@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
@@ -11,9 +12,13 @@ import {
 
 /** The product grid a new page gets from its shopping path (shopping path, part 5). */
 
-// The editor's product-block.test.ts expects this same markup for the same products.
-const SAME_AS_THE_EDITOR =
-  '<div class="ansvisor-products" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin:16px 0"><a class="ansvisor-product" href="https://shop.example/products/p1" style="display:block;border:1px solid #e5e5e5;border-radius:12px;padding:12px;text-decoration:none;color:inherit"><img src="https://cdn.example/p1.jpg" alt="Summit &quot;GTX&quot; Boot" loading="lazy" style="display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px"><strong style="display:block;margin-top:8px">Summit &quot;GTX&quot; Boot</strong><span style="display:block;margin-top:4px">$189.00</span></a><a class="ansvisor-product" href="https://shop.example/products/p2" style="display:block;border:1px solid #e5e5e5;border-radius:12px;padding:12px;text-decoration:none;color:inherit"><strong style="display:block;margin-top:8px">Trail Mid</strong></a></div>';
+// The editor's product-block.test.ts reads the same products and expects the same markup.
+const SAME_AS_THE_EDITOR = JSON.parse(
+  readFileSync(
+    new URL('../../../web/src/lib/content/__fixtures__/product-block.json', import.meta.url),
+    'utf8',
+  ),
+);
 
 const product = (id, title, extra = {}) => ({
   id,
@@ -30,28 +35,41 @@ const product = (id, title, extra = {}) => ({
 });
 
 describe('priceText', () => {
-  it('writes a price in its currency, the sale price first', () => {
+  it('writes a price in its currency, the sale price when it is under the price', () => {
     expect(priceText({ price: 189, salePrice: null, currency: 'USD' })).toBe('$189.00');
     expect(priceText({ price: 149, salePrice: 129, currency: 'EUR' })).toBe('€129.00');
     expect(priceText({ price: null, salePrice: null, currency: 'USD' })).toBeNull();
   });
+
+  it('reads a price of 0 as none, and a sale price not under the price as no sale', () => {
+    expect(priceText({ price: 0, salePrice: null, currency: 'USD' })).toBeNull();
+    expect(priceText({ price: 149, salePrice: 0, currency: 'USD' })).toBe('$149.00');
+    expect(priceText({ price: 149, salePrice: 149, currency: 'USD' })).toBe('$149.00');
+    expect(priceText({ price: 149, salePrice: 159, currency: 'USD' })).toBe('$149.00');
+    expect(priceText({ price: null, salePrice: 129, currency: 'USD' })).toBeNull();
+  });
 });
 
 describe('productBlockHtml', () => {
-  it("writes the editor's markup: picture, name and price, linked, escaped", () => {
-    expect(
-      productBlockHtml([
-        {
-          title: 'Summit "GTX" Boot',
-          url: 'https://shop.example/products/p1',
-          image: 'https://cdn.example/p1.jpg',
-          price: '$189.00',
-        },
-        { title: 'Trail Mid', url: 'https://shop.example/products/p2', image: null, price: null },
-        { title: 'No page', url: 'javascript:alert(1)', image: null, price: null },
-      ]),
-    ).toBe(SAME_AS_THE_EDITOR);
+  it("writes the editor's markup: picture, name and price, linked over https without tracking, escaped", () => {
+    expect(productBlockHtml(SAME_AS_THE_EDITOR.products)).toBe(SAME_AS_THE_EDITOR.html);
     expect(productBlockHtml([])).toBe('');
+  });
+
+  it('shows four at most, the first that have a page', () => {
+    const many = [
+      { title: 'No page', url: 'http://s.example/p0', image: null, price: null },
+      ...Array.from({ length: 5 }, (_, i) => ({
+        title: `P${i + 1}`,
+        url: `https://s.example/p${i + 1}`,
+        image: null,
+        price: null,
+      })),
+    ];
+    const code = productBlockHtml(many);
+    expect(code.match(/class="ansvisor-product"/g)).toHaveLength(4);
+    expect(code).toContain('>P4</strong>');
+    expect(code).not.toContain('>P5</strong>');
   });
 });
 
@@ -85,10 +103,65 @@ describe('insertProductGrid', () => {
     expect(decoded(out)[0]).toContain('https://shop.example/products/p2');
   });
 
-  it('puts it before the last section when no section links them, or at the end', () => {
+  it("counts only links to the grid's products, not to other pages", () => {
+    const html =
+      '<h1>T</h1><h2>Brands</h2>' +
+      '<p><a href="https://other.example/a">a</a> <a href="https://shop.example/about">b</a></p>' +
+      `<h2>Picks</h2><p>${link('p1')}</p><h2>FAQ</h2><p>q</p>`;
+    const out = insertProductGrid(html, path);
+    expect(out).toMatch(
+      /<a href="https:\/\/shop\.example\/products\/p1">x<\/a><\/p><div data-html-block=/,
+    );
+  });
+
+  it('puts it before the last H2 when no section links them, a lone one too, or at the end with none', () => {
     const out = insertProductGrid('<h1>T</h1><h2>A</h2><p>a</p><h2>FAQ</h2><p>q</p>', path);
-    expect(out.indexOf('data-html-block')).toBeLessThan(out.indexOf('<h2>FAQ</h2>'));
+    expect(out).toMatch(/<p>a<\/p><div data-html-block="[^"]+"><\/div><h2>FAQ<\/h2>/);
+    // One H2, linking none of them: before it, not after its section.
+    expect(insertProductGrid('<h1>T</h1><p>a</p><h2>FAQ</h2><p>q</p>', path)).toMatch(
+      /<p>a<\/p><div data-html-block="[^"]+"><\/div><h2>FAQ<\/h2><p>q<\/p>$/,
+    );
     expect(insertProductGrid('<h1>T</h1><p>a</p>', path)).toMatch(/<p>a<\/p><div data-html-block=/);
+  });
+
+  it('shows only the products in stock, as the catalog has them now', () => {
+    const withOut = (availability) => ({
+      ...path,
+      products: [...path.products, product('p3', 'Ridge Low', { availability })],
+    });
+    for (const availability of ['out_of_stock', '']) {
+      const code = decoded(insertProductGrid('<h1>T</h1><p>a</p>', withOut(availability)))[0];
+      expect(code).toContain('Summit GTX Boot');
+      expect(code).not.toContain('Ridge Low');
+    }
+    expect(
+      decoded(insertProductGrid('<h1>T</h1><p>a</p>', withOut('limited_availability')))[0],
+    ).toContain('Ridge Low');
+    // One left in stock: no grid.
+    const html = '<h1>T</h1><p>a</p>';
+    expect(
+      insertProductGrid(html, {
+        ...path,
+        products: [path.products[0], { ...path.products[1], availability: 'out_of_stock' }],
+      }),
+    ).toBe(html);
+  });
+
+  it("writes each one's price as the path has it, and links only https pages", () => {
+    const code = decoded(
+      insertProductGrid('<h1>T</h1><p>a</p>', {
+        ...path,
+        products: [
+          product('p1', 'Summit GTX Boot', { price: 149, salePrice: 129 }),
+          product('p2', 'Trail Mid', { price: 0 }),
+          product('p3', 'Ridge Low', { url: 'http://shop.example/products/p3' }),
+        ],
+      }),
+    )[0];
+    expect(code).toContain('$129.00');
+    expect(code).not.toContain('$149.00');
+    expect(code).not.toContain('$0.00');
+    expect(code).not.toContain('Ridge Low');
   });
 
   it('leaves a page type without a grid, or a path with one product, as it is', () => {

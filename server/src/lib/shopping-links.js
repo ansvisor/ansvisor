@@ -71,8 +71,13 @@ const CURRENCY_SIGNS = {
 
 /** A product's price, the sale price first; null with none. */
 function amountOf(product) {
-  const amount = product.salePrice ?? product.price;
-  return amount != null && Number.isFinite(Number(amount)) ? Number(amount) : null;
+  // As the card reads it (shopping-blocks.js priceText): an amount of 0 is
+  // none, and the sale price counts only under the price.
+  const positive = (value) =>
+    value != null && Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
+  const regular = positive(product.price);
+  const sale = positive(product.salePrice);
+  return sale != null && regular != null && sale < regular ? sale : regular;
 }
 
 /** A product's price and stock as the agent is told them: "189.00 USD, in stock". */
@@ -184,17 +189,32 @@ export function withShopping(targets, path) {
   return { ...targets, shopping: shoppingTargets(path) };
 }
 
+/** The amount a variant sells at: its sale price first, as shopping-path.js offerOf orders them. */
+const sellsAt = (variant) => variant.sale_price ?? variant.price;
+
 /**
- * The products with their stock as the catalog has it now: the best of
- * their live variants' (none read: nothing is said of it); as the path
- * saved it when the read fails.
+ * The variant whose price is told: the cheapest in stock with a price, as
+ * shopping-path.js offerOf picks it; with none in stock, the cheapest of
+ * all. Null when none has a price.
+ */
+function pricedVariant(variants) {
+  const priced = variants.filter((v) => v.price != null);
+  const inStock = priced.filter((v) => isInStock(v.availability));
+  return (inStock.length ? inStock : priced).sort((a, b) => sellsAt(a) - sellsAt(b))[0] ?? null;
+}
+
+/**
+ * The products with their stock and price as the catalog has them now:
+ * the best stock of their live variants', the price of pricedVariant's
+ * (none read: nothing is said of either); as the path saved them when
+ * the read fails.
  */
 async function withStock(db, brandId, products, draftId) {
   if (!products.length) return products;
   const { data, error } = await readAllRpcRows('catalog_variants', (from, to) =>
     db
       .from('catalog_variants')
-      .select('id, product_id, availability')
+      .select('id, product_id, availability, price, sale_price, currency')
       .eq('brand_id', brandId)
       .in(
         'product_id',
@@ -209,20 +229,31 @@ async function withStock(db, brandId, products, draftId) {
     return products;
   }
   const best = new Map();
+  const variantsOf = new Map();
   for (const variant of data) {
+    variantsOf.set(variant.product_id, [...(variantsOf.get(variant.product_id) ?? []), variant]);
     const rank = STOCK_ORDER.indexOf(stockWords(variant.availability));
     if (rank === -1 || best.get(variant.product_id)?.rank <= rank) continue;
     best.set(variant.product_id, { rank, availability: stockKey(variant.availability) });
   }
-  return products.map((p) => ({ ...p, availability: best.get(p.id)?.availability ?? '' }));
+  return products.map((p) => {
+    const priced = pricedVariant(variantsOf.get(p.id) ?? []);
+    return {
+      ...p,
+      availability: best.get(p.id)?.availability ?? '',
+      price: priced?.price ?? null,
+      salePrice: priced?.sale_price ?? null,
+      currency: priced?.currency ?? null,
+    };
+  });
 }
 
 /**
  * The draft's shopping path as the agent writes with it, or null: read as
  * shopping-path.js reads it (none when it isn't a path), its pages only
  * https ones on the brand's own site (a stored path is a member's to
- * change), its products' stock as the catalog has it now. The site not
- * read, it has none: nothing it can't check is linked.
+ * change), its products' stock and prices as the catalog has them now.
+ * The site not read, it has none: nothing it can't check is linked.
  */
 export async function shoppingPathFor(draft, { db = supabaseAdmin } = {}) {
   const path = readShoppingPath(draft.shopping_path, { draftId: draft.id });

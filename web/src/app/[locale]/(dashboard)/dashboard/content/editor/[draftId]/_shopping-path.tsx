@@ -27,9 +27,17 @@ import {
 } from '@/lib/content/shopping-path';
 import { pagePath } from '@/lib/content/overlap';
 
-/** A product's price as the catalog has it, in its currency; null without one. */
+/** An amount above 0, or null: a price of 0 is none given. */
+const positive = (value: number | null) => (value != null && value > 0 ? value : null);
+
+/**
+ * A product's price as the catalog has it, in its currency: the sale price
+ * when it's under the price, else the price; null without one.
+ */
 export function priceText(product: Pick<ShoppingProduct, 'price' | 'salePrice' | 'currency'>) {
-  const amount = product.salePrice ?? product.price;
+  const price = positive(product.price);
+  const sale = positive(product.salePrice);
+  const amount = sale != null && price != null && sale < price ? sale : price;
   if (amount == null) return null;
   try {
     return product.currency

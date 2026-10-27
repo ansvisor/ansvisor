@@ -1,38 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_BLOCK_PRODUCTS, productBlockHtml } from './product-block';
+import SAME_AS_THE_SERVER from './__fixtures__/product-block.json';
+import { MAX_BLOCK_PRODUCTS, productBlockHtml, productHref } from './product-block';
 
 /** Product card and product grid (shopping path, part 5). */
 
-// server/src/lib/shopping-blocks.test.js expects this same markup for the same products.
-const SAME_AS_THE_SERVER =
-  '<div class="ansvisor-products" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin:16px 0"><a class="ansvisor-product" href="https://shop.example/products/p1" style="display:block;border:1px solid #e5e5e5;border-radius:12px;padding:12px;text-decoration:none;color:inherit"><img src="https://cdn.example/p1.jpg" alt="Summit &quot;GTX&quot; Boot" loading="lazy" style="display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px"><strong style="display:block;margin-top:8px">Summit &quot;GTX&quot; Boot</strong><span style="display:block;margin-top:4px">$189.00</span></a><a class="ansvisor-product" href="https://shop.example/products/p2" style="display:block;border:1px solid #e5e5e5;border-radius:12px;padding:12px;text-decoration:none;color:inherit"><strong style="display:block;margin-top:8px">Trail Mid</strong></a></div>';
-
 describe('productBlockHtml', () => {
-  it('writes picture, name and price, linked, escaped, and leaves out what has no page', () => {
-    expect(
-      productBlockHtml([
-        {
-          title: 'Summit "GTX" Boot',
-          url: 'https://shop.example/products/p1',
-          image: 'https://cdn.example/p1.jpg',
-          price: '$189.00',
-        },
-        { title: 'Trail Mid', url: 'https://shop.example/products/p2', image: null, price: null },
-        { title: 'No page', url: 'javascript:alert(1)', image: null, price: null },
-      ]),
-    ).toBe(SAME_AS_THE_SERVER);
+  // server/src/lib/shopping-blocks.test.js reads the same products and expects the same markup.
+  it('writes picture, name and price, linked over https without tracking, escaped, and leaves out what has no page', () => {
+    expect(productBlockHtml(SAME_AS_THE_SERVER.products)).toBe(SAME_AS_THE_SERVER.html);
   });
 
-  it('shows four at most, and nothing with none', () => {
-    const many = Array.from({ length: 6 }, (_, i) => ({
-      title: `P${i}`,
-      url: `https://s.example/p${i}`,
-      image: null,
-      price: null,
-    }));
-    expect(productBlockHtml(many).match(/class="ansvisor-product"/g)).toHaveLength(
-      MAX_BLOCK_PRODUCTS,
-    );
+  it('shows four at most, the first that have a page, and nothing with none', () => {
+    const many = [
+      { title: 'No page', url: 'http://s.example/p0', image: null, price: null },
+      ...Array.from({ length: 6 }, (_, i) => ({
+        title: `P${i + 1}`,
+        url: `https://s.example/p${i + 1}`,
+        image: null,
+        price: null,
+      })),
+    ];
+    const code = productBlockHtml(many);
+    expect(code.match(/class="ansvisor-product"/g)).toHaveLength(MAX_BLOCK_PRODUCTS);
+    expect(code).toContain('>P4</strong>');
     expect(productBlockHtml([])).toBe('');
+  });
+});
+
+describe('productHref', () => {
+  it('links an https page without tracking or a hash, and nothing else', () => {
+    expect(productHref('https://shop.example/p?utm_medium=x&gclid=1&size=9#top')).toBe(
+      'https://shop.example/p?size=9',
+    );
+    expect(productHref('http://shop.example/p')).toBeNull();
+    expect(productHref('javascript:alert(1)')).toBeNull();
+    expect(productHref('/p')).toBeNull();
+    expect(productHref(null)).toBeNull();
   });
 });

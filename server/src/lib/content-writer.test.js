@@ -587,7 +587,16 @@ describe('runDraftWriting on a new page', () => {
     });
     rows.brand_domains = [{ domain: 'shop.example' }];
     // Sold out since the path was built: the catalog's stock now.
-    rows.catalog_variants = [{ id: 'v1', product_id: 'p1', availability: 'out of stock' }];
+    rows.catalog_variants = [
+      {
+        id: 'v1',
+        product_id: 'p1',
+        availability: 'out of stock',
+        price: 189,
+        sale_price: null,
+        currency: 'USD',
+      },
+    ];
     await expect(run(draftRow({ shopping_path: shoppingPath() }))).resolves.toEqual({
       written: true,
     });
@@ -624,6 +633,65 @@ describe('runDraftWriting on a new page', () => {
       const written = draftUpdates().find((u) => u.body_html)?.body_html;
       expect(written).toContain('<p>The Summit GTX Boot costs [figure, source].</p>');
     }
+  });
+
+  it("puts the checked path's products in stock as a grid, not the ones the draft keeps (shopping path, part 5)", async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        sections: [
+          { heading: 'How to choose', paragraphs: ['Fit first.'], bullets: [] },
+          {
+            heading: 'Our picks',
+            paragraphs: ['The Summit GTX Boot, then the Trail 450 Boot.'],
+            bullets: [],
+          },
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    const variant = (id, productId, price) => ({
+      id,
+      product_id: productId,
+      availability: 'in stock',
+      price,
+      sale_price: null,
+      currency: 'USD',
+    });
+    // All in stock now, the first cheaper than when the path was built.
+    rows.catalog_variants = [
+      variant('v1', 'p1', 179),
+      variant('v2', 'p2', 129),
+      variant('v3', 'p3', 99),
+      variant('v4', 'p4', 99),
+    ];
+    const kept = shoppingPath({ pageType: 'buying_guide' });
+    // Kept as a member saved it: one page off the brand's site (Evil Boot), one over http.
+    kept.products.push({
+      ...kept.products[1],
+      id: 'p4',
+      title: 'Plain Boot',
+      url: 'http://shop.example/products/p4',
+    });
+    await expect(
+      run(draftRow({ page_type: 'buying_guide', shopping_path: kept })),
+    ).resolves.toEqual({ written: true });
+    const written = draftUpdates().find((u) => u.body_html)?.body_html;
+    const encoded = /<div data-html-block="([^"]+)"><\/div>/.exec(written);
+    const grid = Buffer.from(encoded[1], 'base64').toString('utf8');
+    expect(grid.match(/class="ansvisor-product"/g)).toHaveLength(2);
+    expect(grid).toContain('href="https://shop.example/products/p1"');
+    expect(grid).toContain('href="https://shop.example/products/p2"');
+    expect(grid).not.toContain('Evil Boot');
+    expect(grid).not.toContain('Plain Boot');
+    // The catalog's price now, not the one the path was built with.
+    expect(grid).toContain('$179.00');
+    expect(grid).not.toContain('$189.00');
+    // At the end of the section that links them.
+    expect(written).toMatch(
+      /Trail 450 Boot<\/a>\.<\/p><div data-html-block="[^"]+"><\/div><h2>FAQ<\/h2>/,
+    );
   });
 
   it('leaves a draft marked ready during the run as it is', async () => {
