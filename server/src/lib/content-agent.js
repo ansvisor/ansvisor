@@ -7,7 +7,7 @@ import { resolveModel } from './ai-provider.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
-import { withShopping } from './shopping-links.js';
+import { shoppingGiven, shoppingPathFor, withShopping } from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import {
   NOT_NAMES,
@@ -43,6 +43,7 @@ import {
   stripSourceIds,
   textPieces,
   todayText,
+  withNamedNumbers,
 } from './content-sources.js';
 import { draftLanguage } from './content-language.js';
 import { editSpans } from './edit-spans.js';
@@ -1350,9 +1351,11 @@ async function fixWithRun({
   // The data it writes from, numbered, Brief › Your input last (CE-048);
   // the numbers it may write unmarked.
   await advanceRun(run, 1);
-  const [prompts, inputRow] = await Promise.all([
+  const [prompts, inputRow, shoppingPath] = await Promise.all([
     readPrompts(brandId, input.sources?.promptIds ?? []),
     readDraftInputs(draftId),
+    // Its shopping path, checked: none when it isn't one (shopping path, part 4).
+    shoppingPathFor(draft),
   ]);
   const numbered = numberSources({
     prompts,
@@ -1367,15 +1370,21 @@ async function fixWithRun({
     ? input.rules.map((r) => r.name)
     : [...input.rules.flatMap((r) => [r.name, r.detail]), ...input.textRules];
   const facts = handoff && ruleKeys.has('trust:brandFacts') ? await approvedFacts(brandId) : [];
-  const known = knownNumbers(
-    htmlText(draft.body_html),
-    draft.title,
-    brand.name,
-    brand.industry,
-    brand.description,
-    ...ruleWords,
-    ...facts,
-    todayText(),
+  // The shopping path's prices and names: the catalog's, written unmarked.
+  const shopping = shoppingGiven(shoppingPath);
+  const known = withNamedNumbers(
+    knownNumbers(
+      htmlText(draft.body_html),
+      draft.title,
+      brand.name,
+      brand.industry,
+      brand.description,
+      ...ruleWords,
+      ...facts,
+      shopping.prices,
+      todayText(),
+    ),
+    shopping.names,
   );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
   const authors = await authorWords(supabaseAdmin, brand.organization_id);
@@ -1386,6 +1395,7 @@ async function fixWithRun({
     brand.industry,
     brand.description,
     ...ruleWords,
+    ...shopping.names,
     ...numbered.map(sourceWords),
     ...authors,
   );
@@ -1412,7 +1422,7 @@ async function fixWithRun({
       sourceUrl: draft.source_url,
       ruleKeys: linkKeys,
     }),
-    draft.shopping_path,
+    shoppingPath,
   );
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
