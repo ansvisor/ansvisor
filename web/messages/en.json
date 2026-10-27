@@ -35,6 +35,7 @@
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working.",
+      "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
       "otherLimits": "Other limits this month",
@@ -7806,11 +7807,11 @@
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",
-        "content": "Content Editor (briefs, Content Agent)",
+        "content": "Content Editor (briefs, Content Agent, quality checks)",
         "action_center": "Action Center task writing",
-        "quality": "Content Editor quality checks",
         "other": "Other"
       },
+      "none": "No AI usage yet this period.",
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
       "failed": "Couldn't read this period's AI usage. Try again later."
     },

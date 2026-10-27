@@ -10,13 +10,7 @@ import { USAGE_WARNING_RATIO, type UsageTone } from '@/lib/content-usage';
  * only decides how they read.
  */
 
-export const AI_USAGE_FEATURES = [
-  'improve',
-  'content',
-  'action_center',
-  'quality',
-  'other',
-] as const;
+export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center', 'other'] as const;
 export type AiUsageFeature = (typeof AI_USAGE_FEATURES)[number];
 
 export interface AiUsage {
@@ -30,7 +24,11 @@ export interface AiUsage {
   unlimited: boolean;
   /** Share of the allowance used, 0–100, to a tenth; null when unlimited. */
   percentUsed: number | null;
-  /** Each feature's share of the allowance; 'other' only when there is some. */
+  /**
+   * Each feature's share of the allowance, listed only when it used some (the
+   * Content Editor's quality checks in its row): one under a twentieth of a
+   * percent comes as 0, read with featurePercentLabel.
+   */
   features: { feature: AiUsageFeature; percent: number }[];
 }
 
@@ -59,6 +57,15 @@ export function percentLabel(percent: number): string {
   if (percent > 0 && percent < 0.1) return '<0.1%';
   // The tiny nudge keeps a tenth the server sent (2.3 × 10) from flooring below it.
   return `${Math.floor(percent * 10 + 1e-9) / 10}%`;
+}
+
+/**
+ * A feature's share in the list of what used the allowance: the server lists
+ * only features that used some, so one it rounds to 0 reads as "<0.1%", not
+ * as unused.
+ */
+export function featurePercentLabel(percent: number): string {
+  return percent > 0 ? percentLabel(percent) : '<0.1%';
 }
 
 /** Warning from 80% of the allowance, used up at 100%. */
