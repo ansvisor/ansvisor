@@ -1579,7 +1579,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_content_draft',
     {
       description:
-        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
+        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
       },

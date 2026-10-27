@@ -258,10 +258,11 @@ accepts it.
   `open_suggestions` (how many wait for review) and `editor_path`.
   Filter: `status`.
 - **`get_content_draft`** — one draft: `body_html`, the page as
-  numbered `passages` (`locked: true` = AI answers quote it today), the
-  Action Center `action` it belongs to, the `open_suggestions` still
-  waiting, and `link_targets` (`own_pages`, `sources`): the only URLs a
-  suggestion may link to.
+  numbered `passages` (`locked: true` = AI answers quote it today),
+  `published_url` and `published_at` (where and since when the page is
+  live; null until then), the Action Center `action` it belongs to, the
+  `open_suggestions` still waiting, and `link_targets` (`own_pages`,
+  `sources`): the only URLs a suggestion may link to.
 - **`get_content_sources`** — what the draft draws on over 30 days, as
   the Sources tab shows it: its prompts, the AI searches (fan-outs) run
   for them, the pages AI cites, Search Console queries, and the
@@ -292,8 +293,10 @@ accepts it.
   version. It skips the editor's Before you publish check (its Trust
   warning), so point the person to it with `editor_path` first. A linked
   action's writing task completes once every page the action names has a
-  ready draft (`action_tasks_done`; 0 until then). A draft `in_review`
-  waits for a person to mark it ready in the editor *(write)*.
+  ready draft (`action_tasks_done`; 0 until then). A draft that's
+  already `ready` or `published` comes back as it is, with
+  `action_tasks_done: 0`. A draft `in_review` waits for a person to mark
+  it ready in the editor *(write)*.
 
 **Shopping**
 
@@ -656,17 +659,19 @@ When the user asks how AI describes the brand, why sentiment moved
    Content Agent is writing it: say so and stop. Report how many were
    kept and any `dropped`.
 5. When the user says the draft is done, give them its `editor_path` to
-   run Before you publish, then offer `set_content_draft_ready` and call
-   it after they confirm *(write)*. A draft `in_review` is marked ready
-   by a person in the editor.
+   run Before you publish. If they marked it ready there, it's done.
+   Otherwise offer `set_content_draft_ready` and call it after they
+   confirm *(write)*. A draft `in_review` is marked ready by a person in
+   the editor.
 6. Once the page is live, `get_content_impact` (30 days by default)
    says whether it paid off: lead with `citations` and `aiVisits`
    (`cur` vs `prev`), then `promptCounts.lost`. `gscSince` is the first
    day of Search Console data (null: none); when it falls after the
    period before began, the Google clicks don't compare. The windows are
    the last `days` against the `days` before, not before and after the
-   page went live: pick the period closest to how long it has been live,
-   and say so.
+   page went live: pick the period closest to how long it has been live
+   (`published_at` from `get_content_draft`; for an optimized page, when
+   this version went live), and say so.
 
 ## Formatting principles
 
