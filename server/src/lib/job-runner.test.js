@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const manager = vi.hoisted(() => ({
+  cancelWaitingJob: vi.fn(),
   claimWaitingJob: vi.fn(),
   listWaitingJobs: vi.fn(),
   getJob: vi.fn(),
@@ -12,8 +13,10 @@ const manager = vi.hoisted(() => ({
 }));
 const processTrackingJob = vi.hoisted(() => vi.fn());
 const processContentJob = vi.hoisted(() => vi.fn());
+const activeBrandFilter = vi.hoisted(() => vi.fn());
 
 vi.mock('./job-manager.js', () => manager);
+vi.mock('./active-subscriptions.js', () => ({ activeBrandFilter }));
 vi.mock('../workers/tracking-worker.js', () => ({ processTrackingJob }));
 vi.mock('../workers/content-worker.js', () => ({ processContentJob }));
 vi.mock('./pulse/engine.js', () => ({ generatePulseForBrand: vi.fn() }));
@@ -54,6 +57,8 @@ beforeEach(() => {
   for (const fn of Object.values(manager)) fn.mockReset();
   processTrackingJob.mockReset();
   processContentJob.mockReset();
+  // Every organization on a plan unless a test says otherwise.
+  activeBrandFilter.mockReset().mockResolvedValue(() => true);
   // The claim resolves a tick later, as a network call would.
   manager.claimWaitingJob.mockImplementation(async (id) => {
     await Promise.resolve();
@@ -139,5 +144,41 @@ describe('recoverWaitingJobs', () => {
     manager.listWaitingJobs.mockResolvedValue([]);
     expect(await recoverWaitingJobs()).toBe(0);
     expect(manager.claimWaitingJob).not.toHaveBeenCalled();
+    expect(activeBrandFilter).not.toHaveBeenCalled();
+  });
+
+  it('cancels, rather than runs, the waiting jobs of an organization whose plan has ended', async () => {
+    const releases = heldRuns();
+    processContentJob.mockResolvedValue({ generated: 0 });
+    activeBrandFilter.mockResolvedValue((brandId) => brandId === 'paying');
+    manager.cancelWaitingJob.mockResolvedValue(true);
+    manager.listWaitingJobs.mockResolvedValue([
+      { id: 'kept', type: 'tracking', brand_id: 'paying' },
+      { id: 'lapsed-tracking', type: 'tracking', brand_id: 'lapsed' },
+      { id: 'lapsed-content', type: 'content', brand_id: 'lapsed' },
+    ]);
+
+    const recovered = await recoverWaitingJobs();
+    await flush();
+
+    expect(recovered).toBe(1);
+    expect(activeBrandFilter).toHaveBeenCalledWith(['paying', 'lapsed', 'lapsed']);
+    // Only while still waiting, saying why.
+    expect(manager.cancelWaitingJob.mock.calls).toEqual([
+      ['lapsed-tracking', 'subscription_inactive'],
+      ['lapsed-content', 'subscription_inactive'],
+    ]);
+    expect(manager.claimWaitingJob.mock.calls.map(([id]) => id)).toEqual(['kept']);
+    expect(processContentJob).not.toHaveBeenCalled();
+    await drain(releases);
+  });
+
+  it('runs nothing when it cannot tell which organizations are on a plan', async () => {
+    activeBrandFilter.mockRejectedValue(new Error('organizations read: timeout'));
+    manager.listWaitingJobs.mockResolvedValue([{ id: 'lost', type: 'tracking', brand_id: 'b' }]);
+
+    await expect(recoverWaitingJobs()).rejects.toThrow('organizations read');
+    expect(manager.claimWaitingJob).not.toHaveBeenCalled();
+    expect(manager.cancelWaitingJob).not.toHaveBeenCalled();
   });
 });

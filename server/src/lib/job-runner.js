@@ -6,6 +6,7 @@
 
 import {
   getJob,
+  cancelWaitingJob,
   claimWaitingJob,
   listWaitingJobs,
   completeJob,
@@ -14,6 +15,7 @@ import {
   registerActiveJob,
   unregisterActiveJob,
 } from './job-manager.js';
+import { activeBrandFilter } from './active-subscriptions.js';
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
@@ -42,6 +44,7 @@ const queuedJobs = new Set();
 // either started or is about to.
 const RECOVERY_IDLE_MS = 2 * 60_000;
 const RECOVERY_MAX_AGE_MS = 20 * 60 * 60_000;
+const RECOVERABLE_TYPES = new Set(['tracking', 'content']);
 
 /**
  * Create a mock job object that mirrors the Bull job interface
@@ -284,22 +287,36 @@ async function attemptContentJob(jobId, io) {
 /**
  * Restart waiting jobs that have no run chain in this process. Runs at
  * startup and every minute (server.js). Returns how many it restarted.
+ *
+ * A job whose organization's plan has ended is cancelled instead: it would
+ * track, scrape or write for an organization that no longer pays for it, and
+ * left waiting it would only be found again the next minute.
  */
 export async function recoverWaitingJobs(io) {
-  const jobs = await listWaitingJobs({
-    idleMs: RECOVERY_IDLE_MS,
-    maxAgeMs: RECOVERY_MAX_AGE_MS,
-  });
+  const jobs = (
+    await listWaitingJobs({
+      idleMs: RECOVERY_IDLE_MS,
+      maxAgeMs: RECOVERY_MAX_AGE_MS,
+    })
+  ).filter((job) => !queuedJobs.has(job.id) && RECOVERABLE_TYPES.has(job.type));
+  if (jobs.length === 0) return 0;
+  const isActive = await activeBrandFilter(jobs.map((job) => job.brand_id));
 
   let recovered = 0;
+  let cancelled = 0;
   for (const job of jobs) {
-    if (queuedJobs.has(job.id)) continue;
+    if (!isActive(job.brand_id)) {
+      if (await cancelWaitingJob(job.id, 'subscription_inactive')) cancelled++;
+      continue;
+    }
     if (job.type === 'tracking') runTrackingJob(job.id, io);
-    else if (job.type === 'content') runContentJob(job.id, io);
-    else continue;
+    else runContentJob(job.id, io);
     recovered++;
   }
 
+  if (cancelled > 0) {
+    logger.info({ cancelled }, 'cancelled waiting jobs of organizations without an active plan');
+  }
   if (recovered > 0) logger.warn({ recovered }, 'restarted waiting jobs that had no run chain');
   return recovered;
 }

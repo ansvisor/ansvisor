@@ -16,6 +16,10 @@ const rescoreBrandActions = vi.fn();
 vi.mock('../action-center/priority-data.js', () => ({
   rescoreBrandActions: (...a) => rescoreBrandActions(...a),
 }));
+const activeBrandFilter = vi.fn();
+vi.mock('../active-subscriptions.js', () => ({
+  activeBrandFilter: (...a) => activeBrandFilter(...a),
+}));
 
 import { runFirstSignalPass, runSignalCatchUp, runSignalPass } from './pass.js';
 
@@ -63,6 +67,8 @@ beforeEach(() => {
   rescoreBrandActions.mockResolvedValue(3);
   recordSignalsForBrand.mockResolvedValue({ inserted: 2, refreshed: 1 });
   generateActionsForBrand.mockResolvedValue({ created: 1, refreshed: 0 });
+  // Every brand's organization on a plan unless a test says otherwise.
+  activeBrandFilter.mockReset().mockResolvedValue(() => true);
 });
 
 describe('runSignalPass', () => {
@@ -212,6 +218,24 @@ describe('runSignalCatchUp', () => {
     const summary = await runSignalCatchUp({ now: NOW });
 
     expect(summary.recovered).toBe(1);
+  });
+
+  it("catches up no pass for a brand whose organization's plan has ended", async () => {
+    const writes = mockDb({
+      runs: [
+        { brand_id: 'paying', completed_at: RUN_AT },
+        { brand_id: 'lapsed', completed_at: RUN_AT },
+      ],
+    });
+    activeBrandFilter.mockResolvedValue((brandId) => brandId === 'paying');
+
+    const summary = await runSignalCatchUp({ now: NOW });
+
+    expect(activeBrandFilter).toHaveBeenCalledWith(['paying', 'lapsed']);
+    expect(summary).toMatchObject({ recovered: 1, healthy: 0, failed: 0, inactive: 1 });
+    expect(recordSignalsForBrand).toHaveBeenCalledTimes(1);
+    expect(recordSignalsForBrand.mock.calls[0][0]).toBe('paying');
+    expect(writes.map((w) => w.row.brand_id)).toEqual(['paying']);
   });
 
   it('reports rather than throws when the sweep itself fails', async () => {
