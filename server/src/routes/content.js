@@ -17,7 +17,7 @@ import { resolveModel } from '../lib/ai-provider.js';
 import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from '../lib/chunked-in.js';
-import { postJson } from '../lib/safe-post.js';
+import { isRedirect, postJson } from '../lib/safe-post.js';
 import {
   assertBrandAccess,
   assertOpportunitiesAccess,
@@ -937,6 +937,11 @@ router.post('/bulk/send-webhook', async (req, res) => {
         const webhookRes = await postJson(webhookConfig.webhook_url, JSON.stringify(payload), {
           headers,
         });
+        // A redirect isn't followed, so nothing arrived: not sent.
+        if (isRedirect(webhookRes.status)) {
+          failed++;
+          continue;
+        }
         const responseBody = webhookRes.answer;
 
         // A workflow may call callback_url before it sends its HTTP response.
@@ -1121,6 +1126,15 @@ router.post('/:id/send-webhook', async (req, res) => {
     const webhookRes = await postJson(webhookConfig.webhook_url, JSON.stringify(payload), {
       headers,
     });
+    // A redirect isn't followed, so the payload never arrived: the
+    // opportunity keeps its status, as Send to CMS fails a 3xx.
+    if (isRedirect(webhookRes.status)) {
+      return res.status(502).json({
+        error: 'The webhook address redirects. Use the address it redirects to.',
+        code: 'webhook_redirect',
+        webhookStatus: webhookRes.status,
+      });
+    }
     const responseBody = webhookRes.answer;
 
     const { data: statusUpdate } = await supabaseAdmin

@@ -49,7 +49,10 @@ function query(table) {
 
 async function startApp() {
   vi.resetModules();
-  vi.doMock('../lib/safe-post.js', () => ({ postJson: (...args) => postJson(...args) }));
+  vi.doMock('../lib/safe-post.js', async (importOriginal) => ({
+    ...(await importOriginal()),
+    postJson: (...args) => postJson(...args),
+  }));
   // As the other content route tests: the jobs and workers aren't loaded.
   vi.doMock('../lib/plan-guard.js', () => ({
     PlanLimitError: class PlanLimitError extends Error {},
@@ -197,12 +200,27 @@ describe('POST /api/content/:id/send-webhook', () => {
     });
   });
 
-  it('marks it sent on a redirect, as on any answer, keeping the status it got', async () => {
-    postJson.mockResolvedValue({ status: 302, answer: '' });
+  it.each([301, 302, 307, 308])(
+    'answers 502 on a %i, which no send follows, and marks nothing sent',
+    async (status) => {
+      postJson.mockResolvedValue({ status, answer: '' });
+      const res = await post('/o1/send-webhook');
+      expect(res.status).toBe(502);
+      expect(await res.json()).toEqual({
+        error: 'The webhook address redirects. Use the address it redirects to.',
+        code: 'webhook_redirect',
+        webhookStatus: status,
+      });
+      expect(updates.find((u) => u.table === 'content_opportunities')).toBeUndefined();
+    },
+  );
+
+  it('marks it sent on any other answer, an error too, keeping the status it got', async () => {
+    postJson.mockResolvedValue({ status: 400, answer: 'bad' });
     const res = await post('/o1/send-webhook');
-    expect(await res.json()).toMatchObject({ success: true, webhookStatus: 302 });
+    expect(await res.json()).toMatchObject({ success: true, webhookStatus: 400 });
     const write = updates.find((u) => u.table === 'content_opportunities');
-    expect(write.values).toMatchObject({ status: 'sent', webhook_response: { status: 302 } });
+    expect(write.values).toMatchObject({ status: 'sent', webhook_response: { status: 400 } });
   });
 
   it('answers 500 when the address is refused, and marks nothing sent', async () => {
@@ -235,6 +253,18 @@ describe('POST /api/content/bulk/send-webhook', () => {
       ['https://hooks.example/abc', 'o1', { headers: { 'X-Webhook-Secret': 'shh' } }],
       ['https://hooks.example/abc', 'o2', { headers: { 'X-Webhook-Secret': 'shh' } }],
     ]);
+    const writes = updates.filter((u) => u.table === 'content_opportunities');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].values.webhook_response).toEqual({ status: 200, body: 'ok' });
+  });
+
+  it('counts a redirect failed and marks only the delivered one sent', async () => {
+    rows.content_opportunities = [OPPORTUNITY, { ...OPPORTUNITY, id: 'o2', title: 'FAQ page' }];
+    postJson
+      .mockResolvedValueOnce({ status: 302, answer: '' })
+      .mockResolvedValueOnce({ status: 200, answer: 'ok' });
+    const res = await post('/bulk/send-webhook', { ids: ['o1', 'o2'] });
+    expect(await res.json()).toEqual({ sent: 1, failed: 1 });
     const writes = updates.filter((u) => u.table === 'content_opportunities');
     expect(writes).toHaveLength(1);
     expect(writes[0].values.webhook_response).toEqual({ status: 200, body: 'ok' });
