@@ -226,9 +226,11 @@ function openingWords(html) {
  * field the brand's map gives it. The meta title falls back to the title,
  * the meta description to the page's opening words. JSON-LD goes as its
  * JSON (for an embed in the collection's template), empty when the page has
- * none, so an item sent again loses what the page no longer says.
+ * none, so an item sent again loses what the page no longer says. The date
+ * is `sentAt` as Webflow takes it (ISO 8601), only for a new item: one sent
+ * again keeps its own (a blog template's publish date).
  */
-export function fieldDataFor({ page, slug, body, jsonLd }, fieldMap) {
+export function fieldDataFor({ page, slug, body, jsonLd, sentAt }, fieldMap) {
   const data = { name: squash(page.title).slice(0, NAME_CHARS), slug };
   if (fieldMap.body) data[fieldMap.body] = body;
   if (fieldMap.metaTitle) {
@@ -243,5 +245,6 @@ export function fieldDataFor({ page, slug, body, jsonLd }, fieldMap) {
       ? JSON.stringify(jsonLd.length === 1 ? jsonLd[0] : jsonLd).replace(/</g, '\\u003c')
       : '';
   }
+  if (fieldMap.date && sentAt) data[fieldMap.date] = sentAt.toISOString();
   return data;
 }

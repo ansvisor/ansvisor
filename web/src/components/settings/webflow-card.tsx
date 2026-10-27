@@ -560,6 +560,7 @@ function WebflowMapping({
             })
           )}
           {map.jsonLd && <p className="text-xs text-muted-foreground">{t('jsonLdHint')}</p>}
+          {map.date && <p className="text-xs text-muted-foreground">{t('dateHint')}</p>}
           {problems.length > 0 && (
             <ul role="alert" className="list-disc space-y-1 pl-5 text-xs text-destructive">
               {problems.map((p) => (
