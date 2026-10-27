@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
+import { syncShoppingLinksAction } from './action-center/from-shopping-check.js';
 import { isInStock } from './catalog/stock.js';
 import { selectInChunks } from './chunked-in.js';
 import { linkKey } from './content-links.js';
@@ -19,6 +20,9 @@ import { readIn, readShoppingPath, refuses } from './shopping-path.js';
  * stock), refused (Merchant Center refuses every variant in stock in its free
  * listings) or gone from the catalog. What it finds is kept per draft in
  * content_shopping_checks, for the Content Library's Shopping path column.
+ * A live page that links one that no longer sells gets a Fix action in the
+ * Action Center, closed by the check that finds it fixed
+ * (action-center/from-shopping-check.js).
  *
  * Only the path's products are checked: a product linked by hand from
  * outside the path isn't known to be one.
@@ -35,9 +39,13 @@ const PAGE_TIMEOUT_MS = 10_000;
 const PAGE_BYTES = 1024 * 1024;
 /** A check stops reading live pages after this, and reads the rest from their drafts. */
 export const LIVE_PAGES_DEADLINE_MS = 3 * 60 * 1000;
+/** New Action Center actions one check opens at most: the rest wait for the next sync. */
+export const MAX_NEW_ACTIONS = 5;
 
 const TITLE_CHARS = 200;
 const MAX_BAD = 40;
+/** The path's products that sell and the page doesn't link, named to swap in. */
+const MAX_SWAPS = 5;
 
 /**
  * Every link's address in a page's HTML, and in the HTML blocks the editor
@@ -141,7 +149,8 @@ export function pathProductIds(path) {
  * (web lib/content/shopping-check.ts): how many of its category pages and
  * of its products that sell it links, and the products it links that no
  * longer sell. A product the person removed or the path left out counts
- * only when it no longer sells: the page may still link it.
+ * only when it no longer sells: the page may still link it. `swaps`: the
+ * path's products that sell and the page doesn't link, in its order.
  *
  * @param {{ states: Map<string, string>, pages: Map<string, string> }} catalog
  */
@@ -187,6 +196,10 @@ export function linkCheck(hrefs, path, { states, pages }) {
       .filter((p) => p.state !== 'ok')
       .map(({ inPath: _inPath, ...p }) => p)
       .slice(0, MAX_BAD),
+    swaps: path.products
+      .filter((p) => p.url && (states.get(p.id) ?? 'gone') === 'ok' && !keys.has(linkKey(p.url)))
+      .slice(0, MAX_SWAPS)
+      .map((p) => ({ id: p.id, title: String(p.title ?? '').slice(0, TITLE_CHARS) })),
   };
 }
 
@@ -228,7 +241,7 @@ async function primarySite(db, brandId) {
 async function draftBatch(db, brandId, from) {
   const { data, error } = await db
     .from('content_drafts')
-    .select('id, status, method, source_url, published_url, body_html, shopping_path')
+    .select('id, title, status, method, source_url, published_url, body_html, shopping_path')
     .eq('brand_id', brandId)
     .is('archived_at', null)
     .not('shopping_path', 'is', null)
@@ -258,12 +271,15 @@ async function dropStale(db, brandId, kept) {
 }
 
 /**
- * Checks a brand's pages' shopping links and keeps what it finds.
+ * Checks a brand's pages' shopping links and keeps what it finds; a live
+ * page's Action Center action is opened or closed by what it found. A
+ * failure there is logged and the check goes on.
  *
  * @param {string} brandId
  * @param {{ db?: object, now?: Date, readPage?: Function, livePages?: number }} [opts]
  *   `readPage` reads a live page (safe-fetch's fetchPage); tests pass their own.
- * @returns {Promise<{ drafts: number, live: number, attention: number, dropped: number }>}
+ * @returns {Promise<{ drafts: number, live: number, attention: number, dropped: number,
+ *   opened: number, closed: number }>}
  */
 export async function checkShoppingLinks(
   brandId,
@@ -274,6 +290,8 @@ export async function checkShoppingLinks(
   const kept = new Set();
   let live = 0;
   let attention = 0;
+  let opened = 0;
+  let closed = 0;
   // Whether every draft with a path was read: only then is a row no draft
   // was read for a stale one.
   let complete = false;
@@ -288,6 +306,7 @@ export async function checkShoppingLinks(
       paths.flatMap((d) => pathProductIds(d.path)),
     );
     const rows = [];
+    const livePagesRead = [];
     for (const { draft, path } of paths) {
       const url = livePage(draft);
       const canRead = url && live < livePages && Date.now() - started < LIVE_PAGES_DEADLINE_MS;
@@ -297,6 +316,7 @@ export async function checkShoppingLinks(
       const base = url ?? draft.source_url ?? site;
       const check = linkCheck(fromPage ?? pageHrefs(draft.body_html, base), path, catalog);
       if (check.bad.length) attention += 1;
+      if (fromPage) livePagesRead.push({ draft, pageUrl: url, check });
       kept.add(draft.id);
       rows.push({
         draft_id: draft.id,
@@ -317,13 +337,31 @@ export async function checkShoppingLinks(
         .upsert(rows, { onConflict: 'draft_id' });
       if (error) throw new Error(`content_shopping_checks write: ${error.message}`);
     }
+    // Only a live page read now opens or closes its action: a draft isn't
+    // what readers see, and a page that couldn't be read says nothing.
+    for (const page of livePagesRead) {
+      try {
+        const done = await syncShoppingLinksAction(brandId, page, {
+          db,
+          now,
+          open: opened < MAX_NEW_ACTIONS,
+        });
+        if (done === 'opened') opened += 1;
+        if (done === 'closed') closed += 1;
+      } catch (err) {
+        logger.warn(
+          { err: { name: err?.name, message: err?.message }, brandId, draftId: page.draft.id },
+          '[shopping-check] Action Center action not synced',
+        );
+      }
+    }
     if (drafts.length < DRAFT_BATCH) {
       complete = true;
       break;
     }
   }
   const dropped = complete ? await dropStale(db, brandId, kept) : 0;
-  return { drafts: kept.size, live, attention, dropped };
+  return { drafts: kept.size, live, attention, dropped, opened, closed };
 }
 
 /** Brands waiting for their check, with the check's options. */

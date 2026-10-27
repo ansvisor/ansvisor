@@ -11,6 +11,7 @@ import { htmlBlockElement } from './shopping-blocks.js';
 import {
   DRAFT_BATCH,
   MAX_LIVE_PAGES,
+  MAX_NEW_ACTIONS,
   checkShoppingLinks,
   linkCheck,
   livePage,
@@ -208,7 +209,29 @@ describe('linkCheck', () => {
       products: 1,
       productsLinked: 1,
       bad: [{ id: 'p2', title: 'Boot p2', state: 'sold_out' }],
+      swaps: [],
     });
+  });
+
+  it("names the path's products that sell and the page doesn't link, to swap in", () => {
+    const check = linkCheck(
+      ['https://shop.example/products/p1', 'https://shop.example/products/p2'],
+      path([product('p1'), product('p2'), product('p3'), product('p4'), product('p5')]),
+      {
+        states: new Map([
+          ['p1', 'ok'],
+          ['p2', 'sold_out'],
+          ['p3', 'ok'],
+          ['p4', 'refused'],
+          ['p5', 'ok'],
+        ]),
+        pages: new Map(),
+      },
+    );
+    expect(check.swaps).toEqual([
+      { id: 'p3', title: 'Boot p3' },
+      { id: 'p5', title: 'Boot p5' },
+    ]);
   });
 
   it('counts a removed or left-out product the page still links, only when it no longer sells', () => {
@@ -315,7 +338,14 @@ describe('checkShoppingLinks', () => {
       html: '<a href="/products/p1">one</a>',
     });
     const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
-    expect(result).toEqual({ drafts: 2, live: 1, attention: 1, dropped: 0 });
+    expect(result).toEqual({
+      drafts: 2,
+      live: 1,
+      attention: 1,
+      dropped: 0,
+      opened: 0,
+      closed: 0,
+    });
     expect(readPage).toHaveBeenCalledOnce();
     expect(readPage.mock.calls[0][0]).toBe('https://shop.example/blog/boots');
     const rows = Object.fromEntries(
@@ -427,6 +457,81 @@ describe('checkShoppingLinks', () => {
     const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
     expect(result.drafts).toBe(DRAFT_BATCH + 3);
     expect(fake.rows('content_shopping_checks')).toHaveLength(DRAFT_BATCH + 3);
+  });
+
+  it('opens an Action Center action for a live page linking a product that no longer sells, and closes it once fixed', async () => {
+    const fake = setup();
+    fake.rows('content_drafts').push(
+      draft('d1', {
+        title: 'Best boots',
+        status: 'published',
+        published_url: 'https://shop.example/blog/boots',
+      }),
+    );
+    const live = (html) => vi.fn(async (url) => ({ url, status: 200, html }));
+    const first = await checkShoppingLinks(BRAND, {
+      db: fake.db,
+      now: NOW,
+      readPage: live(`${link('p1')} ${link('p2')}`),
+    });
+    expect(first).toMatchObject({ opened: 1, closed: 0 });
+    const [action] = fake.rows('actions');
+    expect(action).toMatchObject({
+      kind: 'shopping_links',
+      dedup_key: 'shopping_links:d1',
+      status: 'new',
+      payload: {
+        title: 'Best boots',
+        pageUrl: 'https://shop.example/blog/boots',
+        products: [{ id: 'p2', title: 'Boot p2', state: 'sold_out' }],
+      },
+    });
+
+    const fixed = await checkShoppingLinks(BRAND, {
+      db: fake.db,
+      now: NOW,
+      readPage: live(link('p1')),
+    });
+    expect(fixed).toMatchObject({ opened: 0, closed: 1 });
+    expect(action.status).toBe('completed');
+  });
+
+  it(`opens none from a draft, and at most ${MAX_NEW_ACTIONS} a run`, async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(
+        draft('d-draft'),
+        ...Array.from({ length: MAX_NEW_ACTIONS + 2 }, (_, i) =>
+          draft(`d${i}`, { status: 'published', published_url: `https://shop.example/${i}` }),
+        ),
+      );
+    const readPage = vi.fn(async (url) => ({ url, status: 200, html: link('p2') }));
+    const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
+    expect(result).toMatchObject({ attention: MAX_NEW_ACTIONS + 3, opened: MAX_NEW_ACTIONS });
+    expect(fake.rows('actions')).toHaveLength(MAX_NEW_ACTIONS);
+    expect(fake.rows('actions').some((a) => a.payload.draftId === 'd-draft')).toBe(false);
+  });
+
+  it("logs an action it can't open and keeps the check", async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(draft('d1', { status: 'published', published_url: 'https://shop.example/a' }));
+    const db = {
+      from: (table) => {
+        if (table === 'actions') throw new Error('actions unavailable');
+        return fake.db.from(table);
+      },
+    };
+    const readPage = vi.fn(async (url) => ({ url, status: 200, html: link('p2') }));
+    const result = await checkShoppingLinks(BRAND, { db, now: NOW, readPage });
+    expect(result).toMatchObject({ drafts: 1, attention: 1, opened: 0 });
+    expect(fake.rows('content_shopping_checks')).toHaveLength(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'd1' }),
+      '[shopping-check] Action Center action not synced',
+    );
   });
 
   it("reads a path it can't read as none, and logs it", async () => {
