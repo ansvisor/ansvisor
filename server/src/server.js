@@ -29,6 +29,7 @@ import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
+import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
 import { handleScraperResult } from './lib/cloro-result-handler.js';
@@ -291,9 +292,19 @@ async function runDailyTracking() {
   });
 
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
-  sweepCatalogSources().catch((err) => {
-    logger.error({ err }, '[catalog] daily sweep failed');
-  });
+  // Then the brands' AI shopping cards are matched to their catalogs as they
+  // are now (product visibility, 00360).
+  sweepCatalogSources()
+    .catch((err) => {
+      logger.error({ err }, '[catalog] daily sweep failed');
+    })
+    .then(() => sweepShoppingCardMatches())
+    .catch((err) => {
+      logger.error(
+        { err: { name: err?.name, message: err?.message } },
+        '[card-match] daily sweep failed',
+      );
+    });
 
   // Pages sent to Webflow, published there since (#1331): read once a day.
   sweepWebflowPublished().catch((err) => {

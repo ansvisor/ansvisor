@@ -3201,6 +3201,8 @@ export type Database = {
       prompt_result_shopping_cards: {
         Row: {
           brand_id: string
+          catalog_match: string | null
+          catalog_product_id: string | null
           created_at: string
           id: string
           image_url: string | null
@@ -3225,6 +3227,8 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          catalog_match?: string | null
+          catalog_product_id?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -3249,6 +3253,8 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          catalog_match?: string | null
+          catalog_product_id?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -3272,6 +3278,13 @@ export type Database = {
           review_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "prompt_result_shopping_cards_catalog_product_id_fkey"
+            columns: ["catalog_product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "prompt_result_shopping_cards_brand_id_fkey"
             columns: ["brand_id"]

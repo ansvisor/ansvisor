@@ -7,8 +7,16 @@ vi.mock('../config/supabase.js', () => ({
   default: { from: () => ({ upsert }) },
 }));
 vi.mock('./ai-tracker.js', () => ({ analyzeSentimentAI: vi.fn() }));
+const catalogIndexFor = vi.hoisted(() => vi.fn());
+vi.mock('./catalog/card-match.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  catalogIndexFor,
+}));
 
+import { catalogIndex } from './catalog/card-match.js';
 import { persistShoppingCards } from './cloro-result-handler.js';
+
+const noCatalog = catalogIndex({ products: [], variants: [] });
 
 const base = {
   promptResultId: 'result-1',
@@ -23,6 +31,7 @@ describe('persistShoppingCards – ChatGPT inline products (#1183)', () => {
   beforeEach(() => {
     upsert.mockReset();
     upsert.mockResolvedValue({ error: null });
+    catalogIndexFor.mockReset().mockResolvedValue(noCatalog);
   });
 
   it('stores inline products after the carousel cards', async () => {
@@ -105,5 +114,73 @@ describe('persistShoppingCards – ChatGPT inline products (#1183)', () => {
     const inserted = await persistShoppingCards({ ...base, rawCards: [] });
     expect(inserted).toBe(0);
     expect(upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('persistShoppingCards – the catalog product behind an own card (00360)', () => {
+  const catalog = catalogIndex(
+    {
+      products: [
+        {
+          id: 'p-runner',
+          title: 'Acme Trail Runner X',
+          url: 'https://acme.com/products/trail-runner-x',
+        },
+        { id: 'p-pack', title: 'Acme Ridge 30L Backpack', url: null },
+      ],
+      variants: [
+        { product_id: 'p-pack', url: null, gtin: null, marketplace_item_id: 'B0C123ABCD' },
+      ],
+    },
+    { brandName: 'Acme' },
+  );
+  const cards = [
+    {
+      products: [
+        {
+          title: 'Acme Trail Runner X',
+          url: 'https://acme.com/products/trail-runner-x?variant=4',
+          price: '$129.00',
+        },
+        { title: 'Acme Ridge Pack', url: 'https://www.amazon.com/dp/B0C123ABCD', price: '$119.00' },
+        { title: 'Summit Daypack 30 W', url: 'https://summit.example/p/daypack', price: '$110.00' },
+      ],
+    },
+  ];
+
+  beforeEach(() => {
+    upsert.mockReset();
+    upsert.mockResolvedValue({ error: null });
+    catalogIndexFor.mockReset().mockResolvedValue(catalog);
+  });
+
+  it("matches the brand's own cards by their link or listing, and leaves a rival's alone", async () => {
+    await persistShoppingCards({ ...base, rawCards: cards });
+    expect(catalogIndexFor).toHaveBeenCalledWith('brand-1', { brandName: 'Acme' });
+    const rows = upsert.mock.calls[0][0];
+    expect(rows.map((row) => [row.catalog_product_id ?? null, row.catalog_match ?? null])).toEqual([
+      ['p-runner', 'url'],
+      ['p-pack', 'listing'],
+      [null, null],
+    ]);
+  });
+
+  it("writes the cards without matches when the catalog can't be read", async () => {
+    catalogIndexFor.mockRejectedValue(new Error('down'));
+    expect(await persistShoppingCards({ ...base, rawCards: cards })).toBe(3);
+    expect(upsert.mock.calls[0][0].some((row) => 'catalog_product_id' in row)).toBe(false);
+  });
+
+  it('writes the cards again without their matches before the migration is in', async () => {
+    upsert
+      .mockResolvedValueOnce({
+        error: {
+          message: "Could not find the 'catalog_match' column of 'prompt_result_shopping_cards'",
+        },
+      })
+      .mockResolvedValueOnce({ error: null });
+    expect(await persistShoppingCards({ ...base, rawCards: cards })).toBe(3);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[1][0].some((row) => 'catalog_product_id' in row)).toBe(false);
   });
 });
