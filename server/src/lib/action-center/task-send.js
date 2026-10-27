@@ -70,14 +70,20 @@ export async function loadTask(taskId) {
   return { task, action };
 }
 
+/** The most of a Where or URL read for a page: the drawer keeps them to this. */
+const WHERE_CHARS = 500;
+
 /**
  * The brand's page a task's Where names, as a URL: "acme.example/pricing ·
  * lost on ChatGPT" gives https://acme.example/pricing, and a bare path is on
  * the brand's first domain. Null when Where names no page of the brand's.
+ * Only its first WHERE_CHARS are read, so a long one is read in bounded time.
  */
 export function ownPageOf(where, brandDomains) {
   const isOwn = ownDomainMatcher(brandDomains);
-  for (const token of text(where).split(/[\s·,;()]+/)) {
+  for (const token of text(where)
+    .slice(0, WHERE_CHARS)
+    .split(/[\s·,;()]+/)) {
     const cleaned = token.replace(/^["'“”]+|["'“”.]+$/g, '');
     if (!cleaned) continue;
     if (cleaned.startsWith('/') && cleaned.length > 1 && brandDomains[0]) {
