@@ -75,9 +75,10 @@ export async function assertWritable({
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
+  // The organization comes with the profile (profiles_organization_id_fkey): one round trip.
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('organization_id')
+    .select('organization_id, organizations(subscription_status, stripe_subscription_id)')
     .eq('id', user.id)
     .maybeSingle();
   if (error) throw new Error(`Could not read the workspace's plan: ${error.message}`);
@@ -88,12 +89,7 @@ export async function assertWritable({
     throw new SubscriptionInactiveError();
   }
 
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('subscription_status, stripe_subscription_id')
-    .eq('id', profile.organization_id)
-    .maybeSingle();
-  if (orgError) throw new Error(`Could not read the workspace's plan: ${orgError.message}`);
+  const org = profile.organizations;
   if (!org) throw new SubscriptionInactiveError();
   if (isSubscriptionActive(org.subscription_status)) return;
   // Never subscribed: the Stripe subscription id, which only billing writes, stays once given.

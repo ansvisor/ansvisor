@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { jsonbBytes } from '@/lib/content/draft-inputs';
+import { assertWritable } from '@/lib/subscription-guard';
 import {
   NO_PATH_REASONS,
   shoppingChoicesSchema,
@@ -64,6 +65,7 @@ export async function saveDraftShoppingPath(
   read: { builtAt: string; savedAt?: string | null },
   choices: ShoppingChoices,
 ): Promise<{ path: ShoppingPath } | { error: 'changed' }> {
+  await assertWritable();
   const at = readAt.safeParse(read);
   const chosen = shoppingChoicesSchema.safeParse(choices);
   if (!guid.safeParse(draftId).success || !at.success || !chosen.success) {

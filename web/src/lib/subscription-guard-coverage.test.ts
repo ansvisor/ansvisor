@@ -13,21 +13,36 @@ import { describe, expect, it } from 'vitest';
  * A new write is gated, or named here, before it ships.
  *
  * A write is .insert/.update/.upsert/.delete on a .from() query, a storage
- * change, an auth change, or an RPC whose database function isn't declared
- * STABLE or IMMUTABLE (supabase/schema.sql).
+ * change (a signed upload address too), an auth change, or an RPC whose
+ * database function isn't declared STABLE or IMMUTABLE (supabase/schema.sql).
+ * A query or bucket kept in a name first (`const images = ….storage.from(…)`)
+ * is followed to it.
+ *
+ * The check comes first: it is the first thing a gated action awaits. And a
+ * setup action (assertWritable({ onboarding: true })) never runs one in its
+ * file that checks without it — that check would refuse the organization
+ * setup lets through.
  */
 
 const ACTIONS_DIR = join(__dirname, 'actions');
 const API_DIR = join(__dirname, '../app/api');
 const SCHEMA = join(__dirname, '../../../supabase/schema.sql');
 
-/** Server actions that write and stay open while read-only: file:function → why. */
+/**
+ * Server actions that write and stay open while read-only: file:function →
+ * why. One that writes through the API (a fetch that posts, puts, patches or
+ * deletes) is named here when the API keeps that route open too.
+ */
 const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
   'team.ts:acceptInvitation': "the invited person's own account joins",
   'team.ts:revokeInvitation': 'takes back access, never gives it',
   'team.ts:removeMember': 'takes back access, never gives it',
   'getting-started.ts:markGettingStartedPageOpened': 'a trace of reading a page',
+  'content-images.ts:prepareImageUpload':
+    'checks the plan itself (isSubscriptionActive), to answer "plan" instead of throwing',
+  'brand.ts:deleteBrand':
+    'deleting a brand only removes what the person gave us (Ansvisor, 2026-10-27)',
 };
 
 /** Write routes that stay open while read-only: path:METHOD → why. */
@@ -61,7 +76,14 @@ const ROUTE_GATES = new Set([
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DB_WRITES = new Set(['insert', 'update', 'upsert', 'delete']);
-const STORAGE_WRITES = new Set(['upload', 'update', 'remove', 'move', 'copy']);
+const STORAGE_WRITES = new Set([
+  'upload',
+  'update',
+  'remove',
+  'move',
+  'copy',
+  'createSignedUploadUrl',
+]);
 
 /** The database functions that only read: their last definition is STABLE or IMMUTABLE. */
 function readOnlyFunctions(): Set<string> {
@@ -84,13 +106,41 @@ function readOnlyFunctions(): Set<string> {
 interface FunctionFacts {
   exported: boolean;
   writes: string[];
+  /** Its fetches that change something through the API: `DELETE`, `POST`… */
+  apiWrites: string[];
   gates: string[];
+  /** It calls assertWritable() without `onboarding: true`. */
+  strictGate: boolean;
+  /** It calls assertWritable({ onboarding: true }). */
+  onboardingGate: boolean;
+  /** What it awaits first, outside the functions inside it: the callee's name, else the text. */
+  firstAwait: string | null;
   callees: string[];
 }
 
-/** The chain a call hangs off: `supabase.from('x').select()` → true for `.from`. */
-function chainCalls(node: ts.Expression, name: string): boolean {
+/** What a file names with `const`/`let`, by name: `images` → `supabase.storage.from(…)`. */
+type Bindings = Map<string, ts.Expression>;
+
+function readBindings(source: ts.SourceFile): Bindings {
+  const bound: Bindings = new Map();
+  const visit = (n: ts.Node) => {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+      bound.set(n.name.text, n.initializer);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(source);
+  return bound;
+}
+
+/**
+ * The chain a call hangs off: `supabase.from('x').select()` → true for
+ * `.from`. A name is followed to what it was given, and a one-line arrow
+ * to what it returns: `const uploads = () => admin.from('x')`.
+ */
+function chainCalls(node: ts.Expression, name: string, bound: Bindings): boolean {
   let current: ts.Expression = node;
+  const followed = new Set<string>();
   for (;;) {
     if (ts.isCallExpression(current)) {
       const callee = current.expression;
@@ -101,10 +151,35 @@ function chainCalls(node: ts.Expression, name: string): boolean {
       current = current.expression;
     } else if (ts.isAwaitExpression(current) || ts.isParenthesizedExpression(current)) {
       current = current.expression;
+    } else if (ts.isArrowFunction(current) && !ts.isBlock(current.body)) {
+      current = current.body;
+    } else if (ts.isIdentifier(current) && bound.has(current.text) && !followed.has(current.text)) {
+      followed.add(current.text);
+      current = bound.get(current.text)!;
     } else {
       return false;
     }
   }
+}
+
+/** The first await in a function's own body, in source order: not in the functions inside it. */
+function firstAwaitIn(root: ts.Node): string | null {
+  let found: string | null = null;
+  const visit = (n: ts.Node) => {
+    if (found !== null) return;
+    if (n !== root && ts.isFunctionLike(n)) return;
+    if (ts.isAwaitExpression(n)) {
+      const awaited = n.expression;
+      found =
+        ts.isCallExpression(awaited) && ts.isIdentifier(awaited.expression)
+          ? awaited.expression.text
+          : awaited.getText().slice(0, 60);
+      return;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(root);
+  return found;
 }
 
 /** The top-level functions of a file: what each writes, which gates it calls, and its callees there. */
@@ -119,6 +194,7 @@ function readFunctions(
     ts.ScriptTarget.Latest,
     true,
   );
+  const bound = readBindings(source);
   const bodies = new Map<string, { node: ts.Node; exported: boolean }>();
   const isExported = (node: ts.Node) =>
     ts.canHaveModifiers(node) &&
@@ -141,16 +217,25 @@ function readFunctions(
 
   const facts = new Map<string, FunctionFacts>();
   for (const [name, { node, exported }] of bodies) {
-    const fact: FunctionFacts = { exported, writes: [], gates: [], callees: [] };
+    const fact: FunctionFacts = {
+      exported,
+      writes: [],
+      apiWrites: [],
+      gates: [],
+      strictGate: false,
+      onboardingGate: false,
+      firstAwait: firstAwaitIn(node),
+      callees: [],
+    };
     const visit = (n: ts.Node) => {
       if (ts.isCallExpression(n)) {
         const callee = n.expression;
         if (ts.isPropertyAccessExpression(callee)) {
           const method = callee.name.text;
           const target = callee.expression;
-          if (chainCalls(target, 'storage') && STORAGE_WRITES.has(method)) {
+          if (chainCalls(target, 'storage', bound) && STORAGE_WRITES.has(method)) {
             fact.writes.push(`storage.${method}`);
-          } else if (DB_WRITES.has(method) && chainCalls(target, 'from')) {
+          } else if (DB_WRITES.has(method) && chainCalls(target, 'from', bound)) {
             fact.writes.push(method);
           } else if (method === 'rpc') {
             const arg = n.arguments[0];
@@ -158,8 +243,8 @@ function readFunctions(
             if (!readRpcs.has(fn)) fact.writes.push(`rpc ${fn}`);
           } else if (
             method === 'updateUser' ||
-            (chainCalls(target, 'admin') &&
-              chainCalls(target, 'auth') &&
+            (chainCalls(target, 'admin', bound) &&
+              chainCalls(target, 'auth', bound) &&
               !['listUsers', 'getUserById'].includes(method))
           ) {
             fact.writes.push(`auth.${method}`);
@@ -168,7 +253,28 @@ function readFunctions(
           const called = callee.text;
           const opensMcpWrites = n.arguments.some((a) => /gateWrites:\s*false/.test(a.getText()));
           if (gateNames.has(called) && !opensMcpWrites) fact.gates.push(called);
+          if (called === 'assertWritable') {
+            const onboarding = n.arguments.some((a) => /onboarding:\s*true/.test(a.getText()));
+            if (onboarding) fact.onboardingGate = true;
+            else fact.strictGate = true;
+          }
           if (bodies.has(called)) fact.callees.push(called);
+          if (
+            called === 'fetch' &&
+            n.arguments[1] &&
+            ts.isObjectLiteralExpression(n.arguments[1])
+          ) {
+            for (const prop of n.arguments[1].properties) {
+              if (
+                ts.isPropertyAssignment(prop) &&
+                prop.name.getText() === 'method' &&
+                ts.isStringLiteralLike(prop.initializer) &&
+                WRITE_METHODS.has(prop.initializer.text)
+              ) {
+                fact.apiWrites.push(prop.initializer.text);
+              }
+            }
+          }
         }
       }
       ts.forEachChild(n, visit);
@@ -182,6 +288,7 @@ function readFunctions(
 /** What a function writes and which gates it calls, through the helpers in its file. */
 function reach(facts: Map<string, FunctionFacts>, name: string) {
   const writes = new Set<string>();
+  const apiWrites = new Set<string>();
   const gates = new Set<string>();
   const seen = new Set<string>();
   const walk = (current: string) => {
@@ -189,11 +296,12 @@ function reach(facts: Map<string, FunctionFacts>, name: string) {
     seen.add(current);
     const fact = facts.get(current)!;
     fact.writes.forEach((w) => writes.add(w));
+    fact.apiWrites.forEach((w) => apiWrites.add(w));
     fact.gates.forEach((g) => gates.add(g));
     fact.callees.forEach(walk);
   };
   walk(name);
-  return { writes: [...writes], gated: gates.size > 0 };
+  return { writes: [...writes], apiWrites: [...apiWrites], gated: gates.size > 0 };
 }
 
 function routeFiles(dir: string): string[] {
@@ -205,6 +313,15 @@ function routeFiles(dir: string): string[] {
 }
 
 const readRpcs = readOnlyFunctions();
+
+/** The server action files ('use server' in lib/actions), each with its functions. */
+const actionFiles = readdirSync(ACTIONS_DIR)
+  .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+  .filter((f) => /^['"]use server['"]/m.test(readFileSync(join(ACTIONS_DIR, f), 'utf8')))
+  .map((file) => ({
+    file,
+    facts: readFunctions(join(ACTIONS_DIR, file), readRpcs, new Set(['assertWritable'])),
+  }));
 
 describe('read-only coverage', () => {
   it('reads which database functions only read', () => {
@@ -218,33 +335,64 @@ describe('read-only coverage', () => {
   it('has every server action that writes call assertWritable, or name why it stays open', () => {
     const ungated: string[] = [];
     const writers = new Set<string>();
+    const apiWriters = new Set<string>();
     const gatedOpen: string[] = [];
-    const files = readdirSync(ACTIONS_DIR).filter(
-      (f) => f.endsWith('.ts') && !f.endsWith('.test.ts'),
-    );
-    for (const file of files) {
-      const path = join(ACTIONS_DIR, file);
-      if (!/^['"]use server['"]/m.test(readFileSync(path, 'utf8'))) continue;
-      const facts = readFunctions(path, readRpcs, new Set(['assertWritable']));
+    for (const { file, facts } of actionFiles) {
       for (const [name, fact] of facts) {
         if (!fact.exported) continue;
-        const { writes, gated } = reach(facts, name);
-        if (!writes.length) continue;
+        const { writes, apiWrites, gated } = reach(facts, name);
         const key = `${file}:${name}`;
+        if (apiWrites.length) apiWriters.add(key);
+        if (key in OPEN_ACTIONS && gated) gatedOpen.push(key);
+        // A write through the API is the API's to refuse (requireActiveSubscription).
+        if (!writes.length) continue;
         writers.add(key);
-        if (key in OPEN_ACTIONS) {
-          if (gated) gatedOpen.push(key);
-        } else if (!gated) {
-          ungated.push(`${key} (${writes.join(', ')})`);
-        }
+        if (!(key in OPEN_ACTIONS) && !gated) ungated.push(`${key} (${writes.join(', ')})`);
       }
     }
     expect(ungated).toEqual([]);
-    // The open list stays true: each one writes, and doesn't check after all.
-    expect(Object.keys(OPEN_ACTIONS).filter((key) => !writers.has(key))).toEqual([]);
+    // The open list stays true: each one writes, here or through the API, and doesn't check after all.
+    expect(
+      Object.keys(OPEN_ACTIONS).filter((key) => !writers.has(key) && !apiWriters.has(key)),
+    ).toEqual([]);
     expect(gatedOpen).toEqual([]);
     // Sanity: the scan finds the writes it is meant to.
     expect(writers.size).toBeGreaterThan(90);
+  });
+
+  it('has every gated action check the plan before anything else it awaits', () => {
+    const late: string[] = [];
+    for (const { file, facts } of actionFiles) {
+      for (const [name, fact] of facts) {
+        const key = `${file}:${name}`;
+        if (!fact.exported || key in OPEN_ACTIONS || !reach(facts, name).writes.length) continue;
+        if (fact.firstAwait !== 'assertWritable') {
+          late.push(`${key} (awaits ${fact.firstAwait ?? 'nothing'} first)`);
+        }
+      }
+    }
+    expect(late).toEqual([]);
+  });
+
+  it("has no setup action run a function in its file whose check refuses setup's organization", () => {
+    // A setup action is open to an organization that never subscribed; a
+    // plain assertWritable() it runs on the way would refuse that one.
+    const refused: string[] = [];
+    for (const { file, facts } of actionFiles) {
+      for (const [name, fact] of facts) {
+        if (!fact.onboardingGate) continue;
+        const seen = new Set([name]);
+        const walk = (callee: string) => {
+          if (seen.has(callee)) return;
+          seen.add(callee);
+          const called = facts.get(callee)!;
+          if (called.strictGate) refused.push(`${file}:${name} → ${callee}`);
+          called.callees.forEach(walk);
+        };
+        fact.callees.forEach(walk);
+      }
+    }
+    expect(refused).toEqual([]);
   });
 
   it('has every write route check the plan, or name why it stays open', () => {

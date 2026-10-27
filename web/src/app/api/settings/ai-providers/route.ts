@@ -236,8 +236,10 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
-// Open while the workspace is read-only: removing a key takes back what the
-// org gave us, as disconnecting an integration does (lib/subscription-guard.ts).
+/**
+ * Open while the workspace is read-only: removing a key takes back what the
+ * org gave us, as disconnecting an integration does (lib/subscription-guard.ts).
+ */
 export async function DELETE(req: Request) {
   const ctx = await getAdmin();
   if (ctx instanceof NextResponse) return ctx;

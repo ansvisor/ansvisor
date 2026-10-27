@@ -276,8 +276,18 @@ export async function setBrandShoppingMode(
   enabled: boolean,
 ): Promise<{ promptsUpdated: number }> {
   await assertWritable();
-  const supabase = await createClient();
+  return applyShoppingMode(await createClient(), brandId, enabled);
+}
 
+/**
+ * setBrandShoppingMode's writes, without its plan check: markBrandAsEcommerce
+ * runs them in setup, where an organization that never subscribed may write.
+ */
+async function applyShoppingMode(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  enabled: boolean,
+): Promise<{ promptsUpdated: number }> {
   // RLS gates this — the calling user must already have write access to
   // the brand via their org membership. The updated row comes back, as in
   // setBrandActive, so a write RLS denied (an analyst) fails instead of
@@ -377,7 +387,7 @@ export async function markBrandAsEcommerce(
     }
     industry = ecommerce;
   }
-  const { promptsUpdated } = await setBrandShoppingMode(brandId, true);
+  const { promptsUpdated } = await applyShoppingMode(supabase, brandId, true);
   return { industry, promptsUpdated };
 }
 

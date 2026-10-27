@@ -13,12 +13,13 @@ let org: { subscription_status: string; stripe_subscription_id: string };
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user } }) },
-    from: (table: string) => ({
+    from: () => ({
       select: () => ({
         eq: () => ({
           single: async () => ({ data: profile }),
+          // The plan check: the profile with its organization.
           maybeSingle: async () => ({
-            data: table === 'organizations' ? org : profile,
+            data: profile && { ...profile, organizations: org },
             error: null,
           }),
         }),

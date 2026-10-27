@@ -10,25 +10,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let org: { subscription_status: string | null; stripe_subscription_id: string | null };
 let writes: string[];
+/** What each update set, by table. */
+let updates: { table: string; values: unknown }[];
 
-/** A query builder whose every call chains; records a write, resolves to `row`. */
+/**
+ * A query builder whose every call chains; records a write, resolves to
+ * `row`, or to a list of it unless the query asked for one row.
+ */
 function query(table: string): unknown {
   const row =
     table === 'profiles'
-      ? { organization_id: 'org-1' }
-      : table === 'organizations'
-        ? org
-        : { id: 'row-1', brand_id: 'brand-1', prompt_id: 'prompt-1', name: 'Acme', domain: '' };
-  const result = { data: row, error: null };
+      ? { organization_id: 'org-1', organizations: org }
+      : table === 'brands'
+        ? { id: 'brand-1', industry: null, shopping_mode_enabled: false }
+        : table === 'prompts'
+          ? { id: 'prompt-1', platforms: ['chatgpt'] }
+          : { id: 'row-1', brand_id: 'brand-1', prompt_id: 'prompt-1', name: 'Acme', domain: '' };
+  let one = false;
   const builder: unknown = new Proxy(
     {},
     {
       get: (_, prop) => {
-        if (prop === 'then') return (resolve: (value: unknown) => void) => resolve(result);
-        return () => {
+        if (prop === 'then') {
+          return (resolve: (value: unknown) => void) =>
+            resolve({ data: one ? row : [row], error: null });
+        }
+        return (...args: unknown[]) => {
+          if (prop === 'single' || prop === 'maybeSingle') one = true;
           if (['insert', 'update', 'upsert', 'delete'].includes(prop as string)) {
             writes.push(`${table}.${String(prop)}`);
           }
+          if (prop === 'update') updates.push({ table, values: args[0] });
           return builder;
         };
       },
@@ -58,6 +70,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 const { SubscriptionInactiveError } = await import('@/lib/subscription-guard');
 const { addCompetitor, deleteCompetitor } = await import('./competitor');
+const { markBrandAsEcommerce, setBrandShoppingMode } = await import('./brand');
 const { addPromptNote } = await import('./prompt-workflow');
 const { markGettingStartedPageOpened } = await import('./getting-started');
 const { updateAccountName } = await import('./organization');
@@ -66,6 +79,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   org = { subscription_status: 'canceled', stripe_subscription_id: 'sub_1' };
   writes = [];
+  updates = [];
 });
 
 afterEach(() => {
@@ -97,6 +111,30 @@ describe('server actions on a read-only workspace', () => {
     await addCompetitor('brand-1', { name: 'Acme', domain: 'acme.com' });
     await expect(deleteCompetitor('row-1')).rejects.toThrow(SubscriptionInactiveError);
     expect(writes).toEqual(['competitors.insert']);
+  });
+
+  it('let setup turn Shopping mode on for an organization that never subscribed', async () => {
+    org = { subscription_status: null, stripe_subscription_id: null };
+    await expect(markBrandAsEcommerce('brand-1')).resolves.toEqual({
+      industry: 'E-commerce & Retail',
+      promptsUpdated: 1,
+    });
+    expect(updates).toContainEqual({
+      table: 'brands',
+      values: { industry: 'E-commerce & Retail' },
+    });
+    expect(updates).toContainEqual({ table: 'brands', values: { shopping_mode_enabled: true } });
+    expect(writes).toEqual([
+      'brands.update',
+      'brands.update',
+      'prompts.update',
+      'brand_platforms.upsert',
+    ]);
+
+    // Outside setup, the same change waits for a plan.
+    writes = [];
+    await expect(setBrandShoppingMode('brand-1', true)).rejects.toThrow(SubscriptionInactiveError);
+    expect(writes).toEqual([]);
   });
 
   it("keep the person's own profile and a page-opened trace open", async () => {

@@ -17,17 +17,21 @@ const state = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
-    from: (table: string) => ({
+    from: () => ({
       select: () => ({
         eq: () => ({
           single: async () => ({
             data: { id: 'u1', role: state.role, organization_id: 'o1' },
           }),
+          // The plan check: the profile with its organization.
           maybeSingle: async () => ({
-            data:
-              table === 'organizations'
-                ? { subscription_status: state.subscriptionStatus, stripe_subscription_id: 'sub_1' }
-                : { organization_id: 'o1' },
+            data: {
+              organization_id: 'o1',
+              organizations: {
+                subscription_status: state.subscriptionStatus,
+                stripe_subscription_id: 'sub_1',
+              },
+            },
             error: null,
           }),
         }),
