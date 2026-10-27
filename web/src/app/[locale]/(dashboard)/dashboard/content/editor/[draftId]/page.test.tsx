@@ -6943,12 +6943,9 @@ describe('the side panel', () => {
       await act(async () => panelButton('Run Agent').click());
       await act(async () => {});
       const sent = fixDraftRules.mock.calls[0][2];
-      // Sent as a rule, it says how far off the page is itself; held, the hint does.
-      if (sent.rules.some((r: { key: string }) => r.key === 'length')) {
-        expect(sent).not.toHaveProperty('overLength');
-      } else {
-        expect(sent.overLength).toEqual({ count: expect.any(Number), max: 24 });
-      }
+      // Far past its 20 characters, the Length is held from Fix: the hint says how far off the page is.
+      expect(sent.rules.map((r: { key: string }) => r.key)).not.toContain('length');
+      expect(sent.overLength).toEqual({ count: expect.any(Number), max: 24 });
     });
 
     it('says the month’s AI usage is used up before anything else, and runs nothing', async () => {
