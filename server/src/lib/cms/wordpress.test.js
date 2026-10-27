@@ -4,8 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 const { startFakeApi } = await import('../../connectors/testing.js');
-const { WordPressError, checkSite, createPost, readPost, revokePassword, siteAddress, updatePost } =
-  await import('./wordpress.js');
+const {
+  WordPressError,
+  answersAsWordPress,
+  checkSite,
+  createPost,
+  readPost,
+  readPostState,
+  revokePassword,
+  siteAddress,
+  updatePost,
+} = await import('./wordpress.js');
 
 /**
  * WordPress's REST API for Send to CMS (#1331, phase 2): a site checked
@@ -286,5 +295,44 @@ describe('revokePassword', () => {
   it('says it couldn’t on a site that doesn’t tell a password its id', async () => {
     const { site, request } = await start({});
     expect(await revokePassword(site, signIn, { request })).toBe(false);
+  });
+});
+
+describe('readPostState and answersAsWordPress (the published check)', () => {
+  it('reads a post this user can’t edit as the public sees it: a Contributor’s, published', async () => {
+    const { site, request } = await start({
+      'GET /wp-json/wp/v2/posts/7': (call) =>
+        call.query.context === 'edit'
+          ? { status: 403, json: { code: 'rest_forbidden_context' } }
+          : { json: { id: 7, status: 'publish', link: 'https://blog.acme.example/cold-brew/' } },
+    });
+    expect(await readPostState(site, signIn, '7', { request })).toEqual({
+      id: 7,
+      status: 'publish',
+      link: 'https://blog.acme.example/cold-brew/',
+    });
+    expect(api.calls.map((c) => c.query.context)).toEqual(['edit', 'view']);
+  });
+
+  it('throws, never reading as gone, a post it can’t read either way; null for one gone', async () => {
+    const { site, request } = await start({
+      'GET /wp-json/wp/v2/posts/7': () => ({ status: 403, json: { code: 'rest_forbidden' } }),
+      'GET /wp-json/wp/v2/posts/8': () => ({ status: 404, json: { code: 'rest_post_invalid_id' } }),
+    });
+    await expect(readPostState(site, signIn, '7', { request })).rejects.toMatchObject({
+      code: 'failed',
+    });
+    expect(await readPostState(site, signIn, '8', { request })).toBeNull();
+  });
+
+  it('says whether the site answers as WordPress now', async () => {
+    let checked = await start({ 'GET /wp-json/': () => ({ json: { namespaces: ['wp/v2'] } }) });
+    expect(await answersAsWordPress(checked.site, signIn, { request: checked.request })).toBe(true);
+    expect(api.calls[0].query).toEqual({ _fields: 'namespaces' });
+    api.close();
+    checked = await start({});
+    expect(await answersAsWordPress(checked.site, signIn, { request: checked.request })).toBe(
+      false,
+    );
   });
 });

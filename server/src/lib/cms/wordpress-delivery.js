@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
+import { markDeliveryPublished } from '../content-published.js';
 import { readCmsCredentials } from './credentials.js';
 import { WordPressError, createPost, readPost, updatePost } from './wordpress.js';
 
@@ -32,7 +33,7 @@ const DRAFT_STATUSES = new Set(['draft', 'pending', 'auto-draft']);
 async function lastPost(draftId, site, deliveryId) {
   const { data, error } = await supabaseAdmin
     .from('content_draft_deliveries')
-    .select('external_id')
+    .select('id, draft_id, status, published_url, external_id')
     .eq('draft_id', draftId)
     .eq('target', 'wordpress')
     .eq('target_collection', site)
@@ -42,7 +43,25 @@ async function lastPost(draftId, site, deliveryId) {
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return data?.external_id ?? null;
+  return data?.external_id ? data : null;
+}
+
+/**
+ * The last send's post, found live by this send before the published check
+ * saw it: that send is marked published at the post's link, so the publish
+ * isn't lost behind the new draft (the page itself follows its latest send,
+ * this new draft, once that is published). Best effort.
+ */
+async function keepPublished(last, post) {
+  if (post.status !== 'publish' || !/^https?:\/\//i.test(post.link ?? '')) return;
+  try {
+    await markDeliveryPublished(last, post.link);
+  } catch (err) {
+    logger.warn(
+      { err: { name: err?.name }, deliveryId: last.id },
+      '[content-delivery] publish not kept',
+    );
+  }
 }
 
 /**
@@ -102,11 +121,13 @@ export async function sendToWordPress({ delivery, page, html, connection, reques
         refused: true,
       };
     }
-    const before = await lastPost(page.draftId, site, delivery.id);
+    const last = await lastPost(page.draftId, site, delivery.id);
+    const before = last?.external_id ?? null;
     const current = before ? await readPost(site, credentials, before, { request }) : null;
     const live = Boolean(
       current && current.status !== 'trash' && !DRAFT_STATUSES.has(current.status),
     );
+    if (live) await keepPublished(last, current);
     let written = null;
     if (current && !live && current.status !== 'trash') {
       try {

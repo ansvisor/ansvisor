@@ -294,6 +294,58 @@ export async function readPost(site, credentials, id, { request } = {}) {
   }
 }
 
+/**
+ * A post's status and link, for the published check (cms/wordpress-status.js):
+ * null when it's gone (404, 410). A post this user can't read to edit, as
+ * a Contributor's once an Editor published it, is read as the public sees
+ * it; one it can't read either throws ('failed'), so its send stays open.
+ */
+export async function readPostState(site, credentials, id, { request } = {}) {
+  const path = postId(id);
+  if (!path) return null;
+  try {
+    return postOf(
+      await call(site, `/wp/v2/posts/${path}`, {
+        credentials,
+        query: { context: 'edit' },
+        request,
+      }),
+    );
+  } catch (err) {
+    if (err instanceof WordPressError && err.code === 'not_found') return null;
+    if (!(err instanceof WordPressError && err.code === 'no_access')) throw err;
+  }
+  try {
+    return postOf(
+      await call(site, `/wp/v2/posts/${path}`, {
+        credentials,
+        query: { context: 'view' },
+        request,
+      }),
+    );
+  } catch (err) {
+    throw new WordPressError('failed', 'This user can’t read the post.', err?.status);
+  }
+}
+
+/**
+ * Whether the site answers as WordPress now, signed in: before a post's
+ * 404 closes its send, as a site moved, or its permalinks set to Plain,
+ * answers 404 for every post.
+ */
+export async function answersAsWordPress(site, credentials, { request } = {}) {
+  try {
+    const index = await call(site, '/', {
+      credentials,
+      query: { _fields: 'namespaces' },
+      request,
+    });
+    return Array.isArray(index?.namespaces) && index.namespaces.includes('wp/v2');
+  } catch {
+    return false;
+  }
+}
+
 /** Writes a post's title, slug, content and excerpt; its status stays as it is. */
 export async function updatePost(site, credentials, id, post, { request } = {}) {
   const path = postId(id);
