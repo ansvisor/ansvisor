@@ -891,6 +891,7 @@
         "prioritySub": "Across open actions"
       },
       "allActions": "All",
+      "fromProducts": "From Products",
       "filters": {
         "priority": "Priority",
         "status": "Status",
