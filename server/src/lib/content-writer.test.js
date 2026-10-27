@@ -97,6 +97,7 @@ const {
   WRITE_SYSTEM_PROMPT,
   buildWritePrompt,
   briefText,
+  lengthNow,
   renderPage,
   rewriteSystemPrompt,
   runDraftWriting,
@@ -1168,6 +1169,36 @@ describe('the write prompt', () => {
       'Industry: Coffee\nSite type: B2B SaaS (software or services sold to businesses)\nDescription:',
     );
     expect(write('')).toContain('Industry: Coffee\nDescription:');
+  });
+
+  it('tells an existing page’s suggestions how long it is now, beside its Length', () => {
+    const prompt = (bodyHtml, passages = [{ tag: 'p', text: 'Brew it slowly.' }]) =>
+      buildWritePrompt({
+        brand,
+        draft: draftRow({ body_html: bodyHtml }),
+        brief: 'No brief.',
+        input: { sources: { length: 3000 }, rules: [], textRules: [] },
+        passages,
+        lockedKeys: new Set(),
+      });
+    // 5,353 characters for a Length of 3,000, as the page that went to Webflow.
+    expect(prompt(`<p>${'x'.repeat(5353)}</p>`)).toContain(
+      'Length: about 3000 characters. The page is about 5353 characters now, over its Length: suggest cuts',
+    );
+    expect(prompt(`<p>${'x'.repeat(3100)}</p>`)).toContain(
+      'The page is about 3100 characters now: keep it about this long.',
+    );
+    // A new page has no length yet.
+    expect(prompt('', null)).toContain('Length: about 3000 characters.\n');
+  });
+});
+
+describe('lengthNow', () => {
+  it('reads a page over, under or within its Length’s band (±20%)', () => {
+    expect(lengthNow(3601, 3000)).toMatch(/over its Length: suggest cuts/);
+    expect(lengthNow(3600, 3000)).toMatch(/keep it about this long/);
+    expect(lengthNow(2400, 3000)).toMatch(/keep it about this long/);
+    expect(lengthNow(2399, 3000)).toMatch(/under its Length: add what/);
   });
 });
 
