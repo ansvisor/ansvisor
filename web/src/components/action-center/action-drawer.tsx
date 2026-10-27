@@ -753,7 +753,12 @@ export function ActionDrawer({
                         (task.status === 'todo' || task.status === 'in_progress') &&
                         task.details?.check === 'auto' &&
                         task.details.url
-                          ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
+                          ? {
+                              onCheck: guard(() => void checkTask(task.id), {
+                                action: tActions('checkTasks'),
+                              }),
+                              busy: checking === task.id,
+                            }
                           : undefined
                       }
                       draftWork={draftWork}

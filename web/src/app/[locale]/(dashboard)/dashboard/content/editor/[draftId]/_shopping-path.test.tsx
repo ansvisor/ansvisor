@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { ShoppingChoices, ShoppingPath } from '@/lib/content/shopping-path';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const getDraftShoppingPath = vi.fn();
 const buildDraftShoppingPath = vi.fn();
@@ -74,17 +75,23 @@ let root: Root;
 // The path as saved: each save writes the choices and a new savedAt, as the action does.
 let stored: ShoppingPath;
 let saves: number;
+const openUpgrade = vi.fn();
 
-async function render(onPathChange?: () => void) {
+/** `isLocked`: a read-only workspace (plan not active). */
+async function render(onPathChange?: () => void, isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ShoppingPathSection
-          draftId="d1"
-          brandId="b1"
-          pageType="buying_guide"
-          onPathChange={onPathChange}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ShoppingPathSection
+            draftId="d1"
+            brandId="b1"
+            pageType="buying_guide"
+            onPathChange={onPathChange}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -113,6 +120,7 @@ beforeEach(() => {
     });
   searchCatalogProducts.mockReset().mockResolvedValue([]);
   toast.error.mockReset();
+  openUpgrade.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -384,5 +392,39 @@ describe('ShoppingPathSection', () => {
     await act(async () => button('Try again')!.click());
     expect(getDraftShoppingPath).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain('Summit GTX Boot');
+  });
+
+  it('shows the path on a read-only workspace, and each change or pick opens the upgrade dialog', async () => {
+    const onPathChange = vi.fn();
+    await render(onPathChange, true);
+    expect(container.textContent).toContain('Summit GTX Boot');
+    const clicks = [
+      'Lock Summit GTX Boot',
+      'Swap Summit GTX Boot for another product',
+      'Remove Ridge Light Hiker from the page',
+      'Pick again',
+      'Add product',
+    ];
+    for (const label of clicks) {
+      await act(async () => button(label)!.click());
+    }
+    expect(openUpgrade).toHaveBeenCalledTimes(clicks.length);
+    expect(openUpgrade).toHaveBeenCalledWith('Changing the shopping path needs a plan');
+    expect(saveDraftShoppingPath).not.toHaveBeenCalled();
+    expect(buildDraftShoppingPath).not.toHaveBeenCalled();
+    expect(onPathChange).not.toHaveBeenCalled();
+    // Nothing changed on the page, and Add product's search stays closed.
+    expect(button('Lock Summit GTX Boot')!.getAttribute('aria-pressed')).toBe('false');
+    expect(container.textContent).toContain('Ridge Light Hiker');
+    expect(container.querySelector('input[type="search"]')).toBeNull();
+
+    // Nor is a first pick made.
+    act(() => root.unmount());
+    root = createRoot(container);
+    getDraftShoppingPath.mockResolvedValue({ path: null });
+    await render(undefined, true);
+    await act(async () => button('Pick from the catalog')!.click());
+    expect(openUpgrade).toHaveBeenCalledTimes(clicks.length + 1);
+    expect(buildDraftShoppingPath).not.toHaveBeenCalled();
   });
 });

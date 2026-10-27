@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   listCategoryPages,
   resetCategoryPage,
@@ -34,7 +35,8 @@ export function shortAddress(url: string): string {
  * person, so a buying guide or a comparison links to it. Shown once the
  * brand's catalog has categories, and under its heading when they can't be
  * read. Admins and managers change a page, set none, or put it back to the
- * match; members see the table.
+ * match; members see the table. On a read-only workspace (plan not active)
+ * the table shows, and changing a page opens the upgrade dialog instead.
  *
  * `refreshKey`: changed by the page to read the categories again (the
  * catalog's sources read again: a feed added or synced, a file uploaded).
@@ -43,6 +45,9 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
   const t = useTranslations('settings.catalog.categories');
   const { activeBrandId } = useBrandStore();
   const { canManage } = useUserRole();
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const needsPlan = { action: tActions('changeCategoryPages') };
 
   // The categories as read for a brand: another brand's never show.
   const [loaded, setLoaded] = useState<{
@@ -79,6 +84,11 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
     result: { ok: true } | { ok: false; code: CategoryPageError },
   ): Promise<void> => {
     setBusy(false);
+    // The plan ended while the page was open: the server's refusal opens the upgrade dialog.
+    if (!result.ok && result.code === 'subscription') {
+      openUpgrade(needsPlan.action);
+      return;
+    }
     if (!result.ok) {
       toast.error(t(`errors.${result.code}`));
       return;
@@ -87,14 +97,14 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
     setEditing(null);
     setReads((n) => n + 1);
   };
-  const save = async (category: string, value: string | null) => {
+  const save = guard(async (category: string, value: string | null) => {
     setBusy(true);
     await done(await setCategoryPage(activeBrandId, category, value));
-  };
-  const reset = async (category: string) => {
+  }, needsPlan);
+  const reset = guard(async (category: string) => {
     setBusy(true);
     await done(await resetCategoryPage(activeBrandId, category));
-  };
+  }, needsPlan);
 
   return (
     <section aria-labelledby="catalog-category-pages" className="space-y-3 rounded-lg border p-4">
@@ -222,10 +232,10 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
                         variant="outline"
                         disabled={busy}
                         aria-label={t('changeLabel', { category: category.name })}
-                        onClick={() => {
+                        onClick={guard(() => {
                           setEditing({ brandId: activeBrandId, name: category.name });
                           setUrl(category.page?.url ?? '');
-                        }}
+                        }, needsPlan)}
                       >
                         {t('change')}
                       </Button>

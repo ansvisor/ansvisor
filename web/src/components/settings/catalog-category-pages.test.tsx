@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { CategoryPage } from '@/lib/catalog-client';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const listCategoryPages = vi.fn();
 const setCategoryPage = vi.fn();
@@ -37,6 +38,7 @@ const { CatalogCategoryPages, shortAddress } = await import('./catalog-category-
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 const CATEGORIES: CategoryPage[] = [
   {
@@ -56,11 +58,16 @@ const CATEGORIES: CategoryPage[] = [
   { name: 'Sleeping Bags', products: 9, inStock: 9, page: null, how: null },
 ];
 
-async function render() {
+/** `isLocked`: a read-only workspace (plan not active). */
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <CatalogCategoryPages />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <CatalogCategoryPages />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -94,6 +101,7 @@ beforeEach(() => {
   resetCategoryPage.mockReset().mockResolvedValue({ ok: true, value: true });
   toast.error.mockReset();
   toast.success.mockReset();
+  openUpgrade.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -235,5 +243,34 @@ describe('CatalogCategoryPages', () => {
     expect(toast.success).toHaveBeenCalledWith('Saved.');
     expect(button('Change the page for Rain Jackets')!.disabled).toBe(false);
     expect(button('Save')).toBeUndefined();
+  });
+
+  it('changes no page on a read-only workspace: Change opens the upgrade dialog', async () => {
+    await render(true);
+    // The table shows as it is.
+    expect(container.textContent).toContain('/collections/hiking-boots');
+    await act(async () => button('Change the page for Sleeping Bags')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith("Changing a category's page needs a plan");
+    expect(
+      container.querySelector('input[aria-label="Page address for Sleeping Bags"]'),
+    ).toBeNull();
+    expect(setCategoryPage).not.toHaveBeenCalled();
+    expect(resetCategoryPage).not.toHaveBeenCalled();
+  });
+
+  it('opens the upgrade dialog, not a failure, when the server says the plan has ended', async () => {
+    await render();
+    await act(async () => button('Change the page for Rain Jackets')!.click());
+    setCategoryPage.mockResolvedValueOnce({ ok: false, code: 'subscription' });
+    await act(async () => button('No page')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith("Changing a category's page needs a plan");
+    expect(toast.error).not.toHaveBeenCalled();
+
+    resetCategoryPage.mockResolvedValueOnce({ ok: false, code: 'subscription' });
+    await act(async () => button('Use the match')!.click());
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(toast.error).not.toHaveBeenCalled();
+    // The row stays open, to try again with a plan.
+    expect(button('Save')!.disabled).toBe(false);
   });
 });
