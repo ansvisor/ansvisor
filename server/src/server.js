@@ -29,6 +29,7 @@ import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
+import { sweepFramerPublished } from './lib/cms/framer-status.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
 import { parseScraperResponse } from './lib/cloro-scraper.js';
@@ -303,6 +304,10 @@ async function runDailyTracking() {
   // And to WordPress (00294), once a day too.
   sweepWordPressPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[wordpress-status] daily sweep failed');
+  });
+  // And to Framer (00295), once a day too.
+  sweepFramerPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[framer-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
