@@ -130,4 +130,18 @@ describe('the brands page', () => {
     await render();
     expect(links()).toEqual([]);
   });
+
+  it("opens the upgrade dialog from Add Brand at the plan's limit on a read-only workspace", async () => {
+    openUpgrade.mockReset();
+    brands.list = [{ id: 'b1' }, { id: 'b2' }];
+    cloud.on = true;
+    await render(true);
+    const add = container.querySelector<HTMLAnchorElement>(
+      'a[href="/dashboard/settings?tab=billing"]',
+    )!;
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    await act(async () => add.dispatchEvent(click));
+    expect(click.defaultPrevented).toBe(true);
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding brands needs a plan');
+  });
 });

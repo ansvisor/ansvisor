@@ -1,5 +1,4 @@
 import { useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
@@ -39,12 +38,12 @@ function BrandsHeader({
               </Button>
             </AddBrandLink>
           ) : needsUpgrade ? (
-            <Link href="/dashboard/settings?tab=billing">
+            <AddBrandLink href="/dashboard/settings?tab=billing">
               <Button variant="outline" className="gap-2">
                 <Crown className="h-4 w-4" />
                 {t('addBrand')}
               </Button>
-            </Link>
+            </AddBrandLink>
           ) : null}
         </div>
       </div>
