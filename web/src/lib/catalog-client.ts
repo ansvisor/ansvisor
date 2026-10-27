@@ -309,3 +309,103 @@ export function connectSignInAccount(
 ): Promise<StoreResult> {
   return connectStore(brandId, kind, { account });
 }
+
+/**
+ * A catalog category and its page on the brand's site (shopping path,
+ * 00350): `how` says how it was found; 'manual' is a person's decision,
+ * a page or none (`page` null), and null is no match.
+ */
+export interface CategoryPage {
+  name: string;
+  products: number;
+  inStock: number;
+  page: { url: string; title: string | null } | null;
+  how: 'manual' | 'address' | 'title' | 'words' | null;
+}
+
+export type CategoryPageError =
+  | 'invalid'
+  | 'off_site'
+  | 'not_found'
+  | 'forbidden'
+  | 'session'
+  | 'workspace'
+  | 'busy'
+  | 'failed';
+
+const CATEGORY_KNOWN: readonly CategoryPageError[] = [
+  'invalid',
+  'off_site',
+  'not_found',
+  'forbidden',
+];
+
+/**
+ * `whenMissing`: what a 404 with no code of ours means, the route not there
+ * yet (an API older than the web).
+ */
+async function categoryCall<T>(
+  path: string,
+  init: RequestInit,
+  read: (body: Record<string, unknown>) => T,
+  whenMissing?: T,
+): Promise<{ ok: true; value: T } | { ok: false; code: CategoryPageError }> {
+  try {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    if (!session) return { ok: false, code: 'session' };
+    const res = await fetch(`${BROWSER_API_BASE_URL}/api/catalog${path}`, {
+      ...init,
+      headers: {
+        ...init.headers,
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (res.ok) return { ok: true, value: read(body) };
+    if (res.status === 404 && body.code === undefined && whenMissing !== undefined) {
+      return { ok: true, value: whenMissing };
+    }
+    const known = CATEGORY_KNOWN.find((c) => c === body.code);
+    if (known) return { ok: false, code: known };
+    const general = apiFailure(res.status, body);
+    return {
+      ok: false,
+      code:
+        general === 'session' || general === 'workspace' || general === 'busy' ? general : 'failed',
+    };
+  } catch (err) {
+    console.error('Failed to reach the catalog API:', err);
+    return { ok: false, code: 'failed' };
+  }
+}
+
+/** The brand's catalog categories and their pages on its site; none while the API has no such route. */
+export function listCategoryPages(brandId: string) {
+  return categoryCall<CategoryPage[]>(
+    `/categories?${new URLSearchParams({ brandId })}`,
+    {},
+    (body) => (body.categories as CategoryPage[] | undefined) ?? [],
+    [],
+  );
+}
+
+/** A category's page set by hand (`url`), or set to none (null). */
+export function setCategoryPage(brandId: string, category: string, url: string | null) {
+  return categoryCall(
+    '/categories',
+    { method: 'PUT', body: JSON.stringify({ brandId, category, url }) },
+    () => true,
+  );
+}
+
+/** A category back to its automatic match. */
+export function resetCategoryPage(brandId: string, category: string) {
+  return categoryCall(
+    `/categories?${new URLSearchParams({ brandId, category })}`,
+    { method: 'DELETE' },
+    () => true,
+  );
+}

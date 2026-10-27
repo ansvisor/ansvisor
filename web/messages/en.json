@@ -7948,6 +7948,43 @@
       "uploadFile": "Upload a file",
       "uploadHint": "CSV or XML, up to 4 MB. For a larger catalog, add its feed URL.",
       "managersOnly": "Admins and managers can add and sync sources.",
+      "categories": {
+        "title": "Category pages",
+        "description": "Where each catalog category lives on your site, so buying guides and comparisons can link to it. We matched them to your site's pages that read as a category page; check them once.",
+        "unavailable": "Couldn't read the category pages right now.",
+        "category": "Category",
+        "productsHeading": "Products",
+        "pageHeading": "Page on your site",
+        "actions": "Actions",
+        "products": "{products, plural, one {# product} other {# products}} · {inStock} in stock",
+        "noPage": "No page",
+        "how": {
+          "address": "Its address names the category",
+          "title": "Its title names the category",
+          "words": "Most of the category's words",
+          "manual": "Set by hand",
+          "none": "Nothing on your site reads as it"
+        },
+        "change": "Change",
+        "changeLabel": "Change the page for {category}",
+        "urlLabel": "Page address for {category}",
+        "urlPlaceholder": "https://example.com/collections/…",
+        "save": "Save",
+        "setNone": "No page",
+        "useMatch": "Use the match",
+        "cancel": "Cancel",
+        "saved": "Saved.",
+        "errors": {
+          "invalid": "That isn't a web address. Paste the page's address.",
+          "off_site": "The page must be on the brand's own site.",
+          "not_found": "This category isn't in the catalog any more. Reload the page.",
+          "forbidden": "Only admins and managers can change this.",
+          "session": "Your session expired. Sign in again.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many requests. Wait a few minutes.",
+          "failed": "Couldn't save the page. Try again later."
+        }
+      },
       "synced": "{count, plural, one {# product read} other {# products read}}",
       "errors": {
         "invalid": "Enter a feed address starting with http:// or https://.",

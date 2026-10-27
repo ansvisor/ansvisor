@@ -11,6 +11,9 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 const {
+  listCategoryPages,
+  resetCategoryPage,
+  setCategoryPage,
   connectSignInAccount,
   connectStore,
   listSignInAccounts,
@@ -242,5 +245,60 @@ describe('StoreError', () => {
     for (const code of Object.keys(CODES)) {
       expect(messages.settings.catalog.stores.errors).toHaveProperty(code);
     }
+  });
+});
+
+describe('category pages (shopping path)', () => {
+  it("reads the brand's categories and their pages", async () => {
+    const categories = [{ name: 'Hiking Boots', products: 24, inStock: 18, page: null, how: null }];
+    answer(200, { categories });
+    expect(await listCategoryPages('b1')).toEqual({ ok: true, value: categories });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/catalog/categories?brandId=b1');
+    expect(init).toMatchObject({ headers: { Authorization: 'Bearer tok' } });
+  });
+
+  it("sets a category's page, none, or puts it back to the match", async () => {
+    answer(200, { ok: true });
+    expect(await setCategoryPage('b1', 'Socks', 'https://s.example/c/socks')).toEqual({
+      ok: true,
+      value: true,
+    });
+    let [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/catalog/categories');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body)).toEqual({
+      brandId: 'b1',
+      category: 'Socks',
+      url: 'https://s.example/c/socks',
+    });
+
+    await resetCategoryPage('b1', 'Hiking Boots');
+    [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe('/api/aeo/api/catalog/categories?brandId=b1&category=Hiking+Boots');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it("names the API's reasons", async () => {
+    answer(400, { code: 'off_site', error: "The page must be on the brand's own site." });
+    expect(await setCategoryPage('b1', 'Socks', 'https://x.example')).toEqual({
+      ok: false,
+      code: 'off_site',
+    });
+    answer(404, { code: 'not_found', error: "That category isn't in the brand's catalog." });
+    expect(await setCategoryPage('b1', 'Tents', null)).toEqual({ ok: false, code: 'not_found' });
+    answer(500, {});
+    expect(await listCategoryPages('b1')).toEqual({ ok: false, code: 'failed' });
+  });
+
+  it('reads an API without the route as no categories, but still fails a save there', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('Cannot GET /api/catalog/categories', { status: 404 }),
+    );
+    expect(await listCategoryPages('b1')).toEqual({ ok: true, value: [] });
+    fetchMock.mockResolvedValue(
+      new Response('Cannot PUT /api/catalog/categories', { status: 404 }),
+    );
+    expect(await setCategoryPage('b1', 'Socks', null)).toEqual({ ok: false, code: 'failed' });
   });
 });

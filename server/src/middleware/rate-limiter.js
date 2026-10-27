@@ -131,6 +131,21 @@ export const catalogLimiter = rateLimit({
   },
 });
 
+// A catalog category's page set by hand, or put back to its match (shopping
+// path, 00350): a person goes down the table a row at a time, so a bucket
+// of its own, wider than the syncs'. Reading the table takes the API's.
+export const catalogCategoryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // A brand's CMS connection (Send to CMS, #1331): each call reaches Webflow
 // through Composio, so a member's are few.
 export const cmsLimiter = rateLimit({

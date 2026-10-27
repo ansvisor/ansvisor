@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { foldLetters } from '../letters.js';
 
 /**
  * A page as a Webflow CMS item (Send to CMS #1331, phase 2): its rich text
@@ -185,20 +186,13 @@ export function toWebflowRichText(html) {
   return { html: $.html().trim(), changed };
 }
 
-/** Letters Unicode doesn't take apart into a base letter and its mark. */
-const LETTERS = { ı: 'i', ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', đ: 'd', ł: 'l', þ: 'th' };
-
 /**
  * A slug Webflow takes: lowercase letters, digits, '-' and '_', starting
  * with a letter, digit or '_' (marks taken off, "ç" → "c"). Null when
  * nothing of it is left (a slug in another script).
  */
 export function webflowSlug(value) {
-  const slug = String(value ?? '')
-    .toLowerCase()
-    .replace(/[ıßæœøđłþ]/g, (c) => LETTERS[c])
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
+  const slug = foldLetters(value)
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-+|-+$/g, '')

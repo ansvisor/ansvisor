@@ -14,6 +14,7 @@ export function fakeDb() {
   const uniqueKey = (table, row) => {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
     if (table === 'catalog_source_credentials') return row.source_id;
+    if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
     return `${row.brand_id}|${row.source}|${row.external_id}`;
   };
   // The unique keys' rows, by table, as the database's unique indexes find them.
