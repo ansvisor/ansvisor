@@ -17,7 +17,10 @@ const syncSource = vi.fn();
 const connectStore = vi.fn();
 const reconnectStore = vi.fn();
 const disconnectStore = vi.fn();
+const connectSignInSource = vi.fn();
+const listSignInAccounts = vi.fn();
 let configured;
+let googleConfigured;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -79,6 +82,8 @@ vi.mock('../lib/catalog/stores.js', async () => {
     connectStore: (...args) => connectStore(...args),
     reconnectStore: (...args) => reconnectStore(...args),
     disconnectStore: (...args) => disconnectStore(...args),
+    connectSignInSource: (...args) => connectSignInSource(...args),
+    listSignInAccounts: (...args) => listSignInAccounts(...args),
   };
 });
 vi.mock('../connectors/index.js', () => ({
@@ -89,6 +94,19 @@ vi.mock('../connectors/index.js', () => ({
       fields: [{ name: 'apiKey', label: 'API key', secret: true }],
     },
   ],
+  signInConnectors: () => [
+    {
+      kind: 'merchant_center',
+      label: 'Google Merchant Center',
+      provider: 'google-merchant-center',
+    },
+  ],
+  connectorFor: (kind) =>
+    kind === 'merchant_center' ? { kind, signIn: 'google-merchant-center' } : { kind },
+  isSignIn: (connector) => typeof connector?.signIn === 'string',
+}));
+vi.mock('../lib/composio.js', () => ({
+  isComposioConfigured: (provider) => provider === 'google-merchant-center' && googleConfigured,
 }));
 
 const { default: router } = await import('./catalog.js');
@@ -111,6 +129,14 @@ beforeEach(async () => {
   ];
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'org-1' });
   syncSource.mockReset().mockResolvedValue({ status: 'ok', counts: { items: 4 } });
+  googleConfigured = true;
+  connectSignInSource.mockReset().mockResolvedValue({
+    id: 'gmc-1',
+    brand_id: BRAND,
+    kind: 'merchant_center',
+    account: '123456789',
+  });
+  listSignInAccounts.mockReset().mockResolvedValue([{ id: '123456789', name: 'Acme' }]);
   connectStore.mockReset().mockResolvedValue({
     id: 'store-1',
     brand_id: BRAND,
@@ -258,12 +284,65 @@ describe('GET /api/catalog/connectors', () => {
         },
       ],
       ready: false,
+      signIns: [
+        {
+          kind: 'merchant_center',
+          label: 'Google Merchant Center',
+          provider: 'google-merchant-center',
+          configured: true,
+        },
+      ],
+    });
+  });
+});
+
+describe('GET /api/catalog/accounts (#1270)', () => {
+  const query = `brandId=${BRAND}&kind=merchant_center`;
+
+  it("lists the accounts the workspace's sign-in opens, for an admin or a manager", async () => {
+    const res = await fetch(`${base}/accounts?${query}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ accounts: [{ id: '123456789', name: 'Acme' }] });
+    expect(listSignInAccounts).toHaveBeenCalledWith({ brandId: BRAND, kind: 'merchant_center' });
+
+    role = 'analyst';
+    expect((await fetch(`${base}/accounts?${query}`)).status).toBe(403);
+    expect((await fetch(`${base}/accounts?brandId=nope&kind=merchant_center`)).status).toBe(400);
+  });
+
+  it('says when the workspace must connect Google first', async () => {
+    listSignInAccounts.mockRejectedValueOnce(
+      new StoreError(409, 'not_connected', 'Connect Google Merchant Center with Google first.'),
+    );
+    const res = await fetch(`${base}/accounts?${query}`);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'Connect Google Merchant Center with Google first.',
+      code: 'not_connected',
     });
   });
 });
 
 describe('POST /api/catalog/sources', () => {
   const body = { brandId: BRAND, kind: 'acme_store', input: { apiKey: 'sk_secret' } };
+
+  it("connects a sign-in platform's account the person picked, then reads it", async () => {
+    const res = await send('POST', '/sources', {
+      brandId: BRAND,
+      kind: 'merchant_center',
+      input: { account: '123456789' },
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ id: 'gmc-1', account: '123456789' });
+    expect(connectSignInSource).toHaveBeenCalledWith({
+      brandId: BRAND,
+      kind: 'merchant_center',
+      input: { account: '123456789' },
+      userId: 'user-1',
+    });
+    expect(connectStore).not.toHaveBeenCalled();
+    expect(syncSource).toHaveBeenCalledWith(expect.objectContaining({ id: 'gmc-1' }));
+  });
 
   it('connects a store for an admin or a manager, then reads it without waiting', async () => {
     role = 'manager';

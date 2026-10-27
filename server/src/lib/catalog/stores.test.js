@@ -4,11 +4,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 import example from '../../connectors/__example__/index.js';
+import { ConnectError } from '../../connectors/errors.js';
+import { ConnectorHttpError } from '../../connectors/http.js';
 import { startFakeApi } from '../../connectors/testing.js';
 import { logger } from '../logger.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
 import { readCredentials } from './credentials.js';
-import { StoreError, connectStore, disconnectStore, readInput, reconnectStore } from './stores.js';
+import {
+  StoreError,
+  connectSignInSource,
+  connectStore,
+  disconnectStore,
+  listSignInAccounts,
+  readInput,
+  reconnectStore,
+} from './stores.js';
 
 /** Connecting a store, replacing its sign-in and removing it (#1263, 00282). */
 
@@ -169,5 +179,89 @@ describe('disconnectStore', () => {
       credentials: { apiKey: KEY },
     });
     expect(fake.rows('catalog_sources')).toEqual([]);
+  });
+});
+
+describe('a platform read with the workspace sign-in (#1270)', () => {
+  const gmc = {
+    kind: 'merchant_center',
+    label: 'Google Merchant Center',
+    signIn: 'google-merchant-center',
+    listAccounts: vi.fn(async () => [{ id: '123', name: 'Acme' }]),
+    checkAccount: vi.fn(async (value) => {
+      if (value !== '123')
+        throw new ConnectError("This Google sign-in can't open that Merchant Center account.");
+      return {
+        account: '123',
+        label: 'Acme',
+        url: 'https://merchants.google.com/mc/overview?a=123',
+      };
+    }),
+    readCatalog: vi.fn(),
+  };
+  const request = vi.fn();
+  const signInRequest = vi.fn(() => request);
+  const signInOpts = () => ({ db: fake.db, connectors: { merchant_center: gmc }, signInRequest });
+  const connectGmc = (account = '123') =>
+    connectSignInSource(
+      { brandId: BRAND, kind: 'merchant_center', input: { account }, userId: 'user-1' },
+      signInOpts(),
+    );
+
+  beforeEach(() => {
+    vi.stubEnv('COMPOSIO_API_KEY', 'test-composio-key');
+    vi.stubEnv('COMPOSIO_GMC_AUTH_CONFIG_ID', 'ac_gmc');
+    fake.rows('brands').push({ id: BRAND, organization_id: 'org-1' });
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("lists the accounts the workspace's sign-in opens", async () => {
+    await expect(
+      listSignInAccounts({ brandId: BRAND, kind: 'merchant_center' }, signInOpts()),
+    ).resolves.toEqual([{ id: '123', name: 'Acme' }]);
+    expect(signInRequest).toHaveBeenCalledWith('google-merchant-center', 'org_org-1');
+    expect(gmc.listAccounts).toHaveBeenCalledWith({ request });
+  });
+
+  it('makes the source for the picked account, with no sign-in of its own', async () => {
+    const source = await connectGmc();
+    expect(source).toMatchObject({
+      brand_id: BRAND,
+      kind: 'merchant_center',
+      account: '123',
+      label: 'Acme',
+      url: 'https://merchants.google.com/mc/overview?a=123',
+    });
+    expect(fake.rows('catalog_source_credentials')).toEqual([]);
+    await expect(connectGmc()).rejects.toMatchObject({ status: 409, code: 'duplicate' });
+  });
+
+  it("says why in plain words when it can't", async () => {
+    await expect(connectGmc('999')).rejects.toMatchObject({ status: 400, code: 'connect_failed' });
+    await expect(connectGmc(' ')).rejects.toMatchObject({ status: 400, code: 'invalid' });
+
+    gmc.listAccounts.mockRejectedValueOnce(new ConnectorHttpError('auth', 'no active sign-in'));
+    await expect(
+      listSignInAccounts({ brandId: BRAND, kind: 'merchant_center' }, signInOpts()),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'not_connected',
+      message: 'Connect Google Merchant Center with Google in Settings › Integrations first.',
+    });
+
+    vi.stubEnv('COMPOSIO_GMC_AUTH_CONFIG_ID', '');
+    await expect(connectGmc()).rejects.toMatchObject({ status: 503, code: 'not_configured' });
+    expect(fake.rows('catalog_sources')).toEqual([]);
+  });
+
+  it("isn't a store: no typed sign-in to connect or replace", async () => {
+    await expect(
+      connectStore(
+        { brandId: BRAND, kind: 'merchant_center', input: {}, userId: 'user-1' },
+        signInOpts(),
+      ),
+    ).rejects.toMatchObject({ status: 404, code: 'not_found' });
   });
 });

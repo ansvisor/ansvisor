@@ -20,6 +20,7 @@ const router = Router();
 
 const GSC = 'google-search-console';
 const GA = 'google-analytics';
+const GMC = 'google-merchant-center';
 const WRITE_ROLES = ['admin', 'manager'];
 
 /** Entity id: one connection per organization per provider (#577). */
@@ -92,6 +93,7 @@ router.get('/config', async (_req, res) => {
   return res.json({
     googleSearchConsole: isComposioConfigured(GSC),
     googleAnalytics: isComposioConfigured(GA),
+    googleMerchantCenter: isComposioConfigured(GMC),
     dataForSeo: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
   });
 });

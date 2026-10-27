@@ -1,14 +1,17 @@
 import express, { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { storeConnectors } from '../connectors/index.js';
+import { connectorFor, isSignIn, signInConnectors, storeConnectors } from '../connectors/index.js';
 import { assertBrandAccess } from '../lib/access.js';
+import { isComposioConfigured } from '../lib/composio.js';
 import { credentialsConfigured } from '../lib/catalog/credentials.js';
 import { syncSource } from '../lib/catalog/sources.js';
 import {
   StoreError,
+  connectSignInSource,
   connectStore,
   disconnectStore,
+  listSignInAccounts,
   reconnectStore,
 } from '../lib/catalog/stores.js';
 import { catalogLimiter } from '../middleware/rate-limiter.js';
@@ -21,9 +24,14 @@ import { catalogLimiter } from '../middleware/rate-limiter.js';
  *   - POST /api/catalog/upload?brandId=…&format=…: a CSV (or XML) file as
  *     the request's body, kept as the brand's upload source;
  *   - GET /api/catalog/connectors: the stores a person can connect, and
- *     their fields;
+ *     their fields; and the platforms read with the workspace's own
+ *     sign-in (Google Merchant Center, #1270), and whether this server has
+ *     that sign-in set up;
+ *   - GET /api/catalog/accounts?brandId=…&kind=…: the accounts the
+ *     workspace's sign-in opens on such a platform, to pick one;
  *   - POST /api/catalog/sources { brandId, kind, input }: a store connected,
- *     its sign-in checked with it and kept encrypted, then read;
+ *     its sign-in checked with it and kept encrypted, then read; or a
+ *     sign-in platform's account (`input.account`), checked, then read;
  *   - PUT /api/catalog/sources/:id/credentials { input }: its sign-in
  *     replaced;
  *   - DELETE /api/catalog/sources/:id: a store removed, with its sign-in and
@@ -100,25 +108,47 @@ function syncLater(req, source) {
   );
 }
 
-// GET /api/catalog/connectors — the stores a person can connect.
+// GET /api/catalog/connectors — the stores a person can connect, and the sign-in platforms.
 router.get('/connectors', (req, res) => {
-  res.json({ connectors: storeConnectors(), ready: credentialsConfigured() });
+  res.json({
+    connectors: storeConnectors(),
+    ready: credentialsConfigured(),
+    signIns: signInConnectors().map((c) => ({
+      ...c,
+      configured: isComposioConfigured(c.provider),
+    })),
+  });
+});
+
+const KIND = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/);
+
+// GET /api/catalog/accounts?brandId=…&kind=… — the accounts the workspace's sign-in opens.
+router.get('/accounts', catalogLimiter, async (req, res) => {
+  const parsed = z.object({ brandId: z.guid(), kind: KIND }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id);
+    return res.json({ accounts: await listSignInAccounts(parsed.data) });
+  } catch (err) {
+    return fail(req, res, err, 'catalog accounts error');
+  }
 });
 
 const connectBody = z.object({
   brandId: z.guid(),
-  kind: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+  kind: KIND,
   input: z.record(z.string(), z.string()),
 });
 
-// POST /api/catalog/sources — connect a store.
+// POST /api/catalog/sources — connect a store, or a sign-in platform's account.
 router.post('/sources', catalogLimiter, async (req, res) => {
   const parsed = connectBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   const { brandId, kind, input } = parsed.data;
   try {
     await assertWriter(brandId, req.user.id);
-    const source = await connectStore({ brandId, kind, input, userId: req.user.id });
+    const connect = isSignIn(connectorFor(kind)) ? connectSignInSource : connectStore;
+    const source = await connect({ brandId, kind, input, userId: req.user.id });
     syncLater(req, source);
     return res.status(201).json({ id: source.id, account: source.account });
   } catch (err) {

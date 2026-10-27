@@ -1,4 +1,5 @@
 import feedUrl from './feed-url/index.js';
+import merchantCenter from './merchant-center/index.js';
 
 /**
  * Catalog connectors (#1263): one folder each under `server/src/connectors/`,
@@ -31,11 +32,24 @@ import feedUrl from './feed-url/index.js';
  *   Later, with orders and webhooks: `syncOrders(since)` and
  *   `handleWebhook(event)`.
  *
+ * A platform read with the workspace's own sign-in (#1270), made in
+ * Settings › Integrations and kept by Composio, has instead of `fields` and
+ * `connect`:
+ *   - `signIn`: the Composio provider (lib/composio.js PROVIDERS). Its
+ *     `ctx.request` goes through that sign-in (lib/catalog/sign-in.js);
+ *   - `listAccounts(ctx)`: the accounts the sign-in opens, `{ id, name }`,
+ *     for the person to pick one;
+ *   - `checkAccount(value, ctx)`: the picked account checked, as
+ *     `{ account, label?, url? }`, or a ConnectError.
+ *   Its `readCatalog` may also return `issues`: the platform's problems per
+ *   item (lib/catalog/issues.js).
+ *
  * A connector never logs credentials or a buyer's personal data, and reads
  * only what its feature needs.
  */
 export const CONNECTORS = {
   [feedUrl.kind]: feedUrl,
+  [merchantCenter.kind]: merchantCenter,
 };
 
 /** The connector for a source's kind, or null. */
@@ -46,6 +60,18 @@ export function connectorFor(kind, connectors = CONNECTORS) {
 /** Whether a connector reads a store with the brand's sign-in. */
 export function isStore(connector) {
   return typeof connector?.connect === 'function';
+}
+
+/** Whether a connector reads with the workspace's own sign-in (Composio). */
+export function isSignIn(connector) {
+  return typeof connector?.signIn === 'string';
+}
+
+/** The platforms read with the workspace's sign-in, as the Settings card lists them. */
+export function signInConnectors(connectors = CONNECTORS) {
+  return Object.values(connectors)
+    .filter(isSignIn)
+    .map(({ kind, label, signIn }) => ({ kind, label, provider: signIn }));
 }
 
 /** The stores a person can connect, as the Settings card lists them. */

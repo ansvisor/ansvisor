@@ -17,7 +17,10 @@ import { requestJson } from './http.js';
  *     host, with its waits recorded instead of slept.
  *   - `runSync(connector, source, { credentials, request })` syncs a source
  *     through the real plumbing (lib/catalog/sources.js) into an in-memory
- *     catalog, and returns the outcome and the rows written.
+ *     catalog, and returns the outcome and the rows written. A connector
+ *     read with the workspace's sign-in (`signIn`, #1270) gets
+ *     `signInRequest` instead: a stand-in for lib/catalog/sign-in.js's,
+ *     `(provider, entityId) => request`.
  *
  * A test file that uses it mocks the Supabase admin client first, which
  * exits without its env (see connectors/__example__/example.test.js).
@@ -101,9 +104,13 @@ export async function startFakeApi(routes) {
  * run does. A store's `credentials` are saved for it first, encrypted, as
  * connecting it would.
  *
- * @returns {Promise<{ outcome: object, products: object[], variants: object[], images: object[], categories: object[], fake: ReturnType<typeof fakeDb> }>}
+ * @returns {Promise<{ outcome: object, products: object[], variants: object[], images: object[], categories: object[], issues: object[], fake: ReturnType<typeof fakeDb> }>}
  */
-export async function runSync(connector, source, { credentials, request, now = new Date() } = {}) {
+export async function runSync(
+  connector,
+  source,
+  { credentials, request, signInRequest, now = new Date() } = {},
+) {
   // A key for this run, when the test has none: nothing outlives it.
   process.env.CONNECTOR_CREDENTIALS_KEY ??= randomBytes(32).toString('base64');
   const fake = fakeDb();
@@ -117,11 +124,14 @@ export async function runSync(connector, source, { credentials, request, now = n
     ...source,
   };
   fake.rows('catalog_sources').push({ ...row, last_synced_at: null });
+  // The brand's workspace, whose sign-in a `signIn` connector reads with.
+  fake.rows('brands').push({ id: row.brand_id, organization_id: 'org-1' });
   if (credentials) await saveCredentials(row.id, credentials, { db: fake.db });
   const outcome = await syncSource(row, {
     db: fake.db,
     now,
     request,
+    ...(signInRequest ? { signInRequest } : {}),
     connectors: { [connector.kind]: connector },
   });
   return {
@@ -130,6 +140,7 @@ export async function runSync(connector, source, { credentials, request, now = n
     variants: fake.rows('catalog_variants'),
     images: fake.rows('catalog_images'),
     categories: fake.rows('catalog_categories'),
+    issues: fake.rows('catalog_item_issues'),
     fake,
   };
 }
