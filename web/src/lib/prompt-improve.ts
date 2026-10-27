@@ -72,8 +72,9 @@ export interface ImproveSet {
 
 /**
  * The monthly Improve budget as the panel shows it. The budget itself is in
- * dollars (1% of the plan price) and stays on the server; the panel gets an
- * estimate of the generations it still buys.
+ * dollars (the workspace's AI budget: Starter $5, Growth $25, Enterprise $50
+ * or more) and stays on the server; the panel gets an estimate of the
+ * generations it still buys.
  */
 export interface ImproveQuota {
   unlimited: boolean;

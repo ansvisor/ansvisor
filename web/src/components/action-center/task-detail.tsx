@@ -52,6 +52,13 @@ export interface TaskSendOptions {
   onSend: (to: 'content' | 'webhook') => void;
 }
 
+/** Checking a task on its page now (AC-010), for a task checked automatically. */
+export interface TaskCheckOptions {
+  onCheck: () => void;
+  /** A check is under way. */
+  busy: boolean;
+}
+
 /** A writing task's work in the Content Editor (CE-022), and starting it. */
 export interface TaskDraftWork {
   method: DraftMethod;
@@ -125,6 +132,7 @@ export function TaskDetailView({
   onEdit,
   send,
   draftWork,
+  check,
 }: {
   details: ActionTaskDetails | null;
   disabled: boolean;
@@ -132,9 +140,13 @@ export function TaskDetailView({
   send?: TaskSendOptions;
   /** A writing task's draft (CE-022). */
   draftWork?: TaskDraftWork;
+  /** Check now, for a task checked automatically (AC-010). */
+  check?: TaskCheckOptions;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
   const tChecks = useTranslations('actionCenter.taskChecks');
+  const missingText = useMissingText();
+  const lastCheck = details?.lastCheck ?? null;
   const format = useFormatter();
   const effort = [details?.effort, details?.role].filter(Boolean).join(' · ');
   const sentContent = details?.sent.content ?? null;
@@ -216,6 +228,19 @@ export function TaskDetailView({
           )}
           {details.doneWhen && <Field label={t('doneWhen')}>{details.doneWhen}</Field>}
           {details.check && <Field label={t('check')}>{tChecks(details.check)}</Field>}
+          {lastCheck && (
+            <Field label={t('lastCheck')}>
+              {(() => {
+                const date = format.dateTime(new Date(lastCheck.at), {
+                  month: 'short',
+                  day: 'numeric',
+                });
+                return lastCheck.passed
+                  ? t('checkedPassed', { date })
+                  : t('checkedMissing', { date, missing: missingText(lastCheck.missing) });
+              })()}
+            </Field>
+          )}
           {effort && <Field label={t('effort')}>{effort}</Field>}
         </dl>
       ) : (
@@ -261,6 +286,18 @@ export function TaskDetailView({
         >
           {t('edit')}
         </Button>
+        {check && details?.check === 'auto' && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled || check.busy}
+            onClick={check.onCheck}
+            className="h-7 text-xs"
+          >
+            {check.busy ? t('checking') : t('checkNow')}
+          </Button>
+        )}
         {/* A writing task is written in the Content Editor: Create content / Optimize page. */}
         {send?.content && !sentContent && !draftWork && (
           <Button
@@ -289,6 +326,13 @@ export function TaskDetailView({
       </div>
     </div>
   );
+}
+
+/** What an automatic check found missing (AC-010), in words: "the page didn't open, …". */
+export function useMissingText() {
+  const tMissing = useTranslations('actionCenter.taskCheckMissing');
+  return (codes: string[]) =>
+    codes.map((code) => (tMissing.has(code) ? tMissing(code) : code)).join(', ');
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
