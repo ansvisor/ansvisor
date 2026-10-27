@@ -227,11 +227,11 @@ describe('the free trial’s AI budget', () => {
     expect(await guard.getAiUsage('o1')).toMatchObject({ trial: false, percentUsed: 0.8 });
   });
 
-  it('leaves Enterprise with its own (a deal’s budget or contract), and an unlimited one as it is', () => {
+  it('leaves Enterprise with its own (a deal’s budget), and an unlimited one as it is', () => {
     const plan = (budget) => ({ id: 'x', limits: { improveMonthlyBudgetUsd: budget } });
     const trialing = (over) => ({ plan: 'starter', subscription_status: 'trialing', ...over });
-    const contract = trialing({ plan: 'enterprise', plan_overrides: { contractMonthlyUsd: 8000 } });
-    expect(guard.applyTrialAiBudget(plan(80), contract)).toEqual(plan(80));
+    const deal = trialing({ plan: 'enterprise', plan_overrides: { improveMonthlyBudgetUsd: 80 } });
+    expect(guard.applyTrialAiBudget(plan(80), deal)).toEqual(plan(80));
     expect(guard.applyTrialAiBudget(plan(-1), trialing())).toEqual(plan(-1));
   });
 
