@@ -40,7 +40,8 @@ export function CatalogSourcesCard() {
   const { canManage } = useUserRole();
   // A read-only workspace's refusal opens the upgrade dialog, not a toast;
   // while it is read-only, adding, syncing, uploading, connecting a store or
-  // its sign-in, and removing open it before anything is sent.
+  // its sign-in, and removing a feed or upload open it before anything is
+  // sent. Removing a store stays open: it disconnects the store.
   const { guard, isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
@@ -271,9 +272,13 @@ export function CatalogSourcesCard() {
                             size="sm"
                             variant="ghost"
                             disabled={busy !== null}
-                            onClick={guard(() => void remove(source), {
-                              action: tActions('removeCatalogSources'),
-                            })}
+                            onClick={
+                              isStoreSource(source.kind)
+                                ? () => void remove(source)
+                                : guard(() => void remove(source), {
+                                    action: tActions('removeCatalogSources'),
+                                  })
+                            }
                             aria-label={t('remove')}
                           >
                             <Trash2 className="h-4 w-4" />

@@ -145,6 +145,11 @@ describe('BrandSwitcher', () => {
     await act(async () => items[3].click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding brands needs a plan');
     expect(push).not.toHaveBeenCalled();
+    // The mobile menu closes first, so the dialog isn't left behind it.
+    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(onNavigate.mock.invocationCallOrder[0]).toBeLessThan(
+      openUpgrade.mock.invocationCallOrder[0],
+    );
     // All brands is reading: it stays open.
     await act(async () => (await openMenu())[2].click());
     expect(push).toHaveBeenCalledWith('/dashboard/brands');
@@ -156,8 +161,10 @@ describe('BrandSwitcher', () => {
     store.brands = [];
     push.mockReset();
     await render(false, true);
+    onNavigate.mockReset();
     await act(async () => container.querySelector('button')!.click());
     expect(openUpgrade).toHaveBeenLastCalledWith('Adding brands needs a plan');
+    expect(onNavigate).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
   });
 

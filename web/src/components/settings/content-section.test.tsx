@@ -47,6 +47,7 @@ beforeEach(() => {
   });
   setBrandQualityHandoff.mockReset().mockResolvedValue(undefined);
   toast.error.mockReset();
+  openUpgrade.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });

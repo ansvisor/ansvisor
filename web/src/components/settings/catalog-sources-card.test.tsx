@@ -215,6 +215,28 @@ describe('CatalogSourcesCard', () => {
     confirm.mockRestore();
   });
 
+  it('still removes a store on a read-only workspace (a disconnect), but not a feed', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    openUpgrade.mockClear();
+    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true });
+    listCatalogSources.mockResolvedValue([FEED, STORE]);
+    await render(true);
+    const removeIn = (text: string) =>
+      [...container.querySelectorAll('li')]
+        .find((li) => li.textContent?.includes(text))!
+        .querySelector<HTMLButtonElement>('button[aria-label="Remove"]')!;
+
+    await act(async () => removeIn('acme-shop.example').click());
+    expect(removeStore).toHaveBeenCalledWith('st1');
+    expect(openUpgrade).not.toHaveBeenCalled();
+
+    await act(async () => removeIn('https://shop.example/feed.xml').click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Removing catalog sources needs a plan');
+    expect(removeCatalogSource).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
+  });
+
   it("says why a feed couldn't be added, or read", async () => {
     addFeedSource.mockResolvedValue({ ok: false, code: 'duplicate' });
     await render();

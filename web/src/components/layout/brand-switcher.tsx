@@ -49,10 +49,18 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
     router.push(href);
   };
   // A read-only workspace (plan not active): Add brand opens the upgrade
-  // dialog instead of the new brand's page.
-  const { guard } = useUpgradeGate();
+  // dialog instead of the new brand's page, the mobile menu closed first so
+  // the dialog isn't left behind it.
+  const { isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
-  const addBrand = guard(() => go('/dashboard/brands/new'), { action: tActions('addBrands') });
+  const addBrand = () => {
+    if (isLocked) {
+      onNavigate?.();
+      openUpgrade(tActions('addBrands'));
+    } else {
+      go('/dashboard/brands/new');
+    }
+  };
   // On a brand's own page (its settings, prompts or topics), the same page
   // of the brand picked; elsewhere the page stays.
   const select = (brandId: string) => {

@@ -223,9 +223,9 @@ function MemberRow({
   const [pendingRole, setPendingRole] = useState<TeamRole | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  // A read-only workspace (plan not active): a role, and Remove (before its
-  // confirm), open the upgrade dialog instead.
-  const { guard, isLocked, openUpgrade } = useUpgradeGate();
+  // A read-only workspace (plan not active): a role opens the upgrade dialog
+  // instead. Remove stays open: it ends a member's access.
+  const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
 
   const canEdit = isAdmin && !member.isCurrentUser;
@@ -303,17 +303,7 @@ function MemberRow({
       )}
 
       {canEdit && (
-        <Dialog
-          open={removeDialogOpen}
-          onOpenChange={(open, details) => {
-            if (open && isLocked) {
-              details.cancel();
-              openUpgrade(tActions('removeMembers'));
-              return;
-            }
-            setRemoveDialogOpen(open);
-          }}
-        >
+        <Dialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
           <DialogTrigger
             render={
               <Button variant="ghost" size="icon-sm" aria-label={t('removeMember')}>
@@ -359,7 +349,8 @@ function InvitationRow({
 }) {
   const t = useTranslations('settings');
   const [busy, setBusy] = useState<'revoke' | 'resend' | null>(null);
-  // A read-only workspace (plan not active): Resend and Revoke open the upgrade dialog instead.
+  // A read-only workspace (plan not active): Resend opens the upgrade dialog
+  // instead. Revoke stays open: it ends an invitation's access.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
 
@@ -432,7 +423,7 @@ function InvitationRow({
               {t('team_resendInvite')}
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={guard(handleRevoke, { action: tActions('revokeInvitations') })}
+              onClick={handleRevoke}
               className="text-destructive focus:text-destructive"
             >
               <Trash2 className="mr-2 h-4 w-4" />

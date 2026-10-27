@@ -238,7 +238,11 @@ function KpisContent({ brand }: { brand: Brand }) {
       {(justSetUp || previewing) && (
         <div className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <p className="flex-1">{previewing ? t('presets.preview') : t('presets.setUp')}</p>
+          <p className="flex-1">
+            {previewing
+              ? t(isLocked ? 'presets.previewReadOnly' : 'presets.preview')
+              : t('presets.setUp')}
+          </p>
           {justSetUp && (
             <button
               type="button"

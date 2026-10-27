@@ -29,8 +29,9 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
   const [failed, setFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   // A read-only workspace (plan not active): Check again reads the site
-  // again, a cost; it opens the upgrade dialog instead.
-  const { guard } = useUpgradeGate();
+  // again, a cost; it opens the upgrade dialog instead, and a partial read
+  // isn't read again on its own.
+  const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(
@@ -58,11 +59,11 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
   const recheckAt = trust ? Date.parse(trust.checkedAt) + SITE_TRUST_RECHECK_MS : 0;
   const tooSoon = !!trust && now.getTime() < recheckAt;
   // A partial read (the site didn't answer all of it) is read again once
-  // that wait is over, as its rows say.
+  // that wait is over, as its rows say; not while the workspace is read-only.
   const partial = trust?.complete === false;
   useEffect(() => {
-    if (partial && !tooSoon) void load(false);
-  }, [partial, tooSoon, load]);
+    if (partial && !tooSoon && !isLocked) void load(false);
+  }, [partial, tooSoon, isLocked, load]);
 
   // Quality's "Fix in Site Audit" lands here (#site-trust): once the card has
   // its read, and the cards above have theirs, it scrolls into view once.

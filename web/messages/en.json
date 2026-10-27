@@ -200,9 +200,7 @@
       "renameOrganization": "Renaming the organization needs a plan",
       "inviteMembers": "Inviting members needs a plan",
       "resendInvitations": "Resending invitations needs a plan",
-      "revokeInvitations": "Revoking invitations needs a plan",
       "changeRoles": "Changing roles needs a plan",
-      "removeMembers": "Removing members needs a plan",
       "saveAiKeys": "Saving an AI key needs a plan",
       "switchAiProvider": "Switching Chat's AI provider needs a plan",
       "addCatalogSources": "Adding catalog sources needs a plan",
@@ -380,6 +378,7 @@
       "presets": {
         "setUp": "We set up these KPIs for you. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. Change or remove them any time.",
         "preview": "Suggested KPIs. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. They're saved the first time an admin or manager opens this tab.",
+        "previewReadOnly": "Suggested KPIs. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. They're saved the first time an admin or manager opens this tab on an active plan.",
         "dismiss": "Dismiss"
       }
     },

@@ -44,6 +44,7 @@ let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
 const fetchMock = vi.fn();
+const originalScrollIntoView = Element.prototype.scrollIntoView;
 
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
@@ -77,6 +78,7 @@ afterEach(() => {
   container.remove();
   document.body.replaceChildren();
   vi.unstubAllGlobals();
+  Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 async function render(isLocked: boolean) {

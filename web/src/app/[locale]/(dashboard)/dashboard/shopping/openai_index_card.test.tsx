@@ -13,8 +13,10 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
+  openUpgrade.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -25,7 +27,6 @@ afterEach(() => {
   container.remove();
 });
 
-const openUpgrade = vi.fn();
 function render(node: React.ReactNode, isLocked = false) {
   act(() => {
     root.render(

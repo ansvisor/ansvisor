@@ -7,8 +7,8 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * Settings › Team on a read-only workspace (plan not active): Invite, a
- * role, Remove (before its confirm), Resend and Revoke open the upgrade
- * dialog instead, and change nothing. On an active plan they work.
+ * role and Resend open the upgrade dialog instead, and change nothing.
+ * Remove and Revoke still work: they end access. On an active plan all work.
  */
 
 const team = vi.hoisted(() => ({
@@ -108,27 +108,32 @@ const click = (el: Element | undefined) =>
 const dialog = () => document.querySelector('[role="dialog"]');
 
 describe('TeamSection on a read-only workspace', () => {
-  it('invites, removes, resends and revokes nothing: each opens the upgrade dialog', async () => {
+  it('invites and resends nothing: each opens the upgrade dialog', async () => {
     await render(true);
     await click(byText('Invite member'));
     expect(openUpgrade).toHaveBeenLastCalledWith('Inviting members needs a plan');
     expect(dialog()).toBeNull();
 
-    await click(byLabel('Remove team member'));
-    expect(openUpgrade).toHaveBeenLastCalledWith('Removing members needs a plan');
-    expect(dialog()).toBeNull();
-
     await click(byLabel('Invitation actions'));
     await click(byText('Resend invite'));
     expect(openUpgrade).toHaveBeenLastCalledWith('Resending invitations needs a plan');
+
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(team.inviteMember).not.toHaveBeenCalled();
+    expect(team.resendInvitation).not.toHaveBeenCalled();
+  });
+
+  it('still removes a member and revokes an invitation: they end access', async () => {
+    await render(true);
+    await click(byLabel('Remove team member'));
+    expect(dialog()?.textContent).toContain('Remove');
+    await click(byText('Remove member'));
+    expect(team.removeMember).toHaveBeenCalledWith('u2');
+
     await click(byLabel('Invitation actions'));
     await click(byText('Revoke'));
-    expect(openUpgrade).toHaveBeenLastCalledWith('Revoking invitations needs a plan');
-
-    expect(openUpgrade).toHaveBeenCalledTimes(4);
-    expect(team.removeMember).not.toHaveBeenCalled();
-    expect(team.resendInvitation).not.toHaveBeenCalled();
-    expect(team.revokeInvitation).not.toHaveBeenCalled();
+    expect(team.revokeInvitation).toHaveBeenCalledWith('i1');
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 
   it('changes no role: picking one opens the upgrade dialog', async () => {

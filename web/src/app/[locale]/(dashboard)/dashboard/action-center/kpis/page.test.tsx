@@ -148,6 +148,7 @@ describe('the ready-made KPIs', () => {
 
     expect(seedKpiPresets).not.toHaveBeenCalled();
     expect(container.textContent).toContain('presets.preview');
+    expect(container.textContent).not.toContain('presets.previewReadOnly');
     expect(container.textContent).not.toContain('editKpis');
     expect(container.textContent).not.toContain('addKpi');
     const props = KpiTable.mock.calls.at(-1)?.[0] as { onEdit?: unknown; kpis: unknown[] };
@@ -162,7 +163,8 @@ describe('the ready-made KPIs', () => {
     getKpiPresetPreview.mockResolvedValue([snapshot('mentions')]);
     const { container, root } = await renderPage(true);
     expect(seedKpiPresets).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('presets.preview');
+    // Not "saved the first time an admin opens this tab": an admin just did.
+    expect(container.textContent).toContain('presets.previewReadOnly');
     await act(async () => root.unmount());
   });
 

@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { SiteTrust } from '@/lib/content/site-trust';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const getSiteTrust = vi.fn();
 vi.mock('@/lib/actions/audits', () => ({
@@ -37,19 +38,25 @@ const TRUST: SiteTrust = {
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
   getSiteTrust.mockReset().mockResolvedValue(TRUST);
+  openUpgrade.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
 afterEach(() => act(() => root.unmount()));
 
-async function render(now?: Date) {
+async function render(now?: Date, isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC" now={now}>
-        <SiteTrustCard brandId="b1" />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <SiteTrustCard brandId="b1" />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -127,6 +134,25 @@ describe('SiteTrustCard', () => {
       expect(getSiteTrust).toHaveBeenCalledTimes(2);
       expect(getSiteTrust).toHaveBeenLastCalledWith('b1', false);
       expect(rows()[2]).toContain('Add a page on how you write and check content');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reads nothing again on a read-only workspace: no partial re-read, Check again opens the upgrade dialog', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-23T12:04:00.000Z'));
+      getSiteTrust.mockResolvedValue({ ...TRUST, complete: false });
+      await render(undefined, true);
+      expect(getSiteTrust).toHaveBeenCalledTimes(1);
+
+      await act(async () => vi.advanceTimersByTime(6 * 60 * 1000));
+      expect(getSiteTrust).toHaveBeenCalledTimes(1);
+      expect(checkAgain().disabled).toBe(false);
+      await act(async () => checkAgain().click());
+      expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Checking site trust again needs a plan');
+      expect(getSiteTrust).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
