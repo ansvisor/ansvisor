@@ -66,6 +66,7 @@ beforeEach(() => {
   // Every organization on a plan unless a test says otherwise.
   activeBrandFilter.mockReset().mockResolvedValue(() => true);
   isBrandActive.mockReset().mockResolvedValue(true);
+  manager.cancelClaimedJob.mockResolvedValue(true);
   // The claim resolves a tick later, as a network call would.
   manager.claimWaitingJob.mockImplementation(async (id) => {
     await Promise.resolve();
@@ -138,6 +139,31 @@ describe('a job of an organization whose plan has ended', () => {
     expect(manager.completeJob).not.toHaveBeenCalledWith('lapsed', expect.anything());
     expect(manager.failJob).not.toHaveBeenCalled();
     await drain(releases);
+  });
+
+  it('is failed, never left active, when it cannot be cancelled', async () => {
+    isBrandActive.mockResolvedValue(false);
+    manager.cancelClaimedJob.mockResolvedValue(false);
+    const { default: logger } = await import('./logger.js');
+    vi.mocked(logger.warn).mockClear();
+
+    runTrackingJob('stuck');
+    await flush();
+
+    expect(manager.cancelClaimedJob).toHaveBeenCalledWith('stuck', 'subscription_inactive');
+    expect(manager.failJob).toHaveBeenCalledWith('stuck', 'subscription_inactive');
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(processTrackingJob).not.toHaveBeenCalled();
+  });
+
+  it('is only cancelled, not failed, when the cancel is written', async () => {
+    isBrandActive.mockResolvedValue(false);
+    manager.cancelClaimedJob.mockResolvedValue(true);
+
+    runTrackingJob('cancelled');
+    await flush();
+
+    expect(manager.failJob).not.toHaveBeenCalled();
   });
 
   it('writes no content either', async () => {

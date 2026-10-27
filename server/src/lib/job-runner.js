@@ -68,8 +68,14 @@ function createJobProxy(jobId, signal) {
  */
 async function skipUnpaid(jobId, brandId) {
   if (await isBrandActive(brandId)) return false;
-  await cancelClaimedJob(jobId, 'subscription_inactive');
-  logger.info({ jobId, brandId }, 'cancelled a job of an organization without an active plan');
+  if (await cancelClaimedJob(jobId, 'subscription_inactive')) {
+    logger.info({ jobId, brandId }, 'cancelled a job of an organization without an active plan');
+  } else {
+    // Not cancelled (the write failed, or the row moved on): never left
+    // 'active', where nothing would end it.
+    logger.warn({ jobId, brandId }, 'could not cancel a job without an active plan; failing it');
+    await failJob(jobId, 'subscription_inactive');
+  }
   return true;
 }
 

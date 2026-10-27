@@ -43,6 +43,7 @@ const ids = (read) => read.in?.[1] ?? [];
 const {
   ACTIVE_SUBSCRIPTION_STATUSES,
   CACHED_ANSWER_MS,
+  CACHED_INACTIVE_MS,
   MAX_CACHED_ANSWERS,
   activeBrandFilter,
   activeOrgFilter,
@@ -181,21 +182,35 @@ describe('isBrandActive', () => {
 describe('isOrgActiveCached and isBrandActiveCached', () => {
   const T0 = 1_800_000_000_000;
 
-  it('reads once, then answers from memory until the minutes are up, inactive too', async () => {
+  it('keeps an active answer for minutes, without a read, until they are up', async () => {
     vi.stubEnv('IS_CLOUD', 'true');
     expect(await isOrgActiveCached('active', { now: T0 })).toBe(true);
-    expect(await isOrgActiveCached('canceled', { now: T0 })).toBe(false);
-    expect(reads).toHaveLength(2);
+    expect(reads).toHaveLength(1);
 
-    // The plan changes meanwhile: still the kept answer, without a read.
-    rows.organizations.find((org) => org.id === 'canceled').subscription_status = 'active';
-    expect(await isOrgActiveCached('canceled', { now: T0 + CACHED_ANSWER_MS - 1 })).toBe(false);
+    // The plan ends meanwhile: still the kept answer, without a read.
+    rows.organizations.find((org) => org.id === 'active').subscription_status = 'canceled';
     expect(await isOrgActiveCached('active', { now: T0 + CACHED_ANSWER_MS - 1 })).toBe(true);
-    expect(reads).toHaveLength(2);
+    expect(reads).toHaveLength(1);
 
     // Once they are up, read again.
-    expect(await isOrgActiveCached('canceled', { now: T0 + CACHED_ANSWER_MS })).toBe(true);
-    expect(reads).toHaveLength(3);
+    expect(await isOrgActiveCached('active', { now: T0 + CACHED_ANSWER_MS })).toBe(false);
+    expect(reads).toHaveLength(2);
+  });
+
+  it('keeps an inactive answer a minute at most, so a plan bought now counts soon', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    expect(CACHED_INACTIVE_MS).toBeLessThanOrEqual(60_000);
+    expect(await isOrgActiveCached('canceled', { now: T0 })).toBe(false);
+    expect(await isBrandActiveCached('b-canceled', { now: T0 })).toBe(false);
+
+    rows.organizations.find((org) => org.id === 'canceled').subscription_status = 'active';
+    rows.brands.find((brand) => brand.id === 'b-canceled').organizations.subscription_status =
+      'trialing';
+    expect(await isOrgActiveCached('canceled', { now: T0 + CACHED_INACTIVE_MS - 1 })).toBe(false);
+    expect(reads).toHaveLength(2);
+    expect(await isOrgActiveCached('canceled', { now: T0 + CACHED_INACTIVE_MS })).toBe(true);
+    expect(await isBrandActiveCached('b-canceled', { now: T0 + CACHED_INACTIVE_MS })).toBe(true);
+    expect(reads).toHaveLength(4);
   });
 
   it('keeps organizations and brands apart, and a burst waits on one read', async () => {

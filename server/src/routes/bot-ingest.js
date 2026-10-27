@@ -16,7 +16,7 @@
  */
 
 import express, { Router } from 'express';
-import { isOrgActiveCached } from '../lib/active-subscriptions.js';
+import { isOrgActive, isOrgActiveCached } from '../lib/active-subscriptions.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 import {
   connectionForSecret,
@@ -88,9 +88,19 @@ router.post('/bots/ingest', botIngestLimiter, sender, body, async (req, res) => 
       : await ingestLogFile(connection, hash, parsed);
     return res.json({ ...result, records: parsed.records });
   } catch (error) {
-    // Only a plan that has ended raises it here (plan-guard.js), one that
-    // ended within the minutes `sender` remembers: answered as `sender` would.
-    if (error instanceof PlanLimitError) return res.json(NOT_STORED);
+    // A plan that ended within the minutes `sender` remembers raises it here
+    // (plan-guard.js): asked again, unremembered, it is answered as `sender`
+    // would. Anything else, a failed read too, is a 500 the sender retries.
+    if (error instanceof PlanLimitError) {
+      try {
+        if (!(await isOrgActive(connection.organizationId))) return res.json(NOT_STORED);
+      } catch (err) {
+        logger.error({ err }, 'bot ingest plan check failed');
+        return res.status(500).json({ error: 'ingest_failed' });
+      }
+      logger.error({ err: error }, 'bot ingest refused for an organization on a plan');
+      return res.status(500).json({ error: 'ingest_failed' });
+    }
     // Mounted before the request-id middleware: there is no req.log here.
     logger.error({ err: error }, 'bot ingest error');
     return res.status(500).json({ error: 'ingest_failed' });

@@ -410,9 +410,31 @@ describe('POST /track/:trackingCode once the plan has ended', () => {
     expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_logs']);
   });
 
-  it('answers 500 and stores nothing when it cannot tell', async () => {
+  it('stores the visit as usual when it cannot tell: a beacon is never sent again', async () => {
     isOrgActiveCached.mockRejectedValue(new Error('organizations read: timeout'));
-    expect((await beacon()).status).toBe(500);
+    expect((await beacon()).status).toBe(204);
+    expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_logs']);
+  });
+
+  it('answers a bad body alike whether the plan is on or not, asking nothing', async () => {
+    const post = (body) =>
+      fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body,
+      });
+    const answers = async () => [
+      (await post('{not json')).status,
+      (await post(JSON.stringify({ s: 'chatgpt.com' }))).status,
+    ];
+
+    const onPlan = await answers();
+    isOrgActiveCached.mockResolvedValue(false);
+    const ended = await answers();
+
+    expect(onPlan).toEqual([400, 400]);
+    expect(ended).toEqual(onPlan);
+    expect(isOrgActiveCached).not.toHaveBeenCalled();
     expect(inserted).toEqual([]);
   });
 });

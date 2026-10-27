@@ -95,14 +95,6 @@ router.post('/track/:trackingCode', trafficLimiter, trackBody, async (req, res) 
       return res.status(404).json({ ok: false });
     }
 
-    // Once the organization's plan has ended (2026-10-27), no visit or
-    // journey event is stored: answered as a stored one is, so the site's
-    // snippet never errors. Whether it has is remembered a few minutes
-    // (active-subscriptions.js), not read per beacon.
-    if (!(await isOrgActiveCached(brand.organization_id))) {
-      return res.status(204).end();
-    }
-
     // Body arrives as a JSON string (beaconBody reads every type as text); an
     // object only if something upstream parsed it first. Normalize both.
     let body = req.body;
@@ -116,6 +108,12 @@ router.post('/track/:trackingCode', trafficLimiter, trackBody, async (req, res) 
     if (!body || !body.u) {
       return res.status(400).json({ ok: false });
     }
+
+    // Once the organization's plan has ended (2026-10-27), no visit or
+    // journey event is stored: answered as a stored one is, so the site's
+    // snippet never errors, and after the body is checked, so a bad one is
+    // answered alike either way.
+    if (!(await storesFor(brand.organization_id))) return res.status(204).end();
 
     // A journey's pageview or conversion (CE-017), from a snippet installed
     // with conversions on: stored only while the brand has them on.
@@ -232,6 +230,21 @@ router.post('/track/:trackingCode', trafficLimiter, trackBody, async (req, res) 
     return res.status(500).json({ ok: false });
   }
 });
+
+/**
+ * Whether a beacon for the organization is stored: while its plan is on,
+ * as remembered a few minutes (active-subscriptions.js), not read per
+ * beacon. A read that fails stores it: a beacon can't be sent again, and a
+ * paying site's lost visit costs more than a lapsed one's stored visit.
+ */
+async function storesFor(orgId) {
+  try {
+    return await isOrgActiveCached(orgId);
+  } catch (err) {
+    logger.warn({ err }, 'traffic plan check failed; stored as usual');
+    return true;
+  }
+}
 
 /**
  * Stores a journey event (traffic-events.js) for a brand with conversions

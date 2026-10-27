@@ -21,7 +21,9 @@ import { selectInChunks } from './chunked-in.js';
 
 /**
  * The subscription statuses isSubscriptionActive takes as active, for a
- * filter in a query (`.in(...)`); kept equal to it by a test.
+ * filter in a query (`.in(...)`); kept equal to it by a test. past_due is
+ * not one: a failed payment locks the workspace at once (product decision,
+ * 2026-10-27), with no grace while Stripe retries.
  */
 export const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'];
 
@@ -105,11 +107,15 @@ export async function isBrandActive(brandId) {
 /**
  * How long an answer is kept for what outside sites and services send us
  * (the AI-bot ingest, the traffic beacon, Cloro's answers): one read per
- * organization or brand every few minutes, not one per event. An inactive
- * answer is kept as long, so a plan bought now starts storing events
- * within these minutes, and one ended now stops within them too.
+ * organization or brand every few minutes, not one per event. A plan that
+ * ends now stops storing within these minutes.
  */
 export const CACHED_ANSWER_MS = 5 * 60_000;
+/**
+ * An inactive answer is kept a minute at most: a plan bought now starts
+ * storing within it.
+ */
+export const CACHED_INACTIVE_MS = 60_000;
 /** Answers kept at most; the oldest goes first. */
 export const MAX_CACHED_ANSWERS = 10_000;
 
@@ -117,9 +123,10 @@ export const MAX_CACHED_ANSWERS = 10_000;
 const answers = new Map();
 
 /**
- * The kept answer for `key`, or a new read kept for CACHED_ANSWER_MS. The
- * read itself is kept, so a burst of events waits on one read; a read that
- * fails is dropped, and the next event asks again.
+ * The kept answer for `key`, or a new read kept for CACHED_ANSWER_MS
+ * (CACHED_INACTIVE_MS once it answers inactive). The read itself is kept,
+ * so a burst of events waits on one read; a read that fails is dropped, and
+ * the next event asks again.
  */
 function keptAnswer(key, read, now) {
   const kept = answers.get(key);
@@ -127,16 +134,22 @@ function keptAnswer(key, read, now) {
   answers.delete(key);
   if (answers.size >= MAX_CACHED_ANSWERS) answers.delete(answers.keys().next().value);
   const active = read();
-  answers.set(key, { until: now + CACHED_ANSWER_MS, active });
-  active.catch(() => {
-    if (answers.get(key)?.active === active) answers.delete(key);
-  });
+  const entry = { until: now + CACHED_ANSWER_MS, active };
+  answers.set(key, entry);
+  active.then(
+    (isActive) => {
+      if (!isActive) entry.until = Math.min(entry.until, now + CACHED_INACTIVE_MS);
+    },
+    () => {
+      if (answers.get(key) === entry) answers.delete(key);
+    },
+  );
   return active;
 }
 
 /**
- * isOrgActive, answered from memory for CACHED_ANSWER_MS. Self-hosted,
- * always true, without a read.
+ * isOrgActive, answered from memory for CACHED_ANSWER_MS (an inactive
+ * answer, CACHED_INACTIVE_MS). Self-hosted, always true, without a read.
  *
  * @param {string} orgId
  * @param {{ now?: number }} [options]
@@ -149,8 +162,8 @@ export async function isOrgActiveCached(orgId, { now = Date.now() } = {}) {
 }
 
 /**
- * isBrandActive, answered from memory for CACHED_ANSWER_MS. Self-hosted,
- * always true, without a read.
+ * isBrandActive, answered from memory for CACHED_ANSWER_MS (an inactive
+ * answer, CACHED_INACTIVE_MS). Self-hosted, always true, without a read.
  *
  * @param {string} brandId
  * @param {{ now?: number }} [options]

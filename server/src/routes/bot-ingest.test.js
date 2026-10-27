@@ -21,7 +21,9 @@ vi.mock('../lib/bot-ingest.js', () => ({
 }));
 vi.mock('../lib/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 const isOrgActiveCached = vi.fn();
+const isOrgActive = vi.fn();
 vi.mock('../lib/active-subscriptions.js', () => ({
+  isOrgActive: (...a) => isOrgActive(...a),
   isOrgActiveCached: (...a) => isOrgActiveCached(...a),
 }));
 vi.mock('../lib/plan-guard.js', () => ({
@@ -46,6 +48,7 @@ beforeEach(async () => {
   connectionForSecret.mockReset();
   // Every organization on a plan unless a test says otherwise.
   isOrgActiveCached.mockReset().mockResolvedValue(true);
+  isOrgActive.mockReset().mockResolvedValue(true);
   ingestBotRequests
     .mockReset()
     .mockResolvedValue({ received: 0, verified: 0, stored: 0, skipped: {} });
@@ -237,7 +240,21 @@ describe('POST /bots/ingest', () => {
     expect(ingestLogFile).not.toHaveBeenCalled();
   });
 
-  it('answers the same when the plan ended within the remembered minutes', async () => {
+  it('answers the same when the plan ended within the remembered minutes, asked afresh', async () => {
+    connectionForSecret.mockResolvedValue({
+      id: 'c1',
+      organizationId: 'o1',
+      kind: 'cloudflare_worker',
+    });
+    ingestBotRequests.mockRejectedValue(new PlanLimitError('choose a plan', 402));
+    isOrgActive.mockResolvedValue(false);
+    const res = await post('abot_x', { requests: [] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ stored: 0, inactive: true });
+    expect(isOrgActive).toHaveBeenCalledWith('o1');
+  });
+
+  it('answers 500, so the sender retries, when a plan that is on is refused', async () => {
     connectionForSecret.mockResolvedValue({
       id: 'c1',
       organizationId: 'o1',
@@ -245,8 +262,13 @@ describe('POST /bots/ingest', () => {
     });
     ingestBotRequests.mockRejectedValue(new PlanLimitError('choose a plan', 402));
     const res = await post('abot_x', { requests: [] });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ stored: 0, inactive: true });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'ingest_failed' });
+    expect(isOrgActive).toHaveBeenCalledWith('o1');
+
+    // A fresh read that fails too.
+    isOrgActive.mockRejectedValue(new Error('organizations read: timeout'));
+    expect((await post('abot_x', { requests: [] })).status).toBe(500);
   });
 
   it('answers 500, so the sender retries, when it cannot tell whether the plan has ended', async () => {
