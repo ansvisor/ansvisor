@@ -6,43 +6,105 @@ import { linkKey } from '@/lib/content/link-targets';
  * (shopping path, part 6): the category page it should link, and its
  * products as the catalog has them now. Read for the Rules tab's Shopping
  * rules and for Before you publish. A product the page links is checked
- * when it's one of the page's shopping path. The check after each catalog
- * sync (00352) keeps the same for the Content Library.
+ * when it's one of the page's shopping path, or one the person removed from
+ * it or the path left out: the page may still link it. The check after each
+ * catalog sync (00352) keeps the same for the Content Library.
  */
 
 /** A product's state now: sold out, refused by Merchant Center, gone from the catalog, or fine. */
 export type ShoppingLinkState = 'ok' | 'sold_out' | 'refused' | 'gone';
 
+export interface ShoppingProductCheck {
+  /** Its page's link key (link-targets.ts linkKey). */
+  key: string;
+  title: string;
+  state: ShoppingLinkState;
+  /**
+   * In the path now. False for one removed from it or left out, listed only
+   * when it no longer sells: it counts for "No sold-out or refused product
+   * linked" alone.
+   */
+  inPath: boolean;
+}
+
 export interface ShoppingCheck {
   /** The category pages' link keys (link-targets.ts linkKey). */
   categories: string[];
-  products: { key: string; title: string; state: ShoppingLinkState }[];
+  /** The path's products first, then the removed and left-out ones that no longer sell. */
+  products: ShoppingProductCheck[];
+  /**
+   * What a relative link on the page ("/products/x") is read against: the
+   * page's address, else the brand's site; null when neither is known.
+   */
+  site: string | null;
 }
 
 /** What a page's links do with its shopping path. */
 export interface ShoppingLinks {
   categoryLinked: boolean;
-  /** The path's products the page links, each once. */
-  linked: ShoppingCheck['products'];
-  /** The ones of them that no longer sell: sold out, refused or gone. */
-  bad: ShoppingCheck['products'];
-  /** The path's products, linked or not. */
+  /** The path's products that sell now and the page links, each once. */
+  linked: ShoppingProductCheck[];
+  /** The products the page links that no longer sell: sold out, refused or gone. */
+  bad: ShoppingProductCheck[];
+  /** The path's products that sell now, linked or not. */
   products: number;
+  /** How many of them the page should link: `n`, or all of them when fewer sell; 0 for none. */
+  want: number;
   /** The path's category pages. */
   categories: number;
 }
 
-/** The page's links read against its shopping path. */
-export function shoppingLinks(hrefs: readonly string[], check: ShoppingCheck): ShoppingLinks {
-  const keys = new Set(hrefs.map((href) => linkKey(href)).filter((k): k is string => !!k));
-  const linked = check.products.filter((p) => keys.has(p.key));
+/** A link's key, a relative one read against `site`; null when it leads to no page. */
+function hrefKey(href: string, site: string | null): string | null {
+  const text = href.trim();
+  if (!text) return null;
+  // A scheme ("https:", "mailto:"): read as written.
+  if (/^[a-z][a-z\d+.-]*:/i.test(text)) return linkKey(text);
+  if (!site) return null;
+  try {
+    return linkKey(new URL(text, site).toString());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The page's links read against its shopping path, `n` the products it
+ * should link (the Shopping rule's number). Only products that sell count
+ * towards it: a sold-out one is the one to swap, not a link that counts.
+ */
+export function shoppingLinks(
+  hrefs: readonly string[],
+  check: ShoppingCheck,
+  n = 0,
+): ShoppingLinks {
+  const keys = new Set(
+    hrefs.map((href) => hrefKey(href, check.site)).filter((k): k is string => !!k),
+  );
+  // One per page: the path's first, before a removed one with the same page.
+  const seen = new Set<string>();
+  const products = check.products.filter((p) => {
+    if (seen.has(p.key)) return false;
+    seen.add(p.key);
+    return true;
+  });
+  const selling = products.filter((p) => p.inPath && p.state === 'ok');
   return {
     categoryLinked: check.categories.some((key) => keys.has(key)),
-    linked,
-    bad: linked.filter((p) => p.state !== 'ok'),
-    products: check.products.length,
+    linked: selling.filter((p) => keys.has(p.key)),
+    bad: products.filter((p) => p.state !== 'ok' && keys.has(p.key)),
+    products: selling.length,
+    want: Math.min(Math.max(0, n), selling.length),
     categories: check.categories.length,
   };
+}
+
+/** Names a list shows before "+N more". */
+export const LISTED_MAX = 3;
+
+/** The first few of a list to name, and how many more there are. */
+export function listed<T>(items: readonly T[], max = LISTED_MAX): { shown: T[]; more: number } {
+  return { shown: items.slice(0, max), more: Math.max(0, items.length - max) };
 }
 
 /** A linked product that no longer sells, as the check after a catalog sync keeps it (00352). */

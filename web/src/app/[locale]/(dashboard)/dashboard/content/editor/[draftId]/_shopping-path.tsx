@@ -15,6 +15,8 @@ import {
   type CatalogProductHit,
 } from '@/lib/actions/shopping-path';
 import {
+  choicesOf,
+  leftOutReason,
   placementOf,
   withAdded,
   withLocked,
@@ -25,9 +27,17 @@ import {
 } from '@/lib/content/shopping-path';
 import { pagePath } from '@/lib/content/overlap';
 
-/** A product's price as the catalog has it, in its currency; null without one. */
+/** An amount above 0, or null: a price of 0 is none given. */
+const positive = (value: number | null) => (value != null && value > 0 ? value : null);
+
+/**
+ * A product's price as the catalog has it, in its currency: the sale price
+ * when it's under the price, else the price; null without one.
+ */
 export function priceText(product: Pick<ShoppingProduct, 'price' | 'salePrice' | 'currency'>) {
-  const amount = product.salePrice ?? product.price;
+  const price = positive(product.price);
+  const sale = positive(product.salePrice);
+  const amount = sale != null && price != null && sale < price ? sale : price;
   if (amount == null) return null;
   try {
     return product.currency
@@ -44,7 +54,16 @@ export function priceText(product: Pick<ShoppingProduct, 'price' | 'salePrice' |
 type PathState =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; path: ShoppingPath | null; none: NoPathReason | null };
+  | {
+      status: 'ready';
+      path: ShoppingPath | null;
+      none: NoPathReason | null;
+      /** A path is kept, but not one this tab reads: built anew, as none would be. */
+      unreadable?: boolean;
+    };
+
+/** Why a draft has no path that a new pick may change: the topic, or a reason not known here. */
+const PICK_AGAIN: readonly (NoPathReason | null)[] = [null, 'no_match', 'other'];
 
 /**
  * Brief › Shopping path (shopping path, part 3): on an online shop, the
@@ -52,29 +71,37 @@ type PathState =
  * API for its topic (in stock, accepted by Merchant Center), with where each
  * goes. The person locks, swaps, removes or adds a product; Pick again
  * builds it anew, their choices kept. Shown for a page type that takes one
- * on an e-commerce brand.
+ * on an e-commerce brand. `onPathChange` follows each change saved or
+ * built, and one found made meanwhile: the Shopping rules read it again.
  */
 export function ShoppingPathSection({
   draftId,
   brandId,
   pageType,
+  onPathChange,
 }: {
   draftId: string;
   brandId: string;
   pageType: string | null;
+  onPathChange?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.shopping');
   const [state, setState] = useState<PathState>({ status: 'loading' });
   const [busy, setBusy] = useState<'build' | 'save' | null>(null);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
-  const [hits, setHits] = useState<CatalogProductHit[] | null>(null);
+  // The catalog's products for what's typed; 'failed' when the search failed.
+  const [hits, setHits] = useState<CatalogProductHit[] | 'failed' | null>(null);
 
   const load = useCallback(async () => {
     setState({ status: 'loading' });
     try {
       const read = await getDraftShoppingPath(draftId);
-      setState(read ? { status: 'ready', path: read.path, none: null } : { status: 'failed' });
+      setState(
+        read
+          ? { status: 'ready', path: read.path, none: null, unreadable: read.unreadable }
+          : { status: 'failed' },
+      );
     } catch (err) {
       console.error('Failed to read the shopping path:', err);
       setState({ status: 'failed' });
@@ -97,8 +124,9 @@ export function ShoppingPathSection({
         (found) => {
           if (!cancelled) setHits(found);
         },
-        () => {
-          if (!cancelled) setHits([]);
+        (err) => {
+          console.error('Failed to search the catalog:', err);
+          if (!cancelled) setHits('failed');
         },
       );
     }, 250);
@@ -108,15 +136,51 @@ export function ShoppingPathSection({
     };
   }, [adding, query, brandId]);
 
-  /** Builds the path again from the catalog, after `change` is saved when there's one. */
-  const build = async (change?: ShoppingPath) => {
+  /**
+   * The person's choices in `next`, saved over `from`, the path they were
+   * made on: the path as saved, or null when it changed meanwhile.
+   */
+  const persist = async (from: ShoppingPath, next: ShoppingPath) => {
+    const saved = await saveDraftShoppingPath(
+      draftId,
+      { builtAt: from.builtAt, savedAt: from.savedAt ?? null },
+      choicesOf(next),
+    );
+    // Saved, or changed meanwhile: the path kept isn't the one read either way.
+    onPathChange?.();
+    if ('error' in saved) {
+      // A build or another change since it was read: shown as it is now, not overwritten.
+      toast.error(t('changed'));
+      void load();
+      return null;
+    }
+    return saved.path;
+  };
+
+  /**
+   * Builds the path again from the catalog, after `change` (made on `from`)
+   * is saved when there's one. The saved change is shown whether the build
+   * then works or not.
+   */
+  const build = async (change?: { from: ShoppingPath; next: ShoppingPath }) => {
     setBusy('build');
     try {
-      if (change) await saveDraftShoppingPath(draftId, change);
+      if (change) {
+        const saved = await persist(change.from, change.next);
+        if (!saved) return;
+        setState({ status: 'ready', path: saved, none: null });
+      }
       const result = await buildDraftShoppingPath(draftId, brandId);
-      if ('error' in result) toast.error(t('buildFailed'));
-      else
+      if (!('error' in result)) {
         setState({ status: 'ready', path: result.path, none: result.path ? null : result.reason });
+        onPathChange?.();
+      } else if (result.error === 'changed') {
+        toast.error(t('changed'));
+        void load();
+        onPathChange?.();
+      } else {
+        toast.error(t(result.error === 'rate_limited' ? 'rateLimited' : 'buildFailed'));
+      }
     } catch (err) {
       console.error('Failed to build the shopping path:', err);
       toast.error(t('saveFailed'));
@@ -125,13 +189,14 @@ export function ShoppingPathSection({
     }
   };
 
-  /** Saves a change made here (a lock, a removal), shown at once. */
-  const save = async (next: ShoppingPath) => {
+  /** Saves a change made here (a lock, a removal), shown at once; put back when it fails. */
+  const save = async (from: ShoppingPath, next: ShoppingPath) => {
     const before = state;
     setState({ status: 'ready', path: next, none: null });
     setBusy('save');
     try {
-      await saveDraftShoppingPath(draftId, next);
+      const saved = await persist(from, next);
+      if (saved) setState({ status: 'ready', path: saved, none: null });
     } catch (err) {
       console.error('Failed to save the shopping path:', err);
       toast.error(t('saveFailed'));
@@ -180,13 +245,15 @@ export function ShoppingPathSection({
     );
   }
 
-  const { path, none } = state;
+  const { path, none, unreadable } = state;
   if (!path) {
     return (
       <section className="space-y-2 rounded-lg border p-3" aria-label={t('title')}>
         {header(null)}
-        <p className="text-xs text-muted-foreground">{none ? t(`noPath.${none}`) : t('empty')}</p>
-        {!none && (
+        <p className="text-xs text-muted-foreground">
+          {none ? t(`noPath.${none}`) : unreadable ? t('unreadable') : t('empty')}
+        </p>
+        {PICK_AGAIN.includes(none) && (
           <Button size="sm" disabled={busy !== null} onClick={() => void build()}>
             {busy === 'build' ? t('building') : t('build')}
           </Button>
@@ -204,18 +271,21 @@ export function ShoppingPathSection({
       <div className="space-y-1 rounded-md border p-2.5">
         <p className="text-xs text-muted-foreground">{t('category')}</p>
         {path.categories.length ? (
-          path.categories.map((category) => (
-            <div key={category.url} className="space-y-0.5">
+          path.categories.map((category, index) => (
+            // Two categories may share a page: the place keeps them apart.
+            <div key={`${index}:${category.name}`} className="space-y-0.5">
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <span className="text-sm font-medium">{category.name}</span>
-                <a
-                  href={category.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-muted-foreground underline underline-offset-4"
-                >
-                  {pagePath(category.url)}
-                </a>
+                {category.url && (
+                  <a
+                    href={category.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="min-w-0 text-xs text-muted-foreground underline underline-offset-4 [overflow-wrap:anywhere]"
+                  >
+                    {pagePath(category.url)}
+                  </a>
+                )}
               </div>
               <p className="text-xs">{t('categoryPlace')}</p>
             </div>
@@ -258,10 +328,15 @@ export function ShoppingPathSection({
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
-          {hits && hits.length === 0 && (
+          {hits === 'failed' && (
+            <p className="text-xs text-muted-foreground" role="alert">
+              {t('searchFailed')}
+            </p>
+          )}
+          {Array.isArray(hits) && hits.length === 0 && (
             <p className="text-xs text-muted-foreground">{t('searchEmpty')}</p>
           )}
-          {hits && hits.length > 0 && (
+          {Array.isArray(hits) && hits.length > 0 && (
             <ul className="divide-y rounded-md border">
               {hits.map((hit) => (
                 <li key={hit.id}>
@@ -273,7 +348,7 @@ export function ShoppingPathSection({
                     onClick={() => {
                       setAdding(false);
                       setQuery('');
-                      void build(withAdded(path, hit.id));
+                      void build({ from: path, next: withAdded(path, hit.id) });
                     }}
                   >
                     {hit.title}
@@ -308,14 +383,18 @@ export function ShoppingPathSection({
                 )}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-baseline gap-x-2">
-                    <a
-                      href={product.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {product.title}
-                    </a>
+                    {product.url ? (
+                      <a
+                        href={product.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-medium hover:underline"
+                      >
+                        {product.title}
+                      </a>
+                    ) : (
+                      <span className="text-sm font-medium">{product.title}</span>
+                    )}
                     {price && <span className="text-xs text-muted-foreground">{price}</span>}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -354,14 +433,16 @@ export function ShoppingPathSection({
                     size="sm"
                     variant="ghost"
                     className="h-7 w-7 p-0"
+                    // One name, its state pressed or not; the tooltip says what a click does.
+                    aria-label={t('lock', { title: product.title })}
                     aria-pressed={isLocked}
-                    aria-label={
+                    title={
                       isLocked
                         ? t('unlock', { title: product.title })
                         : t('lock', { title: product.title })
                     }
                     disabled={busy !== null}
-                    onClick={() => void save(withLocked(path, product.id, !isLocked))}
+                    onClick={() => void save(path, withLocked(path, product.id, !isLocked))}
                   >
                     {isLocked ? (
                       <Lock className="h-3.5 w-3.5" aria-hidden="true" />
@@ -376,7 +457,7 @@ export function ShoppingPathSection({
                     className="h-7 px-2 text-xs"
                     aria-label={t('swapLabel', { title: product.title })}
                     disabled={busy !== null}
-                    onClick={() => void build(withRemoved(path, product.id))}
+                    onClick={() => void build({ from: path, next: withRemoved(path, product.id) })}
                   >
                     {t('swap')}
                   </Button>
@@ -387,7 +468,7 @@ export function ShoppingPathSection({
                     className="h-7 px-2 text-xs"
                     aria-label={t('removeLabel', { title: product.title })}
                     disabled={busy !== null}
-                    onClick={() => void save(withRemoved(path, product.id))}
+                    onClick={() => void save(path, withRemoved(path, product.id))}
                   >
                     {t('remove')}
                   </Button>
@@ -402,9 +483,9 @@ export function ShoppingPathSection({
         <div className="space-y-1">
           <p className="text-xs font-medium text-muted-foreground">{t('leftOut')}</p>
           <ul className="space-y-0.5 text-xs text-muted-foreground">
-            {path.leftOut.map((item) => (
-              <li key={item.id}>
-                {item.title} · {t(`reason.${item.reason}`)}
+            {path.leftOut.map((item, index) => (
+              <li key={`${index}:${item.id}`}>
+                {item.title ?? t('untitled')} · {t(`reason.${leftOutReason(item.reason)}`)}
               </li>
             ))}
           </ul>

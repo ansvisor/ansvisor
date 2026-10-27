@@ -112,14 +112,13 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
       {current.categories === null ? (
         <p className="text-sm text-muted-foreground">{t('unavailable')}</p>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full min-w-[640px] text-sm">
+        <div className="relative overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
                 <th className="px-3 py-2 font-medium">{t('category')}</th>
                 <th className="px-3 py-2 font-medium">{t('productsHeading')}</th>
                 <th className="px-3 py-2 font-medium">{t('pageHeading')}</th>
-                <th className="px-3 py-2 font-medium">{t('howHeading')}</th>
                 {canManage && (
                   <th className="px-3 py-2 font-medium">
                     <span className="sr-only">{t('actions')}</span>
@@ -134,7 +133,10 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
                   <td className="px-3 py-2 text-muted-foreground">
                     {t('products', { products: category.products, inStock: category.inStock })}
                   </td>
-                  <td className="px-3 py-2">
+                  <td
+                    className="px-3 py-2"
+                    colSpan={canManage && open === category.name ? 2 : undefined}
+                  >
                     {open === category.name ? (
                       <form
                         className="flex flex-col gap-2"
@@ -194,7 +196,7 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
                         href={category.page.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="break-all underline underline-offset-4"
+                        className="underline underline-offset-4 [overflow-wrap:anywhere]"
                         title={category.page.title ?? undefined}
                       >
                         {shortAddress(category.page.url)}
@@ -207,26 +209,26 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
                         {t('noPage')}
                       </Badge>
                     )}
+                    {open !== category.name && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t(`how.${category.how ?? 'none'}`)}
+                      </p>
+                    )}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {t(`how.${category.how ?? 'none'}`)}
-                  </td>
-                  {canManage && (
+                  {canManage && open !== category.name && (
                     <td className="px-3 py-2 text-right">
-                      {open !== category.name && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          aria-label={t('changeLabel', { category: category.name })}
-                          onClick={() => {
-                            setEditing({ brandId: activeBrandId, name: category.name });
-                            setUrl(category.page?.url ?? '');
-                          }}
-                        >
-                          {t('change')}
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        aria-label={t('changeLabel', { category: category.name })}
+                        onClick={() => {
+                          setEditing({ brandId: activeBrandId, name: category.name });
+                          setUrl(category.page?.url ?? '');
+                        }}
+                      >
+                        {t('change')}
+                      </Button>
                     </td>
                   )}
                 </tr>
