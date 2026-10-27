@@ -91,7 +91,7 @@
       "customName": "Custom",
       "customTagline": "For large companies and agencies managing AI visibility at scale.",
       "startingAt": "Starting at",
-      "customAiUsage": "Custom AI usage, over {count}x",
+      "customAiUsage": "Custom AI usage, from {count}x",
       "contactUs": "Contact us",
       "pricesInUsd": "Prices in USD.",
       "promo": {

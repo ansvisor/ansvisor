@@ -142,7 +142,7 @@ describe('ChoosePlanDialog', () => {
     const custom = card('custom').textContent;
     expect(custom).toContain('Starting at$499/mo');
     expect(custom).toContain('Contact us');
-    expect(custom).toContain('Custom AI usage, over 10x');
+    expect(custom).toContain('Custom AI usage, from 10x');
     expect(custom).toContain('SSO / SAML and custom feature requests');
     expect(card('custom').querySelector('a')?.getAttribute('href')).toBe(
       'https://www.ansvisor.com/contact-us',
