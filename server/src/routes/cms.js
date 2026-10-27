@@ -65,7 +65,8 @@ function routeError(message, status, code) {
   return err;
 }
 
-async function assertWriter(id, userId) {
+/** Admins and managers of the brand's organization only (WordPress's routes too, cms-wordpress.js). */
+export async function assertWriter(id, userId) {
   await assertBrandAccess(id, userId);
   const { data: profile } = await supabaseAdmin
     .from('profiles')
@@ -178,7 +179,7 @@ const notConfigured = (res) =>
   res.status(503).json({ error: 'Webflow is not set up on this server.', code: 'not_configured' });
 
 /** The brand from the path, or a 400. */
-function brandOf(req, res) {
+export function brandOf(req, res) {
   const parsed = brandId.safeParse(req.params.brandId);
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid brand', code: 'invalid' });
