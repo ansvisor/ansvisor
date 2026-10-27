@@ -3,12 +3,71 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // The handler reaches the supabase admin client at import time, and the AI
 // tracker reaches the model SDKs; stub both so the module loads under test.
 const upsert = vi.fn();
+const from = vi.fn();
 vi.mock('../config/supabase.js', () => ({
-  default: { from: () => ({ upsert }) },
+  default: { from: (...a) => from(...a) },
 }));
-vi.mock('./ai-tracker.js', () => ({ analyzeSentimentAI: vi.fn() }));
+const analyzeSentimentAI = vi.fn();
+vi.mock('./ai-tracker.js', () => ({ analyzeSentimentAI: (...a) => analyzeSentimentAI(...a) }));
+const isBrandActiveCached = vi.fn();
+vi.mock('./active-subscriptions.js', () => ({
+  isBrandActiveCached: (...a) => isBrandActiveCached(...a),
+}));
+vi.mock('./target-url-stats.js', () => ({ updateTargetUrlStats: vi.fn() }));
+vi.mock('./citation-rows.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  persistCitationRows: vi.fn(),
+}));
 
-import { persistShoppingCards } from './cloro-result-handler.js';
+import { handleScraperResult, persistShoppingCards } from './cloro-result-handler.js';
+
+beforeEach(() => {
+  from.mockReset().mockImplementation(() => ({ upsert }));
+  analyzeSentimentAI.mockReset().mockResolvedValue({ sentiment: 'positive' });
+  isBrandActiveCached.mockReset().mockResolvedValue(true);
+});
+
+/**
+ * Cloro's answer for a brand whose organization's plan has ended
+ * (2026-10-27): dropped, with no sentiment call and nothing stored.
+ */
+describe('handleScraperResult once the plan has ended', () => {
+  const answer = {
+    aiResponse: { text: 'Acme is a good pick.', citations: [], model: 'gpt' },
+    scraperId: 'chatgpt-web',
+    promptId: 'prompt-1',
+    brandId: 'brand-1',
+    region: 'US',
+    brandInfo: { brandName: 'Acme', domains: ['acme.com'] },
+    competitors: [],
+  };
+
+  it('drops the answer, calling no model and writing nothing', async () => {
+    isBrandActiveCached.mockResolvedValue(false);
+
+    expect(await handleScraperResult(answer)).toEqual({
+      inserted: false,
+      skipped: 'subscription_inactive',
+    });
+    expect(isBrandActiveCached).toHaveBeenCalledWith('brand-1');
+    expect(analyzeSentimentAI).not.toHaveBeenCalled();
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('stores the answer, with its sentiment, while the plan is on', async () => {
+    const insert = vi.fn(() => ({
+      select: () => ({
+        single: async () => ({ data: { id: 'r1', created_at: 'now' }, error: null }),
+      }),
+    }));
+    from.mockImplementation(() => ({ insert, upsert }));
+
+    expect(await handleScraperResult(answer)).toEqual({ inserted: true });
+    expect(analyzeSentimentAI).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith('prompt_results');
+    expect(insert.mock.calls[0][0]).toMatchObject({ prompt_id: 'prompt-1', sentiment: 'positive' });
+  });
+});
 
 const base = {
   promptResultId: 'result-1',

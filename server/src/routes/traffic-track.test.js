@@ -54,7 +54,7 @@ vi.mock('../config/supabase.js', () => ({
         single: async () =>
           chain.columns === 'conversions_enabled'
             ? conversionsRead
-            : { data: { id: 'b1' }, error: null },
+            : { data: { id: 'b1', organization_id: 'o1' }, error: null },
         maybeSingle: async () => ({ data: latestPageview, error: null }),
         insert: async (row) => {
           inserted.push({ table, row });
@@ -80,6 +80,10 @@ vi.mock('../lib/logger.js', () => {
   return { default: logger, logger };
 });
 vi.mock('../lib/traffic-visits.js', () => ({ findVisitOf: (...args) => findVisitOf(...args) }));
+const isOrgActiveCached = vi.fn();
+vi.mock('../lib/active-subscriptions.js', () => ({
+  isOrgActiveCached: (...args) => isOrgActiveCached(...args),
+}));
 // The visitor key stands in for the IP address (00250).
 const visitorKey = vi.fn();
 vi.mock('../lib/visitor-key.js', () => ({ visitorKey: (...args) => visitorKey(...args) }));
@@ -100,6 +104,8 @@ beforeAll(async () => {
 afterAll(() => new Promise((resolve) => server.close(resolve)));
 
 beforeEach(() => {
+  // Every organization on a plan unless a test says otherwise.
+  isOrgActiveCached.mockReset().mockResolvedValue(true);
   inserted.length = 0;
   insertError = null;
   findVisitOf.mockReset();
@@ -366,6 +372,47 @@ describe('POST /track/:trackingCode', () => {
       });
       expect(res.status, type).toBe(413);
     }
+    expect(inserted).toEqual([]);
+  });
+});
+
+/**
+ * Once the plan has ended (2026-10-27): a beacon is answered as a stored one
+ * is, so the site's snippet never errors, and nothing is written.
+ */
+describe('POST /track/:trackingCode once the plan has ended', () => {
+  it('stores no visit, no not-found mark and no journey event, and answers 204', async () => {
+    isOrgActiveCached.mockResolvedValue(false);
+    conversionsRead = { data: { conversions_enabled: true }, error: null };
+    latestPageview = { id: 'pv1' };
+
+    expect((await beacon()).status).toBe(204);
+    expect((await beacon({ k: 'nf', nf: 1 })).status).toBe(204);
+    expect((await beacon({ k: 'cv', id: 'Vq3xT0mZ8kLp2RwYbN5sQa', g: 'demo' })).status).toBe(204);
+
+    expect(isOrgActiveCached).toHaveBeenCalledWith('o1');
+    expect(inserted).toEqual([]);
+    expect(updated).toEqual([]);
+    expect(findVisitOf).not.toHaveBeenCalled();
+    expect(visitorKey).not.toHaveBeenCalled();
+    // Only the brand's own read: not its conversions setting.
+    expect(brandFilters.filter(([columns]) => columns === 'conversions_enabled')).toEqual([]);
+    expect(brandFilters).toContainEqual([
+      'id, organization_id',
+      'eq',
+      'tracking_code',
+      'abcdef123',
+    ]);
+  });
+
+  it('stores the visit for an organization on a plan', async () => {
+    expect((await beacon()).status).toBe(204);
+    expect(inserted.map(({ table }) => table)).toEqual(['ai_traffic_logs']);
+  });
+
+  it('answers 500 and stores nothing when it cannot tell', async () => {
+    isOrgActiveCached.mockRejectedValue(new Error('organizations read: timeout'));
+    expect((await beacon()).status).toBe(500);
     expect(inserted).toEqual([]);
   });
 });

@@ -9,9 +9,14 @@
  * month's raw cap and written in one transaction, so a file it sends again
  * (after timing out, say) is read once, and a read that fails leaves nothing
  * for the retry to count twice.
+ *
+ * Once the organization's plan has ended (2026-10-27), a sender's requests
+ * are answered 200 and nothing is read or stored: the customer's edge keeps
+ * working and doesn't retry, and we pay for no read, verification or row.
  */
 
 import express, { Router } from 'express';
+import { isOrgActiveCached } from '../lib/active-subscriptions.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 import {
   connectionForSecret,
@@ -32,7 +37,14 @@ const router = Router();
 // Mounted before the app's JSON parser (server.js), so this reads it.
 const body = express.raw({ type: () => true, limit: '20mb' });
 
-/** The live connection the secret names, before the body is read; 401 otherwise. */
+/** The answer to a sender whose organization's plan has ended: nothing read. */
+export const NOT_STORED = { received: 0, verified: 0, stored: 0, inactive: true };
+
+/**
+ * The live connection the secret names, before the body is read; 401
+ * otherwise. Once the organization's plan has ended, 200 with nothing read
+ * (whether it has is remembered a few minutes, active-subscriptions.js).
+ */
 async function sender(req, res, next) {
   try {
     const secret = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -40,6 +52,7 @@ async function sender(req, res, next) {
     if (!connection) return res.status(401).json({ error: 'unknown_connection' });
     // Its next requests count against the connection's bucket, not the IP's.
     markBotSenderVerified(req.headers.authorization, connection.id);
+    if (!(await isOrgActiveCached(connection.organizationId))) return res.json(NOT_STORED);
     res.locals.connection = connection;
     return next();
   } catch (error) {
@@ -75,9 +88,9 @@ router.post('/bots/ingest', botIngestLimiter, sender, body, async (req, res) => 
       : await ingestLogFile(connection, hash, parsed);
     return res.json({ ...result, records: parsed.records });
   } catch (error) {
-    if (error instanceof PlanLimitError) {
-      return res.status(error.statusCode).json({ error: 'plan_limit', message: error.message });
-    }
+    // Only a plan that has ended raises it here (plan-guard.js), one that
+    // ended within the minutes `sender` remembers: answered as `sender` would.
+    if (error instanceof PlanLimitError) return res.json(NOT_STORED);
     // Mounted before the request-id middleware: there is no req.log here.
     logger.error({ err: error }, 'bot ingest error');
     return res.status(500).json({ error: 'ingest_failed' });

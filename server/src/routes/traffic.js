@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
 import { journeyEventLimiter, trafficLimiter } from '../middleware/rate-limiter.js';
 import logger from '../lib/logger.js';
+import { isOrgActiveCached } from '../lib/active-subscriptions.js';
 import { findVisitOf } from '../lib/traffic-visits.js';
 import { visitorKey as anonymousVisitorKey } from '../lib/visitor-key.js';
 import {
@@ -86,12 +87,20 @@ router.post('/track/:trackingCode', trafficLimiter, trackBody, async (req, res) 
 
     const { data: brand, error: brandErr } = await supabaseAdmin
       .from('brands')
-      .select('id')
+      .select('id, organization_id')
       .eq('tracking_code', trackingCode)
       .single();
 
     if (brandErr || !brand) {
       return res.status(404).json({ ok: false });
+    }
+
+    // Once the organization's plan has ended (2026-10-27), no visit or
+    // journey event is stored: answered as a stored one is, so the site's
+    // snippet never errors. Whether it has is remembered a few minutes
+    // (active-subscriptions.js), not read per beacon.
+    if (!(await isOrgActiveCached(brand.organization_id))) {
+      return res.status(204).end();
     }
 
     // Body arrives as a JSON string (beaconBody reads every type as text); an

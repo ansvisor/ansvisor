@@ -6,6 +6,7 @@
 
 import {
   getJob,
+  cancelClaimedJob,
   cancelWaitingJob,
   claimWaitingJob,
   listWaitingJobs,
@@ -15,7 +16,7 @@ import {
   registerActiveJob,
   unregisterActiveJob,
 } from './job-manager.js';
-import { activeBrandFilter } from './active-subscriptions.js';
+import { activeBrandFilter, isBrandActive } from './active-subscriptions.js';
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
@@ -58,6 +59,21 @@ function createJobProxy(jobId, signal) {
 }
 
 /**
+ * Whether a claimed job's organization has no active plan, cancelling the
+ * job if so (2026-10-27): every way a job starts (the nightly run, the
+ * internal trigger, a retry, the recovery) ends in a claim, so this is where
+ * an ended plan stops tracking and content generation, with no Cloro, AI or
+ * scraping spent. A read that fails throws, and the job retries as after any
+ * failure.
+ */
+async function skipUnpaid(jobId, brandId) {
+  if (await isBrandActive(brandId)) return false;
+  await cancelClaimedJob(jobId, 'subscription_inactive');
+  logger.info({ jobId, brandId }, 'cancelled a job of an organization without an active plan');
+  return true;
+}
+
+/**
  * Run a tracking job. Call without await (fire-and-forget).
  * Handles concurrency gating, retry, and Socket.IO emit.
  */
@@ -90,6 +106,7 @@ async function attemptTrackingJob(jobId, io) {
 
   try {
     const { brandId, promptId, promptIds, immediate } = jobRow.data;
+    if (await skipUnpaid(jobId, brandId)) return;
     const proxy = createJobProxy(jobId, abortController.signal);
 
     const result = await processTrackingJob({
@@ -237,6 +254,7 @@ async function attemptContentJob(jobId, io) {
 
   try {
     const { brandId, model, request } = jobRow.data;
+    if (await skipUnpaid(jobId, brandId)) return;
     const proxy = createJobProxy(jobId, abortController.signal);
 
     const result = await processContentJob({ brandId, model, job: proxy, request });

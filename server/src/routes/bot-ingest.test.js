@@ -20,6 +20,10 @@ vi.mock('../lib/bot-ingest.js', () => ({
   logFileRead: (...a) => logFileRead(...a),
 }));
 vi.mock('../lib/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
+const isOrgActiveCached = vi.fn();
+vi.mock('../lib/active-subscriptions.js', () => ({
+  isOrgActiveCached: (...a) => isOrgActiveCached(...a),
+}));
 vi.mock('../lib/plan-guard.js', () => ({
   PlanLimitError: class PlanLimitError extends Error {
     constructor(message, statusCode = 403) {
@@ -40,6 +44,8 @@ let url;
 beforeEach(async () => {
   clearVerifiedTokens();
   connectionForSecret.mockReset();
+  // Every organization on a plan unless a test says otherwise.
+  isOrgActiveCached.mockReset().mockResolvedValue(true);
   ingestBotRequests
     .mockReset()
     .mockResolvedValue({ received: 0, verified: 0, stored: 0, skipped: {} });
@@ -185,18 +191,73 @@ describe('POST /bots/ingest', () => {
     expect(ingestLogFile).not.toHaveBeenCalled();
   });
 
-  it('refuses an unknown secret, and an organization without a subscription', async () => {
+  it('refuses an unknown secret', async () => {
     connectionForSecret.mockResolvedValue(null);
     expect((await post('abot_bad', { requests: [] })).status).toBe(401);
     expect(ingestBotRequests).not.toHaveBeenCalled();
+    expect(isOrgActiveCached).not.toHaveBeenCalled();
     // A made-up secret earns no bucket of its own.
     expect(botIngestKey({ headers: { authorization: 'Bearer abot_bad' }, ip: '1.1.1.1' })).toBe(
       'ip:1.1.1.1',
     );
+  });
 
-    connectionForSecret.mockResolvedValue({ id: 'c1', kind: 'cloudflare_worker' });
+  /**
+   * Once the plan has ended (2026-10-27): answered 200, so the customer's
+   * edge neither breaks nor retries, with nothing read or stored.
+   */
+  it("stores nothing for an organization whose plan has ended, and doesn't read the file", async () => {
+    isOrgActiveCached.mockResolvedValue(false);
+    connectionForSecret.mockResolvedValue({
+      id: 'c1',
+      organizationId: 'o1',
+      kind: 'cloudflare_worker',
+    });
+    const worker = await post('abot_x', {
+      requests: [{ userAgent: 'GPTBot', ip: '1.2.3.4', url: '/' }],
+    });
+    expect(worker.status).toBe(200);
+    expect(await worker.json()).toEqual({ received: 0, verified: 0, stored: 0, inactive: true });
+    expect(isOrgActiveCached).toHaveBeenCalledWith('o1');
+    expect(ingestBotRequests).not.toHaveBeenCalled();
+
+    connectionForSecret.mockResolvedValue({
+      id: 'c3',
+      organizationId: 'o1',
+      kind: 'cloudflare_logpush',
+    });
+    const file = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer abot_x' },
+      body: gzipSync('{"content":"tests"}'),
+    });
+    expect(file.status).toBe(200);
+    expect(await file.json()).toMatchObject({ stored: 0, inactive: true });
+    expect(logFileRead).not.toHaveBeenCalled();
+    expect(ingestLogFile).not.toHaveBeenCalled();
+  });
+
+  it('answers the same when the plan ended within the remembered minutes', async () => {
+    connectionForSecret.mockResolvedValue({
+      id: 'c1',
+      organizationId: 'o1',
+      kind: 'cloudflare_worker',
+    });
     ingestBotRequests.mockRejectedValue(new PlanLimitError('choose a plan', 402));
-    expect((await post('abot_x', { requests: [] })).status).toBe(402);
+    const res = await post('abot_x', { requests: [] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ stored: 0, inactive: true });
+  });
+
+  it('answers 500, so the sender retries, when it cannot tell whether the plan has ended', async () => {
+    isOrgActiveCached.mockRejectedValue(new Error('organizations read: timeout'));
+    connectionForSecret.mockResolvedValue({
+      id: 'c1',
+      organizationId: 'o1',
+      kind: 'cloudflare_worker',
+    });
+    expect((await post('abot_x', { requests: [] })).status).toBe(500);
+    expect(ingestBotRequests).not.toHaveBeenCalled();
   });
 
   it("checks the secret before reading the body: an unknown one gets 401, not the body's 413", async () => {

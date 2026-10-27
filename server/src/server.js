@@ -715,8 +715,10 @@ app.post('/cloro/callback', async (req, res) => {
       return;
     }
 
+    let handled;
     try {
-      await handleScraperResult({
+      // Dropped, not stored, once the brand's plan has ended (the handler).
+      handled = await handleScraperResult({
         aiResponse,
         scraperId: pending.scraper_id,
         promptId: pending.prompt_id,
@@ -732,8 +734,10 @@ app.post('/cloro/callback', async (req, res) => {
     }
 
     req.log.info(
-      { taskId, scraperId: pending.scraper_id },
-      'cloro callback: task processed and inserted',
+      { taskId, scraperId: pending.scraper_id, skipped: handled?.skipped },
+      handled?.inserted
+        ? 'cloro callback: task processed and inserted'
+        : 'cloro callback: task dropped',
     );
   } catch (err) {
     req.log.error({ err }, 'cloro callback: error processing webhook');

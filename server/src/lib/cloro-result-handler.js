@@ -22,6 +22,7 @@ import {
   normalizeInlineProducts,
   matchCardBrand,
 } from './shopping-cards.js';
+import { isBrandActiveCached } from './active-subscriptions.js';
 import { updateTargetUrlStats } from './target-url-stats.js';
 import { persistCitationRows } from './citation-rows.js';
 import { logger } from './logger.js';
@@ -37,7 +38,7 @@ import { classifyMerchant } from './merchant-detection.js';
  * @param {string|null} args.region
  * @param {{ brandName: string, domains: string[] }} args.brandInfo
  * @param {Array<{ id: string, name: string, domain: string }>} args.competitors
- * @returns {Promise<{ inserted: boolean }>}
+ * @returns {Promise<{ inserted: boolean, skipped?: string }>}
  */
 export async function handleScraperResult({
   aiResponse,
@@ -48,6 +49,17 @@ export async function handleScraperResult({
   brandInfo,
   competitors,
 }) {
+  // An answer that arrives once the plan has ended (2026-10-27) is dropped,
+  // not stored: Cloro has been paid for it already, but storing it means a
+  // sentiment model call whenever the brand is named, and a result the
+  // read-only workspace never asked for. Dropping costs nothing more; the
+  // caller deletes the task's pending row either way. Answered from memory
+  // for a few minutes: a run's answers arrive in hundreds.
+  if (!(await isBrandActiveCached(brandId))) {
+    logger.info({ brandId, promptId, scraperId }, '[cloro-result] dropped: no active plan');
+    return { inserted: false, skipped: 'subscription_inactive' };
+  }
+
   const mentionCount = countBrandMentions(aiResponse.text, brandInfo);
   const sentimentResult =
     mentionCount > 0

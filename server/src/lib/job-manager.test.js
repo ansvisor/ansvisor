@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Cancelling a waiting job (2026-10-27): only while it still waits, with
- * why it was cancelled kept on the row.
+ * Cancelling a waiting job, or one just claimed (2026-10-27): only while it
+ * is still in that state, with why it was cancelled kept on the row.
  */
 
 const updates = [];
@@ -30,7 +30,7 @@ vi.mock('../config/supabase.js', () => ({
 }));
 vi.mock('./logger.js', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
-const { cancelWaitingJob } = await import('./job-manager.js');
+const { cancelClaimedJob, cancelWaitingJob } = await import('./job-manager.js');
 
 beforeEach(() => {
   updates.length = 0;
@@ -63,5 +63,31 @@ describe('cancelWaitingJob', () => {
   it('says it did not cancel when the write fails', async () => {
     answer = { data: null, error: { message: 'timeout' } };
     expect(await cancelWaitingJob('j1', 'subscription_inactive')).toBe(false);
+  });
+});
+
+describe('cancelClaimedJob', () => {
+  it('cancels a job this process has just claimed, and keeps why', async () => {
+    expect(await cancelClaimedJob('j1', 'subscription_inactive')).toBe(true);
+    expect(updates).toEqual([
+      {
+        table: 'jobs',
+        patch: expect.objectContaining({
+          status: 'cancelled',
+          failed_reason: 'subscription_inactive',
+        }),
+        filters: [
+          ['id', 'j1'],
+          ['status', 'active'],
+        ],
+      },
+    ]);
+  });
+
+  it('says so when the job was cancelled meanwhile, or the write fails', async () => {
+    answer = { data: [], error: null };
+    expect(await cancelClaimedJob('j1', 'subscription_inactive')).toBe(false);
+    answer = { data: null, error: { message: 'timeout' } };
+    expect(await cancelClaimedJob('j1', 'subscription_inactive')).toBe(false);
   });
 });

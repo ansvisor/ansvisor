@@ -17,8 +17,14 @@ vi.mock('../action-center/priority-data.js', () => ({
   rescoreBrandActions: (...a) => rescoreBrandActions(...a),
 }));
 const activeBrandFilter = vi.fn();
+const isBrandActive = vi.fn();
 vi.mock('../active-subscriptions.js', () => ({
   activeBrandFilter: (...a) => activeBrandFilter(...a),
+  isBrandActive: (...a) => isBrandActive(...a),
+}));
+const sweepActionTasks = vi.fn();
+vi.mock('../action-center/task-writer/index.js', () => ({
+  sweepActionTasks: (...a) => sweepActionTasks(...a),
 }));
 
 import { runFirstSignalPass, runSignalCatchUp, runSignalPass } from './pass.js';
@@ -69,6 +75,8 @@ beforeEach(() => {
   generateActionsForBrand.mockResolvedValue({ created: 1, refreshed: 0 });
   // Every brand's organization on a plan unless a test says otherwise.
   activeBrandFilter.mockReset().mockResolvedValue(() => true);
+  isBrandActive.mockReset().mockResolvedValue(true);
+  sweepActionTasks.mockReset().mockResolvedValue({ written: 0, skipped: 0, failed: 0 });
 });
 
 describe('runSignalPass', () => {
@@ -161,6 +169,45 @@ describe('runSignalPass', () => {
     const result = await runSignalPass(BRAND, { now: NOW });
 
     expect(result).toEqual({ skipped: 'no_stamped_run' });
+    expect(recordSignalsForBrand).not.toHaveBeenCalled();
+    expect(writes).toHaveLength(0);
+  });
+
+  it("has tonight's new actions' tasks written", async () => {
+    mockDb({ runs: [{ completed_at: RUN_AT }] });
+
+    await runSignalPass(BRAND, { now: NOW });
+
+    expect(isBrandActive).toHaveBeenCalledWith(BRAND);
+    expect(sweepActionTasks).toHaveBeenCalledWith({ brandId: BRAND, now: NOW });
+  });
+
+  /**
+   * Once the plan has ended (2026-10-27): no signal, no action, no task
+   * written, no score, and no row, so a plan bought within the catch-up's
+   * window still gets the night.
+   */
+  it("records nothing and raises no action for a brand whose organization's plan has ended", async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+    isBrandActive.mockResolvedValue(false);
+
+    const result = await runSignalPass(BRAND, { now: NOW });
+
+    expect(result).toEqual({ skipped: 'subscription_inactive' });
+    expect(isBrandActive).toHaveBeenCalledWith(BRAND);
+    expect(recordSignalsForBrand).not.toHaveBeenCalled();
+    expect(generateActionsForBrand).not.toHaveBeenCalled();
+    expect(rescoreBrandActions).not.toHaveBeenCalled();
+    expect(sweepActionTasks).not.toHaveBeenCalled();
+    expect(writes).toHaveLength(0);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('throws, recording nothing, when it cannot tell whether the plan has ended', async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }] });
+    isBrandActive.mockRejectedValue(new Error('brands read: timeout'));
+
+    await expect(runSignalPass(BRAND, { now: NOW })).rejects.toThrow('brands read');
     expect(recordSignalsForBrand).not.toHaveBeenCalled();
     expect(writes).toHaveLength(0);
   });
@@ -284,6 +331,17 @@ describe('runFirstSignalPass', () => {
 
     expect(await runFirstSignalPass(BRAND, { now: NOW })).toEqual({ skipped: 'no_stamped_run' });
     expect(recordSignalsForBrand).not.toHaveBeenCalled();
+  });
+
+  it("raises nothing for a new brand whose organization's plan has ended", async () => {
+    const writes = mockDb({ runs: [{ completed_at: RUN_AT }], passes: [] });
+    isBrandActive.mockResolvedValue(false);
+
+    expect(await runFirstSignalPass(BRAND, { now: NOW })).toEqual({
+      skipped: 'subscription_inactive',
+    });
+    expect(generateActionsForBrand).not.toHaveBeenCalled();
+    expect(writes).toHaveLength(0);
   });
 
   it('leaves the nightly pass reading nightly runs only', async () => {
