@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFrom, mockFetch, state } = vi.hoisted(() => ({
+const { mockFrom, postJson, state } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
-  mockFetch: vi.fn(),
+  postJson: vi.fn(),
   state: { configs: [] },
 }));
 
 vi.mock('../config/supabase.js', () => ({
   default: { from: mockFrom },
 }));
+vi.mock('./safe-post.js', () => ({ postJson: (...args) => postJson(...args) }));
 vi.mock('./logger.js', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
@@ -46,9 +47,8 @@ beforeEach(() => {
     expect(table).toBe('webhook_configs');
     return queryForConfigs();
   });
-  mockFetch.mockReset();
-  mockFetch.mockResolvedValue({ ok: true, status: 204 });
-  vi.stubGlobal('fetch', mockFetch);
+  postJson.mockReset();
+  postJson.mockResolvedValue({ status: 204, answer: '' });
 });
 
 describe('dispatchBrandWebhook', () => {
@@ -94,17 +94,28 @@ describe('dispatchBrandWebhook', () => {
     });
 
     expect(result).toEqual({ sent: 1, failed: 0 });
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith(
+    // Posted as Send to CMS posts: the safe POST sets the content type.
+    expect(postJson).toHaveBeenCalledTimes(1);
+    expect(postJson).toHaveBeenCalledWith(
       'https://pulse.example/hook',
-      expect.objectContaining({
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Webhook-Secret': 'pulse-secret',
-        },
-      }),
+      JSON.stringify({ event: 'daily_pulse.created', pulse: { date: '2026-10-20' } }),
+      { headers: { 'X-Webhook-Secret': 'pulse-secret' } },
     );
+  });
+
+  it('sends no secret header to a webhook without one', async () => {
+    state.configs = [
+      {
+        id: 'open',
+        brand_id: 'brand-1',
+        webhook_url: 'https://open.example/hook',
+        webhook_secret: null,
+        is_active: true,
+        events: ['opportunity.sent'],
+      },
+    ];
+    await dispatchBrandWebhook('brand-1', { event: 'opportunity.sent' });
+    expect(postJson.mock.calls[0][2]).toEqual({ headers: {} });
   });
 
   it('counts delivery failures without throwing', async () => {
@@ -126,8 +137,9 @@ describe('dispatchBrandWebhook', () => {
         events: ['opportunity.sent'],
       },
     ];
-    mockFetch
-      .mockResolvedValueOnce({ ok: false, status: 503 })
+    // A redirect is an answer, as a 503 is: none is followed.
+    postJson
+      .mockResolvedValueOnce({ status: 302, answer: '' })
       .mockRejectedValueOnce(new Error('connection refused'));
 
     await expect(dispatchBrandWebhook('brand-1', { event: 'opportunity.sent' })).resolves.toEqual({
@@ -151,6 +163,6 @@ describe('dispatchBrandWebhook', () => {
     await expect(
       dispatchBrandWebhook('brand-1', { event: 'daily_pulse.created' }),
     ).resolves.toEqual({ sent: 0, failed: 0 });
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(postJson).not.toHaveBeenCalled();
   });
 });

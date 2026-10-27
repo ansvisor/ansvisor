@@ -1,3 +1,4 @@
+import { STATUS_CODES } from 'node:http';
 import { Router } from 'express';
 import { generateObject } from 'ai';
 import { z } from 'zod';
@@ -16,6 +17,7 @@ import { resolveModel } from '../lib/ai-provider.js';
 import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from '../lib/chunked-in.js';
+import { postJson } from '../lib/safe-post.js';
 import {
   assertBrandAccess,
   assertOpportunitiesAccess,
@@ -885,7 +887,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
     const serverUrl =
       process.env.PUBLIC_SERVER_URL || `http://localhost:${process.env.PORT || 3001}`;
-    const headers = { 'Content-Type': 'application/json' };
+    // The content type is postJson's own.
+    const headers = {};
     if (webhookConfig.webhook_secret) {
       headers['X-Webhook-Secret'] = webhookConfig.webhook_secret;
     }
@@ -930,14 +933,11 @@ router.post('/bulk/send-webhook', async (req, res) => {
           callback_method: 'POST',
         };
 
-        const webhookRes = await fetch(webhookConfig.webhook_url, {
-          method: 'POST',
+        // As Send to CMS posts: no private address on Cloud, no redirect followed, 15 s.
+        const webhookRes = await postJson(webhookConfig.webhook_url, JSON.stringify(payload), {
           headers,
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(15000),
         });
-
-        const responseBody = await webhookRes.text().catch(() => '');
+        const responseBody = webhookRes.answer;
 
         // A workflow may call callback_url before it sends its HTTP response.
         // Guard the write with the state observed before POST so this delayed
@@ -1112,19 +1112,16 @@ router.post('/:id/send-webhook', async (req, res) => {
       callback_method: 'POST',
     };
 
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = {};
     if (webhookConfig.webhook_secret) {
       headers['X-Webhook-Secret'] = webhookConfig.webhook_secret;
     }
 
-    const webhookRes = await fetch(webhookConfig.webhook_url, {
-      method: 'POST',
+    // As the bulk send above posts.
+    const webhookRes = await postJson(webhookConfig.webhook_url, JSON.stringify(payload), {
       headers,
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000),
     });
-
-    const responseBody = await webhookRes.text().catch(() => '');
+    const responseBody = webhookRes.answer;
 
     const { data: statusUpdate } = await supabaseAdmin
       .from('content_opportunities')
@@ -1188,22 +1185,22 @@ router.post('/webhook-test', async (req, res) => {
       timestamp: new Date().toISOString(),
     };
 
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = {};
     if (webhookSecret) {
       headers['X-Webhook-Secret'] = webhookSecret;
     }
 
-    const webhookRes = await fetch(webhookUrl, {
-      method: 'POST',
+    // Posted as a real send is, so the test says what a send would meet:
+    // on Cloud a private address is refused, and a redirect is an answer.
+    const webhookRes = await postJson(webhookUrl, JSON.stringify(payload), {
       headers,
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(10000),
+      timeoutMs: 10_000,
     });
 
     return res.json({
-      success: webhookRes.ok,
+      success: webhookRes.status >= 200 && webhookRes.status < 300,
       status: webhookRes.status,
-      statusText: webhookRes.statusText,
+      statusText: STATUS_CODES[webhookRes.status] ?? '',
     });
   } catch (error) {
     return res.json({
