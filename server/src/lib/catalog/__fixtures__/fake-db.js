@@ -39,6 +39,7 @@ export function fakeDb() {
         state.filters.every(([kind, column, value]) => {
           if (kind === 'eq') return row[column] === value;
           if (kind === 'neq') return row[column] !== value;
+          if (kind === 'is') return value === null ? row[column] == null : row[column] === value;
           return value.includes(row[column]);
         });
       if (state.op === 'select') {
@@ -94,6 +95,10 @@ export function fakeDb() {
       },
       neq: (column, value) => {
         state.filters.push(['neq', column, value]);
+        return builder;
+      },
+      is: (column, value) => {
+        state.filters.push(['is', column, value]);
         return builder;
       },
       single: () => {

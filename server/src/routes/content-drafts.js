@@ -5,6 +5,7 @@ import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
 import { qualityPhase } from '../lib/content-quality.js';
 import { briefRules, rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
+import { NoShoppingPath, buildShoppingPath } from '../lib/shopping-path.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
@@ -202,6 +203,38 @@ router.post('/:draftId/brief', async (req, res) => {
     }
     req.log.error({ err }, 'content draft brief rebuild error');
     return res.status(502).json({ error: 'The brief could not be written', code: 'failed' });
+  }
+});
+
+/**
+ * POST /api/content-drafts/:draftId/shopping-path
+ * Body: { brandId }
+ * Builds the draft's shopping path from the brand's catalog and saves it
+ * (shopping path, 00351): { path }, or { path: null, reason } when it
+ * doesn't fit ('not_a_shop', 'page_type', 'no_catalog').
+ */
+router.post('/:draftId/shopping-path', async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const body = z.object({ brandId: z.guid() }).safeParse(req.body ?? {});
+  if (!draftId.success || !body.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  try {
+    await assertBrandAccess(body.data.brandId, req.user.id);
+    const path = await buildShoppingPath({ draftId: draftId.data, brandId: body.data.brandId });
+    return res.json({ path });
+  } catch (err) {
+    if (err instanceof NoShoppingPath) return res.json({ path: null, reason: err.reason });
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, message: err?.message } },
+      'content draft shopping path error',
+    );
+    return res.status(502).json({ error: 'The shopping path could not be built', code: 'failed' });
   }
 });
 

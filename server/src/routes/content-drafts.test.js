@@ -17,6 +17,7 @@ const startDraftWriting = vi.fn();
 const fixDraftRules = vi.fn();
 const assertBrandAccess = vi.fn();
 const stopDraftRun = vi.fn();
+const buildShoppingPath = vi.fn();
 /** A Start's claim on the draft (its agent_state_at), as its run carries it. */
 const CLAIM = '2026-10-23T10:00:00.000+00:00';
 /** The draft Stop reads, to check it is the brand's. */
@@ -56,11 +57,16 @@ vi.mock('../lib/content-agent.js', async (importOriginal) => ({
   ...(await importOriginal()),
   fixDraftRules: (...args) => fixDraftRules(...args),
 }));
+vi.mock('../lib/shopping-path.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  buildShoppingPath: (...args) => buildShoppingPath(...args),
+}));
 vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
 
 const { default: router } = await import('./content-drafts.js');
 const { PlanLimitError } = await import('../lib/plan-guard.js');
 const { RunStoppedError } = await import('../lib/content-runs.js');
+const { NoShoppingPath } = await import('../lib/shopping-path.js');
 
 let server;
 let baseUrl;
@@ -71,6 +77,7 @@ beforeEach(async () => {
   fixDraftRules.mockReset().mockResolvedValue({ count: 2, batchId: 'b1' });
   assertBrandAccess.mockReset().mockResolvedValue({});
   stopDraftRun.mockReset().mockResolvedValue([{ id: 'run-1', claimed_at: CLAIM }]);
+  buildShoppingPath.mockReset().mockResolvedValue({ version: 1, products: [] });
   stopDraft = { brand_id: BRAND };
   letGo = [];
   const app = express();
@@ -413,5 +420,35 @@ describe('POST /api/content-drafts/:draftId/stop', () => {
     });
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ code: 'stopped' });
+  });
+});
+
+describe('POST /api/content-drafts/:draftId/shopping-path', () => {
+  const build = (body, draftId = DRAFT) =>
+    fetch(`${baseUrl}/${draftId}/shopping-path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it("builds the draft's shopping path for a member of the brand", async () => {
+    const res = await build({ brandId: BRAND });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ path: { version: 1, products: [] } });
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'u1');
+    expect(buildShoppingPath).toHaveBeenCalledWith({ draftId: DRAFT, brandId: BRAND });
+  });
+
+  it("says why a draft has none, and refuses another brand's draft", async () => {
+    buildShoppingPath.mockRejectedValueOnce(new NoShoppingPath('page_type'));
+    await expect((await build({ brandId: BRAND })).json()).resolves.toEqual({
+      path: null,
+      reason: 'page_type',
+    });
+    buildShoppingPath.mockRejectedValueOnce(
+      Object.assign(new Error('Draft not found'), { status: 404 }),
+    );
+    expect((await build({ brandId: BRAND })).status).toBe(404);
+    expect((await build({ brandId: 'nope' })).status).toBe(400);
   });
 });
