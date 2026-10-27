@@ -1090,9 +1090,8 @@ function DangerTab({
   const { canAdmin } = useUserRole();
   const [confirmValue, setConfirmValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-  // A read-only workspace (plan not active): Delete opens the upgrade dialog instead.
-  const { guard } = useUpgradeGate();
-  const tActions = useTranslations('readOnly.actions');
+  // Delete stays open on a read-only workspace (plan not active): it only
+  // removes what the person gave us (Ansvisor, 2026-10-27).
 
   const canDelete = confirmValue === brand.name;
 
@@ -1135,7 +1134,7 @@ function DangerTab({
           <Button
             variant="destructive"
             disabled={!canDelete || isDeleting}
-            onClick={guard(handleDelete, { action: tActions('deleteBrands') })}
+            onClick={handleDelete}
             className="gap-2"
           >
             {isDeleting ? (

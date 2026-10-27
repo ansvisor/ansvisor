@@ -437,8 +437,9 @@ describe('brand settings on a read-only workspace', () => {
     return { container, root, button, openTab, type, panel };
   }
 
-  it('saves, pauses, adds and deletes nothing: each opens the upgrade dialog', async () => {
+  it('saves, pauses and adds nothing, each opening the upgrade dialog, but deletes', async () => {
     openUpgrade.mockReset();
+    deleteBrand.mockResolvedValue({ deleted: true });
     const { container, root, button, openTab, type, panel } = await render(true);
 
     await act(async () => button('settings.saveChanges').click());
@@ -459,14 +460,13 @@ describe('brand settings on a read-only workspace', () => {
     await openTab('settings.dangerTab');
     await type(panel().querySelector<HTMLInputElement>('input')!, 'Acme');
     await act(async () => button('settings.deleteButton').click());
-    expect(openUpgrade).toHaveBeenLastCalledWith('deleteBrands');
+    expect(deleteBrand).toHaveBeenCalledOnce();
 
-    expect(openUpgrade).toHaveBeenCalledTimes(5);
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
     expect(updateBrand).not.toHaveBeenCalled();
     expect(setBrandShoppingMode).not.toHaveBeenCalled();
     expect(setBrandActive).not.toHaveBeenCalled();
     expect(addCompetitor).not.toHaveBeenCalled();
-    expect(deleteBrand).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
