@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { htmlBlockElement } from './html-allowlist';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
@@ -448,6 +449,89 @@ describe('links and sources', () => {
     expect(check('datedPoint', `<p>${'word '.repeat(120)}In 2026.</p>`)).toEqual({
       state: 'bad',
       code: 'missing',
+    });
+  });
+});
+
+describe('shopping path rules (shopping path, part 6)', () => {
+  const shopping = {
+    categories: ['shop.example/collections/hiking-boots'],
+    products: [
+      { key: 'shop.example/products/p1', title: 'Summit', state: 'ok' as const },
+      { key: 'shop.example/products/p2', title: 'Trail', state: 'sold_out' as const },
+      { key: 'shop.example/products/p3', title: 'Ridge', state: 'ok' as const },
+      { key: 'shop.example/products/p4', title: 'Alpine', state: 'ok' as const },
+    ],
+  };
+  const shopRule = (key: string) => {
+    const found = activeRules(ruleSet('buying_guide', { shopping: true }), NO_DRAFT_RULES).find(
+      (r) => r.key === key,
+    );
+    if (!found) throw new Error(`no rule ${key}`);
+    return found;
+  };
+  const grid = (hrefs: string[]) =>
+    htmlBlockElement(hrefs.map((h) => `<a class="ansvisor-product" href="${h}">x</a>`).join(''));
+  const html =
+    '<h1>Boots</h1><p>Our <a href="https://shop.example/collections/hiking-boots/">hiking boots</a>.</p>' +
+    '<p>The <a href="https://www.shop.example/products/p1?utm_source=x">Summit</a>.</p>' +
+    grid(['https://shop.example/products/p2', 'https://shop.example/products/p3']);
+  const status = (key: string, read = page(html), with_: RuleContext['shopping'] = shopping) =>
+    checkRule(shopRule(key), read, { ...ctx, shopping: with_ });
+
+  it('come only on an online shop’s page that takes a shopping path', () => {
+    const keys = (pageType: Parameters<typeof ruleSet>[0], on: boolean) =>
+      ruleSet(pageType, { shopping: on })
+        .map((r) => r.key)
+        .filter((k) => k.startsWith('shop'));
+    expect(keys('buying_guide', true)).toEqual([
+      'shopCategoryLink',
+      'shopProductLinks',
+      'shopLinksLive',
+    ]);
+    expect(keys('buying_guide', false)).toEqual([]);
+    expect(keys('product_page', true)).toEqual([]);
+    expect(NOT_FOR_AGENT.has('shopLinksLive')).toBe(true);
+  });
+
+  it('read the links in the text and in a product grid', () => {
+    const read = page(html);
+    expect(read.htmlBlockLinks).toEqual([
+      'https://shop.example/products/p2',
+      'https://shop.example/products/p3',
+    ]);
+    expect(status('shopCategoryLink')).toEqual({ state: 'ok' });
+    expect(status('shopProductLinks')).toEqual({ state: 'ok' });
+    expect(status('shopLinksLive')).toEqual({ state: 'bad', code: 'found', count: 1 });
+  });
+
+  it('want the category page, three products or all of a smaller path, none sold out', () => {
+    const bare = page('<p>Nothing linked.</p>');
+    expect(status('shopCategoryLink', bare)).toEqual({ state: 'bad', code: 'missing' });
+    expect(status('shopProductLinks', bare)).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 0,
+      of: 3,
+    });
+    expect(
+      status('shopProductLinks', bare, { ...shopping, products: shopping.products.slice(0, 2) }),
+    ).toEqual({ state: 'bad', code: 'partOf', count: 0, of: 2 });
+    expect(status('shopLinksLive', bare)).toEqual({ state: 'ok' });
+  });
+
+  it('wait for the path, and say when there is none', () => {
+    expect(status('shopProductLinks', page(html), 'reading')).toEqual({
+      state: 'info',
+      code: 'shoppingReading',
+    });
+    expect(status('shopLinksLive', page(html), null)).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
+    });
+    expect(status('shopCategoryLink', page(html), { ...shopping, categories: [] })).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
     });
   });
 });

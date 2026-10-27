@@ -8,6 +8,8 @@ import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
+import { shoppingLinks, type ShoppingCheck } from '@/lib/content/shopping-check';
+import { PRODUCTS_FOR } from '@/lib/content/shopping-path';
 
 /**
  * The editor's Rules tab (Content Editor CE-009, spec §10): the rules a page
@@ -259,16 +261,43 @@ export function languageRuleValue(code: string | null | undefined): string {
 }
 
 /**
+ * A shopping path's rules (shopping path, part 6), on an online shop's page
+ * that takes one: it links its category page, enough of its products, and
+ * none that no longer sells.
+ */
+const SHOPPING_RULES: RuleDef[] = [
+  { key: 'shopCategoryLink', group: 'links', kind: 'switch', value: '', check: 'page' },
+  {
+    key: 'shopProductLinks',
+    group: 'links',
+    kind: 'number',
+    value: '3',
+    unit: 'links',
+    check: 'page',
+  },
+  { key: 'shopLinksLive', group: 'links', kind: 'switch', value: '', check: 'page' },
+];
+
+/**
  * The rules of a set: the type's own, then the shared groups, with the
- * type's length, or the page's own when it was brought in to optimize.
+ * type's length, or the page's own when it was brought in to optimize; and
+ * a shopping path's on an online shop's page that takes one (`shopping`).
  */
 export function ruleSet(
   pageType: PageType | null,
-  defaults: { keywords?: string[]; language?: string | null; length?: number | null } = {},
+  defaults: {
+    keywords?: string[];
+    language?: string | null;
+    length?: number | null;
+    shopping?: boolean;
+  } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
+  const shopping =
+    defaults.shopping && pageType && Object.hasOwn(PRODUCTS_FOR, pageType) ? SHOPPING_RULES : [];
   return [
     ...own,
+    ...shopping,
     ...SHARED_RULES.map((rule) => {
       if (rule.key === 'length') {
         return { ...rule, value: String(defaults.length ?? lengthTarget(pageType)) };
@@ -531,6 +560,8 @@ export interface PageRead {
   characters: number;
   /** H1s with words inside the page's HTML blocks. */
   htmlBlockH1s?: number;
+  /** Links inside the page's HTML blocks: a product card or grid's (shopping path). */
+  htmlBlockLinks?: string[];
 }
 
 const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
@@ -556,6 +587,7 @@ export function readPage(html: string, characters: number): PageRead {
   // An HTML block's H1s are the page's too (One H1 per page): the editor
   // doesn't rewrite them, so the rule says so.
   let htmlBlockH1s = 0;
+  const htmlBlockLinks: string[] = [];
   for (const el of doc.body.querySelectorAll('[data-html-block]')) {
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (!inner) continue;
@@ -563,6 +595,9 @@ export function readPage(html: string, characters: number): PageRead {
     htmlBlockH1s += [...block.body.querySelectorAll('h1')].filter((h) =>
       h.textContent?.trim(),
     ).length;
+    for (const a of block.body.querySelectorAll('a[href]')) {
+      htmlBlockLinks.push(a.getAttribute('href') ?? '');
+    }
   }
   return {
     blocks,
@@ -572,6 +607,7 @@ export function readPage(html: string, characters: number): PageRead {
       .join(' '),
     characters,
     htmlBlockH1s,
+    htmlBlockLinks,
   };
 }
 
@@ -614,7 +650,10 @@ export type RuleStatus =
         | 'addKeywords'
         | 'notHowTo'
         | 'englishOnly'
-        | 'noSizes';
+        | 'noSizes'
+        /** No shopping path yet, or it's being read (shopping path, part 6). */
+        | 'noShoppingPath'
+        | 'shoppingReading';
     };
 
 export interface RuleContext {
@@ -630,6 +669,11 @@ export interface RuleContext {
    * is read; none where the feed isn't checked (before Phase 3, other types).
    */
   catalog?: CatalogMatch | 'reading' | null;
+  /**
+   * The page's shopping path read against the catalog now (shopping-check.ts),
+   * for the Shopping rules: 'reading' while it is read; none without a path.
+   */
+  shopping?: ShoppingCheck | 'reading' | null;
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -765,7 +809,7 @@ const atLeast = (have: number, want: number): RuleStatus =>
  * price, GTIN or stock that differs from the feed is the person's to check
  * (the page or the feed may be the one that's wrong).
  */
-export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch']);
+export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch', 'shopLinksLive']);
 
 /** What to do instead, for the open rules the agent doesn't fix: its message's key. */
 export const notForAgentMessage = (open: readonly { rule: { key: string } }[]) =>
@@ -1052,6 +1096,33 @@ function feedStatus(
 }
 
 /** Checks one rule against the page as written. */
+/**
+ * A Shopping rule's status (shopping path, part 6), from the page's links,
+ * its HTML blocks' too: the category page linked; at least `n` of the path's
+ * products, or all of them when it has fewer; none that no longer sells.
+ */
+function shoppingStatus(
+  key: string,
+  n: number,
+  hrefs: string[],
+  check: ShoppingCheck | 'reading' | null | undefined,
+): RuleStatus {
+  if (check === 'reading') return { state: 'info', code: 'shoppingReading' };
+  if (!check) return { state: 'info', code: 'noShoppingPath' };
+  const read = shoppingLinks(hrefs, check);
+  if (key === 'shopCategoryLink') {
+    if (!check.categories.length) return { state: 'info', code: 'noShoppingPath' };
+    return read.categoryLinked ? { state: 'ok' } : { state: 'bad', code: 'missing' };
+  }
+  if (key === 'shopProductLinks') {
+    if (!read.products) return { state: 'info', code: 'noShoppingPath' };
+    return atLeast(read.linked.length, Math.min(n, read.products));
+  }
+  return read.bad.length
+    ? { state: 'bad', code: 'found', count: read.bad.length }
+    : { state: 'ok' };
+}
+
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
   if (rule.check === 'feed') return feedStatus(page, ctx.catalog);
   if (rule.key === 'whoFor' && !rule.current.trim()) return { state: 'bad', code: 'notSet' };
@@ -1067,6 +1138,9 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
   const own = ctx.brandDomains.map(normalizeDomain);
   const competitors = ctx.competitorDomains.map(normalizeDomain);
   const links = blocks.flatMap((b) => (isText(b) ? b.links : []));
+  if (rule.key.startsWith('shop')) {
+    return shoppingStatus(rule.key, n, [...links, ...(page.htmlBlockLinks ?? [])], ctx.shopping);
+  }
   const outbound = (href: string) => {
     const host = linkHost(href);
     if (!host) return false;

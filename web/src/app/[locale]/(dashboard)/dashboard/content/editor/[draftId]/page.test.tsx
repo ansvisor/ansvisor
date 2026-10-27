@@ -171,6 +171,8 @@ vi.mock('@/lib/actions/shopping-path', () => ({
   buildDraftShoppingPath: vi.fn(),
   saveDraftShoppingPath: vi.fn(),
   searchCatalogProducts: vi.fn(async () => []),
+  getProductsForBlock: vi.fn(async () => []),
+  getShoppingCheck: vi.fn(async () => null),
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),

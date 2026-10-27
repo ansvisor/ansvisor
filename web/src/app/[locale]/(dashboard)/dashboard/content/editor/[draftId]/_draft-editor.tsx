@@ -190,6 +190,7 @@ import {
   type RewriteReach,
   type RuleStatus,
 } from '@/lib/content/rules';
+import { shoppingLinks } from '@/lib/content/shopping-check';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
 import { saveBlob } from '@/lib/download';
 import { formatMonthDay } from '@/lib/format';
@@ -273,6 +274,7 @@ import { useDraftInputs } from './_use-draft-inputs';
 import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
+import { useShoppingCheck } from './_use-shopping-check';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
 /**
@@ -706,6 +708,14 @@ export function DraftEditor({
       catalogRead.title.trim().toLowerCase() === title.trim().toLowerCase())
       ? catalogRead.read
       : undefined;
+  // The shopping path against the catalog now, for the Shopping rules and
+  // Before you publish (shopping path, part 6).
+  const shoppingCheck = useShoppingCheck({
+    draftId: draft.id,
+    brandId: draft.brandId,
+    siteType,
+    pageType,
+  });
   const rules = useDraftRules({
     draft,
     siteType,
@@ -714,6 +724,7 @@ export function DraftEditor({
     pageType,
     reads,
     catalog: feedOn ? (catalog === undefined ? 'reading' : catalog) : null,
+    shopping: shoppingCheck.check,
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
   // images…), read as the characters are, and the least it comes to with the
@@ -3157,7 +3168,19 @@ export function DraftEditor({
   ) => {
     setPublishOpen({ mode, html: pageToPublish(), returnTo });
     if (mode === 'markReady') nudgeAt('markReady');
+    // A product may have sold out since the check was read.
+    shoppingCheck.reload();
   };
+  // The page to publish's shopping links against the catalog (shopping path, part 6).
+  const shoppingRead = useMemo(() => {
+    const check = shoppingCheck.check;
+    if (!publishOpen || !check || check === 'reading') return null;
+    const read = readPage(publishOpen.html, 0);
+    return shoppingLinks(
+      [...read.blocks.flatMap((b) => b.links), ...(read.htmlBlockLinks ?? [])],
+      check,
+    );
+  }, [publishOpen, shoppingCheck.check]);
   // Read once per change (a link read landing, the title), not on every render.
   const readyToPaste = useMemo((): ReadyToPaste | null => {
     if (!publishOpen) return null;
@@ -4335,6 +4358,7 @@ export function DraftEditor({
           onAddDisclosure={addLineUnderAnswer}
           product={productSchema}
           category={categorySchema}
+          shopping={shoppingRead}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);

@@ -27,6 +27,7 @@ import {
 } from '@/lib/content/page-schema';
 import { qualityPhase } from '@/lib/content/quality';
 import { checksOff } from '@/lib/content/quality-profiles';
+import type { ShoppingLinks } from '@/lib/content/shopping-check';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -100,7 +101,14 @@ export function BeforePublish({
   onAddDisclosure,
   product = null,
   category = null,
+  shopping = null,
 }: {
+  /**
+   * The page's shopping links against the catalog now (shopping path, part
+   * 6): the products that no longer sell, the category page; null on a page
+   * without a shopping path.
+   */
+  shopping?: ShoppingLinks | null;
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
    * paragraph, its images and the price it states (pageOffer); null on
@@ -352,6 +360,7 @@ export function BeforePublish({
                 },
         ]
       : []),
+    ...(shopping ? [shoppingRow(t, shopping)] : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
 
@@ -570,4 +579,35 @@ function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
     };
   }
   return { state: 'ok', title: t('paste.title'), detail: t('paste.ok') };
+}
+
+/**
+ * The shopping links' row (shopping path, part 6): the products the page
+ * links that no longer sell, by name, to swap in Brief › Shopping path;
+ * else a missing link to the category page; else how many work.
+ */
+function shoppingRow(t: T, shopping: ShoppingLinks): Row {
+  if (shopping.bad.length) {
+    return {
+      state: 'missing',
+      title: t('shopping.bad', { count: shopping.bad.length }),
+      detail: t('shopping.badDetail', {
+        list: shopping.bad
+          .map((p) => t('shopping.item', { title: p.title, state: p.state }))
+          .join(', '),
+      }),
+    };
+  }
+  if (shopping.categories > 0 && !shopping.categoryLinked) {
+    return {
+      state: 'missing',
+      title: t('shopping.noCategory'),
+      detail: t('shopping.noCategoryDetail'),
+    };
+  }
+  return {
+    state: 'ok',
+    title: t('shopping.ok'),
+    detail: t('shopping.okDetail', { count: shopping.linked.length }),
+  };
 }

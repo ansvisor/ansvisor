@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { jsonbBytes } from '@/lib/content/draft-inputs';
+import { feedStock } from '@/lib/content/feed-match';
+import { linkKey } from '@/lib/content/link-targets';
+import type { ShoppingCheck, ShoppingLinkState } from '@/lib/content/shopping-check';
 import {
   shoppingPathSchema,
   type NoPathReason,
@@ -202,4 +205,97 @@ export async function getProductsForBlock(
       },
     ];
   });
+}
+
+/**
+ * Merchant Center refusals that keep a product out of AI shopping: its free
+ * listings, which AI Overviews and AI Mode draw on, or an issue with no
+ * destination. A refusal for Shopping ads alone doesn't.
+ */
+const REFUSING_CONTEXTS = new Set(['FREE_LISTINGS', '']);
+
+/**
+ * The draft's shopping path read against the catalog now (shopping path,
+ * part 6): each product sold out, refused by Merchant Center, gone, or
+ * fine; and the category pages. Null without a path, or when it can't be
+ * read.
+ */
+export async function getShoppingCheck(
+  draftId: string,
+  brandId: string,
+): Promise<ShoppingCheck | null> {
+  if (!guid.safeParse(draftId).success || !guid.safeParse(brandId).success) return null;
+  const read = await getDraftShoppingPath(draftId).catch(() => null);
+  const path = read?.path;
+  if (!path) return null;
+  const ids = [...new Set(path.products.map((p) => p.id))].filter(
+    (id) => guid.safeParse(id).success,
+  );
+  const supabase = await createClient();
+  const [products, variants] = await Promise.all([
+    ids.length
+      ? supabase
+          .from('catalog_products')
+          .select('id, removed_at')
+          .eq('brand_id', brandId)
+          .in('id', ids)
+      : Promise.resolve({ data: [], error: null }),
+    ids.length
+      ? supabase
+          .from('catalog_variants')
+          .select('product_id, external_id, availability')
+          .in('product_id', ids)
+          .is('removed_at', null)
+          .order('id')
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (products.error || variants.error) {
+    console.error('Failed to read the shopping path’s products:', products.error ?? variants.error);
+    return null;
+  }
+  const externalIds = [...new Set((variants.data ?? []).map((v) => v.external_id))];
+  const issues = externalIds.length
+    ? await supabase
+        .from('catalog_item_issues')
+        .select('external_id, reporting_context')
+        .eq('brand_id', brandId)
+        .eq('severity', 'disapproved')
+        .in('external_id', externalIds.slice(0, 500))
+    : { data: [], error: null };
+  if (issues.error) {
+    console.error('Failed to read the Merchant Center issues:', issues.error);
+    return null;
+  }
+  const refused = new Set(
+    (issues.data ?? [])
+      .filter((i) => REFUSING_CONTEXTS.has(i.reporting_context ?? ''))
+      .map((i) => i.external_id),
+  );
+  const live = new Map((products.data ?? []).map((p) => [p.id, !p.removed_at]));
+  const stateOf = (id: string): ShoppingLinkState => {
+    if (!live.get(id)) return 'gone';
+    const inStock = (variants.data ?? []).filter(
+      (v) =>
+        v.product_id === id &&
+        feedStock([
+          {
+            availability: v.availability,
+            price: null,
+            salePrice: null,
+            currency: null,
+            gtin: null,
+          },
+        ]) === 'in',
+    );
+    if (!inStock.length) return 'sold_out';
+    return inStock.every((v) => refused.has(v.external_id)) ? 'refused' : 'ok';
+  };
+  return {
+    categories: path.categories.map((c) => linkKey(c.url)).filter((k): k is string => !!k),
+    products: path.products.flatMap((p) => {
+      const key = linkKey(p.url);
+      return key ? [{ key, title: p.title, state: stateOf(p.id) }] : [];
+    }),
+  };
 }

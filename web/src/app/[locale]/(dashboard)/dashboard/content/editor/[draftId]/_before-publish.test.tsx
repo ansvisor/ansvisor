@@ -106,6 +106,7 @@ async function render(
     disclosureAdded = false,
     product = null as Parameters<typeof BeforePublish>[0]['product'],
     category = null as Parameters<typeof BeforePublish>[0]['category'],
+    shopping = null as Parameters<typeof BeforePublish>[0]['shopping'],
   } = {},
 ) {
   await act(async () => {
@@ -126,6 +127,7 @@ async function render(
           linksPending={linksPending}
           product={product}
           category={category}
+          shopping={shopping}
           onMarkReady={onMarkReady}
           onFixFirst={onFixFirst}
           disclosureLine={disclosureLine}
@@ -182,6 +184,47 @@ afterEach(() => {
 });
 
 describe('BeforePublish', () => {
+  it("says which shopping links to swap, the category page's, or that they work (shopping path)", async () => {
+    const product = (title: string, state: 'ok' | 'sold_out' | 'refused' | 'gone') => ({
+      key: `shop.example/products/${title}`,
+      title,
+      state,
+    });
+    await render(quality(), {
+      shopping: {
+        categoryLinked: true,
+        linked: [product('Canyon', 'sold_out'), product('Ridge', 'refused')],
+        bad: [product('Canyon', 'sold_out'), product('Ridge', 'refused')],
+        products: 4,
+        categories: 1,
+      },
+    });
+    const bad = rows().find((r) => r?.startsWith('2 product links to swap'));
+    expect(bad).toContain(
+      'Canyon (sold out), Ridge (Merchant Center refuses it). Swap them in Brief › Shopping path.',
+    );
+
+    await render(quality(), {
+      shopping: { categoryLinked: false, linked: [], bad: [], products: 4, categories: 1 },
+    });
+    expect(rows().join('|')).toContain('No link to the category page');
+
+    await render(quality(), {
+      shopping: {
+        categoryLinked: true,
+        linked: [product('Summit', 'ok')],
+        bad: [],
+        products: 4,
+        categories: 1,
+      },
+    });
+    const ok = rows().find((r) => r?.startsWith('Shopping links work'));
+    expect(ok).toContain('1 product linked, in stock and accepted by Merchant Center.');
+
+    await render(quality());
+    expect(rows().join('|')).not.toContain('Shopping links');
+  });
+
   it('warns under Trust 60 with the biggest reason, and logs Mark ready anyway', async () => {
     expect(lowTrust.score).toBe(37);
     await render(quality());
