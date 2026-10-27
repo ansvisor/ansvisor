@@ -11,6 +11,7 @@ import {
   setBrandQualityHandoff,
   type ContentSettings,
 } from '@/lib/actions/content-settings';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Settings › Content (Quality spec §5, CE-051): per brand, Hand off quality
@@ -25,6 +26,10 @@ export function ContentSection() {
   const [failed, setFailed] = useState(false);
   // A brand's setting being saved: shown at once, put back if it fails.
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  // A read-only workspace (plan not active): a box opens the upgrade dialog
+  // instead, and stays as it was.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(async () => {
     setFailed(false);
@@ -104,7 +109,10 @@ export function ContentSection() {
                       checked={saving[brand.id] ?? brand.qualityHandoff}
                       aria-describedby={`content-${brand.id}`}
                       disabled={!read.canManage || brand.id in saving}
-                      onCheckedChange={(checked) => void toggle(brand.id, checked === true)}
+                      onCheckedChange={guard(
+                        (checked: boolean) => void toggle(brand.id, checked === true),
+                        { action: tActions('changeContentSettings') },
+                      )}
                     />
                     {t('handOff')}
                   </label>

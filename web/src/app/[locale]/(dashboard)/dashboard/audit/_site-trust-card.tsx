@@ -14,6 +14,7 @@ import {
   type SiteTrustCheck,
 } from '@/lib/content/site-trust';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Site trust (Content Editor Quality spec §8, CE-043): the brand's five
@@ -27,6 +28,10 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
   const [trust, setTrust] = useState<SiteTrust | null>(null);
   const [failed, setFailed] = useState(false);
   const [checking, setChecking] = useState(false);
+  // A read-only workspace (plan not active): Check again reads the site
+  // again, a cost; it opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(
     async (refresh: boolean) => {
@@ -83,7 +88,7 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
           className="shrink-0"
           disabled={checking || !trust || tooSoon}
           aria-describedby={tooSoon ? 'site-trust-recheck' : undefined}
-          onClick={() => void load(true)}
+          onClick={guard(() => void load(true), { action: tActions('checkSiteTrust') })}
         >
           {checking && <LoadingDots className="mr-1.5" />}
           {t('checkAgain')}

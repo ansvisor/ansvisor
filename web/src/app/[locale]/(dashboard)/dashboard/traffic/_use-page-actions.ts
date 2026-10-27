@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { getAuditQuota, runAuditsBulk, type AuditQuota } from '@/lib/actions/audits';
@@ -25,12 +26,15 @@ const SUGGEST_CALLS = { start: generateOpportunitiesOnDemand, getStatus: getGene
  * footer: send pages to the Action Center as one action, audit several
  * pages at once within the month's audits, and suggest content for a page
  * (part B3, one of the month's content suggestions). Each reports how it went
- * in a toast that opens what it made.
+ * in a toast that opens what it made. On a read-only workspace (plan not
+ * active) each opens the upgrade dialog instead.
  */
 export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
   const t = useTranslations('traffic.pageList.actions');
   const failureToast = useFailureToast();
   const router = useRouter();
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [sending, setSending] = useState(false);
   const [auditing, setAuditing] = useState(false);
   // The page whose content suggestion is being written.
@@ -187,7 +191,15 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
     [brandId, failureToast, router, t],
   );
 
-  return { send, sending, auditMany, auditing, quota, suggestContent, suggesting };
+  return {
+    send: guard(send, { action: tActions('sendAction') }),
+    sending,
+    auditMany: guard(auditMany, { action: tActions('auditPages') }),
+    auditing,
+    quota,
+    suggestContent: guard(suggestContent, { action: tActions('suggestContent') }),
+    suggesting,
+  };
 }
 
 /**

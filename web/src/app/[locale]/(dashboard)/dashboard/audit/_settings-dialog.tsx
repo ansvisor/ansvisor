@@ -26,6 +26,7 @@ import {
   type AutoAuditRun,
 } from '@/lib/actions/audits';
 import { nextAutoRun } from '@/lib/audit-auto-runs';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 
 /** One pattern per line, blank lines dropped. */
@@ -83,6 +84,10 @@ export function AuditSettingsDialog({
   now?: Date;
 }) {
   const t = useTranslations('audit.settings');
+  // A read-only workspace (plan not active): the settings open to read; Save
+  // and Unpin open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [settings, setSettings] = useState<AuditSettings | null>(null);
   const [autoAudit, setAutoAudit] = useState(false);
   const [emailAfterRun, setEmailAfterRun] = useState(false);
@@ -258,7 +263,9 @@ export function AuditSettingsDialog({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleUnpin(page.url)}
+                          onClick={guard(() => void handleUnpin(page.url), {
+                            action: tActions('unpinPages'),
+                          })}
                           disabled={unpinning !== null}
                         >
                           {unpinning === page.url && (
@@ -282,7 +289,10 @@ export function AuditSettingsDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={!canManage || !changed || saving}>
+          <Button
+            onClick={guard(handleSave, { action: tActions('saveAuditSettings') })}
+            disabled={!canManage || !changed || saving}
+          >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {t('save')}
           </Button>

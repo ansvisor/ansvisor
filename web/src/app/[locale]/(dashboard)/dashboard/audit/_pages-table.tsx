@@ -30,6 +30,7 @@ import { pct, scoreColor } from '@/components/audit/audit-report';
 import type { AuditedPage, AuditedPageStatus, AuditRun, AuditTemplate } from '@/lib/actions/audits';
 import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * The shown pages by template (SA-007's Group by template): the templates in
@@ -112,6 +113,9 @@ function StatusPill({ status }: { status: AuditedPageStatus }) {
 
 function HistoryRun({ run, onDelete }: { run: AuditRun; onDelete: (id: string) => void }) {
   const t = useTranslations('audit');
+  // A read-only workspace (plan not active): the upgrade dialog instead of the confirm.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   return (
     <li className="flex items-center gap-3 px-3 py-1.5 text-sm">
       <span className="w-48 shrink-0 text-muted-foreground">{formatDateTime(run.createdAt)}</span>
@@ -126,7 +130,13 @@ function HistoryRun({ run, onDelete }: { run: AuditRun; onDelete: (id: string) =
       <Link href={`/dashboard/audit/${run.id}`} className="text-primary hover:underline">
         {t('pages.viewReport')}
       </Link>
-      <Dialog>
+      <Dialog
+        onOpenChange={(open, details) => {
+          if (!open || !isLocked) return;
+          details.cancel();
+          openUpgrade(tActions('deleteAudits'));
+        }}
+      >
         <DialogTrigger
           render={
             <Button

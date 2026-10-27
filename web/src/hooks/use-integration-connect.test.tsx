@@ -1,11 +1,15 @@
 import { act, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * The OAuth popup flow shared by Settings › Integrations and AI Traffic's
  * sources strip: open the popup, poll until the account is connected, and
- * stop once the caller is gone.
+ * stop once the caller is gone. On a read-only workspace (plan not active)
+ * it opens the upgrade dialog instead and starts nothing.
  */
 
 const actions = vi.hoisted(() => ({
@@ -22,10 +26,11 @@ const { useIntegrationConnect } = await import('./use-integration-connect');
 
 let container: HTMLDivElement;
 let root: Root;
-const harness: { connect?: () => Promise<void> } = {};
-const connect = () => harness.connect!();
+const harness: { connect?: () => Promise<void> | undefined } = {};
+const connect = () => harness.connect!() as Promise<void>;
 const onStatus = vi.fn();
 const popup = { closed: false, close: vi.fn() };
+const openUpgrade = vi.fn();
 
 function Harness() {
   const { connect: start } = useIntegrationConnect('google-analytics', {
@@ -47,8 +52,22 @@ beforeEach(() => {
   vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
   container = document.createElement('div');
   root = createRoot(container);
-  act(() => root.render(<Harness />));
+  render(false);
 });
+
+function render(isLocked: boolean) {
+  act(() =>
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <Harness />
+        </UpgradeDialogContext.Provider>
+      </NextIntlClientProvider>,
+    ),
+  );
+}
 
 afterEach(() => {
   act(() => root.unmount());
@@ -104,5 +123,13 @@ describe('useIntegrationConnect', () => {
     expect(onStatus).not.toHaveBeenCalled();
     // Re-mount for afterEach's unmount.
     root = createRoot(container);
+  });
+
+  it('opens the upgrade dialog, and no popup, on a read-only workspace', async () => {
+    render(true);
+    await act(async () => void harness.connect!());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Connecting an integration needs a plan');
+    expect(actions.connectIntegration).not.toHaveBeenCalled();
+    expect(window.open).not.toHaveBeenCalled();
   });
 });

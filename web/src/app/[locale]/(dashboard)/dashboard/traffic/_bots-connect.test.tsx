@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { BotConnections, NewBotConnection } from '@/lib/actions/ai-bots';
 
 /**
@@ -68,11 +69,16 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function render(canConnect = true) {
+const openUpgrade = vi.fn();
+async function render(canConnect = true, isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <BotsSource brandId="b1" canConnect={canConnect} />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <BotsSource brandId="b1" canConnect={canConnect} />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -126,6 +132,15 @@ describe('BotsSource', () => {
     expect(page()).toContain('Authorization: Bearer abot_s3cret');
     expect(page()).toContain('Format: JSON. Log sources: static, lambda.');
     expect(getBotConnections).toHaveBeenCalledTimes(2);
+  });
+
+  it('makes no connection on a read-only workspace: Create connection opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    await render(true, true);
+    await act(async () => button('Connect')!.click());
+    await act(async () => button('Create connection')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Connecting bot logs needs a plan');
+    expect(createBotConnection).not.toHaveBeenCalled();
   });
 
   // gkhngyk on #1225: a failed read after the create took the dialog down.

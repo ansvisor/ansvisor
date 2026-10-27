@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { CatalogSource } from '@/lib/catalog';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const listCatalogSources = vi.fn();
 const addFeedSource = vi.fn();
@@ -44,6 +45,7 @@ const { CatalogSourcesCard } = await import('./catalog-sources-card');
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 const FEED: CatalogSource = {
   id: 's1',
@@ -93,11 +95,15 @@ const ACME = {
   ],
 };
 
-async function render() {
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <CatalogSourcesCard />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <CatalogSourcesCard />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -181,6 +187,32 @@ describe('CatalogSourcesCard', () => {
     expect(syncCatalogSource).toHaveBeenCalledWith('s2');
     expect(toast.success).toHaveBeenCalledWith('12 products read');
     expect(listCatalogSources).toHaveBeenCalledTimes(2);
+  });
+
+  it('adds, syncs, uploads and removes nothing on a read-only workspace', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    openUpgrade.mockClear();
+    await render(true);
+    const input = container.querySelector<HTMLInputElement>('input[type="url"]')!;
+    await type(input, 'https://shop.example/meta.csv');
+    await act(async () => {
+      container
+        .querySelector('form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding catalog sources needs a plan');
+    await act(async () => button('Upload a file')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding catalog sources needs a plan');
+    await act(async () => button('Sync now')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Syncing the catalog needs a plan');
+    await act(async () => button('Remove')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Removing catalog sources needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(addFeedSource).not.toHaveBeenCalled();
+    expect(syncCatalogSource).not.toHaveBeenCalled();
+    expect(removeCatalogSource).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it("says why a feed couldn't be added, or read", async () => {

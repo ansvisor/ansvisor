@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { AuthorsRead } from '@/lib/content/authors';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * Settings › Authors (CE-037): the workspace's real authors; whoever added
@@ -81,6 +82,7 @@ function workspace(role: string): AuthorsRead {
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
   for (const fn of [...Object.values(actions), toast.success, toast.error]) fn.mockReset();
@@ -100,11 +102,15 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function render() {
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AuthorsSection />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <AuthorsSection />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -323,6 +329,24 @@ describe('AuthorsSection', () => {
     expect(document.body.textContent).toContain(
       "Their 3 pages go back to your brand's team byline.",
     );
+  });
+
+  it('on a read-only workspace, adds, edits, removes and sets nothing', async () => {
+    actions.getContentAuthors.mockResolvedValue(workspace('manager'));
+    openUpgrade.mockClear();
+    await render(true);
+    await click(buttons('Add author')[0]);
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding authors needs a plan');
+    await click(row('Cal Freelance').querySelectorAll('button')[0]);
+    expect(openUpgrade).toHaveBeenLastCalledWith('Editing authors needs a plan');
+    await click(row('Cal Freelance').querySelectorAll('button')[1]);
+    expect(openUpgrade).toHaveBeenLastCalledWith('Removing authors needs a plan');
+    await click(byline());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Changing the byline setting needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(actions.setBrandByline).not.toHaveBeenCalled();
+    expect(actions.deleteContentAuthor).not.toHaveBeenCalled();
   });
 
   it("says so when the authors can't be read", async () => {

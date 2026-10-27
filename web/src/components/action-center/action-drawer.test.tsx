@@ -6,6 +6,7 @@ import type { ActionItem } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
 import { promptVolumeEstimate } from '@/lib/volume-estimate';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * Status, assignee and due date sit right under the drawer's header, ahead of
@@ -69,6 +70,7 @@ let container: HTMLDivElement;
 let root: Root;
 const onChanged = vi.fn();
 const onPatched = vi.fn();
+const openUpgrade = vi.fn();
 
 const emptyDetail = { tasks: [], signals: [], events: [], kpis: [], positionOutcome: null };
 
@@ -87,18 +89,22 @@ afterEach(() => {
   container.remove();
 });
 
-async function renderDrawer(shown: ActionItem = action) {
+async function renderDrawer(shown: ActionItem = action, isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ActionDrawer
-          brandId="b1"
-          action={shown}
-          members={[]}
-          onOpenChange={() => {}}
-          onChanged={onChanged}
-          onPatched={onPatched}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ActionDrawer
+            brandId="b1"
+            action={shown}
+            members={[]}
+            onOpenChange={() => {}}
+            onChanged={onChanged}
+            onPatched={onPatched}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -244,6 +250,25 @@ describe('ActionDrawer', () => {
       expect(onChanged).toHaveBeenCalledTimes(1);
     });
 
+    it('changes nothing on a read-only workspace: the due date and Add task open the upgrade dialog', async () => {
+      await renderDrawer(action, true);
+      enter('2026-11-18');
+      expect(openUpgrade).toHaveBeenLastCalledWith('Setting a due date needs a plan');
+      expect(dueDate().value).toBe('2026-11-01');
+      await settle();
+      expect(server.setActionDueDate).not.toHaveBeenCalled();
+
+      const button = (name: string) =>
+        [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+        )!;
+      await act(async () => button('Tasks').click());
+      await act(async () => button('Add task').click());
+      expect(openUpgrade).toHaveBeenLastCalledWith('Adding tasks needs a plan');
+      expect(document.querySelector('input[aria-label="Add task"]')).toBeNull();
+      expect(server.addTask).not.toHaveBeenCalled();
+    });
+
     it("passes a new task's count to the list without reading it again", async () => {
       await renderDrawer();
       const button = (name: string) =>
@@ -319,6 +344,19 @@ describe('ActionDrawer', () => {
         title: expect.any(String),
       });
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
+    });
+
+    it('starts no draft on a read-only workspace: Optimize page opens the upgrade dialog', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'optimize_content', 'Optimize the page')],
+      });
+      await renderDrawer({ ...action, payload: { pages: [PRICING] } }, true);
+      await openTask('Optimize the page');
+      await act(async () => button('Optimize page')!.click());
+      expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Optimizing content needs a plan');
+      expect(drafts.startDraftFromAction).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
     });
 
     it('opens the draft already written, and lists each page when the action names several', async () => {

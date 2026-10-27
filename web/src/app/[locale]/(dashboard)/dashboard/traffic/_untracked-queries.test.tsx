@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { TrafficDateWindow, TrafficUntrackedQueries } from '@/lib/actions/traffic';
 
 /**
@@ -69,17 +70,22 @@ afterEach(() => {
 });
 
 const onTracked = vi.fn();
+const openUpgrade = vi.fn();
 
-async function render(canTrack = true) {
+async function render(canTrack = true, isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UntrackedQueriesCard
-          brandId="b1"
-          dateWindow={WEEK}
-          canTrack={canTrack}
-          onTracked={onTracked}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <UntrackedQueriesCard
+            brandId="b1"
+            dateWindow={WEEK}
+            canTrack={canTrack}
+            onTracked={onTracked}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -116,6 +122,14 @@ describe('UntrackedQueriesCard', () => {
     expect(toast.success).toHaveBeenCalledWith('Tracking 1 query as a prompt');
     expect(getUntrackedGoogleQueries).toHaveBeenCalledTimes(2);
     expect(onTracked).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks nothing on a read-only workspace: Track opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    await render(true, true);
+    await act(async () => button('Track')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Tracking prompts needs a plan');
+    expect(trackPagePrompts).not.toHaveBeenCalled();
   });
 
   it('tracks as many as the slots allow, and says when the plan ran out', async () => {

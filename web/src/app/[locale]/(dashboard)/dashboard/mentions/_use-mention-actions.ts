@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useRouter } from '@/i18n/navigation';
 import { getGenerationJobStatus, suggestContentForPrompt } from '@/lib/actions/content';
 import { sendMentionsToActionCenter } from '@/lib/actions/mentions';
@@ -17,12 +18,15 @@ const SUGGEST_CALLS = { start: suggestContentForPrompt, getStatus: getGeneration
  * The Mentions tab's actions (MS-08), shared by the response drawer and the
  * table's selection bar: send answers to the Action Center as one action,
  * and suggest content for an answer's prompt. Each reports how it went in a
- * toast that opens what it made.
+ * toast that opens what it made. On a read-only workspace (plan not active)
+ * both open the upgrade dialog instead.
  */
 export function useMentionActions(brandId: string) {
   const t = useTranslations('mentions.actions');
   const router = useRouter();
   const failureToast = useFailureToast();
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState<string | null>(null);
 
@@ -126,5 +130,10 @@ export function useMentionActions(brandId: string) {
     [failureToast, router, t],
   );
 
-  return { send, sending, suggest, suggesting };
+  return {
+    send: guard(send, { action: tActions('sendAction') }),
+    sending,
+    suggest: guard(suggest, { action: tActions('suggestContent') }),
+    suggesting,
+  };
 }

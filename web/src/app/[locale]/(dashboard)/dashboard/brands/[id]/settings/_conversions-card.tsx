@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { getPublicApiBaseUrl } from '@/config/api';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { updateBrand } from '@/lib/actions/brand';
 import {
   CONSENT_CALL,
@@ -115,6 +116,10 @@ export function ConversionsCard({
     setConsent(brand.conversionsConsent ?? 'wait');
   }
   const [saving, setSaving] = useState(false);
+  // A read-only workspace (plan not active): the box and the consent mode
+  // open the upgrade dialog instead; the code to copy stays.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [showPixel, setShowPixel] = useState(siteTypeOf(brand) === 'ecommerce');
   const apiUrl = getPublicApiBaseUrl();
   const tag = trackingSnippetTag(apiUrl, brand.trackingCode, consent);
@@ -168,7 +173,9 @@ export function ConversionsCard({
             id="conversions-on"
             checked={enabled}
             disabled={saving || !canManage}
-            onCheckedChange={(v) => void toggle(v === true)}
+            onCheckedChange={guard((v: boolean) => void toggle(v === true), {
+              action: tActions('changeConversions'),
+            })}
           />
           <div className="min-w-0 space-y-1">
             <Label htmlFor="conversions-on" className="font-medium">
@@ -188,9 +195,12 @@ export function ConversionsCard({
                 items={consentItems}
                 value={consent}
                 disabled={saving || !canManage}
-                onValueChange={(v) => {
-                  if (isConversionsConsent(v)) void pickConsent(v);
-                }}
+                onValueChange={guard(
+                  (v: string | null) => {
+                    if (isConversionsConsent(v)) void pickConsent(v);
+                  },
+                  { action: tActions('changeConversions') },
+                )}
               >
                 <SelectTrigger id="conversions-consent" className="w-full sm:w-96">
                   <SelectValue />

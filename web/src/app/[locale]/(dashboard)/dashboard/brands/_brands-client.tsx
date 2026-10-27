@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
 import { BrandCard } from '@/components/dashboard/brand-card';
+import { AddBrandLink } from '@/components/dashboard/add-brand-link';
 import { Button } from '@/components/ui/button';
 import type { Brand } from '@/types';
 import { Building2, Plus } from 'lucide-react';
@@ -46,12 +46,12 @@ function EmptyState() {
       <h2 className="text-lg font-semibold">{t('noBrands')}</h2>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">{t('noBrandsDescription')}</p>
       {canManage && (
-        <Link href="/dashboard/brands/new" className="mt-6">
+        <AddBrandLink className="mt-6">
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
             {t('addBrand')}
           </Button>
-        </Link>
+        </AddBrandLink>
       )}
     </div>
   );

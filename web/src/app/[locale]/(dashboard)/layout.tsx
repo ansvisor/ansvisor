@@ -94,7 +94,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <>
       <AuthProvider user={user} />
       <BrandLoader brands={brands} />
-      <GettingStartedPageOpened />
       <PlanProvider
         planId={planId}
         allowedModelIds={allowedModelIds}
@@ -103,6 +102,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       >
         <RoleProvider role={role}>
           <UpgradeDialogProvider adminName={adminName}>
+            {/* Inside the provider: it records nothing while the workspace is read-only. */}
+            <GettingStartedPageOpened />
             <AiUsageProvider>
               <div className="flex h-screen overflow-hidden">
                 {/* Desktop sidebar */}

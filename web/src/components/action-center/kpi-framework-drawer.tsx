@@ -44,6 +44,7 @@ import {
 } from '@/lib/kpis/registry';
 import { scaleTargetToWindow } from '@/lib/kpis/status';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 const TEMPLATE_ICONS: Record<KpiTemplateKey, React.ComponentType<{ className?: string }>> = {
   ai_search_visibility: BarChart3,
@@ -116,6 +117,9 @@ export function KpiFrameworkDrawer({
 }) {
   const t = useTranslations('actionCenter.drawer');
   const tRegistry = useTranslations('actionCenter.registry');
+  // A read-only workspace (plan not active): Save & Apply opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -211,19 +215,22 @@ export function KpiFrameworkDrawer({
     setTimeframe(next);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await saveKpiFramework(brandId, timeframe, entries);
-      onOpenChange(false);
-      onSaved();
-      toast.success(t('saved'));
-    } catch {
-      toast.error(t('saveFailed'));
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  const handleSave = guard(
+    async () => {
+      setIsSaving(true);
+      try {
+        await saveKpiFramework(brandId, timeframe, entries);
+        onOpenChange(false);
+        onSaved();
+        toast.success(t('saved'));
+      } catch {
+        toast.error(t('saveFailed'));
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    { action: tActions('editKpis') },
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

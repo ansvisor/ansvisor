@@ -33,6 +33,7 @@ import {
 } from '@/lib/actions/ai-bots';
 import { SourceCard } from './_source-card';
 import { getBotConnections } from '@/lib/traffic-reads';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 const KINDS: BotConnectionKind[] = ['cloudflare_worker', 'cloudflare_logpush', 'vercel_drain'];
 
@@ -158,6 +159,10 @@ export function BotsDialog({
   const [created, setCreated] = useState<NewBotConnection | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // A read-only workspace (plan not active): a new connection opens the
+  // upgrade dialog instead; revoking one stays open (it ends an access).
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const close = (next: boolean) => {
     if (!next) {
@@ -167,17 +172,20 @@ export function BotsDialog({
     onOpenChange(next);
   };
 
-  const create = async () => {
-    setCreating(true);
-    const result = await createBotConnection(brandId, kind);
-    setCreating(false);
-    if ('error' in result) {
-      toast.error(result.code === 'plan_limit' ? t('planLimit') : result.error);
-      return;
-    }
-    setCreated(result);
-    onChanged();
-  };
+  const create = guard(
+    async () => {
+      setCreating(true);
+      const result = await createBotConnection(brandId, kind);
+      setCreating(false);
+      if ('error' in result) {
+        toast.error(result.code === 'plan_limit' ? t('planLimit') : result.error);
+        return;
+      }
+      setCreated(result);
+      onChanged();
+    },
+    { action: tActions('connectBotLogs') },
+  );
 
   const revoke = async (id: string) => {
     setRevoking(id);

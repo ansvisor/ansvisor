@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Lock } from 'lucide-react';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   getOrganization,
   updateOrganizationName,
@@ -39,6 +40,9 @@ export function OrganizationSection() {
   const [loading, setLoading] = useState(true);
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+  // A read-only workspace (plan not active): Save opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const loadOrg = useCallback(async () => {
     try {
@@ -133,7 +137,7 @@ export function OrganizationSection() {
 
           {canAdmin ? (
             <Button
-              onClick={handleSave}
+              onClick={guard(handleSave, { action: tActions('renameOrganization') })}
               disabled={saving || !nameInput.trim() || nameInput.trim() === org?.name}
             >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

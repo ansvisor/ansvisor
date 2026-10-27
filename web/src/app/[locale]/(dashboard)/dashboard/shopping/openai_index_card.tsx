@@ -11,6 +11,7 @@ import {
   type OpenAiIndexStatus,
 } from '@/lib/shopping/openai-index';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 const STATUS_TONE: Record<OpenAiIndexStatus, string> = {
   direct_feed: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
@@ -40,14 +41,21 @@ export function OpenAiIndexCard({
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const status = read ? openAiIndexStatus(read) : null;
+  // A read-only workspace (plan not active): the box opens the upgrade dialog
+  // instead, and stays as it was.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
-  const changeFeed = (on: boolean) => {
-    setSaving(true);
-    setFailed(false);
-    onDirectFeedChange(on)
-      .catch(() => setFailed(true))
-      .finally(() => setSaving(false));
-  };
+  const changeFeed = guard(
+    (on: boolean) => {
+      setSaving(true);
+      setFailed(false);
+      onDirectFeedChange(on)
+        .catch(() => setFailed(true))
+        .finally(() => setSaving(false));
+    },
+    { action: tActions('setProductFeed') },
+  );
 
   return (
     <Card>

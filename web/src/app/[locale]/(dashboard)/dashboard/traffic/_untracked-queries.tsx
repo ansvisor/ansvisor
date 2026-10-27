@@ -23,6 +23,7 @@ import { type TrafficDateWindow, type TrafficUntrackedQueries } from '@/lib/acti
 import { formatTrafficBucketDate } from './_charts';
 import { getUntrackedGoogleQueries } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Prompt slots left on the plan: null when the plan has no cap, or it
@@ -57,6 +58,10 @@ export function UntrackedQueriesCard({
   actions?: ReactNode;
 }) {
   const t = useTranslations('traffic.google.untracked');
+  // A read-only workspace (plan not active): Track and Track all open the
+  // upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // Tracking reads the list again: the tracked queries leave it.
   const [reloads, setReloads] = useState(0);
   const key = `${brandId}|${dateWindow.dateFrom ?? ''}|${dateWindow.dateTo ?? ''}|${reloads}`;
@@ -104,28 +109,31 @@ export function UntrackedQueriesCard({
   const slotsLeft = current ? (quota?.slotsLeft ?? null) : null;
   const busy = tracking.size > 0;
 
-  const track = async (queries: string[]) => {
-    setTracking(new Set(queries));
-    const outcome = await trackPagePrompts(
-      brandId,
-      null,
-      queries.map((text) => ({ text, topic: '' })),
-    ).catch((err: Error) => ({ promptIds: [] as string[], error: err.message, code: undefined }));
-    setTracking(new Set());
-    const tracked = outcome.promptIds.length;
-    if (tracked > 0) toast.success(t('tracked', { count: tracked }));
-    if (outcome.error) {
-      toast.error(
-        outcome.code === 'plan_limit'
-          ? t('planLimit', { count: queries.length - tracked })
-          : outcome.error,
-      );
-    }
-    if (tracked > 0) {
-      setReloads((n) => n + 1);
-      onTracked?.();
-    }
-  };
+  const track = guard(
+    async (queries: string[]) => {
+      setTracking(new Set(queries));
+      const outcome = await trackPagePrompts(
+        brandId,
+        null,
+        queries.map((text) => ({ text, topic: '' })),
+      ).catch((err: Error) => ({ promptIds: [] as string[], error: err.message, code: undefined }));
+      setTracking(new Set());
+      const tracked = outcome.promptIds.length;
+      if (tracked > 0) toast.success(t('tracked', { count: tracked }));
+      if (outcome.error) {
+        toast.error(
+          outcome.code === 'plan_limit'
+            ? t('planLimit', { count: queries.length - tracked })
+            : outcome.error,
+        );
+      }
+      if (tracked > 0) {
+        setReloads((n) => n + 1);
+        onTracked?.();
+      }
+    },
+    { action: tActions('trackPrompts') },
+  );
 
   const trackTitle = !canTrack ? t('trackNotAllowed') : slotsLeft === 0 ? t('noSlots') : undefined;
   const trackable = canTrack && slotsLeft !== 0 && !busy;

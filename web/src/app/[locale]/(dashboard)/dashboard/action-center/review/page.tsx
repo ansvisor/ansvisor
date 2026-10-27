@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ArrowUpRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   approveTaskReview,
@@ -56,6 +57,10 @@ function ReviewContent({ brandId }: { brandId: string }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // A read-only workspace (plan not active): Edit (which approves) and Dismiss
+  // open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(async () => {
     try {
@@ -188,7 +193,7 @@ function ReviewContent({ brandId }: { brandId: string }) {
             <TaskDetailView
               details={review.details}
               disabled={busy !== null}
-              onEdit={() => setEditing(review.id)}
+              onEdit={guard(() => setEditing(review.id), { action: tActions('approveTasks') })}
             />
           )}
           {editing !== review.id && (
@@ -223,7 +228,9 @@ function ReviewContent({ brandId }: { brandId: string }) {
                   variant="ghost"
                   size="sm"
                   disabled={busy !== null}
-                  onClick={() => setDismissing(review.id)}
+                  onClick={guard(() => setDismissing(review.id), {
+                    action: tActions('dismissTasks'),
+                  })}
                   className="h-7 text-xs text-muted-foreground"
                 >
                   {t('dismiss')}

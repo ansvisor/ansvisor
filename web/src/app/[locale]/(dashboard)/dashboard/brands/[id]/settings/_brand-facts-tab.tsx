@@ -16,6 +16,7 @@ import {
   type FactStatus,
 } from '@/lib/content/brand-facts';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Brand settings › Brand facts (Quality spec §10, CE-047): the facts the API
@@ -35,6 +36,10 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
   const [reading, setReading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const ids = useId();
+  // A read-only workspace (plan not active): Approve, Reject and Read again
+  // (it reads the site) open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   useEffect(() => {
     let cancelled = false;
@@ -177,7 +182,9 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
             className="h-7"
             disabled={busy !== null || reading}
             aria-label={t('approveFact', { fact: valueOf(fact) })}
-            onClick={() => void review(fact, 'approved')}
+            onClick={guard(() => void review(fact, 'approved'), {
+              action: tActions('reviewBrandFacts'),
+            })}
           >
             {t('approve')}
           </Button>
@@ -189,7 +196,9 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
             className="h-7"
             disabled={busy !== null || reading}
             aria-label={t('rejectFact', { fact: valueOf(fact) })}
-            onClick={() => void review(fact, 'rejected')}
+            onClick={guard(() => void review(fact, 'rejected'), {
+              action: tActions('reviewBrandFacts'),
+            })}
           >
             {t('reject')}
           </Button>
@@ -253,7 +262,7 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
                 variant="outline"
                 disabled={!canReadAgain}
                 title={canReadAgain ? undefined : t('readAgainSoon')}
-                onClick={() => void readAgain()}
+                onClick={guard(() => void readAgain(), { action: tActions('readBrandFacts') })}
               >
                 {reading && <LoadingDots />}
                 {t('readAgain')}

@@ -58,6 +58,7 @@ import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { KpiTrendPoint } from '@/lib/actions/kpis';
 import { signalChangeTone, signedPercent, type SignalMetric } from '@/lib/signals/metrics';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 const SIGNAL_EXPORT_HEADERS = [
   'title',
@@ -125,6 +126,10 @@ export default function ActionCenterSignalsPage() {
 
 function SignalsContent({ brand }: { brand: Brand }) {
   const t = useTranslations('actionCenter.signalsPage');
+  // A read-only workspace (plan not active): a signal's status, from its row,
+  // group or drawer, opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const common = useTranslations('common');
   const tTexts = useTranslations('actionCenter.signalTexts');
   const tCategories = useTranslations('actionCenter.signalCategories');
@@ -585,7 +590,10 @@ function SignalsContent({ brand }: { brand: Brand }) {
         <SignalTable
           groups={groups}
           onSelect={selectSignal}
-          onStatusChange={(targets, next) => void handleStatusChange(targets, next)}
+          onStatusChange={guard(
+            (targets: Signal[], next: SignalStatus) => void handleStatusChange(targets, next),
+            { action: tActions('changeSignalStatus') },
+          )}
           busyIds={busyIds}
           selectedId={selected?.id ?? null}
         />
@@ -604,7 +612,10 @@ function SignalsContent({ brand }: { brand: Brand }) {
         onOpenChange={(open) => {
           if (!open) selectSignal(null);
         }}
-        onStatusChange={(signal, next) => void handleStatusChange([signal], next)}
+        onStatusChange={guard(
+          (signal: Signal, next: SignalStatus) => void handleStatusChange([signal], next),
+          { action: tActions('changeSignalStatus') },
+        )}
         isBusy={selected ? busyIds.has(selected.id) : false}
       />
     </div>

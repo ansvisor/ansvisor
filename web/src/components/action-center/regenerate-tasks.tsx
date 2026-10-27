@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { regenerateActionTasks } from '@/lib/actions/action-task-writer';
 
 /** Whether this deployment writes tasks (AC-004); the server has its own switch. */
@@ -48,6 +49,9 @@ export function RegenerateTasks({
   const { canManage } = useUserRole();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  // A read-only workspace (plan not active): the upgrade dialog instead of the question.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const run = async () => {
     setBusy(true);
@@ -123,7 +127,7 @@ export function RegenerateTasks({
       variant="outline"
       size="sm"
       disabled={disabled}
-      onClick={() => setConfirming(true)}
+      onClick={guard(() => setConfirming(true), { action: tActions('regenerateTasks') })}
       className="mt-2 h-8 w-full text-xs"
     >
       <RefreshCw className="mr-1.5 h-3.5 w-3.5" />

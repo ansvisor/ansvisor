@@ -13,6 +13,7 @@ import {
   type SentimentOverride,
 } from '@/lib/mentions-list';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 const NOTE_MAX = 500;
 
@@ -41,6 +42,9 @@ export function SentimentCorrection({
   const [choice, setChoice] = useState<MentionSentiment | null>(row.sentiment);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  // A read-only workspace (plan not active): the upgrade dialog instead of the form.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const save = async () => {
     if (!choice) return;
@@ -97,10 +101,13 @@ export function SentimentCorrection({
           variant="link"
           size="sm"
           className="h-auto px-0 text-xs"
-          onClick={() => {
-            setChoice(row.sentiment);
-            setOpen(true);
-          }}
+          onClick={guard(
+            () => {
+              setChoice(row.sentiment);
+              setOpen(true);
+            },
+            { action: tActions('correctSentiment') },
+          )}
         >
           {t('open')}
         </Button>
