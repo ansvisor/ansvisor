@@ -51,6 +51,7 @@ vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: 
 
 const {
   CHANGED_BELOW,
+  MAX_DEPTH,
   MIN_CHANGED_RUNS,
   changedRuns,
   checkKind,
@@ -60,6 +61,7 @@ const {
   similarity,
   sketch,
   sweepTaskChecks,
+  tooDeep,
   visibleText,
 } = await import('./task-checks.js');
 
@@ -160,6 +162,22 @@ describe('visibleText', () => {
   it('reads a page nested ten thousand deep without running out of stack', () => {
     const deep = `<html><body>${'<div>'.repeat(10_000)}deep words${'</div>'.repeat(10_000)}</body></html>`;
     expect(visibleText(deep)).toContain('deep words');
+  });
+});
+
+describe('tooDeep', () => {
+  const nested = (depth) => `${'<div>'.repeat(depth)}words${'</div>'.repeat(depth)}`;
+
+  it('reads a page nested up to the limit, not one past it', () => {
+    expect(tooDeep(nested(MAX_DEPTH))).toBe(false);
+    expect(tooDeep(nested(MAX_DEPTH + 1))).toBe(true);
+    // Left open, they count as nested too.
+    expect(tooDeep('<div>'.repeat(MAX_DEPTH + 1))).toBe(true);
+  });
+
+  it('counts implied closes: a paragraph opened in each paragraph closes the last', () => {
+    expect(tooDeep(`<html><body>${'<p>words '.repeat(5_000)}</body></html>`)).toBe(false);
+    expect(tooDeep(html('words'))).toBe(false);
   });
 });
 
@@ -270,6 +288,27 @@ describe('checkPage', () => {
     });
   });
 
+  it('asks validity for a pass, and relevance only not to fail', async () => {
+    const ld = (json) => `<script type="application/ld+json">${json}</script>`;
+    const ORG = ld('{"@context":"https://schema.org","@type":"Organization","name":"Acme"}');
+    const check = (head, auditChecks) =>
+      checkPage('structuredData', PAGE, {
+        auditChecks,
+        fetch: fetchOf({ [PAGE]: html('x', head) }),
+      });
+    // A good block beside one that doesn't parse: validity's warn, still open.
+    const broken = `${ORG}${ld('{"@type":"Product",')}`;
+    for (const auditChecks of [['json-ld-validity'], []]) {
+      expect(await check(broken, auditChecks)).toEqual({
+        passed: false,
+        missing: ['structured_data_invalid'],
+      });
+    }
+    expect(await check(ORG, ['json-ld-validity'])).toEqual({ passed: true, missing: [] });
+    // Types, none from the high-value list: relevance's warn, passed.
+    expect(await check(ORG, ['json-ld-relevance'])).toEqual({ passed: true, missing: [] });
+  });
+
   it('reads robots.txt for the AI crawlers, and the page for noindex', async () => {
     const check = (pages) => checkPage('crawlers', PAGE, { fetch: fetchOf(pages) });
     const allowed = { passed: true, missing: [] };
@@ -342,6 +381,25 @@ describe('checkPage', () => {
     expect(
       await checkPage('text', PAGE, { after: 'x', fetch: fetchOf({ [PAGE]: empty }) }),
     ).toBeNull();
+  });
+
+  it('reads a page nested past the limit as no answer, without parsing it', async () => {
+    const levels = 300_000;
+    const deep = `<html><body>${'<div>'.repeat(levels)}<p>${essay(300)}</p>${'</div>'.repeat(levels)}</body></html>`;
+    expect(deep.length).toBeGreaterThan(3 * 1024 * 1024);
+    const fetch = fetchOf({ [PAGE]: deep });
+    const started = Date.now();
+    for (const kind of ['changed', 'published', 'structuredData', 'crawlers']) {
+      expect(await checkPage(kind, PAGE, { fetch })).toBeNull();
+    }
+    expect(await checkPage('text', PAGE, { after: 'w1', fetch })).toBeNull();
+    expect(Date.now() - started).toBeLessThan(2_000);
+    // Nested as deep as real pages go, it's read.
+    const nested = `<html><body>${'<div>'.repeat(500)}<p>${essay(300)}</p>${'</div>'.repeat(500)}</body></html>`;
+    expect(await checkPage('changed', PAGE, { fetch: fetchOf({ [PAGE]: nested }) })).toMatchObject({
+      passed: false,
+      missing: ['first_look'],
+    });
   });
 
   it('finds a written task’s new text on the page, its entities read and whole words only', async () => {

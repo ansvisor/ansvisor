@@ -26,6 +26,7 @@
 
 import { createHash } from 'crypto';
 import * as cheerio from 'cheerio';
+import { Parser } from 'htmlparser2';
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
@@ -59,6 +60,9 @@ const RECHECK_AFTER_MS = 20 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
 /** The most of a page or a robots.txt read: the check runs on the API's process. */
 const MAX_PAGE_BYTES = 512 * 1024;
+/** Deeper than this, a page isn't read: browsers stop nesting at 512. */
+export const MAX_DEPTH = 1000;
+const TOO_DEEP = new Error('too deep');
 const OPEN = ['todo', 'in_progress'];
 
 /**
@@ -96,6 +100,8 @@ const STRUCTURED_MISSING = {
 };
 /** A fix raised without the audit's checks named: its JSON-LD must at least be valid. */
 const DEFAULT_STRUCTURED = ['json-ld-validity'];
+/** Checks whose warn is still the problem: a block that doesn't parse. */
+const PASS_ONLY = new Set(['json-ld-validity']);
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -280,13 +286,42 @@ function changedSince(previous, url, visible) {
     : { passed: false, missing: ['not_changed'], sketch: first };
 }
 
+/**
+ * Whether a page nests deeper than MAX_DEPTH: one pass, stopped at the
+ * limit. The read is bounded, but parsing a deeply nested page isn't
+ * linear in its depth.
+ */
+export function tooDeep(html) {
+  let depth = 0;
+  const parser = new Parser(
+    {
+      onopentag() {
+        depth += 1;
+        if (depth > MAX_DEPTH) throw TOO_DEEP;
+      },
+      onclosetag() {
+        depth -= 1;
+      },
+    },
+    { decodeEntities: false },
+  );
+  try {
+    parser.end(html);
+    return false;
+  } catch (err) {
+    if (err === TOO_DEEP) return true;
+    throw err;
+  }
+}
+
 /** An HTML page served where robots.txt should be: no robots.txt. */
 const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
 
 /**
  * A task's check on its page: `{ passed, missing, sketch?, wasMissing? }`,
  * or null when the page couldn't be read (no answer, a timeout, a server
- * error, a 4xx other than "not there"): nothing but the try is kept then.
+ * error, a 4xx other than "not there", a page nested too deep to parse):
+ * nothing but the try is kept then.
  * `missing` names what stands between the task and done, as the card words
  * it (en.json actionCenter.taskCheckMissing).
  *
@@ -327,12 +362,15 @@ export async function checkPage(
   if (domains && !onBrandDomain(page.url, domains)) return { passed: false, missing: ['off_site'] };
   if (kind === 'answers') return { passed: true, missing: [] };
 
+  // A page nested past what any browser builds isn't parsed: no answer.
+  if (tooDeep(page.html)) return null;
   const $ = cheerio.load(page.html);
   if (kind === 'structuredData') {
     const named = auditChecks.filter((key) => STRUCTURED_CHECKS[key]);
-    const failing = (named.length ? named : DEFAULT_STRUCTURED).filter(
-      (key) => STRUCTURED_CHECKS[key].evaluate({ $ }).status === 'fail',
-    );
+    const failing = (named.length ? named : DEFAULT_STRUCTURED).filter((key) => {
+      const { status } = STRUCTURED_CHECKS[key].evaluate({ $ });
+      return status === 'fail' || (PASS_ONLY.has(key) && status !== 'pass');
+    });
     return { passed: !failing.length, missing: failing.map((key) => STRUCTURED_MISSING[key]) };
   }
 
