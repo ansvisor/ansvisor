@@ -158,14 +158,27 @@ function clean(text) {
   return (text ?? '').replace(/\s+/g, ' ').trim();
 }
 
-/** A block's class and id, as lower-case words: "authorBox ans-trk__i" → author, box, ans, trk, i. */
-function wordsOf($el) {
-  const names = `${$el.attr('class') ?? ''} ${$el.attr('id') ?? ''}`;
-  return names
+/** A class and id, as lower-case words: "authorBox ans-trk__i" → author, box, ans, trk, i. */
+function nameWords(className, id) {
+  return `${className ?? ''} ${id ?? ''}`
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean);
+}
+
+/** A block's class and id, as lower-case words. */
+function wordsOf($el) {
+  return nameWords($el.attr('class'), $el.attr('id'));
+}
+
+/**
+ * Whether an element's class or id names furniture anywhere on a page
+ * (author box, share buttons, related posts, ads…), from its attributes:
+ * the Action Center's page checks read a page's words without it.
+ */
+export function furnitureNamed(attribs = {}) {
+  return nameWords(attribs.class, attribs.id).some((word) => FURNITURE_WORDS.has(word));
 }
 
 function named($el, words) {

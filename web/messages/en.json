@@ -2459,12 +2459,17 @@
     },
     "taskCheckMissing": {
       "page_error": "the page didn't open",
-      "no_structured_data": "no valid structured data on the page",
+      "no_structured_data": "no structured data on the page",
+      "structured_data_invalid": "the structured data isn't valid schema.org JSON-LD",
+      "structured_data_irrelevant": "the structured data has no type that describes the page",
+      "no_faq_schema": "no FAQ schema with at least two questions",
       "crawlers_blocked": "robots.txt blocks AI crawlers",
       "noindex": "the page asks not to be indexed",
       "first_look": "first look kept: it passes once the page changes",
       "not_changed": "the page hasn't changed since the first look",
-      "change_not_found": "the new text isn't on the page"
+      "change_not_found": "the new text isn't on the page",
+      "old_text_still_there": "the text it replaces is still on the page",
+      "off_site": "the page isn't on the brand's site"
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",
