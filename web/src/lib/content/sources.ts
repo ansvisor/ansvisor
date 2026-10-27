@@ -197,6 +197,19 @@ export function usedIn(
 }
 
 /**
+ * A fan-out as the searches it holds: an engine can send several as one,
+ * joined by semicolons ("chatgpt subscription;gemini subscription"), and a
+ * page's heading or FAQ question needs one search, not the list.
+ */
+export function fanoutQueries(query: string): string[] {
+  const parts = query
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length > 1 ? parts : [query];
+}
+
+/**
  * The tab's groups — Prompts · Fan-outs · Cited pages · Search Console — from
  * the brand's data and a person's choices: a source left out stays listed,
  * unchecked; a page or query added by hand joins its group.
@@ -229,18 +242,30 @@ export function buildSourceGroups(
     citesPage: p.citesPage && !p.inDraft,
   }));
 
-  const fanouts: DraftSourceRow[] = data.fanouts.map((f) => {
-    const ref = normalizeQuery(f.query);
-    return {
-      kind: 'fanout',
-      ref,
-      name: f.query,
-      included: included('fanout', ref),
-      added: false,
-      platforms: f.platforms,
-      searched: f.searched,
-    };
-  });
+  // An engine's searches sent as one ("a;b;c") are read as each search, and
+  // one met twice as one row: its platforms together, its searches added up.
+  const fanoutRows = new Map<string, { name: string; platforms: Set<string>; searched: number }>();
+  for (const f of data.fanouts) {
+    for (const query of fanoutQueries(f.query)) {
+      const ref = normalizeQuery(query);
+      const row = fanoutRows.get(ref);
+      if (row) {
+        for (const platform of f.platforms) row.platforms.add(platform);
+        row.searched += f.searched;
+      } else {
+        fanoutRows.set(ref, { name: query, platforms: new Set(f.platforms), searched: f.searched });
+      }
+    }
+  }
+  const fanouts: DraftSourceRow[] = [...fanoutRows].map(([ref, f]) => ({
+    kind: 'fanout',
+    ref,
+    name: f.name,
+    included: included('fanout', ref),
+    added: false,
+    platforms: [...f.platforms],
+    searched: f.searched,
+  }));
 
   const pages: DraftSourceRow[] = data.citedPages.map((c) => ({
     kind: 'cited_page',

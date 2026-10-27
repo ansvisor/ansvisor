@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSourceGroups,
+  fanoutQueries,
   includedCounts,
   normalizeQuery,
   pageKey,
@@ -108,6 +109,14 @@ describe('relatedQueries', () => {
   });
 });
 
+describe('fanoutQueries', () => {
+  it('splits searches joined by semicolons, and keeps one search as it is', () => {
+    expect(fanoutQueries('a b;c d ; e')).toEqual(['a b', 'c d', 'e']);
+    expect(fanoutQueries('best crm for realtors')).toEqual(['best crm for realtors']);
+    expect(fanoutQueries('one;')).toEqual(['one;']);
+  });
+});
+
 describe('buildSourceGroups', () => {
   it('lists the prompts, fan-outs, cited pages and related queries, each kind of page named', () => {
     const groups = buildSourceGroups(data(), [], draft);
@@ -128,6 +137,32 @@ describe('buildSourceGroups', () => {
     expect(pages.map((p) => p.category)).toEqual(['forum', 'competitor', 'you']);
     const prompts = groups[0].rows as Extract<DraftSourceRow, { kind: 'prompt' }>[];
     expect(prompts.map((p) => p.citesPage)).toEqual([false, true]);
+  });
+
+  it('reads a fan-out an engine sent as several searches as each one, and one met twice once', () => {
+    const groups = buildSourceGroups(
+      data({
+        fanouts: [
+          {
+            query: 'ChatGPT subscription;Gemini subscription; Google AIO subscription',
+            platforms: ['gemini-web'],
+            searched: 2,
+          },
+          { query: 'gemini subscription', platforms: ['copilot-web'], searched: 3 },
+        ],
+      }),
+      [],
+      draft,
+    );
+    const fanouts = groups.find((g) => g.kind === 'fanout')!.rows as Extract<
+      DraftSourceRow,
+      { kind: 'fanout' }
+    >[];
+    expect(fanouts.map((f) => [f.name, f.platforms, f.searched])).toEqual([
+      ['ChatGPT subscription', ['gemini-web'], 2],
+      ['Gemini subscription', ['gemini-web', 'copilot-web'], 5],
+      ['Google AIO subscription', ['gemini-web'], 2],
+    ]);
   });
 
   it('keeps a source left out unchecked, and adds the pages and queries added by hand', () => {
