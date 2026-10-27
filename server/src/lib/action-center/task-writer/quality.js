@@ -21,9 +21,56 @@ export const TASK_TYPES = Object.freeze([
   'product',
 ]);
 
+/**
+ * How we check a task is done (AC-010): the page fetched again (or a Site
+ * Audit), the prompts run again, or the person confirms it.
+ */
+export const TASK_CHECKS = Object.freeze(['auto', 'rerun', 'manual']);
+
 /** "… for 7 prompts", "across 3 pages": a count where a target should be. */
 const COUNT_IN_TITLE =
   /\b(?:for|across|on|in|to)\s+\d+\s+(?:prompts?|pages?|topics?|platforms?|competitors?|domains?|queries)\b/i;
+
+/**
+ * A page's address: a full URL, a path on the brand's site, or a host and
+ * path as the evidence shows them (pageAddress adds the https://).
+ */
+const PAGE_ADDRESS = /^(?:https?:\/\/\S+|\/\S*|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/?#]\S*)?)$/i;
+
+/** A task's URL as stored: a host and path gets its https://; null when it's no page address. */
+export function pageAddress(url) {
+  const value = text(url);
+  if (!PAGE_ADDRESS.test(value)) return null;
+  return /^(?:https?:\/\/|\/)/i.test(value) ? value : `https://${value}`;
+}
+
+/**
+ * What a task missing one of AC-010's fields is refused for. A task refused
+ * for these alone waits for review (00293) rather than going.
+ */
+const GAP = Object.freeze({
+  urlEmpty: 'URL is empty',
+  urlNotPage: 'URL is not a page address (https://… or /…)',
+  change: 'the change has no after text',
+  doneWhen: 'Done when is empty',
+  check: 'check is not auto, rerun or manual',
+});
+
+/** Whether a task's problems are only AC-010 fields it misses. */
+export function onlyGaps(problems) {
+  const gaps = new Set(Object.values(GAP));
+  return problems.length > 0 && problems.every((problem) => gaps.has(problem));
+}
+
+/** The AC-010 fields a task misses, as action_task_reviews.missing names them. */
+export function taskGaps(task) {
+  const gaps = [];
+  if (!pageAddress(task?.url)) gaps.push('url');
+  if (!text(task?.change?.after)) gaps.push('change');
+  if (!text(task?.doneWhen)) gaps.push('doneWhen');
+  if (!TASK_CHECKS.includes(text(task?.check).toLowerCase())) gaps.push('check');
+  return gaps;
+}
 
 /** Analysis the product does itself and shows in the Affected tab. */
 const ANALYSIS_VERB =
@@ -41,13 +88,19 @@ const text = (value) => (typeof value === 'string' ? value.trim() : '');
 export function taskProblems(task, evidence) {
   const problems = [];
   const title = text(task?.title);
+  const url = text(task?.url);
   const where = text(task?.where);
   const steps = (Array.isArray(task?.how) ? task.how : []).map(text).filter(Boolean);
 
   if (!title) problems.push('it has no title');
+  // AC-010: the exact page, the change, Done when and how it's checked.
+  if (!url) problems.push(GAP.urlEmpty);
+  else if (!PAGE_ADDRESS.test(url)) problems.push(GAP.urlNotPage);
   if (!where) problems.push('Where is empty');
+  if (!text(task?.change?.after)) problems.push(GAP.change);
   if (steps.length < 2 || steps.length > 5) problems.push('How needs 2 to 5 steps');
-  if (!text(task?.doneWhen)) problems.push('Done when is empty');
+  if (!text(task?.doneWhen)) problems.push(GAP.doneWhen);
+  if (!TASK_CHECKS.includes(text(task?.check).toLowerCase())) problems.push(GAP.check);
   if (!TASK_TYPES.includes(task?.type)) problems.push('its type is not one of the six');
   if (COUNT_IN_TITLE.test(title)) {
     problems.push('the title counts prompts or pages instead of naming one');
@@ -64,8 +117,8 @@ export function taskProblems(task, evidence) {
     problems.push(
       `it cites refs the evidence does not have (${refs.filter((r) => !evidence.byRef.has(r)).join(', ')})`,
     );
-  } else if (!known.some((ref) => names(`${title} ${where}`, evidence.byRef.get(ref)))) {
-    problems.push('neither the title nor Where names its target');
+  } else if (!known.some((ref) => names(`${title} ${where} ${url}`, evidence.byRef.get(ref)))) {
+    problems.push('neither the title, Where nor URL names its target');
   }
   return problems;
 }

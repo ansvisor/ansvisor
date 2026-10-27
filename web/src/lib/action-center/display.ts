@@ -204,6 +204,8 @@ export function actionEventText(
   return t(`drawer.events.${event.event}`, {
     to: String(event.data.to ?? ''),
     count: Number(event.data.count ?? 0),
+    // Tasks the writer left for review (AC-010).
+    reviews: Number(event.data.reviews ?? 0),
     // Work the product did itself names the task in the reader's language
     // and the tool as it is recorded — the tool id is the audit fact, so it
     // is not translated.

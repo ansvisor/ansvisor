@@ -422,6 +422,7 @@ describe('History events', () => {
     measurable: 2,
     title: 'Ask the agency',
     outcome: 'improved',
+    reviews: 0,
   };
   const eventText = (event: string, data: Partial<typeof values> = {}) =>
     tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });
@@ -450,6 +451,16 @@ describe('History events', () => {
 
   it.each([...new Set([...logged, ...written])])('has a History line for %s', (event) => {
     expect(() => eventText(event)).not.toThrow();
+  });
+
+  /** Tasks the writer left for review are said after the ones it wrote (AC-010). */
+  it('says how many tasks wait for review, when any do', () => {
+    expect(eventText('tasks_generated', { count: 3 })).toBe(
+      "3 tasks written from the action's evidence",
+    );
+    expect(eventText('tasks_generated', { count: 0, reviews: 2 })).toBe(
+      "0 tasks written from the action's evidence; 2 wait for review",
+    );
   });
 
   /** The validation sweep records one of four verdicts, and each reads in

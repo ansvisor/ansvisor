@@ -86,7 +86,12 @@ import { getActionDrafts, startDraftFromAction } from '@/lib/actions/content-dra
 import { actionPages, draftMethodForTask, type ActionDraft } from '@/lib/content/action-drafts';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
-import { hasTaskSpec, type TaskDetailsEdit } from '@/lib/action-center/task-details';
+import {
+  hasTaskSpec,
+  withTemplateDoneWhen,
+  withoutTemplateDoneWhen,
+  type TaskDetailsEdit,
+} from '@/lib/action-center/task-details';
 import { ImproveOutcomeCard } from './improve-outcome-card';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
@@ -832,6 +837,11 @@ function TaskRow({
     () => !!task.details && !hasTaskSpec(task.details) && !!task.details.body,
   );
   const [editing, setEditing] = useState(false);
+  // A library task's Done when is its template's until someone writes one (AC-010).
+  const tDoneWhen = useTranslations('actionCenter.taskDoneWhen');
+  const details = withTemplateDoneWhen(task.details, task.taskKey, (key) =>
+    tDoneWhen.has(key) ? tDoneWhen(key) : null,
+  );
   // Choosing Skipped opens a reason field rather than committing: a skip
   // without a reason cannot be told apart from an abandoned task later.
   const [skipDraft, setSkipDraft] = useState<string | null>(null);
@@ -909,17 +919,20 @@ function TaskRow({
         (editing ? (
           <TaskDetailForm
             text={text}
-            details={task.details}
+            details={details}
             disabled={disabled}
             onSave={async (edit) => {
+              // The template's Done when, left as it was, stays the template's.
               // The form stays until the save lands, so a failure keeps what was typed.
-              if (await onEdit(edit)) setEditing(false);
+              if (await onEdit(withoutTemplateDoneWhen(edit, task.details, details))) {
+                setEditing(false);
+              }
             }}
             onCancel={() => setEditing(false)}
           />
         ) : (
           <TaskDetailView
-            details={task.details}
+            details={details}
             disabled={disabled || skipDraft !== null}
             onEdit={() => setEditing(true)}
             send={send}

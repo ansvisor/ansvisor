@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { parseTaskDetails } from './task-details';
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
 import {
@@ -137,6 +138,10 @@ const texts: ExportTexts = {
   event: () => 'Action created',
   skipped: (reason) => `Skipped: ${reason}`,
   taskType: (type) => ({ content: 'Content', outreach: 'Outreach' })[type] ?? type,
+  taskCheck: (check) => `check.${check}`,
+  taskChange: ({ before, after }) => (before ? `${before} → ${after}` : `Add: ${after}`),
+  templateDoneWhen: (taskKey) =>
+    taskKey === 'refresh_content' ? 'The page has its new facts and date' : '',
   taskSent: (to) => (to === 'content' ? 'Sent to Content' : 'Sent to the webhook'),
   answerSource: 'AI answer',
 };
@@ -379,9 +384,33 @@ describe('the Excel file', () => {
       null,
       null,
       null,
+      null,
+      null,
+      null,
       'Skipped: Done by hand',
     ]);
     expect(sheets[3].data[1][6]).toBe('ChatGPT, Gemini');
+  });
+});
+
+describe('a library task’s Done when (AC-010)', () => {
+  it('is its template’s until someone writes one', () => {
+    const library = (details: (typeof detail.tasks)[number]['details']) =>
+      buildActionExport(
+        action,
+        {
+          ...detail,
+          tasks: [{ ...detail.tasks[1], taskKey: 'refresh_content', title: null, details }],
+        },
+        texts,
+        { origin: 'https://app.example', timeZone: 'Europe/Istanbul' },
+      ).tasks[0].doneWhen;
+    expect(library(null)).toBe('The page has its new facts and date');
+    // A template's check alone (AC-010 part 3) still takes its Done when.
+    expect(library(parseTaskDetails({ check: 'auto' }))).toBe(
+      'The page has its new facts and date',
+    );
+    expect(library(parseTaskDetails({ doneWhen: 'Our own check' }))).toBe('Our own check');
   });
 });
 
@@ -400,9 +429,12 @@ describe('a task with AC-004 fields', () => {
             platformLabel: null,
             sources: [],
             where: 'acme.example/blog/best-tools · 3 prompts on ChatGPT',
+            url: '/blog/best-tools',
             why: 'Cited #2 until Oct 8.\nThe pages cited now have a dated table.',
+            change: { before: null, after: 'A 2026 feature table.' },
             how: ['Add a feature table.', 'Put "2026" in the title.'],
             doneWhen: 'Cited again on 2 of 3 platforms within 14 days.',
+            check: 'rerun',
             type: 'content',
             effort: '~2h',
             role: 'Content writer',
@@ -419,10 +451,13 @@ describe('a task with AC-004 fields', () => {
     expect(actionMarkdown(concrete, label)).toContain(
       [
         '1. Add a 2026 comparison table to /blog/best-tools (todo) · Content',
+        '   taskUrl: /blog/best-tools',
         '   taskWhere: acme.example/blog/best-tools · 3 prompts on ChatGPT',
         '   taskWhy: Cited #2 until Oct 8. The pages cited now have a dated table.',
+        '   taskChange: Add: A 2026 feature table.',
         '   taskHow: 1) Add a feature table. 2) Put "2026" in the title.',
         '   taskDoneWhen: Cited again on 2 of 3 platforms within 14 days.',
+        '   taskCheck: check.rerun',
         '   taskEffort: ~2h · Content writer',
       ].join('\n'),
     );
@@ -436,6 +471,9 @@ describe('a task with AC-004 fields', () => {
     expect(cells.type).toBe('Content,');
     expect(cells.how).toBe('"1) Add a feature table. 2) Put ""2026"" in the title.",');
     expect(cells.done_when).toBe('Cited again on 2 of 3 platforms within 14 days.,');
+    expect(cells.url).toBe('/blog/best-tools,');
+    expect(cells.change).toBe('Add: A 2026 feature table.,');
+    expect(cells.check).toBe('check.rerun,');
 
     const sheet = actionWorkbook(concrete, label)[2];
     expect(sheet.data[1]).toEqual([
@@ -443,10 +481,13 @@ describe('a task with AC-004 fields', () => {
       'Add a 2026 comparison table to /blog/best-tools',
       'Content',
       'todo',
+      '/blog/best-tools',
       'acme.example/blog/best-tools · 3 prompts on ChatGPT',
       'Cited #2 until Oct 8. The pages cited now have a dated table.',
+      'Add: A 2026 feature table.',
       '1) Add a feature table. 2) Put "2026" in the title.',
       'Cited again on 2 of 3 platforms within 14 days.',
+      'check.rerun',
       '~2h · Content writer',
       '',
     ]);

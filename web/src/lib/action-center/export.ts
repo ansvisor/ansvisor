@@ -86,10 +86,16 @@ export interface ExportTask {
   status: string;
   /** "Content", "Outreach"…; empty when the task has none (AC-004). */
   type: string;
+  /** The exact page (AC-010). */
+  url: string;
   where: string;
   why: string;
+  /** "Before: … → After: …", or "Add: …" (AC-010). */
+  change: string;
   how: string[];
   doneWhen: string;
+  /** How we check it (AC-010). */
+  check: string;
   /** "~2h · Content writer". */
   effort: string;
   /** What else the task carries (an Improve task's body and evidence), and why it was skipped. */
@@ -144,6 +150,12 @@ export interface ExportTexts {
   skipped: (reason: string) => string;
   /** "Content", "On-page"…, for a task's type (AC-004). */
   taskType: (type: string) => string;
+  /** "Automatic: we fetch the page again"…, for how a task is checked (AC-010). */
+  taskCheck: (check: string) => string;
+  /** "Before: … → After: …", or "Add: …" (AC-010). */
+  taskChange: (change: { before: string | null; after: string }) => string;
+  /** A library task's Done when from its template (AC-010); empty without one. */
+  templateDoneWhen: (taskKey: string) => string;
   /** "Sent to Content", "Sent to the webhook" (AC-004). */
   taskSent: (to: 'content' | 'webhook') => string;
   /** What an AI answer a task rests on is called; its id means nothing outside. */
@@ -210,10 +222,16 @@ export function buildActionExport(
         title: texts.taskTitle(task),
         status: texts.taskStatus(task.status),
         type: d?.type ? texts.taskType(d.type) : '',
+        url: oneLine(d?.url),
         where: oneLine(d?.where),
         why: oneLine(d?.why),
+        change: d?.change ? oneLine(texts.taskChange(d.change)) : '',
         how: (d?.how ?? []).map(oneLine),
-        doneWhen: oneLine(d?.doneWhen),
+        // A library task's is its template's until someone writes one (AC-010).
+        doneWhen: oneLine(
+          d?.doneWhen ?? (task.taskKey ? texts.templateDoneWhen(task.taskKey) : ''),
+        ),
+        check: d?.check ? texts.taskCheck(d.check) : '',
         effort: [d?.effort, d?.role].filter(Boolean).join(' · '),
         details: details
           .filter((part): part is string => !!part)
@@ -315,10 +333,13 @@ export function actionMarkdown(a: ActionExport, label: Labels): string {
     lines.push(
       `${task.number}. ${task.title} (${task.status})${task.type ? ` · ${task.type}` : ''}`,
     );
+    if (task.url) lines.push(`   ${label('taskUrl')}: ${task.url}`);
     if (task.where) lines.push(`   ${label('taskWhere')}: ${task.where}`);
     if (task.why) lines.push(`   ${label('taskWhy')}: ${task.why}`);
+    if (task.change) lines.push(`   ${label('taskChange')}: ${task.change}`);
     if (task.how.length) lines.push(`   ${label('taskHow')}: ${steps(task.how)}`);
     if (task.doneWhen) lines.push(`   ${label('taskDoneWhen')}: ${task.doneWhen}`);
+    if (task.check) lines.push(`   ${label('taskCheck')}: ${task.check}`);
     if (task.effort) lines.push(`   ${label('taskEffort')}: ${task.effort}`);
     if (task.details) lines.push(`   ${task.details}`);
   }
@@ -347,10 +368,13 @@ export const ACTION_CSV_HEADERS = [
   'type',
   'entity',
   'details',
+  'url',
   'where',
   'why',
+  'change',
   'how',
   'done_when',
+  'check',
   'effort',
   'status',
   'category',
@@ -392,10 +416,13 @@ export function actionCsv(a: ActionExport): string {
       title: task.title,
       type: task.type,
       details: task.details,
+      url: task.url,
       where: task.where,
       why: task.why,
+      change: task.change,
       how: steps(task.how),
       done_when: task.doneWhen,
+      check: task.check,
       effort: task.effort,
       status: task.status,
       link: a.link,
@@ -568,9 +595,12 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
         { width: 12 },
         { width: 14 },
         { width: 40 },
+        { width: 40 },
         { width: 50 },
         { width: 60 },
+        { width: 60 },
         { width: 40 },
+        { width: 30 },
         { width: 20 },
         { width: 50 },
       ],
@@ -580,10 +610,13 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
           label('task'),
           label('type'),
           label('status'),
+          label('taskUrl'),
           label('taskWhere'),
           label('taskWhy'),
+          label('taskChange'),
           label('taskHow'),
           label('taskDoneWhen'),
+          label('taskCheck'),
           label('taskEffort'),
           label('details'),
         ].map(bold),
@@ -592,10 +625,13 @@ export function actionWorkbook(a: ActionExport, label: Labels): Sheet<Blob>[] {
           task.title,
           task.type,
           task.status,
+          task.url,
           task.where,
           task.why,
+          task.change,
           steps(task.how),
           task.doneWhen,
+          task.check,
           task.effort,
           task.details,
         ]),

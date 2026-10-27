@@ -494,7 +494,12 @@ export async function updateTaskDetails(
     row.details && typeof row.details === 'object' && !Array.isArray(row.details)
       ? (row.details as Record<string, unknown>)
       : {};
-  const details = { ...stored, ...cleanTaskDetailsEdit(edit) };
+  const merged = { ...stored, ...cleanTaskDetailsEdit(edit) };
+  // A template's details, edited, are the person's (AC-010): the task writer
+  // reads the task as worked on (task-writer isTouched). An undefined key
+  // isn't written.
+  const fromTemplate = (stored as { source?: unknown }).source === 'template';
+  const details = fromTemplate ? { ...merged, source: undefined } : merged;
   const title = edit.title === null ? null : cleanTaskTitle(edit.title);
 
   const { error } = await supabase

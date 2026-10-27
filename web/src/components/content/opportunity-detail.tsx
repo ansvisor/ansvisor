@@ -962,6 +962,12 @@ function FromTaskCard({
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+          {task.url && (
+            <>
+              <dt className="text-muted-foreground">{t('url')}</dt>
+              <dd className="min-w-0 break-words">{task.url}</dd>
+            </>
+          )}
           {task.where && (
             <>
               <dt className="text-muted-foreground">{t('where')}</dt>
@@ -972,6 +978,27 @@ function FromTaskCard({
             <>
               <dt className="text-muted-foreground">{t('why')}</dt>
               <dd className="min-w-0 break-words">{task.why}</dd>
+            </>
+          )}
+          {task.change && (
+            <>
+              <dt className="text-muted-foreground">{t('change')}</dt>
+              <dd className="min-w-0 break-words">
+                {task.change.before ? (
+                  <>
+                    <span className="text-muted-foreground">{t('changeBefore')}: </span>
+                    {task.change.before}
+                    <br />
+                    <span className="text-muted-foreground">{t('changeAfter')}: </span>
+                    {task.change.after}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-muted-foreground">{t('changeAdd')}: </span>
+                    {task.change.after}
+                  </>
+                )}
+              </dd>
             </>
           )}
           {task.how && task.how.length > 0 && (
