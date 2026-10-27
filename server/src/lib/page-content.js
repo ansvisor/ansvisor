@@ -15,6 +15,7 @@
  */
 
 import * as cheerio from 'cheerio';
+import { compile } from 'css-select';
 
 /** The most HTML a page brings into a draft, as the editor's body limit. */
 export const MAX_CONTENT_LENGTH = 500_000;
@@ -42,7 +43,7 @@ const HIDDEN =
  * A question an accordion's hidden answer follows: an FAQ beside the text
  * (after the post, in the page's main block) keeps its answers too.
  */
-const QUESTION = 'h2, h3, h4, h5, h6';
+const QUESTION = new Set(['h2', 'h3', 'h4', 'h5', 'h6']);
 
 /**
  * Words in a block's class or id that name furniture: anywhere, even in the
@@ -185,18 +186,210 @@ function named($el, words) {
   return wordsOf($el).some((word) => words.has(word));
 }
 
-/** An element's text, with a space where its blocks meet ("Ada" "8 min read" → "Ada 8 min read"). */
-function textOf($, el) {
-  return clean(
-    $(el)
-      .find('*')
-      .addBack()
-      .contents()
-      .filter((_, node) => node.type === 'text')
-      .map((_, node) => node.data)
-      .get()
-      .join(' '),
-  );
+/*
+ * A page is read in time that grows with its length, whatever its shape.
+ * cheerio's find and remove don't: find sorts an element's children out again
+ * and remove searches its siblings, each in time that grows with the square
+ * of their number, and asking each element about every block above it grows
+ * with the page's length times its depth. So elements are found from the
+ * element itself, removed siblings together, and each block above asked once.
+ */
+
+const isElement = (node) =>
+  node?.type === 'tag' || node?.type === 'script' || node?.type === 'style';
+
+const matchers = new Map();
+
+/**
+ * The elements under `el` matching `selector`, in page order, as
+ * `$(el).find(selector)` gives them for these selectors, which have no
+ * combinators: each element is tested once against the selector, compiled
+ * once.
+ */
+function findIn($, el, selector) {
+  if (!matchers.has(selector)) matchers.set(selector, compile(selector));
+  const matches = matchers.get(selector);
+  const found = [];
+  const stack = [...(el.children ?? [])].reverse();
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!isElement(node)) continue;
+    if (matches(node)) found.push(node);
+    const children = node.children ?? [];
+    for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]);
+  }
+  return $(found);
+}
+
+/** Takes the nodes out of the page, as cheerio's remove does, each parent's in one pass. */
+function removeAll(nodes) {
+  const byParent = new Map();
+  for (const node of nodes) {
+    if (!node.parent) continue;
+    if (!byParent.has(node.parent)) byParent.set(node.parent, new Set());
+    byParent.get(node.parent).add(node);
+  }
+  for (const [parent, gone] of byParent) {
+    relink(
+      parent,
+      parent.children.filter((child) => !gone.has(child)),
+    );
+    for (const node of gone) {
+      node.parent = null;
+      node.prev = null;
+      node.next = null;
+    }
+  }
+}
+
+/**
+ * Puts each element's contents in its place, in page order, as
+ * `$(el).replaceWith($(el).contents())` one after another does. The deepest
+ * parents go first, so one inside another lands where the outer one was.
+ */
+function unwrapAll(elements) {
+  const byParent = new Map();
+  for (const el of elements) {
+    if (!el.parent) continue;
+    if (!byParent.has(el.parent)) byParent.set(el.parent, new Set());
+    byParent.get(el.parent).add(el);
+  }
+  // A parent inside an unwrapped element comes after it in page order.
+  for (const [parent, unwrapped] of [...byParent].reverse()) {
+    relink(
+      parent,
+      parent.children.flatMap((child) => (unwrapped.has(child) ? child.children : [child])),
+    );
+  }
+  for (const el of elements) {
+    el.children = [];
+    el.parent = null;
+    el.prev = null;
+    el.next = null;
+  }
+}
+
+/** A parent's new children, linked to it and to each other. */
+function relink(parent, children) {
+  children.forEach((child, i) => {
+    child.parent = parent;
+    child.prev = children[i - 1] ?? null;
+    child.next = children[i + 1] ?? null;
+  });
+  parent.children = children;
+}
+
+/**
+ * Whether an element or a block above it, below `stop`, passes `test`: the
+ * blocks asked once each, across calls.
+ */
+function upward(test, stop = null) {
+  const seen = new Map();
+  return (start) => {
+    const path = [];
+    let found = false;
+    for (let node = start; isElement(node) && node !== stop; node = node.parent) {
+      if (seen.has(node)) {
+        found = seen.get(node);
+        break;
+      }
+      path.push(node);
+      if (test(node)) {
+        found = true;
+        break;
+      }
+    }
+    for (const node of path) seen.set(node, found);
+    return found;
+  };
+}
+
+/** Whether `node` is `block` or inside it. */
+function inside(node, block) {
+  for (let el = node; el; el = el.parent) if (el === block) return true;
+  return false;
+}
+
+/**
+ * What a block's judging reads of it, each element counted once, children
+ * first: its text's length, with a space where its blocks meet ("Ada" "8 min
+ * read" → "Ada 8 min read") and each element's own text before its
+ * children's; the text itself while it's short; and its links. Read for
+ * every block of a deep page, it stays linear in the page. The page mustn't
+ * change while it's read.
+ */
+function blockReader() {
+  const blocks = new Map();
+  const read = (start) => {
+    const stack = [[start, false]];
+    while (stack.length > 0) {
+      const [node, ready] = stack.pop();
+      if (blocks.has(node)) continue;
+      const children = node.children ?? [];
+      if (!ready) {
+        stack.push([node, true]);
+        for (const child of children) {
+          if (isElement(child) && !blocks.has(child)) stack.push([child, false]);
+        }
+        continue;
+      }
+      const own = clean(
+        children
+          .filter((child) => child.type === 'text')
+          .map((child) => child.data)
+          .join(' '),
+      );
+      const block = {
+        own,
+        length: own.length,
+        parts: own ? 1 : 0,
+        links: 0,
+        linkText: 0,
+        inPage: 0,
+        hrefs: new Set(),
+      };
+      for (const child of children) {
+        if (!isElement(child)) continue;
+        const sub = blocks.get(child);
+        if (sub.length) {
+          block.length += sub.length;
+          block.parts += 1;
+        }
+        if (child.name === 'a') {
+          const href = child.attribs?.href ?? '';
+          block.links += 1;
+          block.linkText += sub.length;
+          if (href.startsWith('#')) block.inPage += 1;
+          if (block.hrefs.size < MIN_LIST_TARGETS) block.hrefs.add(href);
+        }
+        block.links += sub.links;
+        block.linkText += sub.linkText;
+        block.inPage += sub.inPage;
+        for (const href of sub.hrefs) {
+          if (block.hrefs.size >= MIN_LIST_TARGETS) break;
+          block.hrefs.add(href);
+        }
+      }
+      // A space between each part with words.
+      block.length += Math.max(0, block.parts - 1);
+      blocks.set(node, block);
+    }
+    return blocks.get(start);
+  };
+  const texts = new Map();
+  /** The block's text when it's at most `max` long, else null. */
+  const shortText = (el, max) => {
+    if (read(el).length > max) return null;
+    if (!texts.has(el)) {
+      const parts = blocks.get(el).own ? [blocks.get(el).own] : [];
+      for (const child of el.children ?? []) {
+        if (isElement(child) && blocks.get(child).length) parts.push(shortText(child, max));
+      }
+      texts.set(el, parts.join(' '));
+    }
+    return texts.get(el);
+  };
+  return { read, shortText };
 }
 
 /**
@@ -211,53 +404,71 @@ function findTextArea($, body) {
   // An author's bio or a comment is no sign of where the text is, nor is
   // what the page hides: the text is where its visible paragraphs are, and
   // a hidden answer inside it stays (HIDDEN).
-  const paragraphs = body
-    .find('p, pre, blockquote, li')
-    .toArray()
-    .filter(
-      (el) =>
-        clean($(el).text()).length >= MIN_PARAGRAPH &&
-        $(el).closest(HIDDEN).length === 0 &&
-        !$(el)
-          .parents()
-          .toArray()
-          .some((block) => named($(block), PAGE_FURNITURE_WORDS)),
-    );
-  const counted = new Set(paragraphs);
-  paragraphs.forEach((el) => {
-    const length = clean($(el).text()).length;
+  const hidden = new Set($(HIDDEN).toArray());
+  const hiddenHere = upward((node) => hidden.has(node));
+  const furnitureHere = upward((node) => named($(node), PAGE_FURNITURE_WORDS));
+  const counted = new Map();
+  for (const el of findIn($, body[0], 'p, pre, blockquote, li').toArray()) {
+    const text = clean($(el).text());
+    if (text.length >= MIN_PARAGRAPH && !hiddenHere(el) && !furnitureHere(el.parent)) {
+      counted.set(el, text);
+    }
+  }
+  for (const [el, text] of counted) {
+    const length = text.length;
     total += length;
-    const score =
-      1 + (clean($(el).text()).match(/,/g)?.length ?? 0) + Math.min(3, Math.floor(length / 100));
+    const score = 1 + (text.match(/,/g)?.length ?? 0) + Math.min(3, Math.floor(length / 100));
     const parent = el.parent;
-    if (!parent || parent.type !== 'tag') return;
+    if (!parent || parent.type !== 'tag') continue;
     scores.set(parent, (scores.get(parent) ?? 0) + score);
     const grandparent = parent.parent;
     if (grandparent && grandparent.type === 'tag') {
       scores.set(grandparent, (scores.get(grandparent) ?? 0) + score / 2);
     }
-  });
+  }
   let best = null;
   for (const [el, score] of scores) {
     if (!best || score > best.score) best = { el, score };
   }
   if (!best) return null;
 
-  const paragraphText = (el) =>
-    $(el)
-      .find('p, pre, blockquote, li')
-      .toArray()
-      .reduce((sum, p) => (counted.has(p) ? sum + clean($(p).text()).length : sum), 0);
-  let area = best.el;
-  while (
-    paragraphText(area) < total * TEXT_AREA_SHARE &&
-    area.parent &&
-    area.parent.type === 'tag' &&
-    area.parent !== body[0]
-  ) {
-    area = area.parent;
+  // The blocks the area may widen to, the best one first, short of the body;
+  // each counted paragraph's text is on the first of them it's inside.
+  const steps = [best.el];
+  for (let el = best.el; el.parent?.type === 'tag' && el.parent !== body[0]; el = el.parent) {
+    steps.push(el.parent);
   }
-  return area;
+  const stepOf = new Map(steps.map((el, i) => [el, i]));
+  const seen = new Map();
+  const firstStepAbove = (start) => {
+    const path = [];
+    let step;
+    for (let node = start; isElement(node); node = node.parent) {
+      if (seen.has(node)) {
+        step = seen.get(node);
+        break;
+      }
+      path.push(node);
+      if (stepOf.has(node)) {
+        step = stepOf.get(node);
+        break;
+      }
+    }
+    for (const node of path) seen.set(node, step);
+    return step;
+  };
+  const within = steps.map(() => 0);
+  for (const [el, text] of counted) {
+    const step = firstStepAbove(el.parent);
+    if (step !== undefined) within[step] += text.length;
+  }
+  let step = 0;
+  let text = within[0];
+  while (text < total * TEXT_AREA_SHARE && step < steps.length - 1) {
+    step += 1;
+    text += within[step];
+  }
+  return steps[step];
 }
 
 /** The closest block holding both elements. */
@@ -310,7 +521,7 @@ export function extractPageContent(html, pageUrl) {
     .filter((el) => clean($(el).text()));
 
   const body = $('body');
-  body.find(FRAME).remove();
+  removeAll(findIn($, body[0], FRAME).toArray());
 
   // The root: the page's main block when it holds the text; else the part
   // of the page holding the text and its H1; else the text area alone.
@@ -318,30 +529,21 @@ export function extractPageContent(html, pageUrl) {
   // What the page hides goes, outside the text. An answer right after its
   // question waits for the root: in it, it's an FAQ's (QUESTION).
   const answers = [];
-  body
-    .find(HIDDEN)
-    .filter(
-      (_, el) =>
-        !textArea || ($(el).closest(textArea).length === 0 && !$(el).find(textArea).length),
-    )
-    .each((_, el) => {
-      if ($(el).prev().is(QUESTION)) answers.push(el);
-      else $(el).remove();
-    });
+  const hiddenGone = [];
+  for (const el of findIn($, body[0], HIDDEN).toArray()) {
+    if (textArea && (inside(el, textArea) || inside(textArea, el))) continue;
+    if (QUESTION.has($(el).prev()[0]?.name)) answers.push(el);
+    else hiddenGone.push(el);
+  }
+  removeAll(hiddenGone);
   // The title's H1, picked once: the last one with words before the text's
   // first paragraph (not a logo's or a site name's above it), else the first.
   // A byline, date or breadcrumb line above the title is no paragraph of it.
+  const furnitureInArea = upward((block) => named($(block), PAGE_FURNITURE_WORDS), textArea);
   const lead = textArea
-    ? $(textArea)
-        .find('p, li, pre, blockquote')
+    ? findIn($, textArea, 'p, li, pre, blockquote')
         .toArray()
-        .find(
-          (el) =>
-            clean($(el).text()).length >= MIN_PARAGRAPH &&
-            ![el, ...$(el).parentsUntil(textArea).toArray()].some((block) =>
-              named($(block), PAGE_FURNITURE_WORDS),
-            ),
-        )
+        .find((el) => clean($(el).text()).length >= MIN_PARAGRAPH && !furnitureInArea(el))
     : null;
   const titleH1 =
     (lead && worded.filter((el) => order.get(el) < order.get(lead)).at(-1)) || worded[0] || null;
@@ -353,15 +555,13 @@ export function extractPageContent(html, pageUrl) {
   const heading = titleH1 && $(titleH1).closest('body').length > 0 ? titleH1 : null;
   const main = MAIN_SELECTORS.map((selector) => $(selector).toArray())
     .flat()
-    .find((el) => !textArea || el === textArea || $(el).find(textArea).length > 0);
+    .find((el) => !textArea || inside(textArea, el));
   const root = main
     ? $(main)
     : textArea
       ? $(heading ? commonAncestor($, heading, textArea) : textArea)
       : body;
-  for (const el of answers) {
-    if ($(el).closest(root[0]).length === 0) $(el).remove();
-  }
+  removeAll(answers.filter((el) => !inside(el, root[0])));
 
   // What stays whatever its name: the text area, the blocks around it and
   // the H1's.
@@ -375,38 +575,40 @@ export function extractPageContent(html, pageUrl) {
 
   // 'remove' for furniture; 'list' for a long list of links outside the
   // text (a category's products), kept and read as the text is.
+  const blocks = blockReader();
   const judge = (el, inContent) => {
     const $el = $(el);
-    const text = textOf($, el);
+    const block = blocks.read(el);
     const toc = `${$el.attr('class') ?? ''} ${$el.attr('id') ?? ''}`
       .toLowerCase()
       .includes('table-of-contents');
     if (
       (named($el, inContent ? FURNITURE_WORDS : PAGE_FURNITURE_WORDS) || toc) &&
-      text.length < rootLength * MAX_FURNITURE_SHARE
+      block.length < rootLength * MAX_FURNITURE_SHARE
     ) {
       return 'remove';
     }
     // In the text, lists of links and short lines are its own; a page with
     // no paragraphs to go by keeps them too.
     if (!textArea || inContent) return null;
-    const links = ($el.is('a') ? $el : $el.find('a')).toArray();
-    if (links.length >= 2) {
-      const linkText = links.reduce((sum, a) => sum + textOf($, a).length, 0);
-      const hrefs = links.map((a) => $(a).attr('href') ?? '');
+    // Its links: the ones inside it, or itself when it's one.
+    const links = el.name === 'a' ? 1 : block.links;
+    if (links >= 2) {
       // A table of contents: links within the page.
-      if (hrefs.filter((href) => href.startsWith('#')).length * 2 > links.length) return 'remove';
+      if (block.inPage * 2 > links) return 'remove';
       if (
-        new Set(hrefs).size >= MIN_LIST_TARGETS ||
-        (text.length > MAX_LINK_LIST && linkText >= text.length * LIST_LINK_SHARE)
+        block.hrefs.size >= MIN_LIST_TARGETS ||
+        (block.length > MAX_LINK_LIST && block.linkText >= block.length * LIST_LINK_SHARE)
       ) {
         return 'list';
       }
-      if (text.length - linkText <= MAX_LINK_LIST_TEXT) return 'remove';
+      if (block.length - block.linkText <= MAX_LINK_LIST_TEXT) return 'remove';
     }
-    return text.length <= MAX_BYLINE && BYLINE.test(text) ? 'remove' : null;
+    const text = blocks.shortText(el, MAX_BYLINE);
+    return text !== null && BYLINE.test(text) ? 'remove' : null;
   };
   const lists = new Set();
+  const stripped = [];
   const strip = (parent, inContent) => {
     $(parent)
       .children()
@@ -418,7 +620,7 @@ export function extractPageContent(html, pageUrl) {
         }
         const verdict = judge(el, content);
         if (verdict === 'remove') {
-          $(el).remove();
+          stripped.push(el);
         } else if (verdict === 'list') {
           lists.add(el);
           strip(el, true);
@@ -428,57 +630,63 @@ export function extractPageContent(html, pageUrl) {
       });
   };
   strip(root[0], root[0] === textArea);
+  removeAll(stripped);
 
   // Avatars, logos, icons and cover images aren't the text's; a list's
   // pictures (its products) are its own.
-  root.find('img').each((_, el) => {
+  const inTextArea = upward((node) => node === textArea, root[0]);
+  const inList = upward((node) => lists.has(node), root[0]);
+  const markedFor = (words) => upward((node) => !kept.has(node) && named($(node), words), root[0]);
+  const markedInText = markedFor(IMAGE_FURNITURE_WORDS);
+  const markedOnPage = markedFor(PAGE_IMAGE_FURNITURE_WORDS);
+  const images = [];
+  for (const el of findIn($, root[0], 'img').toArray()) {
     const $el = $(el);
     const small = ['width', 'height'].some((side) => {
       const size = Number($el.attr(side));
       return Number.isFinite(size) && size > 0 && size <= MAX_ICON_SIZE;
     });
-    const above = $el.parentsUntil(root).toArray();
     // In the text when the root is the text area itself, as strip has it.
-    const words =
-      textArea && (root[0] === textArea || above.includes(textArea))
-        ? IMAGE_FURNITURE_WORDS
-        : PAGE_IMAGE_FURNITURE_WORDS;
+    const inText = textArea && (root[0] === textArea || inTextArea(el.parent));
     // Its own name or its block's, not the text's or the H1's wrappers.
-    const marked =
-      !above.some((node) => lists.has(node)) &&
-      [el, ...above].some((node) => !kept.has(node) && named($(node), words));
-    if (small || marked) $el.remove();
-  });
+    const marked = !inList(el.parent) && (inText ? markedInText : markedOnPage)(el);
+    if (small || marked) images.push(el);
+  }
+  removeAll(images);
 
   // Links and images keep working outside the page: relative addresses
   // become absolute; anything else the editor's cleaning decides on.
-  root.find('a[href]').each((_, el) => {
+  for (const el of findIn($, root[0], 'a[href]').toArray()) {
     const href = $(el).attr('href');
     try {
       $(el).attr('href', new URL(href, pageUrl).toString());
     } catch {
       $(el).removeAttr('href');
     }
-  });
-  root.find('img[src]').each((_, el) => {
+  }
+  const unaddressed = [];
+  for (const el of findIn($, root[0], 'img[src]').toArray()) {
     try {
       $(el).attr('src', new URL($(el).attr('src'), pageUrl).toString());
     } catch {
-      $(el).remove();
+      unaddressed.push(el);
     }
-  });
+  }
+  removeAll(unaddressed);
 
   // One H1 per page, its title: any other becomes an H2, and one without
   // words (a logo) is no heading.
-  for (const el of root.find('h1').toArray()) {
+  const wordless = [];
+  for (const el of findIn($, root[0], 'h1').toArray()) {
     if (el === heading) continue;
-    if (!clean($(el).text())) $(el).replaceWith($(el).contents());
+    if (!clean($(el).text())) wordless.push(el);
     else el.name = 'h2';
   }
+  unwrapAll(wordless);
   let content = (root.html() ?? '').trim();
   // A title above the content (a hero outside <main>) heads it, as the
   // draft's title is its first heading.
-  if (title && root.find('h1').length === 0) {
+  if (title && findIn($, root[0], 'h1').length === 0) {
     content = `<h1>${$('<i>').text(title).html()}</h1>${content}`;
   }
   const schema = jsonLd

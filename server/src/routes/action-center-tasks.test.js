@@ -33,7 +33,12 @@ class TaskWriterError extends Error {
     this.status = status;
   }
 }
-class PlanLimitError extends Error {}
+class PlanLimitError extends Error {
+  constructor(message, statusCode = 403) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
 vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
 vi.mock('../lib/action-center/task-writer/index.js', () => ({
   TaskWriterError,
@@ -103,10 +108,21 @@ describe('regenerateTasks', () => {
   });
 
   it('says the budget is spent, as a code the drawer words', async () => {
-    writeTasksForAction.mockRejectedValueOnce(new PlanLimitError('Budget used up'));
+    writeTasksForAction.mockRejectedValueOnce(new PlanLimitError('Budget used up', 429));
     await expect(regenerateTasks('a1', 'u1')).rejects.toMatchObject({
       status: 429,
       code: 'budget',
+    });
+  });
+
+  it('says there is no plan, not a spent budget, once the plan has ended', async () => {
+    writeTasksForAction.mockRejectedValueOnce(
+      new PlanLimitError('An active subscription or free trial is required.', 402),
+    );
+    await expect(regenerateTasks('a1', 'u1')).rejects.toMatchObject({
+      status: 402,
+      code: 'plan_limit',
+      message: 'An active subscription or free trial is required.',
     });
   });
 });
