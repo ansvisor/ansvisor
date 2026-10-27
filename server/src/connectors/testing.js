@@ -20,7 +20,7 @@ import { requestJson } from './http.js';
  *     catalog, and returns the outcome and the rows written. A connector
  *     read with the workspace's sign-in (`signIn`, #1270) gets
  *     `signInRequest` instead: a stand-in for lib/catalog/sign-in.js's,
- *     `(provider, entityId) => request`.
+ *     `(provider, entityId, { hosts }) => request`.
  *
  * A test file that uses it mocks the Supabase admin client first, which
  * exits without its env (see connectors/__example__/example.test.js).

@@ -37,12 +37,16 @@ import merchantCenter from './merchant-center/index.js';
  * `connect`:
  *   - `signIn`: the Composio provider (lib/composio.js PROVIDERS). Its
  *     `ctx.request` goes through that sign-in (lib/catalog/sign-in.js);
+ *   - `hosts`: the API hosts that request may call, over https; any other
+ *     address is refused;
  *   - `listAccounts(ctx)`: the accounts the sign-in opens, `{ id, name }`,
  *     for the person to pick one;
  *   - `checkAccount(value, ctx)`: the picked account checked, as
  *     `{ account, label?, url? }`, or a ConnectError.
  *   Its `readCatalog` may also return `issues`: the platform's problems per
- *   item (lib/catalog/issues.js).
+ *   item (lib/catalog/issues.js); and `repeated`: the listings of an item
+ *   read already (another language or feed label), kept once and counted,
+ *   not skipped.
  *
  * A connector never logs credentials or a buyer's personal data, and reads
  * only what its feature needs.

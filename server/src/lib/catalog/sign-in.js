@@ -1,6 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { ConnectorHttpError, MAX_WAIT_MS, RETRIES, retryAfterMs } from '../../connectors/http.js';
-import { getActiveConnection, proxyRequest } from '../composio.js';
+import { entityIdFor, getActiveConnection, proxyRequest } from '../composio.js';
+import { logger } from '../logger.js';
 
 /**
  * Catalog sources read with the workspace's own sign-in to a platform
@@ -9,18 +10,31 @@ import { getActiveConnection, proxyRequest } from '../composio.js';
  * (integration_connections, 00045). Such a source has no credentials of its
  * own (00282): its connector's `signIn` names the Composio provider, and its
  * calls go through Composio's proxy (composio.js proxyRequest), so the token
- * never reaches us.
+ * never reaches us. They reach only the hosts the connector names (`hosts`).
  *
  * The request it gives a connector answers like the HTTP client's
  * (connectors/http.js requestJson): `{ status, headers, data }` for a 2xx,
  * else a ConnectorHttpError:
- *   - 'auth': the sign-in is gone or refused (no active connection, a
- *     401 or 403, Composio saying the account expired);
- *   - 'rate_limited': still 429 after RETRIES waits;
+ *   - 'auth': the sign-in is gone or refused: no active connection, Composio
+ *     saying the connection expired or was revoked, or the API's 401;
+ *   - 'not_set_up': this server's setup is refused, not the sign-in:
+ *     Composio's own 401 or 403 (its API key, or a key without the "Proxy
+ *     execute" permission), the API's 403 (the Google Cloud project not
+ *     registered with Merchant Center, a scope missing), or its 401 when it
+ *     says the project isn't registered;
+ *   - 'rate_limited': still 429 after RETRIES waits, or asked to wait longer
+ *     than MAX_WAIT_MS;
  *   - 'http_error': any other status;
+ *   - 'blocked': an address on a host the connector didn't name;
  *   - 'unreachable' or 'timeout': Composio couldn't be reached in time.
+ * Only the API's own answers carry a `status`: Composio's refusals don't.
  * It waits and tries again on 429 and 5xx, as long as Retry-After says,
  * else 1, 2, 4 seconds. Errors name the host and path only.
+ *
+ * Every refusal by Composio or the API ('auth', 'not_set_up') is logged as
+ * a warning, for whoever runs the server: the error's name and status, and
+ * the API's own status and reason. Never the token, the query or the
+ * account. A workspace with no connection at all isn't: it's not connected yet.
  */
 
 /** The Composio entity of a brand's workspace: one connection per workspace and provider. */
@@ -32,19 +46,66 @@ export async function workspaceEntity(brandId, { db = supabaseAdmin } = {}) {
     .maybeSingle();
   if (error) throw new Error(`brands read: ${error.message}`);
   if (!data?.organization_id) throw new Error('The brand has no workspace.');
-  return `org_${data.organization_id}`;
+  return entityIdFor(data.organization_id);
 }
 
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
-/** Composio's own refusals that mean the sign-in is gone, not that Composio is down. */
-const SIGN_IN_GONE = /expired|inactive|not active|revoked|invalid_grant|unauthori[sz]ed|reauth/i;
+/**
+ * Composio's own refusals that mean the workspace's connection is gone (it
+ * expired, was revoked or removed), not that this server's setup is wrong:
+ * they name the connection.
+ */
+const SIGN_IN_GONE =
+  /^(?=[\s\S]*(connected[\s_-]?account|connection))(?=[\s\S]*(expired|inactive|not[\s_-]?active|revoked|deleted|not[\s_-]?found))|invalid_grant|re-?auth/i;
+/** Google's 401 when the Google Cloud project isn't registered with Merchant Center (registerGcp). */
+const NOT_REGISTERED = /not registered|registerGcp/i;
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A wait that ends early when `signal` aborts. */
+function sleep(ms, signal) {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
 
 /** Header names in lower case, as retryAfterMs reads them. */
 function lowerKeys(headers) {
   return Object.fromEntries(
     Object.entries(headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]),
+  );
+}
+
+const clip = (value, max = 100) => (typeof value === 'string' ? value.slice(0, max) : undefined);
+
+/** Why Google refused, from its error body: `details[].reason`, or the older `errors[].reason`. */
+function reasonOf(error) {
+  const detail = Array.isArray(error?.details)
+    ? error.details.find((d) => typeof d?.reason === 'string')
+    : undefined;
+  return clip(detail?.reason ?? error?.errors?.[0]?.reason);
+}
+
+/** A refusal, logged: what refused and why. No token, query or account id. */
+function logRefusal(code, { provider, url, name, status, data }) {
+  const error = data?.error;
+  logger.warn(
+    {
+      provider,
+      code,
+      host: url.host,
+      // The path's ids (an account's) left out.
+      path: url.pathname.replace(/\/\d+(?=[/:]|$)/g, '/:id'),
+      err: { name, status },
+      ...(error && typeof error === 'object'
+        ? { google: { status: clip(error.status), reason: reasonOf(error) } }
+        : {}),
+    },
+    '[catalog] sign-in call refused',
   );
 }
 
@@ -54,17 +115,31 @@ function lowerKeys(headers) {
  *
  * @param {string} provider a Composio provider (composio.js PROVIDERS)
  * @param {string} entityId the workspace's entity (workspaceEntity)
- * @param {{ active?: Function, proxy?: Function, wait?: Function }} [stand-ins] the tests'
+ * @param {{ hosts?: string[], active?: Function, proxy?: Function, wait?: Function }} [options]
+ *   `hosts`: the only hosts it calls, over https (the connector's `hosts`);
+ *   `active`, `proxy` and `wait` are the tests' stand-ins
  */
 export function signInRequest(
   provider,
   entityId,
-  { active = getActiveConnection, proxy = proxyRequest, wait = sleep } = {},
+  { hosts = [], active = getActiveConnection, proxy = proxyRequest, wait = sleep } = {},
 ) {
+  const allowed = new Set(hosts.map((host) => host.toLowerCase()));
   let accountId = null;
   return async function request(address, { query, signal } = {}) {
-    const url = new URL(address);
+    let url;
+    try {
+      url = new URL(address);
+    } catch {
+      throw new ConnectorHttpError('invalid_url', "The address isn't a valid one");
+    }
     const where = `GET ${url.host}${url.pathname}`;
+    // url.host carries a port that isn't https's own: such an address isn't allowed either.
+    if (url.protocol !== 'https:' || !allowed.has(url.host)) {
+      // A connector's mistake, not the source's: logged, as the person can't fix it.
+      logger.error({ provider, host: url.host }, '[catalog] sign-in call to a host not allowed');
+      throw new ConnectorHttpError('blocked', `${where}: not a host ${provider} is read at`);
+    }
     if (!accountId) {
       let account;
       try {
@@ -76,27 +151,38 @@ export function signInRequest(
       accountId = account.id;
     }
     for (let attempt = 0; ; attempt += 1) {
+      if (signal?.aborted) throw new ConnectorHttpError('timeout', `${where} took too long`);
       let res;
       try {
         res = await proxy(accountId, { endpoint: url.href, query, signal });
       } catch (err) {
         if (signal?.aborted) throw new ConnectorHttpError('timeout', `${where} took too long`);
         const status = err?.status ?? err?.statusCode;
-        if (status === 401 || status === 403 || SIGN_IN_GONE.test(String(err?.message ?? ''))) {
-          throw new ConnectorHttpError('auth', `${where}: sign-in refused`, { status });
+        const refused = { provider, url, name: clip(err?.name), status };
+        if (SIGN_IN_GONE.test(String(err?.message ?? ''))) {
+          logRefusal('auth', refused);
+          throw new ConnectorHttpError('auth', `${where}: the sign-in is gone`);
+        }
+        if (status === 401 || status === 403) {
+          logRefusal('not_set_up', refused);
+          throw new ConnectorHttpError('not_set_up', `${where}: Composio refused this server`);
         }
         throw new ConnectorHttpError('unreachable', `${where} couldn't be reached`);
       }
       if (res.status >= 200 && res.status < 300) return res;
       if (res.status === 401 || res.status === 403) {
-        throw new ConnectorHttpError('auth', `${where} answered ${res.status}`, {
+        const refused = { provider, url, status: res.status, data: res.data };
+        const notRegistered = NOT_REGISTERED.test(String(res.data?.error?.message ?? ''));
+        const code = res.status === 401 && !notRegistered ? 'auth' : 'not_set_up';
+        logRefusal(code, refused);
+        throw new ConnectorHttpError(code, `${where} answered ${res.status}`, {
           status: res.status,
         });
       }
       if (RETRY_STATUSES.has(res.status) && attempt < RETRIES) {
         const ms = retryAfterMs(lowerKeys(res.headers)) ?? 1000 * 2 ** attempt;
         if (ms <= MAX_WAIT_MS) {
-          await wait(ms);
+          await wait(ms, signal);
           continue;
         }
       }

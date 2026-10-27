@@ -181,8 +181,11 @@ export async function connectStore(
   return source;
 }
 
+/** Listing or checking a sign-in platform's accounts stops calling it after this: the person waits. */
+export const SIGN_IN_CALLS_MS = 30_000;
+
 /** The platform read with the workspace's sign-in, ready to call; or a StoreError. */
-async function signedIn(kind, brandId, { db, connectors, signInRequest }) {
+async function signedIn(kind, brandId, { db, connectors, signInRequest, callsMs }) {
   const connector = connectorFor(kind, connectors);
   if (!isSignIn(connector)) throw new StoreError(404, 'not_found', 'There is no such source.');
   if (!isComposioConfigured(connector.signIn)) {
@@ -192,7 +195,12 @@ async function signedIn(kind, brandId, { db, connectors, signInRequest }) {
       `${connector.label} isn't set up on this server yet.`,
     );
   }
-  const request = signInRequest(connector.signIn, await workspaceEntity(brandId, { db }));
+  const signed = signInRequest(connector.signIn, await workspaceEntity(brandId, { db }), {
+    hosts: connector.hosts,
+  });
+  // Every call stops at one deadline, however many the listing takes.
+  const deadline = AbortSignal.timeout(callsMs);
+  const request = (address, opts = {}) => signed(address, { ...opts, signal: deadline });
   return { connector, request };
 }
 
@@ -204,6 +212,14 @@ function signInFailure(connector, err) {
       409,
       'not_connected',
       `Connect ${connector.label} with Google in Settings › Integrations first.`,
+    );
+  }
+  if (err instanceof ConnectorHttpError && err.code === 'not_set_up') {
+    // Logged where it was refused (sign-in.js): reconnecting wouldn't help.
+    return new StoreError(
+      503,
+      'not_configured',
+      `${connector.label} isn't set up correctly on this server yet. Try again later.`,
     );
   }
   if (!(err instanceof ConnectorHttpError)) {
@@ -227,9 +243,19 @@ function signInFailure(connector, err) {
  */
 export async function listSignInAccounts(
   { brandId, kind },
-  { db = supabaseAdmin, connectors, signInRequest = workspaceSignIn } = {},
+  {
+    db = supabaseAdmin,
+    connectors,
+    signInRequest = workspaceSignIn,
+    callsMs = SIGN_IN_CALLS_MS,
+  } = {},
 ) {
-  const { connector, request } = await signedIn(kind, brandId, { db, connectors, signInRequest });
+  const { connector, request } = await signedIn(kind, brandId, {
+    db,
+    connectors,
+    signInRequest,
+    callsMs,
+  });
   try {
     return await connector.listAccounts({ request });
   } catch (err) {
@@ -244,13 +270,23 @@ export async function listSignInAccounts(
  */
 export async function connectSignInSource(
   { brandId, kind, input, userId },
-  { db = supabaseAdmin, connectors, signInRequest = workspaceSignIn } = {},
+  {
+    db = supabaseAdmin,
+    connectors,
+    signInRequest = workspaceSignIn,
+    callsMs = SIGN_IN_CALLS_MS,
+  } = {},
 ) {
   const value = input?.account;
   if (typeof value !== 'string' || !value.trim() || value.length > FIELD_MAX) {
     throw new StoreError(400, 'invalid', 'Pick an account to connect.');
   }
-  const { connector, request } = await signedIn(kind, brandId, { db, connectors, signInRequest });
+  const { connector, request } = await signedIn(kind, brandId, {
+    db,
+    connectors,
+    signInRequest,
+    callsMs,
+  });
   let result;
   try {
     result = await connector.checkAccount(value, { request });

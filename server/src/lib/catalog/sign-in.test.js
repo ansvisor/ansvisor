@@ -1,40 +1,55 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 import { ConnectorHttpError } from '../../connectors/http.js';
+import { logger } from '../logger.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
 import { signInRequest, workspaceEntity } from './sign-in.js';
 
-const URL_ = 'https://merchantapi.googleapis.com/products/v1/accounts/1/products';
+const HOST = 'merchantapi.googleapis.com';
+const URL_ = `https://${HOST}/products/v1/accounts/1/products`;
 
-function setup(answers, { active = async () => ({ id: 'ca_1' }) } = {}) {
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function setup(answers, { active = async () => ({ id: 'ca_1' }), hosts = [HOST], wait } = {}) {
   const queue = [...answers];
   const proxy = vi.fn(async () => {
     const next = queue.shift();
     if (next instanceof Error) throw next;
     return next;
   });
-  const wait = vi.fn(async () => {});
+  const waits = vi.fn(wait ?? (async () => {}));
   const request = signInRequest('google-merchant-center', 'org_1', {
+    hosts,
     active: vi.fn(active),
     proxy,
-    wait,
+    wait: waits,
   });
-  return { request, proxy, wait };
+  return { request, proxy, wait: waits };
 }
 
-const answer = (status, headers = {}) => ({
+const answer = (status, headers = {}, data = status < 300 ? { ok: true } : null) => ({
   status,
   headers,
-  data: status < 300 ? { ok: true } : null,
+  data,
 });
+
+/** An error as Composio's client throws its own refusals: its name, its status, its body in the message. */
+const composioError = (name, status, message) =>
+  Object.assign(new Error(`${status} ${message}`), { name, status });
 
 describe('signInRequest', () => {
   it('calls the API through the active connection, looked up once', async () => {
     const active = vi.fn(async () => ({ id: 'ca_1' }));
     const proxy = vi.fn(async () => answer(200));
-    const request = signInRequest('google-merchant-center', 'org_1', { active, proxy });
+    const request = signInRequest('google-merchant-center', 'org_1', {
+      hosts: [HOST],
+      active,
+      proxy,
+    });
     await request(URL_, { query: { pageSize: 1000 } });
     await request(URL_);
     expect(active).toHaveBeenCalledTimes(1);
@@ -46,7 +61,8 @@ describe('signInRequest', () => {
     });
   });
 
-  it("says the sign-in is gone when there's no active connection, or Google refuses it", async () => {
+  it("says the sign-in is gone when there's no active connection, Composio says it expired, or Google refuses it", async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
     await expect(setup([], { active: async () => null }).request(URL_)).rejects.toMatchObject({
       code: 'auth',
     });
@@ -54,14 +70,101 @@ describe('signInRequest', () => {
       code: 'auth',
       status: 401,
     });
-    await expect(setup([answer(403)]).request(URL_)).rejects.toMatchObject({
-      code: 'auth',
+    // Composio refusing an expired or revoked connection is the same, with no status of Google's.
+    const expired = await setup([new Error('Connected account is expired')])
+      .request(URL_)
+      .catch((e) => e);
+    expect(expired).toMatchObject({ code: 'auth', status: undefined });
+    await expect(
+      setup([
+        composioError('BadRequestError', 400, '{"error":{"slug":"ConnectedAccountRevoked"}}'),
+      ]).request(URL_),
+    ).rejects.toMatchObject({ code: 'auth' });
+  });
+
+  it("says this server's setup is refused, not the sign-in, on Composio's own 401 or 403 and Google's 403", async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    // Composio refusing the server's API key, or a key without the "Proxy execute" permission.
+    const badKey = await setup([
+      composioError('AuthenticationError', 401, '{"error":{"message":"Unauthorized"}}'),
+    ])
+      .request(URL_)
+      .catch((e) => e);
+    expect(badKey).toMatchObject({ code: 'not_set_up', status: undefined });
+    await expect(
+      setup([
+        composioError('PermissionDeniedError', 403, '{"error":{"message":"No permission"}}'),
+      ]).request(URL_),
+    ).rejects.toMatchObject({ code: 'not_set_up', status: undefined });
+
+    // Google: a scope missing, or the Cloud project not registered with Merchant Center.
+    const scope = {
+      error: {
+        code: 403,
+        status: 'PERMISSION_DENIED',
+        message: 'Request had insufficient authentication scopes.',
+        details: [
+          {
+            '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+            reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT',
+          },
+        ],
+      },
+    };
+    await expect(setup([answer(403, {}, scope)]).request(URL_)).rejects.toMatchObject({
+      code: 'not_set_up',
       status: 403,
     });
-    // Composio refusing an expired account is the same.
-    await expect(
-      setup([new Error('Connected account is expired')]).request(URL_),
-    ).rejects.toMatchObject({ code: 'auth' });
+    const unregistered = {
+      error: {
+        code: 401,
+        status: 'UNAUTHENTICATED',
+        message: 'GCP project with id p-1 is not registered with the merchant account.',
+      },
+    };
+    await expect(setup([answer(401, {}, unregistered)]).request(URL_)).rejects.toMatchObject({
+      code: 'not_set_up',
+      status: 401,
+    });
+
+    // Each is logged: its name and status, Google's own status and reason; never the query.
+    expect(warn.mock.calls.map(([fields]) => fields)).toEqual([
+      expect.objectContaining({
+        code: 'not_set_up',
+        host: HOST,
+        path: '/products/v1/accounts/:id/products',
+        err: { name: 'AuthenticationError', status: 401 },
+      }),
+      expect.objectContaining({
+        code: 'not_set_up',
+        err: { name: 'PermissionDeniedError', status: 403 },
+      }),
+      expect.objectContaining({
+        code: 'not_set_up',
+        err: { name: undefined, status: 403 },
+        google: { status: 'PERMISSION_DENIED', reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' },
+      }),
+      expect.objectContaining({
+        code: 'not_set_up',
+        err: { name: undefined, status: 401 },
+        google: { status: 'UNAUTHENTICATED', reason: undefined },
+      }),
+    ]);
+  });
+
+  it('logs a sign-in refused, without the query', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    await setup([answer(401, {}, { error: { status: 'UNAUTHENTICATED' } })])
+      .request(URL_, { query: { pageToken: 'secret-ish' } })
+      .catch(() => {});
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatchObject({
+      provider: 'google-merchant-center',
+      code: 'auth',
+      err: { status: 401 },
+      google: { status: 'UNAUTHENTICATED' },
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('secret-ish');
   });
 
   it('waits as Retry-After says on a 429, then 1, 2, 4 seconds, and gives up after three', async () => {
@@ -76,6 +179,48 @@ describe('signInRequest', () => {
     const stuck = setup([answer(429), answer(429), answer(429), answer(429)]);
     await expect(stuck.request(URL_)).rejects.toMatchObject({ code: 'rate_limited', status: 429 });
     expect(stuck.wait).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up at once when Retry-After asks for more than a minute', async () => {
+    const limited = setup([answer(429, { 'retry-after': '120' }), answer(200)]);
+    await expect(limited.request(URL_)).rejects.toMatchObject({
+      code: 'rate_limited',
+      status: 429,
+    });
+    expect(limited.wait).not.toHaveBeenCalled();
+    expect(limited.proxy).toHaveBeenCalledTimes(1);
+
+    const down = setup([answer(503, { 'Retry-After': '61' }), answer(200)]);
+    await expect(down.request(URL_)).rejects.toMatchObject({ code: 'http_error', status: 503 });
+    expect(down.wait).not.toHaveBeenCalled();
+  });
+
+  it('calls only the hosts it was given, over https', async () => {
+    const errorLog = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    for (const address of [
+      'https://evil.example/products/v1/accounts/1/products',
+      `http://${HOST}/products/v1/accounts/1/products`,
+      `https://${HOST}:8443/products/v1/accounts/1/products`,
+    ]) {
+      const { request, proxy } = setup([answer(200)]);
+      await expect(request(address)).rejects.toMatchObject({ code: 'blocked' });
+      expect(proxy).not.toHaveBeenCalled();
+    }
+    // A connector that names no host calls none.
+    const proxy = vi.fn(async () => answer(200));
+    const unnamed = signInRequest('google-merchant-center', 'org_1', {
+      active: async () => ({ id: 'ca_1' }),
+      proxy,
+    });
+    await expect(unnamed(URL_)).rejects.toMatchObject({ code: 'blocked' });
+    expect(proxy).not.toHaveBeenCalled();
+    await expect(setup([answer(200)]).request('/products')).rejects.toMatchObject({
+      code: 'invalid_url',
+    });
+    expect(errorLog).toHaveBeenCalledWith(
+      { provider: 'google-merchant-center', host: 'evil.example' },
+      '[catalog] sign-in call to a host not allowed',
+    );
   });
 
   it('names the host and path only, never the query', async () => {
@@ -105,6 +250,21 @@ describe('signInRequest', () => {
     await expect(
       setup([new Error('aborted')]).request(URL_, { signal: controller.signal }),
     ).rejects.toMatchObject({ code: 'timeout' });
+  });
+
+  it('stops waiting for a Retry-After when its deadline comes', async () => {
+    // The real wait: 50 s asked, the deadline 20 ms away.
+    const queue = [answer(429, { 'Retry-After': '50' }), answer(200)];
+    const request = signInRequest('google-merchant-center', 'org_1', {
+      hosts: [HOST],
+      active: async () => ({ id: 'ca_1' }),
+      proxy: async () => queue.shift(),
+    });
+    const started = Date.now();
+    await expect(request(URL_, { signal: AbortSignal.timeout(20) })).rejects.toMatchObject({
+      code: 'timeout',
+    });
+    expect(Date.now() - started).toBeLessThan(5000);
   });
 });
 

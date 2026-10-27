@@ -31,6 +31,8 @@ export const MAX_PAGES = 200;
 /** Accounts the picker lists at most, and the advanced accounts whose sub-accounts it reads. */
 export const MAX_ACCOUNTS = 500;
 export const MAX_PARENTS = 20;
+/** Countries an issue row keeps at most (00296). */
+const MAX_COUNTRIES = 300;
 
 const SEVERITIES = { NOT_IMPACTED: 'not_impacted', DEMOTED: 'demoted', DISAPPROVED: 'disapproved' };
 
@@ -101,10 +103,65 @@ export function issuesOf(product) {
       resolution: text(issue.resolution, 100),
       countries: (issue.applicableCountries ?? [])
         .filter((c) => typeof c === 'string' && /^[A-Z]{2}$/.test(c))
-        .slice(0, 300),
+        .slice(0, MAX_COUNTRIES),
     });
   }
   return out;
+}
+
+/** A listing's place among its offer's others (listingOrder). */
+function rankOf(product) {
+  return {
+    disapproved: (product?.productStatus?.itemLevelIssues ?? []).some(
+      (issue) => issue?.severity === 'DISAPPROVED',
+    ),
+    feedLabel: String(product?.feedLabel ?? ''),
+    contentLanguage: String(product?.contentLanguage ?? ''),
+  };
+}
+
+const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * The order of an offer's listings, the one the catalog keeps first, when
+ * Merchant Center lists the offer again under another language or feed
+ * label (the same offer id: the catalog keys items by id, so it keeps one):
+ * a listing with no disapproved issue first, then the first by feed label,
+ * then by content language, alphabetically (by code point, whatever the
+ * server's locale). The API names no two listings of an offer with the same
+ * feed label and language, so every sync keeps the same one, whatever order
+ * the API pages them in.
+ */
+export function listingOrder(a, b) {
+  return (
+    Number(a.disapproved) - Number(b.disapproved) ||
+    compare(a.feedLabel, b.feedLabel) ||
+    compare(a.contentLanguage, b.contentLanguage)
+  );
+}
+
+/**
+ * The issues of every listing of every offer, one row per issue: the same
+ * issue (code, destination, attribute and severity) of the same offer under
+ * another language or feed label adds its countries to the row. The row's
+ * words are its first listing's (listingOrder), and its countries come first.
+ *
+ * @param {{ rank: object, issue: ReturnType<typeof issuesOf>[number] }[]} found
+ */
+export function mergeIssues(found) {
+  const groups = new Map();
+  for (const entry of found) {
+    const { externalId, code, reportingContext, attribute, severity } = entry.issue;
+    const key = JSON.stringify([externalId, code, reportingContext, attribute, severity]);
+    const group = groups.get(key);
+    if (group) group.push(entry);
+    else groups.set(key, [entry]);
+  }
+  return [...groups.values()].map((group) => {
+    group.sort((a, b) => listingOrder(a.rank, b.rank));
+    const countries = [...new Set(group.flatMap((entry) => entry.issue.countries))];
+    return { ...group[0].issue, countries: countries.slice(0, MAX_COUNTRIES) };
+  });
 }
 
 /** The accounts on one page of `accounts.list` or `:listSubaccounts`. */
@@ -128,6 +185,7 @@ export default {
   kind: 'merchant_center',
   label: 'Google Merchant Center',
   signIn: 'google-merchant-center',
+  hosts: ['merchantapi.googleapis.com'],
 
   /**
    * The Merchant Center accounts the sign-in opens, for the person to pick
@@ -150,8 +208,16 @@ export default {
         );
         for (const sub of subs) if (!seen.has(sub.id)) seen.set(sub.id, sub);
       } catch (err) {
-        // A standalone account has no sub-accounts to list; the sign-in's own failure isn't that.
-        if (err instanceof ConnectorHttpError && err.code === 'auth' && !err.status) throw err;
+        // A standalone account has no sub-accounts to list: Google answers that account with
+        // an error. Anything else ends the listing: the sign-in gone or refused, this server's
+        // setup refused or Composio not reached (no status), the time up, or Google asking
+        // to wait, which the next account's call would only make worse.
+        const ownAnswer =
+          err instanceof ConnectorHttpError &&
+          err.status &&
+          err.code !== 'auth' &&
+          err.code !== 'rate_limited';
+        if (!ownAnswer) throw err;
       }
     }
     return [...seen.values()].slice(0, MAX_ACCOUNTS);
@@ -178,17 +244,21 @@ export default {
   },
 
   /**
-   * The account's products as the catalog's items, and their issues. A
-   * product listed again under another language or feed label (the same
-   * offer id) is kept once, the first time: the catalog keys items by id.
+   * The account's products as the catalog's items, and their issues. An
+   * offer listed again under another language or feed label (the same offer
+   * id) is one item: its listing first by listingOrder, whatever page it's
+   * on. The others are counted (`repeated`), not skipped, and their issues
+   * are kept with the item's (mergeIssues). Past MAX_PAGES the rest isn't
+   * read, and the first error says so.
    */
   async readCatalog(source, { request }) {
     const id = accountId(source.account);
     if (!id) throw new ConnectError('The source has no Merchant Center account id.');
-    const items = [];
-    const errors = [];
-    const issues = [];
-    const seen = new Set();
+    // Per offer id, its first listing so far (listingOrder), as an item or the error it makes.
+    // A listing with no offer id makes an error of its own.
+    const listings = new Map();
+    const found = [];
+    let repeated = 0;
     let row = 0;
     let pageToken;
     for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -197,27 +267,40 @@ export default {
       });
       for (const product of data?.products ?? []) {
         row += 1;
-        const offer = text(product?.offerId, 200);
-        if (offer && seen.has(offer)) {
-          errors.push({
-            row,
-            field: 'id',
-            found: offer,
-            message: `Item ${row}: offer ${offer} is listed again (${product.contentLanguage ?? '?'}, ${product.feedLabel ?? '?'}); the first is kept.`,
-          });
+        const rank = rankOf(product);
+        // Its issues are kept even when the product can't be: a missing price is one.
+        found.push(...issuesOf(product).map((issue) => ({ rank, issue })));
+        const listing = { rank, ...toItem(attributesOf(product), row, 'Item') };
+        const key = text(product?.offerId, 200) ?? Symbol('no offer id');
+        const kept = listings.get(key);
+        if (!kept) {
+          listings.set(key, listing);
           continue;
         }
-        if (offer) seen.add(offer);
-        // Its issues are kept even when the product can't be: a missing price is one.
-        issues.push(...issuesOf(product));
-        const out = toItem(attributesOf(product), row, 'Item');
-        if (out.item) items.push(out.item);
-        else errors.push(out.error);
+        repeated += 1;
+        if (listingOrder(rank, kept.rank) < 0) listings.set(key, listing);
       }
       pageToken = data?.nextPageToken || undefined;
       if (!pageToken) break;
     }
-    return { items, errors, issues, format: 'merchant_center' };
+    const items = [];
+    const errors = [];
+    for (const listing of listings.values()) {
+      if (listing.item) items.push(listing.item);
+      else errors.push(listing.error);
+    }
+    errors.sort((a, b) => a.row - b.row);
+    if (pageToken) {
+      // First, so it's among the errors the source keeps. The products not read are marked
+      // removed by the sync, like any the account no longer lists.
+      errors.unshift({
+        row: 0,
+        field: 'pages',
+        found: '',
+        message: `Only the first ${(MAX_PAGES * PAGE_SIZE).toLocaleString('en-US')} products were read: the rest aren't in the catalog.`,
+      });
+    }
+    return { items, errors, issues: mergeIssues(found), repeated, format: 'merchant_center' };
   },
 
   /** Merchant Center has no orders. */

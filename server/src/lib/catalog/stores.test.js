@@ -11,6 +11,7 @@ import { logger } from '../logger.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
 import { readCredentials } from './credentials.js';
 import {
+  SIGN_IN_CALLS_MS,
   StoreError,
   connectSignInSource,
   connectStore,
@@ -187,6 +188,7 @@ describe('a platform read with the workspace sign-in (#1270)', () => {
     kind: 'merchant_center',
     label: 'Google Merchant Center',
     signIn: 'google-merchant-center',
+    hosts: ['merchantapi.googleapis.com'],
     listAccounts: vi.fn(async () => [{ id: '123', name: 'Acme' }]),
     checkAccount: vi.fn(async (value) => {
       if (value !== '123')
@@ -221,8 +223,53 @@ describe('a platform read with the workspace sign-in (#1270)', () => {
     await expect(
       listSignInAccounts({ brandId: BRAND, kind: 'merchant_center' }, signInOpts()),
     ).resolves.toEqual([{ id: '123', name: 'Acme' }]);
-    expect(signInRequest).toHaveBeenCalledWith('google-merchant-center', 'org_org-1');
-    expect(gmc.listAccounts).toHaveBeenCalledWith({ request });
+    expect(signInRequest).toHaveBeenCalledWith('google-merchant-center', 'org_org-1', {
+      hosts: ['merchantapi.googleapis.com'],
+    });
+    expect(gmc.listAccounts).toHaveBeenCalledWith({ request: expect.any(Function) });
+  });
+
+  it('stops every call of a listing at one deadline, 30 seconds by default', async () => {
+    expect(SIGN_IN_CALLS_MS).toBe(30_000);
+    const signals = [];
+    const slow = vi.fn(async (_address, { signal } = {}) => {
+      signals.push(signal);
+      if (signals.length === 1) return { status: 200, headers: {}, data: {} };
+      // The second call answers only when its deadline stops it.
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () =>
+          reject(new ConnectorHttpError('timeout', 'GET took too long')),
+        );
+      });
+    });
+    gmc.listAccounts.mockImplementationOnce(async ({ request: call }) => {
+      await call('https://merchantapi.googleapis.com/accounts/v1/accounts');
+      await call('https://merchantapi.googleapis.com/accounts/v1/accounts/1:listSubaccounts');
+      return [];
+    });
+    await expect(
+      listSignInAccounts(
+        { brandId: BRAND, kind: 'merchant_center' },
+        { ...signInOpts(), signInRequest: () => slow, callsMs: 20 },
+      ),
+    ).rejects.toMatchObject({ status: 502, code: 'unreachable' });
+    expect(signals).toHaveLength(2);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(signals[1]).toBe(signals[0]);
+    expect(signals[0].aborted).toBe(true);
+  });
+
+  it("says the server isn't set up when its own setup is refused, not to reconnect", async () => {
+    gmc.listAccounts.mockRejectedValueOnce(
+      new ConnectorHttpError('not_set_up', 'Composio refused this server'),
+    );
+    await expect(
+      listSignInAccounts({ brandId: BRAND, kind: 'merchant_center' }, signInOpts()),
+    ).rejects.toMatchObject({
+      status: 503,
+      code: 'not_configured',
+      message: "Google Merchant Center isn't set up correctly on this server yet. Try again later.",
+    });
   });
 
   it('makes the source for the picked account, with no sign-in of its own', async () => {

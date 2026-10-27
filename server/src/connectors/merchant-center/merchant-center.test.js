@@ -6,9 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 import { signInRequest } from '../../lib/catalog/sign-in.js';
+import { logger } from '../../lib/logger.js';
 import { ConnectError } from '../errors.js';
 import { runSync } from '../testing.js';
-import merchantCenter, { API, PAGE_SIZE, accountId, moneyText } from './index.js';
+import merchantCenter, {
+  API,
+  MAX_ACCOUNTS,
+  MAX_PAGES,
+  MAX_PARENTS,
+  PAGE_SIZE,
+  accountId,
+  moneyText,
+} from './index.js';
 
 /**
  * The Merchant Center connector (#1270) against a fake of the Merchant API,
@@ -34,11 +43,15 @@ function google(routes, { connected = true } = {}) {
       : { status: 404, headers: {}, data: { error: { code: 404 } } };
   });
   const active = vi.fn(async () => (connected ? { id: 'ca_1' } : null));
-  const factory = vi.fn((provider, entityId) =>
-    signInRequest(provider, entityId, { active, proxy, wait: async () => {} }),
+  const factory = vi.fn((provider, entityId, options) =>
+    signInRequest(provider, entityId, { ...options, active, proxy, wait: async () => {} }),
   );
   return { factory, proxy, active };
 }
+
+/** The request the plumbing gives the connector, with the connector's own hosts. */
+const signedIn = (factory) =>
+  factory(merchantCenter.signIn, 'org_org-1', { hosts: merchantCenter.hosts });
 
 const products = () => ({
   [PRODUCTS]: (query) => ok(query.pageToken === 'page-2' ? page(2) : page(1)),
@@ -48,6 +61,8 @@ beforeEach(() => {
   // The server's Merchant Center sign-in is set up (composio.js isComposioConfigured).
   vi.stubEnv('COMPOSIO_API_KEY', 'test-composio-key');
   vi.stubEnv('COMPOSIO_GMC_AUTH_CONFIG_ID', 'ac_gmc');
+  // A refused sign-in is logged as a warning (sign-in.js): kept out of the run's output.
+  vi.spyOn(logger, 'warn').mockImplementation(() => {});
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -84,7 +99,9 @@ describe('readCatalog, through the real plumbing', () => {
     } = await runSync(merchantCenter, { account: ACCOUNT }, { signInRequest: factory });
 
     // The workspace's Merchant Center sign-in, a page at a time, at the API's largest page.
-    expect(factory).toHaveBeenCalledWith('google-merchant-center', 'org_org-1');
+    expect(factory).toHaveBeenCalledWith('google-merchant-center', 'org_org-1', {
+      hosts: ['merchantapi.googleapis.com'],
+    });
     expect(proxy.mock.calls.map(([, call]) => call.query)).toEqual([
       { pageSize: PAGE_SIZE, pageToken: undefined },
       { pageSize: PAGE_SIZE, pageToken: 'page-2' },
@@ -95,15 +112,13 @@ describe('readCatalog, through the real plumbing', () => {
       counts: {
         format: 'merchant_center',
         items: 2,
-        // The German listing of an offer read already, and a product with no price.
-        skipped: 2,
-        issues: { items: 2, disapproved: 1, demoted: 1, not_impacted: 1 },
+        // A product with no price; the German listing of an offer read already is counted apart.
+        skipped: 1,
+        repeated: 1,
+        issues: { items: 2, disapproved: 2, demoted: 1, not_impacted: 1 },
       },
     });
-    expect(outcome.counts.errors).toEqual([
-      'Item 3: offer TB-42-BRN is listed again (de, DE); the first is kept.',
-      'Item 4: price is missing.',
-    ]);
+    expect(outcome.counts.errors).toEqual(['Item 4: price is missing.']);
 
     // Colors of one item group are one product.
     expect(rows).toHaveLength(1);
@@ -127,10 +142,12 @@ describe('readCatalog, through the real plumbing', () => {
       availability: 'out_of_stock',
     });
 
-    // An item with no issues has none; one the catalog can't keep still has its own.
+    // An item with no issues has none; one the catalog can't keep still has its own; and the
+    // German listing's are the item's too: the same issue once, with both listings' countries.
     expect(issues.map((i) => [i.external_id, i.code, i.severity, i.reporting_context])).toEqual([
       ['TB-42-BRN', 'image_too_small', 'demoted', 'SHOPPING_ADS'],
       ['TB-42-BRN', 'image_too_small', 'not_impacted', 'FREE_LISTINGS'],
+      ['TB-42-BRN', 'landing_page_error', 'disapproved', 'SHOPPING_ADS'],
       ['SOCK-1', 'missing_price', 'disapproved', 'SHOPPING_ADS'],
     ]);
     expect(issues[0]).toMatchObject({
@@ -139,7 +156,7 @@ describe('readCatalog, through the real plumbing', () => {
       description: 'Image too small',
       detail: 'Use an image of at least 100 x 100 pixels',
       resolution: 'merchant_action',
-      countries: ['US', 'CA'],
+      countries: ['US', 'CA', 'DE'],
     });
   });
 
@@ -211,6 +228,124 @@ describe('readCatalog, through the real plumbing', () => {
   });
 });
 
+describe('readCatalog, an offer listed again', () => {
+  /** One listing of an offer, under a language and a feed label, with an issue in its countries. */
+  const listing = (
+    offerId,
+    contentLanguage,
+    feedLabel,
+    countries,
+    { disapproved = false } = {},
+  ) => ({
+    offerId,
+    contentLanguage,
+    feedLabel,
+    productAttributes: {
+      title: `Boot ${contentLanguage}-${feedLabel}`,
+      link: `https://shop.example/${contentLanguage}/boot`,
+      price: { amountMicros: '10000000', currencyCode: 'USD' },
+      availability: 'IN_STOCK',
+    },
+    productStatus: {
+      itemLevelIssues: [
+        {
+          code: 'image_too_small',
+          severity: 'DEMOTED',
+          attribute: 'image link',
+          reportingContext: 'SHOPPING_ADS',
+          description: `Words of ${contentLanguage}-${feedLabel}`,
+          applicableCountries: countries,
+        },
+        ...(disapproved
+          ? [
+              {
+                code: 'landing_page_error',
+                severity: 'DISAPPROVED',
+                attribute: 'link',
+                reportingContext: 'SHOPPING_ADS',
+                applicableCountries: countries,
+              },
+            ]
+          : []),
+      ],
+    },
+  });
+
+  /** The API, its products in pages of `size`, paged by the page's index. */
+  const paged = (all, size) =>
+    vi.fn(async (_url, { query }) => {
+      const at = Number(query.pageToken ?? 0);
+      const next = at + 1;
+      return {
+        status: 200,
+        headers: {},
+        data: {
+          products: all.slice(at * size, next * size),
+          nextPageToken: next * size < all.length ? String(next) : undefined,
+        },
+      };
+    });
+
+  const permutations = (list) =>
+    list.length <= 1
+      ? [list]
+      : list.flatMap((first, i) =>
+          permutations([...list.slice(0, i), ...list.slice(i + 1)]).map((rest) => [first, ...rest]),
+        );
+
+  it('keeps the same listing, and the same issues, whatever order the API pages them in', async () => {
+    const listings = [
+      // First by feed label, but disapproved: a listing that isn't comes first.
+      listing('BOOT', 'de', 'AT', ['AT'], { disapproved: true }),
+      listing('BOOT', 'en', 'US', ['US']),
+      listing('BOOT', 'fr', 'EU', ['FR', 'BE']),
+      // The same feed label as the French: the first language.
+      listing('BOOT', 'de', 'EU', ['DE', 'AT']),
+    ];
+    for (const order of permutations(listings)) {
+      const read = await merchantCenter.readCatalog(
+        { account: ACCOUNT },
+        { request: paged(order, 2) },
+      );
+      expect(read.items.map((item) => item.title)).toEqual(['Boot de-EU']);
+      expect(read.errors).toEqual([]);
+      expect(read.repeated).toBe(3);
+      expect(read.issues).toEqual([
+        expect.objectContaining({
+          externalId: 'BOOT',
+          code: 'image_too_small',
+          severity: 'demoted',
+          description: 'Words of de-EU',
+          countries: ['DE', 'AT', 'FR', 'BE', 'US'],
+        }),
+        expect.objectContaining({
+          externalId: 'BOOT',
+          code: 'landing_page_error',
+          severity: 'disapproved',
+          countries: ['AT'],
+        }),
+      ]);
+    }
+  });
+
+  it('says so, first, when it stops at MAX_PAGES', async () => {
+    const request = vi.fn(async (_url, { query }) => {
+      const n = Number(query.pageToken ?? 0);
+      return {
+        status: 200,
+        headers: {},
+        data: { products: [listing(`O-${n}`, 'en', 'US', ['US'])], nextPageToken: String(n + 1) },
+      };
+    });
+    const read = await merchantCenter.readCatalog({ account: ACCOUNT }, { request });
+    expect(request).toHaveBeenCalledTimes(MAX_PAGES);
+    expect(read.items).toHaveLength(MAX_PAGES);
+    expect(read.errors.map((e) => e.message)).toEqual([
+      "Only the first 200,000 products were read: the rest aren't in the catalog.",
+    ]);
+  });
+});
+
 describe('listAccounts', () => {
   it("lists the accounts the sign-in opens, and an advanced account's sub-accounts", async () => {
     const { factory } = google({
@@ -230,7 +365,7 @@ describe('listAccounts', () => {
         data: null,
       }),
     });
-    const request = factory('google-merchant-center', 'org_org-1');
+    const request = signedIn(factory);
     await expect(merchantCenter.listAccounts({ request })).resolves.toEqual([
       { id: '100', name: 'Acme (advanced)' },
       { id: '200', name: 'Other shop' },
@@ -240,8 +375,73 @@ describe('listAccounts', () => {
 
   it('says the sign-in is gone when the workspace has none', async () => {
     const { factory } = google({}, { connected: false });
-    const request = factory('google-merchant-center', 'org_org-1');
+    const request = signedIn(factory);
     await expect(merchantCenter.listAccounts({ request })).rejects.toMatchObject({ code: 'auth' });
+  });
+
+  const ACCOUNTS = `${API}/accounts/v1/accounts`;
+  const subCalls = (proxy) =>
+    proxy.mock.calls.filter(([, call]) => call.endpoint.endsWith(':listSubaccounts'));
+  const many = (n, from = 1000) =>
+    Array.from({ length: n }, (_, i) => ({ accountId: String(from + i), accountName: null }));
+
+  it('reads every page of the list', async () => {
+    const { factory, proxy } = google({
+      [ACCOUNTS]: (query) =>
+        query.pageToken === 'p2'
+          ? ok({ accounts: [{ accountId: '200', accountName: 'B' }] })
+          : ok({ accounts: [{ accountId: '100', accountName: 'A' }], nextPageToken: 'p2' }),
+    });
+    await expect(merchantCenter.listAccounts({ request: signedIn(factory) })).resolves.toEqual([
+      { id: '100', name: 'A' },
+      { id: '200', name: 'B' },
+    ]);
+    expect(
+      proxy.mock.calls.filter(([, call]) => call.endpoint === ACCOUNTS).map(([, c]) => c.query),
+    ).toEqual([
+      { pageSize: 500, pageToken: undefined },
+      { pageSize: 500, pageToken: 'p2' },
+    ]);
+  });
+
+  it('lists MAX_ACCOUNTS at most, and the sub-accounts of MAX_PARENTS', async () => {
+    const full = google({
+      [ACCOUNTS]: () => ok({ accounts: many(MAX_ACCOUNTS), nextPageToken: 'more' }),
+    });
+    await expect(
+      merchantCenter.listAccounts({ request: signedIn(full.factory) }),
+    ).resolves.toHaveLength(MAX_ACCOUNTS);
+    // No second page, and no sub-accounts: the list is full.
+    expect(full.proxy).toHaveBeenCalledTimes(1);
+
+    const parents = google({ [ACCOUNTS]: () => ok({ accounts: many(MAX_PARENTS + 10) }) });
+    await merchantCenter.listAccounts({ request: signedIn(parents.factory) });
+    expect(subCalls(parents.proxy)).toHaveLength(MAX_PARENTS);
+  });
+
+  it('stops when the sign-in goes, or Google asks to wait, while it lists sub-accounts', async () => {
+    const gone = google({
+      [ACCOUNTS]: () => ok({ accounts: many(3) }),
+      [`${ACCOUNTS}/1000:listSubaccounts`]: () => {
+        throw new Error('Connected account is expired');
+      },
+    });
+    await expect(
+      merchantCenter.listAccounts({ request: signedIn(gone.factory) }),
+    ).rejects.toMatchObject({ code: 'auth', status: undefined });
+    expect(subCalls(gone.proxy)).toHaveLength(1);
+
+    const waiting = google({
+      [ACCOUNTS]: () => ok({ accounts: many(3) }),
+      [`${ACCOUNTS}/1000:listSubaccounts`]: () => ({ status: 429, headers: {}, data: null }),
+    });
+    await expect(
+      merchantCenter.listAccounts({ request: signedIn(waiting.factory) }),
+    ).rejects.toMatchObject({ code: 'rate_limited' });
+    // The first account's call and its three tries again; none for the next accounts.
+    expect(subCalls(waiting.proxy).map(([, call]) => call.endpoint)).toEqual(
+      Array(4).fill(`${ACCOUNTS}/1000:listSubaccounts`),
+    );
   });
 });
 
@@ -252,7 +452,7 @@ describe('checkAccount', () => {
   };
 
   it('confirms the account the person picked, with its name', async () => {
-    const request = google(routes).factory('google-merchant-center', 'org_org-1');
+    const request = signedIn(google(routes).factory);
     await expect(merchantCenter.checkAccount(`accounts/${ACCOUNT}`, { request })).resolves.toEqual({
       account: ACCOUNT,
       label: 'Acme Outdoor',
@@ -261,7 +461,7 @@ describe('checkAccount', () => {
   });
 
   it("says so in plain words when the sign-in can't open it, or it isn't an id", async () => {
-    const request = google(routes).factory('google-merchant-center', 'org_org-1');
+    const request = signedIn(google(routes).factory);
     await expect(merchantCenter.checkAccount('987654321', { request })).rejects.toThrow(
       new ConnectError("This Google sign-in can't open that Merchant Center account."),
     );

@@ -100,8 +100,12 @@ Some platforms sign in with OAuth through a provider Composio already handles fo
 - **Picking the account:**
   - `listAccounts(ctx)` returns the accounts the sign-in opens, as `{ id, name }`.
   - The person picks one. `POST /api/catalog/sources` with `input: { account }` then calls `checkAccount(value, ctx)`, which returns `{ account, label?, url? }` or throws a ConnectError.
-- **Calls:** `ctx.request(url, { query, signal })` goes through Composio's proxy (`server/src/lib/catalog/sign-in.js`). It answers like the HTTP client and throws the same `ConnectorHttpError` codes. When the sign-in is gone or refused, the source shows "Reconnect it in Settings › Integrations".
+- **Calls:** `ctx.request(url, { query, signal })` goes through Composio's proxy (`server/src/lib/catalog/sign-in.js`), to the hosts your connector names in `hosts` only (Merchant Center's is `merchantapi.googleapis.com`). It answers like the HTTP client and throws the same `ConnectorHttpError` codes, and one more:
+  - `auth`: the sign-in is gone or refused. The source shows "Reconnect it in Settings › Integrations".
+  - `not_set_up`: the server's own setup is refused, not the sign-in: Composio's API key, or Google's 403 (the Google Cloud project not registered with Merchant Center, a scope missing). Reconnecting wouldn't help, so the source says the server isn't set up correctly. Both are logged as warnings, with Google's reason, for whoever runs the server.
+  - Listing accounts and checking one stop after 30 seconds in all; a sync's calls after 10 minutes.
 - **Issues:** `readCatalog` may also return `issues`, the platform's problems per item. The plumbing replaces the source's rows in `catalog_item_issues` with them (00296) and counts them on the source (`last_counts.issues`).
+- **The same item listed again:** Merchant Center lists an offer once per language and feed label. The catalog keeps one (a listing that isn't disapproved first, then by feed label and language), keeps the issues of all of them, and counts the others in `repeated` (`last_counts.repeated`), not as skipped.
 - **Testing:** pass `runSync` a `signInRequest` stand-in. `merchant-center.test.js` builds one from the real `signInRequest` with a fake proxy.
 
 ## Testing
