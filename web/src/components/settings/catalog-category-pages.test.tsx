@@ -124,6 +124,17 @@ describe('CatalogCategoryPages', () => {
     expect(text).toContain('Set by hand');
     expect(text).toContain('No page');
     expect(text).toContain('Nothing on your site reads as it');
+    // Four columns, with how a page was found under it, so the table fits a narrow card.
+    expect(container.querySelectorAll('thead th')).toHaveLength(4);
+  });
+
+  it("gives the form the page's cell and the button's while a category is changed", async () => {
+    await render();
+    await act(async () => button('Change the page for Sleeping Bags')!.click());
+    const input = container.querySelector('input[aria-label="Page address for Sleeping Bags"]')!;
+    expect(input.closest('td')!.colSpan).toBe(2);
+    expect(input.closest('tr')!.querySelectorAll('td')).toHaveLength(3);
+    expect(button('Change the page for Sleeping Bags')).toBeFalsy();
   });
 
   it("changes a category's page, and says why one can't be kept", async () => {

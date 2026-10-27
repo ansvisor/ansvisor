@@ -7967,7 +7967,6 @@
         "category": "Category",
         "productsHeading": "Products",
         "pageHeading": "Page on your site",
-        "howHeading": "How we found it",
         "actions": "Actions",
         "products": "{products, plural, one {# product} other {# products}} · {inStock} in stock",
         "noPage": "No page",
