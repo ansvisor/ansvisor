@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { jsonbBytes } from '@/lib/content/draft-inputs';
+import { variantStock } from '@/lib/content/feed-match';
+import { MAX_BLOCK_PRODUCTS } from '@/lib/content/product-block';
 import {
   NO_PATH_REASONS,
   shoppingChoicesSchema,
@@ -188,4 +190,134 @@ export async function searchCatalogProducts(
     .limit(8);
   if (error) throw new Error(error.message);
   return (data ?? []).map((p) => ({ id: p.id, title: p.title, url: p.url ?? null }));
+}
+
+/** A catalog product as a product card shows it (product-block.ts). */
+export interface BlockProductRead {
+  id: string;
+  title: string;
+  url: string | null;
+  image: string | null;
+  price: number | null;
+  salePrice: number | null;
+  currency: string | null;
+  /** A live variant is in stock (feed-match.ts variantStock): only then does it go in a block. */
+  inStock: boolean;
+}
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+interface VariantRead {
+  url: string | null;
+  price: number | null;
+  sale_price: number | null;
+  currency: string | null;
+  availability: string | null;
+}
+
+/**
+ * The variant a card shows, as the API's path picks it (shopping-path.js
+ * offerOf): the cheapest in stock, its sale price first; null with none in
+ * stock.
+ */
+function blockVariant(variants: VariantRead[]): VariantRead | null {
+  const inStock = variants.filter((v) => variantStock(v.availability) === 'in');
+  const sellsAt = (v: VariantRead) => v.sale_price ?? v.price ?? 0;
+  return (
+    inStock.filter((v) => v.price != null).sort((a, b) => sellsAt(a) - sellsAt(b))[0] ??
+    inStock[0] ??
+    null
+  );
+}
+
+/**
+ * A product's live variants and, with `image`, its picture, read for it
+ * alone, so no product's are cut off by another's: the product's own
+ * first picture, else a variant's first.
+ */
+async function readBlockDetails(supabase: Client, id: string, image: boolean) {
+  const [variants, images] = await Promise.all([
+    supabase
+      .from('catalog_variants')
+      .select('url, price, sale_price, currency, availability')
+      .eq('product_id', id)
+      .is('removed_at', null),
+    image
+      ? supabase
+          .from('catalog_images')
+          .select('url')
+          .eq('product_id', id)
+          .order('variant_id', { ascending: true, nullsFirst: true })
+          .order('position', { ascending: true })
+          .limit(1)
+      : null,
+  ]);
+  if (variants.error) throw new Error(variants.error.message);
+  if (images?.error) throw new Error(images.error.message);
+  return { variants: variants.data ?? [], image: images?.data?.[0]?.url ?? null };
+}
+
+/** A product as a card shows it, from its row and its details. */
+function blockProduct(
+  product: { id: string; title: string; url: string | null },
+  details: Awaited<ReturnType<typeof readBlockDetails>>,
+): BlockProductRead {
+  const variant = blockVariant(details.variants);
+  return {
+    id: product.id,
+    title: product.title,
+    url: product.url ?? details.variants.find((v) => v.url)?.url ?? null,
+    image: details.image,
+    price: variant?.price ?? null,
+    salePrice: variant?.sale_price ?? null,
+    currency: variant?.currency ?? null,
+    inStock: variant !== null,
+  };
+}
+
+/**
+ * The brand's catalog products by id, as a product card shows them: the
+ * product's page, its picture, and the price of its cheapest variant in
+ * stock (none, and `inStock` false, when none is). In the order asked,
+ * MAX_BLOCK_PRODUCTS at most; a product gone from the catalog is left out.
+ */
+export async function getProductsForBlock(
+  brandId: string,
+  ids: string[],
+): Promise<BlockProductRead[]> {
+  const wanted = [...new Set(ids)]
+    .filter((id) => guid.safeParse(id).success)
+    .slice(0, MAX_BLOCK_PRODUCTS);
+  if (!guid.safeParse(brandId).success || !wanted.length) return [];
+  const supabase = await createClient();
+  const [products, details] = await Promise.all([
+    supabase
+      .from('catalog_products')
+      .select('id, title, url')
+      .eq('brand_id', brandId)
+      .is('removed_at', null)
+      .in('id', wanted),
+    Promise.all(wanted.map((id) => readBlockDetails(supabase, id, true))),
+  ]);
+  if (products.error) throw new Error(products.error.message);
+  const byId = new Map((products.data ?? []).map((p) => [p.id, p]));
+  return wanted.flatMap((id, i) => {
+    const product = byId.get(id);
+    return product ? [blockProduct(product, details[i])] : [];
+  });
+}
+
+/**
+ * + Insert › Products' search: the brand's live catalog products whose
+ * title holds `query` (searchCatalogProducts), each with its price and
+ * stock as a card shows them; no picture.
+ */
+export async function searchProductsForBlock(
+  brandId: string,
+  query: string,
+): Promise<BlockProductRead[]> {
+  const hits = await searchCatalogProducts(brandId, query);
+  if (!hits.length) return [];
+  const supabase = await createClient();
+  const details = await Promise.all(hits.map((hit) => readBlockDetails(supabase, hit.id, false)));
+  return hits.map((hit, i) => blockProduct(hit, details[i]));
 }

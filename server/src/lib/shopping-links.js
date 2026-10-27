@@ -71,8 +71,13 @@ const CURRENCY_SIGNS = {
 
 /** A product's price, the sale price first; null with none. */
 function amountOf(product) {
-  const amount = product.salePrice ?? product.price;
-  return amount != null && Number.isFinite(Number(amount)) ? Number(amount) : null;
+  // As the card reads it (shopping-blocks.js priceText): an amount of 0 is
+  // none, and the sale price counts only under the price.
+  const positive = (value) =>
+    value != null && Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
+  const regular = positive(product.price);
+  const sale = positive(product.salePrice);
+  return sale != null && regular != null && sale < regular ? sale : regular;
 }
 
 /** A product's price and stock as the agent is told them: "189.00 USD, in stock". */
@@ -243,8 +248,8 @@ async function withOffer(db, brandId, products, draftId) {
  * The draft's shopping path as the agent writes with it, or null: read as
  * shopping-path.js reads it (none when it isn't a path), its pages only
  * https ones on the brand's own site (a stored path is a member's to
- * change), its products' stock as the catalog has it now. The site not
- * read, it has none: nothing it can't check is linked.
+ * change), its products' stock and prices as the catalog has them now.
+ * The site not read, it has none: nothing it can't check is linked.
  */
 export async function shoppingPathFor(draft, { db = supabaseAdmin } = {}) {
   const path = readShoppingPath(draft.shopping_path, { draftId: draft.id });

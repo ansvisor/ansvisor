@@ -84,6 +84,7 @@ const ownRows = ($, table) =>
  * A page's publishable HTML as Webflow's rich text keeps it:
  *   - a table becomes a list, a row an item ("Header: cell · …"), a table in
  *     a cell first: rich text has no tables (#1331);
+ *   - a product card or grid becomes a list, a product an item ("Name $189.00");
  *   - images and media are left out until workspace files (CHAT-06, #1331),
  *     a figure of one with its caption; scripts (the JSON-LD has its own
  *     field), embeds, forms and rules go too;
@@ -138,6 +139,23 @@ export function toWebflowRichText(html) {
       items.length ? `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>` : '',
     );
   }
+
+  // A product card or grid (the editor's product-block.ts, shopping-blocks.js)
+  // as a list: a product an item, its name linked, its price after it.
+  $('.ansvisor-products').each((_, grid) => {
+    const items = $(grid)
+      .find('a.ansvisor-product')
+      .toArray()
+      .flatMap((card) => {
+        const name = squash($(card).find('strong').text());
+        if (!name) return [];
+        const price = squash($(card).find('span').text());
+        const $item = $('<li></li>').append($(card).text(name));
+        if (price) $item.append(` ${escape(price)}`);
+        return [$item];
+      });
+    $(grid).replaceWith(items.length ? $('<ul></ul>').append(items) : '');
+  });
 
   // A figure of media goes with its caption; a figure of words (a table's) keeps them.
   $('figure').each((_, figure) => {

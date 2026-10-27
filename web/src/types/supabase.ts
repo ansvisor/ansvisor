@@ -868,6 +868,55 @@ export type Database = {
           },
         ]
       }
+      catalog_images: {
+        Row: {
+          brand_id: string
+          id: string
+          position: number
+          product_id: string
+          url: string
+          variant_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          id?: string
+          position?: number
+          product_id: string
+          url: string
+          variant_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          id?: string
+          position?: number
+          product_id?: string
+          url?: string
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_images_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_images_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_products: {
         Row: {
           brand_id: string
