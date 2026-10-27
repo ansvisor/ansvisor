@@ -291,3 +291,34 @@ describe('no number without a source', () => {
     expect([...knownNumbers(htmlText('<td>1:16</td><td>2026</td>'))]).toEqual(['1', '16', '2026']);
   });
 });
+
+describe('long input read quickly (#1544 review)', () => {
+  const known = knownNumbers('Trackers in 2026 cost $1,299 a year.');
+  const time = (read) => {
+    const started = Date.now();
+    read();
+    return Date.now() - started;
+  };
+
+  it('puts thousands of numbers on one line, and reads an opening bracket with no closing one, in time near its length', () => {
+    // A character past Latin-1 (Ü) in each: V8 skips no position then.
+    // 20,000 numbers: the text rebuilt per number took over a second (main,
+    // 2026-10-26); built once, under 10 ms.
+    const line = `Ürün: ${'Teams see 40% more. '.repeat(20_000)}`;
+    placeholderNumbers('Teams see 40% more.', known);
+    let out;
+    expect(time(() => (out = placeholderNumbers(line, known)))).toBeLessThan(400);
+    expect(out).toBe(`Ürün: ${`Teams see ${NUMBER_PLACEHOLDER} more. `.repeat(20_000)}`);
+    const open = `Ürün ${'[a '.repeat(20_000)}40% more.`;
+    addedNumbers(open.slice(0, 40), known);
+    expect(time(() => addedNumbers(open, known))).toBeLessThan(150);
+    expect(addedNumbers(open, known).map((n) => n.value)).toEqual(['40']);
+    // A unit that runs into the next number's sign is that one's: the space stays.
+    expect(placeholderNumbers('Teams 40 %50 more.', known)).toBe(
+      `Teams ${NUMBER_PLACEHOLDER} ${NUMBER_PLACEHOLDER} more.`,
+    );
+    expect(placeholderNumbers('%40 %50 more.', known)).toBe(
+      `${NUMBER_PLACEHOLDER} ${NUMBER_PLACEHOLDER} more.`,
+    );
+  });
+});

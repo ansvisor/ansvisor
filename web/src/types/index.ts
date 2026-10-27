@@ -252,6 +252,9 @@ export interface ContentOpportunitySourceData {
     actionNo: number | null;
     taskId: string;
     task?: {
+      /** The exact page, and the change to make there (AC-010). */
+      url?: string;
+      change?: { before: string | null; after: string } | null;
       where?: string;
       why?: string;
       how?: string[];

@@ -45,6 +45,7 @@ const ACTIONS = [
 ];
 
 let actionRows: Record<string, unknown>[] = ACTIONS;
+let taskRows: Record<string, unknown>[] = [];
 
 function builder(table: string) {
   const chain = {
@@ -65,7 +66,10 @@ function builder(table: string) {
       error: null,
     }),
     then: (resolve: (v: { data: unknown; error: null }) => void) =>
-      resolve({ data: table === 'actions' ? actionRows : [], error: null }),
+      resolve({
+        data: table === 'actions' ? actionRows : table === 'action_tasks' ? taskRows : [],
+        error: null,
+      }),
   };
   return chain;
 }
@@ -133,6 +137,68 @@ describe('listActionsFor', () => {
 });
 
 describe('getActionFor', () => {
+  it("gives each task the exact page, the change and how it's checked (AC-010)", async () => {
+    taskRows = [
+      {
+        id: 't1',
+        position: 1,
+        task_key: null,
+        title: 'Add an H2 to /blog/tracking',
+        status: 'todo',
+        details: {
+          url: '/blog/tracking',
+          change: { before: null, after: 'H2 "How accurate is AI search tracking?"' },
+          doneWhen: 'H2 present · answer under 60 words · page re-fetched',
+          check: 'auto',
+        },
+      },
+    ];
+    try {
+      const action = await getActionFor(auth, 'a1');
+      expect(action?.tasks[0].details).toMatchObject({
+        url: '/blog/tracking',
+        change: { before: null, after: 'H2 "How accurate is AI search tracking?"' },
+        done_when: 'H2 present · answer under 60 words · page re-fetched',
+        check: 'auto',
+      });
+    } finally {
+      taskRows = [];
+    }
+  });
+
+  it("gives a library task its template's Done when (AC-010)", async () => {
+    taskRows = [
+      {
+        id: 't2',
+        position: 1,
+        task_key: 'refresh_content',
+        title: null,
+        status: 'todo',
+        details: { check: 'auto', source: 'template' },
+      },
+      {
+        id: 't3',
+        position: 2,
+        task_key: 'analyze_citations',
+        title: null,
+        status: 'todo',
+        details: null,
+      },
+    ];
+    try {
+      const action = await getActionFor(auth, 'a1');
+      expect(action?.tasks[0].details).toMatchObject({
+        check: 'auto',
+        done_when:
+          'The page has its new facts and date, or its draft is marked ready in the Content Editor',
+      });
+      // The analysis has no template.
+      expect(action?.tasks[1].details).toBeNull();
+    } finally {
+      taskRows = [];
+    }
+  });
+
   it('gives the action its priority', async () => {
     const action = await getActionFor(auth, 'a1');
     expect(action?.priority).toEqual({

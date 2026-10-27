@@ -164,6 +164,7 @@ async function openCycle({
       permission: item.permission,
       depends_on: item.dependsOn,
       title_params: item.titleParams,
+      details: item.details,
     })),
   );
   if (tasksErr) throw new Error(tasksErr.message);

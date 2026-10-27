@@ -4,16 +4,19 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUserRole } from '@/hooks/use-user-role';
 import { getNewSignalCount } from '@/lib/actions/signals';
+import { getTaskReviewCount } from '@/lib/actions/action-task-reviews';
 import { cn } from '@/lib/utils';
-import { ACTION_CENTER_TABS } from '@/lib/action-center/tabs';
+import { ACTION_CENTER_TABS, REVIEW_TAB, TASK_REVIEWS_CHANGED } from '@/lib/action-center/tabs';
 import { FirstRunNote } from './first-run-note';
 
 /**
- * The Action Center's section nav: Actions | Signals | KPIs | History.
- * Route-backed rather than state-backed tabs so each section is linkable
- * and the browser back button works across them. The first run's note sits
- * under it while a new brand's first analysis goes on.
+ * The Action Center's section nav: Actions | Signals | KPIs | History, and
+ * Needs review for admins and managers (AC-010). Route-backed rather than
+ * state-backed tabs so each section is linkable and the browser back button
+ * works across them. The first run's note sits under it while a new brand's
+ * first analysis goes on.
  */
 export function ActionCenterTabs() {
   const pathname = usePathname();
@@ -36,10 +39,35 @@ export function ActionCenterTabs() {
     };
   }, [brandId, pathname]);
 
+  // Tasks waiting for review, on their own tab: admins and managers fill and approve them.
+  const { canManage } = useUserRole();
+  // Kept with its brand: another brand's count isn't shown while this one's loads.
+  const [reviewCount, setReviewCount] = useState<{ brandId: string; count: number } | null>(null);
+  const reviews = reviewCount && reviewCount.brandId === brandId ? reviewCount.count : 0;
+  useEffect(() => {
+    if (!brandId || !canManage) return;
+    let cancelled = false;
+    const load = () => {
+      getTaskReviewCount(brandId)
+        .then((count) => {
+          if (!cancelled) setReviewCount({ brandId, count });
+        })
+        .catch(() => {});
+    };
+    load();
+    // Approved or dismissed on the review page itself.
+    window.addEventListener(TASK_REVIEWS_CHANGED, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TASK_REVIEWS_CHANGED, load);
+    };
+  }, [brandId, canManage, pathname]);
+  const tabs = canManage ? [...ACTION_CENTER_TABS, REVIEW_TAB] : ACTION_CENTER_TABS;
+
   return (
     <>
       <nav className="flex gap-6 border-b" aria-label={t('label')}>
-        {ACTION_CENTER_TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = pathname.startsWith(tab.href);
           return (
             <Link
@@ -57,6 +85,11 @@ export function ActionCenterTabs() {
               {tab.key === 'signals' && newSignals > 0 && (
                 <span className="ml-1.5 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
                   {newSignals}
+                </span>
+              )}
+              {tab.key === 'review' && reviews > 0 && (
+                <span className="ml-1.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                  {reviews}
                 </span>
               )}
             </Link>

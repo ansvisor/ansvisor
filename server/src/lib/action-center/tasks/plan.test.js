@@ -20,6 +20,34 @@ const keys = (plan) => plan.map((item) => item.taskKey);
  * brands, different plans. Everything else here is the machinery that makes
  * that safe to do.
  */
+describe('planTasks: what each task says it is done by (AC-010)', () => {
+  it('gives a task its template’s details, and a change on a page the action’s one page', () => {
+    const definition = {
+      id: 'x',
+      tasks: ['analyze_citations', 'optimize_content', 'validate_citations'],
+    };
+    const payload = {
+      targetEntity: 'pages',
+      targetCount: 1,
+      targets: [{ id: '/pricing', label: '/pricing' }],
+    };
+    const plan = planTasks(definition, { sources: ALL, payload });
+    expect(
+      plan.map((item) => [item.taskKey, item.details?.check ?? null, item.details?.url ?? null]),
+    ).toEqual([
+      ['analyze_citations', null, null],
+      ['optimize_content', 'auto', '/pricing'],
+      ['validate_citations', 'rerun', null],
+    ]);
+    // Two pages: no one page to name.
+    const two = planTasks(definition, {
+      sources: ALL,
+      payload: { ...payload, targetCount: 2, targets: [{ id: '/a' }, { id: '/b' }] },
+    });
+    expect(two[1].details).not.toHaveProperty('url');
+  });
+});
+
 describe('planTasks', () => {
   const definition = {
     id: 'recover_visibility',

@@ -155,6 +155,15 @@ describe('generateActionsForBrand', () => {
       .rows.map((r) => r.task_key);
     expect(keys).toContain('validate_ai_visibility');
     expect(keys.at(-1)).toBe('measure_action_outcome');
+    // Each with its template's check (AC-010); the analysis none.
+    const rows = writes.inserted.find((w) => w.table === 'action_tasks').rows;
+    expect(rows.find((r) => r.task_key === 'validate_ai_visibility').details).toEqual({
+      check: 'rerun',
+      source: 'template',
+    });
+    const analysis = rows.find((r) => r.task_key.startsWith('analyze_'));
+    expect(analysis).toBeDefined();
+    expect(analysis.details).toBeNull();
   });
 
   /**

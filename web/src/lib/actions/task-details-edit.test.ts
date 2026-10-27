@@ -38,10 +38,14 @@ const { updateTaskDetails } = await import('./action-center');
 
 const edit = {
   title: null,
+  url: ' /pricing ',
   where: ' acme.example/pricing ',
   why: '',
+  before: '',
+  after: 'A table of plans and prices.',
   how: ['Add a table.', ''],
   doneWhen: 'Cited again within 14 days.',
+  check: 'rerun' as const,
   type: 'content' as const,
   effort: '~1h',
   role: '',
@@ -68,10 +72,13 @@ describe('updateTaskDetails', () => {
       platform: 'chatgpt-web',
       platformLabel: 'ChatGPT',
       sources: [{ type: 'domain', ref: 'profound.com' }],
+      url: '/pricing',
       where: 'acme.example/pricing',
       why: null,
+      change: { before: null, after: 'A table of plans and prices.' },
       how: ['Add a table.'],
       doneWhen: 'Cited again within 14 days.',
+      check: 'rerun',
       type: 'content',
       effort: '~1h',
       role: null,
@@ -79,6 +86,14 @@ describe('updateTaskDetails', () => {
     // The text was not changed, so a library task keeps rendering from its template.
     expect(updates[0]).not.toHaveProperty('title');
     expect(events[0]).toMatchObject({ event: 'task_edited', data: { taskId: 't1', title: null } });
+  });
+
+  it("makes a template's details the person's once edited (AC-010)", async () => {
+    stored = { doneWhen: 'The changed page is live', check: 'auto', source: 'template' };
+    await updateTaskDetails('b1', 'a1', 't1', edit);
+    // As written to the database: an undefined key isn't.
+    expect(JSON.parse(JSON.stringify(updates[0].details))).not.toHaveProperty('source');
+    expect(updates[0].details).toMatchObject({ check: 'rerun', url: '/pricing' });
   });
 
   it('writes a changed text', async () => {
