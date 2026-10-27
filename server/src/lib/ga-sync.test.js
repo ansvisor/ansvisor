@@ -2,13 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The module imports the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain. The
-// stub records deletes and their filters.
+// stub records deletes and their filters, and answers reads from `tables`.
 const deletes = [];
+const calls = [];
 let deleteError = null;
+let tables = {};
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => {
       const call = { table, filters: [] };
+      calls.push(call);
       const filter = (op) => (col, val) => {
         call.filters.push([op, col, val]);
         return chain;
@@ -18,16 +21,23 @@ vi.mock('../config/supabase.js', () => ({
           deletes.push(call);
           return chain;
         },
+        select: () => chain,
         eq: filter('eq'),
         is: filter('is'),
         gte: filter('gte'),
         lte: filter('lte'),
-        then: (resolve) => resolve({ error: deleteError }),
+        lt: filter('lt'),
+        in: filter('in'),
+        not: filter('not'),
+        then: (resolve) => resolve({ data: tables[table] ?? [], error: deleteError }),
       };
       return chain;
     },
   },
 }));
+vi.mock('./composio.js', () => ({ isComposioConfigured: () => true, runGaReport: vi.fn() }));
+const activeOrgFilter = vi.hoisted(() => vi.fn());
+vi.mock('./active-subscriptions.js', () => ({ activeOrgFilter }));
 
 import { AI_SOURCES_VERSION } from './ai-sources.js';
 import { GA_AI_SOURCE_PATTERN, classifyGaSource, gaAiPlatform } from './ga-sources.js';
@@ -42,6 +52,7 @@ import {
   mapItemRows,
   mapPageRows,
   readReportRows,
+  runGaSync,
   unclassifiedSources,
 } from './ga-sync.js';
 
@@ -585,5 +596,40 @@ describe('unclassifiedSources', () => {
     expect(unclassifiedSources(raw, { minSessions: 400 })).toEqual([
       { source: '(direct)', sessions: 1477 },
     ]);
+  });
+});
+
+/**
+ * Once an organization's plan has ended (2026-10-27), the nightly sync
+ * leaves it out: nothing is read from Analytics for it.
+ */
+describe('runGaSync', () => {
+  beforeEach(() => {
+    calls.length = 0;
+    deleteError = null;
+    tables = {
+      integration_connections: [
+        { organization_id: 'paying' },
+        { organization_id: 'lapsed' },
+        { organization_id: 'paying' },
+      ],
+      brands: [],
+    };
+    activeOrgFilter.mockReset().mockResolvedValue((orgId) => orgId === 'paying');
+  });
+
+  it('syncs only the organizations still on a plan', async () => {
+    await runGaSync();
+
+    expect(activeOrgFilter).toHaveBeenCalledWith(['paying', 'lapsed']);
+    const brands = calls.find((call) => call.table === 'brands');
+    expect(brands.filters).toContainEqual(['in', 'organization_id', ['paying']]);
+  });
+
+  it('reads no brand when no connected organization is on a plan', async () => {
+    activeOrgFilter.mockResolvedValue(() => false);
+
+    expect(await runGaSync()).toEqual({ synced: 0, skipped: 0, results: [] });
+    expect(calls.some((call) => call.table === 'brands')).toBe(false);
   });
 });
