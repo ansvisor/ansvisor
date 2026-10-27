@@ -26,6 +26,9 @@ export const MAX_ANSWER_BYTES = 8 * 1024;
 
 const USER_AGENT = 'Ansvisor-Webhook/1.0 (+https://ansvisor.com)';
 
+/** A 3xx: an answer that sends elsewhere, so the body never arrived (none is followed). */
+export const isRedirect = (status) => status >= 300 && status < 400;
+
 /**
  * A webhook address, checked as a page's is but on any port; throws
  * 'invalid_url' or 'blocked'. `privateOk` (self-hosted) takes a private one.

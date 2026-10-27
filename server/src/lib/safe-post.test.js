@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PageFetchError, publicOnlyLookup } from './safe-fetch.js';
-import { MAX_ANSWER_BYTES, checkWebhookUrl, postJson } from './safe-post.js';
+import { MAX_ANSWER_BYTES, checkWebhookUrl, isRedirect, postJson } from './safe-post.js';
 
 /**
  * Posting a content package to a workspace's webhook (Send to CMS, #1331)
@@ -27,6 +27,19 @@ describe('checkWebhookUrl', () => {
     ['http://[::ffff:0:127.0.0.1]/hook', 'blocked'],
   ])('refuses %s', (address, code) => {
     expect(() => checkWebhookUrl(address)).toThrow(expect.objectContaining({ code }));
+  });
+});
+
+describe('isRedirect', () => {
+  it('takes a 3xx, and nothing either side of it', () => {
+    expect([299, 300, 302, 308, 399, 400].map(isRedirect)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
   });
 });
 
