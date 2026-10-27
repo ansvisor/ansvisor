@@ -15,7 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { CheckCircle2, XCircle } from 'lucide-react';
-import { getWebhookConfig, saveWebhookConfig, testWebhook } from '@/lib/actions/content';
+import {
+  getWebhookConfig,
+  saveWebhookConfig,
+  testWebhook,
+  type WebhookTestResult,
+} from '@/lib/actions/content';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 
@@ -40,6 +45,7 @@ interface WebhookSettingsDialogProps {
 
 export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSettingsDialogProps) {
   const t = useTranslations('content.webhook');
+  const tFailure = useTranslations('apiFailure');
   // A read-only workspace (plan not active): the settings show, and Test and
   // Save open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
@@ -107,6 +113,18 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
     }
   };
 
+  const testMessage = (result: WebhookTestResult) => {
+    if (result.success) return t('testSuccess');
+    // The API didn't run the test: not an admin or manager, too many tests…
+    if (result.failure) {
+      return result.failure === 'forbidden' ? t('testForbidden') : tFailure(result.failure);
+    }
+    if (result.location) {
+      return t('testRedirect', { status: result.status, location: result.location });
+    }
+    return result.error || `HTTP ${result.status}`;
+  };
+
   const handleTest = async () => {
     if (!url.trim()) {
       toast.error(t('urlRequiredTest'));
@@ -115,11 +133,8 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await testWebhook(url.trim(), secret.trim() || undefined);
-      setTestResult({
-        success: result.success,
-        message: result.success ? t('testSuccess') : result.error || `HTTP ${result.status}`,
-      });
+      const result = await testWebhook(brandId, url.trim(), secret.trim() || undefined);
+      setTestResult({ success: result.success, message: testMessage(result) });
     } catch (err) {
       setTestResult({
         success: false,

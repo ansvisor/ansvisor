@@ -80,9 +80,12 @@ import {
   TaskDetailView,
   TaskTypeBadge,
   type TaskDraftWork,
+  type TaskCheckOptions,
   type TaskSendOptions,
+  useMissingText,
 } from './task-detail';
 import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
+import { checkActionTask } from '@/lib/actions/action-task-check';
 import { getActionDrafts, startDraftFromAction } from '@/lib/actions/content-drafts';
 import { actionPages, draftMethodForTask, type ActionDraft } from '@/lib/content/action-drafts';
 import { contentEditorPath } from '@/lib/content/drafts';
@@ -154,6 +157,10 @@ export function ActionDrawer({
   // dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Check now (AC-010): the task being checked, and the card's words.
+  const tTaskCard = useTranslations('actionCenter.actionsPage.drawer.task');
+  const missingText = useMissingText();
+  const [checking, setChecking] = useState<string | null>(null);
   // The drafts written for the action's writing tasks (CE-022), once read.
   const [drafts, setDrafts] = useState<ActionDraft[]>([]);
 
@@ -288,6 +295,28 @@ export function ActionDrawer({
       onChanged();
     } finally {
       setIsBusy(false);
+    }
+  };
+
+  /**
+   * Check a task on its page now (AC-010), as the nightly sweep does: done,
+   * it's completed; else the card says what is missing. Then reload.
+   */
+  const checkTask = async (taskId: string) => {
+    setChecking(taskId);
+    try {
+      const result = await checkActionTask(taskId);
+      if ('error' in result) {
+        toast.error(tTaskCard('checkFailed'));
+        return;
+      }
+      if (!result.checked) toast(tTaskCard(`checkNot.${result.reason ?? 'no_answer'}`));
+      else if (result.checked.passed) toast.success(tTaskCard('checkPassed'));
+      else toast(tTaskCard('checkMissing', { missing: missingText(result.checked.missing) }));
+      await load();
+      onChanged();
+    } finally {
+      setChecking(null);
     }
   };
 
@@ -719,6 +748,19 @@ export function ActionDrawer({
                           { action: tActions('sendTasks') },
                         ),
                       }}
+                      // An open task checked automatically, with its page (AC-010).
+                      check={
+                        (task.status === 'todo' || task.status === 'in_progress') &&
+                        task.details?.check === 'auto' &&
+                        task.details.url
+                          ? {
+                              onCheck: guard(() => void checkTask(task.id), {
+                                action: tActions('checkTasks'),
+                              }),
+                              busy: checking === task.id,
+                            }
+                          : undefined
+                      }
                       draftWork={draftWork}
                     />
                   );
@@ -839,6 +881,7 @@ function TaskRow({
   onEdit,
   onDelete,
   send,
+  check,
   draftWork,
 }: {
   task: ActionTask;
@@ -851,6 +894,8 @@ function TaskRow({
   onEdit: (edit: TaskDetailsEdit & { title: string | null }) => Promise<boolean>;
   onDelete: () => void;
   send: TaskSendOptions;
+  /** Check now, for an open task checked automatically (AC-010). */
+  check?: TaskCheckOptions;
   draftWork?: TaskDraftWork;
 }) {
   // A task sent from the Improve tab opens on its suggestion, as it always
@@ -965,6 +1010,7 @@ function TaskRow({
             disabled={disabled || skipDraft !== null}
             onEdit={guard(() => setEditing(true), { action: tActions('editTasks') })}
             send={send}
+            check={check}
             draftWork={draftWork}
           />
         ))}

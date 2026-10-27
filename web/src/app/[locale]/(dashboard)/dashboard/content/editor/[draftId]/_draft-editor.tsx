@@ -185,12 +185,14 @@ import {
   lengthOutOfReach,
   readPage,
   pageTextLength,
+  ruleNumber,
   rulesMet,
   type ActiveRule,
   type LastRewrite,
   type RewriteReach,
   type RuleStatus,
 } from '@/lib/content/rules';
+import { shoppingLinks, type ShoppingLinks } from '@/lib/content/shopping-check';
 import { aiUsageTone } from '@/lib/billing/ai-usage';
 import { saveBlob } from '@/lib/download';
 import { formatMonthDay } from '@/lib/format';
@@ -274,6 +276,7 @@ import { useDraftInputs } from './_use-draft-inputs';
 import { useDraftReads } from './_use-draft-reads';
 import { useDraftRules } from './_use-draft-rules';
 import { EditorToolbar } from './_toolbar';
+import { useShoppingCheck } from './_use-shopping-check';
 import { useDraftAutosave, type SaveState } from './_use-autosave';
 
 /**
@@ -720,6 +723,9 @@ export function DraftEditor({
       catalogRead.title.trim().toLowerCase() === title.trim().toLowerCase())
       ? catalogRead.read
       : undefined;
+  // The shopping path against the catalog now, for the Shopping rules and
+  // Before you publish (shopping path, part 6).
+  const shoppingCheck = useShoppingCheck({ draftId: draft.id, siteType, pageType });
   const rules = useDraftRules({
     draft,
     siteType,
@@ -728,6 +734,7 @@ export function DraftEditor({
     pageType,
     reads,
     catalog: feedOn ? (catalog === undefined ? 'reading' : catalog) : null,
+    shopping: shoppingCheck.check,
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
   // images…), read as the characters are, and the least it comes to with the
@@ -2083,9 +2090,11 @@ export function DraftEditor({
   const rulesSettled =
     rules.ready &&
     reads.sources !== null &&
-    // The keywords rule reads the brief, the feed rule the catalog.
+    // The keywords rule reads the brief, the feed rule the catalog, the
+    // Shopping rules the shopping path.
     reads.brief.status !== 'loading' &&
-    (!feedOn || catalog !== undefined);
+    (!feedOn || catalog !== undefined) &&
+    shoppingCheck.check !== 'reading';
   // Open rules no run can close on this page (editor test 2026-10-25): every
   // long sentence inside a passage AI answers quote, a Length out of a
   // rewrite's reach. They leave the agent's work and Next step; the Rules tab
@@ -3195,7 +3204,23 @@ export function DraftEditor({
   ) => {
     setPublishOpen({ mode, html: pageToPublish(), returnTo });
     if (mode === 'markReady') nudgeAt('markReady');
+    // A product may have sold out since the check was read.
+    shoppingCheck.reload();
   };
+  // The page to publish's shopping links against the catalog (shopping path,
+  // part 6), as the Shopping rules read them: every link, a product grid's
+  // too, and the products the rule asks for (none with it off). Read fresh:
+  // 'reading' meanwhile, for a draft known to have a path. No row while
+  // none is known to, so a draft without one never shows it.
+  const shopRule = rules.rules.find(({ rule }) => rule.key === 'shopProductLinks')?.rule;
+  const shopWant = shopRule?.on ? ruleNumber(shopRule) : 0;
+  const { check: shopping, refreshing: shoppingRefreshing } = shoppingCheck;
+  const shoppingRead = useMemo((): ShoppingLinks | 'reading' | 'failed' | null => {
+    if (!publishOpen || shopping === null || shopping === 'reading') return null;
+    if (shoppingRefreshing) return 'reading';
+    if (shopping === 'failed') return 'failed';
+    return shoppingLinks(readPage(publishOpen.html, 0).links ?? [], shopping, shopWant);
+  }, [publishOpen, shopping, shoppingRefreshing, shopWant]);
   // Read once per change (a link read landing, the title), not on every render.
   const readyToPaste = useMemo((): ReadyToPaste | null => {
     if (!publishOpen) return null;
@@ -4140,6 +4165,8 @@ export function DraftEditor({
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
               onAttach={attachments.open}
               linkRequest={linkRequest}
+              // + Insert › Products, from an online shop's catalog (shopping path, part 5).
+              productsBrandId={siteType === 'ecommerce' ? draft.brandId : null}
             />
           )}
 
@@ -4250,6 +4277,7 @@ export function DraftEditor({
             onRemoveClaim={sourcesOn ? removeClaim : undefined}
             onConfirmImages={openConfirmImages}
             onAddImage={addImage}
+            onShoppingPathChange={shoppingCheck.reload}
           />
         ) : (
           <EditorPanelRail onOpen={openPanelTab} />
@@ -4377,6 +4405,7 @@ export function DraftEditor({
           onAddDisclosure={addLineUnderAnswer}
           product={productSchema}
           category={categorySchema}
+          shopping={shoppingRead}
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);
