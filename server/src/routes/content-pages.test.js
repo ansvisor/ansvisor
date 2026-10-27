@@ -285,6 +285,13 @@ describe('POST /api/content-pages/source-classes (Quality CE-046)', () => {
     expect((await res.json()).code).toBe('ai_budget');
   });
 
+  it('says there is no plan, not a spent budget, once the plan has ended', async () => {
+    readSourceClasses.mockRejectedValueOnce(new PlanLimitError('No plan', 402));
+    const res = await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] });
+    expect(res.status).toBe(402);
+    expect(await res.json()).toEqual({ error: 'No plan', code: 'no_subscription' });
+  });
+
   it('refuses another workspace’s draft and a malformed ask', async () => {
     org = 'o2';
     expect((await ask({ draftId: DRAFT, sites: ['coffee-blog.example'] })).status).toBe(403);
@@ -343,6 +350,13 @@ describe('POST /api/content-pages/claims (Quality CE-045)', () => {
     const res = await ask({ draftId: DRAFT });
     expect(res.status).toBe(429);
     expect((await res.json()).code).toBe('ai_budget');
+  });
+
+  it('says there is no plan, not a spent budget, once the plan has ended', async () => {
+    readDraftClaims.mockRejectedValueOnce(new PlanLimitError('No plan', 402));
+    const res = await ask({ draftId: DRAFT });
+    expect(res.status).toBe(402);
+    expect(await res.json()).toEqual({ error: 'No plan', code: 'no_subscription' });
   });
 
   it('refuses another workspace’s draft and a malformed ask', async () => {

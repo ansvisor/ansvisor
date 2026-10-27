@@ -26,8 +26,11 @@ import { ConnectorHttpError } from '../http.js';
 export const API = 'https://merchantapi.googleapis.com';
 /** Products a page, the API's most. */
 export const PAGE_SIZE = 1000;
-/** Pages read at most: 200,000 products. */
-export const MAX_PAGES = 200;
+/** Pages read at most: 50,000 products, about what a 50 MB feed holds. */
+export const MAX_PAGES = 50;
+/** Issues kept at most for a listing, and for a source's whole read. */
+export const MAX_LISTING_ISSUES = 20;
+export const MAX_ISSUES = 100_000;
 /** Accounts the picker lists at most, and the advanced accounts whose sub-accounts it reads. */
 export const MAX_ACCOUNTS = 500;
 export const MAX_PARENTS = 20;
@@ -88,6 +91,7 @@ export function issuesOf(product) {
   if (!externalId) return [];
   const out = [];
   for (const issue of product.productStatus?.itemLevelIssues ?? []) {
+    if (out.length >= MAX_LISTING_ISSUES) break;
     const severity = SEVERITIES[issue?.severity];
     const code = text(issue?.code, 200);
     if (!severity || !code) continue;
@@ -260,16 +264,28 @@ export default {
     const found = [];
     let repeated = 0;
     let row = 0;
+    let issuesLeft = 0;
     let pageToken;
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const { data } = await request(`${API}/products/v1/accounts/${id}/products`, {
         query: { pageSize: PAGE_SIZE, pageToken },
       });
-      for (const product of data?.products ?? []) {
+      // Google leaves `products` out for an account with none; any other shape isn't an answer.
+      const isObject = data !== null && typeof data === 'object' && !Array.isArray(data);
+      if (!isObject || (data.products !== undefined && !Array.isArray(data.products))) {
+        throw new ConnectorHttpError(
+          'bad_response',
+          'Merchant Center answered with no product list.',
+        );
+      }
+      for (const product of data.products ?? []) {
         row += 1;
         const rank = rankOf(product);
         // Its issues are kept even when the product can't be: a missing price is one.
-        found.push(...issuesOf(product).map((issue) => ({ rank, issue })));
+        const issues = issuesOf(product);
+        const room = Math.max(0, MAX_ISSUES - found.length);
+        issuesLeft += Math.max(0, issues.length - room);
+        found.push(...issues.slice(0, room).map((issue) => ({ rank, issue })));
         const listing = { rank, ...toItem(attributesOf(product), row, 'Item') };
         const key = text(product?.offerId, 200) ?? Symbol('no offer id');
         const kept = listings.get(key);
@@ -280,7 +296,7 @@ export default {
         repeated += 1;
         if (listingOrder(rank, kept.rank) < 0) listings.set(key, listing);
       }
-      pageToken = data?.nextPageToken || undefined;
+      pageToken = data.nextPageToken || undefined;
       if (!pageToken) break;
     }
     const items = [];
@@ -290,6 +306,14 @@ export default {
       else errors.push(listing.error);
     }
     errors.sort((a, b) => a.row - b.row);
+    if (issuesLeft) {
+      errors.unshift({
+        row: 0,
+        field: 'issues',
+        found: '',
+        message: `Only the first ${MAX_ISSUES.toLocaleString('en-US')} issues were kept: ${issuesLeft.toLocaleString('en-US')} more weren't.`,
+      });
+    }
     if (pageToken) {
       // First, so it's among the errors the source keeps. The products not read are marked
       // removed by the sync, like any the account no longer lists.

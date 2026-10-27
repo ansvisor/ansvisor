@@ -31,6 +31,8 @@
  */
 
 import supabaseAdmin from '../../../config/supabase.js';
+import { isCloud } from '../../../config/plans.js';
+import { ACTIVE_SUBSCRIPTION_STATUSES } from '../../active-subscriptions.js';
 import { logger } from '../../logger.js';
 import { APPROVAL_PERMISSIONS, AUTOMATABLE_MODES, getTask } from '../tasks/registry.js';
 import { resolveBrandSources } from '../sources.js';
@@ -267,9 +269,18 @@ export async function sweepTaskExecution({ now = new Date() } = {}) {
 
   // Candidate tasks: not finished, on an action nobody has closed. The tool
   // and dependency checks belong to `runTask`, which records what it refused.
-  const { data: rows, error } = await supabaseAdmin
-    .from('action_tasks')
-    .select('id, task_key, action_id, actions!inner(status)')
+  // On the cloud, only for organizations still on a plan: a tool reads
+  // outside services on the organization's behalf. Filtered in the query, so
+  // the old tasks of an organization whose plan ended can't fill the read.
+  let query = supabaseAdmin.from('action_tasks');
+  query = isCloud()
+    ? query
+        .select(
+          'id, task_key, action_id, actions!inner(status, brands!inner(organizations!inner(subscription_status)))',
+        )
+        .in('actions.brands.organizations.subscription_status', ACTIVE_SUBSCRIPTION_STATUSES)
+    : query.select('id, task_key, action_id, actions!inner(status)');
+  const { data: rows, error } = await query
     .in('status', RUNNABLE_STATUSES)
     .not('actions.status', 'in', '("completed","dismissed")')
     .order('created_at', { ascending: true })

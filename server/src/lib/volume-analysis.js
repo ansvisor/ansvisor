@@ -1,6 +1,7 @@
 import { resolveModel } from '../lib/ai-provider.js';
 import { regionToLocationCode, languageToCode } from '../lib/dataforseo-codes.js';
 import supabaseAdmin from '../config/supabase.js';
+import { isOrgActive } from './active-subscriptions.js';
 import { AI_VOLUME_MULTIPLIER, extractIntentKeywords } from '../lib/intent-extraction.js';
 import { getSearchVolumes } from './dataforseo.js';
 import { withRetry } from './retry.js';
@@ -339,7 +340,7 @@ export async function analyzeBrandVolumes(
 ) {
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
-    .select('region, language')
+    .select('region, language, organization_id')
     .eq('id', brandId)
     .maybeSingle();
 
@@ -348,6 +349,13 @@ export async function analyzeBrandVolumes(
   }
   if (!brand) {
     throw new Error(`Brand ${brandId} not found`);
+  }
+  // Once the plan has ended (2026-10-27), no volume is looked up: every
+  // prompt is a model call and a DataForSEO request. The internal trigger
+  // (after a checkout) reaches here without the API's 402.
+  if (!(await isOrgActive(brand.organization_id))) {
+    logger.info({ brandId }, 'volume analysis skipped: no active plan');
+    return [];
   }
 
   const resolvedLocationCode =

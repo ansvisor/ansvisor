@@ -428,6 +428,14 @@ export function Sidebar() {
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
                           <span className="flex-1 truncate">{label}</span>
+                          {effectiveBadge && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 shrink-0 px-1.5 text-[10px] font-normal"
+                            >
+                              {effectiveBadge}
+                            </Badge>
+                          )}
                           <ChevronDown
                             className={cn(
                               'h-3.5 w-3.5 shrink-0 transition-transform',
