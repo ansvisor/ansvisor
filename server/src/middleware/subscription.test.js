@@ -5,9 +5,9 @@ import express from 'express';
 /**
  * Read-only once the plan has ended (2026-10-27): on the cloud, a signed-in
  * person's writes are refused while their organization has no active or
- * trialing subscription, but for billing, the routes that stop a cost or
- * take back an access, and onboarding's routes for an organization that
- * never subscribed.
+ * trialing subscription, but for billing's named routes, the routes that
+ * stop a cost or take back an access, and onboarding's routes for an
+ * organization that never subscribed, a few a day.
  */
 
 const reads = [];
@@ -32,8 +32,11 @@ vi.mock('../lib/logger.js', () => ({
 
 const {
   ACTIVE_CACHE_MS,
+  BILLING_ROUTES,
   COST_STOPPING,
   MAX_ENTRIES,
+  ONBOARDING_DAILY_CALLS,
+  ONBOARDING_LIMIT_REACHED,
   ONBOARDING_ROUTES,
   SUBSCRIPTION_INACTIVE,
   clearSubscriptionCache,
@@ -42,8 +45,9 @@ const {
 } = await import('./subscription.js');
 
 function makeRes() {
-  const res = { status: vi.fn(), json: vi.fn() };
+  const res = { status: vi.fn(), json: vi.fn(), set: vi.fn() };
   res.status.mockReturnValue(res);
+  res.set.mockReturnValue(res);
   return res;
 }
 
@@ -115,15 +119,33 @@ describe('requireActiveSubscription', () => {
     expect(reads).toHaveLength(0);
   });
 
-  it('leaves billing open, so a plan can be chosen or cancelled', async () => {
+  it("leaves billing's named routes open, and only them", async () => {
     org = ended;
-    for (const path of ['/billing', '/billing/cancel-feedback']) {
-      const { next } = await run({ path });
-      expect(next).toHaveBeenCalledOnce();
+    for (const [method, path] of [
+      ['POST', '/billing/cancel-feedback'],
+      ['POST', '/billing/cancel-feedback/'],
+      // Billing's reads, as every read.
+      ['GET', '/billing/ai-usage'],
+      ['GET', '/billing/ai-usage/draft/d1'],
+    ]) {
+      const { res, next } = await run({ method, path });
+      expect(next, `${method} ${path}`).toHaveBeenCalledOnce();
+      expect(res.status).not.toHaveBeenCalled();
     }
-    // A path that only starts with the word is not billing.
-    const { res } = await run({ path: '/billingx' });
-    expect(res.status).toHaveBeenCalledWith(402);
+    // A billing route that isn't named isn't let through by its path.
+    for (const [method, path] of [
+      ['POST', '/billing'],
+      ['POST', '/billing/checkout'],
+      ['POST', '/billing/cancel-feedback/extra'],
+      ['PUT', '/billing/cancel-feedback'],
+      ['DELETE', '/billing/cancel-feedback'],
+      ['POST', '/billingx'],
+    ]) {
+      const { res, next } = await run({ method, path });
+      expect(next, `${method} ${path}`).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(402);
+    }
+    expect(BILLING_ROUTES).toHaveLength(1);
   });
 
   it('lets an organization off a plan stop work and take back access, and nothing else', async () => {
@@ -135,6 +157,8 @@ describe('requireActiveSubscription', () => {
       ['DELETE', '/integrations/google-analytics'],
       ['DELETE', '/cms/brands/b1/webflow'],
       ['DELETE', '/bots/connections/b1/c1'],
+      // A store's sign-in is revoked at the store as it is removed.
+      ['DELETE', '/catalog/sources/9b2c1e40-0000-4000-8000-000000000003'],
     ];
     for (const [method, path] of open) {
       const { res, next } = await run({ method, path });
@@ -158,6 +182,11 @@ describe('requireActiveSubscription', () => {
       ['POST', '/cms/brands/b1/webflow'],
       ['POST', '/bots/connections/b1'],
       ['DELETE', '/bots/connections/b1'],
+      ['POST', '/catalog/sources'],
+      ['POST', '/catalog/sources/s1/sync'],
+      ['PUT', '/catalog/sources/s1/credentials'],
+      ['DELETE', '/catalog/sources/s1/extra'],
+      ['POST', '/catalog/upload'],
       // A brand is deleted only on a plan (product decision, 2026-10-27).
       ['DELETE', '/brands/b1'],
     ]) {
@@ -166,7 +195,7 @@ describe('requireActiveSubscription', () => {
       expect(res.status).toHaveBeenCalledWith(402);
     }
     // Both Google disconnects are one route.
-    expect(COST_STOPPING).toHaveLength(5);
+    expect(COST_STOPPING).toHaveLength(6);
   });
 
   it("opens onboarding's routes, and only them, to an organization that never subscribed", async () => {
@@ -195,6 +224,87 @@ describe('requireActiveSubscription', () => {
     // Before the organization exists, too.
     profile = { organization_id: null };
     expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+  });
+
+  it("holds onboarding's routes to ONBOARDING_DAILY_CALLS a day for the organization", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-27T18:00:00Z'));
+    org = neverSubscribed;
+    // The three routes share one count.
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) {
+      const [method, path] = ONBOARDING[i % ONBOARDING.length];
+      expect((await run({ method, path })).next).toHaveBeenCalledOnce();
+    }
+    const { res, next } = await run({ path: '/competitors/suggest' });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(429);
+    expect(res.json).toHaveBeenCalledWith(ONBOARDING_LIMIT_REACHED);
+    // Until midnight UTC, six hours on.
+    expect(res.set).toHaveBeenCalledWith('Retry-After', String(6 * 60 * 60));
+    expect(ONBOARDING_LIMIT_REACHED).toMatchObject({ error: 'rate_limited' });
+
+    // Counted per organization: its other people wait too…
+    expect(
+      (await run({ path: '/topics/suggest', user: { id: 'u2' } })).res.status,
+    ).toHaveBeenCalledWith(429);
+    // …another organization doesn't.
+    profile = { organization_id: 'org-2' };
+    expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+
+    // A new day starts over.
+    profile = { organization_id: 'org-1' };
+    vi.setSystemTime(new Date('2026-10-28T00:00:00Z'));
+    expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+  });
+
+  it('makes room by the day a count began, so a count renewed today stays', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-27T18:00:00Z'));
+    org = neverSubscribed;
+    for (let i = 0; i < MAX_ENTRIES; i++) {
+      profile = { organization_id: `org-${i}` };
+      await run({ path: '/topics/suggest' });
+    }
+
+    // The next day the first organization uses its calls again: its count
+    // moves to the end, behind every count of the day before.
+    vi.setSystemTime(new Date('2026-10-28T09:00:00Z'));
+    profile = { organization_id: 'org-0' };
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) {
+      expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+    }
+    // A new organization makes room by dropping a count of the day before…
+    profile = { organization_id: 'org-new' };
+    expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+    // …not today's, so the first organization's calls are still used up.
+    profile = { organization_id: 'org-0' };
+    expect((await run({ path: '/topics/suggest' })).res.status).toHaveBeenCalledWith(429);
+  });
+
+  it('counts onboarding per person before the organization exists', async () => {
+    profile = { organization_id: null };
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) await run({ path: '/topics/suggest' });
+    expect((await run({ path: '/topics/suggest' })).res.status).toHaveBeenCalledWith(429);
+    expect(
+      (await run({ path: '/topics/suggest', user: { id: 'u2' } })).next,
+    ).toHaveBeenCalledOnce();
+  });
+
+  it("leaves an active organization's onboarding calls uncounted", async () => {
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS + 5; i++) {
+      clearSubscriptionCache();
+      const { res, next } = await run({ path: '/topics/suggest' });
+      expect(next).toHaveBeenCalledOnce();
+      expect(res.status).not.toHaveBeenCalled();
+    }
+    // And a subscription chosen after the day's calls are used lets them all
+    // through (another person: the first is remembered as active).
+    const user = { id: 'u3' };
+    org = neverSubscribed;
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) await run({ path: '/topics/suggest', user });
+    expect((await run({ path: '/topics/suggest', user })).res.status).toHaveBeenCalledWith(429);
+    org = { subscription_status: 'trialing', stripe_subscription_id: 'sub_1' };
+    expect((await run({ path: '/topics/suggest', user })).next).toHaveBeenCalledOnce();
   });
 
   it("keeps onboarding's routes closed once the organization has had a subscription", async () => {
@@ -371,6 +481,7 @@ describe('mounted like the server', () => {
     routes.get('/prompts', (req, res) => res.json({ prompts: [] }));
     routes.post('/prompts/suggest', (req, res) => res.json({ suggested: true }));
     routes.post('/billing/cancel-feedback', (req, res) => res.json({ kept: true }));
+    routes.post('/billing/checkout', (req, res) => res.json({ charged: true }));
     routes.delete('/tracking/job/:jobId', (req, res) => res.json({ cancelled: true }));
     routes.post('/content-drafts/:draftId/stop', (req, res) => res.json({ stopped: true }));
     routes.post('/content-drafts/:draftId/write', (req, res) => res.json({ writing: true }));
@@ -397,6 +508,8 @@ describe('mounted like the server', () => {
 
     expect((await fetch(`${baseUrl}/api/prompts`)).status).toBe(200);
     expect((await post('/api/billing/cancel-feedback')).status).toBe(200);
+    // A billing write that isn't named is refused like any other.
+    expect((await post('/api/billing/checkout')).status).toBe(402);
   });
 
   it('lets work under way be stopped, but not started', async () => {
