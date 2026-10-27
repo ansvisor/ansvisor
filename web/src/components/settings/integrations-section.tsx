@@ -40,6 +40,7 @@ import {
 import { matchProperty } from '@/lib/property-match';
 import { CatalogSourcesCard } from './catalog-sources-card';
 import { WebflowCard } from './webflow-card';
+import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 
 /**
@@ -82,6 +83,8 @@ export function IntegrationsSection() {
         <CatalogSourcesCard />
 
         <WebflowCard />
+
+        <WordPressCard />
       </CardContent>
     </Card>
   );
