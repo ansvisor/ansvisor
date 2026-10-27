@@ -6,23 +6,26 @@ import { Button } from '@/components/ui/button';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
 import type { CmsTarget } from '@/lib/content/cms-send-client';
+import { readFramer } from '@/lib/framer-client';
 import { readWebflow } from '@/lib/webflow-client';
 import { readWordPress } from '@/lib/wordpress-client';
 
 /**
  * Where Send to CMS sends (#1331, phase 2): the brand's webhook, its
  * Webflow collection once Settings › Integrations has it ready (connected,
- * a collection with a body field), or its WordPress site once connected
- * (00294; no collection or fields to pick there). The choice, picked or
- * sent to, is remembered per brand, in this browser; the first ready of
- * Webflow and WordPress is the first choice where none is remembered, or
- * the remembered one is no longer connected. One remembered and connected
- * but not ready leaves the webhook, as before: the page never goes to
- * another CMS than the one picked. A brand with one connected but not ready
- * sees it, off, so its pages don't go to the webhook unnoticed. A read that
- * fails (or an API without them)
- * leaves the webhook as it was before: a webhook send doesn't need them,
- * and a person who picked the one that couldn't be read is told so.
+ * a collection with a body field), its WordPress site once connected
+ * (00294; no collection or fields to pick there), or its Framer collection
+ * once ready (00295; connected, a collection with its title and body
+ * fields). The choice, picked or sent to, is remembered per brand, in this
+ * browser; the first ready of Webflow, WordPress and Framer is the first
+ * choice where none is remembered, or the remembered one is no longer
+ * connected. One remembered and connected but not ready leaves the
+ * webhook, as before: the page never goes to another CMS than the one
+ * picked. A brand with one connected but not ready sees it, off, so its
+ * pages don't go to the webhook unnoticed. A read that fails (or an API
+ * without them) leaves the webhook as it was before: a webhook send doesn't
+ * need them, and a person who picked the one that couldn't be read is told
+ * so.
  */
 
 /** The targets a brand connects in Settings › Integrations. */
@@ -33,7 +36,9 @@ const storageKey = (brandId: string) => `aeo:cms-target:${brandId}`;
 function remembered(brandId: string): CmsTarget | null {
   try {
     const value = localStorage.getItem(storageKey(brandId));
-    return value === 'webhook' || value === 'webflow' || value === 'wordpress' ? value : null;
+    return value === 'webhook' || value === 'webflow' || value === 'wordpress' || value === 'framer'
+      ? value
+      : null;
   } catch {
     return null;
   }
@@ -65,6 +70,15 @@ export type CmsWordPress =
   /** Not connected, not set up on this server, or not read. */
   | null;
 
+/** The brand's Framer, as Send to CMS reads it. */
+export type CmsFramer =
+  /** Ready: pages go to this collection as draft items (its name; empty when it has none). */
+  | { ready: true; collection: string }
+  /** Connected, but its API key refused, or no collection or title and body fields picked yet. */
+  | { ready: false }
+  /** Not connected, not set up on this server, or not read. */
+  | null;
+
 function webflowOf(result: Awaited<ReturnType<typeof readWebflow>>): CmsWebflow {
   const connection = result.ok && result.configured ? result.connection : null;
   if (!connection) return null;
@@ -81,17 +95,29 @@ function wordpressOf(result: Awaited<ReturnType<typeof readWordPress>>): CmsWord
     : { ready: false };
 }
 
+function framerOf(result: Awaited<ReturnType<typeof readFramer>>): CmsFramer {
+  const connection = result.ok && result.configured ? result.connection : null;
+  if (!connection) return null;
+  return connection.status === 'connected' &&
+    connection.collectionId &&
+    connection.fieldMap.title &&
+    connection.fieldMap.body
+    ? { ready: true, collection: connection.collectionName ?? '' }
+    : { ready: false };
+}
+
 /**
- * The brand's send target: undefined while its Webflow and WordPress
- * connections are read, then where pages go and how to change it. A failed
- * read leaves that one out; `unchecked` names it when the person picked it
- * before, and the page goes to the webhook, with `retry`.
+ * The brand's send target: undefined while its Webflow, WordPress and
+ * Framer connections are read, then where pages go and how to change it. A
+ * failed read leaves that one out; `unchecked` names it when the person
+ * picked it before, and the page goes to the webhook, with `retry`.
  */
 export function useCmsTarget(brandId: string) {
   const [read, setRead] = useState<{
     key: string;
     webflow: CmsWebflow;
     wordpress: CmsWordPress;
+    framer: CmsFramer;
     /** The connections that couldn't be read. */
     failed: CmsLocal[];
   } | null>(null);
@@ -101,18 +127,22 @@ export function useCmsTarget(brandId: string) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([readWebflow(brandId), readWordPress(brandId)]).then(([webflow, wordpress]) => {
-      if (cancelled) return;
-      setRead({
-        key,
-        webflow: webflowOf(webflow),
-        wordpress: wordpressOf(wordpress),
-        failed: [
-          ...(webflow.ok ? [] : ['webflow' as const]),
-          ...(wordpress.ok ? [] : ['wordpress' as const]),
-        ],
-      });
-    });
+    Promise.all([readWebflow(brandId), readWordPress(brandId), readFramer(brandId)]).then(
+      ([webflow, wordpress, framer]) => {
+        if (cancelled) return;
+        setRead({
+          key,
+          webflow: webflowOf(webflow),
+          wordpress: wordpressOf(wordpress),
+          framer: framerOf(framer),
+          failed: [
+            ...(webflow.ok ? [] : ['webflow' as const]),
+            ...(wordpress.ok ? [] : ['wordpress' as const]),
+            ...(framer.ok ? [] : ['framer' as const]),
+          ],
+        });
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -121,12 +151,13 @@ export function useCmsTarget(brandId: string) {
   const current = read?.key === key ? read : null;
   const webflow = current ? current.webflow : undefined;
   const wordpress = current ? current.wordpress : undefined;
+  const framer = current ? current.framer : undefined;
   const chosen = picked?.brandId === brandId ? picked.target : remembered(brandId);
   // Read again after a failure: the note stays, as trying, until the answer.
   const failed = current ? current.failed : read?.key.startsWith(`${brandId}:`) ? read.failed : [];
   const unchecked = chosen && chosen !== 'webhook' && failed.includes(chosen) ? chosen : null;
-  const connectionOf = (to: CmsLocal) => (to === 'webflow' ? webflow : wordpress);
-  // The choice stands while it's still connected; ready or not, it's never swapped for the other CMS.
+  const connectionOf = (to: CmsLocal) => ({ webflow, wordpress, framer })[to];
+  // The choice stands while it's still connected; ready or not, it's never swapped for another CMS.
   const kept = chosen && (chosen === 'webhook' || connectionOf(chosen)) ? chosen : null;
   const target: CmsTarget | undefined = !current
     ? undefined
@@ -140,13 +171,17 @@ export function useCmsTarget(brandId: string) {
           ? 'webflow'
           : wordpress?.ready
             ? 'wordpress'
-            : 'webhook';
+            : framer?.ready
+              ? 'framer'
+              : 'webhook';
 
   return {
     /** The brand's Webflow; undefined while read; null without one, or when it couldn't be read. */
     webflow,
     /** The brand's WordPress, as `webflow`. */
     wordpress,
+    /** The brand's Framer, as `webflow`. */
+    framer,
     target,
     /**
      * The target the person picked before that couldn't be read: the page
@@ -165,36 +200,36 @@ export function useCmsTarget(brandId: string) {
   };
 }
 
-const TARGETS = ['webflow', 'wordpress', 'webhook'] as const;
+const TARGETS = ['webflow', 'wordpress', 'framer', 'webhook'] as const;
 
 /**
- * The targets the brand has, when it has Webflow or WordPress: the person
- * picks where pages go. The webhook is always one; a CMS connected but not
- * ready shows, off, with what to do. One tab stop, the picked card; the
- * arrow keys move to the next one and pick it, past one that's off.
+ * The targets the brand has, when it has Webflow, WordPress or Framer: the
+ * person picks where pages go. The webhook is always one; a CMS connected
+ * but not ready shows, off, with what to do. One tab stop, the picked card;
+ * the arrow keys move to the next one and pick it, past one that's off.
+ * Four cards go two by two.
  */
 export function CmsTargetPicker({
   value,
   webflow,
   wordpress,
+  framer,
   onChange,
   disabled,
 }: {
   value: CmsTarget;
   webflow: CmsWebflow | undefined;
   wordpress: CmsWordPress | undefined;
+  framer: CmsFramer | undefined;
   onChange: (target: CmsTarget) => void;
   disabled?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.send.target');
   const cards = useRef<Partial<Record<CmsTarget, HTMLButtonElement | null>>>({});
-  const shown = TARGETS.filter(
-    (target) => target === 'webhook' || (target === 'webflow' ? webflow : wordpress),
-  );
+  const connections = { webflow, wordpress, framer };
+  const shown = TARGETS.filter((target) => target === 'webhook' || connections[target]);
   const off = (target: CmsTarget) =>
-    disabled ||
-    (target === 'webflow' && !webflow?.ready) ||
-    (target === 'wordpress' && !wordpress?.ready);
+    disabled || (target !== 'webhook' && !connections[target]?.ready);
   const onKey = (event: KeyboardEvent, i: number) => {
     const step = ({ ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as const)[
       event.key as 'ArrowRight'
@@ -217,9 +252,14 @@ export function CmsTargetPicker({
         ? t('webflow.hint', { collection: webflow.collection || t('webflow.collection') })
         : t('webflow.notReady');
     }
-    return wordpress?.ready
-      ? t('wordpress.hint', { site: wordpress.site })
-      : t('wordpress.notReady');
+    if (target === 'wordpress') {
+      return wordpress?.ready
+        ? t('wordpress.hint', { site: wordpress.site })
+        : t('wordpress.notReady');
+    }
+    return framer?.ready
+      ? t('framer.hint', { collection: framer.collection || t('framer.collection') })
+      : t('framer.notReady');
   };
   return (
     <div
@@ -227,7 +267,11 @@ export function CmsTargetPicker({
       aria-label={t('label')}
       className={cn(
         'grid gap-2',
-        shown.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2',
+        shown.length === 3
+          ? 'grid-cols-1 sm:grid-cols-3'
+          : shown.length === 4
+            ? 'grid-cols-1 sm:grid-cols-2'
+            : 'grid-cols-2',
       )}
     >
       {shown.map((target, i) => (
@@ -280,7 +324,13 @@ export function CmsTargetUnchecked({
       className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground"
     >
       <span className="min-w-0 flex-1">
-        {t(target === 'wordpress' ? 'uncheckedWordPress' : 'unchecked')}
+        {t(
+          target === 'wordpress'
+            ? 'uncheckedWordPress'
+            : target === 'framer'
+              ? 'uncheckedFramer'
+              : 'unchecked',
+        )}
       </span>
       <Button
         size="sm"
