@@ -167,6 +167,16 @@ const brandState = vi.hoisted(() => ({
 }));
 const updateBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ updateBrand }));
+// Brief › Shopping path (shopping path, part 3) reads its own path: none here.
+const getShoppingCheck = vi.hoisted(() => vi.fn(async (): Promise<unknown> => null));
+vi.mock('@/lib/actions/shopping-path', () => ({
+  getDraftShoppingPath: vi.fn(async () => ({ path: null })),
+  buildDraftShoppingPath: vi.fn(),
+  saveDraftShoppingPath: vi.fn(),
+  searchCatalogProducts: vi.fn(async () => []),
+  getProductsForBlock: vi.fn(async () => []),
+  getShoppingCheck,
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
@@ -2875,6 +2885,53 @@ describe('the side panel', () => {
     await act(async () => button('Hide side panel')!.click());
     expect(panel()).toBeNull();
     expect(rail()).not.toBeNull();
+  });
+
+  // Brief › Shopping path (shopping path, part 3): an online shop's page that links products.
+  it.each([
+    [{ siteType: 'ecommerce', pageType: 'buying_guide' }, true],
+    [{ siteType: 'b2b', pageType: 'buying_guide' }, false],
+    [{ siteType: 'ecommerce', pageType: 'product_page' }, false],
+  ] as const)('shows the shopping path in Brief for %o: %s', async (over, shown) => {
+    getContentDraft.mockResolvedValue(draft(over));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Brief');
+    expect(panel()!.querySelector('section[aria-label="Shopping path"]') !== null).toBe(shown);
+  });
+
+  it('shows the Shopping rules once the path is read, and reads it again after a change in Brief', async () => {
+    let land!: (value: unknown) => void;
+    getShoppingCheck.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+    );
+    try {
+      getContentDraft.mockResolvedValue(draft({ siteType: 'ecommerce', pageType: 'buying_guide' }));
+      window.innerWidth = 1440;
+      await renderPage();
+      await pickTab('Rules');
+      // While it's first read: no Shopping rules, and no count that would change.
+      expect(panel()!.textContent).not.toContain('Links its category page');
+      expect(panel()!.textContent).toContain('Reading the rules…');
+      await act(async () =>
+        land({ categories: ['shop.example/collections/boots'], products: [], site: null }),
+      );
+      expect(panel()!.textContent).toContain('Links its category page');
+      expect(panel()!.textContent).toMatch(/\d+ of \d+ rules met/);
+
+      // Brief › Shopping path picks again: the rules read the path again.
+      const { buildDraftShoppingPath } = await import('@/lib/actions/shopping-path');
+      vi.mocked(buildDraftShoppingPath).mockResolvedValueOnce({ path: null, reason: 'no_match' });
+      await pickTab('Brief');
+      const reads = getShoppingCheck.mock.calls.length;
+      await act(async () => button('Pick from the catalog')!.click());
+      expect(getShoppingCheck.mock.calls.length).toBe(reads + 1);
+    } finally {
+      getShoppingCheck.mockReset().mockResolvedValue(null);
+    }
   });
 
   it('points a page without fan-outs to Sources, where its prompts are added', async () => {
@@ -5747,6 +5804,78 @@ describe('the side panel', () => {
       expect(selectedSegment()).toMatch(/^Quality/);
       // The passage the warning names first.
       expect(scrolled).toHaveBeenCalled();
+    });
+
+    it("names the shopping links to remove from the page as published, a product grid's too (shopping path)", async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      const { productBlockHtml } = await import('@/lib/content/product-block');
+      const product = (n: number, title: string, state: string) => ({
+        key: `shop.example/products/${n}`,
+        title,
+        state,
+        inPath: true,
+      });
+      const check = (trail: string) => ({
+        categories: ['shop.example/collections/boots'],
+        products: [
+          product(1, 'Summit', 'ok'),
+          product(2, 'Trail', trail),
+          product(3, 'Ridge', 'ok'),
+        ],
+        site: 'https://shop.example/blog/boots',
+      });
+      getShoppingCheck.mockResolvedValue(check('ok'));
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            siteType: 'ecommerce',
+            pageType: 'buying_guide',
+            bodyHtml:
+              '<h1>Hiking boots</h1>' +
+              '<h2>Our <a href="/collections/boots">boots</a></h2>' +
+              htmlBlockElement(
+                productBlockHtml([
+                  {
+                    title: 'Summit',
+                    url: 'https://shop.example/products/1',
+                    image: null,
+                    price: null,
+                  },
+                  {
+                    title: 'Trail',
+                    url: 'https://shop.example/products/2',
+                    image: null,
+                    price: null,
+                  },
+                ]),
+              ),
+          }),
+        );
+        await renderPage();
+        const reads = getShoppingCheck.mock.calls.length;
+        // Read fresh when it opens: Trail sold out since.
+        let land!: (value: unknown) => void;
+        getShoppingCheck.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              land = resolve;
+            }),
+        );
+        await act(async () => button('Mark ready')!.click());
+        expect(getShoppingCheck.mock.calls.length).toBe(reads + 1);
+        expect(getShoppingCheck).toHaveBeenLastCalledWith('d1');
+        expect(dialogText()).toContain("Reading your catalog for the linked products' stock…");
+        expect(dialogText()).not.toContain('Trail');
+        await act(async () => land(check('sold_out')));
+        expect(dialogText()).not.toContain('Reading your catalog');
+        expect(dialogText()).toContain('1 product link to remove or replace');
+        expect(dialogText()).toContain(
+          'Trail (sold out). Remove or replace these links on the page',
+        );
+        expect(dialogText()).not.toContain('No link to the category page');
+      } finally {
+        getShoppingCheck.mockReset().mockResolvedValue(null);
+      }
     });
 
     it('marks it ready at once while Quality is off', async () => {

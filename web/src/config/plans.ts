@@ -46,8 +46,8 @@ export interface PlanLimits {
   /**
    * Monthly USD budget for AI usage: Improve-tab model calls (Positions
    * panel, PROMPT-003), the Content Editor's AI and the Action Center's task
-   * writing. Starter $5, Growth $25, Enterprise $50 (or 1% of its contract),
-   * and $1 in the free trial (the server's rule); the billing cards
+   * writing. Starter $5, Growth $25, Enterprise $50 (or more, set per
+   * customer), and $1 in the free trial (the server's rule); the billing cards
    * show them as multiples of Starter's. Enforced on the server from each
    * call's real token cost so it holds whichever model is configured.
    * -1 = unlimited (self-host).
@@ -171,7 +171,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: 10,
       // The workspace's one AI budget, in tiers the billing cards show as
       // multiples of Starter's: $5 here (1x), Growth $25 (5x), Enterprise $50
-      // or 1% of its contract (2026-10-24); the server gives the free trial $1.
+      // or more, set per customer (2026-10-27); the server gives the free trial $1.
       improveMonthlyBudgetUsd: 5,
       // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.049,
@@ -264,9 +264,9 @@ export const PLANS: Record<PlanId, Plan> = {
       maxVolumeAnalyses: -1,
       // Per-customer: override via organizations.plan_overrides in the DB.
       maxBriefGenerations: -1,
-      // AI usage: $50 at the least, twice Growth's $25.
-      // plan_overrides.contractMonthlyUsd raises it to 1% of the contract; an
-      // explicit plan_overrides.improveMonthlyBudgetUsd wins.
+      // AI usage: $50 at the least, twice Growth's $25. Over that, Ansvisor
+      // sets a customer's own in plan_overrides.improveMonthlyBudgetUsd
+      // (2026-10-27); the contract's value doesn't raise it.
       improveMonthlyBudgetUsd: 50,
       // 0.1% of the $499 floor, raised to 0.1% of contractMonthlyUsd; an
       // explicit plan_overrides.relevanceMonthlyBudgetUsd wins.

@@ -35,7 +35,7 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
-import { usePlanFeatures } from './plan-features';
+import { aiUsageMultiple, usePlanFeatures, type PlanFeature } from './plan-features';
 
 interface SubscriptionData {
   planId: string;
@@ -207,6 +207,20 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
       toast.error(err instanceof Error ? err.message : 'Failed to open billing portal');
       setPortalLoading(false);
     }
+  }
+
+  /**
+   * The custom plan's points: its AI usage first, set per customer above
+   * Enterprise's floor (2026-10-27), then the pricing page's points.
+   */
+  function customPlanPoints(): PlanFeature[] {
+    const aiUsage = aiUsageMultiple('enterprise');
+    return [
+      ...(aiUsage
+        ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards('aiUsageCustomHint') }]
+        : []),
+      ...(t.raw('customPlanPoints') as string[]).map((text) => ({ text })),
+    ];
   }
 
   function isUpgrade(targetPlan: PlanId): boolean {
@@ -516,10 +530,19 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
           </a>
         </div>
         <ul className="grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-2">
-          {(t.raw('customPlanPoints') as string[]).map((point) => (
-            <li key={point} className="flex items-start gap-2">
+          {customPlanPoints().map((point) => (
+            <li key={point.text} className="flex items-start gap-2">
               <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <span>{point}</span>
+              <span
+                title={point.hint}
+                className={
+                  point.hint
+                    ? 'cursor-help underline decoration-dotted underline-offset-4'
+                    : undefined
+                }
+              >
+                {point.text}
+              </span>
             </li>
           ))}
         </ul>
