@@ -69,11 +69,11 @@ const published = (id: string, over: Partial<ShoppingPlanDraft> = {}): ShoppingP
 let container: HTMLDivElement;
 let root: Root;
 
-async function render() {
+async function render(hidden = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ShoppingOpportunities brandId={BRAND} />
+        <ShoppingOpportunities brandId={BRAND} hidden={hidden} />
       </NextIntlClientProvider>,
     );
   });
@@ -89,7 +89,7 @@ beforeEach(() => {
   push.mockReset();
   createContentDraft.mockReset();
   toastError.mockReset();
-  listCategoryPages.mockResolvedValue({
+  listCategoryPages.mockReset().mockResolvedValue({
     ok: true,
     value: [
       category('Shoes > Hiking Boots', 18),
@@ -97,7 +97,7 @@ beforeEach(() => {
       category('Tents', 5, false),
     ],
   });
-  getShoppingPlan.mockResolvedValue({
+  getShoppingPlan.mockReset().mockResolvedValue({
     drafts: [published('d1')],
     prompts: [
       { id: '44444444-4444-4444-4444-444444444444', text: 'best waterproof hiking boots' },
@@ -191,5 +191,15 @@ describe('ShoppingOpportunities', () => {
     root = createRoot(container);
     await render();
     expect(container.textContent).toBe('');
+  });
+
+  it('keeps what it read while hidden, and shows it again without reading it anew', async () => {
+    await render(true);
+    expect(container.textContent).toBe('');
+    expect(getShoppingPlan).toHaveBeenCalledOnce();
+    await render(false);
+    expect(container.textContent).toContain('Shopping opportunities');
+    expect(getShoppingPlan).toHaveBeenCalledOnce();
+    expect(listCategoryPages).toHaveBeenCalledOnce();
   });
 });

@@ -42,9 +42,16 @@ type Read = {
  * (lib/content/shopping-plan.ts), ranked on the Plan's scale. Create starts
  * the guide as a draft in the editor; a row with a draft opens it. Read on
  * its own: when it can't be, or the catalog has no categories, the section
- * stays hidden and the Plan works as before.
+ * stays hidden and the Plan works as before. `hidden` keeps what it read
+ * while the Plan's list loads another period.
  */
-export function ShoppingOpportunities({ brandId }: { brandId: string }) {
+export function ShoppingOpportunities({
+  brandId,
+  hidden = false,
+}: {
+  brandId: string;
+  hidden?: boolean;
+}) {
   const t = useTranslations('contentEditor.plan.shopping');
   const router = useRouter();
   const [read, setRead] = useState<Read | null>(null);
@@ -73,7 +80,7 @@ export function ShoppingOpportunities({ brandId }: { brandId: string }) {
   }, [brandId]);
 
   const current = read?.brandId === brandId ? read : null;
-  if (!current || current.categories === 0) return null;
+  if (hidden || !current || current.categories === 0) return null;
 
   const create = async (row: Extract<ShoppingRow, { kind: 'guide' }>) => {
     setCreating(row.key);

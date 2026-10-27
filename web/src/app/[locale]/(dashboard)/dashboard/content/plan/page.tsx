@@ -390,8 +390,15 @@ export default function ContentPlanPage() {
               onSelect={setMixType}
             />
           )}
-          {siteType === 'ecommerce' && <ShoppingOpportunities brandId={activeBrandId} />}
-
+        </>
+      )}
+      {/* Its own read, of the catalog: kept through another period's read,
+          hidden while that loads, so the page still opens in its final layout. */}
+      {siteType === 'ecommerce' && (
+        <ShoppingOpportunities brandId={activeBrandId} hidden={loading} />
+      )}
+      {!loading && (
+        <>
           <div className="space-y-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-sm font-medium">{t('listTitle')}</h2>
