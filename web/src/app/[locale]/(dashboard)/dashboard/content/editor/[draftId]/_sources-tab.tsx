@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { setDraftSourceIncluded } from '@/lib/actions/content-drafts';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { platformNames } from '@/lib/content/impact';
 import {
   buildSourceGroups,
@@ -85,6 +86,10 @@ export function SourcesTab({
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const [adding, setAdding] = useState(false);
+  // A read-only workspace (plan not active): a source's box, Add source and
+  // Rebuild open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   // Where each source is used follows the page as it is written, a beat behind typing.
   const html = useDeferredValue(bodyHtml);
@@ -200,7 +205,9 @@ export function SourcesTab({
                     key={`${row.kind}:${row.ref}`}
                     row={row}
                     used={usedIn(row, doc, { sourceUrl })}
-                    onToggle={(included) => void toggle(row, included)}
+                    onToggle={guard((included: boolean) => void toggle(row, included), {
+                      action: tActions('changeSources'),
+                    })}
                   />
                 ))}
               </ul>
@@ -218,7 +225,11 @@ export function SourcesTab({
           {rebuilding ? <WorkingDots className="ml-0" /> : <RefreshCw className="h-3.5 w-3.5" />}
           {t('rebuild')}
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={guard(() => setAdding(true), { action: tActions('addSources') })}
+        >
           <Plus className="h-3.5 w-3.5" />
           {t('add.button')}
         </Button>

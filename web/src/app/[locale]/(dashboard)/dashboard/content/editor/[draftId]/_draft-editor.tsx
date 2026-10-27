@@ -405,7 +405,18 @@ export function DraftEditor({
   const t = useTranslations('contentEditor.editor');
   const tNext = useTranslations('contentEditor.editor.nextStep');
   const tPublish = useTranslations('contentEditor.publish');
-  const autosave = useDraftAutosave(draft.id, draft);
+  // A read-only workspace (plan not active): the page opens read-only and
+  // nothing is saved; each action opens the upgrade dialog instead, named.
+  // The reads the editor asks the API for by itself after a save (links,
+  // sources, claims, the page's proof) are left out; it shows what is stored.
+  const { guard, isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  /** Read-only: the upgrade dialog, labeled with what was asked for; true when so. */
+  const lockedFor = (action: Parameters<typeof tActions>[0]) => {
+    if (isLocked) openUpgrade(tActions(action));
+    return isLocked;
+  };
+  const autosave = useDraftAutosave(draft.id, draft, { off: isLocked });
   const [title, setTitle] = useState(draft.title);
   // The page as written now, for the side panel's Sources.
   const [pageHtml, setPageHtml] = useState(draft.bodyHtml);
@@ -615,6 +626,8 @@ export function DraftEditor({
       ProofSpotsExtension,
     ],
     content: draft.bodyHtml,
+    // Read-only: no typing, pasting or dropping into the page.
+    editable: !isLocked,
     // Rendered on the client only, so the server's HTML can't disagree with it.
     immediatelyRender: false,
     editorProps: {
@@ -751,10 +764,6 @@ export function DraftEditor({
   const language =
     languageRule?.on && languageRule.current.trim() ? languageRule.current : brandLanguage;
   const qualityOn = qualityPhase() >= 1;
-  // A read-only workspace (plan not active): the reads the editor asks the
-  // API for by itself after a save (links, sources, claims, the page's
-  // proof) are left out; the page opens with what is stored.
-  const { isLocked } = useUpgradeGate();
 
   // Who the page is by (CE-038): page metadata, shown in the header and in a
   // Page info strip outside the page; with Quality's first phase.
@@ -802,7 +811,7 @@ export function DraftEditor({
   // One save at a time (the boxes wait): a failed one puts back the pair as saved.
   const [confirming, setConfirming] = useState(false);
   const confirmAuthor = (what: 'real' | 'profile', on: boolean) => {
-    if (confirming) return;
+    if (lockedFor('confirmDetails') || confirming) return;
     const before = authorConfirmed;
     // Unticking the author unticks their profile too, as the database does.
     setAuthorConfirmed(
@@ -1198,10 +1207,14 @@ export function DraftEditor({
   );
   // Confirm: only the person can tell their own image from stock.
   const [confirmingImages, setConfirmingImages] = useState(false);
+  const openConfirmImages = guard(() => setConfirmingImages(true), {
+    action: tActions('confirmDetails'),
+  });
   // Quality's Confirm on a category intro's facts (CE-054): the person's
   // word that its counts and prices are right, the ones not confirmed yet in
   // one row; put back if it can't be saved.
   const confirmIntro = async () => {
+    if (lockedFor('confirmDetails')) return;
     const keys = introConfirmKeys(introAll.filter((fact) => !introConfirmed.has(fact)));
     if (!keys.length) return;
     setIntroConfirms((prev) => new Set([...(prev ?? []), ...keys]));
@@ -1225,6 +1238,7 @@ export function DraftEditor({
   // Quality's Confirm on a customer case (CE-052): the person's statement
   // that the customer may be named; put back if it can't be saved.
   const confirmCase = async (key: string) => {
+    if (lockedFor('confirmDetails')) return;
     if (caseConfirms?.has(key)) return;
     setCaseConfirms((prev) => new Set([...(prev ?? []), key]));
     const takeBack = () =>
@@ -1241,6 +1255,7 @@ export function DraftEditor({
     }
   };
   const confirmImage = async (src: string) => {
+    if (lockedFor('confirmDetails')) return;
     // Already confirmed: nothing to take back if the save fails.
     const had = ownImages?.has(src) ?? false;
     setOwnImages((prev) => new Set([...(prev ?? []), src]));
@@ -1360,7 +1375,7 @@ export function DraftEditor({
   // on them (its Apply links them and comes back to the page).
   const [linkRequest, setLinkRequest] = useState(0);
   const addSource = (mark: ClaimMark) => {
-    if (!editor) return;
+    if (!editor || lockedFor('addSources')) return;
     const [range] = textRanges(editor.state.doc, mark.text, mark.block);
     if (!range) {
       showInPage(mark.sentence);
@@ -1373,7 +1388,7 @@ export function DraftEditor({
   // it too, and the paragraph (its list item) if that leaves it empty. Undo
   // brings it back.
   const removeClaim = (mark: ClaimMark) => {
-    if (!editor) return;
+    if (!editor || lockedFor('editContent')) return;
     const [range] = textRanges(editor.state.doc, mark.sentence, mark.block);
     if (!range) {
       showInPage(mark.sentence);
@@ -1399,6 +1414,7 @@ export function DraftEditor({
       .run();
   };
   const keepSource = async (url: string) => {
+    if (lockedFor('keepSources')) return;
     setKeptSources((kept) => (kept.includes(url) ? kept : [...kept, url]));
     try {
       setKeptSources(await keepDraftSource(draft.id, url));
@@ -1518,7 +1534,7 @@ export function DraftEditor({
   const savedReviewer = useRef(draft.reviewerId);
   const reviewerPick = useRef(0);
   const pickReviewer = async (next: string | null) => {
-    if (next === reviewerId) return;
+    if (next === reviewerId || lockedFor('setReviewer')) return;
     const pick = ++reviewerPick.current;
     setReviewerId(next);
     try {
@@ -1625,7 +1641,7 @@ export function DraftEditor({
     );
   }, [editor, byline, bylineInContent, pageAuthor?.name, pageAuthor?.photoUrl, brandName, t]);
   const pickAuthor = async (next: string | null) => {
-    if (next === authorId) return;
+    if (next === authorId || lockedFor('setAuthor')) return;
     const pick = ++authorPick.current;
     setAuthorId(next);
     try {
@@ -1916,7 +1932,7 @@ export function DraftEditor({
    */
   const decide = async (ids: string[], decision: SuggestionDecision | 'undo_all') => {
     // Never under a restore: it sets the open ones aside on the page it puts in.
-    if (!editor || deciding || restoringNow.current) return;
+    if (!editor || deciding || restoringNow.current || lockedFor('reviewSuggestions')) return;
     const all = suggestionsNow.current;
     const next = all.map((s) => ({ ...s }));
     const picked = next.filter((s) => ids.includes(s.id));
@@ -2208,7 +2224,7 @@ export function DraftEditor({
   // reads, past an image, a byline or a date), else under the page's H1,
   // else at the top; never twice. One undo takes it out.
   const addLineUnderAnswer = (line: string) => {
-    if (!editor || editor.isDestroyed) return;
+    if (!editor || editor.isDestroyed || lockedFor('editContent')) return;
     const { doc } = editor.state;
     if (squeeze(doc.textContent).includes(squeeze(line))) return;
     let at = 0;
@@ -2245,7 +2261,7 @@ export function DraftEditor({
   // the answer) stays theirs. One undo takes it back.
   const addCheckDate = () => {
     const line = checkDateText(language);
-    if (!line || !editor || editor.isDestroyed) return;
+    if (!line || !editor || editor.isDestroyed || lockedFor('editContent')) return;
     let found: { pos: number; size: number } | null = null;
     editor.state.doc.forEach((node, pos) => {
       if (!found && node.type.name === 'paragraph' && isCheckDateLine(node.textContent)) {
@@ -2311,7 +2327,7 @@ export function DraftEditor({
    * isn't written over: the person runs the rewrite again.
    */
   const decidePage = async (s: DraftSuggestion, to: SuggestionStatus) => {
-    if (!editor || deciding || restoringNow.current) return;
+    if (!editor || deciding || restoringNow.current || lockedFor('reviewSuggestions')) return;
     const undo = to === 'open' && s.status === 'accepted';
     // What the page must still read as for the change to go in.
     const expected = to === 'accepted' ? (s.beforeHtml ?? '') : undo ? s.afterText : null;
@@ -2379,6 +2395,7 @@ export function DraftEditor({
    * batch of suggestions for review.
    */
   const fixRules = async (only?: string[]) => {
+    if (lockedFor('fixRules')) return;
     // One agent run at a time, never before the locked passages are read,
     // nor while a restore replaces the page it would read.
     if (!editor || fixing || starting || rewriting || !citedRead || restoringNow.current) return;
@@ -2608,6 +2625,8 @@ export function DraftEditor({
    * workspace's AI usage).
    */
   const handOff = async (origin: 'person' | 'auto' = 'person') => {
+    // Read-only, the automatic one isn't due: only the person's asks here.
+    if (lockedFor('runAgent')) return;
     if (!editor || fixing || starting || rewriting || !citedRead || restoringNow.current) return;
     if (openSuggestions > 0) {
       toast(t('suggestions.decideFirst', { count: openSuggestions }));
@@ -2703,11 +2722,19 @@ export function DraftEditor({
   const [spotFor, setSpotFor] = useState<ProofSpot | null>(null);
   // Quality's Add image (CE-049, part d): the first spot still open.
   const addImage = () => {
-    if (!editor || !pageRead.read) return;
+    if (!editor || !pageRead.read || lockedFor('addImages')) return;
     const [first] = openSpotPlaces(editor.state.doc, pageRead.read.spots);
     if (first) setSpotFor(first.spot);
   };
   const spotList = sourcesOn && !agentBusy ? (pageRead.read?.spots ?? null) : null;
+  // A spot's Add, in the page's margin: read-only, the upgrade dialog instead.
+  const openSpot = useCallback(
+    (spot: ProofSpot) => {
+      if (isLocked) openUpgrade(tActions('addImages'));
+      else setSpotFor(spot);
+    },
+    [isLocked, openUpgrade, tActions],
+  );
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     editor.view.dispatch(
@@ -2722,13 +2749,13 @@ export function DraftEditor({
                 forPassage: (passage: string) => t('proofSpots.for', { passage }),
                 addFor: (passage: string) => t('proofSpots.addFor', { passage }),
                 marker: (image: string) => t('proofSpots.marker', { image }),
-                onAdd: setSpotFor,
+                onAdd: openSpot,
               }
             : null,
         )
         .setMeta('addToHistory', false),
     );
-  }, [editor, spotList, t]);
+  }, [editor, spotList, t, openSpot]);
   // Fix open rules and Hand off share the agent's fix run (fixing): each
   // card runs its own, and the other's run is the agent at work.
   const fixRunning = fixing && !handingOff;
@@ -2774,7 +2801,9 @@ export function DraftEditor({
   useAutoHandOff({
     draftId: draft.id,
     brandId: draft.brandId,
+    // Read-only, nothing runs by itself.
     due:
+      !isLocked &&
       sourcesOn &&
       draft.qualityHandoff &&
       status !== 'published' &&
@@ -2823,6 +2852,7 @@ export function DraftEditor({
       setDragging(false);
       if (e.defaultPrevented || !withFiles(e)) return;
       e.preventDefault();
+      if (lockedFor('editContent')) return;
       void attachments.attach([...e.dataTransfer.files]);
     },
   };
@@ -2938,7 +2968,7 @@ export function DraftEditor({
    * here, and the page waits for it.
    */
   const startAgent = async () => {
-    if (!editor || restoringNow.current) return;
+    if (!editor || restoringNow.current || lockedFor('runAgent')) return;
     setStarting(true);
     try {
       await autosave.settle();
@@ -3013,7 +3043,9 @@ export function DraftEditor({
    */
   const rewritePage = async ({ citedToo = false }: { citedToo?: boolean } = {}) => {
     // Never before the locked passages are read: the rewrite would be told none are.
-    if (!editor || agentBusy || !citedRead || restoringNow.current) return;
+    if (!editor || agentBusy || !citedRead || restoringNow.current || lockedFor('rewritePage')) {
+      return;
+    }
     // Next's step as the person asked for it, before the waits below.
     const stepAsked = nextStepNow.current;
     setRewriting(true);
@@ -3131,7 +3163,7 @@ export function DraftEditor({
    * History as published, as it stands in the database.
    */
   const openPublish = async () => {
-    if (preparingLive || draft.archivedAt) return;
+    if (preparingLive || draft.archivedAt || lockedFor('markPublished')) return;
     if (htmlUnapplied) {
       toast.error(t('send.applyHtml'));
       return;
@@ -3149,6 +3181,7 @@ export function DraftEditor({
     setAskLive(true);
   };
   const startSend = () => {
+    if (lockedFor('sendToCms')) return;
     if (htmlUnapplied) {
       toast.error(t('send.applyHtml'));
       return;
@@ -3177,6 +3210,7 @@ export function DraftEditor({
   }, [publishOpen, linkChecks, title]);
   /** Marks it ready; past Before you publish's warning, logged with its facts. */
   const markReady = async (anyway?: ReadyAnyway) => {
+    if (lockedFor('markReady')) return;
     setMarking(true);
     try {
       // What's waiting goes out first, so the ready draft (and the version
@@ -3469,7 +3503,7 @@ export function DraftEditor({
    */
   const [unmarking, setUnmarking] = useState(false);
   const unmarkReady = async () => {
-    if (unmarking) return;
+    if (unmarking || lockedFor('changeContentStatus')) return;
     setUnmarking(true);
     try {
       const { status: now, tasksReopened } = await unmarkContentDraftReady(draft.id);
@@ -3493,7 +3527,7 @@ export function DraftEditor({
    * heading, else the first block with words), to rename it there.
    */
   const renameInPage = () => {
-    if (!editor) return;
+    if (!editor || lockedFor('editContent')) return;
     // The HTML view holds the page: the title is renamed in its text there.
     if (htmlSource !== null) {
       toast(t('header.renameInHtml'));
@@ -3521,7 +3555,7 @@ export function DraftEditor({
   // as the server keeps the page it replaces, and the page can't change
   // while the restore runs.
   const restoreVersion = async (version: DraftVersion, label: string) => {
-    if (!editor || restoringNow.current) return;
+    if (!editor || restoringNow.current || lockedFor('restoreVersion')) return;
     restoringNow.current = true;
     setRestoring(true);
     editor.setEditable(false, false);
@@ -3594,7 +3628,7 @@ export function DraftEditor({
   };
 
   const pickPageType = async (type: PageType) => {
-    if (type === picked) return;
+    if (type === picked || lockedFor('setPageType')) return;
     const before = picked;
     setPicked(type);
     try {
@@ -3615,7 +3649,7 @@ export function DraftEditor({
   const tSites = useTranslations('brands.siteTypes');
   const [siteSaving, setSiteSaving] = useState(false);
   const pickSite = async (next: SiteType) => {
-    if (next === siteType || siteSaving) return;
+    if (next === siteType || siteSaving || lockedFor('setSiteType')) return;
     // Taken once saved: My rules are read again for it, and one pick at a time.
     setSiteSaving(true);
     const saved = await updateBrand(draft.brandId, { siteType: next }).catch((err) => {
@@ -3834,7 +3868,10 @@ export function DraftEditor({
                     marking || autosave.state === 'conflict' || autosave.state === 'too_large'
                   }
                   aria-label={t('markReady')}
-                  onClick={() => (quality ? openBeforePublish('markReady') : void markReady())}
+                  onClick={guard(
+                    () => (quality ? openBeforePublish('markReady') : void markReady()),
+                    { action: tActions('markReady') },
+                  )}
                 >
                   {marking ? <LoadingDots /> : <Check className="h-3.5 w-3.5 lg:hidden" />}
                   <span className="hidden lg:inline">{t('markReady')}</span>
@@ -4130,6 +4167,8 @@ export function DraftEditor({
                     setHtmlEdited(true);
                   }}
                   spellCheck={false}
+                  // Read-only: the source shows, and nothing in it changes.
+                  readOnly={isLocked}
                   aria-label={t('html.label')}
                   className="block h-full min-h-[600px] w-full resize-none bg-muted/20 px-7 py-5 font-mono text-[12.5px] leading-relaxed outline-none"
                 />
@@ -4156,7 +4195,7 @@ export function DraftEditor({
                 onConfirmIntro={() => void confirmIntro()}
                 onAddInput={addInput}
                 onAddSource={sourcesOn ? addSource : undefined}
-                onConfirmImages={() => setConfirmingImages(true)}
+                onConfirmImages={openConfirmImages}
                 onAddImage={addImage}
                 onLater={nudge.later}
                 onAct={nudge.close}
@@ -4209,7 +4248,7 @@ export function DraftEditor({
             onKeepSource={sourcesOn ? (url) => void keepSource(url) : undefined}
             onAddSource={sourcesOn ? addSource : undefined}
             onRemoveClaim={sourcesOn ? removeClaim : undefined}
-            onConfirmImages={() => setConfirmingImages(true)}
+            onConfirmImages={openConfirmImages}
             onAddImage={addImage}
           />
         ) : (

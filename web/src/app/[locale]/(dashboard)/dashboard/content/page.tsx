@@ -84,6 +84,7 @@ import { getOpportunityDrafts } from '@/lib/actions/content-drafts';
 import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-plan';
 import { OpportunityRowMenu } from '@/components/content/opportunity-row-menu';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -348,6 +349,17 @@ export default function ContentPage() {
   const locale = useLocale();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrandSlug = useBrandStore((s) => s.getActiveBrand()?.slug);
+  // A read-only workspace (plan not active): New, the bulk bar and the rows'
+  // actions open the upgrade dialog instead; filters and Export stay open.
+  const { guard, isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  // The bulk bar's Dismiss and Delete ask first: the upgrade dialog instead.
+  const confirmUnlessLocked =
+    (action: string) => (open: boolean, details: { cancel: () => void }) => {
+      if (!open || !isLocked) return;
+      details.cancel();
+      openUpgrade(action);
+    };
 
   const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
   const [total, setTotal] = useState(0);
@@ -867,7 +879,7 @@ export default function ContentPage() {
     : '';
   const newButton = (
     <Button
-      onClick={() => setNewOpen(true)}
+      onClick={guard(() => setNewOpen(true), { action: tActions('generateOpportunities') })}
       disabled={generating || loading || limitReached}
       size="sm"
       className="gap-2"
@@ -1405,7 +1417,7 @@ export default function ContentPage() {
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs gap-1.5"
-                    onClick={handleBulkSend}
+                    onClick={guard(handleBulkSend, { action: tActions('sendToWorkflow') })}
                     disabled={bulkSending}
                   >
                     {bulkSending ? <LoadingDots /> : <Send className="h-3 w-3" />}
@@ -1416,14 +1428,14 @@ export default function ContentPage() {
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs gap-1.5"
-                    onClick={handleBulkDone}
+                    onClick={guard(handleBulkDone, { action: tActions('markOpportunitiesDone') })}
                     disabled={bulkSending}
                   >
                     <Check className="h-3 w-3" />
                     {t('status.done')}
                   </Button>
 
-                  <Dialog>
+                  <Dialog onOpenChange={confirmUnlessLocked(tActions('dismissOpportunities'))}>
                     <DialogTrigger
                       render={
                         <Button
@@ -1459,7 +1471,7 @@ export default function ContentPage() {
 
                   {/* Last in the row, and the only destructive-styled trigger:
                       this one does not move a row, it removes it. */}
-                  <Dialog>
+                  <Dialog onOpenChange={confirmUnlessLocked(tActions('deleteOpportunities'))}>
                     <DialogTrigger
                       render={
                         <Button
@@ -1687,7 +1699,9 @@ export default function ContentPage() {
                             lookupFailed: draftsShown?.failed ?? false,
                             onRetry: retryDrafts,
                             canStart: canWriteOpportunity(opp),
-                            onStart: () => setContentPreset(opportunityStart(opp)),
+                            onStart: guard(() => setContentPreset(opportunityStart(opp)), {
+                              action: tActions('createContent'),
+                            }),
                             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
                           }}
                           // The Plan lists owned work still open; its marks are
@@ -1698,7 +1712,9 @@ export default function ContentPage() {
                                   prioritized: prioritiesShown
                                     ? prioritiesShown.includes(opp.id)
                                     : undefined,
-                                  onSend: () => void handleSendToPlan(opp.id),
+                                  onSend: guard(() => void handleSendToPlan(opp.id), {
+                                    action: tActions('prioritizeContent'),
+                                  }),
                                   onOpen: () => router.push('/dashboard/content/plan'),
                                 }
                               : null
@@ -1707,13 +1723,19 @@ export default function ContentPage() {
                             opp.status === 'new'
                               ? {
                                   sending: sendingId === opp.id,
-                                  onSend: () => void handleSendWebhook(opp.id),
+                                  onSend: guard(() => void handleSendWebhook(opp.id), {
+                                    action: tActions('sendToWorkflow'),
+                                  }),
                                 }
                               : null
                           }
                           pageHref={`/dashboard/content/${opp.id}`}
                           onDismiss={
-                            opp.status === 'new' ? () => void handleDismiss(opp.id) : undefined
+                            opp.status === 'new'
+                              ? guard(() => void handleDismiss(opp.id), {
+                                  action: tActions('dismissOpportunities'),
+                                })
+                              : undefined
                           }
                         />
                       </TableCell>

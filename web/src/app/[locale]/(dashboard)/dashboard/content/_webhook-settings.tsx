@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { getWebhookConfig, saveWebhookConfig, testWebhook } from '@/lib/actions/content';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 
 const WEBHOOK_EVENTS = [
@@ -39,6 +40,10 @@ interface WebhookSettingsDialogProps {
 
 export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSettingsDialogProps) {
   const t = useTranslations('content.webhook');
+  // A read-only workspace (plan not active): the settings show, and Test and
+  // Save open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const [url, setUrl] = useState('');
   const [secret, setSecret] = useState('');
@@ -234,7 +239,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleTest}
+                onClick={guard(handleTest, { action: tActions('testWorkflow') })}
                 disabled={testing || !url.trim()}
                 className="gap-2"
               >
@@ -243,7 +248,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
               </Button>
               <Button
                 size="sm"
-                onClick={handleSave}
+                onClick={guard(handleSave, { action: tActions('saveWorkflow') })}
                 disabled={saving || !url.trim()}
                 className="gap-2"
               >
