@@ -285,6 +285,8 @@ describe('category pages (shopping path)', () => {
       ok: false,
       code: 'off_site',
     });
+    answer(404, { code: 'not_found', error: "That category isn't in the brand's catalog." });
+    expect(await setCategoryPage('b1', 'Tents', null)).toEqual({ ok: false, code: 'not_found' });
     answer(500, {});
     expect(await listCategoryPages('b1')).toEqual({ ok: false, code: 'failed' });
   });

@@ -64,6 +64,18 @@ export function IntegrationsSection() {
   const [catalogReads, setCatalogReads] = useState(0);
   // The catalog's sources as its card read them, for the picker to mark the accounts added.
   const [catalogSources, setCatalogSources] = useState<CatalogSourcesRead | null>(null);
+  // Bumped on each read of a brand's sources after its first (a feed added or synced, a
+  // file uploaded, a store connected or removed), so the category pages count their
+  // products again. A brand's first read comes with the category pages' own.
+  const [categoryReads, setCategoryReads] = useState(0);
+  const lastSourcesRead = useRef<CatalogSourcesRead | null>(null);
+  const onCatalogSources = useCallback((read: CatalogSourcesRead | null) => {
+    setCatalogSources(read);
+    const last = lastSourcesRead.current;
+    if (!read || read === last) return;
+    if (last?.brandId === read.brandId) setCategoryReads((n) => n + 1);
+    lastSourcesRead.current = read;
+  }, []);
   return (
     <Card>
       <CardHeader>
@@ -105,9 +117,9 @@ export function IntegrationsSection() {
             />
           </IntegrationCard>
 
-          <CatalogSourcesCard refreshKey={catalogReads} onSources={setCatalogSources} />
+          <CatalogSourcesCard refreshKey={catalogReads} onSources={onCatalogSources} />
 
-          <CatalogCategoryPages refreshKey={catalogReads} />
+          <CatalogCategoryPages refreshKey={categoryReads} />
         </IntegrationGroup>
 
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}
