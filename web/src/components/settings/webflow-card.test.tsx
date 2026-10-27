@@ -150,6 +150,24 @@ describe('WebflowCard', () => {
     expect(container.textContent).toContain('Collection');
   });
 
+  it('says how to make the token, step by step above its field, and that it’s shown once', async () => {
+    await render();
+    const steps = container.querySelector('ol[aria-label="How to get a site token"]')!;
+    expect([...steps.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'In Webflow, go to Site settings › Apps & Integrations › API access and click Generate API token.',
+      'Enter a token name (4–80 characters), e.g. “Ansvisor connector”.',
+      'Under Permissions, set CMS to Read and write and Sites to Read-only. Leave everything else on No access.',
+      'Click Generate token, copy the token and paste it into the field below.',
+    ]);
+    const field = container.querySelector('input[type="password"]')!;
+    expect(steps.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const described = field.getAttribute('aria-describedby')!.split(' ');
+    expect(described.map((id) => document.getElementById(id)?.textContent)).toEqual([
+      steps.textContent,
+      'Webflow shows the token only once. We store it securely and won’t display it again.',
+    ]);
+  });
+
   it('says why a token wasn’t taken, and keeps the form', async () => {
     client.connectWebflow.mockResolvedValue({ ok: false, code: 'missing_scopes' });
     await render();

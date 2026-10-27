@@ -253,6 +253,9 @@ export function WebflowCard() {
   );
 }
 
+/** Making a site token in Webflow, in order (en.json settings.webflow.tokenSteps). */
+const TOKEN_STEPS = ['open', 'name', 'permissions', 'copy'] as const;
+
 /** The site token, pasted once: it goes to the API and is never shown again. */
 function TokenForm({
   brandId,
@@ -289,10 +292,20 @@ function TokenForm({
       }}
     >
       <Label htmlFor={`webflow-token-${brandId}`}>{t('tokenLabel')}</Label>
+      {/* How to make one, read before the field it's pasted into. */}
+      <ol
+        id={`webflow-token-steps-${brandId}`}
+        aria-label={t('tokenSteps.label')}
+        className="list-decimal space-y-0.5 pl-4 text-xs text-muted-foreground"
+      >
+        {TOKEN_STEPS.map((step) => (
+          <li key={step}>{t(`tokenSteps.${step}`)}</li>
+        ))}
+      </ol>
       <div className="flex flex-wrap gap-2">
         <Input
           id={`webflow-token-${brandId}`}
-          aria-describedby={`webflow-token-hint-${brandId}`}
+          aria-describedby={`webflow-token-steps-${brandId} webflow-token-hint-${brandId}`}
           type="password"
           autoComplete="off"
           spellCheck={false}
@@ -317,7 +330,7 @@ function TokenForm({
         )}
       </div>
       <p id={`webflow-token-hint-${brandId}`} className="text-xs text-muted-foreground">
-        {t('tokenHint')}
+        {t('tokenNote')}
       </p>
     </form>
   );
