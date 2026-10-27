@@ -75,6 +75,11 @@ describe('shouldShowDashboardNavItem', () => {
   it('shows Shopping when the active brand enables shopping mode', () => {
     expect(shouldShowDashboardNavItem(shopping, { shoppingModeEnabled: true })).toBe(true);
   });
+
+  // Product Visibility (ECOM-spec) is new as a whole.
+  it('marks Shopping new', () => {
+    expect(shopping.badge).toBe('New');
+  });
 });
 
 describe('the Mentions item', () => {
