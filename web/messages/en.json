@@ -5890,6 +5890,8 @@
       "testing": "Testing...",
       "testSuccess": "Webhook responded successfully!",
       "testFailed": "Webhook test failed: {error}",
+      "testRedirect": "The address redirects (HTTP {status}) to {location}. Nothing is sent on to it: use that address instead.",
+      "testForbidden": "Only admins and managers can test the webhook.",
       "save": "Save Webhook",
       "saving": "Saving...",
       "saved": "Webhook saved!",

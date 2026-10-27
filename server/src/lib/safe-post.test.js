@@ -28,6 +28,19 @@ describe('checkWebhookUrl', () => {
   ])('refuses %s', (address, code) => {
     expect(() => checkWebhookUrl(address)).toThrow(expect.objectContaining({ code }));
   });
+
+  // In a webhook's words on Cloud too, not a page's ("pages can be read").
+  it.each([
+    ['ftp://acme.example/x', 'Only http and https addresses can be posted to'],
+    ['https://user:pass@acme.example/', 'URLs with credentials are not posted to'],
+    ['https://user@acme.example/', 'URLs with credentials are not posted to'],
+  ])('refuses %s in a webhook’s words, Cloud and self-hosted alike', (address, message) => {
+    for (const privateOk of [false, true]) {
+      expect(() => checkWebhookUrl(address, { privateOk })).toThrow(
+        expect.objectContaining({ code: 'invalid_url', message }),
+      );
+    }
+  });
 });
 
 describe('isRedirect', () => {
@@ -60,6 +73,24 @@ describe('postJson', () => {
     '/moved': (_req, res) => {
       res.writeHead(302, { location: 'http://localhost/admin' });
       res.end();
+    },
+    '/moved-here': (_req, res) => {
+      res.writeHead(307, { location: '/hook-v2?x=1' });
+      res.end();
+    },
+    '/moved-nowhere': (_req, res) => {
+      res.writeHead(301);
+      res.end();
+    },
+    '/created': (_req, res) => {
+      res.writeHead(201, { location: '/items/1' });
+      res.end('made');
+    },
+    // The status and the start of the answer, then the connection drops.
+    '/cut': (_req, res) => {
+      res.writeHead(200, { 'content-length': '100' });
+      res.write('accepted');
+      setTimeout(() => res.socket.destroy(), 20);
     },
     '/long': (_req, res) => {
       res.writeHead(200);
@@ -105,7 +136,25 @@ describe('postJson', () => {
 
   it('answers a non-2xx and a redirect as they are, following none', async () => {
     await expect(post('/teapot')).resolves.toEqual({ status: 418, answer: 'no' });
-    await expect(post('/moved')).resolves.toMatchObject({ status: 302 });
+    await expect(post('/moved')).resolves.toEqual({
+      status: 302,
+      answer: '',
+      location: 'http://localhost/admin',
+    });
+  });
+
+  it('says where a redirect points, as a full address, and only for a 3xx', async () => {
+    await expect(post('/moved-here')).resolves.toEqual({
+      status: 307,
+      answer: '',
+      location: `http://site.test:${port}/hook-v2?x=1`,
+    });
+    await expect(post('/moved-nowhere')).resolves.toEqual({ status: 301, answer: '' });
+    await expect(post('/created')).resolves.toEqual({ status: 201, answer: 'made' });
+  });
+
+  it('keeps the status of an answer cut off after it, with what was read', async () => {
+    await expect(post('/cut')).resolves.toEqual({ status: 200, answer: 'accepted' });
   });
 
   it('reads back only the start of a long answer', async () => {
@@ -126,6 +175,18 @@ describe('postJson', () => {
     expect(err.code).toBe('blocked');
     await expect(postJson(`http://127.0.0.1:${port}/hook`, '{}')).rejects.toMatchObject({
       code: 'blocked',
+    });
+  });
+
+  it('refuses another scheme or credentials in a webhook’s words on Cloud', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    await expect(postJson('ftp://acme.example/x', '{}')).rejects.toMatchObject({
+      code: 'invalid_url',
+      message: 'Only http and https addresses can be posted to',
+    });
+    await expect(postJson('https://user:pass@acme.example/', '{}')).rejects.toMatchObject({
+      code: 'invalid_url',
+      message: 'URLs with credentials are not posted to',
     });
   });
 
