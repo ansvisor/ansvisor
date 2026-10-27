@@ -18,9 +18,10 @@ afterEach(() => {
 
 describe('regenerateActionTasks', () => {
   it('posts as the user and returns what was written and kept', async () => {
-    const fetch = respond(200, { written: 5, kept: 2 });
+    const fetch = respond(200, { written: 5, kept: 2, reviews: 1 });
     vi.stubGlobal('fetch', fetch);
-    expect(await regenerateActionTasks('a1')).toEqual({ written: 5, kept: 2 });
+    // With how many wait in Needs review (AC-010).
+    expect(await regenerateActionTasks('a1')).toEqual({ written: 5, kept: 2, reviews: 1 });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.example/api/action-center/actions/a1/tasks/regenerate');
     expect(init.headers).toEqual({ Authorization: 'Bearer token' });

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useUserRole } from '@/hooks/use-user-role';
 import { regenerateActionTasks } from '@/lib/actions/action-task-writer';
 
 /** Whether this deployment writes tasks (AC-004); the server has its own switch. */
@@ -43,6 +44,8 @@ export function RegenerateTasks({
   onDone: () => void | Promise<void>;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.regenerate');
+  // Needs review is an admin's or a manager's tab: anyone else is told who reviews.
+  const { canManage } = useUserRole();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -52,7 +55,14 @@ export function RegenerateTasks({
     try {
       const result = await regenerateActionTasks(actionId);
       if ('written' in result) {
-        toast.success(t('done', { count: result.written }));
+        toast.success(
+          result.reviews > 0
+            ? t(canManage ? 'doneWithReviews' : 'doneWithReviewsMember', {
+                count: result.written,
+                reviews: result.reviews,
+              })
+            : t('done', { count: result.written }),
+        );
         await onDone();
       } else {
         toast.error(

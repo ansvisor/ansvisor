@@ -25,6 +25,7 @@
  */
 
 import { getTask } from './registry.js';
+import { templateDetails } from './templates.js';
 
 /**
  * Payload values a task's text may name, normalised.
@@ -71,7 +72,9 @@ function expand(entry, payload) {
  * @param {{ id: string, tasks: readonly (string|object)[] }} definition
  * @param {{ sources: Set<string>, payload?: Record<string, unknown> }} context
  * @returns {Array<{ taskKey: string, version: number, mode: string, permission: string,
- *   dependsOn: string[], titleParams: Record<string, unknown>, position: number }>}
+ *   dependsOn: string[], titleParams: Record<string, unknown>, position: number,
+ *   details: object|null }>} `details`: the template's Done when, How we check
+ *   and page (AC-010, templates.js), null without one
  */
 export function planTasks(definition, { sources, payload = {} }) {
   const values = titleValues(payload);
@@ -105,6 +108,7 @@ export function planTasks(definition, { sources, payload = {} }) {
         ? Object.fromEntries(primitive.titleKeys.map((key) => [key, values[key]]))
         : {},
       position: index + 1,
+      details: templateDetails(primitive.id, payload),
     };
   });
 }
