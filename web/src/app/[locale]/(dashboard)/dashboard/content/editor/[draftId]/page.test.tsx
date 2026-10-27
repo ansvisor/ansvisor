@@ -165,6 +165,13 @@ const brandState = vi.hoisted(() => ({
 }));
 const updateBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ updateBrand }));
+// Brief › Shopping path (shopping path, part 3) reads its own path: none here.
+vi.mock('@/lib/actions/shopping-path', () => ({
+  getDraftShoppingPath: vi.fn(async () => ({ path: null })),
+  buildDraftShoppingPath: vi.fn(),
+  saveDraftShoppingPath: vi.fn(),
+  searchCatalogProducts: vi.fn(async () => []),
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));

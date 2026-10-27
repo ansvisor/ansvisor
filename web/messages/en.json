@@ -4408,6 +4408,58 @@
         },
         "rebuild": "Rebuild with selection"
       },
+      "shopping": {
+        "title": "Shopping path",
+        "fromCatalog": "From your catalog",
+        "description": "Where this page sends readers. Picked by topic, stock and Merchant Center status. Prices and specs come from the catalog only.",
+        "empty": "Pick the category page and the products in stock this page links, from your catalog.",
+        "build": "Pick from the catalog",
+        "rebuild": "Pick again",
+        "building": "Picking…",
+        "loadError": "Couldn't read the shopping path.",
+        "retry": "Try again",
+        "buildFailed": "Couldn't pick from the catalog. Try again in a moment.",
+        "saveFailed": "Couldn't save the change. Try again.",
+        "noPath": {
+          "not_a_shop": "Shopping paths are for brands that sell online. Set the site type to E-commerce in Brand settings.",
+          "page_type": "This page type doesn't link products. Buying guides, best-of lists, comparisons, guides and blog posts do.",
+          "no_catalog": "There's no catalog to pick from yet. Connect Google Merchant Center or a product feed in Settings › Integrations."
+        },
+        "category": "Category page",
+        "categoryPlace": "In the intro, and again at the end",
+        "noCategory": "No category page matches this topic. Check the category pages in Settings › Integrations.",
+        "products": "{count, plural, =0 {No products} one {# product in the page} other {# products in the page}}",
+        "noProducts": "No product in stock matches this page's topic yet.",
+        "place": {
+          "pick": "Top picks #{n}",
+          "compared": "Compared #{n}",
+          "linked": "Linked in the text"
+        },
+        "stock": {
+          "in_stock": "In stock",
+          "limited_availability": "Low stock"
+        },
+        "issues": "{count, plural, one {# Merchant Center issue: {first}} other {# Merchant Center issues: {first} and more}}",
+        "locked": "Locked",
+        "lock": "Lock {title}",
+        "unlock": "Unlock {title}",
+        "swap": "Swap",
+        "swapLabel": "Swap {title} for another product",
+        "remove": "Remove",
+        "removeLabel": "Remove {title} from the page",
+        "lockHint": "Locked products stay when the products are picked again or the agent rewrites.",
+        "add": "Add product",
+        "searchLabel": "Search the catalog",
+        "searchPlaceholder": "Product name…",
+        "searchEmpty": "No product with that name.",
+        "addThis": "Add {title}",
+        "leftOut": "Left out",
+        "reason": {
+          "sold_out": "sold out",
+          "refused": "Merchant Center refuses it",
+          "no_link": "no page to link"
+        }
+      },
       "brief": {
         "loadError": "Couldn't load the brief.",
         "retry": "Retry",

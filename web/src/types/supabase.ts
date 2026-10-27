@@ -1305,6 +1305,7 @@ export type Database = {
           source_url: string | null
           score_after: number | null
           score_before: number | null
+          shopping_path: Json | null
           slug: string | null
           status: string
           title: string
@@ -1346,6 +1347,7 @@ export type Database = {
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          shopping_path?: Json | null
           slug?: string | null
           status?: string
           title?: string
@@ -1387,6 +1389,7 @@ export type Database = {
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          shopping_path?: Json | null
           slug?: string | null
           status?: string
           title?: string
