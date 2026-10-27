@@ -137,6 +137,12 @@ describe('the plan cards', () => {
     expect(container.textContent).toContain(
       'For large companies and agencies managing AI visibility at scale. Starting at $499/month.',
     );
+    // Its AI usage is set per customer, above Enterprise's $50 floor (10x Starter's).
+    const ai = [...container.querySelectorAll('li span')].find(
+      (el) => el.textContent === 'Custom AI usage, over 10x',
+    );
+    expect(ai?.getAttribute('title')).toContain('A monthly allowance for Ansvisor');
+    expect(container.textContent).not.toContain('10x AI usage');
     for (const point of [
       'Unlimited brands in a custom workspace',
       'All answer engines, Claude included',
