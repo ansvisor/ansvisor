@@ -62,6 +62,17 @@ vi.mock('../lib/shopping-path.js', async (importOriginal) => ({
   buildShoppingPath: (...args) => buildShoppingPath(...args),
 }));
 vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
+/** Whether the shopping path's bucket is spent: its limiter answers as express-rate-limit does then. */
+let shoppingPathSpent = false;
+vi.mock('../middleware/rate-limiter.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  shoppingPathLimiter: (_req, res, next) =>
+    shoppingPathSpent
+      ? res
+          .status(429)
+          .json({ success: false, message: 'Too many requests, please try again later.' })
+      : next(),
+}));
 
 const { default: router } = await import('./content-drafts.js');
 const { PlanLimitError } = await import('../lib/plan-guard.js');
@@ -78,6 +89,7 @@ beforeEach(async () => {
   assertBrandAccess.mockReset().mockResolvedValue({});
   stopDraftRun.mockReset().mockResolvedValue([{ id: 'run-1', claimed_at: CLAIM }]);
   buildShoppingPath.mockReset().mockResolvedValue({ version: 1, products: [] });
+  shoppingPathSpent = false;
   stopDraft = { brand_id: BRAND };
   letGo = [];
   const app = express();
@@ -450,5 +462,35 @@ describe('POST /api/content-drafts/:draftId/shopping-path', () => {
     );
     expect((await build({ brandId: BRAND })).status).toBe(404);
     expect((await build({ brandId: 'nope' })).status).toBe(400);
+  });
+
+  it('says when the path changed while it was built, and when the bucket is spent', async () => {
+    buildShoppingPath.mockRejectedValueOnce(
+      Object.assign(new Error('The shopping path changed while it was built'), {
+        status: 409,
+        code: 'changed',
+      }),
+    );
+    const changed = await build({ brandId: BRAND });
+    expect(changed.status).toBe(409);
+    expect(await changed.json()).toMatchObject({ code: 'changed' });
+    buildShoppingPath.mockRejectedValueOnce(new NoShoppingPath('no_match'));
+    await expect((await build({ brandId: BRAND })).json()).resolves.toEqual({
+      path: null,
+      reason: 'no_match',
+    });
+    shoppingPathSpent = true;
+    expect((await build({ brandId: BRAND })).status).toBe(429);
+    expect(buildShoppingPath).toHaveBeenCalledTimes(2);
+  });
+
+  it("answers 502 when the path can't be built", async () => {
+    buildShoppingPath.mockRejectedValueOnce(new Error('catalog_variants read: timeout'));
+    const res = await build({ brandId: BRAND });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: 'The shopping path could not be built',
+      code: 'failed',
+    });
   });
 });

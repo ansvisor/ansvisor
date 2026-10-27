@@ -32,11 +32,12 @@ export function shortAddress(url: string): string {
  * Category pages (shopping path, 00350): each catalog category of the
  * active brand and its page on the site, matched by the API or set by a
  * person, so a buying guide or a comparison links to it. Shown once the
- * brand's catalog has categories. Admins and managers change a page, set
- * none, or put it back to the match; members see the table.
+ * brand's catalog has categories, and under its heading when they can't be
+ * read. Admins and managers change a page, set none, or put it back to the
+ * match; members see the table.
  *
- * `refreshKey`: changed by the page to read the categories again (a
- * catalog source added).
+ * `refreshKey`: changed by the page to read the categories again (the
+ * catalog's sources read again: a feed added or synced, a file uploaded).
  */
 export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }) {
   const t = useTranslations('settings.catalog.categories');
@@ -49,8 +50,8 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
     categories: CategoryPage[] | null;
   } | null>(null);
   const [reads, setReads] = useState(0);
-  // The category being changed, and what's typed for it.
-  const [editing, setEditing] = useState<string | null>(null);
+  // The category being changed, on the brand it was opened for, and what's typed for it.
+  const [editing, setEditing] = useState<{ brandId: string; name: string } | null>(null);
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -69,11 +70,10 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
   const current = loaded?.brandId === activeBrandId ? loaded : null;
   if (!activeBrandId) return null;
   if (current === null) return <Skeleton className="h-24 w-full" />;
-  if (current.categories === null) {
-    return <p className="text-sm text-muted-foreground">{t('unavailable')}</p>;
-  }
   // No catalog categories yet: nothing to match.
-  if (current.categories.length === 0) return null;
+  if (current.categories?.length === 0) return null;
+  // Another brand's row is never open here.
+  const open = editing?.brandId === activeBrandId ? editing.name : null;
 
   const done = async (
     result: { ok: true } | { ok: false; code: CategoryPageError },
@@ -109,128 +109,132 @@ export function CatalogCategoryPages({ refreshKey = 0 }: { refreshKey?: number }
           <p className="text-sm text-muted-foreground">{t('description')}</p>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead>
-            <tr className="text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">{t('category')}</th>
-              <th className="px-3 py-2 font-medium">{t('productsHeading')}</th>
-              <th className="px-3 py-2 font-medium">{t('pageHeading')}</th>
-              <th className="px-3 py-2 font-medium">{t('howHeading')}</th>
-              {canManage && (
-                <th className="px-3 py-2 font-medium">
-                  <span className="sr-only">{t('actions')}</span>
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {current.categories.map((category) => (
-              <tr key={category.name} className="border-t align-top">
-                <td className="px-3 py-2 font-medium">{category.name}</td>
-                <td className="px-3 py-2 text-muted-foreground">
-                  {t('products', { products: category.products, inStock: category.inStock })}
-                </td>
-                <td className="px-3 py-2">
-                  {editing === category.name ? (
-                    <form
-                      className="flex flex-col gap-2"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void save(category.name, url.trim());
-                      }}
-                    >
-                      <Input
-                        type="url"
-                        inputMode="url"
-                        value={url}
-                        maxLength={2048}
-                        placeholder={t('urlPlaceholder')}
-                        aria-label={t('urlLabel', { category: category.name })}
-                        onChange={(e) => setUrl(e.target.value)}
-                        autoFocus
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="submit" size="sm" disabled={busy || !url.trim()}>
-                          {busy && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                          {t('save')}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => void save(category.name, null)}
-                        >
-                          {t('setNone')}
-                        </Button>
-                        {category.how === 'manual' ? (
+      {current.categories === null ? (
+        <p className="text-sm text-muted-foreground">{t('unavailable')}</p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="px-3 py-2 font-medium">{t('category')}</th>
+                <th className="px-3 py-2 font-medium">{t('productsHeading')}</th>
+                <th className="px-3 py-2 font-medium">{t('pageHeading')}</th>
+                <th className="px-3 py-2 font-medium">{t('howHeading')}</th>
+                {canManage && (
+                  <th className="px-3 py-2 font-medium">
+                    <span className="sr-only">{t('actions')}</span>
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {current.categories.map((category) => (
+                <tr key={category.name} className="border-t align-top">
+                  <td className="px-3 py-2 font-medium">{category.name}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {t('products', { products: category.products, inStock: category.inStock })}
+                  </td>
+                  <td className="px-3 py-2">
+                    {open === category.name ? (
+                      <form
+                        className="flex flex-col gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void save(category.name, url.trim());
+                        }}
+                      >
+                        <Input
+                          type="url"
+                          inputMode="url"
+                          value={url}
+                          maxLength={2048}
+                          placeholder={t('urlPlaceholder')}
+                          aria-label={t('urlLabel', { category: category.name })}
+                          onChange={(e) => setUrl(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="submit" size="sm" disabled={busy || !url.trim()}>
+                            {busy && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                            {t('save')}
+                          </Button>
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
                             disabled={busy}
-                            onClick={() => void reset(category.name)}
+                            onClick={() => void save(category.name, null)}
                           >
-                            {t('useMatch')}
+                            {t('setNone')}
                           </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          disabled={busy}
-                          onClick={() => setEditing(null)}
-                        >
-                          {t('cancel')}
-                        </Button>
-                      </div>
-                    </form>
-                  ) : category.page ? (
-                    <a
-                      href={category.page.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="break-all underline underline-offset-4"
-                      title={category.page.title ?? undefined}
-                    >
-                      {shortAddress(category.page.url)}
-                    </a>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                    >
-                      {t('noPage')}
-                    </Badge>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">
-                  {t(`how.${category.how ?? 'none'}`)}
-                </td>
-                {canManage && (
-                  <td className="px-3 py-2 text-right">
-                    {editing !== category.name && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        aria-label={t('changeLabel', { category: category.name })}
-                        onClick={() => {
-                          setEditing(category.name);
-                          setUrl(category.page?.url ?? '');
-                        }}
+                          {category.how === 'manual' ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => void reset(category.name)}
+                            >
+                              {t('useMatch')}
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() => setEditing(null)}
+                          >
+                            {t('cancel')}
+                          </Button>
+                        </div>
+                      </form>
+                    ) : category.page ? (
+                      <a
+                        href={category.page.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all underline underline-offset-4"
+                        title={category.page.title ?? undefined}
                       >
-                        {t('change')}
-                      </Button>
+                        {shortAddress(category.page.url)}
+                      </a>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                      >
+                        {t('noPage')}
+                      </Badge>
                     )}
                   </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {t(`how.${category.how ?? 'none'}`)}
+                  </td>
+                  {canManage && (
+                    <td className="px-3 py-2 text-right">
+                      {open !== category.name && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          aria-label={t('changeLabel', { category: category.name })}
+                          onClick={() => {
+                            setEditing({ brandId: activeBrandId, name: category.name });
+                            setUrl(category.page?.url ?? '');
+                          }}
+                        >
+                          {t('change')}
+                        </Button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

@@ -8014,6 +8014,7 @@
         "errors": {
           "invalid": "That isn't a web address. Paste the page's address.",
           "off_site": "The page must be on the brand's own site.",
+          "not_found": "This category isn't in the catalog any more. Reload the page.",
           "forbidden": "Only admins and managers can change this.",
           "session": "Your session expired. Sign in again.",
           "workspace": "This brand isn't in your workspace.",

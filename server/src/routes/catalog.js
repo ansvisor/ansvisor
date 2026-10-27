@@ -19,7 +19,7 @@ import {
   listSignInAccounts,
   reconnectStore,
 } from '../lib/catalog/stores.js';
-import { catalogLimiter } from '../middleware/rate-limiter.js';
+import { catalogCategoryLimiter, catalogLimiter } from '../middleware/rate-limiter.js';
 
 /**
  * A brand's catalog sources (#1263, 00279, 00282). Members see them through
@@ -58,7 +58,8 @@ export const UPLOAD_MAX = '4mb';
 const RESYNC_AFTER_MS = 2 * 60 * 1000;
 const FORMATS = ['auto', 'google_xml', 'csv', 'meta_csv'];
 
-async function assertWriter(brandId, userId) {
+/** Throws a 403 unless the person is an admin or a manager of the brand's workspace; `may` says what for. */
+async function assertWriter(brandId, userId, may = 'sync the catalog') {
   await assertBrandAccess(brandId, userId);
   const { data: profile } = await supabaseAdmin
     .from('profiles')
@@ -66,15 +67,16 @@ async function assertWriter(brandId, userId) {
     .eq('id', userId)
     .single();
   if (!WRITE_ROLES.includes(profile?.role)) {
-    const err = new Error('Only admins and managers can sync the catalog.');
+    const err = new Error(`Only admins and managers can ${may}.`);
     err.status = 403;
     throw err;
   }
 }
 
-function fail(req, res, err, what) {
+/** The response to a route's error; `failed` is what a 500 says. */
+function fail(req, res, err, what, failed = 'Failed to sync the catalog') {
   if (err instanceof CategoryPageError) {
-    return res.status(400).json({ error: err.message, code: err.code });
+    return res.status(err.status).json({ error: err.message, code: err.code });
   }
   if (err instanceof StoreError) {
     return res.status(err.status).json({ error: err.message, code: err.code });
@@ -91,7 +93,7 @@ function fail(req, res, err, what) {
     });
   }
   req.log.error({ err: { name: err?.name, message: err?.message } }, what);
-  return res.status(500).json({ error: 'Failed to sync the catalog', code: 'failed' });
+  return res.status(500).json({ error: failed, code: 'failed' });
 }
 
 const outcomeBody = (outcome) => ({
@@ -222,15 +224,25 @@ router.post('/sources/:id/sync', catalogLimiter, async (req, res) => {
   }
 });
 
+const CHANGE_CATEGORY_PAGES = "change the catalog's category pages";
+const CATEGORY_PAGES_FAILED = "Failed to change the catalog's category pages";
+
 // GET /api/catalog/categories?brandId=… — the brand's categories and their pages.
-router.get('/categories', catalogLimiter, async (req, res) => {
+// A read like the API's others: the general limiter only.
+router.get('/categories', async (req, res) => {
   const parsed = z.object({ brandId: z.guid() }).safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
     await assertBrandAccess(parsed.data.brandId, req.user.id);
     return res.json({ categories: await categoryPages(parsed.data.brandId) });
   } catch (err) {
-    return fail(req, res, err, 'catalog categories error');
+    return fail(
+      req,
+      res,
+      err,
+      'catalog categories error',
+      "Failed to read the catalog's category pages",
+    );
   }
 });
 
@@ -240,29 +252,31 @@ const categoryBody = z.object({
   url: z.string().max(2048).nullable(),
 });
 
-// PUT /api/catalog/categories — a category's page set by hand, or none.
-router.put('/categories', catalogLimiter, async (req, res) => {
+// PUT /api/catalog/categories — a category's page set by hand, or none (a
+// category the catalog has: 404 otherwise). Writes, here and in DELETE, take
+// a bucket of their own, apart from the syncs'.
+router.put('/categories', catalogCategoryLimiter, async (req, res) => {
   const parsed = categoryBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
-    await assertWriter(parsed.data.brandId, req.user.id);
+    await assertWriter(parsed.data.brandId, req.user.id, CHANGE_CATEGORY_PAGES);
     await setCategoryPage({ ...parsed.data, userId: req.user.id });
     return res.json({ ok: true });
   } catch (err) {
-    return fail(req, res, err, 'catalog category page error');
+    return fail(req, res, err, 'catalog category page error', CATEGORY_PAGES_FAILED);
   }
 });
 
 // DELETE /api/catalog/categories?brandId=…&category=… — back to the automatic match.
-router.delete('/categories', catalogLimiter, async (req, res) => {
+router.delete('/categories', catalogCategoryLimiter, async (req, res) => {
   const parsed = categoryBody.omit({ url: true }).safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
-    await assertWriter(parsed.data.brandId, req.user.id);
+    await assertWriter(parsed.data.brandId, req.user.id, CHANGE_CATEGORY_PAGES);
     await setCategoryPage({ ...parsed.data, url: undefined, userId: req.user.id });
     return res.json({ ok: true });
   } catch (err) {
-    return fail(req, res, err, 'catalog category page error');
+    return fail(req, res, err, 'catalog category page error', CATEGORY_PAGES_FAILED);
   }
 });
 

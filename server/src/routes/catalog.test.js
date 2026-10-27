@@ -66,8 +66,19 @@ vi.mock('../lib/access.js', () => ({
 vi.mock('../lib/catalog/sources.js', () => ({
   syncSource: (...args) => syncSource(...args),
 }));
-// The limiter's 20 a quarter-hour would end this file's run part way.
-vi.mock('../middleware/rate-limiter.js', () => ({ catalogLimiter: (_req, _res, next) => next() }));
+// The limiters' buckets would end this file's run part way: each request
+// notes the bucket it took instead.
+const buckets = [];
+vi.mock('../middleware/rate-limiter.js', () => ({
+  catalogLimiter: (_req, _res, next) => {
+    buckets.push('catalog');
+    next();
+  },
+  catalogCategoryLimiter: (_req, _res, next) => {
+    buckets.push('categories');
+    next();
+  },
+}));
 vi.mock('../lib/catalog/credentials.js', () => ({
   credentialsConfigured: () => configured,
 }));
@@ -109,9 +120,10 @@ vi.mock('../connectors/index.js', () => ({
 }));
 vi.mock('../lib/catalog/category-pages.js', () => {
   class CategoryPageError extends Error {
-    constructor(code, message) {
+    constructor(code, message, status = 400) {
       super(message);
       this.code = code;
+      this.status = status;
     }
   }
   return {
@@ -143,6 +155,7 @@ beforeEach(async () => {
     },
   ];
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'org-1' });
+  buckets.length = 0;
   syncSource.mockReset().mockResolvedValue({ status: 'ok', counts: { items: 4 } });
   googleConfigured = true;
   categoryPages.mockReset().mockResolvedValue([
@@ -517,5 +530,73 @@ describe('category pages (shopping path)', () => {
       url: undefined,
       userId: 'user-1',
     });
+  });
+
+  it("reads under the API's limit, and writes from a bucket apart from the syncs'", async () => {
+    await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(buckets).toEqual([]);
+    await send('PUT', '/categories', { brandId: BRAND, category: 'Socks', url: null });
+    await fetch(`${base}/categories?brandId=${BRAND}&category=Socks`, { method: 'DELETE' });
+    expect(buckets).toEqual(['categories', 'categories']);
+  });
+
+  it("refuses another workspace's brand, and a body without its address", async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("This brand isn't in your workspace"), {
+        status: 403,
+        code: 'not_in_workspace',
+      }),
+    );
+    const other = await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(other.status).toBe(403);
+    expect((await other.json()).code).toBe('not_in_workspace');
+    expect(categoryPages).not.toHaveBeenCalled();
+
+    const missing = await send('PUT', '/categories', { brandId: BRAND, category: 'Socks' });
+    expect(missing.status).toBe(400);
+    expect(setCategoryPage).not.toHaveBeenCalled();
+  });
+
+  it('lets only an admin or a manager put a category back to its match', async () => {
+    role = 'analyst';
+    const refused = await fetch(`${base}/categories?brandId=${BRAND}&category=Socks`, {
+      method: 'DELETE',
+    });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({
+      error: "Only admins and managers can change the catalog's category pages.",
+      code: 'forbidden',
+    });
+    expect(setCategoryPage).not.toHaveBeenCalled();
+  });
+
+  it("says a category isn't in the catalog, and what failed in these routes' words", async () => {
+    setCategoryPage.mockRejectedValueOnce(
+      new (await import('../lib/catalog/category-pages.js')).CategoryPageError(
+        'not_found',
+        "That category isn't in the brand's catalog.",
+        404,
+      ),
+    );
+    const gone = await send('PUT', '/categories', { brandId: BRAND, category: 'Tents', url: null });
+    expect(gone.status).toBe(404);
+    expect((await gone.json()).code).toBe('not_found');
+
+    setCategoryPage.mockRejectedValueOnce(new Error('catalog_category_pages write: down'));
+    const failed = await send('PUT', '/categories', {
+      brandId: BRAND,
+      category: 'Socks',
+      url: null,
+    });
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({
+      error: "Failed to change the catalog's category pages",
+      code: 'failed',
+    });
+
+    categoryPages.mockRejectedValueOnce(new Error('site pages read: down'));
+    const unread = await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(unread.status).toBe(500);
+    expect((await unread.json()).error).toBe("Failed to read the catalog's category pages");
   });
 });
