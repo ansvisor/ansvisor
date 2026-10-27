@@ -12,7 +12,9 @@ import {
  * A catalog sync from the browser (#1263), through the API's same-origin
  * proxy: a feed or a store read now, or a file uploaded. Not a server
  * action, whose body is limited to 1 MB. Stores are connected here too
- * (00282): their sign-in goes to the API, which alone keeps it.
+ * (00282): their sign-in goes to the API, which alone keeps it. So is an
+ * account of a platform read with the workspace's own sign-in, like Google
+ * Merchant Center (#1270): picked from the accounts that sign-in opens.
  */
 
 export type CatalogSyncError =
@@ -131,6 +133,7 @@ export interface StoreConnector {
 
 export type StoreError =
   | 'connect_failed'
+  | 'not_connected'
   | 'auth_failed'
   | 'unreachable'
   | 'duplicate'
@@ -152,6 +155,7 @@ export type StoreResult = { ok: true } | { ok: false; code: StoreError; message:
 
 const STORE_KNOWN: readonly StoreError[] = [
   'connect_failed',
+  'not_connected',
   'auth_failed',
   'unreachable',
   'duplicate',
@@ -206,10 +210,26 @@ async function storeCall(path: string, init: RequestInit): Promise<StoreResult> 
   }
 }
 
-/** The stores a person can connect, and whether the API can keep a sign-in; null when unreadable. */
+/**
+ * A platform read with the workspace's own sign-in (#1270): its Composio
+ * provider, connected in Settings › Integrations, and whether this server
+ * has that sign-in set up.
+ */
+export interface SignInConnector {
+  kind: string;
+  label: string;
+  provider: string;
+  configured: boolean;
+}
+
+/**
+ * The stores a person can connect, whether the API can keep a sign-in, and
+ * the platforms read with the workspace's sign-in; null when unreadable.
+ */
 export async function listStoreConnectors(): Promise<{
   connectors: StoreConnector[];
   ready: boolean;
+  signIns: SignInConnector[];
 } | null> {
   try {
     const {
@@ -220,8 +240,12 @@ export async function listStoreConnectors(): Promise<{
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { connectors?: StoreConnector[]; ready?: boolean };
-    return { connectors: body.connectors ?? [], ready: !!body.ready };
+    const body = (await res.json()) as {
+      connectors?: StoreConnector[];
+      ready?: boolean;
+      signIns?: SignInConnector[];
+    };
+    return { connectors: body.connectors ?? [], ready: !!body.ready, signIns: body.signIns ?? [] };
   } catch (err) {
     console.error('Failed to read the store connectors:', err);
     return null;
@@ -248,4 +272,152 @@ export function updateStoreSignIn(id: string, input: Record<string, string>): Pr
 /** Removes a store, its sign-in and its products. */
 export function removeStore(id: string): Promise<StoreResult> {
   return storeCall(`/sources/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** An account the workspace's sign-in opens on a platform, to connect to a brand. */
+export interface SignInAccount {
+  id: string;
+  name: string | null;
+}
+
+/** The accounts the workspace's sign-in opens on a platform (#1270), for a brand to pick one. */
+export async function listSignInAccounts(
+  brandId: string,
+  kind: string,
+): Promise<{ ok: true; accounts: SignInAccount[] } | { ok: false; code: StoreError }> {
+  try {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    if (!session) return { ok: false, code: 'session' };
+    const query = new URLSearchParams({ brandId, kind });
+    const res = await fetch(`${BROWSER_API_BASE_URL}/api/catalog/accounts?${query}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      accounts?: SignInAccount[];
+      code?: string;
+    };
+    if (res.ok) return { ok: true, accounts: body.accounts ?? [] };
+    const known = STORE_KNOWN.find((c) => c === body.code);
+    if (known) return { ok: false, code: known };
+    const general = apiFailure(res.status, body);
+    return {
+      ok: false,
+      code:
+        general === 'session' || general === 'workspace' || general === 'busy' ? general : 'failed',
+    };
+  } catch (err) {
+    console.error('Failed to read the accounts:', err);
+    return { ok: false, code: 'failed' };
+  }
+}
+
+/** Connects the picked account to a brand; the API reads it right after. */
+export function connectSignInAccount(
+  brandId: string,
+  kind: string,
+  account: string,
+): Promise<StoreResult> {
+  return connectStore(brandId, kind, { account });
+}
+
+/**
+ * A catalog category and its page on the brand's site (shopping path,
+ * 00350): `how` says how it was found; 'manual' is a person's decision,
+ * a page or none (`page` null), and null is no match.
+ */
+export interface CategoryPage {
+  name: string;
+  products: number;
+  inStock: number;
+  page: { url: string; title: string | null } | null;
+  how: 'manual' | 'address' | 'title' | 'words' | null;
+}
+
+export type CategoryPageError =
+  | 'invalid'
+  | 'off_site'
+  | 'not_found'
+  | 'forbidden'
+  | 'session'
+  | 'workspace'
+  | 'busy'
+  | 'failed';
+
+const CATEGORY_KNOWN: readonly CategoryPageError[] = [
+  'invalid',
+  'off_site',
+  'not_found',
+  'forbidden',
+];
+
+/**
+ * `whenMissing`: what a 404 with no code of ours means, the route not there
+ * yet (an API older than the web).
+ */
+async function categoryCall<T>(
+  path: string,
+  init: RequestInit,
+  read: (body: Record<string, unknown>) => T,
+  whenMissing?: T,
+): Promise<{ ok: true; value: T } | { ok: false; code: CategoryPageError }> {
+  try {
+    const {
+      data: { session },
+    } = await createClient().auth.getSession();
+    if (!session) return { ok: false, code: 'session' };
+    const res = await fetch(`${BROWSER_API_BASE_URL}/api/catalog${path}`, {
+      ...init,
+      headers: {
+        ...init.headers,
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (res.ok) return { ok: true, value: read(body) };
+    if (res.status === 404 && body.code === undefined && whenMissing !== undefined) {
+      return { ok: true, value: whenMissing };
+    }
+    const known = CATEGORY_KNOWN.find((c) => c === body.code);
+    if (known) return { ok: false, code: known };
+    const general = apiFailure(res.status, body);
+    return {
+      ok: false,
+      code:
+        general === 'session' || general === 'workspace' || general === 'busy' ? general : 'failed',
+    };
+  } catch (err) {
+    console.error('Failed to reach the catalog API:', err);
+    return { ok: false, code: 'failed' };
+  }
+}
+
+/** The brand's catalog categories and their pages on its site; none while the API has no such route. */
+export function listCategoryPages(brandId: string) {
+  return categoryCall<CategoryPage[]>(
+    `/categories?${new URLSearchParams({ brandId })}`,
+    {},
+    (body) => (body.categories as CategoryPage[] | undefined) ?? [],
+    [],
+  );
+}
+
+/** A category's page set by hand (`url`), or set to none (null). */
+export function setCategoryPage(brandId: string, category: string, url: string | null) {
+  return categoryCall(
+    '/categories',
+    { method: 'PUT', body: JSON.stringify({ brandId, category, url }) },
+    () => true,
+  );
+}
+
+/** A category back to its automatic match. */
+export function resetCategoryPage(brandId: string, category: string) {
+  return categoryCall(
+    `/categories?${new URLSearchParams({ brandId, category })}`,
+    { method: 'DELETE' },
+    () => true,
+  );
 }

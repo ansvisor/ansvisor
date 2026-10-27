@@ -21,6 +21,7 @@ import {
   Paperclip,
   Quote,
   Rows3,
+  ShoppingBag,
   Table2,
   Trash2,
   type LucideIcon,
@@ -42,6 +43,7 @@ import { formatNumber } from '@/lib/format';
 import { safeImageSrc, safeLinkHref } from '@/lib/content/editor';
 import { cn } from '@/lib/utils';
 import { HtmlBlockDialog } from './_html-block';
+import { ProductBlockDialog } from './_product-block-dialog';
 import { h1Positions } from './_one-h1';
 
 /**
@@ -65,7 +67,9 @@ export function onEmptyLine(editor: Editor, state: EditorState): boolean {
  * quote · table, image, Add HTML, attach a file · </> HTML, and the length counter against the page
  * type's target. Inside a table it adds a row, a column, or removes the
  * table. While the HTML view is open, only its own button works. On an empty
- * line, a small menu offers an HTML block, a table or an image there.
+ * line, a small menu offers an HTML block, a table or an image there. With
+ * `productsBrandId` (an online shop's draft), both offer products from its
+ * catalog too (shopping path, part 5).
  */
 export function EditorToolbar({
   editor,
@@ -75,6 +79,7 @@ export function EditorToolbar({
   onToggleHtml,
   onAttach,
   linkRequest = 0,
+  productsBrandId = null,
 }: {
   editor: Editor;
   target: number;
@@ -88,6 +93,8 @@ export function EditorToolbar({
    * source, its claim selected (CE-045).
    */
   linkRequest?: number;
+  /** The brand whose catalog + Insert › Products picks from; null hides it. */
+  productsBrandId?: string | null;
 }) {
   const t = useTranslations('contentEditor.editor.toolbar');
   // A read-only workspace (plan not active): each tool that changes the page
@@ -95,7 +102,7 @@ export function EditorToolbar({
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const edit = (run: () => void) => guard(run, { action: tActions('editContent') });
-  const [dialog, setDialog] = useState<'link' | 'image' | 'htmlBlock' | null>(null);
+  const [dialog, setDialog] = useState<'link' | 'image' | 'htmlBlock' | 'products' | null>(null);
   // Only a new request opens it: not the toolbar showing again.
   const [linkAsked, setLinkAsked] = useState(linkRequest);
   if (linkRequest !== linkAsked) {
@@ -196,6 +203,16 @@ export function EditorToolbar({
           run: () => setDialog('htmlBlock'),
           text: t('addHtml'),
         },
+        ...(productsBrandId
+          ? [
+              {
+                key: 'products',
+                icon: ShoppingBag,
+                on: false,
+                run: () => setDialog('products'),
+              },
+            ]
+          : []),
         { key: 'attach', icon: Paperclip, on: false, run: onAttach },
       ],
     ];
@@ -276,6 +293,9 @@ export function EditorToolbar({
             { key: 'html', icon: Code2, run: () => setDialog('htmlBlock') },
             { key: 'table', icon: Table2, run: insertTable },
             { key: 'image', icon: ImagePlus, run: () => setDialog('image') },
+            ...(productsBrandId
+              ? [{ key: 'products', icon: ShoppingBag, run: () => setDialog('products') }]
+              : []),
           ] as const
         ).map((item) => (
           <ToolButton key={item.key} label={t(`insert.${item.key}Hint`)} onClick={item.run}>
@@ -288,6 +308,15 @@ export function EditorToolbar({
       {/* Mounted while open, so each opening starts from the selection. */}
       {dialog === 'link' && <LinkDialog editor={editor} onClose={() => setDialog(null)} />}
       {dialog === 'image' && <ImageDialog editor={editor} onClose={() => setDialog(null)} />}
+      {dialog === 'products' && productsBrandId && (
+        <ProductBlockDialog
+          brandId={productsBrandId}
+          onInsert={(code) =>
+            editor.chain().focus().insertContent({ type: 'htmlBlock', attrs: { code } }).run()
+          }
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog === 'htmlBlock' && (
         <HtmlBlockDialog
           initial=""
