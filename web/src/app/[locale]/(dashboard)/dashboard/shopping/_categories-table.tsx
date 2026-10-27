@@ -26,20 +26,24 @@ import { priceText } from '@/lib/shopping/price';
 import { cn } from '@/lib/utils';
 import { categoryPlan } from '@/lib/shopping/action-plan';
 import type { CategoryRow } from '@/lib/shopping/categories';
+import { resultKey, type ActionResult } from '@/lib/shopping/recheck';
 import { ActionPlan } from './_action-plan';
+import { ActionResultLine } from './_action-result';
 
 /**
  * The Categories table (ECOM-008): one row per catalog category, with its
  * shopping questions, the brand's share of their shelves, its products on
  * them, the rival with the most slots there and its products' AI revenue.
  * A category the brand barely shows in is marked "needs attention". Its
- * Plan actions sends the category's work to the Action Center (ECOM-013).
+ * Plan actions sends the category's work to the Action Center (ECOM-013);
+ * its last done one shows under its name, 7 days on (ECOM-018).
  */
 export function CategoriesTable({
   categories,
   loading,
   failed,
   brandId,
+  results = {},
 }: {
   /** Null for a catalog without categories. */
   categories: CategoryRow[] | null;
@@ -47,6 +51,8 @@ export function CategoriesTable({
   failed: boolean;
   /** The brand, to send a category's actions with; none, no Plan actions. */
   brandId?: string;
+  /** Each category's last done action, 7 days on, by "category:<id>". */
+  results?: Record<string, ActionResult>;
 }) {
   const t = useTranslations('shopping.categories');
   const [planning, setPlanning] = useState<CategoryRow | null>(null);
@@ -96,6 +102,7 @@ export function CategoriesTable({
                     </span>
                   )}
                 </p>
+                <ActionResultLine result={results[resultKey({ type: 'category', id: row.id })]} />
               </TableCell>
               <TableCell className="text-right">
                 {row.shelfShare === null ? (

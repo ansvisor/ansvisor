@@ -7,7 +7,14 @@ import type { CategoryRow } from '@/lib/shopping/categories';
 
 const sendShoppingActions = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/shopping', () => ({ sendShoppingActions }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), {
     loading: vi.fn(),
@@ -92,6 +99,36 @@ describe('CategoriesTable', () => {
     expect(cells).toEqual([
       ['Trail running shoes14 shopping questions', '31%', '6 / 24', 'Summit Gear', '$6,100'],
       ['Hiking backpacks11 shopping questions · needs attention', '4%', '1 / 18', '—', '—'],
+    ]);
+  });
+
+  it("shows a category's last done action under its name, 7 days on", () => {
+    const done = {
+      actionId: 'a9',
+      actionNo: 9,
+      completedAt: '2026-10-12T09:00:00Z',
+      readyAt: '2026-10-19T09:00:00Z',
+      before: { shelves: 5, on: 1 },
+      after: { shelves: 6, on: 3 },
+    };
+    render(
+      <CategoriesTable
+        categories={[row({}), row({ id: 'packs', leaf: 'Hiking backpacks' })]}
+        loading={false}
+        failed={false}
+        results={{
+          'category:shoes': done,
+          'category:packs': { ...done, actionId: 'a10', actionNo: 10, after: null },
+        }}
+      />,
+    );
+    const links = [...container.querySelectorAll('tbody a')].map((a) => [
+      a.getAttribute('href'),
+      a.textContent,
+    ]);
+    expect(links).toEqual([
+      ['/dashboard/action-center/actions?action=a9', '#9: 1/5 → 3/6 shelves'],
+      ['/dashboard/action-center/actions?action=a10', '#10 done · result Oct 19, 2026'],
     ]);
   });
 

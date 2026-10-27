@@ -18,6 +18,8 @@ function query(table: string) {
     not: () => q,
     gte: () => q,
     lte: () => q,
+    lt: () => q,
+    limit: () => q,
     or: () => q,
     order: () => q,
     maybeSingle: () => ((single = true), q),
@@ -120,5 +122,60 @@ describe('getShoppingProductDetail', () => {
       winner: 'summitgear.example',
     });
     expect(detail?.ai).toEqual({ visits: 4, orders: 0, revenue: null, currency: null });
+    expect(detail?.result).toBeNull();
+  });
+
+  it('sets the week after its last done action beside the week before (ECOM-018)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T00:00:00Z'));
+    try {
+      tables.catalog_products = [{ id: PRODUCT, title: 'Ridge 30L Backpack', description: null }];
+      tables.actions = [
+        {
+          id: 'a7',
+          action_no: 7,
+          completed_at: '2026-10-20T00:00:00Z',
+          payload: { target: { type: 'product', id: PRODUCT }, promptIds: ['q1'] },
+        },
+        // An older one for the same product: the latest done counts.
+        {
+          id: 'a3',
+          action_no: 3,
+          completed_at: '2026-10-01T00:00:00Z',
+          payload: { target: { type: 'product', id: PRODUCT }, promptIds: ['q1'] },
+        },
+      ];
+      const prompt = {
+        prompt_id: 'q1',
+        search_queries: [],
+        prompt: { id: 'q1', text: 'lightweight 30L hiking backpack for women' },
+      };
+      tables.prompt_result_shopping_cards = [
+        card({
+          prompt_result_id: 'r-1',
+          created_at: '2026-10-15T08:00:00Z',
+          prompt_results: prompt,
+        }),
+        card({
+          prompt_result_id: 'r0',
+          created_at: '2026-10-22T08:00:00Z',
+          product_title: 'Ridge 30L Backpack',
+          matched_brand_role: 'own',
+          catalog_product_id: PRODUCT,
+          prompt_results: prompt,
+        }),
+      ];
+      const detail = await getShoppingProductDetail(BRAND, PRODUCT, { datePreset: '30d' });
+      expect(detail?.result).toEqual({
+        actionId: 'a7',
+        actionNo: 7,
+        completedAt: '2026-10-20T00:00:00Z',
+        readyAt: '2026-10-27T00:00:00.000Z',
+        before: { shelves: 1, on: 0 },
+        after: { shelves: 1, on: 1 },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
