@@ -24,6 +24,10 @@ export interface CatalogCounts {
   errors: string[];
   products: { added: number; changed: number; removed: number; unchanged: number };
   variants: { added: number; changed: number; removed: number; unchanged: number };
+  /** Products past the plan's cap, not in the catalog (ECOM-019); absent when none. */
+  overLimit?: number;
+  /** The plan's cap on the workspace's products, when some were past it. */
+  limit?: number;
 }
 
 export interface CatalogSource {

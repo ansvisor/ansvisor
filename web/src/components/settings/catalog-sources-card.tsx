@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { addFeedSource, listCatalogSources, removeCatalogSource } from '@/lib/actions/catalog';
 import { isStoreSource, type CatalogSource } from '@/lib/catalog';
@@ -30,7 +31,7 @@ import { StoreSignInForm } from './catalog-store-form';
  * product feed URL read daily, a CSV / feed file uploaded, or a store
  * connected with its sign-in (00282), as the API's connectors offer them.
  * Admins and managers add, sync and remove; members see the sources and how
- * they went.
+ * they went, and the products past the plan's cap left out (ECOM-019).
  */
 export function CatalogSourcesCard() {
   const t = useTranslations('settings.catalog');
@@ -282,6 +283,25 @@ export function CatalogSourcesCard() {
                           ))}
                         </ul>
                       </details>
+                    )}
+                    {source.lastStatus === 'ok' && (source.lastCounts?.overLimit ?? 0) > 0 && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        {t('overLimit', {
+                          count: source.lastCounts!.overLimit!,
+                          limit: source.lastCounts!.limit ?? 0,
+                        })}
+                        {canManage && (
+                          <>
+                            {' '}
+                            <Link
+                              href="/dashboard/settings/billing"
+                              className="font-medium underline underline-offset-2"
+                            >
+                              {t('upgrade')}
+                            </Link>
+                          </>
+                        )}
+                      </p>
                     )}
                     {signingIn === source.id && connectorOf(source.kind) && (
                       <StoreSignInForm

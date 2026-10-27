@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The module reaches the supabase admin client at import time, whose config
 // hard-exits when SUPABASE_* env is absent (as in CI).
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
+// The plan's product cap (ECOM-019): none unless a test sets one.
+const getCatalogProductCap = vi.hoisted(() => vi.fn(async () => -1));
+vi.mock('../plan-guard.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getCatalogProductCap,
+}));
 
 import { ConnectorHttpError } from '../../connectors/http.js';
 import { logger } from '../logger.js';
@@ -12,7 +18,15 @@ import { PageFetchError } from '../safe-fetch.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
 import { saveCredentials } from './credentials.js';
 import feedUrl, { FEED_MAX_BYTES, FEED_TYPES } from '../../connectors/feed-url/index.js';
-import { redact, sourceKey, sweepCatalogSources, syncSource } from './sources.js';
+import { PlanLimitError } from '../plan-guard.js';
+import {
+  failureOf,
+  productRoom,
+  redact,
+  sourceKey,
+  sweepCatalogSources,
+  syncSource,
+} from './sources.js';
 
 const fixture = (name) =>
   readFileSync(new URL(`../feeds/__fixtures__/${name}`, import.meta.url), 'utf8');
@@ -411,5 +425,61 @@ describe('sweepCatalogSources', () => {
       ['acme_store', 'failed'],
       ['feed_url', 'ok'],
     ]);
+  });
+});
+
+describe("the plan's product cap (ECOM-019)", () => {
+  const OTHER = sourceKey('9b8d6a1e-2a3c-4d5e-8f90-123456789abc');
+  beforeEach(() => {
+    getCatalogProductCap.mockReset().mockResolvedValue(3);
+    fake
+      .rows('brands')
+      .push(
+        { id: 'brand-1', organization_id: 'org-1' },
+        { id: 'brand-2', organization_id: 'org-1' },
+        { id: 'brand-x', organization_id: 'org-2' },
+      );
+    fake.rows('catalog_products').push(
+      // The workspace's other brand: one live, one removed.
+      { id: 'p1', brand_id: 'brand-2', source: OTHER, external_id: 'X1', removed_at: null },
+      { id: 'p2', brand_id: 'brand-2', source: OTHER, external_id: 'X2', removed_at: NOW },
+      // Another workspace's, and this source's own: neither counts.
+      { id: 'p3', brand_id: 'brand-x', source: OTHER, external_id: 'X3', removed_at: null },
+      {
+        id: 'p4',
+        brand_id: 'brand-1',
+        source: sourceKey(SOURCE_ID),
+        external_id: 'OLD',
+        removed_at: null,
+      },
+    );
+  });
+
+  it("leaves a source the workspace's cap less its other live products, on the cloud only", async () => {
+    expect(await productRoom(source, { db: fake.db })).toEqual({ room: Infinity, cap: -1 });
+    process.env.IS_CLOUD = 'true';
+    expect(await productRoom(source, { db: fake.db })).toEqual({ room: 2, cap: 3 });
+    expect(getCatalogProductCap).toHaveBeenCalledWith('org-1');
+    getCatalogProductCap.mockResolvedValue(-1);
+    expect(await productRoom(source, { db: fake.db })).toEqual({ room: Infinity, cap: -1 });
+  });
+
+  it('keeps what there is room for, and records how many it could not, with the cap', async () => {
+    process.env.IS_CLOUD = 'true';
+    getCatalogProductCap.mockResolvedValue(2);
+    const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
+    const outcome = await syncSource(source, { db: fake.db, now: NOW, fetch });
+    expect(outcome).toMatchObject({
+      status: 'ok',
+      counts: { products: { added: 1 }, overLimit: 1, limit: 2 },
+    });
+    expect(kept().last_counts).toMatchObject({ overLimit: 1, limit: 2 });
+  });
+
+  it("records a workspace without an active subscription in the plan's words", () => {
+    expect(failureOf(new PlanLimitError('An active subscription is required.', 402))).toEqual({
+      status: 'failed',
+      error: 'An active subscription is required.',
+    });
   });
 });

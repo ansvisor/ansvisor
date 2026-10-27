@@ -31,6 +31,7 @@ export function fakeDb() {
       payload: null,
       returning: null,
       one: null,
+      count: null,
     };
     const run = () => {
       const all = rows(table);
@@ -38,10 +39,13 @@ export function fakeDb() {
         state.filters.every(([kind, column, value]) => {
           if (kind === 'eq') return row[column] === value;
           if (kind === 'neq') return row[column] !== value;
+          if (kind === 'is') return (row[column] ?? null) === value;
           return value.includes(row[column]);
         });
       if (state.op === 'select') {
         const found = all.filter(match).sort((a, b) => (a.id < b.id ? -1 : 1));
+        // A count only, as `select(…, { count: 'exact', head: true })` asks.
+        if (state.count === 'head') return { data: null, count: found.length, error: null };
         const [start, end] = state.range ?? [0, found.length];
         const data = found.slice(start, end + 1);
         if (state.one) return { data: data[0] ?? null, error: null };
@@ -86,13 +90,20 @@ export function fakeDb() {
       throw new Error(`unexpected ${state.op}`);
     };
     const builder = {
-      select: () => builder,
+      select: (_columns, options) => {
+        if (options?.head) state.count = 'head';
+        return builder;
+      },
       eq: (column, value) => {
         state.filters.push(['eq', column, value]);
         return builder;
       },
       neq: (column, value) => {
         state.filters.push(['neq', column, value]);
+        return builder;
+      },
+      is: (column, value) => {
+        state.filters.push(['is', column, value]);
         return builder;
       },
       single: () => {

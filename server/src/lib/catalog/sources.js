@@ -1,10 +1,11 @@
 import supabaseAdmin from '../../config/supabase.js';
-import { isSubscriptionActive } from '../../config/plans.js';
+import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { connectorFor, isStore } from '../../connectors/index.js';
 import { ConnectorHttpError, requestJson } from '../../connectors/http.js';
 import { FeedFormatError, parseFeed } from '../feeds/index.js';
 import { PageFetchError } from '../safe-fetch.js';
 import { logger } from '../logger.js';
+import { PlanLimitError, getCatalogProductCap } from '../plan-guard.js';
 import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { syncCatalog } from './sync.js';
 
@@ -13,7 +14,9 @@ import { syncCatalog } from './sync.js';
  * feed URL or a store, read through its connector, daily and on demand; or
  * an uploaded CSV. Each source keeps its own products under `sourceKey(id)`,
  * and its last sync's outcome on its row (`last_*`), which the Settings card
- * shows. A store is read with its saved sign-in (credentials.js).
+ * shows. A store is read with its saved sign-in (credentials.js). On the
+ * managed cloud, the plan caps the workspace's live products (ECOM-019):
+ * a source keeps what's left of it, and records how many it couldn't.
  */
 
 /** Feeds and stores read again after this long, by the daily run. */
@@ -49,6 +52,7 @@ const STORE_WORDS = {
 /** Why a sync failed, in words a person can act on. No page, feed or store text. */
 export function failureOf(err) {
   if (err instanceof FeedFormatError) return { status: 'format_error', error: err.message };
+  if (err instanceof PlanLimitError) return { status: 'failed', error: err.message };
   if (err instanceof ConnectorHttpError) {
     if (err.code === 'auth') {
       return {
@@ -97,6 +101,44 @@ export function redact(message, credentials) {
   return text;
 }
 
+/**
+ * The live products a source may keep (ECOM-019): its workspace's cap less
+ * the live products of the workspace's other sources, on any of its brands.
+ * `room` is Infinity (and `cap` -1) on a self-hosted server, or for a plan
+ * without a cap.
+ */
+export async function productRoom(
+  source,
+  { db = supabaseAdmin, capOf = getCatalogProductCap } = {},
+) {
+  const none = { room: Infinity, cap: -1 };
+  if (!isCloud()) return none;
+  const { data: brand, error } = await db
+    .from('brands')
+    .select('organization_id')
+    .eq('id', source.brand_id)
+    .maybeSingle();
+  if (error) throw new Error(`brands read: ${error.message}`);
+  const cap = await capOf(brand?.organization_id ?? null);
+  if (cap < 0) return none;
+  const { data: brands, error: brandsError } = await db
+    .from('brands')
+    .select('id')
+    .eq('organization_id', brand.organization_id);
+  if (brandsError) throw new Error(`brands read: ${brandsError.message}`);
+  const { count, error: countError } = await db
+    .from('catalog_products')
+    .select('id', { count: 'exact', head: true })
+    .in(
+      'brand_id',
+      (brands ?? []).map((b) => b.id),
+    )
+    .neq('source', sourceKey(source.id))
+    .is('removed_at', null);
+  if (countError) throw new Error(`catalog_products count: ${countError.message}`);
+  return { room: Math.max(0, cap - (count ?? 0)), cap };
+}
+
 async function record(db, id, at, outcome) {
   const { error } = await db
     .from('catalog_sources')
@@ -120,9 +162,10 @@ async function record(db, id, at, outcome) {
  * and nothing is recorded. A store's calls stop after `readMs` (STORE_READ_MS).
  *
  * @param {{ id: string, brand_id: string, kind: string, format: string, url?: string|null, account?: string|null }} source
- * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, connectors?: object, readMs?: number }} [options]
- *   `fetch` (a feed's), `request` (a store's HTTP client), `connectors` and
- *   `readMs` are the tests' stand-ins
+ * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, connectors?: object, readMs?: number, capOf?: Function }} [options]
+ *   `fetch` (a feed's), `request` (a store's HTTP client), `connectors`,
+ *   `readMs` and `capOf` (the plan's product cap, by organization) are the
+ *   tests' stand-ins
  */
 export async function syncSource(source, options = {}) {
   if (reading.has(source.id)) {
@@ -149,6 +192,7 @@ async function syncOnce(
     request = requestJson,
     connectors,
     readMs = STORE_READ_MS,
+    capOf,
   },
 ) {
   const at = now.toISOString();
@@ -178,9 +222,11 @@ async function syncOnce(
       }
     }
     if (!outcome) {
+      const { room, cap } = await productRoom(source, { db, capOf });
       const counts = await syncCatalog(source.brand_id, sourceKey(source.id), parsed.items, {
         db,
         now,
+        room,
       });
       outcome = {
         status: 'ok',
@@ -191,6 +237,8 @@ async function syncOnce(
           errors: parsed.errors.slice(0, ERRORS_KEPT).map((e) => e.message),
           products: counts.products,
           variants: counts.variants,
+          // Products past the plan's cap, not kept (ECOM-019), and the cap.
+          ...(counts.overLimit ? { overLimit: counts.overLimit, limit: cap } : {}),
         },
       };
     }

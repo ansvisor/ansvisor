@@ -957,6 +957,16 @@ export async function getBotRawCap(orgId) {
 }
 
 /**
+ * Live catalog products an organization's brands may have across their
+ * sources (ECOM-019): -1 = no cap. Throws PlanLimitError (402) without an
+ * active subscription, like every billed feature.
+ */
+export async function getCatalogProductCap(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  return plan.limits.maxCatalogProducts ?? -1;
+}
+
+/**
  * Express middleware that attaches req.plan from the authenticated user.
  * Must run after auth middleware (req.user must exist).
  */
