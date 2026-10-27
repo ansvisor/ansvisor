@@ -180,6 +180,17 @@ export function SendDialog({
           ? { status: delivery.http_status! }
           : { failed: delivery.error ?? t('errors.failed'), webflow: target === 'webflow' },
       );
+      // The header says it failed too, with why, as the page's last send.
+      onSent?.({
+        status: 'failed',
+        target,
+        at: new Date().toISOString(),
+        error:
+          delivery.error ??
+          (refused
+            ? t('errors.webhookStatus', { status: delivery.http_status! })
+            : t('errors.failed')),
+      });
       return;
     }
     keepTarget(target);

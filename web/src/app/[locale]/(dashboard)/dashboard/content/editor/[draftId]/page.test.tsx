@@ -5837,6 +5837,25 @@ describe('the side panel', () => {
       expect(container.textContent).toContain('Sent to your CMS');
     });
 
+    it('says in the header that a send failed, while the dialog says why', async () => {
+      sendPagesToCms.mockResolvedValueOnce({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'failed', http_status: 500, error: null }],
+      });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Send').click());
+      expect(dialog()!.querySelector('[role="alert"]')!.textContent).toContain(
+        "The webhook answered 500 and didn't take the page.",
+      );
+      expect(container.textContent).toContain('Send failed');
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+      expect(container.textContent).toContain('Send failed');
+    });
+
     it('says in the header, as the page opens, that it is in Webflow as a draft', async () => {
       readDraftCms.mockResolvedValue({
         fields: {},
