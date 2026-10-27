@@ -165,6 +165,13 @@ const brandState = vi.hoisted(() => ({
 }));
 const updateBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ updateBrand }));
+// Brief › Shopping path (shopping path, part 3) reads its own path: none here.
+vi.mock('@/lib/actions/shopping-path', () => ({
+  getDraftShoppingPath: vi.fn(async () => ({ path: null })),
+  buildDraftShoppingPath: vi.fn(),
+  saveDraftShoppingPath: vi.fn(),
+  searchCatalogProducts: vi.fn(async () => []),
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
@@ -2873,6 +2880,19 @@ describe('the side panel', () => {
     await act(async () => button('Hide side panel')!.click());
     expect(panel()).toBeNull();
     expect(rail()).not.toBeNull();
+  });
+
+  // Brief › Shopping path (shopping path, part 3): an online shop's page that links products.
+  it.each([
+    [{ siteType: 'ecommerce', pageType: 'buying_guide' }, true],
+    [{ siteType: 'b2b', pageType: 'buying_guide' }, false],
+    [{ siteType: 'ecommerce', pageType: 'product_page' }, false],
+  ] as const)('shows the shopping path in Brief for %o: %s', async (over, shown) => {
+    getContentDraft.mockResolvedValue(draft(over));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Brief');
+    expect(panel()!.querySelector('section[aria-label="Shopping path"]') !== null).toBe(shown);
   });
 
   it('points a page without fan-outs to Sources, where its prompts are added', async () => {
