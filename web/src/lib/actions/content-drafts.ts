@@ -114,6 +114,7 @@ import {
   type DraftSourceKind,
   type DraftSourcesData,
 } from '@/lib/content/sources';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -926,6 +927,7 @@ export async function startDraftFromAction(
   | { draftId: string; created: boolean; importFailed: boolean }
   | { error: 'invalid' | 'not_found' | 'failed' }
 > {
+  await assertWritable();
   const parsed = actionStartInput.safeParse({ brandId, actionId, taskId, ...options });
   if (!parsed.success) return { error: 'invalid' };
   const { page } = parsed.data;
@@ -1195,6 +1197,7 @@ export async function getContentOverlap(
  * stored as detected, so it follows the page (CE-023).
  */
 export async function createContentDraft(brandId: string, start: DraftStart): Promise<string> {
+  await assertWritable();
   const parsed = startInput.safeParse(start);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
   const { method, pageType, typePicked, source, bodyHtml, sourceUrl } = parsed.data;
@@ -1283,6 +1286,7 @@ export async function saveContentDraft(
     base: { updatedAt: string; bodyHash: string; unconfirmedHash?: string };
   },
 ): Promise<SaveDraftResult> {
+  await assertWritable();
   if (typeof input?.bodyHtml === 'string' && input.bodyHtml.length > MAX_BODY_HTML_LENGTH) {
     return { ok: false, reason: 'too_large' };
   }
@@ -1371,6 +1375,7 @@ const pageTypeInput = z.enum(PAGE_TYPES);
  * whatever the page says. Throws 'not_found' when no row changed.
  */
 export async function setContentDraftPageType(id: string, pageType: PageType): Promise<void> {
+  await assertWritable();
   if (!draftId.safeParse(id).success || !pageTypeInput.safeParse(pageType).success) {
     throw new Error('invalid');
   }
@@ -1395,6 +1400,7 @@ const OTHER_ORGANIZATION = '23514';
  * is the same.
  */
 export async function setContentDraftAuthor(id: string, authorId: string | null): Promise<void> {
+  await assertWritable();
   if (
     !draftId.safeParse(id).success ||
     (authorId !== null && !z.guid().safeParse(authorId).success)
@@ -1422,6 +1428,7 @@ export async function setContentDraftReviewer(
   id: string,
   reviewerId: string | null,
 ): Promise<void> {
+  await assertWritable();
   if (
     !draftId.safeParse(id).success ||
     (reviewerId !== null && !z.guid().safeParse(reviewerId).success)
@@ -1450,6 +1457,7 @@ export async function confirmDraftAuthor(
   what: 'real' | 'profile',
   on: boolean,
 ): Promise<void> {
+  await assertWritable();
   if (
     !draftId.safeParse(id).success ||
     (what !== 'real' && what !== 'profile') ||
@@ -1475,6 +1483,7 @@ export async function confirmDraftAuthor(
  * sources after; 'full' when the page keeps 50 already.
  */
 export async function keepDraftSource(id: string, url: string): Promise<string[]> {
+  await assertWritable();
   if (!draftId.safeParse(id).success || !keptSource.safeParse(url).success) {
     throw new Error('invalid');
   }
@@ -1505,6 +1514,7 @@ export async function setContentDraftStatus(
   id: string,
   status: (typeof ROW_STATUSES)[number],
 ): Promise<void> {
+  await assertWritable();
   if (!draftId.safeParse(id).success || !(ROW_STATUSES as readonly string[]).includes(status)) {
     throw new Error('invalid');
   }
@@ -1561,6 +1571,7 @@ async function unpublishOf(
  * managers; 00233's trigger refuses anyone else). It keeps its status.
  */
 export async function archiveContentDraft(id: string, archived: boolean): Promise<void> {
+  await assertWritable();
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1583,6 +1594,7 @@ export async function archiveContentDraft(id: string, archived: boolean): Promis
  * policy, 00233). Its versions, sources and suggestions go with it.
  */
 export async function deleteContentDraft(id: string): Promise<void> {
+  await assertWritable();
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase.from('content_drafts').delete().eq('id', id).select('id');
@@ -1614,6 +1626,7 @@ export async function markContentDraftReady(
   id: string,
   anyway?: { trust: number; reason: string | null; count: number | null },
 ): Promise<{ status: DraftStatus; tasksDone: number }> {
+  await assertWritable();
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const logged = anyway === undefined ? null : readyAnyway.safeParse(anyway);
   if (logged && !logged.success) throw new Error('invalid');
@@ -1676,6 +1689,7 @@ export async function markContentDraftReady(
 export async function unmarkContentDraftReady(
   id: string,
 ): Promise<{ status: DraftStatus; tasksReopened: number }> {
+  await assertWritable();
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1839,6 +1853,7 @@ export async function getDraftHandoffs(id: string): Promise<DraftHandOff[]> {
  * another organization's.
  */
 export async function restoreDraftVersion(id: string, versionId: string): Promise<RestoredDraft> {
+  await assertWritable();
   if (!draftId.safeParse(id).success || !draftId.safeParse(versionId).success) {
     throw new Error('invalid');
   }
@@ -1894,6 +1909,7 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
  * accepts. A failure is logged, not thrown: the suggestion can be undone.
  */
 export async function keepAgentBeforeVersion(id: string): Promise<void> {
+  await assertWritable();
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   await keepVersion(supabase, id, 'agent_before');
@@ -2009,6 +2025,7 @@ export async function decideDraftSuggestions(
   ids: string[],
   status: SuggestionStatus,
 ): Promise<number> {
+  await assertWritable();
   const parsed = decideInput.safeParse({ ids, status });
   if (!parsed.success) throw new Error('invalid');
   const supabase = await createClient();
@@ -2088,6 +2105,7 @@ export async function setDraftSourceIncluded(
   id: string,
   choice: { kind: DraftSourceKind; ref: string; included: boolean },
 ): Promise<void> {
+  await assertWritable();
   const parsed = sourceChoice.safeParse(choice);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
@@ -2131,6 +2149,7 @@ export type AddedDraftSource = z.infer<typeof addedSource>;
  * as added by hand. Throws 'not_found' when the draft isn't the member's.
  */
 export async function addDraftSource(id: string, source: AddedDraftSource): Promise<void> {
+  await assertWritable();
   const parsed = addedSource.safeParse(source);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
@@ -2160,6 +2179,7 @@ const promptIdList = z.array(z.guid()).min(1).max(100);
  * 'not_found' when the draft isn't the member's.
  */
 export async function addDraftPrompts(id: string, promptIds: string[]): Promise<void> {
+  await assertWritable();
   const parsed = promptIdList.safeParse(promptIds);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();
@@ -2225,6 +2245,7 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
 
 /** Edit brief (CE-007): the brief as the person wrote it. Throws 'not_found' when no row changed. */
 export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<DraftBrief> {
+  await assertWritable();
   const parsed = draftBriefSchema.safeParse({ ...brief, origin: 'edit' });
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   // The column's 64 KB (00212): said, not a failed save.
@@ -2541,6 +2562,7 @@ async function startAgentRun(
  * row changed.
  */
 export async function saveDraftRules(id: string, rules: DraftRulesInput): Promise<void> {
+  await assertWritable();
   const parsed = draftRulesSchema.safeParse(rules);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   if (!draftRulesFit(parsed.data)) throw new Error('too_large');
@@ -2601,6 +2623,7 @@ export async function saveMyRuleSet(
   pageType: PageType,
   set: SavedRuleSet,
 ): Promise<void> {
+  await assertWritable();
   const parsed = savedRuleSetSchema.safeParse(set);
   if (
     !draftId.safeParse(brandId).success ||
@@ -2765,6 +2788,7 @@ export async function getOwnImages(id: string): Promise<string[]> {
  * is fine; 'full' when the draft keeps 50.
  */
 export async function confirmOwnImage(id: string, src: string): Promise<'ok' | 'full'> {
+  await assertWritable();
   if (!draftId.safeParse(id).success || !ownImageSrc.safeParse(src).success) {
     throw new Error('invalid');
   }
@@ -2826,6 +2850,7 @@ export async function confirmDraftItem(
   kind: ConfirmationKind,
   key: string,
 ): Promise<'ok' | 'full'> {
+  await assertWritable();
   if (
     !draftId.safeParse(id).success ||
     !confirmationKind.safeParse(kind).success ||

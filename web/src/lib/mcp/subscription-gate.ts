@@ -1,23 +1,27 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { NextResponse } from 'next/server';
 import { isCloud, isSubscriptionActive } from '@/config/plans';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import {
+  SUBSCRIPTION_INACTIVE,
+  SubscriptionInactiveError,
+  failedCallResponse,
+  subscriptionInactiveResponse,
+} from '@/lib/subscription-guard';
 
 /**
  * Ansvisor Cloud's read-only mode on the API key surface (MCP tools, the
  * /api/mcp REST routes): while a workspace's plan isn't active — its trial
  * ended, or it was canceled — reading stays open and anything that writes,
  * runs or spends answers with the server's 402 body, as the dashboard's
- * upgrade dialog reads it. Self-hosted is never gated.
+ * upgrade dialog reads it. Self-hosted is never gated. The refusal itself is
+ * shared with the web app's own writes (lib/subscription-guard.ts).
  */
-export const SUBSCRIPTION_INACTIVE = {
-  error: 'plan_limit',
-  code: 'subscription_inactive',
-  message:
-    "This workspace's plan isn't active (its free trial ended or it was canceled), so it is " +
-    'read-only: reading still works, but nothing can be changed, run or generated until an ' +
-    'admin chooses a plan in Settings › Billing.',
-} as const;
+export {
+  SUBSCRIPTION_INACTIVE,
+  SubscriptionInactiveError,
+  failedCallResponse,
+  subscriptionInactiveResponse,
+};
 
 /**
  * The tools that only read: open while read-only. Any other tool — a new one
@@ -39,16 +43,6 @@ export async function subscriptionActiveFor(organizationId: string | null): Prom
   return isSubscriptionActive(data?.subscription_status as string | null | undefined);
 }
 
-/** A call that writes, runs or spends, refused while the workspace is read-only. */
-export class SubscriptionInactiveError extends Error {
-  readonly code = SUBSCRIPTION_INACTIVE.code;
-
-  constructor() {
-    super(SUBSCRIPTION_INACTIVE.message);
-    this.name = 'SubscriptionInactiveError';
-  }
-}
-
 /**
  * Refuse a costly call (the server's internal endpoints: a brief, a Site
  * Audit, an Improve action) while the workspace is read-only, whoever calls
@@ -56,22 +50,6 @@ export class SubscriptionInactiveError extends Error {
  */
 export async function assertSubscriptionActive(organizationId: string | null): Promise<void> {
   if (!(await subscriptionActiveFor(organizationId))) throw new SubscriptionInactiveError();
-}
-
-/** The REST routes' answer to a write while read-only. */
-export function subscriptionInactiveResponse(): NextResponse {
-  return NextResponse.json(SUBSCRIPTION_INACTIVE, { status: 402 });
-}
-
-/**
- * A REST route's answer to a call that threw: 402 subscription_inactive when
- * a costly call was refused (assertSubscriptionActive), else 500 with the
- * error's message.
- */
-export function failedCallResponse(err: unknown): NextResponse {
-  if (err instanceof SubscriptionInactiveError) return subscriptionInactiveResponse();
-  const message = err instanceof Error ? err.message : 'Failed';
-  return NextResponse.json({ error: message }, { status: 500 });
 }
 
 /** A tool's answer to a call while read-only: a tool error carrying the same body. */

@@ -8,6 +8,7 @@ import { API_BASE_URL } from '@/config/api';
 // Types only — this file is `'use server'`, so the guards that go with them
 // live in a plain module (every runtime export here must be a server action).
 import type { PromptSuggestionSource, SuggestionSourceData } from '@/lib/prompt-suggestion-source';
+import { assertWritable } from '@/lib/subscription-guard';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -312,6 +313,7 @@ export async function trackPagePrompts(
   pageUrl: string | null,
   prompts: { text: string; topic: string }[],
 ): Promise<TrackPagePromptsResult> {
+  await assertWritable();
   const wanted = (Array.isArray(prompts) ? prompts : [])
     .filter((p) => typeof p?.text === 'string' && p.text.trim())
     .slice(0, MAX_PAGE_PROMPTS);

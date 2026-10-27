@@ -24,6 +24,7 @@ import {
 import { SIGNAL_ROW_COLUMNS, mapSignalRows, type Signal, type SignalRow } from '@/lib/signals/map';
 import { readPromptPlaces } from '@/lib/signals/prompt-places';
 import type { ActionStatus } from '@/lib/action-center/registry';
+import { assertWritable } from '@/lib/subscription-guard';
 
 export type { Signal } from '@/lib/signals/map';
 
@@ -203,6 +204,7 @@ export async function updateSignalStatus(
   signalIds: string[],
   status: SignalStatus,
 ): Promise<void> {
+  await assertWritable();
   if (signalIds.length === 0) return;
   const supabase = await createClient();
   const { data: before } = await supabase

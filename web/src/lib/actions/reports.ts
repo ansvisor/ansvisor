@@ -29,6 +29,7 @@ import {
   type ReportSection,
   type ReportTemplateId,
 } from '@/lib/reports/templates';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * Simple Reports MVP — generate, list and delete immutable report snapshots.
@@ -780,6 +781,7 @@ export async function createReport(
     sections?: ReportSection[];
   },
 ): Promise<{ id: string }> {
+  await assertWritable();
   const supabase = await createClient();
   const {
     data: { session },
@@ -1024,6 +1026,7 @@ export async function getReport(id: string): Promise<Report | null> {
 }
 
 export async function deleteReport(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
   const { error } = await supabase.from('reports').delete().eq('id', id);
   if (error) throw new Error(error.message);

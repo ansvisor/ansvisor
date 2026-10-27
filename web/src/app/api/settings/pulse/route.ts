@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { writeRefusal } from '@/lib/subscription-guard';
 import { parseRecipients } from '@/lib/pulse-recipients';
 
 /**
@@ -93,6 +94,8 @@ export async function PUT(request: Request) {
   if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'manager') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  const refused = await writeRefusal();
+  if (refused) return refused;
 
   let body: {
     brandId?: string;

@@ -24,6 +24,11 @@ export async function GET() {
   return NextResponse.json({ keys: data ?? [] });
 }
 
+/**
+ * Open while the workspace is read-only (2026-10-14 decision): a key costs
+ * nothing, and on a read-only workspace it only reads — the MCP surface
+ * answers subscription_inactive to everything but list_ and get_ tools.
+ */
 export async function POST(req: Request) {
   const supabase = await createClient();
   const {
