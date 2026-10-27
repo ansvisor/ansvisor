@@ -4990,7 +4990,7 @@
       },
       "placeholders": {
         "label": "Placeholders to fill",
-        "left": "{count, plural, one {# placeholder to fill} other {# placeholders to fill}}",
+        "left": "{count, plural, =0 {No placeholders left to fill} one {# placeholder to fill} other {# placeholders to fill}}",
         "onOf": "Placeholder {on} of {count}",
         "previous": "Previous placeholder",
         "next": "Next placeholder",

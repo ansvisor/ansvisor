@@ -3,6 +3,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   PlaceholderMarks,
+  placeholderIndexAt,
   placeholderMarksKey,
   placeholderRanges,
   selectPlaceholder,
@@ -91,6 +92,38 @@ describe('stepPlaceholder', () => {
 
   it('finds none in a page without one', () => {
     expect(stepPlaceholder([], 3, 1)).toBeNull();
+  });
+
+  it('goes on past two that touch, the second selected starting where the first ends', () => {
+    const e = open('<p>Call [ab][cd] or [ef].</p>');
+    const found = placeholderRanges(e.state.doc);
+    expect(found.map((r) => e.state.doc.textBetween(r.from, r.to))).toEqual([
+      '[ab]',
+      '[cd]',
+      '[ef]',
+    ]);
+    expect(found[0].to).toBe(found[1].from);
+    // On the second (its start is the first's end), Next is the third, not the second again.
+    expect(placeholderIndexAt(found, found[1].from)).toBe(1);
+    expect(stepPlaceholder(found, found[1].from, 1)).toBe(found[2]);
+    expect(stepPlaceholder(found, found[1].from, -1)).toBe(found[0]);
+    // On the first, Next is the second.
+    expect(stepPlaceholder(found, found[0].from, 1)).toBe(found[1]);
+  });
+});
+
+describe('placeholderIndexAt', () => {
+  const ranges = [
+    { from: 5, to: 10, block: { from: 0, to: 30 } },
+    { from: 10, to: 15, block: { from: 0, to: 30 } },
+    { from: 20, to: 25, block: { from: 0, to: 30 } },
+  ];
+
+  it('reads the one the cursor is in, at its end too, and the second where two touch', () => {
+    expect(placeholderIndexAt(ranges, 7)).toBe(0);
+    expect(placeholderIndexAt(ranges, 10)).toBe(1);
+    expect(placeholderIndexAt(ranges, 25)).toBe(2);
+    expect(placeholderIndexAt(ranges, 17)).toBe(-1);
   });
 });
 

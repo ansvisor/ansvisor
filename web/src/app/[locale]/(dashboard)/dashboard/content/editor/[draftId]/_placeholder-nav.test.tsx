@@ -34,6 +34,7 @@ const button = (label: string) =>
   [...container.querySelectorAll('button')].find(
     (b) => b.getAttribute('aria-label') === label || b.textContent === label,
   )!;
+const status = () => container.querySelector('[role="status"]')!.textContent;
 const selected = () => {
   const { from, to } = editor.state.selection;
   return editor.state.doc.textBetween(from, to);
@@ -85,13 +86,45 @@ describe('PlaceholderNav', () => {
     await act(async () => {
       editor.commands.insertContent('Beta');
     });
-    expect(container.textContent).toBe('');
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(0);
+    // A screen reader hears that the last one is filled.
+    expect(status()).toBe('No placeholders left to fill');
   });
 
-  it('counts the ones the page doesn’t show, and shows them in HTML once the rest are filled', async () => {
+  it('steps past two that touch, on to the second and then the next', async () => {
+    await render('<p>Call [ab][cd] or [ef].</p>');
+    await act(async () => button('Next placeholder').click());
+    expect(selected()).toBe('[ab]');
+    await act(async () => button('Next placeholder').click());
+    expect(selected()).toBe('[cd]');
+    expect(container.textContent).toContain('Placeholder 2 of 3');
+    await act(async () => button('Next placeholder').click());
+    expect(selected()).toBe('[ef]');
+    expect(container.textContent).toContain('Placeholder 3 of 3');
+  });
+
+  it('says the count as it changes, in a polite status', async () => {
+    await render('<p>Rivals like [competitor] and [partner] lead.</p>');
+    expect(container.querySelector('[role="status"]')!.getAttribute('aria-live')).toBe('polite');
+    expect(status()).toBe('2 placeholders to fill');
+    await act(async () => button('Next placeholder').click());
+    // Stepping doesn't change it: only a fill does.
+    expect(status()).toBe('2 placeholders to fill');
+    await act(async () => {
+      editor.commands.insertContent('Acme');
+    });
+    expect(status()).toBe('1 placeholder to fill');
+  });
+
+  it('counts the ones the page doesn’t show, and offers Show in HTML for them all along', async () => {
     const onShowHidden = await render('<p>Rivals like [competitor] lead.</p>', 1);
     expect(container.textContent).toContain('2 placeholders to fill');
+    // The arrows step through the page's only: Show in HTML is there for the hidden one.
+    expect(button('Show in HTML')).toBeTruthy();
     await act(async () => button('Next placeholder').click());
+    expect(container.textContent).toContain('Placeholder 1 of 2');
+    expect(button('Show in HTML')).toBeTruthy();
     await act(async () => {
       editor.commands.insertContent('Acme');
     });
@@ -100,8 +133,18 @@ describe('PlaceholderNav', () => {
     expect(onShowHidden).toHaveBeenCalledOnce();
   });
 
+  it('says where the hidden ones are to a screen reader, not only in a tooltip', async () => {
+    await render('<p>Nothing to fill.</p>', 2);
+    const show = button('Show in HTML');
+    const hint = document.getElementById(show.getAttribute('aria-describedby')!)!;
+    expect(hint.textContent).toBe(
+      "In an image's alt text, the JSON-LD or an HTML block: the page doesn't show them.",
+    );
+  });
+
   it('shows nothing for a page without one', async () => {
     await render('<p>Nothing to fill.</p>');
     expect(container.textContent).toBe('');
+    expect(container.querySelectorAll('button')).toHaveLength(0);
   });
 });

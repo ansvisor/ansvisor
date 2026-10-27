@@ -6035,6 +6035,30 @@ describe('the side panel', () => {
       await act(async () => inDialog('Cancel').click());
     });
 
+    it('keeps the focus on the placeholder Fill now selects in the HTML view, not on the header’s button', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Send to CMS')!.focus();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
+    });
+
     it('is for admins and managers only', async () => {
       getContentDraft.mockResolvedValue(draft());
       await renderPage('analyst');
@@ -6257,6 +6281,29 @@ describe('the side panel', () => {
         .editor;
       const { from, to } = editor.state.selection;
       expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
+    });
+
+    it('keeps the focus on the placeholder Export’s Fill now selects in the HTML view, not on the header’s button', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Export')!.focus();
+      await act(async () => button('Export')!.click());
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
     });
 
     it('selects a placeholder only an HTML block holds in the HTML view, and says where it is', async () => {

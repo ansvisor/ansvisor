@@ -50,6 +50,15 @@ export function placeholderRanges(doc: PmNode): PlaceholderRange[] {
 }
 
 /**
+ * Which placeholder the cursor at `at` is on (-1 for none): the last one
+ * holding it, so where two touch ("[ab][cd]") the end of the first, which
+ * is where the second starts, is the second's.
+ */
+export function placeholderIndexAt(ranges: readonly PlaceholderRange[], at: number): number {
+  return ranges.findLastIndex((r) => at >= r.from && at <= r.to);
+}
+
+/**
  * The placeholder after (or before) the cursor at `at`, round to the first
  * (or the last) past the end: from inside one, its neighbour.
  */
@@ -59,7 +68,7 @@ export function stepPlaceholder(
   direction: 1 | -1,
 ): PlaceholderRange | null {
   if (!ranges.length) return null;
-  const here = ranges.findIndex((r) => at >= r.from && at <= r.to);
+  const here = placeholderIndexAt(ranges, at);
   if (direction === 1) {
     const next = here >= 0 ? here + 1 : ranges.findIndex((r) => r.from > at);
     return ranges[next >= 0 && next < ranges.length ? next : 0];
