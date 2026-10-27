@@ -18,6 +18,8 @@ const connectStore = vi.fn();
 const reconnectStore = vi.fn();
 const disconnectStore = vi.fn();
 const connectSignInSource = vi.fn();
+const categoryPages = vi.fn();
+const setCategoryPage = vi.fn();
 const listSignInAccounts = vi.fn();
 let configured;
 let googleConfigured;
@@ -105,6 +107,19 @@ vi.mock('../connectors/index.js', () => ({
     kind === 'merchant_center' ? { kind, signIn: 'google-merchant-center' } : { kind },
   isSignIn: (connector) => typeof connector?.signIn === 'string',
 }));
+vi.mock('../lib/catalog/category-pages.js', () => {
+  class CategoryPageError extends Error {
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+    }
+  }
+  return {
+    CategoryPageError,
+    categoryPages: (...args) => categoryPages(...args),
+    setCategoryPage: (...args) => setCategoryPage(...args),
+  };
+});
 vi.mock('../lib/composio.js', () => ({
   isComposioConfigured: (provider) => provider === 'google-merchant-center' && googleConfigured,
 }));
@@ -130,6 +145,16 @@ beforeEach(async () => {
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'org-1' });
   syncSource.mockReset().mockResolvedValue({ status: 'ok', counts: { items: 4 } });
   googleConfigured = true;
+  categoryPages.mockReset().mockResolvedValue([
+    {
+      name: 'Hiking Boots',
+      products: 24,
+      inStock: 18,
+      page: { url: 'https://shop.example/collections/hiking-boots', title: 'Hiking boots' },
+      how: 'address',
+    },
+  ]);
+  setCategoryPage.mockReset().mockResolvedValue(undefined);
   connectSignInSource.mockReset().mockResolvedValue({
     id: 'gmc-1',
     brand_id: BRAND,
@@ -434,5 +459,63 @@ describe('DELETE /api/catalog/sources/:id', () => {
     expect((await send('DELETE', `/sources/${STORE}`)).status).toBe(403);
     expect((await send('DELETE', '/sources/nope')).status).toBe(404);
     expect(disconnectStore).not.toHaveBeenCalled();
+  });
+});
+
+describe('category pages (shopping path)', () => {
+  it("lists the brand's categories and their pages to any member", async () => {
+    role = 'analyst';
+    const res = await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).categories[0]).toMatchObject({
+      name: 'Hiking Boots',
+      how: 'address',
+    });
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'user-1');
+    expect(categoryPages).toHaveBeenCalledWith(BRAND);
+    expect((await fetch(`${base}/categories?brandId=nope`)).status).toBe(400);
+  });
+
+  it("sets a category's page, or none, for an admin or a manager only", async () => {
+    role = 'manager';
+    const body = { brandId: BRAND, category: 'Socks', url: 'https://shop.example/c/socks' };
+    expect((await send('PUT', '/categories', body)).status).toBe(200);
+    expect(setCategoryPage).toHaveBeenCalledWith({ ...body, userId: 'user-1' });
+    expect((await send('PUT', '/categories', { ...body, url: null })).status).toBe(200);
+    expect(setCategoryPage).toHaveBeenLastCalledWith({ ...body, url: null, userId: 'user-1' });
+
+    role = 'analyst';
+    expect((await send('PUT', '/categories', body)).status).toBe(403);
+    expect(setCategoryPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("says why a page can't be set, and puts a category back to its match", async () => {
+    setCategoryPage.mockRejectedValueOnce(
+      new (await import('../lib/catalog/category-pages.js')).CategoryPageError(
+        'off_site',
+        "The page must be on the brand's own site.",
+      ),
+    );
+    const refused = await send('PUT', '/categories', {
+      brandId: BRAND,
+      category: 'Socks',
+      url: 'https://elsewhere.example/socks',
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({
+      error: "The page must be on the brand's own site.",
+      code: 'off_site',
+    });
+
+    const back = await fetch(`${base}/categories?brandId=${BRAND}&category=Socks`, {
+      method: 'DELETE',
+    });
+    expect(back.status).toBe(200);
+    expect(setCategoryPage).toHaveBeenLastCalledWith({
+      brandId: BRAND,
+      category: 'Socks',
+      url: undefined,
+      userId: 'user-1',
+    });
   });
 });

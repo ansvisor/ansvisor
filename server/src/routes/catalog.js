@@ -4,6 +4,11 @@ import supabaseAdmin from '../config/supabase.js';
 import { connectorFor, isSignIn, signInConnectors, storeConnectors } from '../connectors/index.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { isComposioConfigured } from '../lib/composio.js';
+import {
+  CategoryPageError,
+  categoryPages,
+  setCategoryPage,
+} from '../lib/catalog/category-pages.js';
 import { credentialsConfigured } from '../lib/catalog/credentials.js';
 import { syncSource } from '../lib/catalog/sources.js';
 import {
@@ -34,6 +39,12 @@ import { catalogLimiter } from '../middleware/rate-limiter.js';
  *     sign-in platform's account (`input.account`), checked, then read;
  *   - PUT /api/catalog/sources/:id/credentials { input }: its sign-in
  *     replaced;
+ *   - GET /api/catalog/categories?brandId=…: the brand's categories, each
+ *     with its products, how many are in stock, and its page on the site
+ *     (shopping path): members read it;
+ *   - PUT /api/catalog/categories { brandId, category, url }: a category's
+ *     page set by hand (url), or set to none (null); DELETE with
+ *     ?brandId=…&category=… puts it back to the automatic match;
  *   - DELETE /api/catalog/sources/:id: a store removed, with its sign-in and
  *     its products.
  */
@@ -62,6 +73,9 @@ async function assertWriter(brandId, userId) {
 }
 
 function fail(req, res, err, what) {
+  if (err instanceof CategoryPageError) {
+    return res.status(400).json({ error: err.message, code: err.code });
+  }
   if (err instanceof StoreError) {
     return res.status(err.status).json({ error: err.message, code: err.code });
   }
@@ -205,6 +219,50 @@ router.post('/sources/:id/sync', catalogLimiter, async (req, res) => {
     return res.json(outcomeBody(await syncSource(source)));
   } catch (err) {
     return fail(req, res, err, 'catalog sync error');
+  }
+});
+
+// GET /api/catalog/categories?brandId=… — the brand's categories and their pages.
+router.get('/categories', catalogLimiter, async (req, res) => {
+  const parsed = z.object({ brandId: z.guid() }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertBrandAccess(parsed.data.brandId, req.user.id);
+    return res.json({ categories: await categoryPages(parsed.data.brandId) });
+  } catch (err) {
+    return fail(req, res, err, 'catalog categories error');
+  }
+});
+
+const categoryBody = z.object({
+  brandId: z.guid(),
+  category: z.string().min(1).max(750),
+  url: z.string().max(2048).nullable(),
+});
+
+// PUT /api/catalog/categories — a category's page set by hand, or none.
+router.put('/categories', catalogLimiter, async (req, res) => {
+  const parsed = categoryBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id);
+    await setCategoryPage({ ...parsed.data, userId: req.user.id });
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog category page error');
+  }
+});
+
+// DELETE /api/catalog/categories?brandId=…&category=… — back to the automatic match.
+router.delete('/categories', catalogLimiter, async (req, res) => {
+  const parsed = categoryBody.omit({ url: true }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id);
+    await setCategoryPage({ ...parsed.data, url: undefined, userId: req.user.id });
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog category page error');
   }
 });
 
