@@ -19,7 +19,7 @@
  */
 
 import supabaseAdmin from '../../config/supabase.js';
-import { activeBrandFilter } from '../active-subscriptions.js';
+import { activeBrandFilter, isBrandActive } from '../active-subscriptions.js';
 import { logger } from '../logger.js';
 import { recordSignalsForBrand } from './record.js';
 import { generateActionsForBrand } from '../action-center/generate.js';
@@ -79,6 +79,12 @@ async function rescoreSkippedNight(brandId, now) {
  *   run this pass covers; omitted, the brand's most recent stamped run.
  */
 export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
+  // Once the plan has ended, no signal is recorded and no action raised,
+  // whichever way the pass was started (a run's stamp, a late stamp, the
+  // first pass, the catch-up). No row either: should a plan be bought within
+  // the catch-up's window, the night is still there to catch up.
+  if (!(await isBrandActive(brandId))) return { skipped: 'subscription_inactive' };
+
   const trackingRunAt = runAt ?? (await latestStampedRun(brandId));
   if (!trackingRunAt) {
     logger.info({ brandId }, '[signals] no stamped run to record against');

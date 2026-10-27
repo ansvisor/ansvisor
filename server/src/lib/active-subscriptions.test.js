@@ -40,13 +40,25 @@ vi.mock('../config/supabase.js', () => ({
 
 const ids = (read) => read.in?.[1] ?? [];
 
-const { ACTIVE_SUBSCRIPTION_STATUSES, activeBrandFilter, activeOrgFilter, isOrgActive } =
-  await import('./active-subscriptions.js');
+const {
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  CACHED_ANSWER_MS,
+  CACHED_INACTIVE_MS,
+  MAX_CACHED_ANSWERS,
+  activeBrandFilter,
+  activeOrgFilter,
+  clearCachedAnswers,
+  isBrandActive,
+  isBrandActiveCached,
+  isOrgActive,
+  isOrgActiveCached,
+} = await import('./active-subscriptions.js');
 const { isSubscriptionActive } = await import('../config/plans.js');
 
 beforeEach(() => {
   reads.length = 0;
   failWith = null;
+  clearCachedAnswers();
   rows = {
     organizations: [
       { id: 'trialing', subscription_status: 'trialing' },
@@ -146,6 +158,104 @@ describe('isOrgActive', () => {
     vi.stubEnv('IS_CLOUD', 'false');
     reads.length = 0;
     expect(await isOrgActive('canceled')).toBe(true);
+    expect(reads).toHaveLength(0);
+  });
+});
+
+describe('isBrandActive', () => {
+  it("tells one brand by its organization's subscription, self-hosted always", async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    expect(await isBrandActive('b-trialing')).toBe(true);
+    expect(await isBrandActive('b-canceled')).toBe(false);
+    expect(await isBrandActive('b-orphan')).toBe(false);
+    vi.stubEnv('IS_CLOUD', 'false');
+    reads.length = 0;
+    expect(await isBrandActive('b-canceled')).toBe(true);
+    expect(reads).toHaveLength(0);
+  });
+});
+
+/**
+ * What outside sites send us (2026-10-27): one read per organization or
+ * brand every CACHED_ANSWER_MS, not one per event.
+ */
+describe('isOrgActiveCached and isBrandActiveCached', () => {
+  const T0 = 1_800_000_000_000;
+
+  it('keeps an active answer for minutes, without a read, until they are up', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    expect(await isOrgActiveCached('active', { now: T0 })).toBe(true);
+    expect(reads).toHaveLength(1);
+
+    // The plan ends meanwhile: still the kept answer, without a read.
+    rows.organizations.find((org) => org.id === 'active').subscription_status = 'canceled';
+    expect(await isOrgActiveCached('active', { now: T0 + CACHED_ANSWER_MS - 1 })).toBe(true);
+    expect(reads).toHaveLength(1);
+
+    // Once they are up, read again.
+    expect(await isOrgActiveCached('active', { now: T0 + CACHED_ANSWER_MS })).toBe(false);
+    expect(reads).toHaveLength(2);
+  });
+
+  it('keeps an inactive answer a minute at most, so a plan bought now counts soon', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    expect(CACHED_INACTIVE_MS).toBeLessThanOrEqual(60_000);
+    expect(await isOrgActiveCached('canceled', { now: T0 })).toBe(false);
+    expect(await isBrandActiveCached('b-canceled', { now: T0 })).toBe(false);
+
+    rows.organizations.find((org) => org.id === 'canceled').subscription_status = 'active';
+    rows.brands.find((brand) => brand.id === 'b-canceled').organizations.subscription_status =
+      'trialing';
+    expect(await isOrgActiveCached('canceled', { now: T0 + CACHED_INACTIVE_MS - 1 })).toBe(false);
+    expect(reads).toHaveLength(2);
+    expect(await isOrgActiveCached('canceled', { now: T0 + CACHED_INACTIVE_MS })).toBe(true);
+    expect(await isBrandActiveCached('b-canceled', { now: T0 + CACHED_INACTIVE_MS })).toBe(true);
+    expect(reads).toHaveLength(4);
+  });
+
+  it('keeps organizations and brands apart, and a burst waits on one read', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    const answers = await Promise.all([
+      isBrandActiveCached('b-active', { now: T0 }),
+      isBrandActiveCached('b-active', { now: T0 }),
+      isBrandActiveCached('b-canceled', { now: T0 }),
+      isOrgActiveCached('active', { now: T0 }),
+    ]);
+    expect(answers).toEqual([true, true, false, true]);
+    expect(reads.map((read) => [read.table, read.in[1]])).toEqual([
+      ['brands', ['b-active']],
+      ['brands', ['b-canceled']],
+      ['organizations', ['active']],
+    ]);
+  });
+
+  it("doesn't keep a read that failed: the next event asks again", async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    failWith = 'statement timeout';
+    await expect(isOrgActiveCached('active', { now: T0 })).rejects.toThrow('statement timeout');
+    failWith = null;
+    expect(await isOrgActiveCached('active', { now: T0 + 1 })).toBe(true);
+    expect(reads).toHaveLength(2);
+  });
+
+  it('forgets the oldest answer first once full', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    for (let i = 0; i < MAX_CACHED_ANSWERS; i++) await isOrgActiveCached(`org-${i}`, { now: T0 });
+    await isOrgActiveCached('one-more', { now: T0 });
+    reads.length = 0;
+    await isOrgActiveCached(`org-${MAX_CACHED_ANSWERS - 1}`, { now: T0 });
+    expect(reads).toHaveLength(0);
+    await isOrgActiveCached('org-0', { now: T0 });
+    expect(reads).toHaveLength(1);
+  });
+
+  it('lets nothing through without an id, and everything self-hosted, without a read', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    expect(await isOrgActiveCached(null, { now: T0 })).toBe(false);
+    expect(await isBrandActiveCached(undefined, { now: T0 })).toBe(false);
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await isOrgActiveCached('canceled', { now: T0 })).toBe(true);
+    expect(await isBrandActiveCached('b-canceled', { now: T0 })).toBe(true);
     expect(reads).toHaveLength(0);
   });
 });
