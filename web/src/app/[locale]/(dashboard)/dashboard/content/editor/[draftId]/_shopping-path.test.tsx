@@ -75,11 +75,16 @@ let root: Root;
 let stored: ShoppingPath;
 let saves: number;
 
-async function render() {
+async function render(onPathChange?: () => void) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ShoppingPathSection draftId="d1" brandId="b1" pageType="buying_guide" />
+        <ShoppingPathSection
+          draftId="d1"
+          brandId="b1"
+          pageType="buying_guide"
+          onPathChange={onPathChange}
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -199,6 +204,31 @@ describe('ShoppingPathSection', () => {
       { locked: [], removed: ['p2', 'p1'], added: [] },
     );
     expect(buildDraftShoppingPath).toHaveBeenCalledWith('d1', 'b1');
+  });
+
+  it('tells the editor of each change saved or picked, and one made meanwhile; not of one that failed', async () => {
+    const onPathChange = vi.fn();
+    await render(onPathChange);
+    expect(onPathChange).not.toHaveBeenCalled();
+    await act(async () => button('Remove Ridge Light Hiker from the page')!.click());
+    expect(onPathChange).toHaveBeenCalledTimes(1);
+    await act(async () => button('Pick again')!.click());
+    expect(onPathChange).toHaveBeenCalledTimes(2);
+
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      saveDraftShoppingPath.mockRejectedValueOnce(new Error('denied'));
+      await act(async () => button('Lock Summit GTX Boot')!.click());
+      buildDraftShoppingPath.mockResolvedValueOnce({ error: 'failed' });
+      await act(async () => button('Pick again')!.click());
+      expect(onPathChange).toHaveBeenCalledTimes(2);
+    } finally {
+      error.mockRestore();
+    }
+
+    saveDraftShoppingPath.mockResolvedValueOnce({ error: 'changed' });
+    await act(async () => button('Lock Summit GTX Boot')!.click());
+    expect(onPathChange).toHaveBeenCalledTimes(3);
   });
 
   it('puts a change back when it can’t be saved', async () => {

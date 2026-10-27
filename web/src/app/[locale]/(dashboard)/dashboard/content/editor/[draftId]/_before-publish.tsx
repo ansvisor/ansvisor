@@ -27,6 +27,7 @@ import {
 } from '@/lib/content/page-schema';
 import { qualityPhase } from '@/lib/content/quality';
 import { checksOff } from '@/lib/content/quality-profiles';
+import { listed, type ShoppingLinks } from '@/lib/content/shopping-check';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -100,7 +101,15 @@ export function BeforePublish({
   onAddDisclosure,
   product = null,
   category = null,
+  shopping = null,
 }: {
+  /**
+   * The page's shopping links against the catalog now (shopping path, part
+   * 6): the products that no longer sell, the category page, the products
+   * linked; 'reading' while it's read again, 'failed' when it couldn't be;
+   * null on a page without a shopping path.
+   */
+  shopping?: ShoppingLinks | 'reading' | 'failed' | null;
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
    * paragraph, its images and the price it states (pageOffer); null on
@@ -352,6 +361,7 @@ export function BeforePublish({
                 },
         ]
       : []),
+    ...(shopping ? [shoppingRow(t, shopping)] : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
 
@@ -570,4 +580,50 @@ function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
     };
   }
   return { state: 'ok', title: t('paste.title'), detail: t('paste.ok') };
+}
+
+/**
+ * The shopping links' row (shopping path, part 6): the products the page
+ * links that no longer sell, by name, to remove or replace on the page;
+ * else a missing link to the category page; else too few products linked;
+ * else how many work. While the catalog is read, or when it can't be, a
+ * check of its own.
+ */
+function shoppingRow(t: T, shopping: ShoppingLinks | 'reading' | 'failed'): Row {
+  if (shopping === 'reading' || shopping === 'failed') {
+    return { state: 'check', title: t('shopping.title'), detail: t(`shopping.${shopping}`) };
+  }
+  if (shopping.bad.length) {
+    const { shown, more } = listed(shopping.bad);
+    return {
+      state: 'missing',
+      title: t('shopping.bad', { count: shopping.bad.length }),
+      detail: t('shopping.badDetail', {
+        list: shown.map((p) => t('shopping.item', { title: p.title, state: p.state })).join(', '),
+        more,
+      }),
+    };
+  }
+  if (shopping.categories > 0 && !shopping.categoryLinked) {
+    return {
+      state: 'missing',
+      title: t('shopping.noCategory'),
+      detail: t('shopping.noCategoryDetail'),
+    };
+  }
+  if (shopping.linked.length < shopping.want) {
+    return {
+      state: 'missing',
+      title: t('shopping.few', { count: shopping.linked.length, want: shopping.want }),
+      detail: t('shopping.fewDetail'),
+    };
+  }
+  return {
+    state: 'ok',
+    title: t('shopping.ok'),
+    detail: t('shopping.okDetail', {
+      count: shopping.linked.length,
+      category: shopping.categoryLinked ? 'yes' : 'no',
+    }),
+  };
 }

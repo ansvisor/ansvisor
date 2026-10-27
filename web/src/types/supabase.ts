@@ -917,6 +917,72 @@ export type Database = {
           },
         ]
       }
+      catalog_item_issues: {
+        Row: {
+          attribute: string | null
+          brand_id: string
+          code: string
+          countries: string[]
+          created_at: string
+          description: string | null
+          detail: string | null
+          documentation: string | null
+          external_id: string
+          id: string
+          reporting_context: string | null
+          resolution: string | null
+          severity: string
+          source_id: string
+        }
+        Insert: {
+          attribute?: string | null
+          brand_id: string
+          code: string
+          countries?: string[]
+          created_at?: string
+          description?: string | null
+          detail?: string | null
+          documentation?: string | null
+          external_id: string
+          id?: string
+          reporting_context?: string | null
+          resolution?: string | null
+          severity: string
+          source_id: string
+        }
+        Update: {
+          attribute?: string | null
+          brand_id?: string
+          code?: string
+          countries?: string[]
+          created_at?: string
+          description?: string | null
+          detail?: string | null
+          documentation?: string | null
+          external_id?: string
+          id?: string
+          reporting_context?: string | null
+          resolution?: string | null
+          severity?: string
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_item_issues_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_item_issues_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_products: {
         Row: {
           brand_id: string

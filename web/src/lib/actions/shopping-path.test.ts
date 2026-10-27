@@ -12,6 +12,7 @@ interface Call {
   filters: [string, string, unknown][];
   orders: [string, unknown][];
   limit?: number;
+  range?: [number, number];
 }
 type Answer = { data: unknown; error: { message: string } | null };
 let calls: Call[];
@@ -40,6 +41,7 @@ vi.mock('@/lib/supabase/server', () => ({
         in: filter('in'),
         order: (col: string, opts: unknown) => (call.orders.push([col, opts]), chain),
         limit: (n: number) => ((call.limit = n), chain),
+        range: (from: number, to: number) => ((call.range = [from, to]), chain),
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
         maybeSingle: async () => result(),
         then: (resolve: (r: unknown) => void) => resolve(result()),
@@ -53,6 +55,7 @@ const {
   buildDraftShoppingPath,
   getDraftShoppingPath,
   getProductsForBlock,
+  getShoppingCheck,
   saveDraftShoppingPath,
   searchCatalogProducts,
   searchProductsForBlock,
@@ -448,5 +451,301 @@ describe('searchProductsForBlock', () => {
     expect(calls).toHaveLength(0);
     read = { data: null, error: { message: 'boom' } };
     await expect(searchProductsForBlock(BRAND, 'boots')).rejects.toThrow('boom');
+  });
+});
+
+describe('getShoppingCheck', () => {
+  const SHOP = '44444444-4444-4444-8444-444444444444';
+  const P = (n: number) => `bbbbbbbb-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const inPath = (n: number, url = `https://shop.example/products/${n}`) => ({
+    ...product(P(n)),
+    title: `Boot ${n}`,
+    url,
+  });
+  const pathOf = (over: Record<string, unknown> = {}) => ({
+    ...STORED,
+    categories: [
+      { name: 'Boots', url: 'https://shop.example/collections/boots', title: null },
+      // A link the path can't keep: nothing to check.
+      { name: 'Odd', url: 'javascript:alert(1)', title: null },
+    ],
+    products: [],
+    leftOut: [],
+    locked: [],
+    removed: [],
+    added: [],
+    ...over,
+  });
+  const row = (n: number, extra: Record<string, unknown> = {}) => ({
+    id: P(n),
+    brand_id: SHOP,
+    title: `Catalog ${n}`,
+    url: `https://shop.example/products/${n}`,
+    removed_at: null,
+    ...extra,
+  });
+  let variants = 0;
+  const variant = (n: number, availability: string, extra: Record<string, unknown> = {}) => {
+    variants += 1;
+    return {
+      id: `v${String(variants).padStart(6, '0')}`,
+      brand_id: SHOP,
+      product_id: P(n),
+      external_id: `ext-${variants}`,
+      url: null,
+      availability,
+      removed_at: null,
+      ...extra,
+    };
+  };
+  const issue = (v: { external_id: string }, context: string | null, severity = 'disapproved') => ({
+    id: `i-${v.external_id}-${context}-${severity}`,
+    brand_id: SHOP,
+    external_id: v.external_id,
+    severity,
+    reporting_context: context,
+  });
+
+  /** The tables, read as PostgREST would: by their filters, a page at a time. */
+  let db: Record<string, Record<string, unknown>[]>;
+  let down: Record<string, string>;
+  const draftRow = () => db.content_drafts[0];
+  const of = (table: string) => calls.filter((c) => c.table === table);
+  const inList = (call: Call) => call.filters.find(([kind]) => kind === 'in')?.[2] as string[];
+
+  beforeEach(() => {
+    variants = 0;
+    down = {};
+    db = {
+      content_drafts: [
+        {
+          id: DRAFT,
+          brand_id: SHOP,
+          shopping_path: pathOf(),
+          published_url: null,
+          source_url: null,
+        },
+      ],
+      brand_domains: [
+        { brand_id: SHOP, domain: 'shop.example', is_primary: false },
+        { brand_id: SHOP, domain: 'https://www.shop.example/', is_primary: true },
+      ],
+      catalog_products: [],
+      catalog_variants: [],
+      catalog_item_issues: [],
+    };
+    answer = (call) => {
+      if (down[call.table]) return { data: null, error: { message: down[call.table] } };
+      let rows = (db[call.table] ?? []).filter((r) =>
+        call.filters.every(([kind, col, v]) =>
+          kind === 'eq'
+            ? r[col] === v
+            : kind === 'in'
+              ? (v as unknown[]).includes(r[col])
+              : kind === 'is'
+                ? r[col] == null
+                : true,
+        ),
+      );
+      if (call.range) rows = rows.slice(call.range[0], call.range[1] + 1);
+      const single = call.table === 'content_drafts' || call.table === 'brand_domains';
+      return { data: single ? (rows[0] ?? null) : rows, error: null };
+    };
+  });
+
+  it('reads each product now: gone, sold out, refused only when every variant in stock is', async () => {
+    const v1 = variant(1, 'In Stock');
+    const v3a = variant(3, 'in_stock');
+    const v3b = variant(3, 'LIMITED AVAILABILITY');
+    const v3c = variant(3, 'sold out');
+    const v4a = variant(4, 'in_stock');
+    const v4b = variant(4, 'in_stock');
+    db.catalog_variants = [
+      v1,
+      variant(2, 'out_of_stock'),
+      variant(2, 'preorder'),
+      v3a,
+      v3b,
+      v3c,
+      v4a,
+      v4b,
+      variant(7, 'in_stock'),
+    ];
+    db.catalog_item_issues = [
+      // An ads refusal, and a warning for free listings: neither keeps it out.
+      issue(v1, 'SHOPPING_ADS'),
+      issue(v1, 'FREE_LISTINGS', 'warning'),
+      // The free listings however written, or no destination: refused.
+      issue(v3a, ' free_listings '),
+      issue(v3b, null),
+      // One variant refused, another in stock that isn't: it still sells.
+      issue(v4a, 'FREE_LISTINGS'),
+    ];
+    db.catalog_products = [
+      row(1),
+      row(2),
+      row(3),
+      row(4),
+      row(5, { removed_at: '2026-10-20' }),
+      row(7),
+    ];
+    // 6 isn't in the catalog; 7's link the path couldn't keep.
+    draftRow().shopping_path = pathOf({
+      products: [1, 2, 3, 4, 5, 6].map((n) => inPath(n)).concat(inPath(7, '')),
+    });
+
+    expect(await getShoppingCheck(DRAFT)).toEqual({
+      categories: ['shop.example/collections/boots'],
+      products: (
+        [
+          [1, 'ok'],
+          [2, 'sold_out'],
+          [3, 'refused'],
+          [4, 'ok'],
+          [5, 'gone'],
+          [6, 'gone'],
+        ] as const
+      ).map(([n, state]) => ({
+        key: `shop.example/products/${n}`,
+        title: `Boot ${n}`,
+        state,
+        inPath: true,
+      })),
+      site: 'https://www.shop.example/',
+    });
+    // The refusals of the variants in stock alone.
+    expect(of('catalog_item_issues').flatMap(inList).sort()).toEqual(
+      [v1, v3a, v3b, v4a, v4b, db.catalog_variants[8]].map((v) => v.external_id).sort(),
+    );
+  });
+
+  it('checks the removed and left-out products that no longer sell, at the catalog’s page', async () => {
+    db.catalog_products = [
+      row(10),
+      row(11),
+      row(12, { removed_at: '2026-10-21' }),
+      row(13, { url: null }),
+    ];
+    const v13 = variant(13, 'in_stock', { url: 'https://shop.example/products/13?variant=1' });
+    db.catalog_variants = [variant(10, 'out_of_stock'), variant(11, 'in_stock'), v13];
+    db.catalog_item_issues = [issue(v13, 'FREE_LISTINGS')];
+    draftRow().shopping_path = pathOf({
+      products: [inPath(1)],
+      removed: [P(10), P(11), P(12), P(1)],
+      leftOut: [
+        { id: P(13), title: 'Left Boot', reason: 'refused' },
+        { id: P(10), title: null, reason: 'sold_out' },
+      ],
+    });
+    db.catalog_products.push(row(1));
+    db.catalog_variants.push(variant(1, 'in_stock'));
+
+    const check = await getShoppingCheck(DRAFT);
+    expect(check!.products).toEqual([
+      { key: 'shop.example/products/1', title: 'Boot 1', state: 'ok', inPath: true },
+      // 11 still sells: linking it is fine.
+      { key: 'shop.example/products/10', title: 'Catalog 10', state: 'sold_out', inPath: false },
+      { key: 'shop.example/products/12', title: 'Catalog 12', state: 'gone', inPath: false },
+      {
+        key: 'shop.example/products/13?variant=1',
+        title: 'Left Boot',
+        state: 'refused',
+        inPath: false,
+      },
+    ]);
+  });
+
+  it('reads the draft’s brand, 100 ids a request and every page of variants past 1,000', async () => {
+    // 1,100 variants of the first, its 50 in stock on the second page.
+    db.catalog_variants = Array.from({ length: 1100 }, (_, i) =>
+      variant(1, i < 1050 ? 'out_of_stock' : 'in_stock'),
+    );
+    // 250 in stock, each refused: refused only once every refusal is read.
+    const refusedOnes = Array.from({ length: 250 }, () => variant(2, 'in_stock'));
+    db.catalog_variants.push(...refusedOnes);
+    db.catalog_item_issues = refusedOnes.map((v) => issue(v, 'FREE_LISTINGS'));
+    // 3 is another brand's: not this draft's catalog.
+    db.catalog_products = [row(1), row(2), row(3, { brand_id: BRAND })];
+    draftRow().shopping_path = pathOf({
+      products: [inPath(1), inPath(2), inPath(3)],
+      removed: Array.from({ length: 150 }, (_, i) => P(100 + i)),
+    });
+
+    const check = await getShoppingCheck(DRAFT);
+    expect(check!.products.map((p) => p.state)).toEqual(['ok', 'refused', 'gone']);
+    const catalog = ['catalog_products', 'catalog_variants', 'catalog_item_issues'].flatMap(of);
+    for (const call of catalog) {
+      expect(call.filters).toContainEqual(['eq', 'brand_id', SHOP]);
+      expect(inList(call).length).toBeLessThanOrEqual(100);
+      expect(call.limit).toBeUndefined();
+    }
+    expect(of('catalog_products').map((c) => inList(c).length)).toEqual([100, 53]);
+    expect(of('catalog_variants').map((c) => c.range)).toContainEqual([1000, 1999]);
+    expect(of('catalog_item_issues').map((c) => inList(c).length)).toEqual([100, 100, 100]);
+  });
+
+  it('reads a relative link against the live page, the page it optimizes, else the brand’s site', async () => {
+    draftRow().published_url = 'https://shop.example/blog/boots';
+    draftRow().source_url = 'https://shop.example/old';
+    expect((await getShoppingCheck(DRAFT))!.site).toBe('https://shop.example/blog/boots');
+    draftRow().published_url = null;
+    expect((await getShoppingCheck(DRAFT))!.site).toBe('https://shop.example/old');
+    expect(of('brand_domains')).toHaveLength(0);
+    draftRow().source_url = null;
+    expect((await getShoppingCheck(DRAFT))!.site).toBe('https://www.shop.example/');
+
+    // The brand's site unread: no site, the rest of the check stands.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      down = { brand_domains: 'down' };
+      expect(await getShoppingCheck(DRAFT)).toMatchObject({
+        categories: ['shop.example/collections/boots'],
+        site: null,
+      });
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('is null without a path, reads no catalog for an empty one, and fails on a failed read', async () => {
+    draftRow().shopping_path = null;
+    expect(await getShoppingCheck(DRAFT)).toBeNull();
+    draftRow().shopping_path = pathOf();
+    expect(await getShoppingCheck(DRAFT)).toMatchObject({ products: [] });
+    expect(calls.some((c) => c.table.startsWith('catalog_'))).toBe(false);
+
+    await expect(getShoppingCheck('nope')).rejects.toThrow('invalid');
+    db.content_drafts = [];
+    await expect(getShoppingCheck(DRAFT)).rejects.toThrow('not_found');
+    for (const table of [
+      'content_drafts',
+      'catalog_products',
+      'catalog_variants',
+      'catalog_item_issues',
+    ]) {
+      db.content_drafts = [
+        {
+          id: DRAFT,
+          brand_id: SHOP,
+          shopping_path: pathOf({ products: [inPath(1)] }),
+          published_url: null,
+          source_url: null,
+        },
+      ];
+      db.catalog_products = [row(1)];
+      db.catalog_variants = [variant(1, 'in_stock')];
+      down = { [table]: `${table} down` };
+      await expect(getShoppingCheck(DRAFT)).rejects.toThrow(`${table} down`);
+    }
+  });
+
+  it('is null for a kept path it can’t read', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      draftRow().shopping_path = { ...pathOf(), version: 2 };
+      expect(await getShoppingCheck(DRAFT)).toBeNull();
+    } finally {
+      error.mockRestore();
+    }
   });
 });
