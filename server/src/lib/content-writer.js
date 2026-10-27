@@ -13,6 +13,7 @@ import {
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
+  PLACEHOLDER_RULE,
   draftPassages,
   hasOpenSuggestions,
   keepSuggestions,
@@ -174,6 +175,7 @@ How to write:
 - Follow every rule listed, and the writer's own rules.
 - For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand, the brief and your data. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year]. A number that isn't in them becomes a placeholder.
+${PLACEHOLDER_RULE}
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
 
@@ -208,6 +210,7 @@ ${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
+${PLACEHOLDER_RULE}
 ${SOURCES_RULE}
 ${ATTRIBUTION_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
