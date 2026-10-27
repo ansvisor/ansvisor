@@ -1279,6 +1279,7 @@
           "task_edited": "Task edited",
           "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence",
           "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
+          "task_checked": "Checked automatically and done: {task}{title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
@@ -1349,6 +1350,21 @@
           "doneWhen": "Done when",
           "check": "How we check",
           "noCheck": "Not set",
+          "lastCheck": "Last check",
+          "checkedPassed": "Checked {date} · passed",
+          "checkedMissing": "Checked {date} · {missing}",
+          "checkNow": "Check now",
+          "checking": "Checking…",
+          "checkPassed": "Checked: done. The task is completed.",
+          "checkMissing": "Checked: {missing}",
+          "checkNot": {
+            "not_checkable": "This task isn't checked on its page: a Site Audit fix is checked by your next audit.",
+            "not_open": "This task is already done or skipped.",
+            "no_answer": "Couldn't read the page. Try again later.",
+            "changed": "The task changed while it was checked. Try again.",
+            "closed": "This action is closed."
+          },
+          "checkFailed": "Couldn't check the task. Try again.",
           "type": "Type",
           "noType": "No type",
           "effort": "Effort",
@@ -2409,6 +2425,15 @@
       "validate_ai_traffic": "AI-referred visits in the window are above their baseline",
       "validate_gsc": "Search Console clicks in the window are above their baseline",
       "validate_ga4": "Key events in the window are above their baseline"
+    },
+    "taskCheckMissing": {
+      "page_error": "the page didn't open",
+      "no_structured_data": "no valid structured data on the page",
+      "crawlers_blocked": "robots.txt blocks AI crawlers",
+      "noindex": "the page asks not to be indexed",
+      "first_look": "first look kept: it passes once the page changes",
+      "not_changed": "the page hasn't changed since the first look",
+      "change_not_found": "the new text isn't on the page"
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",

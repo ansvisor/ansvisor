@@ -54,7 +54,7 @@ const changeOf = (value) => {
 export async function loadTask(taskId) {
   const { data: task, error } = await supabaseAdmin
     .from('action_tasks')
-    .select('id, action_id, task_key, title, status, details')
+    .select('id, action_id, task_key, title, status, details, updated_at')
     .eq('id', taskId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -62,7 +62,7 @@ export async function loadTask(taskId) {
   const { data: action, error: actionError } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, brand_id, kind, category, impact, status, priority_score, priority_level',
+      'id, action_no, brand_id, kind, category, impact, status, priority_score, priority_level, deleted_at',
     )
     .eq('id', task.action_id)
     .single();
