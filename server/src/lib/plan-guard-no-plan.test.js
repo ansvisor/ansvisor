@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * reads as the plan it was on with every allowance 0 and `noPlan: true`, so
  * what it stored still comes back instead of a 402. Without `readOnly`, as
  * on every write, it is still refused. requireFeature does the same for a
- * GET, against the features of the plan it was on.
+ * route given `readOnly`, against the features of the plan it was on.
  */
 
 let org;
@@ -148,6 +148,34 @@ describe('a read without an active plan', () => {
     });
   });
 
+  it('reads a limit an override set as text as 0 too', async () => {
+    org = {
+      plan: 'enterprise',
+      subscription_status: 'canceled',
+      plan_overrides: { maxSiteAudits: '1000', maxBriefGenerations: '50' },
+    };
+    expect(await guard.getSiteAuditQuotaStatus('o1', { readOnly: true })).toMatchObject({
+      limit: 0,
+      remaining: 0,
+    });
+    expect(await guard.getBriefQuotaStatus('o1', { readOnly: true })).toMatchObject({
+      limit: 0,
+      remaining: 0,
+    });
+  });
+
+  it('is refused without the organization’s row, readOnly or not', async () => {
+    org = null;
+    const refused = { name: 'PlanLimitError', statusCode: 402 };
+    await expect(guard.getBriefQuotaStatus('o1', { readOnly: true })).rejects.toMatchObject(
+      refused,
+    );
+    await expect(guard.getSiteAuditQuotaStatus('o1', { readOnly: true })).rejects.toMatchObject(
+      refused,
+    );
+    await expect(guard.getBotCaps('o1', { readOnly: true })).rejects.toMatchObject(refused);
+  });
+
   it('is still refused without readOnly, as every write is', async () => {
     const refused = { name: 'PlanLimitError', statusCode: 402 };
     await expect(guard.getVolumeQuotaStatus('u1')).rejects.toMatchObject(refused);
@@ -209,41 +237,47 @@ describe('self-hosted', () => {
 });
 
 describe('requireFeature', () => {
-  async function call(method, feature) {
+  async function call(method, feature, options) {
     const res = { status: vi.fn(), json: vi.fn() };
     res.status.mockReturnValue(res);
     const next = vi.fn();
-    await guard.requireFeature(feature)({ method, user: { id: 'u1' } }, res, next);
+    await guard.requireFeature(feature, options)({ method, user: { id: 'u1' } }, res, next);
     return { res, next };
   }
 
-  it("lets a GET through on the plan it was on, so what's kept comes back", async () => {
-    for (const method of ['GET', 'HEAD']) {
-      for (const feature of ['prompt_improve', 'prompt_volumes', 'content_optimization']) {
-        const { res, next } = await call(method, feature);
-        expect(next, `${method} ${feature}`).toHaveBeenCalledOnce();
-        expect(res.status).not.toHaveBeenCalled();
-      }
+  it("lets a readOnly route through on the plan it was on, so what's kept comes back", async () => {
+    for (const feature of ['prompt_improve', 'prompt_volumes', 'content_optimization']) {
+      const { res, next } = await call('GET', feature, { readOnly: true });
+      expect(next, feature).toHaveBeenCalledOnce();
+      expect(res.status).not.toHaveBeenCalled();
+    }
+  });
+
+  it('refuses a route not given readOnly with 402, a GET too: never by its method', async () => {
+    for (const method of ['GET', 'HEAD', 'POST', 'DELETE']) {
+      const { res, next } = await call(method, 'prompt_improve');
+      expect(next, method).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(402);
     }
   });
 
   it('still refuses a feature that plan never had', async () => {
-    const { res, next } = await call('GET', 'white_label');
+    const { res, next } = await call('GET', 'white_label', { readOnly: true });
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  it('still refuses a write with 402', async () => {
-    for (const method of ['POST', 'PUT', 'DELETE']) {
-      const { res, next } = await call(method, 'prompt_improve');
-      expect(next).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(402);
-    }
+  it('refuses a readOnly route without the organization’s row', async () => {
+    org = null;
+    const { res, next } = await call('GET', 'prompt_improve', { readOnly: true });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(402);
   });
 
   it('is unchanged on an active plan', async () => {
     org = active;
     expect((await call('GET', 'prompt_improve')).next).toHaveBeenCalledOnce();
+    expect((await call('GET', 'prompt_improve', { readOnly: true })).next).toHaveBeenCalledOnce();
     expect((await call('POST', 'prompt_improve')).next).toHaveBeenCalledOnce();
     expect((await call('GET', 'white_label')).res.status).toHaveBeenCalledWith(403);
   });

@@ -2,27 +2,46 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import express from 'express';
 
 /**
- * GET /api/content/usage and GET /api/content/briefs/quota read the content
- * counts as reads (read-only once the plan has ended, 2026-10-27): plan-guard
- * answers a workspace without an active plan with limits of 0 and `noPlan`,
- * not a 402, so the Content page still opens on what was kept.
+ * The Content reads a workspace whose plan ended still gets (read-only,
+ * 2026-10-27): GET /api/content/usage and GET /api/content/briefs/quota read
+ * the counts as reads (plan-guard answers limits of 0 and `noPlan`, not a
+ * 402), and GET /api/content/prompts/:promptId/suggestion gives
+ * requireFeature `readOnly`, so the prompt's open suggestion still opens.
  */
 
 const getBriefQuotaStatus = vi.fn();
 const getContentUsage = vi.fn();
 const getOrgIdForUser = vi.fn();
+const openOpportunityForPrompt = vi.fn();
+// The plan ended: requireFeature refuses with 402 unless the route gave it
+// readOnly, as the real one does.
+let planEnded = false;
 let server;
 let baseUrl;
 
 beforeAll(async () => {
   vi.doMock('../lib/plan-guard.js', () => ({
     PlanLimitError: class PlanLimitError extends Error {},
-    requireFeature: () => (req, res, next) => next(),
+    requireFeature: (_feature, options) => (req, res, next) =>
+      planEnded && !options?.readOnly ? res.status(402).json({ error: 'plan_limit' }) : next(),
     enforceBriefQuota: vi.fn(),
     getBriefQuotaStatus,
     getContentUsage,
     getOpportunityRequestAllowance: vi.fn(),
     getOrgIdForUser,
+  }));
+  vi.doMock('../lib/access.js', () => ({
+    NOT_IN_WORKSPACE: 'Not in this workspace',
+    assertBrandAccess: vi.fn(),
+    assertOpportunitiesAccess: vi.fn(),
+    assertOpportunityAccess: vi.fn(),
+    assertPromptAccess: async () => [{ prompt_sets: { brand_id: 'b1' } }],
+  }));
+  vi.doMock('../lib/prompt-content-suggestion.js', () => ({
+    openOpportunityForPrompt,
+    promptClusterId: vi.fn(),
+    promptSuggestionRequest: vi.fn(),
+    runningSuggestionJob: vi.fn(),
   }));
   vi.doMock('../lib/job-manager.js', () => ({ createJob: vi.fn(), getJob: vi.fn() }));
   vi.doMock('../lib/job-runner.js', () => ({ runContentJob: vi.fn() }));
@@ -34,6 +53,7 @@ beforeAll(async () => {
 
   const { default: router } = await import('./content.js');
   const app = express();
+  app.use(express.json());
   app.use((req, _res, next) => {
     req.user = { id: 'u1' };
     req.log = { error: vi.fn(), info: vi.fn() };
@@ -50,6 +70,8 @@ afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
   for (const mod of [
     '../lib/plan-guard.js',
+    '../lib/access.js',
+    '../lib/prompt-content-suggestion.js',
     '../lib/job-manager.js',
     '../lib/job-runner.js',
     '../config/supabase.js',
@@ -61,6 +83,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  planEnded = false;
   getOrgIdForUser.mockResolvedValue('o1');
 });
 
@@ -92,5 +115,24 @@ describe('GET /briefs/quota', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(noPlanCount);
     expect(getBriefQuotaStatus).toHaveBeenCalledWith('o1', { readOnly: true });
+  });
+});
+
+describe('GET /prompts/:promptId/suggestion', () => {
+  it("still opens the prompt's suggestion once the plan has ended, but writes none", async () => {
+    planEnded = true;
+    openOpportunityForPrompt.mockResolvedValue('opp-1');
+    const res = await fetch(`${baseUrl}/prompts/p1/suggestion`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ existingId: 'opp-1' });
+    expect(openOpportunityForPrompt).toHaveBeenCalledWith('b1', 'p1');
+
+    // Only the read is given readOnly: asking for a new one is refused.
+    const suggest = await fetch(`${baseUrl}/prompts/p1/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey: 'key-0001' }),
+    });
+    expect(suggest.status).toBe(402);
   });
 });

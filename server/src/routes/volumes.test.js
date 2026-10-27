@@ -25,6 +25,14 @@ const getVolumeProgress = vi.fn();
 const analyzeBrandVolumes = vi.fn();
 const insert = vi.fn();
 
+/**
+ * The plan ended: requireFeature refuses with 402 unless the route gave it
+ * readOnly, as the real one does.
+ */
+let planEnded = false;
+const requireFeature = (_feature, options) => (req, res, next) =>
+  planEnded && !options?.readOnly ? res.status(402).json({ error: 'plan_limit' }) : next();
+
 /** Rows a read of each table answers (GET /brand); a table not here only inserts. */
 let rows = {};
 function from(table) {
@@ -58,7 +66,7 @@ async function startApp() {
     PlanLimitError,
     enforceVolumeQuota,
     getVolumeQuotaStatus,
-    requireFeature: () => (req, res, next) => next(),
+    requireFeature,
   }));
   vi.doMock('../lib/access.js', () => ({
     assertBrandAccess,
@@ -107,6 +115,7 @@ const post = (body) =>
 beforeEach(async () => {
   vi.clearAllMocks();
   rows = {};
+  planEnded = false;
   enforceVolumeQuota.mockResolvedValue({ remaining: -1, orgId: 'org1' });
   assertBrandAccess.mockResolvedValue(undefined);
   getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 0 });
@@ -409,6 +418,15 @@ describe('POST /bootstrap', () => {
 });
 
 describe('GET /status/:brandId', () => {
+  it('stays readable once the plan has ended (readOnly), while a run is refused', async () => {
+    planEnded = true;
+    getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 40 });
+    const res = await fetch(`${baseUrl}/status/b1`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ running: false, total: 100, analyzed: 40, done: 40 });
+    expect((await post({ brandId: 'b1' })).status).toBe(402);
+  });
+
   /**
    * Nothing reaches prompt_volumes until the lookup at the very end, so a
    * status built on row counts read 0/100 for the whole ten-minute wait and

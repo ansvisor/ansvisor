@@ -157,6 +157,8 @@ describe('requireActiveSubscription', () => {
       ['DELETE', '/integrations/google-analytics'],
       ['DELETE', '/cms/brands/b1/webflow'],
       ['DELETE', '/bots/connections/b1/c1'],
+      // A store's sign-in is revoked at the store as it is removed.
+      ['DELETE', '/catalog/sources/9b2c1e40-0000-4000-8000-000000000003'],
     ];
     for (const [method, path] of open) {
       const { res, next } = await run({ method, path });
@@ -180,6 +182,11 @@ describe('requireActiveSubscription', () => {
       ['POST', '/cms/brands/b1/webflow'],
       ['POST', '/bots/connections/b1'],
       ['DELETE', '/bots/connections/b1'],
+      ['POST', '/catalog/sources'],
+      ['POST', '/catalog/sources/s1/sync'],
+      ['PUT', '/catalog/sources/s1/credentials'],
+      ['DELETE', '/catalog/sources/s1/extra'],
+      ['POST', '/catalog/upload'],
       // A brand is deleted only on a plan (product decision, 2026-10-27).
       ['DELETE', '/brands/b1'],
     ]) {
@@ -188,7 +195,7 @@ describe('requireActiveSubscription', () => {
       expect(res.status).toHaveBeenCalledWith(402);
     }
     // Both Google disconnects are one route.
-    expect(COST_STOPPING).toHaveLength(5);
+    expect(COST_STOPPING).toHaveLength(6);
   });
 
   it("opens onboarding's routes, and only them, to an organization that never subscribed", async () => {
@@ -248,6 +255,30 @@ describe('requireActiveSubscription', () => {
     profile = { organization_id: 'org-1' };
     vi.setSystemTime(new Date('2026-10-28T00:00:00Z'));
     expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+  });
+
+  it('makes room by the day a count began, so a count renewed today stays', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-27T18:00:00Z'));
+    org = neverSubscribed;
+    for (let i = 0; i < MAX_ENTRIES; i++) {
+      profile = { organization_id: `org-${i}` };
+      await run({ path: '/topics/suggest' });
+    }
+
+    // The next day the first organization uses its calls again: its count
+    // moves to the end, behind every count of the day before.
+    vi.setSystemTime(new Date('2026-10-28T09:00:00Z'));
+    profile = { organization_id: 'org-0' };
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) {
+      expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+    }
+    // A new organization makes room by dropping a count of the day before…
+    profile = { organization_id: 'org-new' };
+    expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+    // …not today's, so the first organization's calls are still used up.
+    profile = { organization_id: 'org-0' };
+    expect((await run({ path: '/topics/suggest' })).res.status).toHaveBeenCalledWith(429);
   });
 
   it('counts onboarding per person before the organization exists', async () => {

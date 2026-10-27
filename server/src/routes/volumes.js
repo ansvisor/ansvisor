@@ -328,7 +328,9 @@ router.post('/bootstrap', requireFeature('prompt_volumes'), async (req, res) => 
  * what actually landed, which is the honest reading — the counts come from the
  * table either way.
  */
-router.get('/status/:brandId', requireFeature('prompt_volumes'), async (req, res) => {
+// Reads only: a workspace whose plan ended still sees what was analyzed.
+const readVolumes = requireFeature('prompt_volumes', { readOnly: true });
+router.get('/status/:brandId', readVolumes, async (req, res) => {
   try {
     const { brandId } = req.params;
     await assertBrandAccess(brandId, req.user.id);

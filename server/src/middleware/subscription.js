@@ -13,7 +13,7 @@ import logger from '../lib/logger.js';
  * chosen, but for these, named route by route:
  *   - BILLING_ROUTES: telling us why a plan is cancelled;
  *   - COST_STOPPING: stopping work under way, and taking back the access to
- *     an outside account (Google, a CMS, a bot log) the person gave us;
+ *     an outside account (Google, a CMS, a bot log, a store) the person gave us;
  *   - ONBOARDING_ROUTES, for an organization that never had a subscription:
  *     setup suggests the brand's topics, prompts and competitors before the
  *     plan step, and again when the person comes back from it, up to
@@ -58,6 +58,9 @@ export const COST_STOPPING = [
   { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/webflow\/?$/ },
   // Removes an AI-bot log connection (bots.js): its secret stops working.
   { method: 'DELETE', path: /^\/bots\/connections\/[^/]+\/[^/]+\/?$/ },
+  // Removes a store from the catalog (catalog.js): its sign-in is revoked at
+  // the store, then deleted with its products. Feeds and uploads go through RLS.
+  { method: 'DELETE', path: /^\/catalog\/sources\/[^/]+\/?$/ },
 ];
 
 /**
@@ -122,7 +125,9 @@ function isOpen(req) {
 
 /**
  * Counts one onboarding call for `key` today (UTC): false once the day's
- * ONBOARDING_DAILY_CALLS are used. A count from an earlier day starts over.
+ * ONBOARDING_DAILY_CALLS are used. A count from an earlier day starts over,
+ * at the end of the map: the counts are kept in the order their day began,
+ * so the oldest goes first when MAX_ENTRIES are kept.
  */
 function takeOnboardingCall(key, now) {
   const day = Math.floor(now / DAY_MS);
@@ -132,7 +137,8 @@ function takeOnboardingCall(key, now) {
     kept.calls += 1;
     return true;
   }
-  if (!kept && onboardingCalls.size >= MAX_ENTRIES) {
+  onboardingCalls.delete(key);
+  if (onboardingCalls.size >= MAX_ENTRIES) {
     onboardingCalls.delete(onboardingCalls.keys().next().value);
   }
   onboardingCalls.set(key, { day, calls: 1 });

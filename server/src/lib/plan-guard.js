@@ -78,12 +78,14 @@ export function applyPlanOverrides(plan, org) {
  * it (read-only once the plan has ended, 2026-10-27): the plan it was on (or,
  * never subscribed, the one it would start on) with every allowance 0, marked
  * `noPlan`. Its stored data still comes back, with nothing left to spend; its
- * features stay, naming what that data covers.
+ * features stay, naming what that data covers. Lists (features, the allowed
+ * scrapers and models) are kept; every other value, a number or one an
+ * override set as text, is 0.
  */
 function noPlanOf(org) {
-  const plan = applyPlanOverrides(getPlan(org?.plan), org);
+  const plan = applyPlanOverrides(getPlan(org.plan), org);
   const limits = Object.fromEntries(
-    Object.entries(plan.limits).map(([key, value]) => [key, typeof value === 'number' ? 0 : value]),
+    Object.entries(plan.limits).map(([key, value]) => [key, Array.isArray(value) ? value : 0]),
   );
   return { ...plan, noPlan: true, limits };
 }
@@ -112,7 +114,8 @@ async function resolveOrgPlanByOrgId(orgId, { readOnly = false } = {}) {
   // granted billed features (volume fetch, content generation, etc.) to
   // unsubscribed signups.
   if (!isSubscriptionActive(org?.subscription_status)) {
-    if (readOnly) return noPlanOf(org);
+    // Without the organization's row there is nothing kept to read.
+    if (readOnly && org) return noPlanOf(org);
     throw new PlanLimitError(
       'An active subscription or free trial is required. Please choose a plan to continue.',
       402,
@@ -1042,15 +1045,15 @@ export function attachPlan() {
  * Express middleware factory — blocks the request if the plan lacks a feature.
  * Usage: router.post('/suggest', requireFeature('prompt_suggestions'), handler)
  *
- * A read (GET, HEAD) by an organization without an active plan is checked
- * against the features of the plan it was on (read-only once the plan has
- * ended, 2026-10-27), so what it stored still comes back; a GET starts no
- * cost. Its writes never get here: requireActiveSubscription refuses them.
+ * `readOnly`, named route by route (as the middleware's open routes are, so
+ * none is let through by its method alone): a route that only reads what is
+ * kept. An organization without an active plan is then checked against the
+ * features of the plan it was on (read-only once the plan has ended,
+ * 2026-10-27), so what it stored still comes back; without it, a 402.
  */
-export function requireFeature(feature) {
+export function requireFeature(feature, { readOnly = false } = {}) {
   return async (req, res, next) => {
     try {
-      const readOnly = req.method === 'GET' || req.method === 'HEAD';
       await enforceFeature(req.user.id, feature, { readOnly });
       next();
     } catch (err) {

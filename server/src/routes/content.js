@@ -337,7 +337,8 @@ router.post('/:id/alternative', requireFeature('content_optimization'), async (r
  */
 router.get(
   '/prompts/:promptId/suggestion',
-  requireFeature('content_optimization'),
+  // Reads only: a workspace whose plan ended still opens its suggestion.
+  requireFeature('content_optimization', { readOnly: true }),
   async (req, res) => {
     const { promptId } = req.params;
     try {

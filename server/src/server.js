@@ -469,7 +469,8 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
     if (!orgId) {
       return res.status(400).json({ success: false, message: 'orgId is required' });
     }
-    const quota = await getSiteAuditQuotaStatus(orgId);
+    // A read, as the dashboard's: a plan that ended reads as a limit of 0.
+    const quota = await getSiteAuditQuotaStatus(orgId, { readOnly: true });
     return res.json({ success: true, quota });
   } catch (err) {
     if (err.statusCode) {

@@ -217,6 +217,13 @@ describe('GET /api/audits/quota', () => {
     expect(await res.json()).toEqual({ success: true, quota });
     expect(getSiteAuditQuotaStatus).toHaveBeenCalledWith('org-1', { readOnly: true });
   });
+
+  it('reads nothing without an organization', async () => {
+    getOrgIdForUser.mockResolvedValueOnce(null);
+    const res = await fetch(`${baseUrl}/quota`);
+    expect(res.status).toBe(400);
+    expect(getSiteAuditQuotaStatus).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/audits/settings', () => {

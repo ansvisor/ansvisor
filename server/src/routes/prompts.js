@@ -1047,8 +1047,10 @@ function improveModelId() {
   );
 }
 
-// Read the cached set; never generates.
-router.get('/:promptId/improve', requireFeature('prompt_improve'), async (req, res) => {
+// Read the cached set; never generates. A workspace whose plan ended still
+// reads it (readOnly).
+const readImprove = requireFeature('prompt_improve', { readOnly: true });
+router.get('/:promptId/improve', readImprove, async (req, res) => {
   try {
     const range = parseImproveRange(req.query);
     const { brand, brandId } = await loadImprovePrompt(req.params.promptId, req.user.id);

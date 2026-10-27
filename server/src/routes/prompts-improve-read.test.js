@@ -9,6 +9,9 @@ import express from 'express';
  */
 
 const getImproveQuotaStatus = vi.fn();
+// The plan ended: requireFeature refuses with 402 unless the route gave it
+// readOnly, as the real one does.
+let planEnded = false;
 const kept = {
   id: 'set-1',
   range_key: '7d',
@@ -51,7 +54,8 @@ vi.mock('../lib/plan-guard.js', () => ({
   enforceFeature: vi.fn(),
   reserveAiBudget: vi.fn(),
   getImproveQuotaStatus,
-  requireFeature: () => (req, res, next) => next(),
+  requireFeature: (_feature, options) => (req, res, next) =>
+    planEnded && !options?.readOnly ? res.status(402).json({ error: 'plan_limit' }) : next(),
   reserveRelevanceAllowance: vi.fn(),
   settleRelevanceUsage: vi.fn(),
 }));
@@ -72,6 +76,7 @@ const read = () =>
 
 beforeEach(async () => {
   getImproveQuotaStatus.mockReset();
+  planEnded = false;
   const app = express();
   app.use((req, _res, next) => {
     req.user = { id: 'u1' };
@@ -91,6 +96,7 @@ afterEach(async () => {
 
 describe('GET /api/prompts/:promptId/improve', () => {
   it('returns the kept set with a spent budget once the plan has ended', async () => {
+    planEnded = true;
     getImproveQuotaStatus.mockResolvedValue({
       unlimited: false,
       planName: 'Starter',
@@ -117,6 +123,13 @@ describe('GET /api/prompts/:promptId/improve', () => {
     expect(getImproveQuotaStatus).toHaveBeenCalledWith('o1', expect.any(String), {
       readOnly: true,
     });
+    // Only the read is given readOnly: building a set is still refused.
+    const build = await fetch(`${baseUrl}/p1/improve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(build.status).toBe(402);
   });
 
   it('answers an active plan as before, with no noPlan', async () => {

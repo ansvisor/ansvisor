@@ -463,6 +463,9 @@ router.post('/bulk', requireFeature('content_optimization'), async (req, res) =>
 router.get('/quota', async (req, res) => {
   try {
     const orgId = await getOrgIdForUser(req.user?.id);
+    if (!orgId) {
+      return res.status(400).json({ success: false, message: 'No organization found for user.' });
+    }
     // Read-only once the plan has ended (2026-10-27): no plan reads as a limit of 0.
     const quota = await getSiteAuditQuotaStatus(orgId, { readOnly: true });
     return res.json({ success: true, quota });
