@@ -8000,12 +8000,14 @@
         "body": "Page content (rich text)",
         "metaTitle": "Meta title",
         "metaDescription": "Meta description",
-        "jsonLd": "JSON-LD (structured data)"
+        "jsonLd": "JSON-LD (structured data)",
+        "date": "Date (the day it's first sent)"
       },
       "notSent": "Not sent",
       "pickField": "Pick a field",
       "fieldRequired": "{name} (required)",
       "jsonLdHint": "JSON-LD goes as plain JSON. In the collection template, add an Embed that puts this field inside a JSON-LD script tag.",
+      "dateHint": "The date field gets the day a page first goes to Webflow. Sending the page again leaves its date as it is.",
       "save": "Save",
       "saved": "Saved. Pages go to {collection}.",
       "errors": {

@@ -256,6 +256,32 @@ describe('WebflowCard', () => {
     expect(toast.success).toHaveBeenCalledWith('Saved. Pages go to Blog Posts.');
   });
 
+  it('gives a Webflow date field the day a page is first sent', async () => {
+    client.readWebflow.mockResolvedValue({
+      ok: true,
+      configured: true,
+      connection: { ...CONNECTED, fieldMap: { body: 'post-body', date: 'date' } },
+    });
+    client.readWebflowCollection.mockResolvedValue({
+      ok: true,
+      id: 'c1',
+      name: 'Blog Posts',
+      fields: [...FIELDS, { slug: 'date', name: 'Date', type: 'DateTime', required: true }],
+      suggested: { body: 'post-body', date: 'date' },
+    });
+    await render();
+    expect(picker("Date (the day it's first sent)").textContent).toContain('Date (required)');
+    expect(container.textContent).toContain(
+      'The date field gets the day a page first goes to Webflow.',
+    );
+    await click(button('Save'));
+    expect(client.saveWebflowSettings).toHaveBeenCalledWith('b1', {
+      siteId: 's1',
+      collectionId: 'c1',
+      fieldMap: { body: 'post-body', date: 'date' },
+    });
+  });
+
   it('lists what doesn’t fit when a map is refused', async () => {
     client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
     client.saveWebflowSettings.mockResolvedValue({

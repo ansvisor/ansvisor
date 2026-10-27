@@ -147,4 +147,22 @@ describe('fieldDataFor', () => {
       ),
     ).toHaveProperty('schema', '');
   });
+
+  it('dates a new item the day it’s sent, as ISO 8601, and leaves an item sent again its own date', () => {
+    const sentAt = new Date('2026-10-27T09:30:00Z');
+    const item = { page, slug: 's', body: '<p>x</p>', jsonLd: [] };
+    expect(fieldDataFor({ ...item, sentAt }, { body: 'b', date: 'date' })).toEqual({
+      name: 'Cold brew at home',
+      slug: 's',
+      b: '<p>x</p>',
+      date: '2026-10-27T09:30:00.000Z',
+    });
+    expect(fieldDataFor(item, { body: 'b', date: 'date' })).not.toHaveProperty('date');
+    // No date field in the map: nothing dated.
+    expect(fieldDataFor({ ...item, sentAt }, { body: 'b' })).toEqual({
+      name: 'Cold brew at home',
+      slug: 's',
+      b: '<p>x</p>',
+    });
+  });
 });
