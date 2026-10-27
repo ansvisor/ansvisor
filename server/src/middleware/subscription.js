@@ -14,6 +14,7 @@ import logger from '../lib/logger.js';
  *   - BILLING_ROUTES: telling us why a plan is cancelled;
  *   - COST_STOPPING: stopping work under way, and taking back the access to
  *     an outside account (Google, a CMS, a bot log, a store) the person gave us;
+ *   - DATA_REMOVAL: deleting what the person gave us (a brand and its data);
  *   - ONBOARDING_ROUTES, for an organization that never had a subscription:
  *     setup suggests the brand's topics, prompts and competitors before the
  *     plan step, and again when the person comes back from it, up to
@@ -61,6 +62,15 @@ export const COST_STOPPING = [
   // Removes a store from the catalog (catalog.js): its sign-in is revoked at
   // the store, then deleted with its products. Feeds and uploads go through RLS.
   { method: 'DELETE', path: /^\/catalog\/sources\/[^/]+\/?$/ },
+];
+
+/**
+ * Requests, under /api, that only delete what the person gave us: open
+ * whatever the plan, so leaving needs no purchase (Ansvisor, 2026-10-27).
+ */
+export const DATA_REMOVAL = [
+  // Deletes a brand and all its data (brands.js); admins only, as before.
+  { method: 'DELETE', path: /^\/brands\/[^/]+\/?$/ },
 ];
 
 /**
@@ -120,7 +130,7 @@ function matches(routes, { method, path }) {
 }
 
 function isOpen(req) {
-  return matches(BILLING_ROUTES, req) || matches(COST_STOPPING, req);
+  return matches(BILLING_ROUTES, req) || matches(COST_STOPPING, req) || matches(DATA_REMOVAL, req);
 }
 
 /**

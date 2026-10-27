@@ -34,6 +34,7 @@ const {
   ACTIVE_CACHE_MS,
   BILLING_ROUTES,
   COST_STOPPING,
+  DATA_REMOVAL,
   MAX_ENTRIES,
   ONBOARDING_DAILY_CALLS,
   ONBOARDING_LIMIT_REACHED,
@@ -187,8 +188,6 @@ describe('requireActiveSubscription', () => {
       ['PUT', '/catalog/sources/s1/credentials'],
       ['DELETE', '/catalog/sources/s1/extra'],
       ['POST', '/catalog/upload'],
-      // A brand is deleted only on a plan (product decision, 2026-10-27).
-      ['DELETE', '/brands/b1'],
     ]) {
       const { res, next } = await run({ method, path });
       expect(next, `${method} ${path}`).not.toHaveBeenCalled();
@@ -196,6 +195,28 @@ describe('requireActiveSubscription', () => {
     }
     // Both Google disconnects are one route.
     expect(COST_STOPPING).toHaveLength(6);
+  });
+
+  it('lets an organization off a plan delete a brand, and nothing near it', async () => {
+    org = ended;
+    // Leaving needs no purchase (product decision, 2026-10-27).
+    for (const path of ['/brands/9b2c1e40-0000-4000-8000-000000000004', '/brands/b1/']) {
+      const { res, next } = await run({ method: 'DELETE', path });
+      expect(next, path).toHaveBeenCalledOnce();
+      expect(res.status).not.toHaveBeenCalled();
+    }
+    for (const [method, path] of [
+      ['POST', '/brands'],
+      ['PUT', '/brands/b1'],
+      ['PATCH', '/brands/b1'],
+      ['DELETE', '/brands/b1/domains/d1'],
+      ['DELETE', '/brands'],
+    ]) {
+      const { res, next } = await run({ method, path });
+      expect(next, `${method} ${path}`).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(402);
+    }
+    expect(DATA_REMOVAL).toHaveLength(1);
   });
 
   it("opens onboarding's routes, and only them, to an organization that never subscribed", async () => {
