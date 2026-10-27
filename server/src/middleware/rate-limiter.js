@@ -145,6 +145,20 @@ export const cmsLimiter = rateLimit({
   },
 });
 
+// Test Webhook (#1568 review): each test posts to an address the caller
+// typed, so a member's are few, 10 a minute.
+export const webhookTestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 export const brandFactsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,

@@ -6,9 +6,10 @@
  *     own automation (n8n, a CMS) often listens on one of its own;
  *   * every address its host resolves to must be public, checked in the
  *     connection's own DNS lookup (no DNS rebinding);
- *   * no redirect is followed: a 3xx is an answer, as any other non-2xx;
+ *   * no redirect is followed: a 3xx is an answer, as any other non-2xx,
+ *     handed back with where it points;
  *   * a time limit for the whole request, and only the start of the answer
- *     is read back.
+ *     is read back; an answer cut off after its status is still that status.
  * Self-hosted, a private address is the workspace's own network (n8n at
  * http://n8n:5678), as its other webhooks reach it: only the scheme and
  * credentials are checked. Failures carry PageFetchError's codes:
@@ -29,9 +30,21 @@ const USER_AGENT = 'Ansvisor-Webhook/1.0 (+https://ansvisor.com)';
 /** A 3xx: an answer that sends elsewhere, so the body never arrived (none is followed). */
 export const isRedirect = (status) => status >= 300 && status < 400;
 
+/** Where a 3xx points, as a full address (a Location may be relative); null without one. */
+function redirectTarget(location, base) {
+  if (!location) return null;
+  try {
+    return new URL(location, base).href;
+  } catch {
+    return location;
+  }
+}
+
 /**
  * A webhook address, checked as a page's is but on any port; throws
  * 'invalid_url' or 'blocked'. `privateOk` (self-hosted) takes a private one.
+ * The scheme and credentials are checked here in both modes, so the test
+ * says them in a webhook's words, not a page's.
  */
 export function checkWebhookUrl(value, { privateOk = false } = {}) {
   let url;
@@ -40,14 +53,15 @@ export function checkWebhookUrl(value, { privateOk = false } = {}) {
   } catch {
     throw new PageFetchError('invalid_url', 'Not a URL');
   }
-  if (!privateOk) return checkPageUrl(value, [url.port]);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new PageFetchError('invalid_url', 'Only http and https addresses can be posted to');
   }
   if (url.username || url.password) {
     throw new PageFetchError('invalid_url', 'URLs with credentials are not posted to');
   }
-  return url;
+  if (privateOk) return url;
+  // On Cloud, an address written as an IP must be a public one.
+  return checkPageUrl(value, [url.port]);
 }
 
 /**
@@ -56,7 +70,8 @@ export function checkWebhookUrl(value, { privateOk = false } = {}) {
  * @param {string} body
  * @param {{ headers?: Record<string, string>, timeoutMs?: number, lookup?: Function }} [opts]
  *   `lookup` replaces the public-only lookup; tests use it to reach a local server.
- * @returns {Promise<{ status: number, answer: string }>} the HTTP status and the start of the answer
+ * @returns {Promise<{ status: number, answer: string, location?: string }>} the HTTP status
+ *   and the start of the answer; for a 3xx, where it points, when it says
  */
 export async function postJson(address, body, opts = {}) {
   const cloud = isCloud();
@@ -83,9 +98,16 @@ export async function postJson(address, body, opts = {}) {
       },
       (res) => {
         const status = res.statusCode ?? 0;
+        const location = isRedirect(status) ? redirectTarget(res.headers.location, url) : null;
         const chunks = [];
         let size = 0;
-        const done = () => resolve({ status, answer: Buffer.concat(chunks).toString('utf8') });
+        // May run more than once (a cut answer, then its error): the first wins.
+        const done = () =>
+          resolve({
+            status,
+            answer: Buffer.concat(chunks).toString('utf8'),
+            ...(location ? { location } : {}),
+          });
         res.on('data', (chunk) => {
           if (size >= MAX_ANSWER_BYTES) return;
           chunks.push(chunk.subarray(0, MAX_ANSWER_BYTES - size));
@@ -97,7 +119,9 @@ export async function postJson(address, body, opts = {}) {
           }
         });
         res.on('end', done);
-        res.on('error', (err) => reject(err));
+        // The status has arrived: an answer cut off after it is still that
+        // answer, with what was read of it.
+        res.on('error', done);
       },
     );
     req.on('error', (err) => {
