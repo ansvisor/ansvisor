@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import categoryPaths from './__fixtures__/category-paths.json';
 import { PAGE_TYPES } from './drafts';
 import {
   SITE_PAGE_TYPES,
@@ -120,6 +121,21 @@ describe('detectPageType from the URL', () => {
   it('finds nothing in the home page or a plain path', () => {
     expect(detectPageType({ url: 'https://northwind.com/' }, 'b2b')).toBeNull();
     expect(detectPageType({ url: '/about-us' }, 'b2b')).toBeNull();
+  });
+
+  it("keeps a blog's own pages as they were: only its /category/ archives left a shop's categories", () => {
+    expect(detectPageType({ url: '/blog/category/hiking-boots' }, 'ecommerce')).toBe('blog_post');
+    expect(detectPageType({ url: '/blog/how-to-clean-boots' }, 'ecommerce')).toBe('guide');
+    expect(detectPageType({ url: '/blog/trips/porto' }, 'b2c')).toBe('itinerary');
+    expect(detectPageType({ url: '/collections/hiking-boots-size-guide' }, 'b2b')).toBeNull();
+  });
+});
+
+// The shopping path reads a shop's category pages by the same cases
+// (server/src/lib/catalog/category-pages.test.js, categorySlug).
+describe('category pages, as the shopping path reads them (category-paths.json)', () => {
+  it.each(categoryPaths.cases)('$url: a category page when its slug is $slug', ({ url, slug }) => {
+    expect(detectPageType({ url }, 'ecommerce') === 'category_page').toBe(slug !== null);
   });
 });
 

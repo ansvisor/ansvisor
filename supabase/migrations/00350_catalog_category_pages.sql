@@ -17,7 +17,10 @@
 --     and managers, after checking the page is on the brand's domains.
 --   * `catalog_category_counts`: each category's live products and how
 --     many of them have a variant in stock, for the Settings table and the
---     shopping path. The service role calls it.
+--     shopping path. In stock as the editor's feed match reads a variant
+--     (web/src/lib/content/feed-match.ts, feedStock): in_stock, instock,
+--     available or limited_availability, whatever its case, spaces or
+--     hyphens. The service role calls it.
 
 create table if not exists public.catalog_category_pages (
   brand_id uuid not null references public.brands(id) on delete cascade,
@@ -58,7 +61,10 @@ as $$
          count(distinct p.id)::integer,
          count(distinct p.id) filter (where exists (
            select 1 from public.catalog_variants v
-           where v.product_id = p.id and v.removed_at is null and v.availability = 'in_stock'
+           where v.product_id = p.id
+             and v.removed_at is null
+             and lower(regexp_replace(v.availability, '[\s-]+', '_', 'g'))
+               in ('in_stock', 'instock', 'available', 'limited_availability')
          ))::integer
   from public.catalog_categories c
   join public.catalog_product_categories pc on pc.category_id = c.id
@@ -71,6 +77,6 @@ revoke all on function public.catalog_category_counts(uuid) from public, anon, a
 grant execute on function public.catalog_category_counts(uuid) to service_role;
 
 comment on function public.catalog_category_counts(uuid) is
-  'Shopping path (00350): each catalog category of a brand with its live products and how many have a variant in stock. Service role only.';
+  'Shopping path (00350): each catalog category of a brand with its live products and how many have a variant in stock (in_stock, instock, available or limited_availability, as feed-match.ts reads it). Service role only.';
 
 notify pgrst, 'reload schema';

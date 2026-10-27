@@ -5,10 +5,14 @@ import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { jsonbBytes } from '@/lib/content/draft-inputs';
 import {
+  NO_PATH_REASONS,
+  shoppingChoicesSchema,
   shoppingPathSchema,
   type NoPathReason,
+  type ShoppingChoices,
   type ShoppingPath,
 } from '@/lib/content/shopping-path';
+import type { Json } from '@/types/supabase';
 
 /**
  * A draft's shopping path (shopping path, 00351): read and changed by the
@@ -19,11 +23,17 @@ import {
 const guid = z.guid();
 /** The column's 64 KB (00351). */
 const MAX_PATH_BYTES = 65_536;
+/** The path a change was made on, by when it was built and last changed. */
+const readAt = shoppingPathSchema.pick({ builtAt: true, savedAt: true });
 
-/** The draft's shopping path, null until built; null for the whole answer when it can't be read. */
+/**
+ * The draft's shopping path, null until built; `unreadable` when the one
+ * kept isn't a path this tab reads (the API builds over it, as over none).
+ * Null for the whole answer when the draft can't be read.
+ */
 export async function getDraftShoppingPath(
   draftId: string,
-): Promise<{ path: ShoppingPath | null } | null> {
+): Promise<{ path: ShoppingPath | null; unreadable?: true } | null> {
   if (!guid.safeParse(draftId).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -37,37 +47,79 @@ export async function getDraftShoppingPath(
   const parsed = shoppingPathSchema.safeParse(data.shopping_path);
   if (!parsed.success) {
     console.error('The shopping path can’t be read:', parsed.error.issues.slice(0, 3));
-    return null;
+    return { path: null, unreadable: true };
   }
   return { path: parsed.data };
 }
 
-/** The path as the person changed it (a lock, a removal). Throws 'not_found' when no row changed. */
+/**
+ * Saves the person's choices (locks, removals, additions) on the path they
+ * were made on, its removed products out of the page; the rest of the path
+ * stays as the API wrote it. Written only over the path read (its `builtAt`
+ * and `savedAt`), so a build or another change since is never overwritten:
+ * returned, not thrown, as 'changed', for the tab to read it again.
+ */
 export async function saveDraftShoppingPath(
   draftId: string,
-  path: ShoppingPath,
-): Promise<ShoppingPath> {
-  const parsed = shoppingPathSchema.safeParse(path);
-  if (!guid.safeParse(draftId).success || !parsed.success) throw new Error('invalid');
-  if (jsonbBytes(parsed.data) > MAX_PATH_BYTES) throw new Error('too_long');
+  read: { builtAt: string; savedAt?: string | null },
+  choices: ShoppingChoices,
+): Promise<{ path: ShoppingPath } | { error: 'changed' }> {
+  const at = readAt.safeParse(read);
+  const chosen = shoppingChoicesSchema.safeParse(choices);
+  if (!guid.safeParse(draftId).success || !at.success || !chosen.success) {
+    throw new Error('invalid');
+  }
+  const savedAt = at.data.savedAt ?? null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
-    .update({ shopping_path: parsed.data })
+    .select('shopping_path')
     .eq('id', draftId)
-    .select('id')
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('not_found');
-  return parsed.data;
+  const stored = shoppingPathSchema.safeParse(data.shopping_path);
+  if (
+    !stored.success ||
+    stored.data.builtAt !== at.data.builtAt ||
+    (stored.data.savedAt ?? null) !== savedAt
+  ) {
+    return { error: 'changed' };
+  }
+  // The path as kept, not as read: its links and stock as the API wrote them.
+  const kept = data.shopping_path as { products: { id: string }[] } & Record<string, Json>;
+  const removed = new Set(chosen.data.removed);
+  const next = {
+    ...kept,
+    ...chosen.data,
+    products: kept.products.filter((p) => !removed.has(p.id)),
+    savedAt: new Date().toISOString(),
+  };
+  if (jsonbBytes(next) > MAX_PATH_BYTES) throw new Error('too_long');
+  let write = supabase
+    .from('content_drafts')
+    .update({ shopping_path: next as unknown as Json })
+    .eq('id', draftId)
+    .eq('shopping_path->>builtAt', at.data.builtAt);
+  write = savedAt
+    ? write.eq('shopping_path->>savedAt', savedAt)
+    : write.is('shopping_path->>savedAt', null);
+  const { data: written, error: writeError } = await write.select('id');
+  if (writeError) throw new Error(writeError.message);
+  if (!written?.length) return { error: 'changed' };
+  return { path: shoppingPathSchema.parse(next) };
 }
+
+/**
+ * Why a build gave no path: 'changed' when the path changed while it was
+ * built (read it again), 'rate_limited' past the API's bucket, else 'failed'.
+ */
+export type BuildShoppingPathError = 'failed' | 'changed' | 'rate_limited';
 
 export type BuildShoppingPathResult =
   | { path: ShoppingPath }
   | { path: null; reason: NoPathReason }
-  | { error: 'failed' };
-
-const NO_PATH_REASONS: readonly NoPathReason[] = ['not_a_shop', 'page_type', 'no_catalog'];
+  | { error: BuildShoppingPathError };
 
 /** Builds the draft's shopping path again from the catalog, the person's choices kept. */
 export async function buildDraftShoppingPath(
@@ -92,10 +144,14 @@ export async function buildDraftShoppingPath(
       body: JSON.stringify({ brandId }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (res.status === 429) return { error: 'rate_limited' };
+    if (res.status === 409 && body.code === 'changed') return { error: 'changed' };
     if (!res.ok) return { error: 'failed' };
     if (body.path === null) {
-      const reason = body.reason as NoPathReason;
-      return NO_PATH_REASONS.includes(reason) ? { path: null, reason } : { error: 'failed' };
+      const known: readonly unknown[] = NO_PATH_REASONS;
+      // A reason the API added since is said in general words.
+      const reason = known.includes(body.reason) ? (body.reason as NoPathReason) : 'other';
+      return { path: null, reason };
     }
     const path = shoppingPathSchema.safeParse(body.path);
     return path.success ? { path: path.data } : { error: 'failed' };

@@ -2882,6 +2882,19 @@ describe('the side panel', () => {
     expect(rail()).not.toBeNull();
   });
 
+  // Brief › Shopping path (shopping path, part 3): an online shop's page that links products.
+  it.each([
+    [{ siteType: 'ecommerce', pageType: 'buying_guide' }, true],
+    [{ siteType: 'b2b', pageType: 'buying_guide' }, false],
+    [{ siteType: 'ecommerce', pageType: 'product_page' }, false],
+  ] as const)('shows the shopping path in Brief for %o: %s', async (over, shown) => {
+    getContentDraft.mockResolvedValue(draft(over));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Brief');
+    expect(panel()!.querySelector('section[aria-label="Shopping path"]') !== null).toBe(shown);
+  });
+
   it('points a page without fan-outs to Sources, where its prompts are added', async () => {
     getDraftSources.mockResolvedValue({
       data: {

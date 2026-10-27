@@ -1,13 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
+const logger = vi.hoisted(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }));
+vi.mock('./logger.js', () => ({ logger }));
 
 import { linkAllowList, linkTargetsPrompt } from './content-links.js';
+import { knownNumbers, placeholderNumbers, withNamedNumbers } from './content-sources.js';
 import {
   linkShoppingPath,
   shoppingGiven,
+  shoppingPathFor,
   shoppingPrompt,
   shoppingTargets,
+  stockWords,
   withShopping,
 } from './shopping-links.js';
 
@@ -29,6 +34,8 @@ const product = (id, title, extra = {}) => ({
 
 const PATH = {
   version: 1,
+  builtAt: '2026-10-27T10:00:00.000Z',
+  pageType: 'buying_guide',
   categories: [
     {
       name: 'Shoes > Hiking Boots',
@@ -50,6 +57,10 @@ const PATH = {
   added: [],
 };
 
+beforeEach(() => {
+  logger.warn.mockReset();
+});
+
 describe('shoppingTargets', () => {
   it('names the category page by its own name and each product by its title, tracking dropped', () => {
     expect(shoppingTargets(PATH)).toEqual([
@@ -63,17 +74,141 @@ describe('shoppingTargets', () => {
     ]);
     expect(shoppingTargets(null)).toEqual([]);
   });
+
+  it('links https pages only, each name and address once', () => {
+    const path = {
+      ...PATH,
+      products: [
+        product('p1', 'Summit GTX Boot'),
+        product('p2', 'Summit  GTX Boot'),
+        product('p3', 'Trail Mid', { url: 'http://shop.example/products/p3' }),
+        product('p4', 'Other name', { url: 'https://shop.example/products/p1' }),
+        product('p5', 'Ridge Low'),
+      ],
+    };
+    expect(shoppingTargets(path).map((t) => t.title)).toEqual([
+      'Hiking Boots',
+      'Summit GTX Boot',
+      'Ridge Low',
+    ]);
+  });
+
+  it("offers as many products as the page type links, the person's own all kept", () => {
+    const many = Array.from({ length: 12 }, (_, i) => product(`p${i}`, `Boot ${i}`));
+    const titles = (path) => shoppingTargets(path).filter((t) => t.kind === 'product');
+    // A buying guide links 5.
+    expect(titles({ ...PATH, products: many })).toHaveLength(5);
+    // Six locked: all six, and no other.
+    const locked = many.slice(0, 6).map((p) => p.id);
+    expect(titles({ ...PATH, products: many, locked }).map((t) => t.title)).toEqual(
+      many.slice(0, 6).map((p) => p.title),
+    );
+    // Two added: counted in the five.
+    expect(titles({ ...PATH, products: many, added: ['p10', 'p11'] }).map((t) => t.title)).toEqual([
+      'Boot 0',
+      'Boot 1',
+      'Boot 2',
+      'Boot 10',
+      'Boot 11',
+    ]);
+    // A page type the table doesn't have: 40 at most.
+    expect(titles({ ...PATH, pageType: null, products: many })).toHaveLength(12);
+  });
 });
 
-describe('shoppingPrompt and shoppingGiven', () => {
+describe('stockWords', () => {
+  it('says only the stock the catalog reads, and nothing for one it cannot', () => {
+    expect(stockWords('in_stock')).toBe('in stock');
+    expect(stockWords('In Stock')).toBe('in stock');
+    expect(stockWords('limited_availability')).toBe('low stock');
+    expect(stockWords('out_of_stock')).toBe('out of stock');
+    expect(stockWords('OUT OF STOCK')).toBe('out of stock');
+    expect(stockWords('preorder')).toBe('available to pre-order');
+    expect(stockWords('backorder')).toBe('on backorder');
+    expect(stockWords('discontinued')).toBeNull();
+    expect(stockWords('constructor')).toBeNull();
+    expect(stockWords(null)).toBeNull();
+  });
+});
+
+describe('shoppingPrompt', () => {
   it("tells a new page's writer the category and the products with the catalog's price and stock only", () => {
     const prompt = shoppingPrompt(PATH);
     expect(prompt).toContain('Category page: Hiking Boots.');
     expect(prompt).toContain('- Summit GTX Boot: 189.00 USD, in stock');
     expect(prompt).toContain('- Trail Mid: 129.00 USD, low stock');
     expect(prompt).toContain("Never write a price, size, weight or other spec that isn't");
+    expect(prompt).toContain('a price as given');
     expect(shoppingPrompt({ categories: [], products: [] })).toBe('');
-    expect(shoppingGiven(PATH)).toContain('Summit GTX Boot 189.00 USD, in stock');
+  });
+
+  it('never says a product out of stock or on pre-order is in stock, nor any stock it cannot read', () => {
+    const prompt = shoppingPrompt({
+      ...PATH,
+      products: [
+        product('p1', 'Summit GTX Boot', { availability: 'out_of_stock' }),
+        product('p2', 'Trail Mid', { availability: 'preorder' }),
+        product('p3', 'Ridge Low', { availability: 'discontinued' }),
+        product('p4', 'Canyon Sandal', { price: null, availability: '' }),
+      ],
+    });
+    expect(prompt).toContain('- Summit GTX Boot: 189.00 USD, out of stock');
+    expect(prompt).toContain('- Trail Mid: 189.00 USD, available to pre-order');
+    expect(prompt).toContain('- Ridge Low: 189.00 USD\n');
+    expect(prompt).toContain('- Canyon Sandal\n');
+    expect(prompt).not.toMatch(/in stock/);
+  });
+});
+
+describe('shoppingGiven and the number guard', () => {
+  const guard = (path, text) => {
+    const given = shoppingGiven(path);
+    return placeholderNumbers(text, withNamedNumbers(knownNumbers(given.prices), given.names));
+  };
+
+  it("keeps the catalog's price written with a sign, a code or none, and only it", () => {
+    for (const text of [
+      'It costs $189.',
+      'It costs $189.00.',
+      'It costs 189 USD.',
+      'It costs US$189.',
+      'It costs $129, down from [figure, source].',
+    ]) {
+      expect(guard(PATH, text)).toBe(text);
+    }
+    expect(guard(PATH, 'It costs $199.')).toBe('It costs [figure, source].');
+    // A sign the currency doesn't take is a claim of its own.
+    expect(guard(PATH, 'It costs €189.')).toBe('It costs [figure, source].');
+  });
+
+  it('reads a price written with thousands, as Turkish writes it', () => {
+    const path = {
+      ...PATH,
+      products: [product('p1', 'Kışlık Bot', { price: 1299, currency: 'TRY' })],
+    };
+    for (const text of ['Fiyatı ₺1.299.', 'Fiyatı ₺1.299,00.', 'Fiyatı 1.299 TL.']) {
+      expect(guard(path, text)).toBe(text);
+    }
+    expect(guard(path, 'Fiyatı ₺1.399.')).toBe('Fiyatı [figure, source].');
+  });
+
+  it("knows a product's own number only where its name is written", () => {
+    const path = { ...PATH, products: [product('p1', "Men's Trail 450")] };
+    expect(guard(path, 'The Men’s  Trail 450 is light.')).toBe('The Men’s  Trail 450 is light.');
+    expect(guard(path, 'It weighs 450 g.')).toBe('It weighs [figure, source] g.');
+    // Not inside a longer number.
+    expect(guard(path, "The Men's Trail 4500 is new.")).toBe(
+      "The Men's Trail [figure, source] is new.",
+    );
+  });
+
+  it('gives the names the people guard reads: the categories whole, the products', () => {
+    expect(shoppingGiven(PATH).names).toEqual([
+      'Shoes > Hiking Boots',
+      'Summit GTX Boot',
+      'Trail Mid',
+    ]);
+    expect(shoppingGiven(null)).toEqual({ prices: '', names: [] });
   });
 });
 
@@ -82,7 +217,7 @@ describe('linkShoppingPath', () => {
     const html =
       '<h1>Hiking boots</h1><p>Good hiking boots keep you dry. More hiking boots below.</p>' +
       '<h2>Summit GTX Boot</h2><ul><li><p>The Summit GTX Boot is light &amp; dry.</p></li></ul>' +
-      '<p>See the <a href="https://x.example">Trail Mid</a> and the trail mid again.</p>';
+      '<p>See the <a href="https://x.example">Trail Mid</a> and the Trail Mid again.</p>';
     const { html: out, linked } = linkShoppingPath(html, PATH);
     expect(linked).toEqual({ category: 1, product: 2 });
     expect(out).toContain('<h1>Hiking boots</h1>');
@@ -95,7 +230,7 @@ describe('linkShoppingPath', () => {
     );
     // Not inside a link already there: the next time it's named.
     expect(out).toContain(
-      '<a href="https://x.example">Trail Mid</a> and the <a href="https://shop.example/products/p2">trail mid</a> again.',
+      '<a href="https://x.example">Trail Mid</a> and the <a href="https://shop.example/products/p2">Trail Mid</a> again.',
     );
   });
 
@@ -112,6 +247,67 @@ describe('linkShoppingPath', () => {
     expect(html).toBe(
       '<p>The <a href="https://shop.example/products/p3">Hiking Boots Care Kit</a> cleans any <a href="https://shop.example/collections/hiking-boots">hiking boot</a>.</p>',
     );
+  });
+
+  it('links a whole name only: never the start of a longer word', () => {
+    const { html, linked } = linkShoppingPath(
+      '<p>A Trail Midsole and hiking bootstraps. Then the Trail Mid.</p>',
+      PATH,
+    );
+    expect(linked).toEqual({ category: 0, product: 1 });
+    expect(html).toBe(
+      '<p>A Trail Midsole and hiking bootstraps. Then the <a href="https://shop.example/products/p2">Trail Mid</a>.</p>',
+    );
+  });
+
+  it("reads a product's name as written: a common word in lower case isn't the product", () => {
+    const path = { ...PATH, categories: [], products: [product('p9', 'Pro')] };
+    const { html } = linkShoppingPath('<p>Here is a pro tip.</p><p>The Pro is light.</p>', path);
+    expect(html).toBe(
+      '<p>Here is a pro tip.</p><p>The <a href="https://shop.example/products/p9">Pro</a> is light.</p>',
+    );
+  });
+
+  it("reads a name's apostrophes and spaces any way", () => {
+    const path = { ...PATH, categories: [], products: [product('p9', "Men's Trail Boot")] };
+    const { html } = linkShoppingPath('<p>The Men’s  Trail Boot is light.</p>', path);
+    expect(html).toBe(
+      '<p>The <a href="https://shop.example/products/p9">Men’s  Trail Boot</a> is light.</p>',
+    );
+  });
+
+  it("reads a category in any case, Turkish's dotted and dotless i too", () => {
+    const path = {
+      ...PATH,
+      categories: [
+        { name: 'Giyim > İç Giyim', url: 'https://shop.example/kategori/ic-giyim', title: null },
+        { name: 'Kadın Ayakkabı', url: 'https://shop.example/kategori/kadin', title: null },
+      ],
+      products: [],
+    };
+    const { html, linked } = linkShoppingPath(
+      '<p>Rahat iç giyim seçin.</p><p>KADIN AYAKKABI modelleri.</p>',
+      path,
+    );
+    expect(linked).toEqual({ category: 2, product: 0 });
+    expect(html).toBe(
+      '<p>Rahat <a href="https://shop.example/kategori/ic-giyim">iç giyim</a> seçin.</p>' +
+        '<p><a href="https://shop.example/kategori/kadin">KADIN AYAKKABI</a> modelleri.</p>',
+    );
+  });
+
+  it("takes a plural's singular as English writes it: glasses, glass", () => {
+    const path = {
+      ...PATH,
+      categories: [
+        { name: 'Reading Glasses', url: 'https://shop.example/c/reading-glasses', title: null },
+      ],
+      products: [],
+    };
+    expect(linkShoppingPath('<p>Pick a reading glass.</p>', path).html).toBe(
+      '<p>Pick a <a href="https://shop.example/c/reading-glasses">reading glass</a>.</p>',
+    );
+    expect(linkShoppingPath('<p>Pick reading glasse frames.</p>', path).linked.category).toBe(0);
   });
 
   it('leaves a page with no path, or no names, as it is', () => {
@@ -139,5 +335,140 @@ describe('the shopping path as link targets', () => {
     const allow = linkAllowList(targets);
     expect(allow.get('shop.example/products/p1')).toBe('https://shop.example/products/p1');
     expect(allow.get('shop.example/collections/hiking-boots')).toBeDefined();
+  });
+});
+
+describe('shoppingPathFor', () => {
+  /** A database whose reads answer each table's rows, or its error; `asked` lists them. */
+  const fakeDb = (tables) => {
+    const asked = [];
+    const db = {
+      asked,
+      from: (table) => {
+        asked.push(table);
+        const answer = tables[table];
+        const chain = {};
+        for (const name of ['select', 'eq', 'in', 'is', 'order', 'range', 'limit']) {
+          chain[name] = () => chain;
+        }
+        chain.then = (resolve, reject) =>
+          Promise.resolve(
+            answer instanceof Error
+              ? { data: null, error: answer }
+              : { data: answer ?? [], error: null },
+          ).then(resolve, reject);
+        return chain;
+      },
+    };
+    return db;
+  };
+  const draft = (path) => ({ id: 'd1', brand_id: 'b1', shopping_path: path });
+
+  it('reads a broken path as none, logged, without reading the catalog', async () => {
+    const db = fakeDb({});
+    for (const broken of [
+      { ...PATH, categories: { name: 'Boots' } },
+      { ...PATH, products: [null] },
+      'not a path',
+    ]) {
+      expect(await shoppingPathFor(draft(broken), { db })).toBeNull();
+    }
+    expect(logger.warn).toHaveBeenCalledTimes(3);
+    expect(await shoppingPathFor(draft(null), { db })).toBeNull();
+    expect(db.asked).toEqual([]);
+  });
+
+  it("keeps the pages on the brand's own site over https only", async () => {
+    const path = {
+      ...PATH,
+      categories: [
+        ...PATH.categories,
+        { name: 'Sale', url: 'https://evil.example/collections/sale', title: null },
+      ],
+      products: [
+        product('p1', 'Summit GTX Boot'),
+        product('p2', 'Trail Mid', { url: 'http://shop.example/products/p2' }),
+        product('p3', 'Ridge Low', { url: 'https://eu.shop.example/products/p3' }),
+        product('p4', 'Canyon Sandal', { url: 'https://shop.example.evil.example/p4' }),
+      ],
+    };
+    const db = fakeDb({
+      brand_domains: [{ domain: 'shop.example' }],
+      catalog_variants: [
+        { id: 'v1', product_id: 'p1', availability: 'in stock' },
+        { id: 'v3', product_id: 'p3', availability: 'in_stock' },
+      ],
+    });
+    const read = await shoppingPathFor(draft(path), { db });
+    expect(read.categories.map((c) => c.name)).toEqual(['Shoes > Hiking Boots']);
+    expect(read.products.map((p) => p.id)).toEqual(['p1', 'p3']);
+    expect(logger.warn).toHaveBeenCalledWith(
+      { draftId: 'd1', off: 3 },
+      expect.stringContaining('off the brand'),
+    );
+  });
+
+  it('with no domain stored, takes the site its catalog links to', async () => {
+    const db = fakeDb({
+      brand_domains: [],
+      catalog_products: [{ url: 'https://shop.example/products/x' }],
+      catalog_variants: [],
+    });
+    const read = await shoppingPathFor(draft(PATH), { db });
+    expect(read.products.map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(db.asked).toContain('catalog_products');
+  });
+
+  it("links nothing when the brand's site can't be read", async () => {
+    const db = fakeDb({ brand_domains: new Error('down') });
+    expect(await shoppingPathFor(draft(PATH), { db })).toBeNull();
+  });
+
+  it("tells the stock the catalog has now: its live variants' best, none when none reads", async () => {
+    const path = {
+      ...PATH,
+      products: [
+        product('p1', 'Summit GTX Boot'),
+        product('p2', 'Trail Mid'),
+        product('p3', 'Ridge Low'),
+        product('p4', 'Canyon Sandal'),
+      ],
+    };
+    const db = fakeDb({
+      brand_domains: [{ domain: 'shop.example' }],
+      catalog_variants: [
+        // Sold out since the path was built.
+        { id: 'v1', product_id: 'p1', availability: 'out of stock' },
+        // One size low, another sold out: low stock.
+        { id: 'v2', product_id: 'p2', availability: 'OUT_OF_STOCK' },
+        { id: 'v3', product_id: 'p2', availability: 'limited availability' },
+        // A spelling it can't read.
+        { id: 'v4', product_id: 'p3', availability: 'ask us' },
+      ],
+    });
+    const read = await shoppingPathFor(draft(path), { db });
+    expect(read.products.map((p) => [p.id, p.availability])).toEqual([
+      ['p1', 'out_of_stock'],
+      ['p2', 'limited_availability'],
+      ['p3', ''],
+      ['p4', ''],
+    ]);
+    const prompt = shoppingPrompt(read);
+    expect(prompt).toContain('- Summit GTX Boot: 189.00 USD, out of stock');
+    expect(prompt).toContain('- Trail Mid: 189.00 USD, low stock');
+    expect(prompt).toContain('- Ridge Low: 189.00 USD\n');
+  });
+
+  it("keeps the path's stock when the catalog can't be read", async () => {
+    const db = fakeDb({
+      brand_domains: [{ domain: 'shop.example' }],
+      catalog_variants: new Error('down'),
+    });
+    const read = await shoppingPathFor(draft(PATH), { db });
+    expect(read.products.map((p) => p.availability)).toEqual(['in_stock', 'limited_availability']);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'd1' }),
+      expect.stringContaining('reading stock failed'),
+    );
   });
 });

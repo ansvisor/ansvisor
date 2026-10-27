@@ -326,13 +326,19 @@ export interface CategoryPage {
 export type CategoryPageError =
   | 'invalid'
   | 'off_site'
+  | 'not_found'
   | 'forbidden'
   | 'session'
   | 'workspace'
   | 'busy'
   | 'failed';
 
-const CATEGORY_KNOWN: readonly CategoryPageError[] = ['invalid', 'off_site', 'forbidden'];
+const CATEGORY_KNOWN: readonly CategoryPageError[] = [
+  'invalid',
+  'off_site',
+  'not_found',
+  'forbidden',
+];
 
 async function categoryCall<T>(
   path: string,

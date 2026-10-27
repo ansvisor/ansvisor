@@ -15,8 +15,15 @@ vi.mock('@/lib/catalog-client', () => ({
 }));
 const role = vi.hoisted(() => ({ canManage: true }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
+const brand = vi.hoisted(() => ({ activeBrandId: 'b1' }));
 vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: () => ({ activeBrandId: 'b1', brands: [{ id: 'b1', name: 'Acme' }] }),
+  useBrandStore: () => ({
+    activeBrandId: brand.activeBrandId,
+    brands: [
+      { id: 'b1', name: 'Acme' },
+      { id: 'b2', name: 'Northwind' },
+    ],
+  }),
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -70,8 +77,18 @@ async function type(input: HTMLInputElement, value: string) {
   });
 }
 
+/** A promise resolved later, to see the table while a call is on its way. */
+function later<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   role.canManage = true;
+  brand.activeBrandId = 'b1';
   listCategoryPages.mockReset().mockResolvedValue({ ok: true, value: CATEGORIES });
   setCategoryPage.mockReset().mockResolvedValue({ ok: true, value: true });
   resetCategoryPage.mockReset().mockResolvedValue({ ok: true, value: true });
@@ -107,6 +124,17 @@ describe('CatalogCategoryPages', () => {
     expect(text).toContain('Set by hand');
     expect(text).toContain('No page');
     expect(text).toContain('Nothing on your site reads as it');
+    // Four columns, with how a page was found under it, so the table fits a narrow card.
+    expect(container.querySelectorAll('thead th')).toHaveLength(4);
+  });
+
+  it("gives the form the page's cell and the button's while a category is changed", async () => {
+    await render();
+    await act(async () => button('Change the page for Sleeping Bags')!.click());
+    const input = container.querySelector('input[aria-label="Page address for Sleeping Bags"]')!;
+    expect(input.closest('td')!.colSpan).toBe(2);
+    expect(input.closest('tr')!.querySelectorAll('td')).toHaveLength(3);
+    expect(button('Change the page for Sleeping Bags')).toBeFalsy();
   });
 
   it("changes a category's page, and says why one can't be kept", async () => {
@@ -160,5 +188,52 @@ describe('CatalogCategoryPages', () => {
     listCategoryPages.mockResolvedValue({ ok: true, value: [] });
     await render();
     expect(container.textContent).toBe('');
+  });
+
+  it("says so under its heading when the categories can't be read", async () => {
+    listCategoryPages.mockResolvedValue({ ok: false, code: 'failed' });
+    await render();
+    const heading = container.querySelector('#catalog-category-pages');
+    expect(heading?.textContent).toBe('Category pages');
+    expect(heading?.closest('section')?.textContent).toContain(
+      "Couldn't read the category pages right now.",
+    );
+    expect(container.querySelector('table')).toBeNull();
+  });
+
+  it("closes a row being changed when the brand changes, and never shows the last brand's rows", async () => {
+    await render();
+    await act(async () => button('Change the page for Rain Jackets')!.click());
+    expect(
+      container.querySelector('input[aria-label="Page address for Rain Jackets"]'),
+    ).not.toBeNull();
+
+    // Another brand with a category of the same name.
+    const read = later<{ ok: true; value: CategoryPage[] }>();
+    listCategoryPages.mockReturnValueOnce(read.promise);
+    brand.activeBrandId = 'b2';
+    await render();
+    expect(listCategoryPages).toHaveBeenLastCalledWith('b2');
+    expect(container.textContent).not.toContain('Rain Jackets');
+    await act(async () => read.resolve({ ok: true, value: CATEGORIES }));
+    expect(container.textContent).toContain('Rain Jackets');
+    expect(container.querySelector('input[aria-label="Page address for Rain Jackets"]')).toBeNull();
+    expect(button('Change the page for Rain Jackets')).toBeDefined();
+  });
+
+  it('holds every change while one is on its way', async () => {
+    await render();
+    await act(async () => button('Change the page for Sleeping Bags')!.click());
+    const saving = later<{ ok: true; value: true }>();
+    setCategoryPage.mockReturnValueOnce(saving.promise);
+    await act(async () => button('No page')!.click());
+    expect(button('Save')!.disabled).toBe(true);
+    expect(button('Cancel')!.disabled).toBe(true);
+    expect(button('Change the page for Rain Jackets')!.disabled).toBe(true);
+
+    await act(async () => saving.resolve({ ok: true, value: true }));
+    expect(toast.success).toHaveBeenCalledWith('Saved.');
+    expect(button('Change the page for Rain Jackets')!.disabled).toBe(false);
+    expect(button('Save')).toBeUndefined();
   });
 });

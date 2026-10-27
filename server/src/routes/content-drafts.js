@@ -9,7 +9,7 @@ import { NoShoppingPath, buildShoppingPath } from '../lib/shopping-path.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
-import { cmsLimiter } from '../middleware/rate-limiter.js';
+import { cmsLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -211,9 +211,11 @@ router.post('/:draftId/brief', async (req, res) => {
  * Body: { brandId }
  * Builds the draft's shopping path from the brand's catalog and saves it
  * (shopping path, 00351): { path }, or { path: null, reason } when it
- * doesn't fit ('not_a_shop', 'page_type', 'no_catalog').
+ * doesn't fit ('not_a_shop', 'page_type', 'no_catalog', 'no_match'). A 409
+ * 'changed' when the path changed while it was built; a 429 past its
+ * bucket (shoppingPathLimiter).
  */
-router.post('/:draftId/shopping-path', async (req, res) => {
+router.post('/:draftId/shopping-path', shoppingPathLimiter, async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
   const body = z.object({ brandId: z.guid() }).safeParse(req.body ?? {});
   if (!draftId.success || !body.success) {
