@@ -6150,7 +6150,7 @@ describe('the side panel', () => {
       expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
     });
 
-    it('says where a placeholder only an HTML block holds is', async () => {
+    it('selects a placeholder only an HTML block holds in the HTML view, and says where it is', async () => {
       const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
       getContentDraft.mockResolvedValue(
         draft({
@@ -6160,6 +6160,9 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
+      // The toolbar counts it, though the page doesn't show it.
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeTruthy();
       await act(async () => button('Export')!.click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Review').click());
@@ -6168,8 +6171,12 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Fill now').click());
       expect(toast).toHaveBeenCalledWith(
-        'The placeholders are in an HTML block: open it with </> to fill them.',
+        "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view (</>): type over it, then apply.",
       );
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
     });
 
     it('puts the byline under the H1 for a brand that adds it to content, and says so', async () => {

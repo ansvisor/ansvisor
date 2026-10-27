@@ -4962,10 +4962,19 @@
         "copied": "Copied for {destination}: paste it in.",
         "copiedHtml": "HTML copied.",
         "copiedAsHtml": "Copied as HTML: paste it into the editor's HTML or code view.",
-        "inHtmlBlock": "The placeholders are in an HTML block: open it with {html} to fill them.",
         "copyFailed": "Couldn't copy. Open the HTML view and copy it from there.",
         "failed": "Couldn't export the page. Try again.",
         "cancel": "Cancel"
+      },
+      "placeholders": {
+        "label": "Placeholders to fill",
+        "left": "{count, plural, one {# placeholder to fill} other {# placeholders to fill}}",
+        "onOf": "Placeholder {on} of {count}",
+        "previous": "Previous placeholder",
+        "next": "Next placeholder",
+        "showHidden": "Show in HTML",
+        "hiddenHint": "In an image's alt text, the JSON-LD or an HTML block: the page doesn't show them.",
+        "inHtmlView": "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view ({html}): type over it, then apply."
       },
       "beforePublish": {
         "title": "Before you publish",

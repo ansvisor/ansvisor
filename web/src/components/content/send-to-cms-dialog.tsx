@@ -94,6 +94,8 @@ export function SendDialog({
   // or the CMS could get the page twice).
   const touched = useRef(new Set<keyof CmsFields>());
   const [sending, setSending] = useState(false);
+  // Fill now: the editor selects the placeholder, so focus stays there.
+  const filling = useRef(false);
   const [problem, setProblem] = useState<
     | { code: CmsSendError; field: string | null }
     | { status: number }
@@ -218,7 +220,10 @@ export function SendDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && !sending && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+        finalFocus={() => !filling.current}
+      >
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>
@@ -256,7 +261,14 @@ export function SendDialog({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
             <span className="min-w-0 flex-1">{t('placeholders', { count: placeholders })}</span>
-            <Button size="sm" variant="outline" onClick={onFillNow}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                filling.current = true;
+                onFillNow();
+              }}
+            >
               {t('fillNow')}
             </Button>
           </div>
