@@ -5,6 +5,7 @@ import {
   rulesForNext,
   stepState,
   thirdPassOf,
+  thirdStepPasses,
   thirdStepTried,
   type NextStepState,
 } from './next-step';
@@ -305,6 +306,24 @@ describe('the third step, once the agent took it (editor test 2026-10-26)', () =
         rewrite: { reason: 'length', count: 9_000, target: 13_998, percent: 36 },
       }).step.id,
     ).toBe('length');
+  });
+
+  it('keeps Fix open rules passed while the person brings the page within its Length (#1556 review)', () => {
+    // Far under its Length: the rewrite and Fix open rules both taken.
+    const short = {
+      ...long,
+      rewrite: { reason: 'length' as const, count: 8_000, target: 13_998, percent: 43 },
+    };
+    const passes = { length: thirdPassOf(short), fixRules: thirdPassOf(short) };
+    expect(nextStep({ ...short, thirdPasses: passes }).step.id).toBe('proof');
+    // The person writes two paragraphs: within 30% now, Fix open rules holds.
+    const within = { ...fix, thirdPasses: passes };
+    expect(thirdStepPasses(within)).toEqual(new Set(['fixRules']));
+    expect(nextStep(within).step.id).toBe('proof');
+    // Written far past it instead: the Length step, and Fix open rules with it.
+    const over = { ...long, thirdPasses: passes };
+    expect(thirdStepPasses(over)).toEqual(new Set());
+    expect(nextStep(over).step.id).toBe('length');
   });
 
   it('keeps the steps before it: an empty page is still written first', () => {

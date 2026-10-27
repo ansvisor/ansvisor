@@ -6624,6 +6624,10 @@ describe('the side panel', () => {
         expect(fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key)).toEqual([
           'aiTraces',
         ]);
+        // No attempt is kept for it, and once the page reads it, Next stays (#1556 review).
+        expect(stored()).toBeNull();
+        await settle();
+        expect(stored()).toBeNull();
         expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       });
 
@@ -6673,49 +6677,270 @@ describe('the side panel', () => {
       });
 
       it.each([
-        ['stopped', { outcome: 'stopped' }],
-        ['failed', { outcome: 'failed' }],
+        ['rewrite', 'stopped', { outcome: 'stopped' }],
+        ['rewrite', 'failed', { outcome: 'failed' }],
         // A Stop writes stopped_at before the outcome.
-        ['stopped, its outcome not yet written', { outcome: null }],
-      ])('drops an attempt whose run was %s while the page was closed', async (_, ended) => {
-        const attempt = {
-          step: 'fixRules',
-          kind: 'rewrite',
-          at: new Date(Date.now() - 60_000).toISOString(),
-          batch: null,
-        };
-        localStorage.setItem('aeo:next-step-third-try:d1', JSON.stringify({ attempt, passes: {} }));
-        readAgentRun.mockResolvedValue({
-          id: 'r1',
-          kind: 'rewrite',
-          steps: [],
-          step: 0,
-          startedAt: new Date().toISOString(),
-          finishedAt: new Date().toISOString(),
-          stoppedAt: ended.outcome === 'failed' ? null : new Date().toISOString(),
-          ...ended,
-        });
-        // A batch from something else, decided: it mustn't pass the step.
+        ['rewrite', 'stopped, its outcome not yet written', { outcome: null }],
+        // A tab closed mid-run (#1556 review).
+        ['fix', 'stopped', { outcome: 'stopped' }],
+        ['fix', 'failed', { outcome: 'failed' }],
+      ] as const)(
+        'drops a %s attempt whose run was %s while the page was closed',
+        async (kind, _, ended) => {
+          const attempt = {
+            step: kind === 'rewrite' ? 'length' : 'fixRules',
+            kind,
+            at: new Date(Date.now() - 60_000).toISOString(),
+            batch: null,
+          };
+          localStorage.setItem(
+            'aeo:next-step-third-try:d1',
+            JSON.stringify({ attempt, passes: {} }),
+          );
+          readAgentRun.mockResolvedValue({
+            id: 'r1',
+            kind,
+            steps: [],
+            step: 0,
+            startedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+            stoppedAt: ended.outcome === 'failed' ? null : new Date().toISOString(),
+            ...ended,
+          });
+          // A batch from something else, decided: it mustn't pass the step.
+          getDraftSuggestions.mockResolvedValue([
+            {
+              id: 'n7',
+              batchId: 'b7',
+              actionId: null,
+              actionNo: null,
+              kind: 'replace' as const,
+              blockText: 'Teams trust it.',
+              beforeText: 'trust',
+              afterText: 'rely on',
+              reason: 'a Quality check (hand-off)',
+              ruleKeys: [],
+              status: 'rejected' as const,
+            },
+          ]);
+          await renderPage();
+          await settle();
+          expect(readAgentRun).toHaveBeenCalledWith('d1', [kind]);
+          expect(
+            JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1') ?? 'null'),
+          ).toBeNull();
+          expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        },
+      );
+
+      const doneRun = (writes: number) => ({
+        id: 'r1',
+        kind: 'fix',
+        steps: [
+          { key: 'read', count: null },
+          { key: 'rules', count: 1 },
+          { key: 'write', count: writes },
+        ],
+        step: 3,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        stoppedAt: null,
+        outcome: 'done',
+      });
+
+      it('passes a Fix that found nothing while the page was closed (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: {
+              step: 'fixRules',
+              kind: 'fix',
+              at: new Date(Date.now() - 60_000).toISOString(),
+              batch: null,
+            },
+            passes: {},
+          }),
+        );
+        // It left no batch: its row says it wrote nothing.
+        readAgentRun.mockResolvedValue(doneRun(0));
+        getDraftSuggestions.mockResolvedValue([]);
+        await renderPage();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('keeps a Fix begun while the read of an earlier run is still out (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: {
+              step: 'fixRules',
+              kind: 'fix',
+              at: new Date(Date.now() - 60_000).toISOString(),
+              batch: null,
+            },
+            passes: {},
+          }),
+        );
+        // The open-time read of the earlier run, alone: it lands after the new Fix.
+        let readRun!: (run: unknown) => void;
+        readAgentRun.mockImplementation((_id: string, kinds?: string[]) =>
+          kinds?.length === 1 && kinds[0] === 'fix'
+            ? new Promise((resolve) => (readRun = resolve))
+            : Promise.resolve(null),
+        );
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        // The earlier run failed: only its own attempt would go.
+        await act(async () => readRun({ ...doneRun(0), outcome: 'failed' }));
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('doesn’t put back an attempt found failed when a Fix begun meanwhile doesn’t run (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: {
+              step: 'fixRules',
+              kind: 'fix',
+              at: new Date(Date.now() - 60_000).toISOString(),
+              batch: null,
+            },
+            passes: {},
+          }),
+        );
+        let readRun!: (run: unknown) => void;
+        readAgentRun.mockImplementation((_id: string, kinds?: string[]) =>
+          kinds?.length === 1 && kinds[0] === 'fix'
+            ? new Promise((resolve) => (readRun = resolve))
+            : Promise.resolve(null),
+        );
+        getDraftSuggestions.mockResolvedValue([]);
+        let ran!: (result: unknown) => void;
+        fixDraftRules.mockReturnValue(new Promise((resolve) => (ran = resolve)));
+        await runFix();
+        // The earlier run failed; then the new one fails too: neither is an attempt.
+        await act(async () => readRun({ ...doneRun(0), outcome: 'failed' }));
+        await act(async () => ran({ error: 'failed' }));
+        await act(async () => {});
+        expect(stored()).toBeNull();
+      });
+
+      it('waits for the read of the rewrite shown now, not one before it (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+            passes: {},
+          }),
+        );
+        // Its page decided: once read, the step passes.
         getDraftSuggestions.mockResolvedValue([
           {
-            id: 'n7',
-            batchId: 'b7',
+            id: 'p9',
+            batchId: 'b9',
             actionId: null,
             actionNo: null,
-            kind: 'replace' as const,
-            blockText: 'Teams trust it.',
-            beforeText: 'trust',
-            afterText: 'rely on',
-            reason: 'a Quality check (hand-off)',
+            kind: 'page' as const,
+            blockText: 'Pipeline forecasting',
+            beforeText: '',
+            beforeHtml: draft().bodyHtml,
+            afterText: draft().bodyHtml,
+            reason: 'rewrote the page to the rules',
             ruleKeys: [],
             status: 'rejected' as const,
           },
         ]);
+        // Read before the rewrite showed, then again for it: that read is out.
+        let lastRead!: (last: null) => void;
+        getLastPageRewrite.mockImplementation(async (..._args: unknown[]) =>
+          getLastPageRewrite.mock.calls.length === 1
+            ? null
+            : new Promise((resolve) => (lastRead = resolve)),
+        );
         await renderPage();
         await settle();
-        expect(readAgentRun).toHaveBeenCalledWith('d1', ['rewrite']);
-        expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1') ?? 'null')).toBeNull();
-        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        expect(getLastPageRewrite).toHaveBeenCalledTimes(2);
+        expect(stored().passes).toEqual({});
+        await act(async () => lastRead(null));
+        await settle();
+        expect(stored()).toEqual({ attempt: null, passes: { length: expect.any(Object) } });
+      });
+
+      it('passes the step though a Quality read failed: it waits only for what it compares (#1556 review)', async () => {
+        // No authors: E-E-A-T, and the to-dos with it, never read.
+        getContentAuthors.mockRejectedValue(new Error('offline'));
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('waits for the last rewrite’s read, which the Length’s state reads (#1556 review)', async () => {
+        let lastRead!: (last: null) => void;
+        getLastPageRewrite.mockReturnValue(new Promise((resolve) => (lastRead = resolve)));
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(stored()).toMatchObject({ attempt: { step: 'fixRules', ended: true } });
+        expect(stored().passes).toEqual({});
+        await act(async () => lastRead(null));
+        await settle();
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('clears the steps passed when a rewrite’s page is accepted, as Start does (#1556 review)', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
+        // A rewrite begun since, its page waiting.
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            ...stored(),
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+          }),
+        );
+        const body = draft().bodyHtml;
+        getDraftSuggestions.mockResolvedValue([
+          {
+            id: 'p9',
+            batchId: 'b9',
+            actionId: null,
+            actionNo: null,
+            kind: 'page' as const,
+            blockText: 'Pipeline forecasting',
+            beforeText: '',
+            beforeHtml: body,
+            afterText: body.replace('Teams trust it.', 'Teams rely on it.'),
+            reason: 'rewrote the page to the rules',
+            ruleKeys: [],
+            status: 'open' as const,
+          },
+        ]);
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        await act(async () => {});
+        expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
+        const bar = container.querySelector('[role="region"][aria-label="Rewritten page"]')!;
+        await act(async () =>
+          [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Accept')!.click(),
+        );
+        await act(async () => {});
+        expect(decideDraftSuggestions).toHaveBeenCalledWith(['p9'], 'accepted');
+        // A page written again: what was passed on the page before is gone;
+        // the rewrite's own attempt stays, to pass its step.
+        expect(stored().passes).toEqual({});
+        expect(stored().attempt).toMatchObject({ step: 'length', kind: 'rewrite' });
       });
 
       it('drops a rewrite’s attempt when the page opens on that rewrite having failed', async () => {
