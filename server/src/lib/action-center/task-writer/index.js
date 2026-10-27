@@ -190,15 +190,18 @@ function sift(tasks, evidence, kept) {
 
 /**
  * Whether anyone has worked on the action's tasks: moved one on, added one,
- * renamed or edited one. The night writes only untouched plans; a person
- * rewrites theirs with "Regenerate tasks".
+ * renamed, edited or sent one. The night writes only untouched plans; a
+ * person rewrites theirs with "Regenerate tasks". A library task's details
+ * from its template (AC-010, tasks/templates.js) aren't anyone's work; an
+ * edit in the drawer drops their mark.
  */
 export function isTouched(rows) {
   return rows.some(
     (row) =>
       row.status !== 'todo' ||
       (!row.task_key && row.details?.source !== 'ai') ||
-      (row.task_key && (row.title || row.details)),
+      (row.task_key &&
+        (row.title || (row.details && (row.details.source !== 'template' || row.details.sent)))),
   );
 }
 

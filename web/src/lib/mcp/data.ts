@@ -1,3 +1,5 @@
+import { createTranslator } from 'next-intl';
+import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { Citation } from '@/types';
@@ -29,7 +31,7 @@ import {
   withEntityCounts,
   withoutTargetIds,
 } from '@/lib/action-center/entity-counts';
-import { parseTaskDetails } from '@/lib/action-center/task-details';
+import { parseTaskDetails, withTemplateDoneWhen } from '@/lib/action-center/task-details';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
@@ -2987,9 +2989,18 @@ export interface ActionDetailForMcp {
   events: Array<{ event: string; data: Record<string, unknown>; created_at: string }>;
 }
 
+/** A library task's Done when from its template (AC-010), in English as the rest of the output. */
+const doneWhenT = createTranslator({
+  locale: 'en',
+  messages,
+  namespace: 'actionCenter.taskDoneWhen' as never,
+});
+const templateDoneWhen = (taskKey: string) =>
+  doneWhenT.has(taskKey as never) ? doneWhenT(taskKey as never) : null;
+
 /** A task's details in the snake_case the rest of the MCP output uses. */
-function mcpTaskDetails(raw: unknown) {
-  const d = parseTaskDetails(raw);
+function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
+  const d = withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen);
   if (!d) return null;
   return {
     // The exact page, the change to make there and how we check it (AC-010).
@@ -3104,7 +3115,7 @@ export async function getActionFor(
       depends_on: (t.depends_on ?? []) as string[],
       // Where, why, how and done-when (AC-004), the exact page, the change and how
       // it's checked (AC-010); an Improve task's body and evidence.
-      details: mcpTaskDetails(t.details),
+      details: mcpTaskDetails(t.details, t.task_key ?? null),
     })),
     // The join that found them is not part of a signal.
     signals: ((signalsRes.data ?? []) as Record<string, unknown>[]).map((row) =>

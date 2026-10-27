@@ -154,6 +154,8 @@ export interface ExportTexts {
   taskCheck: (check: string) => string;
   /** "Before: … → After: …", or "Add: …" (AC-010). */
   taskChange: (change: { before: string | null; after: string }) => string;
+  /** A library task's Done when from its template (AC-010); empty without one. */
+  templateDoneWhen: (taskKey: string) => string;
   /** "Sent to Content", "Sent to the webhook" (AC-004). */
   taskSent: (to: 'content' | 'webhook') => string;
   /** What an AI answer a task rests on is called; its id means nothing outside. */
@@ -225,7 +227,10 @@ export function buildActionExport(
         why: oneLine(d?.why),
         change: d?.change ? oneLine(texts.taskChange(d.change)) : '',
         how: (d?.how ?? []).map(oneLine),
-        doneWhen: oneLine(d?.doneWhen),
+        // A library task's is its template's until someone writes one (AC-010).
+        doneWhen: oneLine(
+          d?.doneWhen ?? (task.taskKey ? texts.templateDoneWhen(task.taskKey) : ''),
+        ),
         check: d?.check ? texts.taskCheck(d.check) : '',
         effort: [d?.effort, d?.role].filter(Boolean).join(' · '),
         details: details
