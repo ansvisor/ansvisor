@@ -327,27 +327,31 @@ const NAME_CUES = [
     words: 2,
     role: true,
   },
-  // "Sarah, our head of growth", at a sentence's start: a single name.
+  // "Sarah, our head of growth", at a sentence's start: a single name. A
+  // capital first, so the lookbehind (ending in spaces) isn't tried in a
+  // run of them: tried at each, a long run reads in time growing with its square.
   {
     re: new RegExp(
-      String.raw`(?<=^|[.!?]\s+|[“"]\s*)(?<name>${WORD}),\s+(?:our|the|a|an|their|its)\s+(?:[\p{L}-]+\s+){0,3}${ROLE_ANY}(?!\p{L})`,
+      String.raw`(?=\p{Lu})(?<=^|[.!?]\s+|[“"]\s*)(?<name>${WORD}),\s+(?:our|the|a|an|their|its)\s+(?:[\p{L}-]+\s+){0,3}${ROLE_ANY}(?!\p{L})`,
       'gu',
     ),
     words: 1,
     role: true,
   },
   // Whoever says a quote, right next to it: "“…,” says Jane Doe", "„…“,
-  // sagt Anna Schmidt", "“…” diyor Ayşe Demir", "“…,” Jane Doe says".
+  // sagt Anna Schmidt", "“…” diyor Ayşe Demir", "“…,” Jane Doe says". The
+  // spaces read one way only (a mark between, or none), so a quote mark
+  // before a long run of them reads in time growing with the run, not its square.
   {
     re: new RegExp(
-      String.raw`${QUOTE_END}\s*[,.!?]?\s*${QUOTE_SAYS}(?!\p{L})\s+(?<name>${NAME})`,
+      String.raw`${QUOTE_END}\s*(?:[,.!?]\s*)?${QUOTE_SAYS}(?!\p{L})\s+(?<name>${NAME})`,
       'gu',
     ),
     words: 2,
   },
   {
     re: new RegExp(
-      String.raw`${QUOTE_END}\s*[,.!?]?\s*(?<name>${NAME})\s+${QUOTE_SAYS}(?!\p{L})`,
+      String.raw`${QUOTE_END}\s*(?:[,.!?]\s*)?(?<name>${NAME})\s+${QUOTE_SAYS}(?!\p{L})`,
       'gu',
     ),
     words: 2,
@@ -629,6 +633,7 @@ export function guardPeopleInHtml(html, known) {
  */
 export function editLines($, editsFor) {
   let count = 0;
+  const BREAK = Symbol('line end');
   // A line: its own text nodes and its inline tags', in order, read as one.
   const line = (nodes, heading) => {
     if (!nodes.length) return;
@@ -655,14 +660,18 @@ export function editLines($, editsFor) {
       });
     }
   };
-  // An inline tag's text, with any line inside it read on its own.
+  // An inline tag's text, with any line inside it read on its own: a line
+  // break or a block in a bold or a link ends the line there too (BREAK).
   const inlineText = (el) => {
     const out = [];
     for (const node of $(el).contents().get()) {
       if (node.type === 'text') out.push(node);
       else if (node.type !== 'tag' || KEPT_AS_IS.has(node.name)) continue;
-      else if (BLOCKS.has(node.name)) walk(node, HEADINGS.has(node.name));
-      else out.push(...inlineText(node));
+      else if (node.name === 'br') out.push(BREAK);
+      else if (BLOCKS.has(node.name)) {
+        out.push(BREAK);
+        walk(node, HEADINGS.has(node.name));
+      } else out.push(...inlineText(node));
     }
     return out;
   };
@@ -679,7 +688,15 @@ export function editLines($, editsFor) {
         line(run, heading);
         run = [];
         walk(node, HEADINGS.has(node.name));
-      } else run.push(...inlineText(node));
+      } else {
+        for (const piece of inlineText(node)) {
+          if (piece !== BREAK) run.push(piece);
+          else {
+            line(run, heading);
+            run = [];
+          }
+        }
+      }
     }
     line(run, heading);
   };

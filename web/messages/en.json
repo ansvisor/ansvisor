@@ -3378,6 +3378,7 @@
         "opportunityNone": "No content opportunity behind it (neutral)",
         "pageValue": {
           "visits": "{visits, plural, one {# AI visit} other {# AI visits}} this period",
+          "visitsConversions": "{visits, plural, one {# AI visit} other {# AI visits}} and {conversions, plural, one {# conversion} other {# conversions}} this period",
           "newPage": "A new page, no visits yet (neutral)",
           "unknown": "No AI traffic data (neutral)"
         },

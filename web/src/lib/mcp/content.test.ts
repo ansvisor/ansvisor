@@ -78,6 +78,7 @@ const draftRow = (over = {}) => ({
   author: 'user',
   source_url: 'https://acme.example/forecasting',
   published_url: null,
+  published_at: null,
   body_html: `<h1>Pipeline forecasting</h1><p>${QUOTED}</p><p>Our forecasting is very accurate.</p>`,
   action_id: 'act-1',
   prompt_ids: [],
@@ -121,6 +122,24 @@ describe('getContentDraftFor', () => {
         { n: 3, tag: 'p', text: 'Our forecasting is very accurate.', locked: false },
       ],
       open_suggestions: [{ id: 's2', kind: 'insert', reason: 'add FAQ' }],
+    });
+  });
+
+  it('says where and since when the page is live, null until then (#1554 review)', async () => {
+    db.rows.content_drafts = draftRow();
+    expect(await getContentDraftFor(auth, 'd1')).toMatchObject({
+      published_url: null,
+      published_at: null,
+    });
+    db.rows.content_drafts = draftRow({
+      status: 'published',
+      published_url: 'https://acme.example/forecasting',
+      published_at: '2026-10-20T09:30:00Z',
+    });
+    expect(db.selects.find(([table]) => table === 'content_drafts')?.[1]).toContain('published_at');
+    expect(await getContentDraftFor(auth, 'd1')).toMatchObject({
+      published_url: 'https://acme.example/forecasting',
+      published_at: '2026-10-20T09:30:00Z',
     });
   });
 

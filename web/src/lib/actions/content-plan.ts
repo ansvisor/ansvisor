@@ -123,6 +123,9 @@ export async function getContentPlan(
     citations: { cur: Number(p.citations?.cur ?? 0), prev: Number(p.citations?.prev ?? 0) },
     platformsDown: Array.isArray(p.platformsDown) ? p.platformsDown : [],
     aiVisits: Number(p.aiVisits ?? 0),
+    // Null with conversions off (00291), or from a database before it.
+    conversions:
+      p.conversions === null || p.conversions === undefined ? null : Number(p.conversions),
   }));
 
   const marks = (marksRes.data ?? []).map(

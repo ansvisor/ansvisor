@@ -35,7 +35,13 @@ function from(table) {
     }
     if (table === 'content_rule_sets') {
       const types = q.filters.find(([op]) => op === 'in')?.[2] ?? [];
-      return { data: db.ruleSets.filter((r) => types.includes(r.page_type)), error: null };
+      const site = q.filters.find(([op, col]) => op === 'eq' && col === 'site_type')?.[2];
+      return {
+        data: db.ruleSets.filter(
+          (r) => types.includes(r.page_type) && (!r.site_type || r.site_type === site),
+        ),
+        error: null,
+      };
     }
     if (table === 'content_drafts') {
       const ids = q.filters.find(([op]) => op === 'in')?.[2];
@@ -320,7 +326,15 @@ describe('sendContentPages', () => {
   });
 
   it('reads the language from My rules for a draft no one has set rules on, as the editor does', async () => {
-    db.ruleSets = [{ page_type: 'blog_post', overrides: { language: { value: 'French' } } }];
+    // A set for each kind of site (00227): the brand's kind's is read.
+    db.ruleSets = [
+      {
+        page_type: 'blog_post',
+        site_type: 'ecommerce',
+        overrides: { language: { value: 'German' } },
+      },
+      { page_type: 'blog_post', site_type: 'b2b', overrides: { language: { value: 'French' } } },
+    ];
     await send();
     expect(JSON.parse(postJson.mock.calls[0][1]).page.language).toBe('fr');
 
