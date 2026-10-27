@@ -141,6 +141,31 @@ describe('NextStepButton', () => {
     expect(popup()!.textContent).toContain('1 to 3 rules open → Fix open rules');
   });
 
+  it('crosses out a step the agent took, as a done one, and not its note (editor test 2026-10-27)', async () => {
+    await render(
+      state({
+        openRules: ['faq'],
+        thirdPasses: { fixRules: { rules: ['faq'], length: '' } },
+      }),
+    );
+    const step = [...popup()!.querySelectorAll('ol li')].find((li) =>
+      li.textContent?.includes('Fix open rules'),
+    )!;
+    expect(step.textContent).toContain('yours in the Rules tab');
+    const name = [...step.querySelectorAll('span')].find(
+      (s) => s.textContent === 'Fix open rules',
+    )!;
+    expect(name.className).toContain('line-through');
+    // The note says what is still the person's: never crossed out, by
+    // itself or by what holds it.
+    const note = [...step.querySelectorAll('span')].find(
+      (s) => s.textContent === '· yours in the Rules tab',
+    )!;
+    expect(note.className).not.toContain('line-through');
+    expect(name.parentElement!.className).not.toContain('line-through');
+    expect(step.className).not.toContain('line-through');
+  });
+
   it('names the to-do only the person can do while Trust is low', async () => {
     await render(
       state({
