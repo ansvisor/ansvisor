@@ -32,6 +32,7 @@ import {
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
+import { insertProductGrid } from './shopping-blocks.js';
 import { linkShoppingPath, shoppingGiven, shoppingPrompt, withShopping } from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
@@ -973,8 +974,12 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       draft,
       {
         title,
-        // The shopping path's names it wrote, linked (shopping-links.js).
-        body_html: linkShoppingPath(renderPage({ ...written, title }), draft.shopping_path).html,
+        // The shopping path's names it wrote, linked (shopping-links.js), and
+        // its products as a grid where the page names them most (shopping-blocks.js).
+        body_html: insertProductGrid(
+          linkShoppingPath(renderPage({ ...written, title }), draft.shopping_path).html,
+          draft.shopping_path && { ...draft.shopping_path, pageType: draft.page_type },
+        ),
         status: 'in_review',
         author: 'agent',
         agent_state: null,

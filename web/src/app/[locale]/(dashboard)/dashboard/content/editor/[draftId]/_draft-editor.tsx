@@ -4098,6 +4098,8 @@ export function DraftEditor({
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
               onAttach={attachments.open}
               linkRequest={linkRequest}
+              // + Insert › Products, from an online shop's catalog (shopping path, part 5).
+              productsBrandId={siteType === 'ecommerce' ? draft.brandId : null}
             />
           )}
 

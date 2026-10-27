@@ -133,3 +133,73 @@ export async function searchCatalogProducts(
   if (error) throw new Error(error.message);
   return (data ?? []).map((p) => ({ id: p.id, title: p.title, url: p.url ?? null }));
 }
+
+/** A catalog product as a product card shows it (product-block.ts). */
+export interface BlockProductRead {
+  id: string;
+  title: string;
+  url: string | null;
+  image: string | null;
+  price: number | null;
+  salePrice: number | null;
+  currency: string | null;
+}
+
+const IN_STOCK = ['in_stock', 'instock', 'available', 'limited_availability'];
+
+/**
+ * The brand's catalog products by id, as a product card shows them: the
+ * product's page, its first picture, and the price of its cheapest variant
+ * in stock (else of its cheapest). In the order asked; a product gone from
+ * the catalog is left out.
+ */
+export async function getProductsForBlock(
+  brandId: string,
+  ids: string[],
+): Promise<BlockProductRead[]> {
+  const wanted = [...new Set(ids)].filter((id) => guid.safeParse(id).success).slice(0, 8);
+  if (!guid.safeParse(brandId).success || !wanted.length) return [];
+  const supabase = await createClient();
+  const [products, variants, images] = await Promise.all([
+    supabase
+      .from('catalog_products')
+      .select('id, title, url')
+      .eq('brand_id', brandId)
+      .is('removed_at', null)
+      .in('id', wanted),
+    supabase
+      .from('catalog_variants')
+      .select('product_id, url, price, sale_price, currency, availability')
+      .in('product_id', wanted)
+      .is('removed_at', null)
+      .order('price', { ascending: true })
+      .limit(500),
+    supabase
+      .from('catalog_images')
+      .select('product_id, url, position')
+      .in('product_id', wanted)
+      .order('position', { ascending: true })
+      .limit(200),
+  ]);
+  for (const read of [products, variants, images]) {
+    if (read.error) throw new Error(read.error.message);
+  }
+  const byId = new Map((products.data ?? []).map((p) => [p.id, p]));
+  return wanted.flatMap((id) => {
+    const product = byId.get(id);
+    if (!product) return [];
+    const own = (variants.data ?? []).filter((v) => v.product_id === id);
+    const variant = own.find((v) => IN_STOCK.includes(String(v.availability))) ?? own[0];
+    return [
+      {
+        id,
+        title: product.title,
+        url: product.url ?? variant?.url ?? null,
+        image: (images.data ?? []).find((i) => i.product_id === id)?.url ?? null,
+        price: variant?.price ?? null,
+        salePrice: variant?.sale_price ?? null,
+        currency: variant?.currency ?? null,
+      },
+    ];
+  });
+}
