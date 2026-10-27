@@ -117,6 +117,13 @@ function toCitations(sources) {
 }
 
 /**
+ * Where an entry an engine joined splits into its searches: at a semicolon,
+ * not one that ends an HTML entity ("what&#39;s", "&amp;"). The same rule as
+ * the editor's (web/src/lib/content/sources.ts, fanoutQueries).
+ */
+const SEARCH_SEPARATOR = /(?<!&#?\w+);/u;
+
+/**
  * Normalize the observed query fan-out from a raw Cloro response into a rich,
  * engine-labelled array: `[{ query, engine?, source_platform }]` (#332).
  *
@@ -150,7 +157,7 @@ function normalizeSearchQueries(result, scraperId) {
         ? entry.engine.trim()
         : fallbackEngine;
     return query
-      .split(';')
+      .split(SEARCH_SEPARATOR)
       .map((part) => part.trim())
       .filter(Boolean)
       .map((part) => ({ query: part, ...(engine ? { engine } : {}), source_platform: scraperId }));

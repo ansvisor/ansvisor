@@ -330,6 +330,23 @@ describe('cloro-scraper – parseScraperResponse', () => {
       ]);
     });
 
+    it("never splits at an HTML entity's semicolon, and reads 'one;' as 'one', as the editor does", () => {
+      const read = (searchQueries) =>
+        parseScraperResponse(
+          { markdown: 't', sources: [], searchQueries },
+          'copilot-web',
+        ).search_queries.map((item) => item.query);
+      expect(read(['what&#39;s new in aeo'])).toEqual(['what&#39;s new in aeo']);
+      expect(read(['r&amp;d budget;aeo tools;what&#x27;s aeo'])).toEqual([
+        'r&amp;d budget',
+        'aeo tools',
+        'what&#x27;s aeo',
+      ]);
+      // The same as fanoutQueries('one;') in web/src/lib/content/sources.ts.
+      expect(read(['one;'])).toEqual(['one']);
+      expect(read([' ; '])).toEqual([]);
+    });
+
     it('trims surrounding whitespace so a sub-query has one canonical form', () => {
       const copilot = parseScraperResponse(
         { markdown: 't', sources: [], searchQueries: ['  spaced query  '] },

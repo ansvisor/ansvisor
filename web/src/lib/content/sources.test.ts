@@ -113,7 +113,18 @@ describe('fanoutQueries', () => {
   it('splits searches joined by semicolons, and keeps one search as it is', () => {
     expect(fanoutQueries('a b;c d ; e')).toEqual(['a b', 'c d', 'e']);
     expect(fanoutQueries('best crm for realtors')).toEqual(['best crm for realtors']);
-    expect(fanoutQueries('one;')).toEqual(['one;']);
+    // As the tracker stores it (cloro-scraper.test.js): the search, its semicolon dropped.
+    expect(fanoutQueries('one;')).toEqual(['one']);
+    expect(fanoutQueries(' ; ')).toEqual([]);
+  });
+
+  it('never splits an HTML entity’s semicolon, as the tracker doesn’t', () => {
+    expect(fanoutQueries('what&#39;s new in aeo')).toEqual(['what&#39;s new in aeo']);
+    expect(fanoutQueries('r&amp;d budget;aeo tools;what&#x27;s aeo')).toEqual([
+      'r&amp;d budget',
+      'aeo tools',
+      'what&#x27;s aeo',
+    ]);
   });
 });
 
@@ -158,10 +169,68 @@ describe('buildSourceGroups', () => {
       DraftSourceRow,
       { kind: 'fanout' }
     >[];
+    // The one met twice is the most searched now: first.
     expect(fanouts.map((f) => [f.name, f.platforms, f.searched])).toEqual([
-      ['ChatGPT subscription', ['gemini-web'], 2],
       ['Gemini subscription', ['gemini-web', 'copilot-web'], 5],
+      ['ChatGPT subscription', ['gemini-web'], 2],
       ['Google AIO subscription', ['gemini-web'], 2],
+    ]);
+  });
+
+  it('keeps a joined fan-out’s choice for each search it holds, unless the search has its own', () => {
+    const rows = (choices: Parameters<typeof buildSourceGroups>[1]) =>
+      (
+        buildSourceGroups(
+          data({
+            fanouts: [
+              { query: 'a;b;c', platforms: ['gemini-web'], searched: 4 },
+              { query: 'c', platforms: ['copilot-web'], searched: 1 },
+              { query: 'd;e', platforms: ['gemini-web'], searched: 2 },
+            ],
+          }),
+          choices,
+          draft,
+        ).find((g) => g.kind === 'fanout')!.rows as Extract<DraftSourceRow, { kind: 'fanout' }>[]
+      ).map((f) => [f.name, f.included]);
+    // "a;b;c" was left out: its searches stay out, but "c", also its own row
+    // and left in, stays in; "e" was chosen on its own since.
+    expect(
+      rows([
+        { kind: 'fanout', ref: 'a;b;c', included: false, added: false },
+        { kind: 'fanout', ref: 'd;e', included: false, added: false },
+        { kind: 'fanout', ref: 'e', included: true, added: false },
+      ]),
+    ).toEqual([
+      ['c', true],
+      ['a', false],
+      ['b', false],
+      ['d', false],
+      ['e', true],
+    ]);
+    // Nothing chosen: all in.
+    expect(rows([]).every(([, included]) => included)).toBe(true);
+  });
+
+  it('puts the searches in order of how often they were searched once joined ones are added up', () => {
+    const groups = buildSourceGroups(
+      data({
+        fanouts: [
+          { query: 'x', platforms: ['copilot-web'], searched: 5 },
+          { query: 'y', platforms: ['copilot-web'], searched: 4 },
+          { query: 'a;y', platforms: ['gemini-web'], searched: 3 },
+        ],
+      }),
+      [],
+      draft,
+    );
+    const fanouts = groups.find((g) => g.kind === 'fanout')!.rows as Extract<
+      DraftSourceRow,
+      { kind: 'fanout' }
+    >[];
+    expect(fanouts.map((f) => [f.name, f.searched])).toEqual([
+      ['y', 7],
+      ['x', 5],
+      ['a', 3],
     ]);
   });
 
