@@ -27,9 +27,17 @@ import {
 } from '@/lib/content/shopping-path';
 import { pagePath } from '@/lib/content/overlap';
 
-/** A product's price as the catalog has it, in its currency; null without one. */
+/** An amount above 0, or null: a price of 0 is none given. */
+const positive = (value: number | null) => (value != null && value > 0 ? value : null);
+
+/**
+ * A product's price as the catalog has it, in its currency: the sale price
+ * when it's under the price, else the price; null without one.
+ */
 export function priceText(product: Pick<ShoppingProduct, 'price' | 'salePrice' | 'currency'>) {
-  const amount = product.salePrice ?? product.price;
+  const price = positive(product.price);
+  const sale = positive(product.salePrice);
+  const amount = sale != null && price != null && sale < price ? sale : price;
   if (amount == null) return null;
   try {
     return product.currency
@@ -63,16 +71,19 @@ const PICK_AGAIN: readonly (NoPathReason | null)[] = [null, 'no_match', 'other']
  * API for its topic (in stock, accepted by Merchant Center), with where each
  * goes. The person locks, swaps, removes or adds a product; Pick again
  * builds it anew, their choices kept. Shown for a page type that takes one
- * on an e-commerce brand.
+ * on an e-commerce brand. `onPathChange` follows each change saved or
+ * built, and one found made meanwhile: the Shopping rules read it again.
  */
 export function ShoppingPathSection({
   draftId,
   brandId,
   pageType,
+  onPathChange,
 }: {
   draftId: string;
   brandId: string;
   pageType: string | null;
+  onPathChange?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.shopping');
   const [state, setState] = useState<PathState>({ status: 'loading' });
@@ -135,6 +146,8 @@ export function ShoppingPathSection({
       { builtAt: from.builtAt, savedAt: from.savedAt ?? null },
       choicesOf(next),
     );
+    // Saved, or changed meanwhile: the path kept isn't the one read either way.
+    onPathChange?.();
     if ('error' in saved) {
       // A build or another change since it was read: shown as it is now, not overwritten.
       toast.error(t('changed'));
@@ -160,9 +173,11 @@ export function ShoppingPathSection({
       const result = await buildDraftShoppingPath(draftId, brandId);
       if (!('error' in result)) {
         setState({ status: 'ready', path: result.path, none: result.path ? null : result.reason });
+        onPathChange?.();
       } else if (result.error === 'changed') {
         toast.error(t('changed'));
         void load();
+        onPathChange?.();
       } else {
         toast.error(t(result.error === 'rate_limited' ? 'rateLimited' : 'buildFailed'));
       }
