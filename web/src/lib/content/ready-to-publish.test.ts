@@ -291,6 +291,27 @@ describe('pageFields', () => {
     expect(slug(`${'a'.repeat(60)} b`)).toBe('a'.repeat(60));
   });
 
+  it('never ends a Turkish title’s slug on a word that leads into what was cut, as the slug spells it', () => {
+    const slug = (title: string) =>
+      pageFields({ title, html: '', sourceUrl: null, author: null, teamByline: '' }).slug;
+    // "için" is "icin" in a slug: cut there, it goes too.
+    expect(slug('Yapay zekâ aramasında görünürlük isteyen yerel markalar için en iyi rehber')).toBe(
+      'yapay-zeka-aramasinda-gorunurluk-isteyen-yerel-markalar',
+    );
+    expect(slug('Yapay Zekâ Aramasında Görünürlük İsteyen Yerel Markalar İçin En İyi Rehber')).toBe(
+      'yapay-zeka-aramasinda-gorunurluk-isteyen-yerel-markalar',
+    );
+  });
+
+  it('drops "the", "a" or "an" only when it is the title’s first word, not a word’s start', () => {
+    const slug = (title: string) =>
+      pageFields({ title, html: '', sourceUrl: null, author: null, teamByline: '' }).slug;
+    expect(slug('A-Frame houses guide')).toBe('a-frame-houses-guide');
+    expect(slug('An-Najah alumni stories')).toBe('an-najah-alumni-stories');
+    expect(slug('A guide to A-Frame houses')).toBe('guide-to-a-frame-houses');
+    expect(slug('the pour-over guide')).toBe('pour-over-guide');
+  });
+
   it('cuts a first sentence too long to fit at a word', () => {
     const long = `${'Pour slowly '.repeat(20)}now.`;
     const { metaDescription } = pageFields({

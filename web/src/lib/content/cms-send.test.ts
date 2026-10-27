@@ -49,6 +49,26 @@ describe('metaTitleOf', () => {
       ),
     ).toBe('The Ultimate Technical Guide to Unified Tracking');
   });
+
+  it('never ends a Turkish title cut short on "için", in lower case or capitalized', () => {
+    expect(
+      metaTitleOf('Yapay zekâ aramasında görünürlük isteyen yerel markalar için en iyi rehber'),
+    ).toBe('Yapay zekâ aramasında görünürlük isteyen yerel markalar');
+    // "İçin".toLowerCase() is "i\u0307çin", with a combining dot: read as "için".
+    expect(
+      metaTitleOf('Yapay Zekâ Aramasında Görünürlük İsteyen Yerel Markalar İçin En İyi Rehber'),
+    ).toBe('Yapay Zekâ Aramasında Görünürlük İsteyen Yerel Markalar');
+  });
+
+  it('gives the guide’s example as the guide says', () => {
+    expect(
+      metaTitleOf('AEO tools compared side by side for marketing teams: a 2026 guide to the best'),
+    ).toBe('AEO tools compared side by side for marketing teams');
+    // A title that fits stays whole, parts and all.
+    expect(metaTitleOf('AEO tools compared: a 2026 guide')).toBe(
+      'AEO tools compared: a 2026 guide',
+    );
+  });
 });
 
 describe('cmsFields', () => {

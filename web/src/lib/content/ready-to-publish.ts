@@ -418,10 +418,23 @@ const DANGLING = new Set([
   'bir',
 ]);
 
+/** The same words as a slug reads them: "için" is "icin" there. */
+const DANGLING_SLUGS = new Set([...DANGLING].map(slugify));
+
+/**
+ * Whether a word leads into what was cut: a title's word lowercased without
+ * the dot a capital "İ" leaves ("İçin" → "için", where toLowerCase gives
+ * "i\u0307çin"), or a slug's word ("icin").
+ */
+function dangles(word: string): boolean {
+  const key = word.toLowerCase().replace(/\u0307/gu, '');
+  return DANGLING.has(key) || DANGLING_SLUGS.has(key);
+}
+
 /** Words without the ones a cut leaves dangling at their end, keeping one at least. */
 export function withoutDangling(words: string[]): string[] {
   const kept = [...words];
-  while (kept.length > 1 && DANGLING.has(kept.at(-1)!.toLowerCase())) kept.pop();
+  while (kept.length > 1 && dangles(kept.at(-1)!)) kept.pop();
   return kept;
 }
 
@@ -446,7 +459,8 @@ export function slugOf(title: string, sourceUrl: string | null): string {
     }
   }
   const words = slugify(title).split('-').filter(Boolean);
-  if (words.length > 1 && ['the', 'a', 'an'].includes(words[0])) words.shift();
+  // The title's own first word, not the slug's: "A-Frame houses" keeps its "a".
+  if (words.length > 1 && /^(the|a|an)\s/i.test(title.trim())) words.shift();
   const slug = words.join('-');
   if (slug.length <= TITLE_SLUG_MAX) return slug;
   // Cut at a word, not inside one: it becomes the page's address (Send to CMS).
