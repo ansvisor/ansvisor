@@ -72,6 +72,7 @@ describe('linkStatus', () => {
     expect(linkStatus(null)).toBe('ok');
     expect(linkStatus(new PageFetchError('not_html', 'a PDF'))).toBe('ok');
     expect(linkStatus(new PageFetchError('too_large', 'big'))).toBe('ok');
+    expect(linkStatus(new PageFetchError('too_deep', 'nested'))).toBe('ok');
   });
 
   it('reads a gone page, or a site that is nowhere, as broken', () => {

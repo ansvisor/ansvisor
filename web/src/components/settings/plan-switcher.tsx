@@ -207,6 +207,12 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
     }
   }
 
+  /** A plan's AI budget as a multiple of Starter's, as the cards say it; none when unlimited. */
+  function aiMultiple(budget: number): number | null {
+    const starterAi = PLANS.starter.limits.improveMonthlyBudgetUsd;
+    return starterAi > 0 && budget > 0 ? Math.round(budget / starterAi) : null;
+  }
+
   /**
    * A plan card's list, as the pricing page puts it: brands, seats, prompts,
    * the answer engines it tracks, content briefs and site audits a month,
@@ -214,11 +220,7 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
    */
   function planFeatures(planId: PlanId): { text: string; hint?: string }[] {
     const { limits } = PLANS[planId];
-    const starterAi = PLANS.starter.limits.improveMonthlyBudgetUsd;
-    const aiUsage =
-      starterAi > 0 && limits.improveMonthlyBudgetUsd > 0
-        ? Math.round(limits.improveMonthlyBudgetUsd / starterAi)
-        : null;
+    const aiUsage = aiMultiple(limits.improveMonthlyBudgetUsd);
     const items = [
       limits.maxBrands === -1
         ? tCards('unlimitedBrands')
@@ -237,6 +239,20 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
         ? [{ text: tCards('aiUsage', { count: aiUsage }), hint: tCards('aiUsageHint') }]
         : []),
       ...(tCards.raw(`${planId}.extras`) as string[]).map((text) => ({ text })),
+    ];
+  }
+
+  /**
+   * The custom plan's points: its AI usage first, set per customer above
+   * Enterprise's floor (2026-10-27), then the pricing page's points.
+   */
+  function customPlanPoints(): { text: string; hint?: string }[] {
+    const aiUsage = aiMultiple(PLANS.enterprise.limits.improveMonthlyBudgetUsd);
+    return [
+      ...(aiUsage
+        ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards('aiUsageCustomHint') }]
+        : []),
+      ...(t.raw('customPlanPoints') as string[]).map((text) => ({ text })),
     ];
   }
 
@@ -547,10 +563,19 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
           </a>
         </div>
         <ul className="grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-2">
-          {(t.raw('customPlanPoints') as string[]).map((point) => (
-            <li key={point} className="flex items-start gap-2">
+          {customPlanPoints().map((point) => (
+            <li key={point.text} className="flex items-start gap-2">
               <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <span>{point}</span>
+              <span
+                title={point.hint}
+                className={
+                  point.hint
+                    ? 'cursor-help underline decoration-dotted underline-offset-4'
+                    : undefined
+                }
+              >
+                {point.text}
+              </span>
             </li>
           ))}
         </ul>

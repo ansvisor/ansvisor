@@ -29,10 +29,20 @@ export const PROVIDERS = {
     label: 'Google Analytics',
     authConfigEnv: 'COMPOSIO_GA_AUTH_CONFIG_ID',
   },
+  // The catalog's Merchant Center sources read through it (#1270): see proxyRequest.
+  'google-merchant-center': {
+    label: 'Google Merchant Center',
+    authConfigEnv: 'COMPOSIO_GMC_AUTH_CONFIG_ID',
+  },
 };
 
 export function isKnownProvider(provider) {
   return Object.hasOwn(PROVIDERS, provider);
+}
+
+/** Entity id: one connection per organization per provider (#577). */
+export function entityIdFor(organizationId) {
+  return `org_${organizationId}`;
 }
 
 function authConfigId(provider) {
@@ -85,6 +95,27 @@ export async function getActiveConnection(provider, entityId) {
 
 export async function deleteConnection(connectedAccountId) {
   await getClient().connectedAccounts.delete(connectedAccountId);
+}
+
+/**
+ * A call to a provider's own API through Composio's proxy (#1270), on one
+ * connected account: Composio adds the account's OAuth token on its side,
+ * so the token never reaches us, and we choose the API version ourselves
+ * (a toolkit's ready-made tools may call an older one). Composio doesn't
+ * retry it: the caller decides what a 429 means.
+ *
+ * Returns the API's own answer, whatever its status: `{ status, headers, data }`.
+ * Throws when Composio itself refuses the call (an account no longer active).
+ */
+export async function proxyRequest(connectedAccountId, { endpoint, query = {}, signal }) {
+  const parameters = Object.entries(query)
+    .filter(([, value]) => value != null && value !== '')
+    .map(([name, value]) => ({ in: 'query', name, value: String(value) }));
+  const res = await getClient().tools.proxyExecute(
+    { endpoint, method: 'GET', parameters, connectedAccountId },
+    signal ? { signal } : undefined,
+  );
+  return { status: res.status, headers: res.headers ?? {}, data: res.data ?? null };
 }
 
 /**
