@@ -18,9 +18,6 @@ export const MODEL_PRICES = {
 
 export const FALLBACK_PRICE = { input: 5, output: 25 };
 
-/** Share of an Enterprise contract's monthly value its AI usage budget may spend (plan-guard.js). */
-export const IMPROVE_BUDGET_SHARE = 0.01;
-
 /**
  * A typical generation, used to estimate "generations left" before an org
  * has any history, and the least a call holds on the budget before it runs

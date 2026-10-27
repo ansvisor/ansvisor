@@ -55,7 +55,7 @@ export const PLANS = {
       // The workspace's one AI budget (Improve, the Content Editor's AI and
       // the Action Center's task writing), in tiers the billing cards show as
       // multiples of Starter's: $5 here (1x), Growth $25 (5x), Enterprise $50
-      // or 1% of its contract (2026-10-24); the free trial gets
+      // or more, set per customer (2026-10-27); the free trial gets
       // TRIAL_AI_BUDGET_USD.
       improveMonthlyBudgetUsd: 5,
       // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
@@ -144,9 +144,9 @@ export const PLANS = {
       maxVolumeAnalyses: -1,
       // Per-customer: override via organizations.plan_overrides in the DB.
       maxBriefGenerations: -1,
-      // AI usage: $50 at the least, twice Growth's $25.
-      // plan_overrides.contractMonthlyUsd raises it to 1% of the contract; an
-      // explicit plan_overrides.improveMonthlyBudgetUsd wins.
+      // AI usage: $50 at the least, twice Growth's $25. Over that, Ansvisor
+      // sets a customer's own in plan_overrides.improveMonthlyBudgetUsd
+      // (2026-10-27); the contract's value doesn't raise it.
       improveMonthlyBudgetUsd: 50,
       // 0.1% of the $499 floor, raised to 0.1% of contractMonthlyUsd; an
       // explicit plan_overrides.relevanceMonthlyBudgetUsd wins.

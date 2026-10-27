@@ -48,6 +48,8 @@ import {
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
 import { readSiteTrust } from '../lib/site-trust.js';
+import { isOrgActive } from '../lib/active-subscriptions.js';
+import { SUBSCRIPTION_INACTIVE } from '../middleware/subscription.js';
 import { buildTemplates, templateOf, templateOpportunities } from '../lib/audit/templates.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
@@ -1166,15 +1168,21 @@ router.get('/auto-runs/latest', async (req, res) => {
 
 // GET /api/audits/site-trust?brandId=…&refresh=1 — the brand's five site
 // trust checks (Content Editor Quality, CE-043): the day's read, or a new
-// one when asked again (site-trust.js). Registered before /:id.
+// one when asked again (site-trust.js). Once the plan has ended, only the
+// kept read, however old: 402 when none is kept. Registered before /:id.
 router.get('/site-trust', async (req, res) => {
   const parsed = z.guid().safeParse(req.query.brandId);
   if (!parsed.success) {
     return res.status(400).json({ success: false, message: 'brandId is required' });
   }
   try {
-    await assertBrandAccess(parsed.data, req.user?.id);
-    const trust = await readSiteTrust(parsed.data, { refresh: req.query.refresh === '1' });
+    const { orgId } = await assertBrandAccess(parsed.data, req.user?.id);
+    const keptOnly = !(await isOrgActive(orgId));
+    const trust = await readSiteTrust(parsed.data, {
+      refresh: req.query.refresh === '1',
+      keptOnly,
+    });
+    if (!trust) return res.status(402).json(SUBSCRIPTION_INACTIVE);
     return res.json({ success: true, ...trust });
   } catch (err) {
     return sendAuditError(req, res, err, 'site trust read failed');

@@ -1,16 +1,23 @@
 'use client';
 
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+
+// Ink, the theme's primary, as Mentions' trend draws it: black on light,
+// near-white on dark. A second series is grey and dashed, told apart by
+// lightness and line, not by hue.
+const INK = 'var(--primary)';
+const SECOND = 'var(--muted-foreground)';
 
 const AXIS_TICK = {
   fill: 'var(--muted-foreground)',
@@ -49,7 +56,7 @@ export function PlatformCardRateChartView({ width, data }: PlatformCardRateChart
 
       <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--muted)', opacity: 0.3 }} />
 
-      <Bar dataKey="rate" name="Card rate" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+      <Bar dataKey="rate" name="Card rate" fill={INK} radius={[4, 4, 0, 0]} />
     </BarChart>
   );
 }
@@ -65,12 +72,19 @@ type ShoppingTrendChartViewProps = {
 
 export function ShoppingTrendChartView({ width, data }: ShoppingTrendChartViewProps) {
   return (
-    <LineChart
+    <ComposedChart
       width={width}
       height={220}
       data={data}
       margin={{ top: 8, right: 8, bottom: 0, left: -8 }}
     >
+      <defs>
+        <linearGradient id="shoppingTrendFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor={INK} stopOpacity={0.18} />
+          <stop offset="95%" stopColor={INK} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+
       <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
 
       <XAxis
@@ -92,23 +106,30 @@ export function ShoppingTrendChartView({ width, data }: ShoppingTrendChartViewPr
         }}
       />
 
-      <Line
+      <Area
         type="monotone"
         dataKey="ownCards"
         name="Your cards"
-        stroke="var(--chart-2)"
+        legendType="plainline"
+        stroke={INK}
         strokeWidth={2}
-        dot={{ r: 2 }}
+        fill="url(#shoppingTrendFill)"
+        dot={false}
+        activeDot={{ r: 4 }}
       />
 
       <Line
         type="monotone"
         dataKey="totalCards"
         name="All cards"
-        stroke="var(--chart-4)"
+        // The legend draws its icon with the series' dash (plainline), so the two read apart.
+        legendType="plainline"
+        stroke={SECOND}
         strokeWidth={2}
-        dot={{ r: 2 }}
+        strokeDasharray="4 3"
+        dot={false}
+        activeDot={{ r: 4 }}
       />
-    </LineChart>
+    </ComposedChart>
   );
 }
