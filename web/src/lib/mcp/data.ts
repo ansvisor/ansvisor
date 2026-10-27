@@ -2992,10 +2992,14 @@ function mcpTaskDetails(raw: unknown) {
   const d = parseTaskDetails(raw);
   if (!d) return null;
   return {
+    // The exact page, the change to make there and how we check it (AC-010).
+    url: d.url,
     where: d.where,
     why: d.why,
+    change: d.change,
     how: d.how,
     done_when: d.doneWhen,
+    check: d.check,
     type: d.type,
     effort: d.effort,
     role: d.role,
@@ -3098,7 +3102,8 @@ export async function getActionFor(
       mode: t.mode ?? null,
       permission: t.permission ?? null,
       depends_on: (t.depends_on ?? []) as string[],
-      // Where, why, how and done-when (AC-004); an Improve task's body and evidence.
+      // Where, why, how and done-when (AC-004), the exact page, the change and how
+      // it's checked (AC-010); an Improve task's body and evidence.
       details: mcpTaskDetails(t.details),
     })),
     // The join that found them is not part of a signal.

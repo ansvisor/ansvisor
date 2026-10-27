@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildEvidence } from './evidence.js';
-import { sameTask, taskProblems } from './quality.js';
+import { pageAddress, sameTask, taskProblems } from './quality.js';
 
 const evidence = buildEvidence([
   {
@@ -17,10 +17,13 @@ const evidence = buildEvidence([
 
 const good = {
   title: 'Add a 2026 shipping table to /blog/shipping',
+  url: 'https://acme.example/blog/shipping',
   where: 'acme.example/blog/shipping · lost on ChatGPT',
   why: 'Cited #2 until Oct 12; seriouseats.com now has a dated table.',
+  change: { before: '', after: 'H2 "Where do we ship?" with a table of 12 countries and costs.' },
   how: ['Add a table of countries and costs.', 'Put "2026" in the title.'],
   doneWhen: 'Cited again on ChatGPT within 14 days.',
+  check: 'rerun',
   type: 'content',
   effort: '~2h',
   role: 'Content writer',
@@ -61,6 +64,37 @@ describe('taskProblems', () => {
     ]);
   });
 
+  it('needs the exact page, the change and how it is checked (AC-010)', () => {
+    expect(
+      taskProblems(
+        { ...good, url: '', change: { before: 'Old text', after: ' ' }, check: 'weekly' },
+        evidence,
+      ),
+    ).toEqual([
+      'URL is empty',
+      'the change has no after text',
+      'check is not auto, rerun or manual',
+    ]);
+    expect(taskProblems({ ...good, change: undefined }, evidence)).toEqual([
+      'the change has no after text',
+    ]);
+    // A page's address: a full URL, a path, or a host and path as the evidence shows them.
+    expect(taskProblems({ ...good, url: 'the shipping guide' }, evidence)).toEqual([
+      'URL is not a page address (https://… or /…)',
+    ]);
+    expect(taskProblems({ ...good, url: '/blog/shipping', check: 'auto' }, evidence)).toEqual([]);
+    expect(taskProblems({ ...good, url: 'acme.example/blog/shipping?ref=1' }, evidence)).toEqual(
+      [],
+    );
+    expect(taskProblems({ ...good, check: 'Auto' }, evidence)).toEqual([]);
+  });
+
+  it('stores a host and path with its https://', () => {
+    expect(pageAddress(' acme.example/blog/shipping ')).toBe('https://acme.example/blog/shipping');
+    expect(pageAddress('/pricing')).toBe('/pricing');
+    expect(pageAddress('http://acme.example/x')).toBe('http://acme.example/x');
+  });
+
   it('needs refs the evidence has, and its target named', () => {
     expect(taskProblems({ ...good, refs: [] }, evidence)).toEqual([
       'it cites none of the evidence refs',
@@ -69,8 +103,15 @@ describe('taskProblems', () => {
       'it cites refs the evidence does not have (page:9)',
     ]);
     expect(
+      taskProblems(
+        { ...good, title: 'Rewrite the shipping guide', where: 'Your blog', url: '/pricing' },
+        evidence,
+      ),
+    ).toEqual(['neither the title, Where nor URL names its target']);
+    // The URL names the page.
+    expect(
       taskProblems({ ...good, title: 'Rewrite the shipping guide', where: 'Your blog' }, evidence),
-    ).toEqual(['neither the title nor Where names its target']);
+    ).toEqual([]);
   });
 });
 
@@ -93,6 +134,7 @@ describe('a task aimed at a prompt', () => {
   const aimed = {
     ...good,
     title: 'Publish a buyer guide that cites acme.example',
+    url: '/guides/coffee-subscriptions',
     refs: ['prompt:1'],
   };
 
@@ -108,7 +150,7 @@ describe('a task aimed at a prompt', () => {
   it('does not count a paraphrase as naming it', () => {
     expect(
       taskProblems({ ...aimed, where: 'Gemini · prompts about coffee subscriptions' }, prompts),
-    ).toEqual(['neither the title nor Where names its target']);
+    ).toEqual(['neither the title, Where nor URL names its target']);
   });
 });
 

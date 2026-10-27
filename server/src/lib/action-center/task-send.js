@@ -22,6 +22,7 @@ import { logger } from '../logger.js';
 import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { ownDomainMatcher } from '../response-parser.js';
 import { OPPORTUNITY_ACTION_KIND } from './from-opportunity.js';
+import { TASK_CHECKS } from './task-writer/quality.js';
 
 export class TaskSendError extends Error {
   constructor(code, message, status = 422) {
@@ -42,6 +43,12 @@ function appOrigin() {
 }
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
+
+/** The change a task makes (AC-010): its new text, and the text it replaces (null when it adds). */
+const changeOf = (value) => {
+  const after = text(value?.after);
+  return after ? { before: text(value?.before) || null, after } : null;
+};
 
 /** A task and its action, with what sending needs to know about them. */
 export async function loadTask(taskId) {
@@ -94,7 +101,12 @@ export function ownPageOf(where, brandDomains) {
  */
 export function opportunityFromTask({ task, title, action, brandDomains }) {
   const d = task.details ?? {};
-  const page = ownPageOf(d.where, brandDomains);
+  // The page Where names; else the exact page (AC-010) when the change
+  // replaces its text, so it's there. A URL with a change that only adds may
+  // be a page still to write: that's a new page, as before.
+  const page =
+    ownPageOf(d.where, brandDomains) ??
+    (text(d.change?.before) ? ownPageOf(d.url, brandDomains) : null);
   const decision = page ? 'optimize' : 'create';
   const targetPages = page ? [{ url: page, title: '' }] : [];
   return {
@@ -120,6 +132,8 @@ export function opportunityFromTask({ task, title, action, brandDomains }) {
         actionNo: action.action_no,
         taskId: task.id,
         task: {
+          url: text(d.url),
+          change: changeOf(d.change),
           where: text(d.where),
           why: text(d.why),
           how: Array.isArray(d.how) ? d.how.map(text).filter(Boolean) : [],
@@ -297,10 +311,13 @@ export async function sendTaskToWebhook({ taskId, title, userId, loaded }) {
       title: name,
       status: task.status,
       type: d.type ?? null,
+      url: text(d.url) || null,
       where: text(d.where) || null,
       why: text(d.why) || null,
+      change: changeOf(d.change),
       how: Array.isArray(d.how) ? d.how : [],
       done_when: text(d.doneWhen) || null,
+      check: TASK_CHECKS.includes(d.check) ? d.check : null,
       effort: text(d.effort) || null,
       role: text(d.role) || null,
     },

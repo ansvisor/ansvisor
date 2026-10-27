@@ -18,9 +18,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  TASK_CHECKS,
   TASK_DETAIL_LIMITS,
   TASK_TYPES,
   hasTaskSpec,
+  isTaskCheck,
   isTaskType,
   type ActionTaskDetails,
   type TaskDetailsEdit,
@@ -114,7 +116,8 @@ function DraftWorkButtons({ work, disabled }: { work: TaskDraftWork; disabled: b
 /**
  * An opened task (AC-004): where to do it, why, how, when it counts as done
  * and what it takes, where it was sent, and for a task sent from the Improve
- * tab its body, platform and evidence (PROMPT-004).
+ * tab its body, platform and evidence (PROMPT-004); and (AC-010) the exact
+ * page, the change to make there and how we check it.
  */
 export function TaskDetailView({
   details,
@@ -131,6 +134,7 @@ export function TaskDetailView({
   draftWork?: TaskDraftWork;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
+  const tChecks = useTranslations('actionCenter.taskChecks');
   const format = useFormatter();
   const effort = [details?.effort, details?.role].filter(Boolean).join(' · ');
   const sentContent = details?.sent.content ?? null;
@@ -164,8 +168,43 @@ export function TaskDetailView({
       )}
       {details && hasTaskSpec(details) ? (
         <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1.5 text-xs">
+          {details.url && (
+            <Field label={t('url')}>
+              {/^https?:\/\//i.test(details.url) ? (
+                <a
+                  href={details.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="break-all underline-offset-2 hover:underline"
+                >
+                  {details.url}
+                  <ArrowUpRight className="ml-0.5 inline h-3 w-3" />
+                </a>
+              ) : (
+                details.url
+              )}
+            </Field>
+          )}
           {details.where && <Field label={t('where')}>{details.where}</Field>}
           {details.why && <Field label={t('why')}>{details.why}</Field>}
+          {details.change && (
+            <Field label={t('change')}>
+              {details.change.before ? (
+                <>
+                  <span className="text-muted-foreground">{t('changeBefore')}: </span>
+                  {details.change.before}
+                  <br />
+                  <span className="text-muted-foreground">{t('changeAfter')}: </span>
+                  {details.change.after}
+                </>
+              ) : (
+                <>
+                  <span className="text-muted-foreground">{t('changeAdd')}: </span>
+                  {details.change.after}
+                </>
+              )}
+            </Field>
+          )}
           {details.how.length > 0 && (
             <Field label={t('how')}>
               <ol className="list-decimal space-y-0.5 pl-4">
@@ -176,6 +215,7 @@ export function TaskDetailView({
             </Field>
           )}
           {details.doneWhen && <Field label={t('doneWhen')}>{details.doneWhen}</Field>}
+          {details.check && <Field label={t('check')}>{tChecks(details.check)}</Field>}
           {effort && <Field label={t('effort')}>{effort}</Field>}
         </dl>
       ) : (
@@ -261,11 +301,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const NO_TYPE = 'none';
+const NO_CHECK = 'none';
 
 /**
- * Every field of a task, editable (AC-004). The text is saved only when it
- * changed, so a library task keeps rendering from its template in the
- * reader's language.
+ * Every field of a task, editable (AC-004, AC-010). The text is saved only
+ * when it changed, so a library task keeps rendering from its template in
+ * the reader's language.
  */
 export function TaskDetailForm({
   text,
@@ -283,12 +324,17 @@ export function TaskDetailForm({
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
   const tTypes = useTranslations('actionCenter.taskTypes');
+  const tChecks = useTranslations('actionCenter.taskChecks');
   const [draft, setDraft] = useState({
     title: text,
+    url: details?.url ?? '',
     where: details?.where ?? '',
     why: details?.why ?? '',
+    before: details?.change?.before ?? '',
+    after: details?.change?.after ?? '',
     how: (details?.how ?? []).join('\n'),
     doneWhen: details?.doneWhen ?? '',
+    check: details?.check ?? null,
     type: details?.type ?? null,
     effort: details?.effort ?? '',
     role: details?.role ?? '',
@@ -306,10 +352,14 @@ export function TaskDetailForm({
         if (!title) return;
         void onSave({
           title: title === text ? null : title,
+          url: draft.url,
           where: draft.where,
           why: draft.why,
+          before: draft.before,
+          after: draft.after,
           how: draft.how.split('\n'),
           doneWhen: draft.doneWhen,
+          check: draft.check,
           type: draft.type,
           effort: draft.effort,
           role: draft.role,
@@ -333,6 +383,17 @@ export function TaskDetailForm({
           onChange={(e) => set('title')(e.target.value)}
         />
       </FormField>
+      <FormField id={`${id}-url`} label={t('url')}>
+        <Input
+          id={`${id}-url`}
+          value={draft.url}
+          maxLength={TASK_DETAIL_LIMITS.url}
+          placeholder={t('urlPlaceholder')}
+          disabled={disabled}
+          className="h-8 text-xs"
+          onChange={(e) => set('url')(e.target.value)}
+        />
+      </FormField>
       <FormField id={`${id}-where`} label={t('where')}>
         <Input
           id={`${id}-where`}
@@ -352,6 +413,32 @@ export function TaskDetailForm({
           disabled={disabled}
           className="min-h-0 text-xs"
           onChange={(e) => set('why')(e.target.value)}
+        />
+      </FormField>
+      <FormField
+        id={`${id}-before`}
+        label={`${t('change')} · ${t('changeBefore')}`}
+        hint={t('changeBeforeHint')}
+      >
+        <Textarea
+          id={`${id}-before`}
+          value={draft.before}
+          rows={2}
+          maxLength={TASK_DETAIL_LIMITS.change}
+          disabled={disabled}
+          className="min-h-0 text-xs"
+          onChange={(e) => set('before')(e.target.value)}
+        />
+      </FormField>
+      <FormField id={`${id}-after`} label={`${t('change')} · ${t('changeAfter')}`}>
+        <Textarea
+          id={`${id}-after`}
+          value={draft.after}
+          rows={2}
+          maxLength={TASK_DETAIL_LIMITS.change}
+          disabled={disabled}
+          className="min-h-0 text-xs"
+          onChange={(e) => set('after')(e.target.value)}
         />
       </FormField>
       <FormField
@@ -378,6 +465,31 @@ export function TaskDetailForm({
           className="h-8 text-xs"
           onChange={(e) => set('doneWhen')(e.target.value)}
         />
+      </FormField>
+      <FormField id={`${id}-check`} label={t('check')}>
+        <Select
+          value={draft.check ?? NO_CHECK}
+          onValueChange={(value) =>
+            setDraft((current) => ({ ...current, check: isTaskCheck(value) ? value : null }))
+          }
+          disabled={disabled}
+          items={[
+            { value: NO_CHECK, label: t('noCheck') },
+            ...TASK_CHECKS.map((check) => ({ value: check, label: tChecks(check) })),
+          ]}
+        >
+          <SelectTrigger id={`${id}-check`} className="h-8 w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_CHECK}>{t('noCheck')}</SelectItem>
+            {TASK_CHECKS.map((check) => (
+              <SelectItem key={check} value={check}>
+                {tChecks(check)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </FormField>
       <div className="grid grid-cols-3 gap-2">
         <FormField id={`${id}-type`} label={t('type')}>

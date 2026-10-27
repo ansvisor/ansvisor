@@ -15,10 +15,14 @@ import { MAX_TASKS } from './quality.js';
  */
 export const writtenTaskSchema = z.object({
   title: z.string().min(1).max(200),
+  url: z.string().max(500),
   where: z.string().max(300),
   why: z.string().max(600),
+  change: z.object({ before: z.string().max(1000), after: z.string().max(1000) }),
   how: z.array(z.string().max(300)).max(8),
   doneWhen: z.string().max(300),
+  // A string, not the enum, as type below.
+  check: z.string().max(10),
   // A string, not the enum: one unknown type is one refused task (quality.js),
   // not a schema miss that throws the whole answer away.
   type: z.string().max(20),
@@ -33,18 +37,21 @@ export const taskWriterSchema = z.object({
 
 const SYSTEM = `You turn an AI-visibility action into a short list of concrete tasks a person can do this week.
 
-Every task answers five questions:
+Every task answers these questions:
 - title (What): an imperative sentence naming its target, e.g. "Add a 2026 comparison table to /blog/best-tools". Never "… for 7 prompts" or "across 3 pages": one task, one target.
+- url: the exact page the change is made on, as a full URL or a path starting with "/", from the evidence. For outreach or PR, the other site's page.
 - where: the exact page URL, prompt, platform, domain or competitor, from the evidence.
 - why: the evidence behind it, with its numbers (positions, dates, visits), from the evidence only.
+- change: the change itself, written out. after: the new text, e.g. an H2 "How accurate is AI search tracking?" with its 50-word answer. before: the text it replaces, quoted from the evidence, or "" when it adds new text or the evidence doesn't show the page's text.
 - how: 2 to 5 short steps, in order.
-- doneWhen: a measurable check, e.g. "the citation returns on 2 of 3 platforms within 14 days".
+- doneWhen: a measurable check, e.g. "H2 present · answer under 60 words · page re-fetched" or "the citation returns on 2 of 3 platforms within 14 days".
+- check: how doneWhen is checked: auto (the page is fetched again), rerun (the prompts are run again) or manual (the person confirms).
 Also: type (content, on_page, technical, outreach, pr or product), effort (e.g. "~2h") and role (e.g. "Content writer").
 
 Rules:
 - One task per page or domain. Prefer the targets with the most evidence.
 - Do not write analysis tasks (analyze, identify, review, validate, measure, monitor): the product already did that work and shows it to the user.
-- refs lists the evidence refs the task rests on (e.g. "page:1", "domain:2"). Use only refs that exist. The title or Where must name the target itself: a page by its URL or path, a domain or competitor by name, a prompt by quoting it.
+- refs lists the evidence refs the task rests on (e.g. "page:1", "domain:2"). Use only refs that exist. The title, Where or url must name the target itself: a page by its URL or path, a domain or competitor by name, a prompt by quoting it.
 - Use only facts from the evidence. No placeholders, no generic SEO advice.
 - Write in English. At most ${MAX_TASKS} tasks.`;
 

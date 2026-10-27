@@ -12,9 +12,12 @@ const empty = {
   platformLabel: null,
   sources: [],
   where: null,
+  url: null,
+  change: null,
   why: null,
   how: [],
   doneWhen: null,
+  check: null,
   type: null,
   effort: null,
   role: null,
@@ -62,6 +65,27 @@ describe('parseTaskDetails', () => {
     });
   });
 
+  it('reads the exact page, the change and how it is checked (AC-010)', () => {
+    expect(
+      parseTaskDetails({
+        url: ' /blog/best-tools ',
+        change: { before: '  ', after: 'H2 "How accurate is it?" with a 50-word answer.' },
+        check: 'auto',
+      }),
+    ).toEqual({
+      ...empty,
+      url: '/blog/best-tools',
+      // Nothing it replaces: it adds.
+      change: { before: null, after: 'H2 "How accurate is it?" with a 50-word answer.' },
+      check: 'auto',
+    });
+    // A change with no new text is none; an unknown check is none.
+    expect(
+      parseTaskDetails({ where: '/x', change: { before: 'Old', after: ' ' }, check: 'weekly' }),
+    ).toEqual({ ...empty, where: '/x' });
+    expect(parseTaskDetails({ change: 'Add an H2' })).toBeNull();
+  });
+
   it('ignores what is malformed rather than failing on it', () => {
     expect(
       parseTaskDetails({
@@ -83,10 +107,14 @@ describe('parseTaskDetails', () => {
 
 describe('cleanTaskDetailsEdit', () => {
   const edit = {
+    url: '',
     where: '',
     why: '',
+    before: '',
+    after: '',
     how: [],
     doneWhen: '',
+    check: null,
     type: null,
     effort: '',
     role: '',
@@ -96,14 +124,40 @@ describe('cleanTaskDetailsEdit', () => {
     expect(
       cleanTaskDetailsEdit({ ...edit, where: '  /pricing  ', why: '   ', effort: ' ~1h ' }),
     ).toEqual({
+      url: null,
       where: '/pricing',
       why: null,
+      change: null,
       how: [],
       doneWhen: null,
+      check: null,
       type: null,
       effort: '~1h',
       role: null,
     });
+  });
+
+  it('keeps the change only with its new text, and a known check (AC-010)', () => {
+    expect(
+      cleanTaskDetailsEdit({
+        ...edit,
+        url: ' /pricing ',
+        before: ' Old line ',
+        after: ' New line ',
+        check: 'rerun',
+      }),
+    ).toMatchObject({
+      url: '/pricing',
+      change: { before: 'Old line', after: 'New line' },
+      check: 'rerun',
+    });
+    // Before alone is no change; an empty before adds.
+    expect(cleanTaskDetailsEdit({ ...edit, before: 'Old line' }).change).toBeNull();
+    expect(cleanTaskDetailsEdit({ ...edit, after: 'New line' }).change).toEqual({
+      before: null,
+      after: 'New line',
+    });
+    expect(cleanTaskDetailsEdit({ ...edit, check: 'weekly' as never }).check).toBeNull();
   });
 
   it('drops blank steps and keeps at most the limit', () => {
@@ -126,10 +180,14 @@ describe('cleanTaskDetailsEdit', () => {
 
 describe('isTaskDetailsEdit', () => {
   const edit = {
+    url: '/pricing',
     where: '/pricing',
     why: '',
+    before: '',
+    after: 'A table of plans.',
     how: ['Add a table.'],
     doneWhen: '',
+    check: 'auto',
     type: 'content',
     effort: '',
     role: '',
@@ -146,6 +204,11 @@ describe('isTaskDetailsEdit', () => {
     expect(isTaskDetailsEdit({ ...edit, how: [1] })).toBe(false);
     expect(isTaskDetailsEdit({ ...edit, where: null })).toBe(false);
     expect(isTaskDetailsEdit({ ...edit, type: 'marketing' })).toBe(false);
+    // AC-010's fields, from a form before them or with a wrong check.
+    expect(isTaskDetailsEdit({ ...edit, url: undefined })).toBe(false);
+    expect(isTaskDetailsEdit({ ...edit, after: null })).toBe(false);
+    expect(isTaskDetailsEdit({ ...edit, check: 'weekly' })).toBe(false);
+    expect(isTaskDetailsEdit({ ...edit, check: null })).toBe(true);
   });
 });
 
