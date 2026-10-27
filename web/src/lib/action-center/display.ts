@@ -83,6 +83,17 @@ export function actionTexts(
       description: t('content_draft.description'),
     };
   }
+  // A product or category sent from Product Visibility (ECOM-013) is named after it.
+  if (
+    (action.kind === 'shopping_product' || action.kind === 'shopping_category') &&
+    typeof p.title === 'string' &&
+    p.title
+  ) {
+    return {
+      title: t(`${action.kind}.namedTitle`, { name: p.title }),
+      description: t(`${action.kind}.description`),
+    };
+  }
   // An Improve action carries its own title and "why", written from the
   // prompt's platform states when it was sent (PROMPT-004).
   if (action.kind === 'prompt_improve' && typeof p.title === 'string' && p.title) {
@@ -250,6 +261,8 @@ const PERSON_SENT_KINDS: string[] = [
   'mention_review',
   'traffic_pages',
   'content_draft',
+  'shopping_product',
+  'shopping_category',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own

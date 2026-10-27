@@ -114,7 +114,10 @@ export type ActionKind =
   // Sent by a person from AI Traffic's Pages section (AT-006).
   | 'traffic_pages'
   // Sent by a person from the Content Editor's Start, as Team (CE-015).
-  | 'content_draft';
+  | 'content_draft'
+  // Sent by a person from Product Visibility: a product, or a catalog category (ECOM-013).
+  | 'shopping_product'
+  | 'shopping_category';
 
 export type TaskStatus =
   | 'todo'
@@ -251,6 +254,8 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'mention_review',
   'traffic_pages',
   'content_draft',
+  'shopping_product',
+  'shopping_category',
 ];
 
 /**

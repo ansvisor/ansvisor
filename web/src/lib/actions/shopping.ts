@@ -1,5 +1,6 @@
 'use server';
 
+import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
@@ -1687,4 +1688,46 @@ export async function getShoppingProductDetail(
       currency: ai?.currency ?? null,
     },
   };
+}
+
+// ── Actions from Product Visibility (ECOM-013) ────────────────────────────────
+
+/** A work type sent with a product or category, for a person ("me") or the agent. */
+export interface ShoppingWork {
+  type: 'optimize_page' | 'create_content' | 'get_listed' | 'technical';
+  who: 'me' | 'agent';
+  /** The line the person saw for it: the task's why. */
+  why?: string;
+}
+
+/**
+ * Sends a product or a category to the Action Center with the work picked
+ * (POST /api/action-center/products); the open one comes back when it was
+ * sent before.
+ */
+export async function sendShoppingActions(
+  brandId: string,
+  target: { type: 'product' | 'category'; id: string },
+  work: ShoppingWork[],
+  promptIds: string[],
+): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+  const res = await fetch(`${API_BASE_URL}/api/action-center/products`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ brandId, target, work, promptIds }),
+  });
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.details || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
 }

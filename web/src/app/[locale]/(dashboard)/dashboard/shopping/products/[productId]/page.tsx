@@ -82,7 +82,7 @@ export default function ShoppingProductPage() {
   return (
     <div className="space-y-6">
       {back}
-      <ProductDetailView detail={detail} />
+      <ProductDetailView detail={detail} brandId={activeBrandId ?? undefined} />
     </div>
   );
 }

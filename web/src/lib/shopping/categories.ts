@@ -35,6 +35,8 @@ export interface CategoryRow {
   /** The category's last level, as the table names it. */
   leaf: string;
   prompts: number;
+  /** Those questions' ids, for an action to be measured on (ECOM-013). */
+  promptIds: string[];
   /** The brand's share of the slots on the category's shelves; null with none. */
   shelfShare: number | null;
   productsOnShelf: number;
@@ -156,6 +158,7 @@ export function categoryRows(
         name: category.name,
         leaf,
         prompts: mine.size,
+        promptIds: [...mine],
         shelfShare,
         productsOnShelf: shown.size,
         products: category.productIds.length,
