@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../messages/en.json';
+import type { StoreError } from './catalog-client';
 
 /** #1263: a catalog sync from the browser, through the API's proxy. */
 
@@ -9,7 +11,9 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 const {
+  connectSignInAccount,
   connectStore,
+  listSignInAccounts,
   listStoreConnectors,
   removeStore,
   syncCatalogSource,
@@ -79,6 +83,7 @@ describe('stores (00282)', () => {
     expect(await listStoreConnectors()).toEqual({
       connectors: [{ kind: 'acme_store', label: 'Acme Store', fields: [] }],
       ready: true,
+      signIns: [],
     });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/aeo/api/catalog/connectors');
     answer(500, {});
@@ -124,5 +129,118 @@ describe('stores (00282)', () => {
     });
     answer(429, { message: 'Too many requests' });
     expect(await updateStoreSignIn('st1', {})).toEqual({ ok: false, code: 'busy', message: null });
+  });
+});
+
+describe('sign-in platforms (#1270)', () => {
+  const GMC = {
+    kind: 'merchant_center',
+    label: 'Google Merchant Center',
+    provider: 'google-merchant-center',
+    configured: true,
+  };
+
+  it('lists them with the stores', async () => {
+    answer(200, { connectors: [], ready: false, signIns: [GMC] });
+    expect(await listStoreConnectors()).toEqual({ connectors: [], ready: false, signIns: [GMC] });
+  });
+
+  it("reads the accounts the workspace's sign-in opens, for the brand", async () => {
+    answer(200, { accounts: [{ id: '123', name: 'Acme' }] });
+    expect(await listSignInAccounts('b1', 'merchant_center')).toEqual({
+      ok: true,
+      accounts: [{ id: '123', name: 'Acme' }],
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/catalog/accounts?brandId=b1&kind=merchant_center');
+    expect(init).toMatchObject({ headers: { Authorization: 'Bearer tok' } });
+
+    answer(409, { code: 'not_connected', error: 'Connect Google Merchant Center first.' });
+    expect(await listSignInAccounts('b1', 'merchant_center')).toEqual({
+      ok: false,
+      code: 'not_connected',
+    });
+    answer(500, {});
+    expect(await listSignInAccounts('b1', 'merchant_center')).toEqual({
+      ok: false,
+      code: 'failed',
+    });
+  });
+
+  it('connects the picked account as the input', async () => {
+    answer(201, { id: 'gmc1', account: '123' });
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({ ok: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/catalog/sources');
+    expect(JSON.parse(init.body)).toEqual({
+      brandId: 'b1',
+      kind: 'merchant_center',
+      input: { account: '123' },
+    });
+  });
+
+  it("names why the account couldn't be connected, with the platform's own words when it can't open it", async () => {
+    answer(409, { code: 'not_connected', error: 'Connect Google Merchant Center first.' });
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'not_connected',
+      message: null,
+    });
+    answer(400, {
+      code: 'connect_failed',
+      error: "This Google sign-in can't open that Merchant Center account.",
+    });
+    expect(await connectSignInAccount('b1', 'merchant_center', '999')).toEqual({
+      ok: false,
+      code: 'connect_failed',
+      message: "This Google sign-in can't open that Merchant Center account.",
+    });
+    answer(409, { code: 'duplicate' });
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'duplicate',
+      message: null,
+    });
+    answer(502, {});
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'failed',
+      message: null,
+    });
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'failed',
+      message: null,
+    });
+    quiet.mockRestore();
+  });
+});
+
+describe('StoreError', () => {
+  // Every code, so a new one fails the typecheck here until it has its words.
+  const CODES = {
+    connect_failed: true,
+    not_connected: true,
+    auth_failed: true,
+    unreachable: true,
+    duplicate: true,
+    too_many: true,
+    other_account: true,
+    not_configured: true,
+    forbidden: true,
+    not_found: true,
+    invalid: true,
+    session: true,
+    workspace: true,
+    busy: true,
+    failed: true,
+  } satisfies Record<StoreError, true>;
+
+  it('has words for every reason a store call fails', () => {
+    for (const code of Object.keys(CODES)) {
+      expect(messages.settings.catalog.stores.errors).toHaveProperty(code);
+    }
   });
 });
