@@ -138,7 +138,7 @@ export function leafName(category) {
 }
 
 /** A word's singular, roughly: boots → boot, glasses → glass, boxes → box; dress stays. */
-function singular(word) {
+export function singular(word) {
   if (word.length > 4 && /(ss|x|z|ch|sh)es$/.test(word)) return word.slice(0, -2);
   if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
   return word;
@@ -387,23 +387,26 @@ export class CategoryPageError extends Error {
 }
 
 /**
- * Whether `url` is on the brand's site: one of its domains (brand_domains),
+ * The brand's site, as onBrandDomain reads it: its domains (brand_domains),
  * or, for a brand with none stored, the site its catalog's products link to.
  */
-async function onBrandSite(db, brandId, url) {
+export async function brandSite(db, brandId) {
   const { data, error } = await db.from('brand_domains').select('domain').eq('brand_id', brandId);
   if (error) throw new Error(`brand_domains read: ${error.message}`);
-  let domains = (data ?? []).map((d) => d.domain).filter(Boolean);
-  if (!domains.length) {
-    const links = await db
-      .from('catalog_products')
-      .select('url')
-      .eq('brand_id', brandId)
-      .limit(MAX_PRODUCT_LINKS);
-    if (links.error) throw new Error(`catalog_products read: ${links.error.message}`);
-    domains = (links.data ?? []).map((p) => p.url).filter(Boolean);
-  }
-  return onBrandDomain(url, domains);
+  const domains = (data ?? []).map((d) => d.domain).filter(Boolean);
+  if (domains.length) return domains;
+  const links = await db
+    .from('catalog_products')
+    .select('url')
+    .eq('brand_id', brandId)
+    .limit(MAX_PRODUCT_LINKS);
+  if (links.error) throw new Error(`catalog_products read: ${links.error.message}`);
+  return (links.data ?? []).map((p) => p.url).filter(Boolean);
+}
+
+/** Whether `url` is on the brand's site (brandSite). */
+async function onBrandSite(db, brandId, url) {
+  return onBrandDomain(url, await brandSite(db, brandId));
 }
 
 /**
