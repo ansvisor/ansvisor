@@ -518,6 +518,51 @@ describe('runDraftWriting on a new page', () => {
     expect(written).not.toContain('3,400');
   });
 
+  it("writes with the draft's shopping path, its prices kept and its names linked (shopping path)", async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        intro: ['Good hiking boots keep you dry. The Summit GTX Boot costs 189.00 USD.'],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    const shopping = {
+      version: 1,
+      categories: [
+        { name: 'Hiking Boots', url: 'https://shop.example/collections/hiking-boots', title: null },
+      ],
+      products: [
+        {
+          id: 'p1',
+          title: 'Summit GTX Boot',
+          url: 'https://shop.example/products/p1',
+          price: 189,
+          salePrice: null,
+          currency: 'USD',
+          availability: 'in_stock',
+          image: null,
+          issues: [],
+          score: 9,
+        },
+      ],
+      leftOut: [],
+      locked: [],
+      removed: [],
+      added: [],
+    };
+    await expect(run(draftRow({ shopping_path: shopping }))).resolves.toEqual({ written: true });
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      '- Summit GTX Boot: 189.00 USD, in stock',
+    );
+    const written = draftUpdates().find((u) => u.body_html)?.body_html;
+    expect(written).toContain(
+      '<a href="https://shop.example/collections/hiking-boots">hiking boots</a>',
+    );
+    expect(written).toContain(
+      'The <a href="https://shop.example/products/p1">Summit GTX Boot</a> costs 189.00 USD.',
+    );
+  });
+
   it('leaves a draft marked ready during the run as it is', async () => {
     finished = null;
     await expect(run(draftRow())).resolves.toEqual({ skipped: true });

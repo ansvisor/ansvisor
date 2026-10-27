@@ -7,6 +7,7 @@ import { resolveModel } from './ai-provider.js';
 import { contentBriefModelId, rebuildSources } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
+import { withShopping } from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import {
   NOT_NAMES,
@@ -1204,7 +1205,7 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, agent_state, agent_state_at${handoff ? ', quality_handoff' : ''}`,
+      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, agent_state, agent_state_at, shopping_path${handoff ? ', quality_handoff' : ''}`,
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -1403,12 +1404,16 @@ async function fixWithRun({
     handoff && [...ruleKeys].some((key) => SOURCE_CHECKS.has(key))
       ? new Set([...ruleKeys, 'outboundLinks', 'citeInline'])
       : ruleKeys;
-  const targets = await readLinkTargets({
-    brandId,
-    draftId,
-    sourceUrl: draft.source_url,
-    ruleKeys: linkKeys,
-  });
+  // …and its shopping path's shop pages (shopping path, part 4).
+  const targets = withShopping(
+    await readLinkTargets({
+      brandId,
+      draftId,
+      sourceUrl: draft.source_url,
+      ruleKeys: linkKeys,
+    }),
+    draft.shopping_path,
+  );
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
     feature: 'content',
