@@ -387,7 +387,52 @@ function description(root: HTMLElement): string {
   return `${space > 0 ? short.slice(0, space) : short}…`;
 }
 
-/** A live page's own address part ("/blog/pour-over"), else the title as one. */
+/**
+ * Words an address or a meta title cut short shouldn't end on: they lead
+ * into what was cut ("…Unified Tracking Across"). English and Turkish, the
+ * languages the editor writes most.
+ */
+const DANGLING = new Set([
+  'a',
+  'an',
+  'the',
+  'and',
+  'or',
+  'of',
+  'to',
+  'for',
+  'in',
+  'on',
+  'at',
+  'by',
+  'with',
+  'from',
+  'across',
+  'into',
+  'vs',
+  'your',
+  'our',
+  've',
+  'ile',
+  'için',
+  'bir',
+]);
+
+/** Words without the ones a cut leaves dangling at their end, keeping one at least. */
+export function withoutDangling(words: string[]): string[] {
+  const kept = [...words];
+  while (kept.length > 1 && DANGLING.has(kept.at(-1)!.toLowerCase())) kept.pop();
+  return kept;
+}
+
+/** A slug from the title stops about here, at a word (#1331): an address, not a sentence. */
+const TITLE_SLUG_MAX = 60;
+
+/**
+ * A live page's own address part ("/blog/pour-over"), else the title as one:
+ * without a leading "the" or "a", cut at a word near 60 characters, never on
+ * a word that leads into what was cut.
+ */
 export function slugOf(title: string, sourceUrl: string | null): string {
   if (sourceUrl) {
     try {
@@ -400,11 +445,14 @@ export function slugOf(title: string, sourceUrl: string | null): string {
       // Not an address, or not one to read: the title's slug.
     }
   }
-  const slug = slugify(title);
-  if (slug.length <= 80) return slug;
+  const words = slugify(title).split('-').filter(Boolean);
+  if (words.length > 1 && ['the', 'a', 'an'].includes(words[0])) words.shift();
+  const slug = words.join('-');
+  if (slug.length <= TITLE_SLUG_MAX) return slug;
   // Cut at a word, not inside one: it becomes the page's address (Send to CMS).
-  const cut = slug.slice(0, 81).lastIndexOf('-');
-  return slug.slice(0, cut > 0 ? cut : 80).replace(/-+$/, '');
+  const cut = slug.slice(0, TITLE_SLUG_MAX + 1).lastIndexOf('-');
+  if (cut <= 0) return slug.slice(0, TITLE_SLUG_MAX);
+  return withoutDangling(slug.slice(0, cut).split('-')).join('-');
 }
 
 /**

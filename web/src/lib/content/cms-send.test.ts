@@ -9,6 +9,7 @@ import {
   bulkCmsItems,
   cmsSendGroups,
   cmsSource,
+  metaTitleOf,
   type CmsFields,
   type CmsPage,
   type CmsSource,
@@ -32,6 +33,23 @@ const fields: CmsFields = {
   metaTitle: 'Pour-over coffee',
   metaDescription: 'Brew it slowly.',
 };
+
+describe('metaTitleOf', () => {
+  it('keeps a title that fits, takes a long one’s first part when it says enough, else cuts it', () => {
+    expect(metaTitleOf('AEO: Answer Engine Optimization for AI Search Visibility')).toBe(
+      'AEO: Answer Engine Optimization for AI Search Visibility',
+    );
+    expect(
+      metaTitleOf('AEO tools compared side by side for marketing teams: a 2026 guide to the best'),
+    ).toBe('AEO tools compared side by side for marketing teams');
+    // The page that went to Webflow as "…Unified Tracking Across".
+    expect(
+      metaTitleOf(
+        'The Ultimate Technical Guide to Unified Tracking Across ChatGPT, Gemini, and Google AIO',
+      ),
+    ).toBe('The Ultimate Technical Guide to Unified Tracking');
+  });
+});
 
 describe('cmsFields', () => {
   it('cuts the page’s meta title at a word near 60 characters, not a kept one', () => {
