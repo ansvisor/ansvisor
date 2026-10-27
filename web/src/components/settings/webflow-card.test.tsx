@@ -73,6 +73,11 @@ const picker = (label: string) => {
   const name = [...container.querySelectorAll('label')].find((l) => l.textContent === label);
   return container.querySelector(`[id="${name!.htmlFor}"]`)!;
 };
+/** The badges by the card's title. */
+const badges = () =>
+  [...container.querySelectorAll('[data-slot="badge"]')].map((b) => b.textContent);
+const SETUP_STEP =
+  "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.";
 const option = (text: string) =>
   [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
     (o) => o.textContent === text,
@@ -144,10 +149,55 @@ describe('WebflowCard', () => {
     );
     await typeToken('  wf-token-123  ');
     expect(client.connectWebflow).toHaveBeenCalledWith('b1', 'wf-token-123');
-    expect(toast.success).toHaveBeenCalledWith('Webflow connected');
+    expect(toast.success).toHaveBeenCalledWith(
+      'Webflow connected. Now pick a collection and save.',
+    );
     expect(container.querySelector('input[type="password"]')).toBeNull();
     expect(client.listWebflowCollections).toHaveBeenCalledWith('b1', 's1');
-    expect(container.textContent).toContain('Collection');
+    // The setup's last step: the collection picker, focused.
+    expect(document.activeElement).toBe(picker('Collection'));
+  });
+
+  it('says the setup isn’t finished until a collection is saved', async () => {
+    client.readWebflow.mockResolvedValue({
+      ok: true,
+      configured: true,
+      connection: { ...CONNECTED, collectionId: null, collectionName: null, fieldMap: {} },
+    });
+    await render();
+    expect(badges()).toEqual(['Setup not finished']);
+    expect(container.textContent).toContain(SETUP_STEP);
+    // Read on opening the page, the picker isn't focused: only right after connecting.
+    expect(document.activeElement).not.toBe(picker('Collection'));
+
+    await click(picker('Collection'));
+    const blog = option('Blog Posts')!;
+    await act(async () => {
+      blog.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await click(blog);
+    expect(container.textContent).toContain(SETUP_STEP);
+    await click(button('Save'));
+    expect(client.saveWebflowSettings).toHaveBeenCalledWith('b1', {
+      siteId: 's1',
+      collectionId: 'c1',
+      fieldMap: { body: 'post-body' },
+    });
+    expect(badges()).toEqual(['Connected']);
+    expect(container.textContent).not.toContain(SETUP_STEP);
+  });
+
+  it('keeps the setup a new token for the same site keeps', async () => {
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.connectWebflow.mockResolvedValue({ ok: true, connection: CONNECTED, sites: [] });
+    await render();
+    expect(badges()).toEqual(['Connected']);
+    expect(container.textContent).not.toContain(SETUP_STEP);
+    await click(button('Replace token'));
+    await typeToken('wf-token-456');
+    expect(toast.success).toHaveBeenCalledWith('Webflow connected');
+    expect(badges()).toEqual(['Connected']);
+    expect(document.activeElement).not.toBe(picker('Collection'));
   });
 
   it('says how to make the token, step by step above its field, and that it’s shown once', async () => {
@@ -235,6 +285,21 @@ describe('WebflowCard', () => {
     root = createRoot(container);
     await render();
     expect(container.textContent).toContain('Admins and managers can connect Webflow.');
+
+    // Connected, no collection saved: pages can't go yet.
+    client.readWebflow.mockResolvedValue({
+      ok: true,
+      configured: true,
+      connection: { ...CONNECTED, collectionId: null, collectionName: null, fieldMap: {} },
+    });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(badges()).toEqual(['Setup not finished']);
+    expect(container.textContent).toContain(
+      "No collection picked yet. Pages can't go to Webflow until an admin or manager finishes the setup.",
+    );
+    expect(container.textContent).not.toContain(SETUP_STEP);
   });
 
   it('disconnects after asking', async () => {
