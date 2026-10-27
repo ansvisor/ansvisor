@@ -314,6 +314,8 @@ export function TaskDetailForm({
   disabled,
   onSave,
   onCancel,
+  submitLabel,
+  requireSpec = false,
 }: {
   /** The task's text as the drawer shows it. */
   text: string;
@@ -321,6 +323,10 @@ export function TaskDetailForm({
   disabled: boolean;
   onSave: (edit: TaskDetailsEdit & { title: string | null }) => void | Promise<void>;
   onCancel: () => void;
+  /** The submit button's label; Save by default. */
+  submitLabel?: string;
+  /** Submit only with the URL, the change, Done when and How we check filled (AC-010's review). */
+  requireSpec?: boolean;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
   const tTypes = useTranslations('actionCenter.taskTypes');
@@ -343,13 +349,16 @@ export function TaskDetailForm({
   const set = (field: keyof typeof draft) => (value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
   const title = draft.title.trim();
+  const specFilled =
+    !!draft.url.trim() && !!draft.after.trim() && !!draft.doneWhen.trim() && !!draft.check;
+  const canSubmit = !!title && (!requireSpec || specFilled);
 
   return (
     <form
       className="space-y-2.5 border-t px-4 py-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!title) return;
+        if (!canSubmit) return;
         void onSave({
           title: title === text ? null : title,
           url: draft.url,
@@ -386,6 +395,7 @@ export function TaskDetailForm({
       <FormField id={`${id}-url`} label={t('url')}>
         <Input
           id={`${id}-url`}
+          aria-required={requireSpec || undefined}
           value={draft.url}
           maxLength={TASK_DETAIL_LIMITS.url}
           placeholder={t('urlPlaceholder')}
@@ -433,6 +443,7 @@ export function TaskDetailForm({
       <FormField id={`${id}-after`} label={`${t('change')} · ${t('changeAfter')}`}>
         <Textarea
           id={`${id}-after`}
+          aria-required={requireSpec || undefined}
           value={draft.after}
           rows={2}
           maxLength={TASK_DETAIL_LIMITS.change}
@@ -459,6 +470,7 @@ export function TaskDetailForm({
       <FormField id={`${id}-done`} label={t('doneWhen')}>
         <Input
           id={`${id}-done`}
+          aria-required={requireSpec || undefined}
           value={draft.doneWhen}
           maxLength={TASK_DETAIL_LIMITS.doneWhen}
           disabled={disabled}
@@ -478,7 +490,11 @@ export function TaskDetailForm({
             ...TASK_CHECKS.map((check) => ({ value: check, label: tChecks(check) })),
           ]}
         >
-          <SelectTrigger id={`${id}-check`} className="h-8 w-full text-xs">
+          <SelectTrigger
+            id={`${id}-check`}
+            aria-required={requireSpec || undefined}
+            className="h-8 w-full text-xs"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -541,8 +557,8 @@ export function TaskDetailForm({
         </FormField>
       </div>
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={disabled || !title} className="h-7 text-xs">
-          {t('save')}
+        <Button type="submit" size="sm" disabled={disabled || !canSubmit} className="h-7 text-xs">
+          {submitLabel ?? t('save')}
         </Button>
         <Button
           type="button"

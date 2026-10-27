@@ -45,7 +45,7 @@ function table(name) {
     }
     if (q.op === 'delete') {
       const ids = q.filters.find(([col]) => col === 'id')?.[1] ?? [];
-      db[name] = db[name].filter((row) => !ids.includes(row.id));
+      db[name] = (db[name] ?? []).filter((row) => !ids.includes(row.id));
     }
     if (q.op === 'update') {
       const matched = rows();
@@ -194,6 +194,10 @@ describe('keepsTask', () => {
     expect(keepsTask({ task_key: 'refresh_content', status: 'todo' })).toBe(false);
     expect(keepsTask({ task_key: null, status: 'todo', details: null })).toBe(true);
     expect(keepsTask({ task_key: null, status: 'todo', details: { source: 'ai' } })).toBe(false);
+    // One a manager filled and approved from Needs review (AC-010, 00293) is theirs.
+    expect(keepsTask({ task_key: null, status: 'todo', details: { source: 'reviewed' } })).toBe(
+      true,
+    );
     expect(keepsTask({ task_key: 'analyze_citations', status: 'completed' })).toBe(false);
     expect(keepsTask({ task_key: 'validate_citations', status: 'in_progress' })).toBe(false);
     // Sent to Content or a webhook: kept, whatever its status.
@@ -291,6 +295,74 @@ describe('writeTasksForAction', () => {
       actor_id: 'u1',
     });
     expect(db.actions[0].tasks_generated_at).toEqual(expect.any(String));
+  });
+
+  it('puts a task the last round gave without its page, change or check in review (AC-010)', async () => {
+    generateObject
+      .mockResolvedValueOnce(
+        answer([task(), task({ title: 'Add an FAQ to /blog/shipping', url: '', check: 'later' })]),
+      )
+      .mockResolvedValueOnce(
+        answer([
+          task({
+            title: 'Add a map to /blog/shipping',
+            url: 'the shipping page',
+            change: { before: '', after: ' ' },
+          }),
+        ]),
+      );
+
+    const result = await writeTasksForAction('a1', { trigger: 'regenerate', userId: 'u1' });
+
+    expect(result.status).toBe('written');
+    expect(result.tasks.map((t) => t.title)).toEqual([
+      'Add a 2026 shipping table to /blog/shipping',
+    ]);
+    // The first round's was asked for again: only the last round's waits.
+    expect(result.reviews.map((t) => t.title)).toEqual(['Add a map to /blog/shipping']);
+    const reviews = ops.filter((op) => op.table === 'action_task_reviews');
+    expect(reviews.map((op) => [op.op, op.filters])).toEqual([
+      // The earlier writing's go first.
+      [
+        'delete',
+        [
+          ['action_id', 'a1'],
+          ['source', 'ai'],
+        ],
+      ],
+      ['insert', []],
+    ]);
+    // The reviews go in before the tasks: a failure there leaves the tasks as they were.
+    const at = (table, op) => ops.findIndex((o) => o.table === table && o.op === op);
+    expect(at('action_task_reviews', 'insert')).toBeLessThan(at('action_tasks', 'insert'));
+    expect(reviews[1].payload).toEqual([
+      {
+        action_id: 'a1',
+        title: 'Add a map to /blog/shipping',
+        details: expect.objectContaining({ url: null, change: null, check: 'rerun', source: 'ai' }),
+        missing: ['url', 'change'],
+        source: 'ai',
+      },
+    ]);
+    expect(ops.find((op) => op.table === 'action_events').payload.data).toMatchObject({
+      count: 1,
+      reviews: 1,
+    });
+  });
+
+  it('keeps the template tasks when every written task waits for review', async () => {
+    generateObject
+      .mockResolvedValueOnce(answer([task({ url: '' })]))
+      .mockResolvedValueOnce(answer([task({ check: 'weekly' })]));
+
+    const result = await writeTasksForAction('a1', { trigger: 'regenerate', userId: 'u1' });
+
+    expect(result).toMatchObject({ status: 'written', kept: null, tasks: [] });
+    expect(result.reviews).toHaveLength(1);
+    expect(ops.some((op) => op.table === 'action_tasks' && op.op === 'insert')).toBe(false);
+    expect(
+      ops.find((op) => op.table === 'action_task_reviews' && op.op === 'insert').payload[0].missing,
+    ).toEqual(['check']);
   });
 
   it('writes and charges nothing on a dry run', async () => {

@@ -134,6 +134,7 @@
   "actionCenter": {
     "tabs": {
       "label": "Action Center sections",
+      "review": "Needs review",
       "kpis": "KPIs",
       "actions": "Actions",
       "signals": "Signals",
@@ -1277,7 +1278,7 @@
           "task_renamed": "Task renamed to “{title}”",
           "task_deleted": "Task deleted",
           "task_edited": "Task edited",
-          "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence",
+          "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence{reviews, plural, =0 {} one {; # waits for review} other {; # wait for review}}",
           "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
@@ -1317,6 +1318,8 @@
           "cancel": "Cancel",
           "busy": "Writing tasks…",
           "done": "{count, plural, one {# task written} other {# tasks written}}",
+          "doneWithReviews": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} in Needs review for the page, the change or the check",
+          "doneWithReviewsMember": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} for an admin or a manager to review",
           "timeout": "Writing the tasks took too long. Please try again.",
           "unreachable": "Couldn't reach the server. Please try again.",
           "unauthenticated": "Your session has ended. Please sign in again.",
@@ -2376,6 +2379,34 @@
         "regions": "{count, plural, one {# region} other {# regions}}",
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
       }
+    },
+    "reviewPage": {
+      "title": "Needs review",
+      "subtitle": "Tasks an agent wrote without the exact page, the change, Done when or how we check it. Fill what's missing and approve them onto their action, or dismiss them.",
+      "noBrand": "Pick a brand to see its tasks waiting for review.",
+      "managersOnly": "Only admins and managers review tasks.",
+      "empty": "Nothing waits for review. Tasks an agent writes without the page, the change, Done when or how we check it show up here.",
+      "loadFailed": "Couldn't load the tasks waiting for review.",
+      "missing": "Missing",
+      "fields": {
+        "url": "URL",
+        "change": "Change",
+        "doneWhen": "Done when",
+        "check": "How we check"
+      },
+      "openAction": "Open {ref}",
+      "approve": "Approve",
+      "dismiss": "Dismiss",
+      "confirmDismiss": "Dismiss this task? It won't reach the action.",
+      "confirmDismissButton": "Dismiss",
+      "cancel": "Cancel",
+      "approved": "Task added to {ref}",
+      "dismissed": "Task dismissed",
+      "incomplete": "Fill the URL, the change, Done when and How we check first.",
+      "closed": "This task's action is closed or deleted, so it can't take the task.",
+      "gone": "This task was already approved or dismissed.",
+      "notAllowed": "Only admins and managers review tasks.",
+      "failed": "Couldn't save. Try again."
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildEvidence } from './evidence.js';
-import { pageAddress, sameTask, taskProblems } from './quality.js';
+import { onlyGaps, pageAddress, sameTask, taskGaps, taskProblems } from './quality.js';
 
 const evidence = buildEvidence([
   {
@@ -89,10 +89,24 @@ describe('taskProblems', () => {
     expect(taskProblems({ ...good, check: 'Auto' }, evidence)).toEqual([]);
   });
 
-  it('stores a host and path with its https://', () => {
+  it('stores a host and path with its https://, and no address as none', () => {
     expect(pageAddress(' acme.example/blog/shipping ')).toBe('https://acme.example/blog/shipping');
     expect(pageAddress('/pricing')).toBe('/pricing');
     expect(pageAddress('http://acme.example/x')).toBe('http://acme.example/x');
+    expect(pageAddress('the shipping guide')).toBeNull();
+    expect(pageAddress(undefined)).toBeNull();
+  });
+
+  it('names the fields a task misses, and tells them from its other problems (AC-010)', () => {
+    expect(taskGaps(good)).toEqual([]);
+    expect(
+      taskGaps({ ...good, url: 'the guide', change: { before: 'x', after: '' }, doneWhen: ' ' }),
+    ).toEqual(['url', 'change', 'doneWhen']);
+    expect(taskGaps({ ...good, check: undefined })).toEqual(['check']);
+    expect(onlyGaps(taskProblems({ ...good, url: '', check: 'later' }, evidence))).toBe(true);
+    // Another problem with them, or none at all: not a gap to review.
+    expect(onlyGaps(taskProblems({ ...good, url: '', where: '' }, evidence))).toBe(false);
+    expect(onlyGaps([])).toBe(false);
   });
 
   it('needs refs the evidence has, and its target named', () => {
