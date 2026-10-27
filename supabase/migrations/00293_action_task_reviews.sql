@@ -35,8 +35,13 @@ create table if not exists public.action_task_reviews (
 create index if not exists action_task_reviews_action_idx
   on public.action_task_reviews (action_id);
 
+-- Read and dismissed by admins and managers (the policies below); written by the server.
 alter table public.action_task_reviews enable row level security;
+revoke all on table public.action_task_reviews from anon, authenticated;
+grant select, delete on table public.action_task_reviews to authenticated;
+grant all on table public.action_task_reviews to service_role;
 
+drop policy if exists "action_task_reviews: manager select" on public.action_task_reviews;
 create policy "action_task_reviews: manager select"
   on public.action_task_reviews
   for select
@@ -49,6 +54,7 @@ create policy "action_task_reviews: manager select"
     )
   );
 
+drop policy if exists "action_task_reviews: manager delete" on public.action_task_reviews;
 create policy "action_task_reviews: manager delete"
   on public.action_task_reviews
   for delete
@@ -66,9 +72,9 @@ comment on table public.action_task_reviews is
 
 -- The reviewed task onto its action's list, its four fields filled, and the
 -- review row gone. Null when the row isn't there (approved or dismissed
--- meanwhile); an error when the caller isn't an admin or a manager of the
--- brand's organization, the action is deleted or closed, or a field is
--- still missing.
+-- meanwhile, or another organization's); an error when the caller isn't an
+-- admin or a manager, the action is deleted or closed, or a field is still
+-- missing.
 create or replace function public.approve_action_task_review(
   p_review_id uuid,
   p_title text,
@@ -84,23 +90,25 @@ declare
   v_title text := btrim(coalesce(p_title, ''));
   v_task_id uuid;
 begin
-  select r.* into v_review
-  from public.action_task_reviews r
-  where r.id = p_review_id
-  for update;
-  if not found then
-    return null;
-  end if;
-
+  -- The caller's role first, before any row is read or locked.
   if not exists (
-    select 1 from public.actions a
-    join public.brands b on b.id = a.brand_id
-    join public.profiles p on p.organization_id = b.organization_id
-    where a.id = v_review.action_id
-      and p.id = auth.uid()
-      and p.role in ('admin', 'manager')
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role in ('admin', 'manager')
   ) then
     raise exception 'not allowed' using errcode = '42501';
+  end if;
+
+  -- Only a row of the caller's own organization: another's reads as not there.
+  select r.* into v_review
+  from public.action_task_reviews r
+  join public.actions a on a.id = r.action_id
+  join public.brands b on b.id = a.brand_id
+  join public.profiles p on p.organization_id = b.organization_id
+  where r.id = p_review_id
+    and p.id = auth.uid()
+  for update of r;
+  if not found then
+    return null;
   end if;
 
   if exists (
@@ -150,4 +158,6 @@ revoke all on function public.approve_action_task_review(uuid, text, jsonb) from
 grant execute on function public.approve_action_task_review(uuid, text, jsonb) to authenticated;
 
 comment on function public.approve_action_task_review(uuid, text, jsonb) is
-  'Action Center (AC-010): a task waiting for review (action_task_reviews) onto its action''s task list, after its last task, with the exact page, the change, Done when and how it is checked filled, as the reviewer''s (source reviewed); the review row goes and the trail says a task was added. Admins and managers of the brand''s organization only, on an action neither deleted nor closed. Null when the row is gone.';
+  'Action Center (AC-010): a task waiting for review (action_task_reviews) onto its action''s task list, after its last task, with the exact page, the change, Done when and how it is checked filled, as the reviewer''s (source reviewed); the review row goes and the trail says a task was added. Admins and managers of the brand''s organization only, on an action neither deleted nor closed. Null when the row is gone or another organization''s.';
+
+notify pgrst, 'reload schema';
