@@ -15,6 +15,7 @@ import {
   MAX_LIVE_PAGES,
   MAX_NEW_ACTIONS,
   MIN_WORDS,
+  checkShoppingDraft,
   checkShoppingLinks,
   linkCheck,
   linksPath,
@@ -708,6 +709,96 @@ describe('checkShoppingLinks', () => {
     const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
     expect(result.drafts).toBe(0);
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  describe('checkShoppingDraft (Check now on its task)', () => {
+    const live = (html) => vi.fn(async (url) => ({ url, status: 200, html: livePageHtml(html) }));
+
+    it('checks one draft as the sync does, keeps its row, and closes its action once fixed', async () => {
+      const fake = setup();
+      fake
+        .rows('content_drafts')
+        .push(
+          draft('d1', { status: 'published', published_url: 'https://shop.example/blog/boots' }),
+          draft('d2'),
+        );
+      await checkShoppingLinks(BRAND, {
+        db: fake.db,
+        now: NOW,
+        readPage: live(`${link('p1')} ${link('p2')}`),
+      });
+      expect(fake.rows('actions')).toHaveLength(1);
+      const later = new Date('2026-10-28T09:00:00Z');
+      const readPage = live(link('p1'));
+      const found = await checkShoppingDraft(BRAND, 'd1', { db: fake.db, now: later, readPage });
+      expect(found).toEqual({
+        readFrom: 'page',
+        pageUrl: 'https://shop.example/blog/boots',
+        bad: [],
+        action: 'closed',
+      });
+      expect(readPage).toHaveBeenCalledOnce();
+      expect(fake.rows('actions')[0].status).toBe('completed');
+      const rows = Object.fromEntries(
+        fake.rows('content_shopping_checks').map((r) => [r.draft_id, r]),
+      );
+      expect(rows.d1).toMatchObject({
+        read_from: 'page',
+        bad: [],
+        checked_at: later.toISOString(),
+      });
+      // The brand's other rows are left as they were: none is stale.
+      expect(rows.d2.checked_at).toBe(NOW.toISOString());
+    });
+
+    it('reads a page that is no page from its draft, and touches no action', async () => {
+      const fake = setup();
+      fake
+        .rows('content_drafts')
+        .push(draft('d1', { status: 'published', published_url: 'https://shop.example/a' }));
+      const readPage = vi.fn(async (url) => ({ url, status: 200, html: '<div id="root"></div>' }));
+      const found = await checkShoppingDraft(BRAND, 'd1', { db: fake.db, now: NOW, readPage });
+      expect(found).toEqual({
+        readFrom: 'draft',
+        pageUrl: null,
+        bad: [{ id: 'p2', title: 'Boot p2', state: 'sold_out' }],
+        action: null,
+      });
+      expect(fake.rows('actions')).toHaveLength(0);
+    });
+
+    it("has nothing to check for an archived draft, one without a path, or another brand's", async () => {
+      const fake = setup();
+      fake
+        .rows('content_drafts')
+        .push(
+          draft('d-archived', { archived_at: '2026-10-20T00:00:00Z' }),
+          draft('d-none', { shopping_path: null }),
+          draft('d-other', { brand_id: 'brand-2' }),
+        );
+      for (const id of ['d-archived', 'd-none', 'd-other', 'd-missing']) {
+        expect(await checkShoppingDraft(BRAND, id, { db: fake.db, now: NOW })).toBeNull();
+      }
+      expect(fake.rows('content_shopping_checks')).toEqual([]);
+    });
+
+    it("throws an action it can't sync, for the person who asked", async () => {
+      const fake = setup();
+      fake
+        .rows('content_drafts')
+        .push(draft('d1', { status: 'published', published_url: 'https://shop.example/a' }));
+      const db = {
+        from: (table) => {
+          if (table === 'actions') throw new Error('actions unavailable');
+          return fake.db.from(table);
+        },
+      };
+      await expect(
+        checkShoppingDraft(BRAND, 'd1', { db, now: NOW, readPage: live(link('p2')) }),
+      ).rejects.toThrow('actions unavailable');
+      // The check itself is kept.
+      expect(fake.rows('content_shopping_checks')).toHaveLength(1);
+    });
   });
 });
 

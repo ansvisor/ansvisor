@@ -31,6 +31,7 @@ const page = (badProducts, swaps = []) => ({
 describe('shoppingLinksTask', () => {
   it("names what no longer sells and why, the path's products to link instead, and how it's done", () => {
     const task = shoppingLinksTask({
+      draftId: 'd1',
       pageUrl: PAGE,
       bad: [bad('p1', 'sold_out', 'Storm Shell 2'), bad('p2', 'refused', 'Pack-Lite Jacket')],
       swaps: [
@@ -41,6 +42,7 @@ describe('shoppingLinksTask', () => {
     expect(task.title).toBe('Swap the 2 products that no longer sell');
     expect(task.details).toMatchObject({
       source: 'shopping_check',
+      draftId: 'd1',
       url: PAGE,
       where: PAGE,
       check: 'auto',
@@ -158,7 +160,7 @@ describe('syncShoppingLinksAction', () => {
     expect(fake.rows('action_tasks')).toHaveLength(1);
   });
 
-  it('completes its task and the action, each in its History, once the page links none', async () => {
+  it('completes its task as checked automatically and the action, each in its History, once the page links none', async () => {
     const fake = fakeDb();
     await syncShoppingLinksAction(BRAND, page([bad('p1')]), { db: fake.db, now: NOW });
     fake.rows('actions')[0].status = 'in_progress';
@@ -169,11 +171,28 @@ describe('syncShoppingLinksAction', () => {
       status: 'completed',
       completed_at: later.toISOString(),
     });
-    expect(fake.rows('action_tasks')[0]).toMatchObject({ status: 'completed', skip_reason: null });
-    expect(fake.rows('action_events').map((e) => [e.event, e.data.to ?? null])).toEqual([
-      ['created', null],
-      ['task_status', 'completed'],
-      ['status_changed', 'completed'],
+    const [task] = fake.rows('action_tasks');
+    expect(task).toMatchObject({ status: 'completed', skip_reason: null });
+    // Its card's last check, as AC-010's checks keep it; the task's own details stay.
+    expect(task.details).toMatchObject({
+      source: 'shopping_check',
+      draftId: 'd1',
+      autoCheck: {
+        at: later.toISOString(),
+        triedAt: later.toISOString(),
+        url: PAGE,
+        passed: true,
+        missing: [],
+      },
+    });
+    // AC-010's line: "Checked automatically and done: {task}{title}".
+    expect(fake.rows('action_events').map((e) => [e.event, e.data])).toEqual([
+      ['created', expect.any(Object)],
+      [
+        'task_checked',
+        { taskId: task.id, task: null, title: 'Swap the product that no longer sells' },
+      ],
+      ['status_changed', { to: 'completed', source: 'shopping_check' }],
     ]);
   });
 
@@ -189,9 +208,12 @@ describe('syncShoppingLinksAction', () => {
       status: 'todo',
       details: null,
     });
-    const result = await syncShoppingLinksAction(BRAND, page([]), { db: fake.db, now: NOW });
+    const later = new Date('2026-10-28T09:00:00Z');
+    const result = await syncShoppingLinksAction(BRAND, page([]), { db: fake.db, now: later });
     expect(result).toBe('kept');
     expect(action.status).toBe('new');
+    // Its task done, the action moves up its list.
+    expect(action.updated_at).toBe(later.toISOString());
     const statuses = Object.fromEntries(fake.rows('action_tasks').map((t) => [t.title, t.status]));
     expect(statuses).toEqual({
       'Swap the product that no longer sells': 'completed',

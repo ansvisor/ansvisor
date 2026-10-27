@@ -64,7 +64,7 @@ describe('ShoppingLinksContext', () => {
     expect(container.textContent).toContain('Storm Shell 2Sold out');
     expect(container.textContent).toContain('Pack-Lite JacketRefused by Merchant Center');
     expect(container.textContent).toContain('Storm Shell 3 · Pack-Lite Pro');
-    expect(container.textContent).toContain('after the next catalog sync');
+    expect(container.textContent).toContain('or now with Check now on its task');
   });
 
   it('reads a payload of the wrong shape without breaking', async () => {
