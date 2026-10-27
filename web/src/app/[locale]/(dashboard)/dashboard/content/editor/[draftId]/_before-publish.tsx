@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -72,9 +72,10 @@ export interface ReadyToPaste {
  * the Trust the page had; on Export it goes on to Export, and on Send to CMS
  * to the Send dialog (#1331). Rendered only while open.
  *
- * On Send to CMS, a page with nothing to ask about (Trust 60 or more,
- * nothing missing, nothing still being read) goes straight on to the Send
- * dialog, and the code, for a CMS that doesn't write it, is folded away.
+ * On Send to CMS, a page with nothing to ask about (Trust read and 60 or
+ * more, the authors and a category's products read, nothing missing,
+ * nothing still being read) goes straight on to the Send dialog, and the
+ * code, for a CMS that doesn't write it, is folded away.
  */
 /** The below-60 warning, as each way on says what it does. */
 const WARNING = { markReady: 'warning', export: 'warningExport', send: 'warningSend' } as const;
@@ -359,21 +360,40 @@ export function BeforePublish({
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
   // Nothing to ask about as Send opens it: straight on to the Send dialog.
+  // Only once all is read: Trust, the authors and a category's products not
+  // read yet may still have something to ask. A Trust read with no score
+  // has nothing to score (no figure, no dated source): nothing to ask.
   const [skipped] = useState(
     () =>
       mode === 'send' &&
+      quality.trust !== null &&
       !below &&
+      authorsRead &&
+      category?.status !== 'reading' &&
       rows.every((row) => row.state !== 'missing') &&
       linksPending === 0 &&
       !quality.claimsReading &&
       !quality.pageReading,
   );
+  // Once, as it opens: StrictMode runs an effect twice, and the Send dialog opens once.
+  const continued = useRef(false);
   useEffect(() => {
-    if (skipped) onContinue?.();
+    if (!skipped || continued.current) return;
+    continued.current = true;
+    onContinue?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as it opens
   }, [skipped]);
   // The page goes to the CMS: the code is only for one that doesn't write it.
   const [codeShown, setCodeShown] = useState(mode !== 'send');
+  const codeId = useId();
+  const codeRef = useRef<HTMLPreElement>(null);
+  // Show the JSON-LD takes the focus to the code it opens.
+  const focusCode = useRef(false);
+  useEffect(() => {
+    if (!codeShown || !focusCode.current) return;
+    focusCode.current = false;
+    codeRef.current?.focus();
+  }, [codeShown]);
   if (skipped) return null;
 
   return (
@@ -487,32 +507,48 @@ export function BeforePublish({
             </li>
           ))}
         </ul>
-        {jsonLd && !codeShown && (
-          <button
-            type="button"
-            className="justify-self-start text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            onClick={() => setCodeShown(true)}
-          >
-            {t('showCode')}
-          </button>
-        )}
-        {jsonLd && codeShown && (
+        {jsonLd && (
           <div className="space-y-1.5">
-            <pre
-              aria-label={t('jsonLd')}
-              tabIndex={0}
-              className="max-h-48 overflow-auto rounded-xl border bg-muted/40 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
-            >
-              {jsonLd}
-            </pre>
+            {mode === 'send' && (
+              <button
+                type="button"
+                aria-expanded={codeShown}
+                aria-controls={codeShown ? codeId : undefined}
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                onClick={() => {
+                  focusCode.current = !codeShown;
+                  setCodeShown(!codeShown);
+                }}
+              >
+                <ChevronDown
+                  aria-hidden
+                  className={cn('h-3.5 w-3.5 transition-transform', !codeShown && '-rotate-90')}
+                />
+                {t('showCode')}
+              </button>
+            )}
+            {codeShown && (
+              <pre
+                id={codeId}
+                ref={codeRef}
+                aria-label={t('jsonLd')}
+                tabIndex={0}
+                className="max-h-48 overflow-auto rounded-xl border bg-muted/40 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+              >
+                {jsonLd}
+              </pre>
+            )}
+            {/* Said folded too: the code that goes, or is copied, leaves it out. */}
             {(article || itemListLd) && titleHasPlaceholder(title) && (
               <p className="text-xs text-amber-700 dark:text-amber-300">
                 {t(itemListLd ? 'nameLeftOut' : 'headlineLeftOut')}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">
-              {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
-            </p>
+            {codeShown && (
+              <p className="text-xs text-muted-foreground">
+                {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
+              </p>
+            )}
           </div>
         )}
         <DialogFooter className="gap-2 sm:justify-between">
