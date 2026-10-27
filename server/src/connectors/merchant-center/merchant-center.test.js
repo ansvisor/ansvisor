@@ -12,6 +12,8 @@ import { runSync } from '../testing.js';
 import merchantCenter, {
   API,
   MAX_ACCOUNTS,
+  MAX_ISSUES,
+  MAX_LISTING_ISSUES,
   MAX_PAGES,
   MAX_PARENTS,
   PAGE_SIZE,
@@ -341,8 +343,56 @@ describe('readCatalog, an offer listed again', () => {
     expect(request).toHaveBeenCalledTimes(MAX_PAGES);
     expect(read.items).toHaveLength(MAX_PAGES);
     expect(read.errors.map((e) => e.message)).toEqual([
-      "Only the first 200,000 products were read: the rest aren't in the catalog.",
+      "Only the first 50,000 products were read: the rest aren't in the catalog.",
     ]);
+  });
+
+  it('keeps MAX_LISTING_ISSUES of a listing, and MAX_ISSUES of a read, and says how many it left', async () => {
+    const withIssues = (offerId, count) => ({
+      ...listing(offerId, 'en', 'US', ['US']),
+      productStatus: {
+        itemLevelIssues: Array.from({ length: count }, (_, i) => ({
+          code: `issue_${i}`,
+          severity: 'DEMOTED',
+          applicableCountries: ['US'],
+        })),
+      },
+    });
+    const one = await merchantCenter.readCatalog(
+      { account: ACCOUNT },
+      { request: async () => ok({ products: [withIssues('BOOT', 500)] }) },
+    );
+    expect(one.issues).toHaveLength(MAX_LISTING_ISSUES);
+    expect(one.errors).toEqual([]);
+    // Each listing at its most: the read stops keeping them at MAX_ISSUES.
+    const listings = MAX_ISSUES / MAX_LISTING_ISSUES + 10;
+    const request = vi.fn(async (_url, { query }) => {
+      const n = Number(query.pageToken ?? 0);
+      const products = Array.from({ length: PAGE_SIZE }, (_, i) =>
+        withIssues(`O-${n * PAGE_SIZE + i}`, MAX_LISTING_ISSUES),
+      ).slice(0, Math.max(0, listings - n * PAGE_SIZE));
+      const more = (n + 1) * PAGE_SIZE < listings;
+      return ok({ products, nextPageToken: more ? String(n + 1) : '' });
+    });
+    const many = await merchantCenter.readCatalog({ account: ACCOUNT }, { request });
+    expect(many.issues).toHaveLength(MAX_ISSUES);
+    expect(many.errors.map((e) => e.message)).toEqual([
+      `Only the first 100,000 issues were kept: ${(10 * MAX_LISTING_ISSUES).toLocaleString('en-US')} more weren't.`,
+    ]);
+  });
+
+  it("reads an answer that isn't a product list as a failed read, not an empty account", async () => {
+    for (const data of ['<html>', null, [], { products: 'none' }]) {
+      await expect(
+        merchantCenter.readCatalog({ account: ACCOUNT }, { request: async () => ok(data) }),
+      ).rejects.toMatchObject({ code: 'bad_response' });
+    }
+    // No products at all: Google leaves the list out.
+    const none = await merchantCenter.readCatalog(
+      { account: ACCOUNT },
+      { request: async () => ok({}) },
+    );
+    expect(none.items).toEqual([]);
   });
 });
 

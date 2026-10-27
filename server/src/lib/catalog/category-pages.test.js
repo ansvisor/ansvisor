@@ -236,14 +236,31 @@ describe('matchCategoryPages', () => {
     const matched = matchCategoryPages(categories, pages);
     // Each address is read a few times, not once for each category (500,000 reads, seconds).
     expect(reads).toBeLessThan(10_000);
-    // Loose, for a busy machine.
-    expect(Date.now() - started).toBeLessThan(2000);
+    // Loose, for a busy machine: the read count above bounds the work.
+    expect(Date.now() - started).toBeLessThan(5000);
     expect(matched).toHaveLength(1000);
     expect(matched[2]).toMatchObject({
       how: 'words',
       page: { url: 'https://s.example/collections/w2x-boots' },
     });
     expect(matched[1].page).toBeNull();
+  });
+
+  it('matches long names, long addresses and long titles in time near their length', () => {
+    // 1,000 names as long as a catalog keeps (750), mostly spaces.
+    const categories = Array.from(
+      { length: 1000 },
+      (_, i) => `Boots${' '.repeat(700)}> trail boot ${i}`,
+    );
+    // 500 pages whose last segment has hundreds of words, each sharing "boot".
+    const long = Array.from({ length: 400 }, (_, i) => `boot${i % 7 ? '' : 's'}`).join('-');
+    const pages = Array.from({ length: 500 }, (_, i) =>
+      page(`https://s.example/collections/${long}-${i}`, `${'Trail boot '.repeat(2_000)}${i}`),
+    );
+    const started = Date.now();
+    const matched = matchCategoryPages(categories, pages);
+    expect(matched).toHaveLength(1000);
+    expect(Date.now() - started).toBeLessThan(5000);
   });
 });
 

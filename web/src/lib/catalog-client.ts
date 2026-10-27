@@ -340,10 +340,15 @@ const CATEGORY_KNOWN: readonly CategoryPageError[] = [
   'forbidden',
 ];
 
+/**
+ * `whenMissing`: what a 404 with no code of ours means, the route not there
+ * yet (an API older than the web).
+ */
 async function categoryCall<T>(
   path: string,
   init: RequestInit,
   read: (body: Record<string, unknown>) => T,
+  whenMissing?: T,
 ): Promise<{ ok: true; value: T } | { ok: false; code: CategoryPageError }> {
   try {
     const {
@@ -360,6 +365,9 @@ async function categoryCall<T>(
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (res.ok) return { ok: true, value: read(body) };
+    if (res.status === 404 && body.code === undefined && whenMissing !== undefined) {
+      return { ok: true, value: whenMissing };
+    }
     const known = CATEGORY_KNOWN.find((c) => c === body.code);
     if (known) return { ok: false, code: known };
     const general = apiFailure(res.status, body);
@@ -374,12 +382,13 @@ async function categoryCall<T>(
   }
 }
 
-/** The brand's catalog categories and their pages on its site. */
+/** The brand's catalog categories and their pages on its site; none while the API has no such route. */
 export function listCategoryPages(brandId: string) {
-  return categoryCall(
+  return categoryCall<CategoryPage[]>(
     `/categories?${new URLSearchParams({ brandId })}`,
     {},
     (body) => (body.categories as CategoryPage[] | undefined) ?? [],
+    [],
   );
 }
 

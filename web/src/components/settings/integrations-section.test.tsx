@@ -4,8 +4,19 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 
+/** Each provider's status as the API answers it: an Error is a failed read. */
+const statuses: Record<string, string | Error> = {};
+const cloud = { on: false };
+vi.mock('@/config/plans', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/plans')>()),
+  isCloud: () => cloud.on,
+}));
 vi.mock('@/lib/actions/integrations', () => ({
-  getIntegrationStatus: async () => ({ status: 'not_connected' }),
+  getIntegrationStatus: async (provider: string) => {
+    const status = statuses[provider] ?? 'not_connected';
+    if (status instanceof Error) throw status;
+    return { status };
+  },
   disconnectIntegration: vi.fn(),
   getGscProperties: vi.fn(),
   getGscBrandMappings: vi.fn(),
@@ -38,6 +49,7 @@ vi.mock('./catalog-category-pages', () => ({
 vi.mock('./webflow-card', () => ({ WebflowCard: () => <div data-card="webflow">Webflow</div> }));
 
 const { IntegrationsSection } = await import('./integrations-section');
+const { toast } = await import('sonner');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -48,6 +60,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  for (const key of Object.keys(statuses)) delete statuses[key];
+  cloud.on = false;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -103,6 +117,29 @@ describe('IntegrationsSection', () => {
     // The Google data sources come first, in no group.
     expect(groupOf(byText('Google Search Console'))).toBeNull();
     expect(groupOf(byText('Google Analytics'))).toBeNull();
+  });
+
+  it("keeps Merchant Center's card hidden while its status can't be read, without a toast", async () => {
+    statuses['google-merchant-center'] = new Error('Unknown integration provider.');
+    vi.mocked(toast.error).mockClear();
+    await render();
+    expect(byText('Google Merchant Center')).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+    // The other cards are there.
+    expect(byText('Google Search Console')).not.toBeNull();
+    expect(container.querySelector('[data-card="catalog"]')).not.toBeNull();
+  });
+
+  it('keeps it hidden on the cloud while it is not set up there; a self-hosted server shows it', async () => {
+    statuses['google-merchant-center'] = 'not_configured';
+    cloud.on = true;
+    await render();
+    expect(byText('Google Merchant Center')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    cloud.on = false;
+    await render();
+    expect(byText('Google Merchant Center')).not.toBeNull();
   });
 
   it("reads the category pages again on each read of a brand's sources after its first", async () => {
