@@ -8,6 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { pct } from '@/components/audit/audit-report';
 import type { AuditOverview, AuditQuota } from '@/lib/actions/audits';
 import { formatNumber } from '@/lib/format';
+import { isNoPlan } from '@/lib/billing/no-plan';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { MetricCard } from '../insights/_kpi-cards';
 import { upIsGood } from '../insights/kpi-format';
 import { autoSharePct, quotaShares, QuotaSegments, RunDots } from './_quota-meter';
@@ -99,6 +101,8 @@ export function AuditOverviewCards({
 }) {
   const t = useTranslations('audit.overview');
   const tq = useTranslations('audit.quota');
+  const tReadOnly = useTranslations('readOnly');
+  const { isLocked } = useUpgradeGate();
   const [howOpen, setHowOpen] = useState(false);
 
   if (!overview) {
@@ -116,7 +120,10 @@ export function AuditOverviewCards({
   }
 
   const domain = overview.primaryHost ?? t('yourDomain');
-  const shares = quota ? quotaShares(quota) : null;
+  // Without an active plan the quota reads 0 of 0: the card says so, with no
+  // count, bar or runs, rather than "0 of 0 left".
+  const noPlan = isNoPlan(quota, isLocked);
+  const shares = quota && !noPlan ? quotaShares(quota) : null;
   const auto = quota?.auto;
   const gapsSub =
     overview.pages === 0 ? t('noPages') : overview.gaps.length > 0 ? t('gapsSub') : t('noGaps');
@@ -145,7 +152,7 @@ export function AuditOverviewCards({
         {howToggle}
       </div>
     </div>
-  ) : auto?.enabled ? (
+  ) : auto?.enabled && !noPlan ? (
     <div className="space-y-2 pb-0.5">
       <RunDots auto={auto} now={now} />
       <div className="truncate text-xs text-muted-foreground">
@@ -188,13 +195,13 @@ export function AuditOverviewCards({
           label={t('auditsThisMonth')}
           tooltip={t('auditsTip')}
           icon={CalendarDays}
-          value={shares ? formatNumber(shares.left) : t('unlimited')}
+          value={noPlan ? '—' : shares ? formatNumber(shares.left) : t('unlimited')}
           delta={
             shares && quota
               ? { text: t('ofLeft', { limit: formatNumber(quota.limit) }), tone: 'neutral' }
               : null
           }
-          sub={quota && !shares ? t('unlimitedSub') : undefined}
+          sub={noPlan ? tReadOnly('noPlan') : quota && !shares ? t('unlimitedSub') : undefined}
           footer={quotaFooter}
         />
       </div>

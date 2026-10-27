@@ -126,6 +126,25 @@ describe('AuditOverviewCards', () => {
     expect(audits).toContain('Auto-audit off · How it works');
   });
 
+  it('says "No active plan" for 0 of 0 without one, with no count, bar or runs', () => {
+    render(overview(), {
+      used: 245,
+      running: 0,
+      limit: 0,
+      remaining: 0,
+      noPlan: true,
+      auto: auto({ enabled: false, reserved: 0 }),
+    });
+    const audits = cards()[3];
+    expect(audits).toContain('Audits this month');
+    expect(audits).toContain('—');
+    expect(audits).toContain('No active plan');
+    expect(audits).not.toContain('of 0 left');
+    expect(audits).not.toContain('How it works');
+    expect(container.querySelector('[role=img][aria-label]')).toBeNull();
+    expect(container.querySelector('.text-destructive')).toBeNull();
+  });
+
   it('counts the pages on other sites apart, and says when there are no gaps or pages', () => {
     render(overview({ otherPages: 3, gaps: [] }));
     expect(cards()[1]).toContain('+ 3 on other sites');

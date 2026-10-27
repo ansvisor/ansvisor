@@ -78,6 +78,15 @@ describe('AuditBulkBar', () => {
     expect(button('Re-audit').disabled).toBe(true);
   });
 
+  it('keeps Re-audit clickable without an active plan, with no "none left" (0 of 0 is no plan)', () => {
+    render(2, { used: 40, limit: 0, remaining: 0, noPlan: true });
+    expect(container.textContent).not.toContain('No audits left this month');
+    expect(container.querySelector('.text-destructive')).toBeNull();
+    expect(button('Re-audit').disabled).toBe(false);
+    act(() => button('Re-audit').click());
+    expect(onReaudit).toHaveBeenCalledOnce();
+  });
+
   it("says the runs' share is still scheduled when the user's is used up (SA-019)", () => {
     // The spec's example: 100 auto and 375 of the user's used, day 28's 25 to come.
     render(1, {

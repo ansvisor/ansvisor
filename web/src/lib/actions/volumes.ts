@@ -3,8 +3,9 @@
 import { createClient } from '@/lib/supabase/server';
 import type { PromptVolume } from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import type { NoPlanMark } from '@/lib/billing/no-plan';
 
-export interface VolumeQuota {
+export interface VolumeQuota extends NoPlanMark {
   used: number;
   limit: number;
   remaining: number;

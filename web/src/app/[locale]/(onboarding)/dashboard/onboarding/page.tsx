@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createBrand, markBrandAsEcommerce } from '@/lib/actions/brand';
@@ -68,7 +69,13 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
+import {
+  suggestTopics,
+  generatePromptsFromTopics,
+  suggestCompetitors,
+  suggestFailure,
+  type SuggestFailure,
+} from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { DASHBOARD_HOME } from '@/config/home';
@@ -264,6 +271,7 @@ const COMPETITOR_LOADING_MESSAGES = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const tWizard = useTranslations('brands.wizard');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -290,7 +298,9 @@ export default function OnboardingPage() {
   const [loadingTopics, setLoadingTopics] = useState(false);
   // #379 — suggestions can fail even after the server's retries; each step
   // then shows an inline "add your own" fallback instead of a bare toast.
-  const [topicSuggestError, setTopicSuggestError] = useState(false);
+  // 'dailyLimit': the day's setup suggestions are used up (429), so it says
+  // to try tomorrow, and offers no Try again.
+  const [topicSuggestError, setTopicSuggestError] = useState<SuggestFailure | null>(null);
   const [topicLoadingMsg, setTopicLoadingMsg] = useState('');
   const topicMsgIdx = useRef(0);
 
@@ -313,7 +323,7 @@ export default function OnboardingPage() {
   // Step 4
   const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
-  const [promptGenError, setPromptGenError] = useState(false);
+  const [promptGenError, setPromptGenError] = useState<SuggestFailure | null>(null);
   const [topicSaveError, setTopicSaveError] = useState(false);
   const [promptCapacity, setPromptCapacity] = useState<{
     maxPrompts: number;
@@ -329,7 +339,7 @@ export default function OnboardingPage() {
   }
   const [suggestedCompetitors, setSuggestedCompetitors] = useState<CompetitorItem[]>([]);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
-  const [competitorSuggestError, setCompetitorSuggestError] = useState(false);
+  const [competitorSuggestError, setCompetitorSuggestError] = useState<SuggestFailure | null>(null);
   const [ecommerceDetected, setEcommerceDetected] = useState(false);
   const ecommerceSetup = useRef<Promise<void> | null>(null);
   const [competitorName, setCompetitorName] = useState('');
@@ -670,7 +680,7 @@ export default function OnboardingPage() {
 
   const fetchTopicSuggestions = async () => {
     setLoadingTopics(true);
-    setTopicSuggestError(false);
+    setTopicSuggestError(null);
     try {
       const { topics } = await suggestTopics({
         brandName: brandName.trim(),
@@ -682,7 +692,7 @@ export default function OnboardingPage() {
       setSelectedTopics(new Set(topics.slice(0, 7)));
     } catch (err) {
       console.error('Topic suggestion error:', err);
-      setTopicSuggestError(true);
+      setTopicSuggestError(suggestFailure(err));
     } finally {
       setLoadingTopics(false);
     }
@@ -722,7 +732,7 @@ export default function OnboardingPage() {
     if (!createdBrand) return;
     setLoadingPrompts(true);
     setTopicSaveError(false);
-    setPromptGenError(false);
+    setPromptGenError(null);
     const topicNames = Array.from(selectedTopics);
 
     // Save topics to DB first, with its own error handling. createTopics
@@ -763,7 +773,7 @@ export default function OnboardingPage() {
       // advance with empty per-topic groups so the manual add inputs are
       // usable, and explain inline. Continue stays disabled until they add
       // at least one prompt.
-      setPromptGenError(true);
+      setPromptGenError(suggestFailure(err));
       setTopicPrompts(topicNames.map((topic) => ({ topic, prompts: [] })));
       setStep(4);
     } finally {
@@ -830,7 +840,7 @@ export default function OnboardingPage() {
 
   const fetchCompetitorSuggestions = async () => {
     setLoadingCompetitors(true);
-    setCompetitorSuggestError(false);
+    setCompetitorSuggestError(null);
     try {
       const { competitors, isEcommerce } = await suggestCompetitors({
         brandName: brandName.trim(),
@@ -844,7 +854,7 @@ export default function OnboardingPage() {
       if (isEcommerce) ecommerceSetup.current = turnOnProductVisibility();
     } catch (err) {
       console.error('Competitor suggestion error:', err);
-      setCompetitorSuggestError(true);
+      setCompetitorSuggestError(suggestFailure(err));
     } finally {
       setLoadingCompetitors(false);
     }
@@ -1321,11 +1331,19 @@ export default function OnboardingPage() {
                     {topicSuggestError && (
                       <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                         <span>
-                          Couldn&apos;t fetch topic suggestions right now — add your own above.
+                          {topicSuggestError === 'dailyLimit' ? (
+                            tWizard('suggestionsUsedUp')
+                          ) : (
+                            <>
+                              Couldn&apos;t fetch topic suggestions right now — add your own above.
+                            </>
+                          )}
                         </span>
-                        <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
-                          Try again
-                        </Button>
+                        {topicSuggestError !== 'dailyLimit' && (
+                          <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
+                            Try again
+                          </Button>
+                        )}
                       </div>
                     )}
                     {suggestedTopics.map((topic) => {
@@ -1471,8 +1489,14 @@ export default function OnboardingPage() {
 
             {promptGenError && (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                Couldn&apos;t generate prompt suggestions right now — add your own to each topic
-                below to continue.
+                {promptGenError === 'dailyLimit' ? (
+                  tWizard('suggestionsUsedUp')
+                ) : (
+                  <>
+                    Couldn&apos;t generate prompt suggestions right now — add your own to each topic
+                    below to continue.
+                  </>
+                )}
               </div>
             )}
 
@@ -1617,11 +1641,19 @@ export default function OnboardingPage() {
                 {competitorSuggestError && (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                     <span>
-                      Couldn&apos;t fetch competitor suggestions right now — add your own above.
+                      {competitorSuggestError === 'dailyLimit' ? (
+                        tWizard('suggestionsUsedUp')
+                      ) : (
+                        <>
+                          Couldn&apos;t fetch competitor suggestions right now — add your own above.
+                        </>
+                      )}
                     </span>
-                    <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
-                      Try again
-                    </Button>
+                    {competitorSuggestError !== 'dailyLimit' && (
+                      <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
+                        Try again
+                      </Button>
+                    )}
                   </div>
                 )}
                 {suggestedCompetitors.length > 0 && (

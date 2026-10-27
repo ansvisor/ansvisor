@@ -163,6 +163,7 @@ export function BotsDialog({
   // upgrade dialog instead; revoking one stays open (it ends an access).
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
 
   const close = (next: boolean) => {
     if (!next) {
@@ -280,12 +281,14 @@ export function BotsDialog({
                   ))}
                 </ul>
                 <p className="text-xs text-muted-foreground">
-                  {usage.cap < 0
+                  {/* Without an active plan the cap reads 0: the month's rows, not "of 0". */}
+                  {usage.cap < 0 || usage.noPlan
                     ? t('usageNoCap', { stored: formatNumber(usage.stored), count: usage.stored })
                     : t('usage', {
                         stored: formatNumber(usage.stored),
                         cap: formatNumber(usage.cap),
                       })}
+                  {usage.noPlan && ` · ${tReadOnly('noPlan')}`}
                   {pausedUntil && ` ${t('paused', { day: shortDay(pausedUntil) })}`}
                 </p>
                 {/* Log senders' records count against their own cap (§6.3). */}

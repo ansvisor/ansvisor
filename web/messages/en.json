@@ -80,6 +80,7 @@
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
     "portalFailed": "Couldn't open the billing page. Try again.",
+    "noPlan": "No active plan",
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
       "editPrompts": "Editing prompts needs a plan",
@@ -8295,7 +8296,8 @@
       "back": "Back",
       "next": "Next",
       "finish": "Finish Setup",
-      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings."
+      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings.",
+      "suggestionsUsedUp": "Setup suggestions are used up for today. Try again tomorrow, or add your own."
     },
     "settings": {
       "facts": {

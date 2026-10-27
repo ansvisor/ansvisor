@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from 'vitest';
 import {
+  counterTone,
   hasContentQuota,
   onDemandMax,
   usagePercent,
@@ -26,6 +27,15 @@ describe('usageTone', () => {
 
   test('unlimited plans have no tone', () => {
     expect(usageTone(c(0, -1))).toBe('unlimited');
+  });
+});
+
+describe('counterTone', () => {
+  test('is "noPlan", not exhausted, when the limit reads 0 without an active plan', () => {
+    expect(counterTone(c(4, 0), true)).toBe('noPlan');
+    expect(counterTone(c(4, 0))).toBe('exhausted');
+    expect(counterTone(c(7, 10))).toBe('normal');
+    expect(counterTone(c(0, -1))).toBe('unlimited');
   });
 });
 

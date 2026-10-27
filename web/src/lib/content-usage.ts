@@ -5,14 +5,16 @@
  * decides how they read.
  */
 
-export interface UsageCounter {
+import type { NoPlanMark } from '@/lib/billing/no-plan';
+
+export interface UsageCounter extends NoPlanMark {
   used: number;
   /** -1 means unlimited. */
   limit: number;
   remaining: number;
 }
 
-export interface ContentUsage {
+export interface ContentUsage extends NoPlanMark {
   plan: string;
   planName: string | null;
   periodStart: string | null;
@@ -43,6 +45,14 @@ export function usageTone(counter: UsageCounter): UsageTone {
   if (counter.limit === -1) return 'unlimited';
   if (counter.limit <= 0 || counter.used >= counter.limit) return 'exhausted';
   return counter.used / counter.limit >= USAGE_WARNING_RATIO ? 'warning' : 'normal';
+}
+
+/**
+ * A counter's tone on the usage card. Without an active plan (`noPlan`) its
+ * limit reads 0, yet nothing was used up: 'noPlan', never 'exhausted'.
+ */
+export function counterTone(counter: UsageCounter, noPlan = false): UsageTone | 'noPlan' {
+  return noPlan ? 'noPlan' : usageTone(counter);
 }
 
 /** Bar width, 0–100. */

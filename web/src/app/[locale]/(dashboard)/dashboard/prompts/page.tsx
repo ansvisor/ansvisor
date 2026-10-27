@@ -142,6 +142,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import {
   MODEL_GROUPS,
   ALL_MODELS,
@@ -1309,6 +1310,7 @@ export default function PromptsPage() {
   // runs open the upgrade dialog instead.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
   const failureToast = useFailureToast();
   const openAddPrompt = guard(() => setAddPromptOpen(true), { action: tActions('addPrompts') });
 
@@ -1819,7 +1821,10 @@ export default function PromptsPage() {
       v.intent.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
+  // Without an active plan the quota reads 0 of 0: not used up. The analyses
+  // stay clickable, and open the plan dialog.
+  const noPlan = isNoPlan(quota, isLocked);
+  const quotaExhausted = !noPlan && quota !== null && quota.limit !== -1 && quota.remaining <= 0;
 
   // Reads "Analyzing 32/100..." once the first poll lands, so a run measured in
   // minutes shows movement instead of an indefinite spinner. A count is only
@@ -2189,7 +2194,7 @@ export default function PromptsPage() {
                   quotaExhausted ? 'text-red-500' : 'text-muted-foreground',
                 )}
               >
-                {quota.remaining}/{quota.limit} analyses left
+                {noPlan ? tReadOnly('noPlan') : `${quota.remaining}/${quota.limit} analyses left`}
               </span>
             )}
             {volumes.length > 0 && (
@@ -2281,7 +2286,9 @@ export default function PromptsPage() {
                     )}
                     {quota && quota.limit !== -1 && !quotaExhausted && (
                       <p className="text-xs text-muted-foreground">
-                        {quota.remaining}/{quota.limit} analyses remaining this month
+                        {noPlan
+                          ? tReadOnly('noPlan')
+                          : `${quota.remaining}/${quota.limit} analyses remaining this month`}
                       </p>
                     )}
                   </>
@@ -2867,7 +2874,7 @@ function AllPromptsTab({
   const now = useNow({ updateInterval: 60_000 }).getTime();
   // A read-only workspace (plan not active): the row menu's and the bulk
   // bar's actions open the upgrade dialog instead.
-  const { guard } = useUpgradeGate();
+  const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
@@ -3089,8 +3096,12 @@ function AllPromptsTab({
   }, [activeBrandId, usageVersion]);
   const hasOpportunityLimit =
     hasContentQuota(contentUsage) && contentUsage.opportunities.limit !== -1;
+  // Without an active plan the quota reads 0 of 0: Suggest content stays
+  // clickable, and opens the plan dialog.
   const suggestDisabledReason =
-    hasOpportunityLimit && contentUsage.opportunities.remaining <= 0
+    hasOpportunityLimit &&
+    !isNoPlan(contentUsage, isLocked) &&
+    contentUsage.opportunities.remaining <= 0
       ? contentUsage.periodEnd
         ? `Limit reached · resets ${new Date(contentUsage.periodEnd).toLocaleDateString('en-US', {
             month: 'short',

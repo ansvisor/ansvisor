@@ -134,6 +134,29 @@ describe('BotsSource', () => {
     expect(getBotConnections).toHaveBeenCalledTimes(2);
   });
 
+  // The server reads caps of 0 without an active plan (noPlan): not Starter's lock.
+  it('shows a workspace without an active plan its own connections and use, not Upgrade', async () => {
+    openUpgrade.mockReset();
+    getBotConnections.mockResolvedValue(
+      info({
+        connections: [
+          { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: hoursAgo(1) },
+        ],
+        usage: { ...info().usage, stored: 1_200, cap: 0, rawCap: 0, noPlan: true },
+      }),
+    );
+    await render(true, true);
+    expect(card()).toContain('Cloudflare / Vercel · last event 1h ago');
+    expect(card()).not.toContain('Growth+');
+    expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
+    await act(async () => button('Manage')!.click());
+    expect(page()).toContain('This month: 1,200 detailed rows. · No active plan');
+    expect(page()).not.toContain('of 0');
+    await act(async () => button('Create connection')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Connecting bot logs needs a plan');
+    expect(createBotConnection).not.toHaveBeenCalled();
+  });
+
   it('makes no connection on a read-only workspace: Create connection opens the upgrade dialog', async () => {
     openUpgrade.mockReset();
     await render(true, true);

@@ -41,6 +41,15 @@ describe('botsCardState', () => {
       state({ connections: [conn(null), conn('2026-10-19T09:00:00Z', 'c2')], usage: usage() }),
     ).toBe('on');
   });
+
+  it('is never locked without an active plan: its caps read 0, its connections still show', () => {
+    const noPlan = usage({ cap: 0, rawCap: 0, noPlan: true });
+    expect(botsCardState({ connections: [conn('2026-10-19T09:00:00Z')], usage: noPlan })).toBe(
+      'on',
+    );
+    expect(botsCardState({ connections: [conn(null)], usage: noPlan })).toBe('waiting');
+    expect(botsCardState({ connections: [], usage: noPlan })).toBe('off');
+  });
 });
 
 describe('lastBotEvent and rowsPausedUntil', () => {
@@ -117,6 +126,17 @@ describe('botReportState and sampleBotTypes (AT-011)', () => {
     expect(
       botReportState({ connections: [], usage: usage() }, report('2026-10-19T09:00:00Z')),
     ).toBe('data');
+  });
+
+  it('shows a workspace without an active plan its own data, not the locked sample', () => {
+    const noPlan = usage({ cap: 0, rawCap: 0, noPlan: true });
+    expect(
+      botReportState({ connections: [conn(null)], usage: noPlan }, report('2026-10-19T09:00:00Z')),
+    ).toBe('data');
+    expect(botReportState({ connections: [conn(null)], usage: noPlan }, report(null))).toBe(
+      'waiting',
+    );
+    expect(botReportState({ connections: [], usage: noPlan }, report(null))).toBe('off');
   });
 
   it("samples the mockup's numbers, last seen 2h, 40m and 5m ago", () => {

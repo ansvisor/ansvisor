@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 import type { SiteTrust } from '@/lib/content/site-trust';
+import type { NoPlanMark } from '@/lib/billing/no-plan';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -59,7 +60,7 @@ export interface AuditResult {
   recommendations: AuditRecommendation[];
 }
 
-export interface AuditQuota {
+export interface AuditQuota extends NoPlanMark {
   used: number;
   limit: number;
   /**

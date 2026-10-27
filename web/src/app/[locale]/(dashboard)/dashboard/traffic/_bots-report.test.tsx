@@ -239,6 +239,22 @@ describe('BotsReportSection', () => {
     );
   });
 
+  // A Growth plan that ended reads caps of 0 with noPlan: its own data, not Starter's lock.
+  it('shows a workspace without an active plan its own data, not the locked sample', async () => {
+    getBotConnections.mockResolvedValue(
+      info({ usage: { ...info().usage, cap: 0, rawCap: 0, noPlan: true } }),
+    );
+    await render();
+    expect(text()).not.toContain('The AI bot report comes with the Growth plan.');
+    expect(text()).not.toContain('8,420');
+    expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
+    expect(rows()).toEqual([
+      ['Training (GPTBot, ClaudeBot)', '1,200', '300', '2h ago'],
+      ['Search index (OAI-SearchBot)', '400', '120', '1h ago'],
+      ['/menu', '90', '2h ago', '—', '1h ago'],
+    ]);
+  });
+
   it('offers Connect over sample data, and a preview of it', async () => {
     getBotConnections.mockResolvedValue(info({ connections: [] }));
     getTrafficBots.mockResolvedValue(report({ lastSeen: null, types: [], pages: [] }));
