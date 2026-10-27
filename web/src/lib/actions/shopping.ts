@@ -17,6 +17,13 @@ import {
   type ShelfStats,
 } from '@/lib/shopping/shelf';
 import {
+  productRows,
+  type CatalogProductRow,
+  type ProductAiStats,
+  type ProductCardRow,
+  type ProductRow,
+} from '@/lib/shopping/products';
+import {
   toMerchantSplit,
   type MerchantSplitRow,
   type ShoppingMerchantSplit,
@@ -1220,4 +1227,189 @@ export async function getShoppingAiOrders(brandId: string): Promise<ShoppingAiOr
       .map(([source, orders]) => ({ source, orders }))
       .sort((a, b) => b.orders - a.orders || a.source.localeCompare(b.source)),
   };
+}
+
+// ── Products (Product Visibility, ECOM-007) ───────────────────────────────────
+
+/** Catalog products the table reads at most. */
+const PRODUCTS_TABLE_MAX = 2000;
+const CATALOG_PAGE = 1000;
+const IN_STOCK = new Set(['in_stock', 'instock', 'available', 'limited_availability']);
+
+export interface ShoppingProducts {
+  rows: ProductRow[];
+  /** The brand's live catalog products; more than `rows` when past PRODUCTS_TABLE_MAX. */
+  total: number;
+}
+
+/** Every row of a brand's catalog table, in `.range()` pages, up to `max`. */
+async function readCatalogRows<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
+  build: () => any,
+  max: number,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let start = 0; start < max; start += CATALOG_PAGE) {
+    const { data, error } = await build().range(start, Math.min(start + CATALOG_PAGE, max) - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as T[]));
+    if ((data ?? []).length < CATALOG_PAGE) break;
+  }
+  return rows;
+}
+
+/**
+ * The Products table: the brand's catalog, each product with its shelves,
+ * win rate and average place over the filter window (its cards, 00360),
+ * the AI visits its page got and the orders they led to (00361), and its
+ * readiness. Null when the brand has no catalog.
+ */
+export async function getShoppingProducts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingProducts | null> {
+  const supabase = await createClient();
+  const { count: total, error: countErr } = await supabase
+    .from('catalog_products')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .is('removed_at', null);
+  if (countErr) throw new Error(countErr.message);
+  if (!total) return null;
+
+  const { from } = resolveDateRange(filters);
+  const [products, variants, images, categories, cards, stats] = await Promise.all([
+    readCatalogRows<{
+      id: string;
+      title: string;
+      url: string | null;
+      product_type: string | null;
+      product_brand: string | null;
+      description: string | null;
+    }>(
+      () =>
+        supabase
+          .from('catalog_products')
+          .select('id, title, url, product_type, product_brand, description')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
+      PRODUCTS_TABLE_MAX,
+    ),
+    readCatalogRows<{
+      product_id: string;
+      gtin: string | null;
+      price: number | null;
+      sale_price: number | null;
+      currency: string | null;
+      availability: string | null;
+    }>(
+      () =>
+        supabase
+          .from('catalog_variants')
+          .select('product_id, gtin, price, sale_price, currency, availability')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
+      CARD_MAX_ROWS,
+    ),
+    readCatalogRows<{ product_id: string; url: string; position: number }>(
+      () =>
+        supabase
+          .from('catalog_images')
+          .select('product_id, url, position')
+          .eq('brand_id', brandId)
+          .order('id'),
+      CARD_MAX_ROWS,
+    ),
+    readCatalogRows<{ product_id: string; category: { name: string } | null }>(
+      () =>
+        supabase
+          .from('catalog_product_categories')
+          .select('product_id, category:category_id ( name )')
+          .eq('brand_id', brandId)
+          .order('product_id')
+          .order('category_id'),
+      CARD_MAX_ROWS,
+    ),
+    fetchAllCards<{
+      catalog_product_id: string;
+      position: number;
+      platform: string;
+      prompt_results: { prompt_id: string } | null;
+    }>(() =>
+      cardsInWindow(
+        supabase,
+        brandId,
+        filters,
+        'catalog_product_id, position, platform, prompt_results:prompt_result_id ( prompt_id )',
+      )
+        .eq('matched_brand_role', 'own')
+        .not('catalog_product_id', 'is', null),
+    ),
+    supabase.rpc('catalog_product_ai_stats', {
+      p_brand_id: brandId,
+      // All time reads the last 90 days of visits and orders.
+      p_from: from ?? daysAgoIso(90),
+    }),
+  ]);
+  if (stats.error) throw new Error(stats.error.message);
+
+  const variantsOf = new Map<string, typeof variants>();
+  for (const v of variants) {
+    if (!variantsOf.has(v.product_id)) variantsOf.set(v.product_id, []);
+    variantsOf.get(v.product_id)!.push(v);
+  }
+  const imageOf = new Map<string, { url: string; position: number }>();
+  for (const image of images) {
+    const kept = imageOf.get(image.product_id);
+    if (!kept || image.position < kept.position) imageOf.set(image.product_id, image);
+  }
+  const categoryOf = new Map<string, string>();
+  for (const row of categories) {
+    if (row.category?.name && !categoryOf.has(row.product_id)) {
+      categoryOf.set(row.product_id, row.category.name);
+    }
+  }
+  const catalog: CatalogProductRow[] = products.map((p) => {
+    const own = variantsOf.get(p.id) ?? [];
+    const stocked = own.filter((v) =>
+      IN_STOCK.has(
+        String(v.availability ?? '')
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_'),
+      ),
+    );
+    const priced = (stocked.length ? stocked : own)
+      .map((v) => ({ price: v.sale_price ?? v.price, currency: v.currency }))
+      .filter((v): v is { price: number; currency: string | null } => v.price !== null)
+      .sort((a, b) => a.price - b.price);
+    return {
+      id: p.id,
+      title: p.title,
+      url: p.url,
+      productType: p.product_type,
+      brand: p.product_brand,
+      description: p.description,
+      image: imageOf.get(p.id)?.url ?? null,
+      category: categoryOf.get(p.id) ?? null,
+      price: priced[0] ? Number(priced[0].price) : null,
+      currency: priced[0]?.currency ?? null,
+      inStock: stocked.length > 0,
+      hasGtin: own.some((v) => !!v.gtin),
+    };
+  });
+  const shelfCards: ProductCardRow[] = cards.map((card) => ({
+    productId: card.catalog_product_id,
+    shelf: `${card.prompt_results?.prompt_id ?? '?'}:${card.platform}`,
+    rank: card.position + 1,
+  }));
+  const aiStats: ProductAiStats[] = (stats.data ?? []).map((row) => ({
+    productId: row.product_id,
+    aiVisits: Number(row.ai_visits),
+    orders: Number(row.orders),
+    revenue: row.revenue === null ? null : Number(row.revenue),
+    currency: row.currency,
+  }));
+  return { rows: productRows(catalog, shelfCards, aiStats), total };
 }

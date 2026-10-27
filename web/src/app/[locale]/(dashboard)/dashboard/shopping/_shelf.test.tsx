@@ -14,7 +14,8 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 
-const { ShelfKpis, ShelfRows, priceText } = await import('./_shelf');
+const { ShelfKpis, ShelfRows } = await import('./_shelf');
+const { priceText } = await import('@/lib/shopping/price');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;

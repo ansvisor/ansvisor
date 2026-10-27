@@ -21,6 +21,7 @@ import { getFaviconUrl } from '@/lib/favicon';
 import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { cn } from '@/lib/utils';
+import { priceText } from '@/lib/shopping/price';
 import type { ShoppingAiOrders, ShoppingShelf } from '@/lib/actions/shopping';
 import {
   PRICE_BANDS,
@@ -43,21 +44,6 @@ const MARKETPLACE_NAMES: Record<string, string> = {
 };
 const marketplaceName = (id: string) =>
   MARKETPLACE_NAMES[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
-
-/** A price as the card shows it: "$139", "$24.50", "€89", or the amount and its code. */
-export function priceText(value: number, currency: string | null): string {
-  const digits = Number.isInteger(value) ? 0 : 2;
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    }).format(value);
-  } catch {
-    return `${value.toFixed(digits)} ${currency ?? ''}`.trim();
-  }
-}
 
 /** A month's revenue, short: "$24.9k". */
 function revenueText(value: number, currency: string | null): string {

@@ -38,6 +38,7 @@ import {
   getCompetitorProducts,
   getCompetitorSummary,
   getShoppingAiOrders,
+  getShoppingProducts,
   getShoppingShelf,
   type ShoppingChartData,
   type ShoppingDatePreset,
@@ -46,6 +47,7 @@ import {
   type ShoppingProduct,
   type CompetitorShoppingSummary,
   type ShoppingAiOrders,
+  type ShoppingProducts,
   type ShoppingShelf,
 } from '@/lib/actions/shopping';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -91,6 +93,7 @@ import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { ProductDataStrip, useProductSources } from './_data-strip';
+import { ProductsTable } from './_products-table';
 import { ShelfKpis, ShelfRows } from './_shelf';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { WhyDialog } from './_why-dialog';
@@ -143,6 +146,8 @@ export default function ShoppingPage() {
   const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
   const [shelf, setShelf] = useState<ShoppingShelf | 'failed' | null>(null);
   const [orders, setOrders] = useState<ShoppingAiOrders | null>(null);
+  // The catalog's products (ECOM-007): null for a brand without a catalog.
+  const [catalogTable, setCatalogTable] = useState<ShoppingProducts | null | 'failed'>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
   const [activeTab, setActiveTab] = useState<ShoppingTab>('shelf');
@@ -229,6 +234,10 @@ export default function ShoppingPage() {
             console.error('Failed to read the shelves:', err);
             return 'failed' as const;
           }),
+          getShoppingProducts(activeBrandId, filters).catch((err) => {
+            console.error('Failed to read the products:', err);
+            return 'failed' as const;
+          }),
         );
       }
 
@@ -238,11 +247,12 @@ export default function ShoppingPage() {
         const overview = results[0] as { kpis: ShoppingKpis; charts: ShoppingChartData };
         setKpis(overview.kpis);
         setCharts(overview.charts);
-        if (hasFullAccess && results.length >= 5) {
+        if (hasFullAccess && results.length >= 6) {
           setOwnProducts(results[1] as ShoppingProduct[]);
           setCompetitorProducts(results[2] as ShoppingProduct[]);
           setCompetitorSummary(results[3] as CompetitorShoppingSummary[]);
           setShelf(results[4] as ShoppingShelf | 'failed');
+          setCatalogTable(results[5] as ShoppingProducts | null | 'failed');
         }
       }
     } finally {
@@ -437,8 +447,17 @@ export default function ShoppingPage() {
             </TabsContent>
 
             <TabsContent value="products" className="space-y-6">
-              {hasFullAccess ? (
+              {hasFullAccess && (tableLoading || (catalogTable && catalogTable !== 'failed')) ? (
+                <ProductsTable
+                  products={catalogTable === 'failed' ? null : catalogTable}
+                  loading={tableLoading}
+                />
+              ) : hasFullAccess ? (
                 <>
+                  {/* No catalog yet: the products AI showed, by title, until one is connected. */}
+                  <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    {catalogTable === 'failed' ? t('products.failed') : t('products.noCatalog')}
+                  </p>
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{t('tabMyProducts')}</h2>
                     <Button
