@@ -88,6 +88,8 @@ export function WebflowCard() {
   const [replacingFor, setReplacingFor] = useState<string | null>(null);
   const replacing = replacingFor !== null && replacingFor === activeBrandId;
   const [disconnecting, setDisconnecting] = useState(false);
+  // Connected just now without a collection, for the brand: its picker takes the focus.
+  const [settingUpFor, setSettingUpFor] = useState<string | null>(null);
   // Bumped to read the connection again: a token refused or replaced meanwhile.
   const [reads, setReads] = useState(0);
 
@@ -139,12 +141,21 @@ export function WebflowCard() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium">{t('title')}</p>
-            {connection?.status === 'connected' && (
+            {connection?.status === 'connected' && connection.collectionId && (
               <Badge
                 variant="outline"
                 className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               >
                 {t('connected')}
+              </Badge>
+            )}
+            {/* Connected, but nothing goes to Webflow until a collection is saved. */}
+            {connection?.status === 'connected' && !connection.collectionId && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+              >
+                {t('setupNotFinished')}
               </Badge>
             )}
             {connection?.status === 'auth_failed' && (
@@ -236,6 +247,7 @@ export function WebflowCard() {
             onCancel={replacing ? () => setReplacingFor(null) : undefined}
             onConnected={(next) => {
               setReplacingFor(null);
+              setSettingUpFor(next.collectionId ? null : activeBrandId);
               setConnection(next);
             }}
           />
@@ -245,7 +257,11 @@ export function WebflowCard() {
           key={activeBrandId}
           brandId={activeBrandId}
           connection={connection}
-          onSaved={setConnection}
+          focusCollection={settingUpFor === activeBrandId}
+          onSaved={(next) => {
+            setSettingUpFor(null);
+            setConnection(next);
+          }}
           onStale={() => setReads((n) => n + 1)}
         />
       )}
@@ -276,7 +292,8 @@ function TokenForm({
       return;
     }
     setToken('');
-    toast.success(t('connectedToast'));
+    // A new token for the same site keeps its collection; else the setup's last step is left.
+    toast.success(t(result.connection.collectionId ? 'connectedToast' : 'connectedSetupToast'));
     onConnected(result.connection);
   };
 
@@ -327,11 +344,14 @@ function TokenForm({
 function WebflowMapping({
   brandId,
   connection,
+  focusCollection,
   onSaved,
   onStale,
 }: {
   brandId: string;
   connection: WebflowConnection;
+  /** Just connected: the collection picker, the setup's last step, takes the focus. */
+  focusCollection: boolean;
   onSaved: (connection: WebflowConnection) => void;
   /** The connection changed (a token refused, replaced or removed): read it again. */
   onStale: () => void;
@@ -465,6 +485,12 @@ function WebflowMapping({
 
   return (
     <div className="space-y-4">
+      {!connection.collectionId && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{t('setupStep')}</span>
+        </div>
+      )}
       {sites.length > 1 && (
         <Picker
           label={t('siteLabel')}
@@ -493,6 +519,7 @@ function WebflowMapping({
           items={collectionItems}
           value={collectionId}
           placeholder={t('collectionPlaceholder')}
+          autoFocus={focusCollection}
           onChange={(value) => {
             if (value === collectionId) return;
             setCollectionId(value);
@@ -588,12 +615,15 @@ function Picker({
   items,
   value,
   placeholder,
+  autoFocus,
   onChange,
 }: {
   label: string;
   items: { value: string; label: string }[];
   value: string | null;
   placeholder: string;
+  /** Focused when it shows (and so scrolled into view). */
+  autoFocus?: boolean;
   onChange: (value: string | null) => void;
 }) {
   const id = useId();
@@ -603,7 +633,7 @@ function Picker({
         {label}
       </Label>
       <Select items={items} value={value} onValueChange={(v) => onChange(v ?? null)}>
-        <SelectTrigger id={id} className="h-8 w-64 max-w-full text-xs">
+        <SelectTrigger id={id} autoFocus={autoFocus} className="h-8 w-64 max-w-full text-xs">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
