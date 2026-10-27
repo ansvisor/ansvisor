@@ -92,8 +92,13 @@ export async function regenerateTasks(actionId, userId) {
   try {
     result = await writeTasksForAction(actionId, { trigger: 'regenerate', userId });
   } catch (err) {
-    // The month's AI budget, shared with the Improve tab, is spent.
-    if (err instanceof PlanLimitError) throw new TaskWriterError('budget', err.message, 429);
+    if (err instanceof PlanLimitError) {
+      // No plan (the trial ended, or it was cancelled): one to choose, not a
+      // budget to wait for.
+      if (err.statusCode === 402) throw new TaskWriterError('plan_limit', err.message, 402);
+      // The month's AI budget, shared with the Improve tab, is spent.
+      throw new TaskWriterError('budget', err.message, 429);
+    }
     throw err;
   }
   if (result.status !== 'written') {
