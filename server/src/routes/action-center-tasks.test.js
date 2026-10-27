@@ -56,7 +56,12 @@ vi.mock('../lib/action-center/task-send.js', () => ({
   sendTaskToWebhook: (...args) => sendTaskToWebhook(...args),
 }));
 
-const { regenerateTasks, sendTask } = await import('./action-center.js');
+const runTaskCheck = vi.fn();
+vi.mock('../lib/action-center/task-checks.js', () => ({
+  runTaskCheck: (...args) => runTaskCheck(...args),
+}));
+
+const { checkTaskNow, regenerateTasks, sendTask } = await import('./action-center.js');
 
 beforeEach(() => {
   enabled = true;
@@ -119,6 +124,45 @@ describe('regenerateTasks', () => {
       code: 'plan_limit',
       message: 'An active subscription or free trial is required.',
     });
+  });
+});
+
+describe('checkTaskNow', () => {
+  beforeEach(() => {
+    loadTask
+      .mockReset()
+      .mockResolvedValue({ task: { id: 't1' }, action: { brand_id: 'b1', status: 'new' } });
+    runTaskCheck
+      .mockReset()
+      .mockResolvedValue({ autoCheck: { at: 'x', passed: true, missing: [] } });
+  });
+
+  it("checks the caller's access to the task's brand, then the task (AC-010)", async () => {
+    assertBrandAccess.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }));
+    await expect(checkTaskNow('t1', 'u1')).rejects.toThrow('Forbidden');
+    expect(runTaskCheck).not.toHaveBeenCalled();
+    expect(await checkTaskNow('t1', 'u1')).toEqual({
+      checked: { at: 'x', passed: true, missing: [] },
+      reason: null,
+    });
+    expect(runTaskCheck).toHaveBeenCalledWith({ id: 't1' }, { brand_id: 'b1', status: 'new' });
+    // Nothing checked: why.
+    runTaskCheck.mockResolvedValueOnce({ reason: 'not_checkable' });
+    expect(await checkTaskNow('t1', 'u1')).toEqual({ checked: null, reason: 'not_checkable' });
+  });
+
+  it('checks nothing on a closed or deleted action', async () => {
+    loadTask.mockResolvedValueOnce({
+      task: { id: 't1' },
+      action: { brand_id: 'b1', status: 'completed' },
+    });
+    expect(await checkTaskNow('t1', 'u1')).toEqual({ checked: null, reason: 'closed' });
+    loadTask.mockResolvedValueOnce({
+      task: { id: 't1' },
+      action: { brand_id: 'b1', status: 'new', deleted_at: '2026-10-26' },
+    });
+    expect(await checkTaskNow('t1', 'u1')).toEqual({ checked: null, reason: 'closed' });
+    expect(runTaskCheck).not.toHaveBeenCalled();
   });
 });
 
