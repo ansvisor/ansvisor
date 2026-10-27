@@ -26,6 +26,7 @@ import {
 import type { TopicCompetitors } from '@/lib/insights-topics';
 import { guessedVolumeEstimate } from '@/lib/volume-estimate';
 import { EstimateRange } from '@/components/prompts/volume-estimate';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /** Items shown, as in the mockup; "See all" opens the rest. */
 const VISIBLE_ITEMS = 4;
@@ -68,6 +69,10 @@ export function Opportunities({
   className?: string;
 }) {
   const t = useTranslations('insights.opportunities');
+  // A read-only workspace (plan not active): Track, Send action and Suggest
+  // content open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const failureToast = useFailureToast();
   const format = useFormatter();
   const f = numberFormat(useLocale());
@@ -355,7 +360,7 @@ export function Opportunities({
                         size="sm"
                         className="h-7 gap-1.5 px-2.5 text-xs"
                         disabled={planFull || busy !== null}
-                        onClick={() => track(item)}
+                        onClick={guard(() => track(item), { action: tActions('trackPrompts') })}
                       >
                         {/* Track N adds one prompt at a time, so a big topic takes a moment. */}
                         {busy === item.key && (
@@ -375,7 +380,9 @@ export function Opportunities({
                         size="sm"
                         className="h-7 gap-1.5 px-2.5 text-xs"
                         disabled={blocked !== null || working.has(item.key)}
-                        onClick={() => (isTopic ? sendAction(item) : suggestContent(item))}
+                        onClick={guard(() => (isTopic ? sendAction(item) : suggestContent(item)), {
+                          action: tActions(isTopic ? 'sendAction' : 'suggestContent'),
+                        })}
                       >
                         {working.has(item.key) && (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />

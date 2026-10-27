@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/table';
 import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
 import { usePagination, TablePager } from '@/components/table-pager';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   FanoutEngineNotices,
   FanoutEngineStrip,
@@ -97,6 +98,10 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
   const [searchText, setSearchText] = useState('');
   // The engine chip picked above the lists; null shows every engine.
   const [engine, setEngine] = useState<string | null>(null);
+  // A read-only workspace (plan not active): Track opens the upgrade dialog
+  // instead, and the intents (an AI call the API refuses then) aren't asked.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   // Mirror of `intents` for the async classification chain (avoids stale
   // closures), plus a run counter so a reload/brand switch/unmount cancels
@@ -165,7 +170,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
           to: range?.to,
         });
         setData(result);
-        void classifyProgressively(result.subQueries.map((s) => s.query));
+        if (!isLocked) void classifyProgressively(result.subQueries.map((s) => s.query));
       } catch (err) {
         console.error('[fanout] load failed', err);
         toast.error(userErrorMessage(err, 'Failed to load query fan-out — please retry.'));
@@ -182,7 +187,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
         }
       }
     },
-    [brandId, range, classifyProgressively],
+    [brandId, range, classifyProgressively, isLocked],
   );
 
   useEffect(() => {
@@ -377,7 +382,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
             pager={pager}
             rangeLabel={rangeLabel}
             engine={engine}
-            onTrack={handleTrack}
+            onTrack={guard(handleTrack, { action: tActions('trackPrompts') })}
             searchText={searchText}
             onSearchChange={setSearchText}
           />
@@ -389,7 +394,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
             pager={byPromptPager}
             rangeLabel={rangeLabel}
             engine={engine}
-            onTrack={handleTrack}
+            onTrack={guard(handleTrack, { action: tActions('trackPrompts') })}
             searchText={searchText}
             onSearchChange={setSearchText}
           />

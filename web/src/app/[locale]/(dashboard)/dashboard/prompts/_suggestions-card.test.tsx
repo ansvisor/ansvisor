@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { PromptSuggestion, TrackSuggestionsResult } from '@/lib/actions/prompt-suggestions';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import { SuggestionsCard } from './_suggestions-card';
 
 (
@@ -50,6 +51,9 @@ const ids = (from: number, to: number) =>
 let container: HTMLDivElement;
 let root: Root;
 const onAccepted = vi.fn();
+// The workspace's plan: active unless a test says it's read-only.
+let isLocked = false;
+const openUpgrade = vi.fn();
 
 async function render(count: number, planId: 'starter' | 'growth' = 'starter') {
   actions.getPromptSuggestions.mockResolvedValue({
@@ -58,13 +62,17 @@ async function render(count: number, planId: 'starter' | 'growth' = 'starter') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SuggestionsCard
-          brandId="b1"
-          onAccepted={onAccepted}
-          sourceStates={null}
-          planId={planId}
-          limitActions={<button type="button">Upgrade plan</button>}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <SuggestionsCard
+            brandId="b1"
+            onAccepted={onAccepted}
+            sourceStates={null}
+            planId={planId}
+            limitActions={<button type="button">Upgrade plan</button>}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -85,6 +93,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   vi.clearAllMocks();
+  isLocked = false;
 });
 
 afterEach(() => {
@@ -244,5 +253,41 @@ describe('SuggestionsCard — estimated volume', () => {
     expect(range.getAttribute('aria-label')).toBe('600–2.4k a month, estimated, Low confidence');
     expect(range.className).toContain('text-muted-foreground');
     expect(container.textContent).not.toContain('~1,200');
+  });
+});
+
+describe('SuggestionsCard on a read-only workspace (plan not active)', () => {
+  const button = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name || b.getAttribute('aria-label') === name,
+    )!;
+
+  it('adds, accepts, dismisses and generates nothing, and says why', async () => {
+    isLocked = true;
+    await render(2);
+
+    await clickAddAll();
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding prompts needs a plan');
+    await act(async () => button('Add to tracked prompts').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding prompts needs a plan');
+    await act(async () => button('Dismiss suggestion').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Dismissing suggestions needs a plan');
+    await act(async () => button('New').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Suggesting prompts needs a plan');
+
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
+    expect(actions.trackSuggestions).not.toHaveBeenCalled();
+    expect(actions.acceptSuggestion).not.toHaveBeenCalled();
+    expect(actions.dismissSuggestion).not.toHaveBeenCalled();
+    expect(actions.refreshPromptSuggestions).not.toHaveBeenCalled();
+    expect(rows()).toHaveLength(2);
+  });
+
+  it('accepts on an active plan', async () => {
+    await render(1);
+    actions.acceptSuggestion.mockResolvedValue({ success: true });
+    await act(async () => button('Add to tracked prompts').click());
+    expect(actions.acceptSuggestion).toHaveBeenCalledWith('s1');
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 });

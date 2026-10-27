@@ -61,6 +61,7 @@ import {
   type GscSuggestionBadge,
 } from '@/lib/prompt-suggestion-source';
 import type { SuggestionSourceStates } from '@/lib/actions/integrations';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Analytics evidence, in the customer's own numbers (#705). A blind spot is
@@ -286,6 +287,10 @@ export function SuggestionsCard({
   limitActions,
 }: Props) {
   const t = useTranslations('prompts.suggestions');
+  // A read-only workspace (plan not active): generating, adding and
+  // dismissing open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // One method note for the list's volume ranges (PROMPT-013).
   const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
@@ -536,7 +541,7 @@ export function SuggestionsCard({
               </div>
 
               <Button
-                onClick={handleRefresh}
+                onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
                 disabled={refreshing}
                 size="sm"
                 variant="outline"
@@ -551,7 +556,7 @@ export function SuggestionsCard({
               </Button>
 
               <Button
-                onClick={handleAddAll}
+                onClick={guard(handleAddAll, { action: tActions('addPrompts') })}
                 disabled={adding || clearing || visible.length === 0}
                 size="sm"
                 variant="outline"
@@ -567,7 +572,7 @@ export function SuggestionsCard({
               </Button>
 
               <Button
-                onClick={handleClearAll}
+                onClick={guard(handleClearAll, { action: tActions('dismissSuggestions') })}
                 disabled={clearing || adding || visible.length === 0}
                 size="sm"
                 variant="outline"
@@ -648,7 +653,7 @@ export function SuggestionsCard({
             </div>
             {notice.kind === 'ready' && (
               <Button
-                onClick={handleRefresh}
+                onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
                 disabled={refreshing}
                 size="sm"
                 className="shrink-0 gap-2"
@@ -685,7 +690,12 @@ export function SuggestionsCard({
               Click refresh to generate new prompt ideas tailored to your brand and competitor
               activity.
             </p>
-            <Button onClick={handleRefresh} disabled={refreshing} size="sm" className="gap-2">
+            <Button
+              onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
+              disabled={refreshing}
+              size="sm"
+              className="gap-2"
+            >
               {refreshing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
@@ -793,7 +803,9 @@ export function SuggestionsCard({
                           size="icon"
                           variant="outline"
                           className="h-8 w-8"
-                          onClick={() => handleAccept(s)}
+                          onClick={guard(() => handleAccept(s), {
+                            action: tActions('addPrompts'),
+                          })}
                           disabled={busy}
                           title="Add to tracked prompts"
                           aria-label="Add to tracked prompts"
@@ -808,7 +820,9 @@ export function SuggestionsCard({
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground"
-                          onClick={() => handleDismiss(s)}
+                          onClick={guard(() => handleDismiss(s), {
+                            action: tActions('dismissSuggestions'),
+                          })}
                           disabled={busy}
                           title="Dismiss suggestion"
                           aria-label="Dismiss suggestion"

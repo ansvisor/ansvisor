@@ -104,8 +104,10 @@ export function useImprove({
 }): ImproveController {
   const locked = planId !== null && !hasFeature(PLANS[planId], 'prompt_improve');
   // A read-only workspace (plan not active): the set isn't read (the API
-  // refuses it), the tab opens empty, and Generate opens the upgrade dialog.
+  // refuses it), the tab opens empty, and Generate (Regenerate) and Send
+  // Actions open the upgrade dialog.
   const { isLocked: readOnly, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const key = promptId ? `${promptId}|${JSON.stringify(range)}` : '';
   const [state, setState] = useState<{
     key: string;
@@ -184,19 +186,23 @@ export function useImprove({
   const generate = useCallback(() => {
     if (!promptId) return;
     if (readOnly) {
-      openUpgrade();
+      openUpgrade(tActions('improvePrompt'));
       return;
     }
     const forKey = keyRef.current;
     setState((s) => ({ ...s, key: forKey, status: 'generating', error: null }));
     generateImproveSuggestions(promptId, range).then((r) => apply(forKey, 'generate', r));
-  }, [promptId, range, apply, readOnly, openUpgrade]);
+  }, [promptId, range, apply, readOnly, openUpgrade, tActions]);
 
   const current = state.key === key ? state : null;
   const status: Status = locked ? 'locked' : readOnly ? 'ready' : (current?.status ?? 'idle');
   const set = readOnly ? null : (current?.set ?? null);
 
   const send = useCallback(() => {
+    if (readOnly) {
+      openUpgrade(tActions('sendAction'));
+      return;
+    }
     if (!promptId || !state.set || sending) return;
     const selected = drafts.filter((d) => d.checked && !d.removed && d.title.trim());
     if (selected.length === 0) return;
@@ -233,7 +239,7 @@ export function useImprove({
         );
       })
       .finally(() => setSending(false));
-  }, [promptId, range, drafts, sending, state.set]);
+  }, [promptId, range, drafts, sending, state.set, readOnly, openUpgrade, tActions]);
 
   const dirty = useMemo(() => !!set && hasUnsentEdits(drafts, set.suggestions), [drafts, set]);
 

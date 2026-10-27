@@ -141,6 +141,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   MODEL_GROUPS,
   ALL_MODELS,
@@ -1304,6 +1305,12 @@ export default function PromptsPage() {
   const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(null);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): adding, editing and the volume
+  // runs open the upgrade dialog instead.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const failureToast = useFailureToast();
+  const openAddPrompt = guard(() => setAddPromptOpen(true), { action: tActions('addPrompts') });
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const tCommon = useTranslations('common');
@@ -1516,7 +1523,9 @@ export default function PromptsPage() {
         setAllPrompts(prompts);
         setVisibility(page.visibility);
         setPositions(page.positions);
-        if (page.volumesDegraded) {
+        // A read-only workspace's volumes are refused (402): their columns
+        // stay empty, without a warning that something broke.
+        if (page.volumesDegraded && !isLocked) {
           toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
         }
         if (page.visibilityDegraded) toast.warning(tPrompts('visibilityDegraded'));
@@ -1529,7 +1538,7 @@ export default function PromptsPage() {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter, tPrompts],
+    [activeBrandId, range, regionFilter, tPrompts, isLocked],
   );
 
   useEffect(() => {
@@ -1688,12 +1697,17 @@ export default function PromptsPage() {
       const started = await startPromptVolumeAnalysis(activeBrandId, force);
 
       if (!started.ok) {
-        toast.error(
-          volumeErrorMessage(
-            started.code,
-            'Volume analysis could not be started. Please try again.',
-          ),
-        );
+        // The plan ended meanwhile: the upgrade dialog, not "not in your plan".
+        if (started.code === 'subscription_inactive') {
+          failureToast('subscription');
+        } else {
+          toast.error(
+            volumeErrorMessage(
+              started.code,
+              'Volume analysis could not be started. Please try again.',
+            ),
+          );
+        }
         return;
       }
 
@@ -1738,7 +1752,9 @@ export default function PromptsPage() {
     }
   };
 
-  const handleAnalyzeNew = () => runVolumeAnalysis(false);
+  const handleAnalyzeNew = guard(() => runVolumeAnalysis(false), {
+    action: tActions('analyzePrompts'),
+  });
 
   const handleRefreshVolumes = async () => {
     if (!activeBrandId || volumes.length === 0) return;
@@ -1747,9 +1763,13 @@ export default function PromptsPage() {
     try {
       const result = await refreshVolumes(activeBrandId);
       if (!result.ok) {
-        toast.error(
-          volumeErrorMessage(result.code, 'Volumes could not be refreshed. Please try again.'),
-        );
+        if (result.code === 'subscription_inactive') {
+          failureToast('subscription');
+        } else {
+          toast.error(
+            volumeErrorMessage(result.code, 'Volumes could not be refreshed. Please try again.'),
+          );
+        }
         return;
       }
       if (result.remaining !== undefined && quota) {
@@ -1769,7 +1789,9 @@ export default function PromptsPage() {
     }
   };
 
-  const handleReanalyzeAll = () => runVolumeAnalysis(true);
+  const handleReanalyzeAll = guard(() => runVolumeAnalysis(true), {
+    action: tActions('analyzePrompts'),
+  });
 
   // Each volume as an estimate: a range and how sure it is (PROMPT-013).
   const estimateByPromptId = useMemo(() => {
@@ -1912,12 +1934,7 @@ export default function PromptsPage() {
                 them in this row's flex and gap. */}
             <div ref={setHeaderActions} className="contents" />
             {tab === 'all' && canManage && (
-              <Button
-                type="button"
-                size="sm"
-                className="gap-2"
-                onClick={() => setAddPromptOpen(true)}
-              >
+              <Button type="button" size="sm" className="gap-2" onClick={openAddPrompt}>
                 <Plus className="h-4 w-4" />
                 Add prompt
               </Button>
@@ -2121,8 +2138,14 @@ export default function PromptsPage() {
                 regionFilter={regionFilter}
                 statusFilter={statusFilter}
                 onStatusFilterChange={setStatusFilter}
-                onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
-                onEditPrompt={canManage ? setEditingPrompt : undefined}
+                onAddPrompt={canManage ? openAddPrompt : undefined}
+                onEditPrompt={
+                  canManage
+                    ? guard((prompt: Prompt) => setEditingPrompt(prompt), {
+                        action: tActions('editPrompts'),
+                      })
+                    : undefined
+                }
                 onChanged={reloadAfterChange}
               />
             </>
@@ -2172,7 +2195,7 @@ export default function PromptsPage() {
             {volumes.length > 0 && (
               <>
                 <Button
-                  onClick={handleRefreshVolumes}
+                  onClick={guard(handleRefreshVolumes, { action: tActions('refreshVolumes') })}
                   disabled={refreshing || analyzing || loading || quotaExhausted}
                   size="sm"
                   variant="outline"
@@ -2842,6 +2865,10 @@ function AllPromptsTab({
   const tColumns = useTranslations('prompts.columns');
   const tTips = useTranslations('prompts.columns.tips');
   const now = useNow({ updateInterval: 60_000 }).getTime();
+  // A read-only workspace (plan not active): the row menu's and the bulk
+  // bar's actions open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -3643,10 +3670,18 @@ function AllPromptsTab({
                   }))
             }
             deleting={showDeleteProgress ? deleteProgress : null}
-            onPause={() => void setActiveFor(selectedPrompts, false)}
-            onResume={() => void setActiveFor(selectedPrompts, true)}
-            onSuggestContent={() => void suggestFor(selectedPrompts)}
-            onDelete={() => setConfirmDelete(selectedPrompts)}
+            onPause={guard(() => void setActiveFor(selectedPrompts, false), {
+              action: tActions('pausePrompts'),
+            })}
+            onResume={guard(() => void setActiveFor(selectedPrompts, true), {
+              action: tActions('resumePrompts'),
+            })}
+            onSuggestContent={guard(() => void suggestFor(selectedPrompts), {
+              action: tActions('suggestContent'),
+            })}
+            onDelete={guard(() => setConfirmDelete(selectedPrompts), {
+              action: tActions('deletePrompts'),
+            })}
             onClear={() => setSelectedIds(new Set())}
           />
         )}
@@ -3824,7 +3859,13 @@ function AllPromptsTab({
                     <div className="inline-flex flex-col items-center gap-0.5">
                       <WorkStatusBadge
                         status={statusOf(p)}
-                        onChange={onEditPrompt ? (s) => handleStatusChange(p, s) : undefined}
+                        onChange={
+                          onEditPrompt
+                            ? guard((s: PromptWorkStatus | null) => handleStatusChange(p, s), {
+                                action: tActions('setWorkStatus'),
+                              })
+                            : undefined
+                        }
                       />
                       {p.targetUrlCount > 0 && (
                         <span
@@ -3956,24 +3997,32 @@ function AllPromptsTab({
                         prompt={p}
                         brandId={activeBrandId}
                         onEdit={() => onEditPrompt(p)}
-                        onToggleActive={() => void toggleActive(p)}
+                        onToggleActive={guard(() => void toggleActive(p), {
+                          action: tActions(p.isActive ? 'pausePrompts' : 'resumePrompts'),
+                        })}
                         onImprove={() => openPositionsPanel(p.id, 'improve')}
-                        onSuggestContent={() => void suggestContent(p)}
+                        onSuggestContent={guard(() => void suggestContent(p), {
+                          action: tActions('suggestContent'),
+                        })}
                         onOpenSuggestion={openOpportunity}
                         suggesting={suggestingIds.has(p.id)}
                         suggestDisabledReason={
                           suggestDisabledReason ??
                           (bulkSuggesting ? 'Wait for the selected prompts' : null)
                         }
-                        onCreateContent={() =>
-                          setContentPreset({
-                            kind: 'prompt',
-                            id: p.id,
-                            text: p.text,
-                            method: 'create',
-                          })
-                        }
-                        onDelete={() => setConfirmDelete([p])}
+                        onCreateContent={guard(
+                          () =>
+                            setContentPreset({
+                              kind: 'prompt',
+                              id: p.id,
+                              text: p.text,
+                              method: 'create',
+                            }),
+                          { action: tActions('createContent') },
+                        )}
+                        onDelete={guard(() => setConfirmDelete([p]), {
+                          action: tActions('deletePrompts'),
+                        })}
                       />
                     </TableCell>
                   )}

@@ -6,6 +6,7 @@ import { FilePen, FilePlus, FileText, Loader2 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import type { DialogPreset } from '@/components/content/new-content-dialog';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { getDraftForPrompt } from '@/lib/actions/content-drafts';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { contentStep } from '@/lib/prompt-content';
@@ -39,6 +40,10 @@ export function PromptContentStep({
 }) {
   const t = useTranslations('prompts.content');
   const router = useRouter();
+  // A read-only workspace (plan not active): Create or Optimize content opens
+  // the upgrade dialog instead; Open draft stays open.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const step = contentStep(summary);
   const wanted = step !== null;
   // The draft lookup for this prompt: undefined while it runs.
@@ -106,7 +111,9 @@ export function PromptContentStep({
           size="sm"
           className="shrink-0 gap-1.5"
           disabled={draftId === undefined}
-          onClick={start}
+          onClick={guard(start, {
+            action: tActions(step.kind === 'create' ? 'createContent' : 'optimizeContent'),
+          })}
         >
           {draftId === undefined ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
