@@ -7771,8 +7771,9 @@
       "briefs": "{count, number} content briefs a month",
       "audits": "{count, number} site audits a month",
       "aiUsage": "{count}x AI usage",
-      "aiUsageCustom": "Custom AI usage, over {count}x",
-      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance."
+      "aiUsageCustom": "Custom AI usage, from {count}x",
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance.",
+      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",
