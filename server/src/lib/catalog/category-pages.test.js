@@ -138,7 +138,8 @@ describe('categoryPages', () => {
       },
       // Another brand's page is never matched.
       { name: 'Tents', products: 16, inStock: 3, page: null, how: null },
-      { name: 'Socks', products: 2, inStock: 2, page: null, how: null },
+      // A person said it has none.
+      { name: 'Socks', products: 2, inStock: 2, page: null, how: 'manual' },
     ]);
   });
 });

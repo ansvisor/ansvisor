@@ -126,7 +126,9 @@ function compare(a, b) {
 /**
  * The brand's categories, each with its live products, how many are in
  * stock, and its page: a person's decision first ('manual', or none), else
- * the best match. The categories with the most products first.
+ * the best match. The categories with the most products first. `how` is
+ * 'manual' for a person's decision, a page or none, and null when nothing
+ * matched.
  *
  * @returns {Promise<{ name: string, products: number, inStock: number,
  *   page: { url: string, title: string|null }|null,
@@ -163,7 +165,8 @@ export async function categoryPages(brandId, { db = supabaseAdmin } = {}) {
     const base = { name: r.category, products: r.products, inStock: r.in_stock };
     if (decided.has(r.category)) {
       const url = decided.get(r.category);
-      return { ...base, page: url ? { url, title: null } : null, how: url ? 'manual' : null };
+      // A person's decision, a page or none, is 'manual' either way.
+      return { ...base, page: url ? { url, title: null } : null, how: 'manual' };
     }
     const m = byName.get(r.category);
     return { ...base, page: m?.page ?? null, how: m?.how ?? null };

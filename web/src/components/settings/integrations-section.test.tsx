@@ -23,6 +23,7 @@ vi.mock('./catalog-sources-card', () => ({
   CatalogSourcesCard: () => <div data-card="catalog">Product catalog</div>,
 }));
 vi.mock('./merchant-center-accounts', () => ({ MerchantCenterAccounts: () => null }));
+vi.mock('./catalog-category-pages', () => ({ CatalogCategoryPages: () => null }));
 vi.mock('./webflow-card', () => ({ WebflowCard: () => <div data-card="webflow">Webflow</div> }));
 
 const { IntegrationsSection } = await import('./integrations-section');

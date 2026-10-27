@@ -40,6 +40,7 @@ import {
 import { matchProperty } from '@/lib/property-match';
 import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
+import { CatalogCategoryPages } from './catalog-category-pages';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
@@ -105,6 +106,8 @@ export function IntegrationsSection() {
           </IntegrationCard>
 
           <CatalogSourcesCard refreshKey={catalogReads} onSources={setCatalogSources} />
+
+          <CatalogCategoryPages refreshKey={catalogReads} />
         </IntegrationGroup>
 
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}
