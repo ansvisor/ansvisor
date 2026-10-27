@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import express from 'express';
 import {
   apiLimiterKey,
   botIngestKey,
+  catalogCategoryLimiter,
+  catalogLimiter,
   isJourneyBeacon,
   journeyEventKey,
   webhookCallbackKey,
@@ -140,5 +143,30 @@ describe('rate-limiter – journey events (CE-017)', () => {
     expect(isJourneyBeacon({ k: 'nf' })).toBe(false);
     expect(isJourneyBeacon('not json')).toBe(false);
     expect(isJourneyBeacon(undefined)).toBe(false);
+  });
+});
+
+describe('rate-limiter – catalog buckets', () => {
+  it("gives category page changes a wider bucket than the syncs', apart from them", async () => {
+    const app = express();
+    app.post('/sync', catalogLimiter, (_req, res) => res.json({}));
+    app.put('/categories', catalogCategoryLimiter, (_req, res) => res.json({}));
+    const server = await new Promise((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const statuses = async (method, path, n) => {
+      const out = [];
+      for (let i = 0; i < n; i += 1) out.push((await fetch(base + path, { method })).status);
+      return out;
+    };
+    try {
+      // The syncs' 20 a quarter-hour run out…
+      expect((await statuses('POST', '/sync', 21)).at(-1)).toBe(429);
+      // …and a person changing the table row by row goes on past them.
+      expect(new Set(await statuses('PUT', '/categories', 40))).toEqual(new Set([200]));
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });
