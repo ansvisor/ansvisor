@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ShoppingBag } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -93,9 +94,13 @@ function ProductCell({ row }: { row: ProductRow }) {
         )}
       </div>
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium" title={product.title}>
+        <Link
+          href={`/dashboard/shopping/products/${product.id}`}
+          className="block truncate text-sm font-medium hover:underline"
+          title={product.title}
+        >
           {product.title}
-        </p>
+        </Link>
         <p className="truncate text-xs text-muted-foreground">
           {[
             product.category?.split('>').at(-1)?.trim(),
