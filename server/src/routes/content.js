@@ -1512,7 +1512,8 @@ router.get('/briefs/quota', async (req, res) => {
       // Self-hosted single-user setups may have no org row; no quota applies.
       return res.json({ used: 0, limit: -1, remaining: -1 });
     }
-    const quota = await getBriefQuotaStatus(orgId);
+    // Read-only once the plan has ended (2026-10-27): no plan reads as a limit of 0.
+    const quota = await getBriefQuotaStatus(orgId, { readOnly: true });
     return res.json(quota);
   } catch (error) {
     if (error instanceof PlanLimitError) {
@@ -1549,7 +1550,8 @@ router.get('/usage', async (req, res) => {
         briefs: unlimited,
       });
     }
-    return res.json(await getContentUsage(orgId));
+    // Read-only once the plan has ended (2026-10-27): no plan reads as limits of 0.
+    return res.json(await getContentUsage(orgId, { readOnly: true }));
   } catch (error) {
     if (error instanceof PlanLimitError) {
       return res.status(error.statusCode).json({

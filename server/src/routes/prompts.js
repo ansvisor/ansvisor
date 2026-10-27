@@ -1034,6 +1034,8 @@ function publicQuota(q) {
     percentLeft: q.percentLeft,
     // The free trial's: more comes with starting the plan, not a bigger one.
     trial: q.trial === true,
+    // No plan (read-only, 2026-10-27): nothing left until one is chosen.
+    ...(q.noPlan ? { noPlan: true } : {}),
   };
 }
 
@@ -1059,7 +1061,9 @@ router.get('/:promptId/improve', requireFeature('prompt_improve'), async (req, r
         .eq('region', range.region)
         .maybeSingle(),
       improveResultsQuery('created_at', { promptId: req.params.promptId, brandId, range }).limit(1),
-      getImproveQuotaStatus(brand.organization_id, improveModelId()),
+      // Read-only once the plan has ended (2026-10-27): the kept set still
+      // comes back, with a budget of 0.
+      getImproveQuotaStatus(brand.organization_id, improveModelId(), { readOnly: true }),
     ]);
     return res.json({
       improve: improveResponse(

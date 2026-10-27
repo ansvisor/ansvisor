@@ -11,12 +11,13 @@ import logger from '../lib/logger.js';
  * outside services, sends. So every signed-in request that writes — any
  * method but GET, HEAD and OPTIONS — is refused with 402 until a plan is
  * chosen, but for these, named route by route:
- *   - billing (/billing/…): choosing, or cancelling, a plan;
+ *   - BILLING_ROUTES: telling us why a plan is cancelled;
  *   - COST_STOPPING: stopping work under way, and taking back the access to
  *     an outside account (Google, a CMS, a bot log) the person gave us;
  *   - ONBOARDING_ROUTES, for an organization that never had a subscription:
  *     setup suggests the brand's topics, prompts and competitors before the
- *     plan step, and again when the person comes back from it.
+ *     plan step, and again when the person comes back from it, up to
+ *     ONBOARDING_DAILY_CALLS a day for the organization (429 past them).
  * A person's own profile and signing out are the web app's, through
  * Supabase; neither comes through this API. A request with no signed-in
  * person is refused too: decodeToken answers it first.
@@ -30,8 +31,16 @@ import logger from '../lib/logger.js';
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-/** Paths, under /api, that stay open whatever the plan. */
-const OPEN_PATHS = ['/billing'];
+/**
+ * Billing's writes, under /api: open whatever the plan. The plan itself is
+ * chosen and cancelled by the web app, through Stripe. Named route by route,
+ * as the others are, so a billing route that costs is never let through by
+ * its path alone.
+ */
+export const BILLING_ROUTES = [
+  // Why a plan is cancelled, kept and e-mailed to the team (billing.js).
+  { method: 'POST', path: /^\/billing\/cancel-feedback\/?$/ },
+];
 
 /**
  * Requests, under /api, that end a cost or an access, never start one: open
@@ -66,6 +75,14 @@ export const ONBOARDING_ROUTES = [
   { method: 'POST', path: /^\/competitors\/suggest\/?$/ },
 ];
 
+/**
+ * Onboarding's calls an organization that never subscribed may make a day
+ * (UTC), all three routes together: a setup asks each once, so this leaves
+ * room for several setups and retries, and bounds what a workspace without a
+ * plan can spend on AI. Counted in this process's memory.
+ */
+export const ONBOARDING_DAILY_CALLS = 20;
+
 /** How long an active organization is taken as still active. */
 export const ACTIVE_CACHE_MS = 30_000;
 /** People remembered at most; the oldest goes first. */
@@ -79,18 +96,47 @@ export const SUBSCRIPTION_INACTIVE = {
   message: 'Your plan has ended. Choose a plan to use Ansvisor again.',
 };
 
+/** The answer to an onboarding call past the day's ONBOARDING_DAILY_CALLS. */
+export const ONBOARDING_LIMIT_REACHED = {
+  success: false,
+  error: 'rate_limited',
+  code: 'onboarding_daily_limit',
+  message: 'Setup suggestions are used up for today. Try again tomorrow, or choose a plan.',
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** Person id → until when their organization is taken as active. */
 const activeUntil = new Map();
+
+/** `org:<id>` (`user:<id>` before the organization exists) → { day, calls } */
+const onboardingCalls = new Map();
 
 function matches(routes, { method, path }) {
   return routes.some((route) => route.method === method && route.path.test(path));
 }
 
 function isOpen(req) {
-  return (
-    OPEN_PATHS.some((open) => req.path === open || req.path.startsWith(`${open}/`)) ||
-    matches(COST_STOPPING, req)
-  );
+  return matches(BILLING_ROUTES, req) || matches(COST_STOPPING, req);
+}
+
+/**
+ * Counts one onboarding call for `key` today (UTC): false once the day's
+ * ONBOARDING_DAILY_CALLS are used. A count from an earlier day starts over.
+ */
+function takeOnboardingCall(key, now) {
+  const day = Math.floor(now / DAY_MS);
+  const kept = onboardingCalls.get(key);
+  if (kept?.day === day) {
+    if (kept.calls >= ONBOARDING_DAILY_CALLS) return false;
+    kept.calls += 1;
+    return true;
+  }
+  if (!kept && onboardingCalls.size >= MAX_ENTRIES) {
+    onboardingCalls.delete(onboardingCalls.keys().next().value);
+  }
+  onboardingCalls.set(key, { day, calls: 1 });
+  return true;
 }
 
 function isCachedActive(userId, now) {
@@ -126,26 +172,32 @@ function rememberActive(userId, now) {
  * @returns {Promise<'active' | 'never_subscribed' | 'inactive'>}
  */
 export async function subscriptionAccess(userId) {
+  return (await readAccess(userId)).access;
+}
+
+/** subscriptionAccess, with the organization it read (null without one). */
+async function readAccess(userId) {
   const { data: profile, error } = await supabaseAdmin
     .from('profiles')
     .select('organization_id')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw new Error(`profiles read: ${error.message}`);
-  if (!profile) return 'inactive';
+  if (!profile) return { access: 'inactive', orgId: null };
   // Onboarding creates the organization with the brand, before it asks for
   // anything here: without one, nothing was ever subscribed.
-  if (!profile.organization_id) return 'never_subscribed';
+  const orgId = profile.organization_id;
+  if (!orgId) return { access: 'never_subscribed', orgId: null };
 
   const { data: org, error: orgError } = await supabaseAdmin
     .from('organizations')
     .select('subscription_status, stripe_subscription_id')
-    .eq('id', profile.organization_id)
+    .eq('id', orgId)
     .maybeSingle();
   if (orgError) throw new Error(`organizations read: ${orgError.message}`);
-  if (!org) return 'inactive';
-  if (isSubscriptionActive(org.subscription_status)) return 'active';
-  return org.stripe_subscription_id ? 'inactive' : 'never_subscribed';
+  if (!org) return { access: 'inactive', orgId };
+  if (isSubscriptionActive(org.subscription_status)) return { access: 'active', orgId };
+  return { access: org.stripe_subscription_id ? 'inactive' : 'never_subscribed', orgId };
 }
 
 /**
@@ -160,12 +212,17 @@ export async function requireActiveSubscription(req, res, next) {
   const now = Date.now();
   if (isCachedActive(userId, now)) return next();
   try {
-    const access = await subscriptionAccess(userId);
+    const { access, orgId } = await readAccess(userId);
     if (access === 'active') {
       rememberActive(userId, now);
       return next();
     }
-    if (access === 'never_subscribed' && matches(ONBOARDING_ROUTES, req)) return next();
+    if (access === 'never_subscribed' && matches(ONBOARDING_ROUTES, req)) {
+      if (takeOnboardingCall(orgId ? `org:${orgId}` : `user:${userId}`, now)) return next();
+      const tomorrow = (Math.floor(now / DAY_MS) + 1) * DAY_MS;
+      res.set('Retry-After', String(Math.ceil((tomorrow - now) / 1000)));
+      return res.status(429).json(ONBOARDING_LIMIT_REACHED);
+    }
     return res.status(402).json(SUBSCRIPTION_INACTIVE);
   } catch (err) {
     (req.log ?? logger).error({ err }, 'subscription check failed');
@@ -173,7 +230,8 @@ export async function requireActiveSubscription(req, res, next) {
   }
 }
 
-// Test hook — what passes depends on what is remembered.
+// Test hook — what passes depends on what is remembered and counted.
 export function clearSubscriptionCache() {
   activeUntil.clear();
+  onboardingCalls.clear();
 }

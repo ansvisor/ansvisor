@@ -19,10 +19,24 @@ class PlanLimitError extends Error {
 }
 
 const enforceVolumeQuota = vi.fn();
+const getVolumeQuotaStatus = vi.fn();
 const assertBrandAccess = vi.fn();
 const getVolumeProgress = vi.fn();
 const analyzeBrandVolumes = vi.fn();
 const insert = vi.fn();
+
+/** Rows a read of each table answers (GET /brand); a table not here only inserts. */
+let rows = {};
+function from(table) {
+  if (!(table in rows)) return { insert };
+  const chain = {
+    select: () => chain,
+    eq: () => chain,
+    in: () => chain,
+    then: (resolve) => resolve({ data: rows[table], error: null }),
+  };
+  return chain;
+}
 
 /** Lets a test hold a run open and decide exactly when it ends. */
 function deferred() {
@@ -43,7 +57,7 @@ async function startApp() {
   vi.doMock('../lib/plan-guard.js', () => ({
     PlanLimitError,
     enforceVolumeQuota,
-    getVolumeQuotaStatus: vi.fn(),
+    getVolumeQuotaStatus,
     requireFeature: () => (req, res, next) => next(),
   }));
   vi.doMock('../lib/access.js', () => ({
@@ -56,7 +70,7 @@ async function startApp() {
     mapVolumeRow: (r) => r,
     fetchAndSaveVolumes: vi.fn(),
   }));
-  vi.doMock('../config/supabase.js', () => ({ default: { from: () => ({ insert }) } }));
+  vi.doMock('../config/supabase.js', () => ({ default: { from } }));
   vi.doMock('../lib/logger.js', () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() };
     return { default: logger, logger };
@@ -92,6 +106,7 @@ const post = (body) =>
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  rows = {};
   enforceVolumeQuota.mockResolvedValue({ remaining: -1, orgId: 'org1' });
   assertBrandAccess.mockResolvedValue(undefined);
   getVolumeProgress.mockResolvedValue({ total: 100, analyzed: 0 });
@@ -456,5 +471,47 @@ describe('GET /status/:brandId', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect((await (await fetch(`${baseUrl}/status/b1`)).json()).running).toBe(false);
+  });
+});
+
+describe('GET /brand/:brandId', () => {
+  beforeEach(() => {
+    rows = {
+      prompt_sets: [{ id: 'ps1' }],
+      prompts: [{ id: 'p1', text: 'best espresso', category: 'coffee', prompt_set_id: 'ps1' }],
+      prompt_volumes: [{ prompt_id: 'p1', est_ai_volume: 40 }],
+    };
+  });
+
+  it('returns the kept volumes with the quota, read as a read', async () => {
+    const quota = { used: 1, limit: 4, remaining: 3 };
+    getVolumeQuotaStatus.mockResolvedValue(quota);
+    const res = await fetch(`${baseUrl}/brand/b1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.volumes).toEqual([
+      { prompt_id: 'p1', est_ai_volume: 40, promptText: 'best espresso', promptCategory: 'coffee' },
+    ]);
+    expect(body.quota).toEqual(quota);
+    // Read-only once the plan has ended: no 402 for a read.
+    expect(getVolumeQuotaStatus).toHaveBeenCalledWith('u1', { readOnly: true });
+  });
+
+  it('still returns the volumes once the plan has ended', async () => {
+    getVolumeQuotaStatus.mockResolvedValue({ used: 1, limit: 0, remaining: 0, noPlan: true });
+    const res = await fetch(`${baseUrl}/brand/b1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.volumes).toHaveLength(1);
+    expect(body.quota).toEqual({ used: 1, limit: 0, remaining: 0, noPlan: true });
+  });
+
+  it('answers a plan refusal with its own status, not 500', async () => {
+    getVolumeQuotaStatus.mockRejectedValue(
+      new PlanLimitError('No organization found for user.', 400),
+    );
+    const res = await fetch(`${baseUrl}/brand/b1`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'plan_limit' });
   });
 });

@@ -12,6 +12,8 @@ let writes;
 let quota;
 const readSiteTrust = vi.fn();
 const isOrgActive = vi.fn();
+const getSiteAuditQuotaStatus = vi.fn(async () => quota);
+const getOrgIdForUser = vi.fn(async () => 'org-1');
 let server;
 let baseUrl;
 
@@ -71,8 +73,8 @@ async function startApp() {
   vi.doMock('../lib/plan-guard.js', () => ({
     requireFeature: () => (req, res, next) => next(),
     enforceSiteAuditQuota: vi.fn(),
-    getSiteAuditQuotaStatus: vi.fn(async () => quota),
-    getOrgIdForUser: vi.fn(),
+    getSiteAuditQuotaStatus,
+    getOrgIdForUser,
     PlanLimitError: class PlanLimitError extends Error {},
   }));
   vi.doMock('../lib/audit/context.js', () => ({ buildAuditContext: vi.fn() }));
@@ -110,6 +112,7 @@ const otherBrand = '44444444-4444-4444-4444-444444444444';
 
 beforeEach(async () => {
   writes = [];
+  getSiteAuditQuotaStatus.mockClear();
   isOrgActive.mockReset().mockResolvedValue(true);
   readSiteTrust.mockReset().mockResolvedValue({
     checks: { about: { ok: true, url: 'https://acme.com/about' } },
@@ -182,6 +185,37 @@ describe('GET /api/audits/settings', () => {
       excludePatterns: ['/careers/*'],
       pinned: [{ key: 'acme.com/about', url: 'https://acme.com/about' }],
     });
+  });
+
+  it('reads what is kept once the plan has ended: auto-audit off at a limit of 0', async () => {
+    // As plan-guard answers a read without an active plan (readOnly).
+    quota = {
+      used: 10,
+      running: 0,
+      limit: 0,
+      remaining: 0,
+      noPlan: true,
+      auto: { enabled: false, setting: true, emailAfterRun: true, perRun: 0 },
+    };
+    const res = await fetch(`${baseUrl}/settings?brandId=${brandId}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).settings).toEqual({
+      autoAudit: { enabled: false, setting: true, perRun: 0, limit: 0 },
+      emailAfterRun: true,
+      excludePatterns: ['/careers/*'],
+      pinned: [{ key: 'acme.com/about', url: 'https://acme.com/about' }],
+    });
+    expect(getSiteAuditQuotaStatus).toHaveBeenCalledWith('org-1', { readOnly: true });
+  });
+});
+
+describe('GET /api/audits/quota', () => {
+  it('reads the quota as a read, so a plan that ended answers 200, not 402', async () => {
+    quota = { used: 3, running: 0, limit: 0, remaining: 0, noPlan: true };
+    const res = await fetch(`${baseUrl}/quota`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, quota });
+    expect(getSiteAuditQuotaStatus).toHaveBeenCalledWith('org-1', { readOnly: true });
   });
 });
 

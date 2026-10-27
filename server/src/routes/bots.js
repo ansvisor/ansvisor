@@ -16,7 +16,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
-import { PlanLimitError, getBotEventCap, getBotRawCap } from '../lib/plan-guard.js';
+import { PlanLimitError, getBotCaps, getBotEventCap } from '../lib/plan-guard.js';
 import {
   CONNECTION_KINDS,
   hashSecret,
@@ -58,7 +58,7 @@ router.get('/connections/:brandId', async (req, res) => {
   try {
     const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
     const month = new Date().toISOString().slice(0, 7) + '-01';
-    const [{ data: connections, error }, { data: usage }, cap, rawCap] = await Promise.all([
+    const [{ data: connections, error }, { data: usage }, caps] = await Promise.all([
       supabaseAdmin
         .from('ai_bot_connections')
         .select('id, kind, created_at, last_event_at')
@@ -71,10 +71,12 @@ router.get('/connections/:brandId', async (req, res) => {
         .eq('organization_id', brand.organization_id)
         .eq('month', month)
         .maybeSingle(),
-      getBotEventCap(brand.organization_id),
-      getBotRawCap(brand.organization_id),
+      // Read-only once the plan has ended (2026-10-27): no plan reads as caps
+      // of 0, and the connections and this month's use still come back.
+      getBotCaps(brand.organization_id, { readOnly: true }),
     ]);
     if (error) throw new Error(error.message);
+    const { cap, rawCap, noPlan } = caps;
     return res.json({
       connections: connections ?? [],
       usage: {
@@ -88,6 +90,7 @@ router.get('/connections/:brandId', async (req, res) => {
         raw: usage?.raw_records ?? 0,
         rawCappedAt: usage?.raw_capped_at ?? null,
         rawCap,
+        ...(noPlan ? { noPlan: true } : {}),
       },
     });
   } catch (error) {
