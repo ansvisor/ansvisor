@@ -67,7 +67,7 @@ export function MerchantCenterAccounts({
   const tStores = useTranslations('settings.catalog.stores');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
-  const { guard, openUpgrade } = useUpgradeGate();
+  const { guard, isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const needsPlan = { action: tActions('connectStores') };
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
@@ -125,6 +125,11 @@ export function MerchantCenterAccounts({
   };
 
   const add = async () => {
+    // A read-only workspace: the upgrade dialog, not the add.
+    if (isLocked) {
+      openUpgrade(needsPlan.action);
+      return;
+    }
     if (!activeBrandId || !brand || !chosen || addingRef.current) return;
     // The brand and account as clicked: switching brands meanwhile changes neither.
     const brandId = activeBrandId;
@@ -198,12 +203,7 @@ export function MerchantCenterAccounts({
               ))}
             </SelectContent>
           </Select>
-          <Button
-            size="sm"
-            className="gap-2"
-            disabled={!chosen || adding !== null}
-            onClick={guard(add, needsPlan)}
-          >
+          <Button size="sm" className="gap-2" disabled={!chosen || adding !== null} onClick={add}>
             {adding === brand.id ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
