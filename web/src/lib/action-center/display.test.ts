@@ -494,6 +494,13 @@ describe('History events', () => {
     );
   });
 
+  /** A task its automatic check closed, named as the drawer names it (AC-010). */
+  it('says a task passed its automatic check', () => {
+    expect(eventText('task_checked', { task: 'Refresh outdated content', title: '' })).toBe(
+      'Checked automatically and done: Refresh outdated content',
+    );
+  });
+
   /** The validation sweep records one of four verdicts, and each reads in
    *  words — "after this action closed", never "because of it". */
   it.each([

@@ -229,6 +229,14 @@ describe('shoppingGiven and the number guard', () => {
 });
 
 describe('linkShoppingPath', () => {
+  it('links a long paragraph, mostly spaces, in time near its length', () => {
+    const html = `<p>${'word   '.repeat(40_000)} the Trail Mid.</p><p>${' '.repeat(200_000)}hiking boots</p>`;
+    const started = Date.now();
+    const { linked } = linkShoppingPath(html, PATH);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(linked).toEqual({ category: 1, product: 1 });
+  });
+
   it('links each name the first time a paragraph or a list item names it, never a heading', () => {
     const html =
       '<h1>Hiking boots</h1><p>Good hiking boots keep you dry. More hiking boots below.</p>' +
@@ -379,8 +387,21 @@ describe('shoppingPathFor', () => {
     return db;
   };
   const draft = (path) => ({ id: 'd1', brand_id: 'b1', shopping_path: path });
-  /** A variant's price in dollars, and its sale price. */
-  const usd = (price, salePrice = null) => ({ price, sale_price: salePrice, currency: 'USD' });
+
+  it('leaves out a name longer than the build keeps', async () => {
+    const db = fakeDb({
+      brand_domains: [{ domain: 'shop.example' }],
+      catalog_variants: [],
+    });
+    const path = {
+      ...PATH,
+      categories: [{ ...PATH.categories[0], name: `Shoes > ${'Boot '.repeat(10_000)}` }],
+      products: [product('p1', 'Summit GTX Boot'), product('p2', 'Trail '.repeat(10_000))],
+    };
+    const read = await shoppingPathFor(draft(path), { db });
+    expect(read.categories).toEqual([]);
+    expect(read.products.map((p) => p.id)).toEqual(['p1']);
+  });
 
   it('reads a broken path as none, logged, without reading the catalog', async () => {
     const db = fakeDb({});
@@ -430,7 +451,10 @@ describe('shoppingPathFor', () => {
     const db = fakeDb({
       brand_domains: [],
       catalog_products: [{ url: 'https://shop.example/products/x' }],
-      catalog_variants: [],
+      catalog_variants: [
+        { id: 'v1', product_id: 'p1', availability: 'in stock', price: 189, currency: 'USD' },
+        { id: 'v2', product_id: 'p2', availability: 'in stock', price: 189, currency: 'USD' },
+      ],
     });
     const read = await shoppingPathFor(draft(PATH), { db });
     expect(read.products.map((p) => p.id)).toEqual(['p1', 'p2']);
@@ -456,12 +480,18 @@ describe('shoppingPathFor', () => {
       brand_domains: [{ domain: 'shop.example' }],
       catalog_variants: [
         // Sold out since the path was built.
-        { id: 'v1', product_id: 'p1', availability: 'out of stock', ...usd(189) },
-        // One size low, another sold out: low stock.
-        { id: 'v2', product_id: 'p2', availability: 'OUT_OF_STOCK', ...usd(189) },
-        { id: 'v3', product_id: 'p2', availability: 'limited availability', ...usd(189) },
+        { id: 'v1', product_id: 'p1', availability: 'out of stock', price: 189, currency: 'USD' },
+        // One size low, another sold out: low stock, at the low one's price.
+        { id: 'v2', product_id: 'p2', availability: 'OUT_OF_STOCK', price: 149, currency: 'USD' },
+        {
+          id: 'v3',
+          product_id: 'p2',
+          availability: 'limited availability',
+          price: 199,
+          currency: 'USD',
+        },
         // A spelling it can't read.
-        { id: 'v4', product_id: 'p3', availability: 'ask us', ...usd(189) },
+        { id: 'v4', product_id: 'p3', availability: 'ask us', price: 189, currency: 'USD' },
       ],
     });
     const read = await shoppingPathFor(draft(path), { db });
@@ -473,52 +503,41 @@ describe('shoppingPathFor', () => {
     ]);
     const prompt = shoppingPrompt(read);
     expect(prompt).toContain('- Summit GTX Boot: 189.00 USD, out of stock');
-    expect(prompt).toContain('- Trail Mid: 189.00 USD, low stock');
+    expect(prompt).toContain('- Trail Mid: 199.00 USD, low stock');
     expect(prompt).toContain('- Ridge Low: 189.00 USD\n');
-    // No live variant: neither its stock nor its price is told.
+    // Gone from the catalog: nothing is said of its price or stock.
     expect(prompt).toContain('- Canyon Sandal\n');
   });
 
-  it("tells the price the catalog has now: the cheapest in stock's, its sale price first", async () => {
-    const path = {
-      ...PATH,
-      products: [
-        product('p1', 'Summit GTX Boot'),
-        product('p2', 'Trail Mid', { price: 149, salePrice: 129 }),
-        product('p3', 'Ridge Low'),
-      ],
-    };
+  it("tells the price the catalog has now, not the path's, from the variant whose stock it tells", async () => {
     const db = fakeDb({
       brand_domains: [{ domain: 'shop.example' }],
       catalog_variants: [
-        // Cheaper since the path was built, the cheapest sold out.
-        { id: 'v1', product_id: 'p1', availability: 'out of stock', ...usd(99) },
-        { id: 'v2', product_id: 'p1', availability: 'In Stock', ...usd(179) },
-        { id: 'v3', product_id: 'p1', availability: 'in_stock', ...usd(199, 159) },
-        // Its sale over, in euros now.
+        // Its sale ended since the pick, and its price rose.
+        { id: 'v1', product_id: 'p1', availability: 'in stock', price: 209, currency: 'USD' },
+        // In stock at two prices: the lower one.
+        { id: 'v2', product_id: 'p2', availability: 'in stock', price: 179, currency: 'USD' },
         {
-          id: 'v4',
+          id: 'v3',
           product_id: 'p2',
-          availability: 'in_stock',
-          price: 139,
-          sale_price: null,
-          currency: 'EUR',
+          availability: 'in stock',
+          price: 199,
+          sale_price: 159,
+          currency: 'USD',
         },
-        // All sold out: the cheapest's.
-        { id: 'v5', product_id: 'p3', availability: 'out_of_stock', ...usd(120) },
-        { id: 'v6', product_id: 'p3', availability: 'sold out', ...usd(110) },
       ],
     });
+    const path = {
+      ...PATH,
+      products: [product('p1', 'Summit GTX Boot', { salePrice: 149 }), product('p2', 'Trail Mid')],
+    };
     const read = await shoppingPathFor(draft(path), { db });
-    expect(read.products.map((p) => [p.id, p.price, p.salePrice, p.currency])).toEqual([
-      ['p1', 199, 159, 'USD'],
-      ['p2', 139, null, 'EUR'],
-      ['p3', 110, null, 'USD'],
-    ]);
     const prompt = shoppingPrompt(read);
-    expect(prompt).toContain('- Summit GTX Boot: 159.00 USD, in stock');
-    expect(prompt).toContain('- Trail Mid: 139.00 EUR, in stock');
-    expect(shoppingGiven(read).prices).not.toContain('129');
+    expect(prompt).toContain('- Summit GTX Boot: 209.00 USD, in stock');
+    expect(prompt).toContain('- Trail Mid: 159.00 USD, in stock');
+    const { prices } = shoppingGiven(read);
+    expect(prices).toContain('$209');
+    expect(prices).not.toContain('149');
   });
 
   it("keeps the path's stock when the catalog can't be read", async () => {

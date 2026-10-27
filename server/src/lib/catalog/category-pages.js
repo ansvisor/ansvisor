@@ -126,7 +126,7 @@ export function categorySlug(url) {
 /** A category's steps: "Shoes > Hiking Boots" → ["Shoes", "Hiking Boots"]. */
 function stepsOf(category) {
   return String(category ?? '')
-    .split(/\s*[>›/|]\s*/)
+    .split(/[>›/|]/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
@@ -153,13 +153,21 @@ export function wordsOf(text) {
 }
 
 const RANK = { address: 3, title: 2, words: 1 };
+/** The most of a name's or its parent's words matching reads: no category's name runs longer. */
+const MAX_NAME_WORDS = 12;
+/** The most of a page's title and h1 matching reads. */
+const MAX_HEADING_CHARS = 300;
 
 /** What matching reads of a category, once. */
 function prepareCategory(category) {
   const steps = stepsOf(category);
-  const leaf = wordsOf(steps.length ? steps[steps.length - 1] : '');
+  const leaf = wordsOf(steps.length ? steps[steps.length - 1] : '').slice(0, MAX_NAME_WORDS);
   const leafSet = new Set(leaf);
-  const parent = new Set(wordsOf(steps.slice(0, -1).join(' ')).filter((w) => !leafSet.has(w)));
+  const parent = new Set(
+    wordsOf(steps.slice(0, -1).join(' '))
+      .filter((w) => !leafSet.has(w))
+      .slice(-MAX_NAME_WORDS),
+  );
   return { category, leaf, leafSet, leafKey: leaf.join(' '), parent };
 }
 
@@ -167,7 +175,7 @@ function prepareCategory(category) {
 function preparePage(page, order) {
   const found = categoryPath(page.url);
   if (!found) return null;
-  const heading = `${page.title ?? ''} ${page.h1 ?? ''}`;
+  const heading = `${String(page.title ?? '').slice(0, MAX_HEADING_CHARS)} ${String(page.h1 ?? '').slice(0, MAX_HEADING_CHARS)}`;
   const slugWords = wordsOf(found.slug);
   const headingWords = wordsOf(heading);
   return {
@@ -187,9 +195,12 @@ function matchPrepared(c, p) {
   if (!c.leaf.length) return null;
   let parentHits = 0;
   for (const w of c.parent) if (p.words.has(w)) parentHits += 1;
-  // The address: the name's words in order, with none but the parent's beside them.
-  const rest = c.parent.size ? p.slugWords.filter((w) => !c.parent.has(w)) : p.slugWords;
-  if (rest.join(' ') === c.leafKey) return { how: 'address', parentHits };
+  // The address: the name's words in order, with none but the parent's beside
+  // them. A slug with more words than the two can't be it.
+  if (p.slugWords.length <= c.leaf.length + c.parent.size) {
+    const rest = c.parent.size ? p.slugWords.filter((w) => !c.parent.has(w)) : p.slugWords;
+    if (rest.join(' ') === c.leafKey) return { how: 'address', parentHits };
+  }
   // One word is too wide for a title or a share: "Shoes" isn't /collections/running-shoes.
   if (c.leaf.length === 1) return null;
   if (p.headingText.includes(` ${c.leafKey} `)) return { how: 'title', parentHits };
