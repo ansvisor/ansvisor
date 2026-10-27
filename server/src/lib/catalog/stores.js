@@ -1,16 +1,20 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { ConnectError } from '../../connectors/errors.js';
 import { ConnectorHttpError, requestJson } from '../../connectors/http.js';
-import { connectorFor, isStore } from '../../connectors/index.js';
+import { connectorFor, isSignIn, isStore } from '../../connectors/index.js';
+import { isComposioConfigured } from '../composio.js';
 import { logger } from '../logger.js';
 import { credentialsConfigured, readCredentials, saveCredentials } from './credentials.js';
+import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
 
 /**
  * Connecting a brand's store as a catalog source (#1263, 00282): the
  * connector checks what the person typed with the store, then the source is
  * made and its sign-in kept, encrypted. Replacing the sign-in and removing
  * the store go through here too, so the sign-in is never handled anywhere
- * else.
+ * else. A platform read with the workspace's own sign-in (Google Merchant
+ * Center, #1270) is connected here too, with no sign-in of its own to keep:
+ * the person picks one of the accounts that sign-in opens.
  *
  * What the person typed never goes in a log or an error: a StoreError's
  * message is the words they see.
@@ -19,7 +23,7 @@ import { credentialsConfigured, readCredentials, saveCredentials } from './crede
 export class StoreError extends Error {
   /**
    * @param {number} status the HTTP status the route answers
-   * @param {'invalid'|'not_found'|'not_configured'|'connect_failed'|'auth_failed'|'unreachable'|'duplicate'|'too_many'|'other_account'} code
+   * @param {'invalid'|'not_found'|'not_configured'|'not_connected'|'connect_failed'|'auth_failed'|'unreachable'|'duplicate'|'too_many'|'other_account'} code
    * @param {string} message
    */
   constructor(status, code, message) {
@@ -174,6 +178,150 @@ export async function connectStore(
     await db.from('catalog_sources').delete().eq('id', source.id);
     throw err;
   }
+  return source;
+}
+
+/** Listing or checking a sign-in platform's accounts stops calling it after this: the person waits. */
+export const SIGN_IN_CALLS_MS = 30_000;
+
+/** The platform read with the workspace's sign-in, ready to call; or a StoreError. */
+async function signedIn(kind, brandId, { db, connectors, signInRequest, callsMs }) {
+  const connector = connectorFor(kind, connectors);
+  if (!isSignIn(connector)) throw new StoreError(404, 'not_found', 'There is no such source.');
+  if (!isComposioConfigured(connector.signIn)) {
+    throw new StoreError(
+      503,
+      'not_configured',
+      `${connector.label} isn't set up on this server yet.`,
+    );
+  }
+  const signed = signInRequest(connector.signIn, await workspaceEntity(brandId, { db }), {
+    hosts: connector.hosts,
+  });
+  // Every call stops at one deadline, however many the listing takes.
+  const deadline = AbortSignal.timeout(callsMs);
+  const request = (address, opts = {}) => signed(address, { ...opts, signal: deadline });
+  return { connector, request };
+}
+
+/** A sign-in platform's failure, as the person should read it. */
+function signInFailure(connector, err) {
+  if (err instanceof ConnectError) return new StoreError(400, 'connect_failed', err.message);
+  if (err instanceof ConnectorHttpError && err.code === 'auth') {
+    return new StoreError(
+      409,
+      'not_connected',
+      `Connect ${connector.label} with Google in Settings › Integrations first.`,
+    );
+  }
+  if (err instanceof ConnectorHttpError && err.code === 'not_set_up') {
+    // Logged where it was refused (sign-in.js): reconnecting wouldn't help.
+    return new StoreError(
+      503,
+      'not_configured',
+      `${connector.label} isn't set up correctly on this server yet. Try again later.`,
+    );
+  }
+  if (!(err instanceof ConnectorHttpError)) {
+    logger.error(
+      { err: { name: err?.name }, kind: connector.kind },
+      '[catalog] sign-in call failed',
+    );
+  }
+  return new StoreError(
+    502,
+    'unreachable',
+    `${connector.label} couldn't be reached. Try again in a moment.`,
+  );
+}
+
+/**
+ * The accounts a brand's workspace sign-in opens on a platform read with it
+ * (#1270), for the person to pick one. The caller has checked the person may.
+ *
+ * @returns {Promise<{ id: string, name: string|null }[]>}
+ */
+export async function listSignInAccounts(
+  { brandId, kind },
+  {
+    db = supabaseAdmin,
+    connectors,
+    signInRequest = workspaceSignIn,
+    callsMs = SIGN_IN_CALLS_MS,
+  } = {},
+) {
+  const { connector, request } = await signedIn(kind, brandId, {
+    db,
+    connectors,
+    signInRequest,
+    callsMs,
+  });
+  try {
+    return await connector.listAccounts({ request });
+  } catch (err) {
+    throw signInFailure(connector, err);
+  }
+}
+
+/**
+ * Connects an account of a platform read with the workspace's sign-in to a
+ * brand: checked with the platform, then made a source. No sign-in is kept:
+ * it is the workspace's. The caller has checked the person may.
+ */
+export async function connectSignInSource(
+  { brandId, kind, input, userId },
+  {
+    db = supabaseAdmin,
+    connectors,
+    signInRequest = workspaceSignIn,
+    callsMs = SIGN_IN_CALLS_MS,
+  } = {},
+) {
+  const value = input?.account;
+  if (typeof value !== 'string' || !value.trim() || value.length > FIELD_MAX) {
+    throw new StoreError(400, 'invalid', 'Pick an account to connect.');
+  }
+  const { connector, request } = await signedIn(kind, brandId, {
+    db,
+    connectors,
+    signInRequest,
+    callsMs,
+  });
+  let result;
+  try {
+    result = await connector.checkAccount(value, { request });
+  } catch (err) {
+    throw signInFailure(connector, err);
+  }
+  const account = text(result?.account, 200);
+  if (!account) throw new Error('checkAccount returned no account');
+  const url = text(result.url, 2048);
+  const { data: existing } = await db
+    .from('catalog_sources')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('kind', kind)
+    .eq('account', account)
+    .maybeSingle();
+  if (existing) throw new StoreError(409, 'duplicate', 'This account is connected already.');
+  const { data: source, error } = await db
+    .from('catalog_sources')
+    .insert({
+      brand_id: brandId,
+      kind,
+      account,
+      url: url && /^https?:\/\//i.test(url) ? url : null,
+      label: text(result.label, 200),
+      created_by: userId,
+    })
+    .select(SOURCE_COLUMNS)
+    .single();
+  if (error?.code === '23514') {
+    throw new StoreError(409, 'too_many', 'A brand has 10 catalog sources at most.');
+  }
+  if (error?.code === '23505')
+    throw new StoreError(409, 'duplicate', 'This account is connected already.');
+  if (error || !source) throw new Error(`catalog_sources write: ${error?.code ?? 'no row'}`);
   return source;
 }
 

@@ -459,11 +459,32 @@ export async function sendToWebhook(id: string): Promise<SendToWebhookResult> {
   };
 }
 
+/** Why the API didn't run a webhook test: not an admin or manager, or a general reason. */
+export type WebhookTestFailure = 'forbidden' | ApiFailure;
+
+export interface WebhookTestResult {
+  success: boolean;
+  /** The webhook's HTTP status; 0 when it wasn't reached or the test didn't run. */
+  status: number;
+  /** Why the address was refused or couldn't be reached. */
+  error?: string;
+  /** Where a redirect (3xx) points. */
+  location?: string;
+  /** Set when the API refused the test itself, rather than the webhook answering. */
+  failure?: WebhookTestFailure;
+}
+
+/**
+ * Test Webhook for a brand whose webhook the caller can edit (#1568 review).
+ * The API's refusals come back as values: thrown, Next.js would hide why.
+ */
 export async function testWebhook(
+  brandId: string,
   webhookUrl: string,
   webhookSecret?: string,
-): Promise<{ success: boolean; status: number; error?: string }> {
-  const session = await getSession();
+): Promise<WebhookTestResult> {
+  const session = await sessionOrNull();
+  if (!session) return { success: false, status: 0, failure: 'session' };
 
   const res = await fetch(`${AEO_SERVER_URL}/api/content/webhook-test`, {
     method: 'POST',
@@ -471,12 +492,16 @@ export async function testWebhook(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ webhookUrl, webhookSecret }),
+    body: JSON.stringify({ brandId, webhookUrl, webhookSecret }),
   });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
+    return {
+      success: false,
+      status: 0,
+      failure: body.code === 'forbidden' ? 'forbidden' : apiFailure(res.status, body),
+    };
   }
 
   return res.json();

@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { foldLetters } from '../letters.js';
 
 /**
  * A page as a Webflow CMS item (Send to CMS #1331, phase 2): its rich text
@@ -185,20 +186,13 @@ export function toWebflowRichText(html) {
   return { html: $.html().trim(), changed };
 }
 
-/** Letters Unicode doesn't take apart into a base letter and its mark. */
-const LETTERS = { ı: 'i', ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', đ: 'd', ł: 'l', þ: 'th' };
-
 /**
  * A slug Webflow takes: lowercase letters, digits, '-' and '_', starting
  * with a letter, digit or '_' (marks taken off, "ç" → "c"). Null when
  * nothing of it is left (a slug in another script).
  */
 export function webflowSlug(value) {
-  const slug = String(value ?? '')
-    .toLowerCase()
-    .replace(/[ıßæœøđłþ]/g, (c) => LETTERS[c])
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
+  const slug = foldLetters(value)
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -226,9 +220,11 @@ function openingWords(html) {
  * field the brand's map gives it. The meta title falls back to the title,
  * the meta description to the page's opening words. JSON-LD goes as its
  * JSON (for an embed in the collection's template), empty when the page has
- * none, so an item sent again loses what the page no longer says.
+ * none, so an item sent again loses what the page no longer says. The date
+ * is `sentAt` as Webflow takes it (ISO 8601), only for a new item: one sent
+ * again keeps its own (a blog template's publish date).
  */
-export function fieldDataFor({ page, slug, body, jsonLd }, fieldMap) {
+export function fieldDataFor({ page, slug, body, jsonLd, sentAt }, fieldMap) {
   const data = { name: squash(page.title).slice(0, NAME_CHARS), slug };
   if (fieldMap.body) data[fieldMap.body] = body;
   if (fieldMap.metaTitle) {
@@ -243,5 +239,6 @@ export function fieldDataFor({ page, slug, body, jsonLd }, fieldMap) {
       ? JSON.stringify(jsonLd.length === 1 ? jsonLd[0] : jsonLd).replace(/</g, '\\u003c')
       : '';
   }
+  if (fieldMap.date && sentAt) data[fieldMap.date] = sentAt.toISOString();
   return data;
 }

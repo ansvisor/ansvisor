@@ -32,6 +32,13 @@ import {
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
+import {
+  linkShoppingPath,
+  shoppingGiven,
+  shoppingPathFor,
+  shoppingPrompt,
+  withShopping,
+} from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
@@ -46,6 +53,7 @@ import {
   sourceWords,
   stripSourceIds,
   todayText,
+  withNamedNumbers,
 } from './content-sources.js';
 import {
   MAX_PAGE_HTML,
@@ -403,7 +411,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
+      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id, shopping_path',
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -572,6 +580,7 @@ async function letGo(draft) {
 async function rewritePage({
   attributable,
   draft,
+  shoppingPath,
   brand,
   model,
   input,
@@ -587,12 +596,16 @@ async function rewritePage({
   // The Length rule's target; with Length off, the page keeps its length.
   const length = ruleKeys.has('length') ? input.sources.length : textLength(draft.body_html);
   // Where it may link: the brand's pages and the draft's sources (A).
-  const targets = await readLinkTargets({
-    brandId: draft.brand_id,
-    draftId: draft.id,
-    sourceUrl: draft.source_url,
-    ruleKeys,
-  });
+  // …and its shopping path's shop pages (shopping path, part 4).
+  const targets = withShopping(
+    await readLinkTargets({
+      brandId: draft.brand_id,
+      draftId: draft.id,
+      sourceUrl: draft.source_url,
+      ruleKeys,
+    }),
+    shoppingPath,
+  );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({
@@ -842,7 +855,7 @@ function startWritingRun(draft, input, rewrite) {
 /** The run itself, step by step: nothing is kept once it is stopped. */
 async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
   await advanceRun(run, 1);
-  const [prompts, inputRow, opportunityRes] = await Promise.all([
+  const [prompts, inputRow, opportunityRes, shoppingPath] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
     readDraftInputs(draft.id),
     draft.opportunity_id && !draft.brief
@@ -853,6 +866,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
           .eq('brand_id', draft.brand_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    // Its shopping path, checked: none when it isn't one (shopping path, part 4).
+    shoppingPathFor(draft),
   ]);
   if (opportunityRes.error) throw opportunityRes.error;
   // A new page's writer has no links rule: the brief's planned links are left out for it.
@@ -863,6 +878,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   // "/top-37-tools", "/interview-with-john-smith"), as sourceWords keeps a
   // cited page's out.
   const briefGiven = brief.replace(/https?:\/\/\S+/g, ' ');
+  // The shopping path's prices and names (shopping path, part 4): the catalog's, written unmarked.
+  const shopping = shoppingGiven(shoppingPath);
   // The data it writes from, numbered (CE-033), Brief › Your input last
   // (CE-048); the numbers a suggestion may write unmarked (the page's, the
   // brand's, the brief's, the rules', today's), and those a page written
@@ -874,18 +891,25 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     queries: input.sources.queries,
     inputs: inputSources(inputRow, brand.name),
   });
-  const known = knownNumbers(
-    htmlText(draft.body_html),
-    draft.title,
-    brand.name,
-    brand.industry,
-    brand.description,
-    briefGiven,
-    ...input.rules.flatMap((r) => [r.name, r.detail]),
-    ...input.textRules,
-    todayText(),
+  const known = withNamedNumbers(
+    knownNumbers(
+      htmlText(draft.body_html),
+      draft.title,
+      brand.name,
+      brand.industry,
+      brand.description,
+      briefGiven,
+      shopping.prices,
+      ...input.rules.flatMap((r) => [r.name, r.detail]),
+      ...input.textRules,
+      todayText(),
+    ),
+    shopping.names,
   );
-  const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
+  const knownInPage = withNamedNumbers(
+    new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]),
+    shopping.names,
+  );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
   const authors = await authorWords(supabaseAdmin, brand.organization_id);
   const people = knownPeople(
@@ -895,6 +919,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     brand.industry,
     brand.description,
     briefGiven,
+    ...shopping.names,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     ...numbered.map(sourceWords),
@@ -914,6 +939,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     return await rewritePage({
       attributable,
       draft,
+      shoppingPath,
       brand,
       model,
       input,
@@ -933,7 +959,14 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
         model,
         schema: pageSchema,
         system: writeSystemPrompt(),
-        prompt: buildWritePrompt({ brand, draft, numbered, brief, input }),
+        prompt: buildWritePrompt({
+          brand,
+          draft,
+          numbered,
+          brief,
+          input,
+          linkTargets: shoppingPrompt(shoppingPath),
+        }),
         abortSignal,
       }),
     );
@@ -957,7 +990,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       draft,
       {
         title,
-        body_html: renderPage({ ...written, title }),
+        // The shopping path's names it wrote, linked (shopping-links.js).
+        body_html: linkShoppingPath(renderPage({ ...written, title }), shoppingPath).html,
         status: 'in_review',
         author: 'agent',
         agent_state: null,
@@ -973,12 +1007,16 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // Where it may link: the brand's pages and the draft's sources (A).
-  const targets = await readLinkTargets({
-    brandId: draft.brand_id,
-    draftId: draft.id,
-    sourceUrl: draft.source_url,
-    ruleKeys,
-  });
+  // …and its shopping path's shop pages (shopping path, part 4).
+  const targets = withShopping(
+    await readLinkTargets({
+      brandId: draft.brand_id,
+      draftId: draft.id,
+      sourceUrl: draft.source_url,
+      ruleKeys,
+    }),
+    shoppingPath,
+  );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({
