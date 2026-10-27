@@ -102,7 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionStatus={subscriptionStatus}
       >
         <RoleProvider role={role}>
-          <UpgradeDialogProvider adminName={adminName}>
+          <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
             <AiUsageProvider>
               <div className="flex h-screen overflow-hidden">
                 {/* Desktop sidebar */}

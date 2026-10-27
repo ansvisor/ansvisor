@@ -5,6 +5,7 @@ import {
   planChange,
   planRequestSchema,
   subscriptionEnded,
+  takesPromoCode,
 } from './plan-purchase';
 
 describe('plan prices', () => {
@@ -96,5 +97,12 @@ describe('subscriptionEnded', () => {
       expect(subscriptionEnded(status)).toBe(true);
     }
     expect(subscriptionEnded(undefined)).toBe(true);
+  });
+});
+
+describe('takesPromoCode', () => {
+  it('takes a code with a monthly plan only: a year has its own discount', () => {
+    expect(takesPromoCode('month')).toBe(true);
+    expect(takesPromoCode('year')).toBe(false);
   });
 });

@@ -35,6 +35,7 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
+import { usePlanFeatures } from './plan-features';
 
 interface SubscriptionData {
   planId: string;
@@ -55,6 +56,7 @@ interface PlanSwitcherProps {
 export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: PlanSwitcherProps) {
   const t = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
+  const planFeatures = usePlanFeatures();
   // Buying or changing the plan charges the organization's card: admins only,
   // as the subscription route checks.
   const { canAdmin } = useUserRole();
@@ -205,39 +207,6 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
       toast.error(err instanceof Error ? err.message : 'Failed to open billing portal');
       setPortalLoading(false);
     }
-  }
-
-  /**
-   * A plan card's list, as the pricing page puts it: brands, seats, prompts,
-   * the answer engines it tracks, content briefs and site audits a month,
-   * AI usage as a multiple of Starter's, then what the plan adds.
-   */
-  function planFeatures(planId: PlanId): { text: string; hint?: string }[] {
-    const { limits } = PLANS[planId];
-    const starterAi = PLANS.starter.limits.improveMonthlyBudgetUsd;
-    const aiUsage =
-      starterAi > 0 && limits.improveMonthlyBudgetUsd > 0
-        ? Math.round(limits.improveMonthlyBudgetUsd / starterAi)
-        : null;
-    const items = [
-      limits.maxBrands === -1
-        ? tCards('unlimitedBrands')
-        : tCards('brands', { count: limits.maxBrands }),
-      limits.maxTeamMembers === -1
-        ? tCards('unlimitedSeats')
-        : tCards('seats', { count: limits.maxTeamMembers }),
-      tCards('prompts', { count: limits.maxPrompts }),
-      tCards(`${planId}.engines`),
-      tCards('briefs', { count: limits.maxBriefGenerations }),
-      tCards('audits', { count: limits.maxSiteAudits }),
-    ].map((text) => ({ text }));
-    return [
-      ...items,
-      ...(aiUsage
-        ? [{ text: tCards('aiUsage', { count: aiUsage }), hint: tCards('aiUsageHint') }]
-        : []),
-      ...(tCards.raw(`${planId}.extras`) as string[]).map((text) => ({ text })),
-    ];
   }
 
   function isUpgrade(targetPlan: PlanId): boolean {

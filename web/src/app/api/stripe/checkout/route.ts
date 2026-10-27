@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { stripe, PRICE_IDS, priceIdFor } from '@/lib/stripe';
 import { TRIAL_DAYS, hasUsedTrial } from '@/lib/billing/trial';
-import { subscriptionEnded } from '@/lib/billing/plan-purchase';
+import { subscriptionEnded, takesPromoCode } from '@/lib/billing/plan-purchase';
+import { findPromotionCode } from '@/lib/billing/promo-code';
 
 /** POST /api/stripe/checkout's body. */
 const checkoutSchema = z.object({
@@ -14,6 +15,11 @@ const checkoutSchema = z.object({
   interval: z.enum(['month', 'year']).optional(),
   /** Where a canceled checkout goes back to: Billing, or onboarding's plan step. */
   returnTo: z.literal('billing').optional(),
+  /**
+   * A promotion code the plan dialog checked, for a monthly plan: Checkout
+   * opens with it applied. Checked again here; the caller's word isn't taken.
+   */
+  promotionCode: z.string().trim().min(1).max(64).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -31,7 +37,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
-    const { planId, organizationId, interval, returnTo } = parsed.data;
+    const { planId, organizationId, interval, returnTo, promotionCode } = parsed.data;
 
     // The org id arrives in the request body, so confirm the caller is
     // actually in it. Row-level security used to be the only thing standing
@@ -88,6 +94,26 @@ export async function POST(req: NextRequest) {
 
     let customerId = org?.stripe_customer_id as string | null;
 
+    // A code goes with a monthly plan only (a year has its own discount), and
+    // must be one Stripe can redeem now: looked up here, not taken on trust.
+    let promotionCodeId: string | null = null;
+    if (promotionCode) {
+      if (!takesPromoCode(interval ?? 'month')) {
+        return NextResponse.json(
+          { error: 'Promo codes are for monthly plans', code: 'promo_code_monthly_only' },
+          { status: 400 },
+        );
+      }
+      const found = await findPromotionCode(stripe, promotionCode, customerId);
+      if (!found) {
+        return NextResponse.json(
+          { error: "That promo code isn't valid", code: 'invalid_promo_code' },
+          { status: 400 },
+        );
+      }
+      promotionCodeId = found.id;
+    }
+
     // Create Stripe customer if none exists
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -122,7 +148,10 @@ export async function POST(req: NextRequest) {
       },
       success_url: `${appUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}${returnTo === 'billing' ? '/dashboard/settings/billing' : '/dashboard/onboarding'}`,
-      allow_promotion_codes: true,
+      // Stripe takes either a code applied here or its own code box, not both.
+      ...(promotionCodeId
+        ? { discounts: [{ promotion_code: promotionCodeId }] }
+        : { allow_promotion_codes: true }),
       // Collect billing address + VAT/tax ID up front so invoices are
       // complete; later edits happen in the Customer Portal (/api/stripe/portal).
       billing_address_collection: 'required',
