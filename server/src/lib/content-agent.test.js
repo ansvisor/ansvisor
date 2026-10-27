@@ -97,7 +97,8 @@ const {
 } = await import('./content-agent.js');
 const { linkKey, NO_LINK_TARGETS } = await import('./content-links.js');
 const { knownNumbers, numberSources } = await import('./content-sources.js');
-const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
+const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, guardPeople, knownPeople } =
+  await import('./content-people.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -389,7 +390,15 @@ describe('keepSuggestions', () => {
     // More ways to give a claim to a source.
     expect(addsAttribution('', 'According to the Zapier report, teams forecast.')).toBe(true);
     expect(addsAttribution('', 'According to a 2025 Gartner survey, teams forecast.')).toBe(true);
-    expect(addsAttribution('', "Gartner's research shows teams forecast.")).toBe(true);
+    expect(addsAttribution('', "Gartner's research shows that teams forecast.")).toBe(true);
+    // A tool's report shows things too: "shows" only before "that" or a figure (#1544 review).
+    expect(addsAttribution('', 'The Search Console report shows clicks and impressions.')).toBe(
+      false,
+    );
+    expect(addsAttribution('', "GA4's Acquisition report shows where visitors come from.")).toBe(
+      false,
+    );
+    expect(addsAttribution('', 'The Gartner report shows 40% of teams forecast.')).toBe(true);
   });
 
   // A replace of the whole passage: its words before and after.
@@ -651,6 +660,44 @@ describe('keepSuggestions', () => {
     expect(Date.now() - started).toBeLessThan(500);
   });
 
+  it('reads a long run of spaces quickly: no lookbehind is tried at each of them', () => {
+    // A character past Latin-1 (’, ı) in each: V8 skips no position then.
+    const reads = (run) => [
+      () => attributableSources(`<p>Ürün${run}açıklamasına göre</p>`, [], []),
+      () => placeholderAttributions(`In a’s${run}b report from Gartner, most do.`),
+      () => addsAttribution('', `x${run}Gartner raporuna göre en hızlı.`),
+      () => attributedNames(`Dem’${run}Bericht zufolge.`),
+      () => attributedNames(`Most’${run}US states that allow it.`),
+    ];
+    // Compiled once, apart from the timing.
+    reads(' ').forEach((read) => read());
+    for (const space of [' ', '\u00a0', '\n']) {
+      for (const read of reads(space.repeat(30_000))) {
+        const started = Date.now();
+        read();
+        expect(Date.now() - started).toBeLessThan(150);
+      }
+    }
+  });
+
+  it('reads a claim with a short aside after "a report by X" (review, #1544)', () => {
+    expect(
+      attributedNames('A 2025 report by Gartner, published in May, found that 40% of teams plan.'),
+    ).toEqual(['Gartner']);
+    expect(
+      attributedNames(
+        'A recent study from Stanford, which surveyed 500 teams, shows that most plan.',
+      ),
+    ).toEqual(['Stanford']);
+    // Still never a product's sentence, nor an aside past its bound.
+    expect(
+      attributedNames('The Performance report from Google Search Console shows clicks.'),
+    ).toEqual([]);
+    expect(
+      attributedNames(`A report by Gartner, ${'and so on '.repeat(10)}, found that most plan.`),
+    ).toEqual([]);
+  });
+
   it('reads a long run of initials quickly: each dot is read one way', () => {
     const initials = 'U.S.'.repeat(10_000);
     const started = Date.now();
@@ -868,7 +915,7 @@ describe('blocks, names and languages as the review read them (#1520)', () => {
       htmlLines('<h2>Forecasting Basics</h2><p>Per <a href="#">Gartner</a>’s survey, most do.</p>'),
     ).toEqual(['Forecasting Basics', 'Per Gartner’s survey, most do.']);
     const cites = attributableSources(
-      '<p><a href="https://gartner.example">Gartner</a>’s report shows teams forecast.</p>',
+      '<p><a href="https://gartner.example">Gartner</a>’s report shows that teams forecast.</p>',
       [],
       [],
     );
@@ -904,6 +951,188 @@ describe('blocks, names and languages as the review read them (#1520)', () => {
       'By 2026 Gartner estimates that most teams will forecast weekly.',
       'In 2025 Gartner found that most teams forecast weekly.',
       'In Q3 2025 IDC estimated that most teams forecast weekly.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(true);
+    }
+  });
+});
+
+describe('attributions as the review of #1537 read them', () => {
+  const none = knownPeople('');
+  const reads = (texts, expected) => {
+    for (const text of texts) expect(addsAttribution('', text), text).toBe(expected);
+  };
+
+  it('reads no product sentence as a claim: a comma after "from X", a tool’s report that "shows"', () => {
+    reads(
+      [
+        'Send a survey from Typeform, Jotform or Google Forms.',
+        'Download the 2025 report from Gartner, then share it with your team.',
+        'The Performance report from Google Search Console shows clicks and impressions.',
+        'Who says B2B content has to be boring?',
+        'In this report from Google Search Console, you can see clicks.',
+        'In the Performance report from Google Search Console, clicks are listed.',
+        'Built in a study from Figma, the kit has 40 parts.',
+      ],
+      false,
+    );
+    // An acronym is a name, even one a sentence could start with ("ama").
+    reads(
+      ['According to AMA, most marketers plan weekly.', 'AMA says that most plan weekly.'],
+      true,
+    );
+    // Turkish sentence words are the attributions' only: the people guard still reads a person.
+    expect(guardPeople('Son Heung-min said the team won.', none).text).toContain(NAME_PLACEHOLDER);
+    reads(
+      [
+        'In a 2025 report by Gartner, most teams forecast weekly.',
+        'According to a survey from Statista, most teams forecast weekly.',
+        'A survey from Statista shows that most teams forecast weekly.',
+        'A report from Gartner shows 40 teams forecast weekly.',
+        'A survey from Statista finds most teams forecast weekly.',
+      ],
+      true,
+    );
+  });
+
+  it('knows the brand’s own name: its report or data says what it says', () => {
+    const known = attributableSources('<p>Acme tracks AI answers.</p>', [], [], 'en', ['Acme']);
+    expect(addsAttribution('', 'Acme’s data shows that most pages gain citations.', known)).toBe(
+      false,
+    );
+    expect(
+      addsAttribution('', 'A weekly report from Acme shows that your top pages gain.', known),
+    ).toBe(false);
+    expect(addsAttribution('', 'Gartner’s data shows that most pages gain.', known)).toBe(true);
+  });
+
+  it('keeps the possessive out of the placeholder, never a name’s own apostrophe', () => {
+    expect(placeholderAttributions("According to O'Day, most do.", none)).toBe(
+      'According to [source], most do.',
+    );
+    expect(placeholderAttributions("According to Gartner's latest survey, most do.", none)).toBe(
+      "According to [source]'s latest survey, most do.",
+    );
+    expect(placeholderAttributions('Gartner’s research shows that teams forecast.', none)).toBe(
+      '[source]’s research shows that teams forecast.',
+    );
+  });
+
+  it('reads Turkish reports with or without the ending, a word before the noun, a name of more words', () => {
+    reads(
+      [
+        "Gartner'ın 2025 raporuna göre pazar büyüyor.",
+        "Gartner'ın son raporuna göre pazar büyüyor.",
+        'Pazar, Gartner raporuna göre büyüyor.',
+        'TÜİK verilerine göre enflasyon düştü.',
+        'HubSpot verilerine göre e-posta açılma oranı düştü.',
+      ],
+      true,
+    );
+    // Without the ending, a sentence's first noun isn't a name.
+    reads(
+      [
+        'Son raporuna göre pazar büyüyor.',
+        'Ürün açıklamasına göre kahve makinesi on bardak yapar.',
+        'Sipariş verilerine göre en çok satan model bu.',
+        'Haziran verilerine göre satışlar arttı.',
+      ],
+      false,
+    );
+    // The brand's own: "Panelinizdeki Ansvisor verilerine göre" reads Ansvisor, known.
+    const known = attributableSources('<p>Ansvisor</p>', [], [], 'tr', ['Ansvisor']);
+    expect(addsAttribution('', 'Panelinizdeki Ansvisor verilerine göre trafik arttı.', known)).toBe(
+      false,
+    );
+    expect(placeholderAttributions("Google Analytics'e göre trafik arttı.", none)).toBe(
+      "[source]'e göre trafik arttı.",
+    );
+    expect(placeholderAttributions("Ancak Google Analytics'e göre trafik arttı.", none)).toBe(
+      "Ancak [source]'e göre trafik arttı.",
+    );
+  });
+
+  it('reads German "zufolge" and "nach Angaben von", never the maker’s own words', () => {
+    reads(
+      ['Gartner zufolge wächst der Markt.', 'Nach Angaben von Gartner wächst der Markt.'],
+      true,
+    );
+    reads(
+      [
+        'Berichten zufolge wächst der Markt.',
+        'Den Angaben zufolge wächst der Markt.',
+        'Laut Hersteller hält der Akku zehn Stunden.',
+        'Laut Herstellerangaben hält der Akku zehn Stunden.',
+        'Laut Datenblatt wiegt es zwei Kilo.',
+        'Laut Datenblättern wiegt es zwei Kilo.',
+        'Nach Angaben des Herstellers hält der Akku zehn Stunden.',
+        // A noun German capitalises, after an article or as a plural.
+        'Dem Bericht zufolge wächst der Markt.',
+        'Einer Studie zufolge wächst der Markt.',
+        'Herstellerangaben zufolge hält der Akku zehn Stunden.',
+        'Kundenbewertungen zufolge ist er leise.',
+        'Unseren Messungen zufolge ist er leise.',
+        'Insidern zufolge wächst der Markt.',
+        'Neuesten Zahlen zufolge wächst der Markt.',
+      ],
+      false,
+    );
+    reads(['Laut Gartner wächst der Markt.', 'IDC zufolge wächst der Markt.'], true);
+  });
+});
+
+describe('the review of #1537, round 2 (low follow-ups)', () => {
+  it('ends a line at a line break inside a bold or a link too', () => {
+    expect(
+      htmlLines(
+        '<p><strong>Forecasting basics<br>According to Zapier, teams forecast.</strong></p>',
+      ),
+    ).toEqual(['Forecasting basics', 'According to Zapier, teams forecast.']);
+    expect(
+      htmlLines(
+        '<p><em>Teams plan weekly, according to Gartner.<br>Most teams plan monthly.</em></p>',
+      ),
+    ).toEqual(['Teams plan weekly, according to Gartner.', 'Most teams plan monthly.']);
+    expect(htmlLines('<p><strong>ChatGPT<br>Gemini<br>Claude</strong></p>')).toEqual([
+      'ChatGPT',
+      'Gemini',
+      'Claude',
+    ]);
+    // A claim a bold's line break hid is read; one on a page that cites the source isn't new.
+    const cites = attributableSources('<p>According to Gartner, teams forecast.</p>', [], []);
+    expect(
+      keepSuggestions(
+        [
+          suggestion({
+            kind: 'insert',
+            passage: 1,
+            before: '',
+            after:
+              '<p><strong>Forecasting basics<br>According to Zapier, teams forecast.</strong></p>',
+            sources: [],
+            marks: [],
+          }),
+        ],
+        [{ tag: 'p', text: 'Track ChatGPT, Gemini and Claude.' }],
+        new Set(),
+        new Set(['dated']),
+        null,
+        { ...sourcing, attributable: cites },
+      ),
+    ).toEqual([]);
+  });
+
+  it('reads "states" and "claims" as nouns after a count at a sentence’s start, and a claim after small words', () => {
+    for (const text of [
+      'Most US states that allow it ship wine.',
+      'Every FDA states that list it are fine.',
+    ]) {
+      expect(addsAttribution('', text), text).toBe(false);
+      expect(placeholderAttributions(text, knownPeople('')), text).toBe(text);
+    }
+    for (const text of [
+      'In some cases Gartner states that most teams forecast weekly.',
+      'For many years Gartner claims that most teams forecast weekly.',
     ]) {
       expect(addsAttribution('', text), text).toBe(true);
     }
@@ -972,6 +1201,128 @@ describe('no invented people or quotes (CE-044)', () => {
       { ...sourcing, people },
     );
     expect(kept.after_text).toBe(`<p>${QUOTE_PLACEHOLDER}</p>`);
+  });
+});
+
+describe('attributions as the review of #1544 read them', () => {
+  const none = knownPeople('');
+  const reads = (texts, expected) => {
+    for (const text of texts) expect(addsAttribution('', text), text).toBe(expected);
+  };
+
+  it('reads no tool’s report when the reader is spoken to after the comma', () => {
+    reads(
+      [
+        'In the report from Google Search Console, you can see clicks.',
+        'In a report from Google Analytics, filter by channel.',
+        'In a report from Google Analytics, your top pages are listed.',
+      ],
+      false,
+    );
+    // A claim's "In …," still is, and "according to" whoever it speaks to;
+    // a verb's word that is a noun there is no instruction.
+    reads(
+      [
+        'In a 2025 report by Gartner, most teams forecast weekly.',
+        'According to a survey from Statista, your customers want speed.',
+        'In a 2025 study from Stanford, open rates fell 8%.',
+        'In a report by the WTO, export volumes rose 3%.',
+        'In a report by Gartner, use cases for AI tripled.',
+        'In a report by Gartner, go-to-market costs rose 30%.',
+        'In a report by Gartner, add-on sales grew 12%.',
+        'In a report by Gartner, download numbers doubled.',
+      ],
+      true,
+    );
+    reads(['In a report from Google Analytics, open the Acquisition tab.'], false);
+  });
+
+  it('reads no report’s acronym, or a list’s first noun, as a Turkish source', () => {
+    reads(
+      [
+        'SEO raporuna göre sıralama yükseldi.',
+        'PDF raporuna göre teslimat iki gün.',
+        'Aylık SEO raporuna göre sıralama yükseldi.',
+        'Bu PDF raporuna göre teslimat iki gün.',
+        'KPI raporuna göre satışlar arttı.',
+        '1) Ürün açıklamasına göre ölçüler değişti.',
+      ],
+      false,
+    );
+    reads(
+      ['TÜİK raporuna göre enflasyon düştü.', 'Bu yıl Gartner raporuna göre pazar büyüyor.'],
+      true,
+    );
+  });
+
+  it('reads no maker’s or page’s German words, in a compound or after an adjective', () => {
+    reads(
+      [
+        'Laut Angaben des Herstellers hält der Akku zehn Stunden.',
+        'Laut Produktdatenblatt wiegt es zwei Kilo.',
+        'Laut Packungsbeilage zweimal täglich.',
+        'Laut Kundenbewertungen ist er leise.',
+        'Einer neuen Studie zufolge wächst der Markt.',
+        'Einer repräsentativen Umfrage zufolge wächst der Markt.',
+      ],
+      false,
+    );
+    reads(
+      [
+        'Laut Gartner wächst der Markt.',
+        'Gartner zufolge wächst der Markt.',
+        // The giver of the figures, by "von", "des" or "der".
+        'Laut Angaben von Statista wuchs der Markt.',
+        'Laut Angaben des Statistischen Bundesamtes stiegen die Preise.',
+        'Laut Bewertungsportal Trustpilot ist er beliebt.',
+        // A verb's ending before the name is no adjective's.
+        'Die Ausgaben sollen Gartner zufolge steigen.',
+        'Die Kosten liegen Gartner zufolge höher.',
+        'Weltweit nutzen Statista zufolge viele Teams KI.',
+        'Die Preise werden IDC zufolge steigen.',
+        'Das gilt immer Gartner zufolge.',
+      ],
+      true,
+    );
+  });
+
+  it('reads no count of names ("most of the US states") as a source', () => {
+    reads(['In most of the US states that allow it, the fee is lower.'], false);
+    reads(['Gartner states that most teams forecast.'], true);
+  });
+
+  it('puts thousands of sources on one line, and skips what a line has no trigger for, quickly', () => {
+    const time = (read) => {
+      const started = Date.now();
+      read();
+      return Date.now() - started;
+    };
+    // A character past Latin-1 (Ü) in each: V8 skips no position then.
+    // 20,000 sources rebuilt per edit took 3 s (main, 2026-10-26); read once, under 100 ms.
+    const line = 'According to Gartner, most do. '.repeat(20_000);
+    placeholderAttributionsInHtml('<p>According to Gartner, most do.</p>');
+    let html;
+    expect(
+      time(() => (html = placeholderAttributionsInHtml(`<p>Ürün <b>x</b> ${line}</p>`))),
+    ).toBeLessThan(400);
+    expect(html).toBe(`<p>Ürün <b>x</b> ${'According to [source], most do. '.repeat(20_000)}</p>`);
+    // A long line of capitalised words, none of the name-first patterns' words
+    // in it: they aren't tried at each capital (160 ms on main, 4 ms now).
+    const caps = `Ürün ${'Acme Beta Corp Delta '.repeat(20_000)}.`;
+    attributedNames('Ürün Acme.');
+    expect(time(() => attributedNames(caps))).toBeLessThan(60);
+  });
+
+  it('puts a name that is itself possessive whole, and keeps an owner’s ending', () => {
+    expect(placeholderAttributions("According to McDonald's, sales rose.", none)).toBe(
+      'According to [source], sales rose.',
+    );
+    expect(placeholderAttributions("According to Gartner's latest survey, most do.", none)).toBe(
+      "According to [source]'s latest survey, most do.",
+    );
+    expect(placeholderAttributions("According to Gartner's 2025 survey, most do.", none)).toBe(
+      "According to [source]'s 2025 survey, most do.",
+    );
   });
 });
 
@@ -1382,6 +1733,23 @@ describe('fixDraftRules', () => {
     rows.content_drafts.rules = null;
     rows.content_rule_sets = { overrides: { language: { value: 'German' } } };
     expect(await fix()).toBe(1);
+  });
+
+  it('gives a claim to the brand’s own data: its name is known', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after: 'good coffee and hot water, as Acme Coffee’s data shows that brews improve',
+            sources: [],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    const { count } = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(count).toBe(1);
   });
 
   it('charges the budget, asks the model and keeps one batch for review', async () => {

@@ -11,7 +11,8 @@ import { API_BASE_URL } from '@/config/api';
  * is its English text, for a reason this build has no words for.
  */
 export type RegenerateTasksResult =
-  | { written: number; kept: number }
+  /** `reviews`: tasks missing an AC-010 field, waiting in Needs review. */
+  | { written: number; kept: number; reviews: number }
   | { error: 'server'; code: string | null; message: string }
   | { error: 'timeout' | 'unreachable' | 'unauthenticated' };
 
@@ -43,7 +44,11 @@ export async function regenerateActionTasks(actionId: string): Promise<Regenerat
         message: data.error || `Server error: ${res.status}`,
       };
     }
-    return { written: Number(data.written ?? 0), kept: Number(data.kept ?? 0) };
+    return {
+      written: Number(data.written ?? 0),
+      kept: Number(data.kept ?? 0),
+      reviews: Number(data.reviews ?? 0),
+    };
   } catch (err) {
     return {
       error: err instanceof Error && err.name === 'TimeoutError' ? 'timeout' : 'unreachable',

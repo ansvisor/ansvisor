@@ -37,10 +37,39 @@ const COUNT_IN_TITLE =
  */
 const PAGE_ADDRESS = /^(?:https?:\/\/\S+|\/\S*|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/?#]\S*)?)$/i;
 
-/** A task's URL as stored: a host and path gets its https://. */
+/** A task's URL as stored: a host and path gets its https://; null when it's no page address. */
 export function pageAddress(url) {
   const value = text(url);
+  if (!PAGE_ADDRESS.test(value)) return null;
   return /^(?:https?:\/\/|\/)/i.test(value) ? value : `https://${value}`;
+}
+
+/**
+ * What a task missing one of AC-010's fields is refused for. A task refused
+ * for these alone waits for review (00293) rather than going.
+ */
+const GAP = Object.freeze({
+  urlEmpty: 'URL is empty',
+  urlNotPage: 'URL is not a page address (https://… or /…)',
+  change: 'the change has no after text',
+  doneWhen: 'Done when is empty',
+  check: 'check is not auto, rerun or manual',
+});
+
+/** Whether a task's problems are only AC-010 fields it misses. */
+export function onlyGaps(problems) {
+  const gaps = new Set(Object.values(GAP));
+  return problems.length > 0 && problems.every((problem) => gaps.has(problem));
+}
+
+/** The AC-010 fields a task misses, as action_task_reviews.missing names them. */
+export function taskGaps(task) {
+  const gaps = [];
+  if (!pageAddress(task?.url)) gaps.push('url');
+  if (!text(task?.change?.after)) gaps.push('change');
+  if (!text(task?.doneWhen)) gaps.push('doneWhen');
+  if (!TASK_CHECKS.includes(text(task?.check).toLowerCase())) gaps.push('check');
+  return gaps;
 }
 
 /** Analysis the product does itself and shows in the Affected tab. */
@@ -65,15 +94,13 @@ export function taskProblems(task, evidence) {
 
   if (!title) problems.push('it has no title');
   // AC-010: the exact page, the change, Done when and how it's checked.
-  if (!url) problems.push('URL is empty');
-  else if (!PAGE_ADDRESS.test(url)) problems.push('URL is not a page address (https://… or /…)');
+  if (!url) problems.push(GAP.urlEmpty);
+  else if (!PAGE_ADDRESS.test(url)) problems.push(GAP.urlNotPage);
   if (!where) problems.push('Where is empty');
-  if (!text(task?.change?.after)) problems.push('the change has no after text');
+  if (!text(task?.change?.after)) problems.push(GAP.change);
   if (steps.length < 2 || steps.length > 5) problems.push('How needs 2 to 5 steps');
-  if (!text(task?.doneWhen)) problems.push('Done when is empty');
-  if (!TASK_CHECKS.includes(text(task?.check).toLowerCase())) {
-    problems.push('check is not auto, rerun or manual');
-  }
+  if (!text(task?.doneWhen)) problems.push(GAP.doneWhen);
+  if (!TASK_CHECKS.includes(text(task?.check).toLowerCase())) problems.push(GAP.check);
   if (!TASK_TYPES.includes(task?.type)) problems.push('its type is not one of the six');
   if (COUNT_IN_TITLE.test(title)) {
     problems.push('the title counts prompts or pages instead of naming one');

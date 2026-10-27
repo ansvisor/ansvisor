@@ -54,7 +54,9 @@ for (const action of actions) {
       console.log(result.reason);
       continue;
     }
-    console.log(`${result.tasks.length} tasks, ${result.refused.length} refused`);
+    console.log(
+      `${result.tasks.length} tasks, ${result.reviews.length} for review, ${result.refused.length} refused`,
+    );
     const e = result.evidence;
     lines.push(
       `Evidence: ${e.pages.length} pages, ${e.prompts.length} prompts, ${e.domains.length} domains, ${e.competitors.length} competitors · $${result.costUsd.toFixed(4)}`,
@@ -63,14 +65,20 @@ for (const action of actions) {
     result.tasks.forEach((task, i) => {
       lines.push(
         `${i + 1}. **${task.title}** · ${task.type}`,
+        `   - URL: ${task.url}`,
         `   - Where: ${task.where}`,
         `   - Why: ${task.why}`,
+        `   - Change: ${task.change.before ? `${task.change.before} → ` : ''}${task.change.after}`,
         `   - How: ${task.how.map((step, n) => `${n + 1}) ${step}`).join(' ')}`,
-        `   - Done when: ${task.doneWhen}`,
+        `   - Done when: ${task.doneWhen} (check: ${task.check})`,
         `   - Effort: ${[task.effort, task.role].filter(Boolean).join(' · ')}`,
         `   - Refs: ${task.refs.join(', ')}`,
       );
     });
+    if (result.reviews.length) {
+      lines.push('', 'Waiting for review (AC-010):');
+      for (const task of result.reviews) lines.push(`- ${task.title}`);
+    }
     if (result.refused.length) {
       lines.push('', 'Refused:');
       for (const { task, problems } of result.refused) {

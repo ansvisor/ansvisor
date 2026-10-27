@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { editSpans } from './edit-spans.js';
 import { logger } from './logger.js';
 
 /**
@@ -55,14 +56,18 @@ export const isKnown = (words, known) => {
 const wordCount = (text) => (String(text).match(/\p{L}[\p{L}\p{N}'’-]*/gu) ?? []).length;
 
 // A capitalised word of a name ("Ada", "McDonald", "O'Neil", "Jean-Luc"): one
-// way to read it only (the lookahead checks it has a small letter), so a
-// long word can't make the reading slow; an apostrophe only before a
-// capital ("O'Neil", not "Yılmaz'a" or "Doe's"). Initials ("J. K.
-// Rowling"), and particles between the words ("Ursula von der Leyen").
-const WORD = String.raw`\p{Lu}(?=[\p{L}'’]*\p{Ll})(?:\p{L}|['’](?=\p{Lu}))+(?:-\p{L}+)?`;
+// way to read it only (the lookahead checks it has a small letter, reading
+// only what the word can hold), so a long word can't make the reading slow;
+// an apostrophe only before a capital ("O'Neil", not "Yılmaz'a" or
+// "Doe's"). Initials ("J. K. Rowling"), and particles between the words
+// ("Ursula von der Leyen").
+const WORD = String.raw`\p{Lu}(?=(?:\p{L}|['’](?=\p{Lu}))*?\p{Ll})(?:\p{L}|['’](?=\p{Lu}))+(?:-\p{L}+)?`;
 const PARTICLE = String.raw`(?:von|van|der|den|de|del|della|di|da|du|la|le|al|bin|ibn|ten|ter)`;
 const STARTS_PARTICLE = new RegExp(`^${PARTICLE}$`);
-export const NAME = String.raw`(?<!\p{L})(?:(?:\p{Lu}\.\s?){1,3}\s?${WORD}|${WORD}(?:\s+(?:${PARTICLE}\s+){0,3}(?:\p{Lu}\.\s+)?${WORD}){1,2})(?!\p{L})`;
+// Never started inside a word, an apostrophe's either: a run of letters
+// joined by apostrophes ("Ab’Ab’Ab’…") would be tried at each capital in it,
+// and read in time growing with its square (#1544 review).
+export const NAME = String.raw`(?<!\p{L}|\p{L}['’])(?:(?:\p{Lu}\.\s?){1,3}\s?${WORD}|${WORD}(?:\s+(?:${PARTICLE}\s+){0,3}(?:\p{Lu}\.\s+)?${WORD}){1,2})(?!\p{L})`;
 
 const ROLE_WORDS = [
   'ceo',
@@ -327,27 +332,31 @@ const NAME_CUES = [
     words: 2,
     role: true,
   },
-  // "Sarah, our head of growth", at a sentence's start: a single name.
+  // "Sarah, our head of growth", at a sentence's start: a single name. A
+  // capital first, so the lookbehind (ending in spaces) isn't tried in a
+  // run of them: tried at each, a long run reads in time growing with its square.
   {
     re: new RegExp(
-      String.raw`(?<=^|[.!?]\s+|[“"]\s*)(?<name>${WORD}),\s+(?:our|the|a|an|their|its)\s+(?:[\p{L}-]+\s+){0,3}${ROLE_ANY}(?!\p{L})`,
+      String.raw`(?=\p{Lu})(?<=^|[.!?]\s+|[“"]\s*)(?<name>${WORD}),\s+(?:our|the|a|an|their|its)\s+(?:[\p{L}-]+\s+){0,3}${ROLE_ANY}(?!\p{L})`,
       'gu',
     ),
     words: 1,
     role: true,
   },
   // Whoever says a quote, right next to it: "“…,” says Jane Doe", "„…“,
-  // sagt Anna Schmidt", "“…” diyor Ayşe Demir", "“…,” Jane Doe says".
+  // sagt Anna Schmidt", "“…” diyor Ayşe Demir", "“…,” Jane Doe says". The
+  // spaces read one way only (a mark between, or none), so a quote mark
+  // before a long run of them reads in time growing with the run, not its square.
   {
     re: new RegExp(
-      String.raw`${QUOTE_END}\s*[,.!?]?\s*${QUOTE_SAYS}(?!\p{L})\s+(?<name>${NAME})`,
+      String.raw`${QUOTE_END}\s*(?:[,.!?]\s*)?${QUOTE_SAYS}(?!\p{L})\s+(?<name>${NAME})`,
       'gu',
     ),
     words: 2,
   },
   {
     re: new RegExp(
-      String.raw`${QUOTE_END}\s*[,.!?]?\s*(?<name>${NAME})\s+${QUOTE_SAYS}(?!\p{L})`,
+      String.raw`${QUOTE_END}\s*(?:[,.!?]\s*)?(?<name>${NAME})\s+${QUOTE_SAYS}(?!\p{L})`,
       'gu',
     ),
     words: 2,
@@ -475,8 +484,12 @@ const SPOKEN_AFTER = new RegExp(
 );
 const SPOKEN_BEFORE = new RegExp(String.raw`${SPEECH}[,:]?\s*$`, 'u');
 
-/** A placeholder the agent left, or one put in: never read again. */
-const BRACKETS = /\[[^\]]*\]/g;
+/**
+ * A placeholder the agent left, or one put in: never read again. Never one
+ * with another "[" in it, so an opening bracket with no closing one isn't
+ * read to the text's end from each "[" after it.
+ */
+const BRACKETS = /\[[^[\]]*\]/g;
 
 /**
  * Whether guillemets enclose the words between two quotes («A» ve «B»,
@@ -496,8 +509,7 @@ export function peopleEdits(text, known, { heading = false } = {}) {
   const s = String(text ?? '');
   // Placeholders aren't read: blanked out, with their places kept.
   const read = s.replace(BRACKETS, (m) => ' '.repeat(m.length));
-  const edits = [];
-  const free = (start, end) => edits.every((e) => end <= e.start || start >= e.end);
+  const { spans: edits, free, add } = editSpans();
 
   for (const pattern of QUOTES) {
     for (const m of read.matchAll(pattern)) {
@@ -512,7 +524,7 @@ export function peopleEdits(text, known, { heading = false } = {}) {
         SPOKEN_AFTER.test(read.slice(end, end + 80)) ||
         SPOKEN_BEFORE.test(read.slice(Math.max(0, m.index - 40), m.index));
       if ((words < MIN_QUOTE_WORDS && !spoken) || isKnown(inner, known)) continue;
-      if (free(m.index, end)) edits.push({ start: m.index, end, text: QUOTE_PLACEHOLDER });
+      if (free(m.index, end)) add({ start: m.index, end, text: QUOTE_PLACEHOLDER });
     }
   }
   for (const cue of NAME_CUES) {
@@ -523,10 +535,10 @@ export function peopleEdits(text, known, { heading = false } = {}) {
       if (!person) continue;
       const start = cue.honorific ? m.index : at + person.start;
       const end = at + person.start + person.name.length;
-      if (free(start, end)) edits.push({ start, end, text: NAME_PLACEHOLDER });
+      if (free(start, end)) add({ start, end, text: NAME_PLACEHOLDER });
     }
   }
-  return edits.sort((a, b) => a.start - b.start);
+  return edits;
 }
 
 /** A text with each unknown name and quote put as a placeholder, and the edits made. */
@@ -629,6 +641,7 @@ export function guardPeopleInHtml(html, known) {
  */
 export function editLines($, editsFor) {
   let count = 0;
+  const BREAK = Symbol('line end');
   // A line: its own text nodes and its inline tags', in order, read as one.
   const line = (nodes, heading) => {
     if (!nodes.length) return;
@@ -642,27 +655,39 @@ export function editLines($, editsFor) {
       starts.push(at);
       at += n.data.length;
     }
-    // From the end, so the places before stay put. The placeholder goes in
-    // the node the edit starts in; the rest of its words are cut.
-    for (const e of [...edits].reverse()) {
-      nodes.forEach((n, i) => {
-        const from = starts[i];
-        const to = from + n.data.length;
-        if (to <= e.start || from >= e.end) return;
-        const head = n.data.slice(0, Math.max(0, e.start - from));
-        const tail = n.data.slice(Math.min(n.data.length, e.end - from));
-        n.data = head + (e.start >= from ? e.text : '') + tail;
-      });
-    }
+    // Each node's text built once from its pieces between the edits (in
+    // order and apart): the placeholder goes in the node the edit starts in;
+    // the rest of its words are cut. Rebuilt per edit, a line with thousands
+    // would take their count times its length (#1544 review).
+    let first = 0;
+    nodes.forEach((n, i) => {
+      const from = starts[i];
+      const to = from + n.data.length;
+      while (first < edits.length && edits[first].end <= from) first++;
+      let out = '';
+      let at = 0;
+      let touched = false;
+      for (let j = first; j < edits.length && edits[j].start < to; j++) {
+        const e = edits[j];
+        touched = true;
+        out += n.data.slice(at, Math.max(at, e.start - from)) + (e.start >= from ? e.text : '');
+        at = Math.min(n.data.length, e.end - from);
+      }
+      if (touched) n.data = out + n.data.slice(at);
+    });
   };
-  // An inline tag's text, with any line inside it read on its own.
+  // An inline tag's text, with any line inside it read on its own: a line
+  // break or a block in a bold or a link ends the line there too (BREAK).
   const inlineText = (el) => {
     const out = [];
     for (const node of $(el).contents().get()) {
       if (node.type === 'text') out.push(node);
       else if (node.type !== 'tag' || KEPT_AS_IS.has(node.name)) continue;
-      else if (BLOCKS.has(node.name)) walk(node, HEADINGS.has(node.name));
-      else out.push(...inlineText(node));
+      else if (node.name === 'br') out.push(BREAK);
+      else if (BLOCKS.has(node.name)) {
+        out.push(BREAK);
+        walk(node, HEADINGS.has(node.name));
+      } else out.push(...inlineText(node));
     }
     return out;
   };
@@ -679,7 +704,15 @@ export function editLines($, editsFor) {
         line(run, heading);
         run = [];
         walk(node, HEADINGS.has(node.name));
-      } else run.push(...inlineText(node));
+      } else {
+        for (const piece of inlineText(node)) {
+          if (piece !== BREAK) run.push(piece);
+          else {
+            line(run, heading);
+            run = [];
+          }
+        }
+      }
     }
     line(run, heading);
   };

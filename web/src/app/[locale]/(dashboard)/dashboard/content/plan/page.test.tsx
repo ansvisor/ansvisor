@@ -68,6 +68,7 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   citations: { cur: 2, prev: 2 },
   platformsDown: [],
   aiVisits: 0,
+  conversions: null,
   ...over,
 });
 const opportunity: PlanOpportunity = {
@@ -227,6 +228,21 @@ describe('the Content plan', () => {
         '3 citations this period: 1 of 10' +
         'Together: 48 of 100' +
         'This score ranks the Plan. The Action Center scores its tasks on its own.',
+    );
+  });
+
+  it('says the conversions a page took part in, with conversions on (00291)', async () => {
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      pages: PLAN.pages.map((p) => ({ ...p, conversions: p.aiVisits ? 3 : 0 })),
+    });
+    await renderPage();
+    const scores = [...container.querySelectorAll('tbody tr')].map((tr) => tr.children[1]);
+    // The top page, with its 42 AI visits: the third row.
+    act(() => scores[2].querySelector('button')!.focus());
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      '42 AI visits and 3 conversions this period',
     );
   });
 

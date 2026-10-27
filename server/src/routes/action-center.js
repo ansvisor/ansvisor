@@ -101,7 +101,8 @@ export async function regenerateTasks(actionId, userId) {
   if (result.status !== 'written') {
     throw new TaskWriterError(result.reason, NOTHING_WRITTEN[result.reason]);
   }
-  return { written: result.tasks.length, kept: result.kept };
+  // Tasks missing an AC-010 field wait in Needs review (00293).
+  return { written: result.tasks.length, kept: result.kept ?? 0, reviews: result.reviews.length };
 }
 
 /** POST /api/action-center/actions/:id/tasks/regenerate */

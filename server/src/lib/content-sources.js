@@ -123,6 +123,8 @@ const CURRENCY = /[$€£¥₺]/;
 /** What makes a lone digit a claim: a percent, a times, a scale. */
 const UNIT_AFTER =
   /^\s?(?:%|×|[xX]\b|[kKMB]\b|bn\b|mn\b|[Mm]illions?\b|[Bb]illions?\b|[Tt]housands?\b|[Tt]rillions?\b)/;
+/** UNIT_AFTER read at a place in the text, without slicing it off. */
+const UNIT_AT = new RegExp(UNIT_AFTER.source.slice(1), 'y');
 
 /** A percent written before its number, as Turkish does: "%40", "yüzde 40". */
 const PERCENT_BEFORE = /(?:%\s?|(?<!\p{L})yüzde\s)$/iu;
@@ -141,8 +143,12 @@ function unitOf(text, start, end) {
   if (unit === 'b' || unit === 'bn' || unit.startsWith('billion')) return 'billion';
   return 'trillion';
 }
-/** A placeholder the agent leaves ("[figure, source, 2025]"): it holds no claim. */
-const BRACKETS = /\[[^\]]*\]/g;
+/**
+ * A placeholder the agent leaves ("[figure, source, 2025]"): it holds no
+ * claim. Never one with another "[" in it, so an opening bracket with no
+ * closing one isn't read to the text's end from each "[" after it.
+ */
+const BRACKETS = /\[[^[\]]*\]/g;
 
 /**
  * A number's value as compared: thousands separators dropped ("1,299" and
@@ -330,20 +336,30 @@ export function sourceSuggestion({ named, marks, pieces, numbered, known }) {
 
 /** A text with each number it adds put as a placeholder: for a page written whole, with no marks. */
 export function placeholderNumbers(text, known) {
-  const added = addedNumbers(text, known);
-  let out = String(text ?? '');
-  for (const n of added.reverse()) {
-    // The sign and unit go with it: "$40", "40%" and "%40" become the placeholder.
+  const s = String(text ?? '');
+  // The text built once from its pieces, left to right: rebuilt per number,
+  // a line with thousands would take their count times its length (#1544 review).
+  // The sign and unit go with it: "$40", "40%" and "%40" become the placeholder.
+  const found = addedNumbers(s, known).map((n) => {
     let start = n.start;
-    let end = n.end;
-    if (CURRENCY.test(out[start - 1] ?? '')) start -= 1;
-    const percent = out.slice(Math.max(0, start - 2), start).match(/%\s?$/);
+    if (CURRENCY.test(s[start - 1] ?? '')) start -= 1;
+    const percent = s.slice(Math.max(0, start - 2), start).match(/%\s?$/);
     if (percent) start -= percent[0].length;
-    const unit = out.slice(end).match(UNIT_AFTER);
-    if (unit) end += unit[0].length;
-    out = `${out.slice(0, start)}${NUMBER_PLACEHOLDER}${out.slice(end)}`;
-  }
-  return out;
+    return { start, end: n.end };
+  });
+  let out = '';
+  let at = 0;
+  found.forEach((n, i) => {
+    let end = n.end;
+    UNIT_AT.lastIndex = end;
+    const unit = UNIT_AT.exec(s);
+    // A unit that runs into the next number's sign is that one's ("40 %50").
+    if (unit && end + unit[0].length <= (found[i + 1]?.start ?? Infinity)) end += unit[0].length;
+    const start = Math.max(n.start, at);
+    out += s.slice(at, start) + NUMBER_PLACEHOLDER;
+    at = Math.max(at, end);
+  });
+  return out + s.slice(at);
 }
 
 /** Tags whose text a page's placeholders never touch: code and what isn't words. */
