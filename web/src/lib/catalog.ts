@@ -41,6 +41,12 @@ export interface CatalogCounts {
    * 00296): the items with at least one, and the issues per severity.
    */
   issues?: { items: number; disapproved: number; demoted: number; not_impacted: number };
+  /**
+   * The listings of an item read already, under another language or feed
+   * label (Google Merchant Center, #1270): kept once, not skipped. Not on
+   * syncs before it was counted.
+   */
+  repeated?: number;
 }
 
 export interface CatalogSource {

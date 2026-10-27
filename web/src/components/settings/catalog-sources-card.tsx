@@ -300,6 +300,8 @@ export function CatalogSourcesCard({
                       {t('products', { count: source.products })}
                       {(source.lastCounts?.issues?.items ?? 0) > 0 &&
                         ` · ${t('issues', { count: source.lastCounts!.issues!.items })}`}
+                      {(source.lastCounts?.repeated ?? 0) > 0 &&
+                        ` · ${t('repeated', { count: source.lastCounts!.repeated! })}`}
                       {source.lastSyncedAt &&
                         ` · ${t('lastSync', { when: format.relativeTime(new Date(source.lastSyncedAt), now) })}`}
                     </p>

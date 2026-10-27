@@ -64,7 +64,8 @@ vi.mock('@/components/ui/select', () => ({
   SelectValue: () => null,
 }));
 
-const { MerchantCenterAccounts, accountLabel } = await import('./merchant-center-accounts');
+const { MerchantCenterAccounts, OWN_ERRORS, accountLabel } =
+  await import('./merchant-center-accounts');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -294,11 +295,35 @@ describe('MerchantCenterAccounts', () => {
     expect(button('Try again')).toBeDefined();
   });
 
-  it("offers no Try again when Merchant Center isn't set up on the server", async () => {
+  it("says who can fix a Merchant Center this server can't open, and reads again once they have", async () => {
+    // The API's 503 not_configured: Composio or Google refused this server's setup (not_set_up).
     listSignInAccounts.mockResolvedValue({ ok: false, code: 'not_configured' });
     await render();
-    expect(container.textContent).toContain("Merchant Center isn't set up on this server yet.");
-    expect(button('Try again')).toBeUndefined();
+    expect(container.textContent).toContain(
+      "Merchant Center isn't set up correctly on this server, or this Google account can't open Merchant Center. Ask whoever runs your Ansvisor server, or check the account's users in Merchant Center.",
+    );
+    listSignInAccounts.mockResolvedValue({ ok: true, accounts: [{ id: '123', name: 'Acme' }] });
+    await act(async () => button('Try again')!.click());
+    expect(options().map((o) => o.textContent)).toEqual(['', 'Acme (123)']);
+  });
+
+  it('says an advanced account holds no products when the sign-in opens more than one account', async () => {
+    const advanced =
+      "An advanced account that manages several stores holds no products itself: pick the store's own account (a sub-account).";
+    await render();
+    expect(container.textContent).toContain(advanced);
+
+    listSignInAccounts.mockResolvedValue({ ok: true, accounts: [{ id: '123', name: 'Acme' }] });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(container.textContent).not.toContain(advanced);
+  });
+
+  it('has words of its own for each error it names', () => {
+    for (const code of OWN_ERRORS) {
+      expect(messages.settings.merchantCenter.errors).toHaveProperty(code);
+    }
   });
 
   it('tells members who picks the account, in words of its own, and asks the API nothing', async () => {

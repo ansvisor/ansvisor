@@ -7889,6 +7889,7 @@
       "products": "{count, plural, one {# product} other {# products}}",
       "lastSync": "synced {when}",
       "issues": "{count, plural, one {# with an issue} other {# with issues}}",
+      "repeated": "{count, plural, one {# listed again, kept once} other {# listed again, kept once}}",
       "skipped": "{count, plural, one {# product was skipped} other {# products were skipped}}",
       "syncNow": "Sync now",
       "remove": "Remove",
@@ -7954,6 +7955,7 @@
       "none": "This Google sign-in doesn't open any Merchant Center account. Ask an admin of the account to add you in Merchant Center, then try again.",
       "retry": "Try again",
       "alreadyAdded": "{account} · already added",
+      "advanced": "An advanced account that manages several stores holds no products itself: pick the store's own account (a sub-account).",
       "managersOnly": "Admins and managers pick {brand}'s Merchant Center account. Once added, it's listed in Product catalog below.",
       "connected": "{account} added to {brand}. Its products are being read now.",
       "addFailed": "Couldn't add the account. Try again in a moment.",
@@ -7962,7 +7964,7 @@
         "connect_failed": "This Google sign-in can't open that account. Pick another one.",
         "unreachable": "Merchant Center couldn't be reached. Try again in a moment.",
         "duplicate": "This account is added to the brand already.",
-        "not_configured": "Merchant Center isn't set up on this server yet.",
+        "not_configured": "Merchant Center isn't set up correctly on this server, or this Google account can't open Merchant Center. Ask whoever runs your Ansvisor server, or check the account's users in Merchant Center.",
         "failed": "Couldn't read the Merchant Center accounts."
       }
     },

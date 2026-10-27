@@ -24,8 +24,12 @@ import {
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { CatalogSourcesRead } from './catalog-sources-card';
 
-/** The errors Merchant Center says in its own words; the rest are the stores'. */
-const OWN_ERRORS: readonly StoreError[] = [
+/**
+ * The errors Merchant Center says in its own words; the rest are the stores'.
+ * `not_configured` is also what the API answers when Composio or Google
+ * refuses this server's setup (its `not_set_up`, lib/catalog/stores.js).
+ */
+export const OWN_ERRORS: readonly StoreError[] = [
   'not_connected',
   'connect_failed',
   'unreachable',
@@ -147,9 +151,8 @@ export function MerchantCenterAccounts({
       : accountLabel(account),
     disabled: added.has(account.id),
   }));
-  // Worth reading again: the list failed for now, or the sign-in opens no account yet.
-  const canRetry =
-    current !== null && (current.error ? current.error !== 'not_configured' : items.length === 0);
+  // Worth reading again once someone has fixed it: the list failed, or the sign-in opens no account yet.
+  const canRetry = current !== null && (current.error !== null || items.length === 0);
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
@@ -190,6 +193,10 @@ export function MerchantCenterAccounts({
             {t('add')}
           </Button>
         </div>
+      )}
+      {/* An advanced account is listed with its sub-accounts, and its products are theirs. */}
+      {!current?.error && items.length > 1 && (
+        <p className="text-xs text-muted-foreground">{t('advanced')}</p>
       )}
       {canRetry && (
         <Button size="sm" variant="outline" className="gap-2" onClick={retry}>

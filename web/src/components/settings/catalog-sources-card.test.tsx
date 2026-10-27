@@ -379,6 +379,22 @@ describe('CatalogSourcesCard', () => {
     expect(unread).not.toContain('with');
   });
 
+  it('says how many listings were read again and kept once, only when there are some (#1270)', async () => {
+    listCatalogSources.mockResolvedValue([
+      { ...GMC, lastCounts: { ...GMC.lastCounts!, repeated: 2 } },
+      { ...GMC, id: 'gmc2', account: '222', lastCounts: { ...GMC.lastCounts!, repeated: 1 } },
+      { ...GMC, id: 'gmc3', account: '333', lastCounts: { ...GMC.lastCounts!, repeated: 0 } },
+      // A sync from before it was counted.
+      { ...GMC, id: 'gmc4', account: '444' },
+    ]);
+    await render();
+    const [two, one, none, before] = rows();
+    expect(two).toContain('40 products · 3 with issues · 2 listed again, kept once · synced');
+    expect(one).toContain('3 with issues · 1 listed again, kept once · synced');
+    expect(none).toContain('40 products · 3 with issues · synced');
+    expect(before).toContain('40 products · 3 with issues · synced');
+  });
+
   it("says when a source's workspace sign-in isn't connected anymore", async () => {
     listCatalogSources.mockResolvedValue([GMC]);
     removeStore.mockResolvedValue({ ok: false, code: 'not_connected', message: null });

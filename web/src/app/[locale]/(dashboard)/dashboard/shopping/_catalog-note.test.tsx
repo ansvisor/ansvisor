@@ -12,7 +12,7 @@ vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
 }));
 
-const { CatalogNote } = await import('./catalog_note');
+const { CatalogNote } = await import('./_catalog-note');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;

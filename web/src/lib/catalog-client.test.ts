@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../messages/en.json';
+import type { StoreError } from './catalog-client';
 
 /** #1263: a catalog sync from the browser, through the API's proxy. */
 
@@ -213,5 +215,32 @@ describe('sign-in platforms (#1270)', () => {
       message: null,
     });
     quiet.mockRestore();
+  });
+});
+
+describe('StoreError', () => {
+  // Every code, so a new one fails the typecheck here until it has its words.
+  const CODES = {
+    connect_failed: true,
+    not_connected: true,
+    auth_failed: true,
+    unreachable: true,
+    duplicate: true,
+    too_many: true,
+    other_account: true,
+    not_configured: true,
+    forbidden: true,
+    not_found: true,
+    invalid: true,
+    session: true,
+    workspace: true,
+    busy: true,
+    failed: true,
+  } satisfies Record<StoreError, true>;
+
+  it('has words for every reason a store call fails', () => {
+    for (const code of Object.keys(CODES)) {
+      expect(messages.settings.catalog.stores.errors).toHaveProperty(code);
+    }
   });
 });
