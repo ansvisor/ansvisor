@@ -43,6 +43,7 @@ const FETCH_STATUS = {
   too_many_redirects: 422,
   not_html: 422,
   too_large: 422,
+  too_deep: 422,
   http_error: 422,
   timeout: 504,
   unreachable: 502,
@@ -146,12 +147,25 @@ const sourceClassesBody = z.object({
 });
 
 /**
+ * A PlanLimitError's answer, as the editor's other routes give it
+ * (content-drafts.js): 402 no_subscription when there is no plan, else 429
+ * ai_budget for a spent budget.
+ */
+function planLimit(res, err) {
+  if (err.statusCode === 402) {
+    return res.status(402).json({ error: err.message, code: 'no_subscription' });
+  }
+  return res.status(429).json({ error: err.message, code: 'ai_budget' });
+}
+
+/**
  * POST /api/content-pages/source-classes { draftId, sites } (Quality CE-046,
  * part b): the kind of each site the editor's rules can't place, read once
  * by the model and kept for every workspace. Only sites the draft links, as
  * saved, are read: the route reads no other site. Off until Quality's phase
  * 2 is live (CONTENT_QUALITY_PHASE). A spent AI budget answers 429
- * ai_budget: the editor leaves those sources out of Trust.
+ * ai_budget: the editor leaves those sources out of Trust (402
+ * no_subscription without a plan).
  */
 router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
   if (qualityPhase() < 2) return res.status(404).json({ error: 'Not available', code: 'off' });
@@ -185,9 +199,7 @@ router.post('/source-classes', qualityCheckLimiter, async (req, res) => {
     });
     return res.json(result);
   } catch (err) {
-    if (err instanceof PlanLimitError) {
-      return res.status(429).json({ error: err.message, code: 'ai_budget' });
-    }
+    if (err instanceof PlanLimitError) return planLimit(res, err);
     if (err?.status === 403 || err?.status === 404) {
       return res.status(err.status).json({ error: err.message, code: 'forbidden' });
     }
@@ -212,7 +224,7 @@ const claimsBody = z.object({
  * a source for, read by the model a paragraph at a time and kept by the
  * paragraph (content_quality_claims). Off until Quality's phase 2 is live.
  * A spent AI budget answers 429 ai_budget: the editor leaves the claims it
- * hasn't read out of Trust.
+ * hasn't read out of Trust (402 no_subscription without a plan).
  */
 router.post('/claims', claimsLimiter, async (req, res) => {
   if (qualityPhase() < 2) return res.status(404).json({ error: 'Not available', code: 'off' });
@@ -235,9 +247,7 @@ router.post('/claims', claimsLimiter, async (req, res) => {
     });
     return res.json(result);
   } catch (err) {
-    if (err instanceof PlanLimitError) {
-      return res.status(429).json({ error: err.message, code: 'ai_budget' });
-    }
+    if (err instanceof PlanLimitError) return planLimit(res, err);
     if (err?.status === 403 || err?.status === 404) {
       return res.status(err.status).json({ error: err.message, code: 'forbidden' });
     }

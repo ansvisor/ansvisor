@@ -19,6 +19,7 @@
  */
 
 import supabaseAdmin from '../../config/supabase.js';
+import { activeBrandFilter } from '../active-subscriptions.js';
 import { logger } from '../logger.js';
 import { recordSignalsForBrand } from './record.js';
 import { generateActionsForBrand } from '../action-center/generate.js';
@@ -171,12 +172,20 @@ export async function runSignalCatchUp({ now = new Date() } = {}) {
       .gte('tracking_run_at', since);
     if (passErr) throw new Error(passErr.message);
     const done = new Set((passes ?? []).map((row) => `${row.brand_id}|${row.tracking_run_at}`));
+    // Once the plan has ended, no pass is caught up: its actions, and the
+    // tasks written for them, are work the organization no longer pays for.
+    const isActive = await activeBrandFilter([...latestByBrand.keys()]);
 
     let recovered = 0;
     let healthy = 0;
     let failed = 0;
+    let inactive = 0;
 
     for (const [brandId, completedAt] of latestByBrand) {
+      if (!isActive(brandId)) {
+        inactive += 1;
+        continue;
+      }
       if (done.has(`${brandId}|${completedAt}`)) {
         healthy += 1;
         continue;
@@ -193,9 +202,9 @@ export async function runSignalCatchUp({ now = new Date() } = {}) {
     }
 
     if (recovered > 0 || failed > 0) {
-      logger.info({ recovered, healthy, failed }, '[signals] catch-up sweep completed');
+      logger.info({ recovered, healthy, failed, inactive }, '[signals] catch-up sweep completed');
     }
-    return { recovered, healthy, failed };
+    return { recovered, healthy, failed, inactive };
   } catch (err) {
     logger.error({ err }, '[signals] catch-up sweep failed');
     return { error: true };
