@@ -6,9 +6,11 @@
  * one task: swap them for products that sell, the page's own shopping path
  * naming the ones in stock.
  *
- * The same check closes it: once the live page links none of them, its task
- * is completed, and the action too unless someone added work to it, each in
- * its History. One open action per page (its draft). A page whose action
+ * The same check closes it, after a sync or by Check now on its task
+ * (action-center/task-checks.js): once the live page links none of them,
+ * its task is completed as checked automatically (AC-010's task_checked),
+ * and the action too unless someone added work to it, each in its History.
+ * One open action per page (its draft). A page whose action
  * someone dismissed isn't raised again for the same products; one closed
  * while they still don't sell waits REST_DAYS. Nothing is measured
  * afterwards (no KPI): the page links them or it doesn't.
@@ -60,13 +62,13 @@ function names(products) {
 /**
  * The task: what no longer sells and why, the steps, the products of the
  * page's path to link instead, and how it's done. Checked by the next
- * catalog sync's shopping check, not by the nightly page sweep: it reads no
- * change text.
+ * catalog sync's shopping check, or now by Check now on its draft
+ * (`draftId`), not by the nightly page sweep: it reads no change text.
  *
- * @param {{ pageUrl: string, bad: Array<{ title: string, state: string }>,
+ * @param {{ draftId: string, pageUrl: string, bad: Array<{ title: string, state: string }>,
  *   swaps: Array<{ title: string }> }} page
  */
-export function shoppingLinksTask({ pageUrl, bad, swaps }) {
+export function shoppingLinksTask({ draftId, pageUrl, bad, swaps }) {
   const reasons = bad
     .slice(0, NAMED)
     .map((p) => `${nameOf(p)} ${STATE_TEXT[p.state] ?? STATE_TEXT.gone}`)
@@ -79,6 +81,7 @@ export function shoppingLinksTask({ pageUrl, bad, swaps }) {
         : `Swap the ${bad.length} products that no longer sell`,
     details: {
       source: TASK_SOURCE,
+      draftId,
       url: pageUrl,
       where: pageUrl,
       why: `${reasons}${more}. Readers and AI answers that follow those links land on a product they can't buy.`,
@@ -122,38 +125,50 @@ async function pageActions(db, brandId, dedupKey) {
 }
 
 /**
- * Completes the check's open task and, when no other work is open on it,
- * the action, each with a line in its History. A task or an action someone
- * changed meanwhile is left as it is.
+ * Completes the check's open task as checked automatically on `pageUrl`
+ * (its card's last check, and AC-010's task_checked line in the History)
+ * and, when no other work is open on it, the action, with its line too. A
+ * task or an action someone changed meanwhile is left as it is.
  */
-async function closeAction(db, action, now) {
+async function closeAction(db, action, pageUrl, now) {
   const at = now.toISOString();
   const { data: tasks, error } = await db
     .from('action_tasks')
-    .select('id, status, details')
+    .select('id, title, status, details')
     .eq('action_id', action.id)
     .in('status', OPEN_TASKS);
   if (error) throw new Error(`action_tasks read: ${error.message}`);
   const own = (tasks ?? []).filter((task) => task.details?.source === TASK_SOURCE);
+  let completed = 0;
   for (const task of own) {
+    const autoCheck = { at, triedAt: at, url: pageUrl, passed: true, missing: [] };
     const { data: changed, error: taskErr } = await db
       .from('action_tasks')
-      .update({ status: 'completed', skip_reason: null, updated_at: at })
+      .update({
+        status: 'completed',
+        skip_reason: null,
+        details: { ...task.details, autoCheck },
+        updated_at: at,
+      })
       .eq('id', task.id)
       .eq('status', task.status)
       .select('id');
     if (taskErr) throw new Error(`action_tasks write: ${taskErr.message}`);
     if (!changed?.length) continue;
+    completed += 1;
     // Best effort, as the drawer's: a missing History line doesn't undo the change.
     await db.from('action_events').insert({
       action_id: action.id,
-      event: 'task_status',
-      data: { taskId: task.id, to: 'completed', source: TASK_SOURCE },
+      event: 'task_checked',
+      data: { taskId: task.id, task: null, title: task.title ?? null },
       actor_id: null,
     });
   }
-  // Someone's own work on it is theirs to finish.
-  if ((tasks ?? []).length > own.length) return false;
+  // Someone's own work on it is theirs to finish; the action moves up its list.
+  if ((tasks ?? []).length > own.length) {
+    if (completed) await db.from('actions').update({ updated_at: at }).eq('id', action.id);
+    return false;
+  }
   const { data: closed, error: closeErr } = await db
     .from('actions')
     .update({ status: 'completed', completed_at: at, updated_at: at })
@@ -195,7 +210,7 @@ export async function syncShoppingLinksAction(
   const active = actions.find((a) => ACTIVE.includes(a.status));
   if (!check.bad.length) {
     if (!active) return 'none';
-    return (await closeAction(db, active, now)) ? 'closed' : 'kept';
+    return (await closeAction(db, active, pageUrl, now)) ? 'closed' : 'kept';
   }
   if (active) return 'kept';
 
@@ -253,7 +268,12 @@ export async function syncShoppingLinksAction(
     throw new Error(`actions write: ${error.message}`);
   }
 
-  const task = shoppingLinksTask({ pageUrl, bad: check.bad, swaps: check.swaps });
+  const task = shoppingLinksTask({
+    draftId: draft.id,
+    pageUrl,
+    bad: check.bad,
+    swaps: check.swaps,
+  });
   const { error: taskErr } = await db.from('action_tasks').insert({
     action_id: action.id,
     position: 1,

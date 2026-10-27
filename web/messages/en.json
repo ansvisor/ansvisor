@@ -1365,7 +1365,8 @@
             "not_open": "This task is already done or skipped.",
             "no_answer": "Couldn't read the page. Try again later.",
             "changed": "The task changed while it was checked. Try again.",
-            "closed": "This action is closed."
+            "closed": "This action is closed.",
+            "no_shopping_path": "This page's draft has no shopping path left to check: it was archived, or its path was removed."
           },
           "checkFailed": "Couldn't check the task. Try again.",
           "type": "Type",
@@ -1491,7 +1492,7 @@
             "gone": "Gone from your catalog"
           },
           "swaps": "In stock, from its shopping path",
-          "check": "Checked again after the next catalog sync: the action closes once the page links none of them."
+          "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
         },
         "mentionReview": {
           "source": "Source",
@@ -2496,7 +2497,8 @@
       "not_changed": "the page hasn't changed since the first look",
       "change_not_found": "the new text isn't on the page",
       "old_text_still_there": "the text it replaces is still on the page",
-      "off_site": "the page isn't on the brand's site"
+      "off_site": "the page isn't on the brand's site",
+      "links_not_for_sale": "the page still links products that no longer sell"
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",
