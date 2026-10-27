@@ -3458,6 +3458,46 @@
         "toggle": "{count, plural, one {# hidden row} other {# hidden rows}} · {open, select, true {Hide} other {Show}}",
         "show": "Show again"
       },
+      "shopping": {
+        "title": "Shopping opportunities",
+        "lead": "Pages that lead readers, and AI answers, to your category pages and products",
+        "catalog": "Catalog: {products, plural, one {# product} other {# products}} in {categories, plural, one {# category} other {# categories}}",
+        "columns": {
+          "page": "Page to make",
+          "why": "Why",
+          "category": "Category",
+          "score": "Priority",
+          "action": "Action"
+        },
+        "kinds": {
+          "guide": "Buying guide",
+          "fix": "Existing post"
+        },
+        "badges": {
+          "new": "New",
+          "draft": "Draft",
+          "fix": "Fix"
+        },
+        "guideTitle": "How to choose {category}",
+        "why": {
+          "prompts": "AI is asked about {category} in {count, plural, one {# of your prompts} other {# of your prompts}}, and no page of yours answers it.",
+          "noPrompts": "No page of yours guides shoppers to your {category} yet.",
+          "draft": "A draft for it is being written.",
+          "noCategoryPage": "It has no category page to link: set one in Settings › Integrations › Product catalog.",
+          "noCategoryLink": "No link to the {category} page.",
+          "categoryLinks": "It links {linked} of its {count} category pages.",
+          "soldOut": "{count, plural, one {# product it links is sold out.} other {# products it links are sold out.}}",
+          "noLongerSell": "{count, plural, one {# product it links no longer sells.} other {# products it links no longer sell.}}"
+        },
+        "stock": "{products, plural, one {# product} other {# products}} · {inStock} in stock",
+        "categoryGone": "No longer in your catalog",
+        "empty": "No shopping opportunities right now: each category in stock has a page, and your posts link products that sell.",
+        "create": "Create",
+        "open": "Open draft",
+        "optimize": "Optimize",
+        "createFailed": "Couldn't start the guide. Try again.",
+        "note": "Shopping opportunities show for shops with a product catalog. The Plan's other rows stay below."
+      },
       "assign": {
         "title": "Assign “{title}”",
         "description": "It goes to the Action Center as a task for this teammate.",
