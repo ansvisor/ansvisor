@@ -150,6 +150,10 @@ describe('sendPagesToCms', () => {
     session = null;
     expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ code: 'session' });
     expect(fetchMock).toHaveBeenCalledTimes(4);
+    // A read-only workspace (plan not active): the upgrade dialog's.
+    session = { access_token: 'tok' };
+    answer(402, { error: 'plan_limit', code: 'subscription_inactive' });
+    expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ code: 'subscription' });
   });
 
   it('reads an unknown code, a body that isn’t JSON or no answer as failed', async () => {

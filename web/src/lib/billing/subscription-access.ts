@@ -6,8 +6,8 @@ type ServerSupabase = Awaited<ReturnType<typeof import('@/lib/supabase/server').
 
 export type SubscriptionAccess =
   | { state: 'ok' }
-  | { state: 'needs_payment' }
-  | { state: 'blocked'; ownerName: string | null };
+  | { state: 'choose_plan' }
+  | { state: 'read_only'; adminName: string | null };
 
 const ACTIVE_STATUSES = new Set(['active', 'trialing']);
 
@@ -15,33 +15,38 @@ const ACTIVE_STATUSES = new Set(['active', 'trialing']);
  * Decide what an authenticated, onboarded org member may do when their org's
  * subscription is not active.
  *
- *   - active / trialing      → 'ok'              (full access)
- *   - inactive + admin       → 'needs_payment'   (admins, incl. the owner, can renew)
- *   - inactive + non-admin   → 'blocked'         (manager / analyst / agency_partner
- *                                                 can't pay or re-onboard — they get a
- *                                                 "contact your account owner" notice)
+ *   - active / trialing                 → 'ok'           (full access)
+ *   - never subscribed + admin          → 'choose_plan'  (a new account that left
+ *                                                         onboarding before its plan
+ *                                                         step: back to that step)
+ *   - anything else                     → 'read_only'    (a trial that ended, a
+ *                                                         canceled or unpaid plan:
+ *                                                         every page opens, no
+ *                                                         action runs until a plan
+ *                                                         is chosen in Billing)
  *
- * This is the fix for the trial-ended invited-member case: previously *every*
- * member was redirected into the onboarding wizard when the subscription
- * lapsed, so a non-owner saw the payment screen and could walk back to step 1
- * and re-create the brand / competitors on an already-set-up org.
+ * "Never subscribed" is an org without a Stripe subscription id: onboarding
+ * marks itself complete before its plan step, so a new account that stops at
+ * the plan cards is onboarded but has never had a subscription. Once Stripe
+ * has given one, the id stays, even after the subscription is deleted.
  *
- * "Owner" is the org's first admin; we surface their name in the blocked
- * message so a member knows who to contact. The lookup uses the caller's RLS
- * client, so if it can't read the owner's row the message simply falls back to
- * a generic wording (never throws).
+ * Members other than admins can't buy a plan, so the read-only notices ask
+ * them to turn to an admin: the org's first admin is named when the caller's
+ * RLS client can read their row, and the wording falls back to a generic one
+ * otherwise (never throws).
  */
 export async function evaluateSubscriptionAccess(
   supabase: ServerSupabase,
   organizationId: string,
   role: TeamRole,
   subscriptionStatus: string | null,
+  everSubscribed: boolean,
 ): Promise<SubscriptionAccess> {
   if (subscriptionStatus && ACTIVE_STATUSES.has(subscriptionStatus)) {
     return { state: 'ok' };
   }
   if (role === 'admin') {
-    return { state: 'needs_payment' };
+    return everSubscribed ? { state: 'read_only', adminName: null } : { state: 'choose_plan' };
   }
 
   const { data: owner } = await supabase
@@ -53,5 +58,19 @@ export async function evaluateSubscriptionAccess(
     .limit(1)
     .maybeSingle();
 
-  return { state: 'blocked', ownerName: (owner?.full_name as string | null) ?? null };
+  return { state: 'read_only', adminName: (owner?.full_name as string | null) ?? null };
+}
+
+/** Why a workspace is read-only, as the upgrade notices say it. */
+export type ReadOnlyReason = 'ended' | 'payment_failed';
+
+/**
+ * The reason, from Stripe's subscription status. A payment being retried
+ * (`past_due`, `unpaid`) is fixed by updating the card in Stripe's billing
+ * page. Anything else — a trial or a plan canceled, a first payment that
+ * expired — reads the same: the row keeps no trace of whether it was a trial,
+ * so the notices don't claim either.
+ */
+export function readOnlyReason(status: string | null | undefined): ReadOnlyReason {
+  return status === 'past_due' || status === 'unpaid' ? 'payment_failed' : 'ended';
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { annualSaving, periodPrice, planChange, planRequestSchema } from './plan-purchase';
+import {
+  annualSaving,
+  periodPrice,
+  planChange,
+  planRequestSchema,
+  subscriptionEnded,
+} from './plan-purchase';
 
 describe('plan prices', () => {
   it('reads a month or a year up front from the config', () => {
@@ -75,5 +81,20 @@ describe('planChange', () => {
     });
     expect(planRequestSchema.safeParse({ newPlanId: 'enterprise' }).success).toBe(false);
     expect(planRequestSchema.safeParse({ interval: 'week' }).success).toBe(false);
+  });
+});
+
+describe('subscriptionEnded', () => {
+  it('keeps a subscription that is billing, trialing or retrying a payment', () => {
+    for (const status of ['active', 'trialing', 'past_due', 'unpaid', 'paused']) {
+      expect(subscriptionEnded(status)).toBe(false);
+    }
+  });
+
+  it('starts a new one after a cancel, an expired first payment, or none ever', () => {
+    for (const status of ['canceled', 'incomplete_expired', 'incomplete', 'inactive', null]) {
+      expect(subscriptionEnded(status)).toBe(true);
+    }
+    expect(subscriptionEnded(undefined)).toBe(true);
   });
 });

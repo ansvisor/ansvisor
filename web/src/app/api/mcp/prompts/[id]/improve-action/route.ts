@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { createImproveActionFor, type CreateImproveActionInput } from '@/lib/mcp/data';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 
 /**
  * POST /api/mcp/prompts/[id]/improve-action
@@ -50,7 +51,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failedCallResponse(err);
   }
 }

@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic';
  * memory between requests.
  */
 async function handle(req: Request): Promise<Response> {
-  const auth = await authenticateMcpRequest(req);
+  // Every MCP call is a POST: its tools are gated one by one (createMcpServer).
+  const auth = await authenticateMcpRequest(req, { gateWrites: false });
   if (auth instanceof NextResponse) return auth;
 
   const server = createMcpServer(auth);

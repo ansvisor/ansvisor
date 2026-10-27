@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { runSiteAuditFor, listSiteAuditsFor } from '@/lib/mcp/data';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 
 /**
  * GET /api/mcp/site-audits?brand_id=…
@@ -60,7 +61,6 @@ export async function POST(req: Request) {
     }
     return NextResponse.json(result, { status: 202 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failedCallResponse(err);
   }
 }

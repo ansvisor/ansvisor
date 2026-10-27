@@ -12,6 +12,7 @@ import { AiUsageCard } from '@/components/settings/ai-usage-card';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { createClient } from '@/lib/supabase/client';
 import { PLANS, type PlanId } from '@/config/plans';
+import { subscriptionEnded } from '@/lib/billing/plan-purchase';
 
 interface SubscriptionData {
   planId: string;
@@ -56,6 +57,8 @@ export function BillingSection() {
   const t = useTranslations('settings');
   const { planId: contextPlanId } = usePlanContext();
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+  // For a new subscription's Checkout, once the old one has ended.
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,6 +78,7 @@ export function BillingSection() {
           .single();
 
         if (!profile?.organization_id) return;
+        setOrganizationId(profile.organization_id);
 
         const { data: org } = await supabase
           .from('organizations')
@@ -154,6 +158,7 @@ export function BillingSection() {
   }
 
   const plan = PLANS[subscription.planId as PlanId] ?? PLANS.starter;
+  const ended = subscriptionEnded(subscription.status);
 
   return (
     <div className="space-y-6">
@@ -178,7 +183,7 @@ export function BillingSection() {
             </p>
           )}
 
-          {subscription.currentPeriodEnd && !subscription.cancelAtPeriodEnd && (
+          {subscription.currentPeriodEnd && !subscription.cancelAtPeriodEnd && !ended && (
             <p className="text-sm text-muted-foreground">
               {t(subscription.status === 'trialing' ? 'trialEndsOn' : 'renewsOn', {
                 date: new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {
@@ -197,12 +202,13 @@ export function BillingSection() {
       {/* Plan Switcher */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('changePlan')}</CardTitle>
+          <CardTitle>{ended ? t('choosePlanTitle') : t('changePlan')}</CardTitle>
         </CardHeader>
         <CardContent>
           <PlanSwitcher
             subscription={subscription}
             onUpdate={(data) => setSubscription({ ...subscription, ...data })}
+            organizationId={organizationId}
           />
         </CardContent>
       </Card>

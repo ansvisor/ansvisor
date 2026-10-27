@@ -28,6 +28,7 @@ import { AiUsageBanner } from '@/components/ai-usage/ai-usage-banner';
 import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import { PublishDialog } from '@/components/content/publish-dialog';
@@ -750,6 +751,10 @@ export function DraftEditor({
   const language =
     languageRule?.on && languageRule.current.trim() ? languageRule.current : brandLanguage;
   const qualityOn = qualityPhase() >= 1;
+  // A read-only workspace (plan not active): the reads the editor asks the
+  // API for by itself after a save (links, sources, claims, the page's
+  // proof) are left out; the page opens with what is stored.
+  const { isLocked } = useUpgradeGate();
 
   // Who the page is by (CE-038): page metadata, shown in the header and in a
   // Page info strip outside the page; with Quality's first phase.
@@ -817,7 +822,7 @@ export function DraftEditor({
     draft.id,
     autosave.savedAt,
     linksToCheck(pageBlocks),
-    qualityOn,
+    qualityOn && !isLocked,
   );
   const brandDomains = reads.sources?.data?.brandDomains;
   // The site's trust (Site Audit, CE-043), read once: Trust's last 5 points.
@@ -877,13 +882,13 @@ export function DraftEditor({
     kinds: aiKinds,
     paused: aiPaused,
     reading: sourcesReading,
-  } = useSourceClasses(draft.id, autosave.savedAt, unplaced, sourcesOn);
+  } = useSourceClasses(draft.id, autosave.savedAt, unplaced, sourcesOn && !isLocked);
   // A save waiting or under way: the page's reads follow it. Not a failed
   // save (or a conflict, a page too large): no new save is coming till it's fixed.
   const saving = autosave.state === 'unsaved' || autosave.state === 'saving';
   // The claims in the draft's own words, as the model reads them (CE-045):
   // asked after a save, leaving the block the person is writing in.
-  const claimsRead = useClaims(draft.id, autosave.savedAt, sourcesOn, saving, () =>
+  const claimsRead = useClaims(draft.id, autosave.savedAt, sourcesOn && !isLocked, saving, () =>
     editor && !editor.isDestroyed && editor.isFocused ? writingBlock(editor) : null,
   );
   const { blocks: claimBlocks, recheck: recheckClaims } = claimsRead;
@@ -896,7 +901,7 @@ export function DraftEditor({
   const pageRead = usePageRead(
     draft.id,
     `${autosave.savedAt}\n${pageType ?? ''}`,
-    sourcesOn,
+    sourcesOn && !isLocked,
     saving,
   );
   const proofAsks = useMemo(

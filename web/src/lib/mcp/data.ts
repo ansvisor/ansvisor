@@ -16,6 +16,7 @@ import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
 import {
   fetchPromptUsageRow,
   toPromptUsageSummary,
@@ -1019,6 +1020,8 @@ export async function generateBriefFor(
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
+  // No brief (an LLM call) for a read-only workspace, whoever asks.
+  await assertSubscriptionActive(auth.organizationId);
 
   const apiUrl = API_BASE_URL;
   const cronSecret = process.env.CRON_SECRET;
@@ -1202,6 +1205,8 @@ export async function runSiteAuditFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
+  // No audit (quota and crawling) for a read-only workspace, whoever asks.
+  await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -3426,6 +3431,8 @@ export async function createImproveActionFor(
     .eq('prompt_sets.brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
+  // No Improve action (an LLM call) for a read-only workspace, whoever asks.
+  await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {

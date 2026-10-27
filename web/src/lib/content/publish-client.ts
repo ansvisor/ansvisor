@@ -17,6 +17,8 @@ export type PublishError =
   | 'session'
   | 'workspace'
   | 'busy'
+  /** A read-only workspace (plan not active): the upgrade dialog, not a message. */
+  | 'subscription'
   | 'failed';
 
 export type PublishResult =
@@ -73,6 +75,7 @@ export async function publishPage(draftId: string, url: string): Promise<Publish
           general === 'session' ||
           general === 'workspace' ||
           general === 'busy' ||
+          general === 'subscription' ||
           general === 'not_found'
             ? general
             : 'failed',

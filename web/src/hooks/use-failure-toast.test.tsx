@@ -6,10 +6,16 @@ import messages from '../../messages/en.json';
 import type { ApiFailure } from '@/lib/api-failure';
 import { useFailureToast } from './use-failure-toast';
 
-const toast = vi.hoisted(() => ({ error: vi.fn() }));
+const toast = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
+// The dashboard's read-only state: none outside its provider.
+const openUpgrade = vi.fn();
+let upgrade: { isLocked: boolean; openUpgrade: () => void } | null = null;
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeDialog: () => upgrade,
+}));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -17,7 +23,9 @@ vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push }) }));
 /** Shows the failure's toast once, and returns what toast.error got. */
 function show(failure: ApiFailure, options?: { id?: string; description?: string }) {
   toast.error.mockReset();
+  toast.dismiss.mockReset();
   push.mockReset();
+  openUpgrade.mockReset();
   function Probe() {
     const failureToast = useFailureToast();
     failureToast(failure, options);
@@ -61,5 +69,54 @@ describe('useFailureToast (BUG-001)', () => {
     const [message, options] = show('failed');
     expect(message).toBe('Something went wrong. Try again.');
     expect(options.action).toBeUndefined();
+  });
+
+  it('keeps the toast for a feature the plan lacks or a used-up allowance', () => {
+    upgrade = { isLocked: false, openUpgrade };
+    const [message, options] = show('plan');
+    expect(message).toBe("Your plan doesn't include this. Upgrade to use it.");
+    expect(options.action?.label).toBe('Upgrade');
+    expect(show('limit')[1].action?.label).toBe('Upgrade');
+    expect(openUpgrade).not.toHaveBeenCalled();
+    upgrade = null;
+  });
+
+  describe('a workspace whose plan is not active', () => {
+    it('opens the upgrade dialog instead of a toast, and clears the loading toast', () => {
+      upgrade = { isLocked: true, openUpgrade };
+      expect(show('subscription', { id: 't1' })).toBeUndefined();
+      expect(openUpgrade).toHaveBeenCalledTimes(1);
+      expect(toast.dismiss).toHaveBeenCalledWith('t1');
+      upgrade = null;
+    });
+
+    it('opens it for the server’s subscription_inactive even before the page knows', () => {
+      upgrade = { isLocked: false, openUpgrade };
+      expect(show('subscription')).toBeUndefined();
+      expect(openUpgrade).toHaveBeenCalledTimes(1);
+      expect(toast.dismiss).not.toHaveBeenCalled();
+      upgrade = null;
+    });
+
+    it('opens it for any plan refusal while the dashboard is read-only, not for a limit', () => {
+      upgrade = { isLocked: true, openUpgrade };
+      expect(show('plan')).toBeUndefined();
+      expect(openUpgrade).toHaveBeenCalledTimes(1);
+      expect(show('limit')[0]).toBe(
+        "You've used this month's allowance. Upgrade, or wait until it resets.",
+      );
+      upgrade = null;
+    });
+
+    it('falls back to a toast with Choose a plan outside the dashboard', () => {
+      upgrade = null;
+      const [message, options] = show('subscription');
+      expect(message).toBe(
+        "Your workspace's plan isn't active, so changes are paused. Choose a plan to use Ansvisor again.",
+      );
+      expect(options.action?.label).toBe('Choose a plan');
+      options.action?.onClick();
+      expect(push).toHaveBeenCalledWith('/dashboard/settings/billing');
+    });
   });
 });

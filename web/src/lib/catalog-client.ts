@@ -25,6 +25,8 @@ export type CatalogSyncError =
   | 'session'
   | 'workspace'
   | 'busy'
+  /** A read-only workspace (plan not active): the upgrade dialog, not a message. */
+  | 'subscription'
   | 'failed';
 
 export type CatalogSyncResult =
@@ -70,7 +72,10 @@ async function call(path: string, init: RequestInit): Promise<CatalogSyncResult>
       return {
         ok: false,
         code:
-          general === 'session' || general === 'workspace' || general === 'busy'
+          general === 'session' ||
+          general === 'workspace' ||
+          general === 'busy' ||
+          general === 'subscription'
             ? general
             : 'failed',
       };
@@ -138,6 +143,8 @@ export type StoreError =
   | 'session'
   | 'workspace'
   | 'busy'
+  /** A read-only workspace (plan not active): the upgrade dialog, not a message. */
+  | 'subscription'
   | 'failed';
 
 /** `message`: the store's own words for what to fix, when it has them. */
@@ -185,7 +192,12 @@ async function storeCall(path: string, init: RequestInit): Promise<StoreResult> 
     return {
       ok: false,
       code:
-        general === 'session' || general === 'workspace' || general === 'busy' ? general : 'failed',
+        general === 'session' ||
+        general === 'workspace' ||
+        general === 'busy' ||
+        general === 'subscription'
+          ? general
+          : 'failed',
       message: null,
     };
   } catch (err) {

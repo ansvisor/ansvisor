@@ -4,7 +4,6 @@ import { AuthProvider } from '@/components/providers/auth-provider';
 import { OnboardingSignOutButton } from '@/components/auth/onboarding-sign-out-button';
 import { isCloud } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
-import { SubscriptionExpiredNotice } from '@/components/billing/subscription-expired-notice';
 import type { TeamRole } from '@/components/providers/role-provider';
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
@@ -17,10 +16,12 @@ export default async function OnboardingLayout({ children }: { children: React.R
     redirect('/sign-in');
   }
 
-  // An already-onboarded non-admin whose org subscription has lapsed must not
-  // re-enter the wizard (they'd otherwise see the payment step and could
-  // re-create the brand / competitors on the org's existing setup). Admins keep
-  // the renew flow; not-yet-onboarded users (new org creators) pass through.
+  // An already-onboarded member whose org subscription has lapsed must not
+  // re-enter the wizard (they could re-create the brand / competitors on the
+  // org's existing setup): the dashboard opens read-only for them, and admins
+  // choose a plan in Billing. Only an admin of a new account that never had a
+  // subscription keeps the plan step; not-yet-onboarded users (new org
+  // creators) pass through.
   if (isCloud()) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -31,7 +32,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
     if (profile?.onboarding_completed && profile.organization_id) {
       const { data: org } = await supabase
         .from('organizations')
-        .select('subscription_status')
+        .select('subscription_status, stripe_subscription_id')
         .eq('id', profile.organization_id)
         .single();
       const access = await evaluateSubscriptionAccess(
@@ -39,9 +40,10 @@ export default async function OnboardingLayout({ children }: { children: React.R
         profile.organization_id,
         (profile.role ?? 'analyst') as TeamRole,
         (org?.subscription_status as string | null) ?? null,
+        Boolean(org?.stripe_subscription_id),
       );
-      if (access.state === 'blocked') {
-        return <SubscriptionExpiredNotice ownerName={access.ownerName} />;
+      if (access.state === 'read_only') {
+        redirect('/dashboard');
       }
     }
   }

@@ -73,6 +73,9 @@ describe('webflow-client', () => {
     expect(await disconnectWebflow('b1')).toEqual({ ok: false, code: 'workspace' });
     answer(429, { message: 'Too many requests' });
     expect(await disconnectWebflow('b1')).toEqual({ ok: false, code: 'busy' });
+    // A read-only workspace (plan not active): the upgrade dialog's.
+    answer(402, { error: 'plan_limit', code: 'subscription_inactive' });
+    expect(await disconnectWebflow('b1')).toEqual({ ok: false, code: 'subscription' });
     answer(500, { code: 'something_else' });
     expect(await disconnectWebflow('b1')).toEqual({ ok: false, code: 'failed' });
     fetchMock.mockRejectedValue(new TypeError('offline'));
