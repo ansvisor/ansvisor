@@ -40,6 +40,11 @@ export function isKnownProvider(provider) {
   return Object.hasOwn(PROVIDERS, provider);
 }
 
+/** Entity id: one connection per organization per provider (#577). */
+export function entityIdFor(organizationId) {
+  return `org_${organizationId}`;
+}
+
 function authConfigId(provider) {
   const config = PROVIDERS[provider];
   if (!config) throw new Error(`Unknown integration provider: ${provider}`);

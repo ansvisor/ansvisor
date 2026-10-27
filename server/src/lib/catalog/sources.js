@@ -62,6 +62,13 @@ export function failureOf(err, connector = null) {
         error: `The Google sign-in can't open this ${connector.label} account anymore. Reconnect it in Settings › Integrations.`,
       };
     }
+    if (err.code === 'not_set_up') {
+      // This server's own setup, or Google's for this account: reconnecting wouldn't help.
+      return {
+        status: 'failed',
+        error: `${connector.label} isn't set up correctly on this server, or the Google account connected in Settings › Integrations can't open this account. The next daily run tries again.`,
+      };
+    }
     if (err.code === 'rate_limited') {
       return {
         status: 'failed',
@@ -195,6 +202,7 @@ async function syncOnce(
         const signedIn = signInRequest(
           connector.signIn,
           await workspaceEntity(source.brand_id, { db }),
+          { hosts: connector.hosts },
         );
         // Every call the read makes stops at its deadline.
         const deadline = AbortSignal.timeout(readMs);
@@ -232,6 +240,8 @@ async function syncOnce(
           variants: counts.variants,
         },
       };
+      // An item listed again (another language or feed label), kept once: not skipped.
+      if (Number.isInteger(parsed.repeated)) outcome.counts.repeated = parsed.repeated;
       if (Array.isArray(parsed.issues)) {
         outcome.counts.issues = await saveItemIssues(source, parsed.issues, { db, now });
       }

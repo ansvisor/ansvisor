@@ -11,7 +11,28 @@
         "price": { "amountMicros": "119000000", "currencyCode": "EUR" },
         "availability": "IN_STOCK"
       },
-      "productStatus": {}
+      "productStatus": {
+        "itemLevelIssues": [
+          {
+            "code": "image_too_small",
+            "severity": "DEMOTED",
+            "resolution": "merchant_action",
+            "attribute": "image link",
+            "reportingContext": "SHOPPING_ADS",
+            "description": "Bild zu klein",
+            "applicableCountries": ["DE", "US"]
+          },
+          {
+            "code": "landing_page_error",
+            "severity": "DISAPPROVED",
+            "resolution": "merchant_action",
+            "attribute": "link",
+            "reportingContext": "SHOPPING_ADS",
+            "description": "Unavailable landing page",
+            "applicableCountries": ["DE"]
+          }
+        ]
+      }
     },
     {
       "name": "accounts/123456789/products/en~US~SOCK-1",

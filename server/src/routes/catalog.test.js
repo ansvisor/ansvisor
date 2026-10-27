@@ -310,6 +310,26 @@ describe('GET /api/catalog/accounts (#1270)', () => {
     expect((await fetch(`${base}/accounts?brandId=nope&kind=merchant_center`)).status).toBe(400);
   });
 
+  it("refuses a brand of another workspace, or one that doesn't exist, and lists nothing", async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("This brand isn't in your workspace"), {
+        status: 403,
+        code: 'not_in_workspace',
+      }),
+    );
+    const other = await fetch(`${base}/accounts?${query}`);
+    expect(other.status).toBe(403);
+    expect((await other.json()).code).toBe('not_in_workspace');
+
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    const missing = await fetch(`${base}/accounts?${query}`);
+    expect(missing.status).toBe(404);
+    expect((await missing.json()).code).toBe('not_found');
+    expect(listSignInAccounts).not.toHaveBeenCalled();
+  });
+
   it('says when the workspace must connect Google first', async () => {
     listSignInAccounts.mockRejectedValueOnce(
       new StoreError(409, 'not_connected', 'Connect Google Merchant Center with Google first.'),
