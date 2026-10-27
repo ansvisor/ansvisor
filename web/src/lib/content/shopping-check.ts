@@ -157,7 +157,8 @@ const checkRowSchema = z.object({
 
 /**
  * A Library row's shopping path: `builtAt` its path's (null for none), and
- * `check` its content_shopping_checks row as PostgREST embeds it.
+ * `check` its content_shopping_checks row, read on its own or as PostgREST
+ * embeds it.
  */
 export function draftShopping(builtAt: string | null, check: unknown): DraftShopping {
   if (!builtAt) return { state: 'none' };

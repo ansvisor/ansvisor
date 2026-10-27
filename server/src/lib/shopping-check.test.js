@@ -4,6 +4,8 @@ vi.mock('../config/supabase.js', () => ({ default: {} }));
 vi.mock('./logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+const isBrandActive = vi.hoisted(() => vi.fn(async () => true));
+vi.mock('./active-subscriptions.js', () => ({ isBrandActive }));
 
 import { fakeDb } from './catalog/__fixtures__/fake-db.js';
 import { logger } from './logger.js';
@@ -12,10 +14,13 @@ import {
   DRAFT_BATCH,
   MAX_LIVE_PAGES,
   MAX_NEW_ACTIONS,
+  MIN_WORDS,
   checkShoppingLinks,
   linkCheck,
+  linksPath,
   livePage,
   pageHrefs,
+  pageWords,
   productStates,
   queueShoppingCheck,
 } from './shopping-check.js';
@@ -58,7 +63,12 @@ const path = (
 /** A catalog with each product's variants: [availability, external id]. */
 function catalog(fake, products) {
   for (const [id, variants, removed = null] of products) {
-    fake.rows('catalog_products').push({ id, brand_id: BRAND, removed_at: removed });
+    fake.rows('catalog_products').push({
+      id,
+      brand_id: BRAND,
+      title: `Boot ${id}`,
+      removed_at: removed,
+    });
     for (const [availability, externalId] of variants) {
       fake.rows('catalog_variants').push({
         id: `v-${externalId}`,
@@ -74,6 +84,10 @@ function catalog(fake, products) {
 
 const link = (id) =>
   `<a href="https://shop.example/products/${id}?utm_source=guide">Boot ${id}</a>`;
+
+/** A live page as the brand's site serves it: words around its links. */
+const livePageHtml = (links) =>
+  `<html><head><script>var words = "${'x '.repeat(50)}";</script></head><body><nav>Home Shop</nav><article><h1>How to choose winter boots</h1><p>${'Warm boots keep feet dry on snow and ice. '.repeat(4)}</p><p>${links}</p></article></body></html>`;
 
 describe('pageHrefs', () => {
   it("reads every link, the HTML blocks' too, and a live page's relative ones against it", () => {
@@ -93,6 +107,25 @@ describe('pageHrefs', () => {
   it('reads no link from nothing, or from a block that is no HTML', () => {
     expect(pageHrefs(null)).toEqual([]);
     expect(pageHrefs('<div data-html-block="!!!"></div>')).toEqual([]);
+  });
+});
+
+describe('pageWords', () => {
+  it("counts a page's words, not its scripts' or styles'", () => {
+    expect(pageWords('<p>Hello, wide world</p><script>one two three</script>')).toBe(3);
+    expect(pageWords(livePageHtml(''))).toBeGreaterThanOrEqual(MIN_WORDS);
+    expect(pageWords('<html><body><div id="root"></div></body></html>')).toBe(0);
+    expect(pageWords(null)).toBe(0);
+  });
+});
+
+describe('linksPath', () => {
+  it('is whether a check found a category page or a product of the path', () => {
+    const none = { categoriesLinked: 0, productsLinked: 0, bad: [] };
+    expect(linksPath(none)).toBe(false);
+    expect(linksPath({ ...none, categoriesLinked: 1 })).toBe(true);
+    expect(linksPath({ ...none, productsLinked: 1 })).toBe(true);
+    expect(linksPath({ ...none, bad: [{ id: 'p2', title: '', state: 'gone' }] })).toBe(true);
   });
 });
 
@@ -183,6 +216,16 @@ describe('productStates', () => {
     });
     expect((await productStates(fake.db, BRAND, ['p1'])).states.get('p1')).toBe('ok');
   });
+
+  it("reads each product's title in the catalog, a removed one's too", async () => {
+    const fake = fakeDb();
+    catalog(fake, [
+      ['p1', [['in_stock', 'a']]],
+      ['p-removed', [['in_stock', 'x']], '2026-10-26T00:00:00Z'],
+    ]);
+    const { titles } = await productStates(fake.db, BRAND, ['p1', 'p-removed', 'p-unknown']);
+    expect(Object.fromEntries(titles)).toEqual({ p1: 'Boot p1', 'p-removed': 'Boot p-removed' });
+  });
 });
 
 describe('linkCheck', () => {
@@ -268,6 +311,36 @@ describe('linkCheck', () => {
       { id: 'l-gone', title: 'Old Boot', state: 'gone' },
     ]);
   });
+
+  it("names a removed product by its catalog title, the path's own first", () => {
+    const removedPath = {
+      ...path([product('p1')]),
+      removed: ['r-sold', 'l-gone'],
+      leftOut: [{ id: 'l-gone', title: 'Old Boot', reason: 'gone' }],
+    };
+    const check = linkCheck(
+      ['https://shop.example/products/r-sold', 'https://shop.example/products/l-gone'],
+      removedPath,
+      {
+        states: new Map([
+          ['r-sold', 'sold_out'],
+          ['l-gone', 'gone'],
+        ]),
+        pages: new Map([
+          ['r-sold', 'https://shop.example/products/r-sold'],
+          ['l-gone', 'https://shop.example/products/l-gone'],
+        ]),
+        titles: new Map([
+          ['r-sold', 'Storm Boot'],
+          ['l-gone', 'Old Boot (catalog)'],
+        ]),
+      },
+    );
+    expect(check.bad).toEqual([
+      { id: 'r-sold', title: 'Storm Boot', state: 'sold_out' },
+      { id: 'l-gone', title: 'Old Boot', state: 'gone' },
+    ]);
+  });
 });
 
 describe('livePage', () => {
@@ -305,6 +378,7 @@ describe('checkShoppingLinks', () => {
       ['p1', [['in_stock', 'a']]],
       ['p2', [['out_of_stock', 'b']]],
     ]);
+    fake.rows('brand_domains').push({ brand_id: BRAND, domain: 'shop.example', is_primary: true });
     return fake;
   }
   const draft = (id, extra = {}) => ({
@@ -335,7 +409,7 @@ describe('checkShoppingLinks', () => {
     const readPage = vi.fn().mockResolvedValue({
       url: 'https://shop.example/blog/boots',
       status: 200,
-      html: '<a href="/products/p1">one</a>',
+      html: livePageHtml('<a href="/products/p1">one</a>'),
     });
     const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
     expect(result).toEqual({
@@ -375,7 +449,6 @@ describe('checkShoppingLinks', () => {
 
   it("reads a draft's relative links against the brand's site", async () => {
     const fake = setup();
-    fake.rows('brand_domains').push({ brand_id: BRAND, domain: 'shop.example', is_primary: true });
     fake.rows('content_drafts').push(draft('d1', { body_html: '<a href="/products/p2">two</a>' }));
     await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
     expect(fake.rows('content_shopping_checks')[0].bad).toEqual([
@@ -402,6 +475,99 @@ describe('checkShoppingLinks', () => {
     ]);
   });
 
+  it("reads a live page with too few words, or off the brand's site, from its draft", async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(
+        draft('d1', { status: 'published', published_url: 'https://shop.example/a' }),
+        draft('d2', { status: 'published', published_url: 'https://shop.example/b' }),
+        draft('d3', { status: 'published', published_url: 'https://elsewhere.example/c' }),
+      );
+    const readPage = vi
+      .fn()
+      // Too short to be the page, though it links p1.
+      .mockResolvedValueOnce({
+        url: 'https://shop.example/a',
+        status: 200,
+        html: '<html><body><a href="/products/p1">Boot</a><script>render()</script></body></html>',
+      })
+      // Redirected off the brand's site.
+      .mockResolvedValueOnce({
+        url: 'https://parked.example/b',
+        status: 200,
+        html: livePageHtml(link('p1')),
+      });
+    const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
+    // d3 is off the brand's site: never fetched.
+    expect(readPage.mock.calls.map(([url]) => url)).toEqual([
+      'https://shop.example/a',
+      'https://shop.example/b',
+    ]);
+    expect(result.live).toBe(2);
+    expect(fake.rows('content_shopping_checks').map((r) => [r.read_from, r.bad.length])).toEqual([
+      ['draft', 1],
+      ['draft', 1],
+      ['draft', 1],
+    ]);
+  });
+
+  it('reads from its draft a live page that links none of the path while the draft does', async () => {
+    const fake = setup();
+    fake.rows('content_drafts').push(
+      draft('d1', { status: 'published', published_url: 'https://shop.example/a' }),
+      draft('d2', {
+        status: 'published',
+        published_url: 'https://shop.example/b',
+        body_html: '<p>No links yet.</p>',
+      }),
+    );
+    // Words enough, but none of the path's links: a page served to bots, say.
+    const readPage = vi.fn(async (url) => ({
+      url,
+      status: 200,
+      html: livePageHtml('<a href="/about">About us</a>'),
+    }));
+    await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
+    const rows = Object.fromEntries(
+      fake.rows('content_shopping_checks').map((r) => [r.draft_id, r]),
+    );
+    // d1's draft links p2, sold out: the page isn't taken as fixed.
+    expect(rows.d1).toMatchObject({ read_from: 'draft', page_url: null });
+    expect(rows.d1.bad).toHaveLength(1);
+    // d2's draft links none either: the live page is read as it is.
+    expect(rows.d2).toMatchObject({
+      read_from: 'page',
+      page_url: 'https://shop.example/b',
+      bad: [],
+    });
+  });
+
+  it("reads no live page when the brand's site can't be read", async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(draft('d1', { status: 'published', published_url: 'https://shop.example/a' }));
+    const from = fake.db.from;
+    const db = {
+      from: (table) =>
+        table === 'brand_domains'
+          ? {
+              select: () => ({
+                eq: () => ({
+                  eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+                  then: (resolve) => resolve({ data: null, error: { message: 'down' } }),
+                }),
+              }),
+            }
+          : from(table),
+    };
+    const readPage = vi.fn();
+    await checkShoppingLinks(BRAND, { db, now: NOW, readPage });
+    expect(readPage).not.toHaveBeenCalled();
+    expect(fake.rows('content_shopping_checks')[0].read_from).toBe('draft');
+  });
+
   it('reads at most its live pages a run; the rest from their drafts', async () => {
     const fake = setup();
     fake
@@ -411,7 +577,7 @@ describe('checkShoppingLinks', () => {
           draft(`d${i}`, { status: 'published', published_url: `https://shop.example/${i}` }),
         ),
       );
-    const readPage = vi.fn(async (url) => ({ url, status: 200, html: link('p1') }));
+    const readPage = vi.fn(async (url) => ({ url, status: 200, html: livePageHtml(link('p1')) }));
     const result = await checkShoppingLinks(BRAND, {
       db: fake.db,
       now: NOW,
@@ -468,7 +634,7 @@ describe('checkShoppingLinks', () => {
         published_url: 'https://shop.example/blog/boots',
       }),
     );
-    const live = (html) => vi.fn(async (url) => ({ url, status: 200, html }));
+    const live = (html) => vi.fn(async (url) => ({ url, status: 200, html: livePageHtml(html) }));
     const first = await checkShoppingLinks(BRAND, {
       db: fake.db,
       now: NOW,
@@ -506,7 +672,7 @@ describe('checkShoppingLinks', () => {
           draft(`d${i}`, { status: 'published', published_url: `https://shop.example/${i}` }),
         ),
       );
-    const readPage = vi.fn(async (url) => ({ url, status: 200, html: link('p2') }));
+    const readPage = vi.fn(async (url) => ({ url, status: 200, html: livePageHtml(link('p2')) }));
     const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
     expect(result).toMatchObject({ attention: MAX_NEW_ACTIONS + 3, opened: MAX_NEW_ACTIONS });
     expect(fake.rows('actions')).toHaveLength(MAX_NEW_ACTIONS);
@@ -524,7 +690,7 @@ describe('checkShoppingLinks', () => {
         return fake.db.from(table);
       },
     };
-    const readPage = vi.fn(async (url) => ({ url, status: 200, html: link('p2') }));
+    const readPage = vi.fn(async (url) => ({ url, status: 200, html: livePageHtml(link('p2')) }));
     const result = await checkShoppingLinks(BRAND, { db, now: NOW, readPage });
     expect(result).toMatchObject({ drafts: 1, attention: 1, opened: 0 });
     expect(fake.rows('content_shopping_checks')).toHaveLength(1);
@@ -546,6 +712,24 @@ describe('checkShoppingLinks', () => {
 });
 
 describe('queueShoppingCheck', () => {
+  it("checks no brand whose workspace's plan ended (#1608)", async () => {
+    const fake = fakeDb();
+    fake.rows('content_drafts').push({
+      id: 'd1',
+      brand_id: 'lapsed',
+      status: 'draft',
+      archived_at: null,
+      body_html: '',
+      shopping_path: path([product('p1')]),
+    });
+    isBrandActive.mockImplementation(async (brandId) => brandId !== 'lapsed');
+    await queueShoppingCheck('lapsed', { db: fake.db });
+    expect(isBrandActive).toHaveBeenCalledWith('lapsed');
+    expect(fake.rows('content_shopping_checks')).toEqual([]);
+    expect(fake.writes).toEqual([]);
+    isBrandActive.mockImplementation(async () => true);
+  });
+
   it('checks the brands one at a time, a brand queued twice once, and logs a failure', async () => {
     const fake = fakeDb();
     const broken = {
