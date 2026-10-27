@@ -142,6 +142,22 @@ describe('shoppingPrompt', () => {
     expect(shoppingPrompt({ categories: [], products: [] })).toBe('');
   });
 
+  it('tells the price as the card shows it: a sale price only under the price, never 0', () => {
+    const prompt = shoppingPrompt({
+      ...PATH,
+      products: [
+        product('p1', 'Summit GTX Boot', { salePrice: 149 }),
+        product('p2', 'Trail Mid', { salePrice: 0 }),
+        product('p3', 'Ridge Low', { salePrice: 249 }),
+        product('p4', 'Canyon Sandal', { price: 0, salePrice: null }),
+      ],
+    });
+    expect(prompt).toContain('- Summit GTX Boot: 149.00 USD');
+    expect(prompt).toContain('- Trail Mid: 189.00 USD');
+    expect(prompt).toContain('- Ridge Low: 189.00 USD');
+    expect(prompt).not.toContain('0.00 USD');
+  });
+
   it('never says a product out of stock or on pre-order is in stock, nor any stock it cannot read', () => {
     const prompt = shoppingPrompt({
       ...PATH,
@@ -531,6 +547,10 @@ describe('shoppingPathFor', () => {
     });
     const read = await shoppingPathFor(draft(PATH), { db });
     expect(read.products.map((p) => p.availability)).toEqual(['in_stock', 'limited_availability']);
+    expect(read.products.map((p) => [p.price, p.salePrice])).toEqual([
+      [189, null],
+      [149, 129],
+    ]);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ draftId: 'd1' }),
       expect.stringContaining('reading stock failed'),
