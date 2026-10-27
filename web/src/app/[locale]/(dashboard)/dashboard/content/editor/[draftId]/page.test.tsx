@@ -5816,7 +5816,8 @@ describe('the side panel', () => {
       );
       await renderPage();
       await act(async () => button('Send to CMS')!.click());
-      await act(async () => inDialog('Continue to send').click());
+      // Nothing for Before you publish to ask about: straight to the Send dialog.
+      expect(dialog()!.textContent).toContain('Meta description');
       await act(async () => inDialog('Send').click());
       // The CMS keeps its own author.
       expect(sendPagesToCms).toHaveBeenCalledWith(

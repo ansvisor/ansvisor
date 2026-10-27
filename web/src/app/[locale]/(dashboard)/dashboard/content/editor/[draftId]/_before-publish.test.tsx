@@ -543,6 +543,40 @@ describe('BeforePublish', () => {
     expect(onMarkReady).not.toHaveBeenCalled();
   });
 
+  it('folds the code away on Send to CMS, and shows it on a click', async () => {
+    await render(quality(), { mode: 'send' });
+    expect(dialog().querySelector('pre')).toBeNull();
+    // Copy JSON-LD is still there, for a CMS that doesn't add it.
+    expect(button('Copy JSON-LD')).toBeDefined();
+    await act(async () => button("Show the JSON-LD, for a CMS that doesn't add it")!.click());
+    expect(jsonLd()['@type']).toBe('Article');
+    // Export and Mark ready show it as before.
+    await render(quality(), { mode: 'export' });
+    expect(dialog().querySelector('pre')).not.toBeNull();
+  });
+
+  it('goes straight on to the Send dialog when there is nothing to ask about', async () => {
+    const fine = quality({ trust: trustRead({ score: 90 }) });
+    await render(fine, { mode: 'send' });
+    expect(onContinue).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('asks on Send to CMS when something is missing, its links still being read, or Trust is under 60', async () => {
+    const fine = { trust: trustRead({ score: 90 }) };
+    await render(quality({ ...fine, author: null }), { mode: 'send' });
+    expect(button('Continue to send')).toBeDefined();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render(quality(fine), { mode: 'send', linksPending: 2 });
+    expect(button('Continue to send')).toBeDefined();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render(quality(fine), { mode: 'send', paste: { ...clean, placeholders: 1 } });
+    expect(button('Continue to send')).toBeDefined();
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
   it('goes to what would raise Trust from Export too', async () => {
     await render(quality(), { mode: 'export' });
     await act(async () => button('Fix first')!.click());

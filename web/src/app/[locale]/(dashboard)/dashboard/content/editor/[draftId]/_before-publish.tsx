@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -71,6 +71,10 @@ export interface ReadyToPaste {
  * write one, from the page's facts only. Mark ready anyway is logged with
  * the Trust the page had; on Export it goes on to Export, and on Send to CMS
  * to the Send dialog (#1331). Rendered only while open.
+ *
+ * On Send to CMS, a page with nothing to ask about (Trust 60 or more,
+ * nothing missing, nothing still being read) goes straight on to the Send
+ * dialog, and the code, for a CMS that doesn't write it, is folded away.
  */
 /** The below-60 warning, as each way on says what it does. */
 const WARNING = { markReady: 'warning', export: 'warningExport', send: 'warningSend' } as const;
@@ -354,6 +358,23 @@ export function BeforePublish({
       : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
+  // Nothing to ask about as Send opens it: straight on to the Send dialog.
+  const [skipped] = useState(
+    () =>
+      mode === 'send' &&
+      !below &&
+      rows.every((row) => row.state !== 'missing') &&
+      linksPending === 0 &&
+      !quality.claimsReading &&
+      !quality.pageReading,
+  );
+  useEffect(() => {
+    if (skipped) onContinue?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as it opens
+  }, [skipped]);
+  // The page goes to the CMS: the code is only for one that doesn't write it.
+  const [codeShown, setCodeShown] = useState(mode !== 'send');
+  if (skipped) return null;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -466,7 +487,16 @@ export function BeforePublish({
             </li>
           ))}
         </ul>
-        {jsonLd && (
+        {jsonLd && !codeShown && (
+          <button
+            type="button"
+            className="justify-self-start text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            onClick={() => setCodeShown(true)}
+          >
+            {t('showCode')}
+          </button>
+        )}
+        {jsonLd && codeShown && (
           <div className="space-y-1.5">
             <pre
               aria-label={t('jsonLd')}
