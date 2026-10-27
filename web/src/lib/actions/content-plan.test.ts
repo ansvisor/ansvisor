@@ -109,6 +109,8 @@ describe('getContentPlan', () => {
           aiVisits: 12,
           // Still in the RPC (00220); the plan no longer reads it.
           overlaps: 1,
+          // With conversions on (00291).
+          conversions: 3,
         },
       ],
     };
@@ -161,6 +163,7 @@ describe('getContentPlan', () => {
           citations: { cur: 4, prev: 9 },
           platformsDown: ['chatgpt-web'],
           aiVisits: 12,
+          conversions: 3,
         },
       ],
       answers: { cur: 120, prev: 140 },
@@ -212,6 +215,24 @@ describe('getContentPlan', () => {
       'status',
       ['draft', 'in_review', 'ready'],
     ]);
+  });
+
+  it('reads a page’s conversions as none with conversions off, or from a database before 00291', async () => {
+    const pageOf = (over: Record<string, unknown>) => ({
+      page: 'https://acme.example/a',
+      title: null,
+      citations: { cur: 1, prev: 1 },
+      platformsDown: [],
+      aiVisits: 2,
+      ...over,
+    });
+    rpcResult = {
+      days: 30,
+      answers: { cur: 1, prev: 1 },
+      pages: [pageOf({ conversions: null }), pageOf({}), pageOf({ conversions: 0 })],
+    };
+    const plan = await getContentPlan(BRAND, 30);
+    expect(plan!.pages.map((p) => p.conversions)).toEqual([null, null, 0]);
   });
 
   it('reads nothing of another organization’s brand, and refuses another period', async () => {
