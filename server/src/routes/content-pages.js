@@ -43,6 +43,7 @@ const FETCH_STATUS = {
   too_many_redirects: 422,
   not_html: 422,
   too_large: 422,
+  too_deep: 422,
   http_error: 422,
   timeout: 504,
   unreachable: 502,
