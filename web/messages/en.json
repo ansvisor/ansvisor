@@ -7965,7 +7965,14 @@
       "noCollection": "No collection picked yet.",
       "tokenLabel": "Site token",
       "tokenPlaceholder": "Paste the site token",
-      "tokenHint": "In Webflow: Site settings › Apps & integrations › API access › Generate API token, with Sites: Read and CMS: Read and write. It's kept by our connector service, never shown again.",
+      "tokenSteps": {
+        "label": "How to get a site token",
+        "open": "In Webflow, go to Site settings › Apps & Integrations › API access and click Generate API token.",
+        "name": "Enter a token name (4–80 characters), e.g. “Ansvisor connector”.",
+        "permissions": "Under Permissions, set CMS to Read and write and Sites to Read-only. Leave everything else on No access.",
+        "copy": "Click Generate token, copy the token and paste it into the field below."
+      },
+      "tokenNote": "Webflow shows the token only once. We store it securely and won’t display it again.",
       "connect": "Connect",
       "connecting": "Connecting…",
       "connectedToast": "Webflow connected",
