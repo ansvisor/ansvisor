@@ -24,6 +24,7 @@ const empty = {
   effort: null,
   role: null,
   sent: { content: null, webhook: null },
+  lastCheck: null,
 };
 
 describe('parseTaskDetails', () => {
@@ -104,6 +105,19 @@ describe('parseTaskDetails', () => {
     expect(parseTaskDetails([])).toBeNull();
     expect(parseTaskDetails('text')).toBeNull();
     expect(parseTaskDetails({ where: '  ', how: [] })).toBeNull();
+  });
+});
+
+describe('the last automatic check (AC-010)', () => {
+  it('reads what the server kept, and nothing malformed', () => {
+    expect(
+      parseTaskDetails({
+        check: 'auto',
+        autoCheck: { at: '2026-10-27T03:00:00Z', passed: false, missing: ['page_error', 7] },
+      })?.lastCheck,
+    ).toEqual({ at: '2026-10-27T03:00:00Z', passed: false, missing: ['page_error'] });
+    expect(parseTaskDetails({ check: 'auto', autoCheck: { at: 'x' } })?.lastCheck).toBeNull();
+    expect(parseTaskDetails({ check: 'auto', autoCheck: 'passed' })?.lastCheck).toBeNull();
   });
 });
 

@@ -290,4 +290,15 @@ describe('category pages (shopping path)', () => {
     answer(500, {});
     expect(await listCategoryPages('b1')).toEqual({ ok: false, code: 'failed' });
   });
+
+  it('reads an API without the route as no categories, but still fails a save there', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('Cannot GET /api/catalog/categories', { status: 404 }),
+    );
+    expect(await listCategoryPages('b1')).toEqual({ ok: true, value: [] });
+    fetchMock.mockResolvedValue(
+      new Response('Cannot PUT /api/catalog/categories', { status: 404 }),
+    );
+    expect(await setCategoryPage('b1', 'Socks', null)).toEqual({ ok: false, code: 'failed' });
+  });
 });

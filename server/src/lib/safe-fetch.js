@@ -10,7 +10,9 @@
  *     and a private one for the request (DNS rebinding);
  *   * redirects are followed by hand, at most MAX_REDIRECTS, each one checked
  *     the same way;
- *   * the whole fetch has a time limit, and the body a size limit.
+ *   * the whole fetch has a time limit, and the body a size limit;
+ *   * a web page nested deeper than any browser keeps isn't handed on to be
+ *     parsed (html-depth.js).
  *
  * Only HTML comes back, decoded as text. Failures carry a code the caller
  * can name to the person (PageFetchError.code).
@@ -24,6 +26,8 @@ import { pipeline } from 'node:stream';
 import { TextDecoder } from 'node:util';
 import zlib from 'node:zlib';
 
+import { nestsTooDeep } from './html-depth.js';
+
 export const FETCH_TIMEOUT_MS = 10_000;
 export const MAX_PAGE_BYTES = 3 * 1024 * 1024;
 export const MAX_REDIRECTS = 5;
@@ -36,7 +40,7 @@ const USER_AGENT = 'Mozilla/5.0 (compatible; AnsvisorBot/1.0; +https://ansvisor.
 
 export class PageFetchError extends Error {
   /**
-   * @param {'invalid_url'|'blocked'|'unreachable'|'timeout'|'too_large'|'not_html'|'http_error'|'too_many_redirects'} code
+   * @param {'invalid_url'|'blocked'|'unreachable'|'timeout'|'too_large'|'too_deep'|'not_html'|'http_error'|'too_many_redirects'} code
    * @param {string} message
    * @param {{ status?: number, errno?: string }} [extra] errno: the network error's code
    *   (ENOTFOUND, ECONNREFUSED, a TLS one…) when the page couldn't be reached
@@ -291,7 +295,12 @@ export async function fetchPage(address, opts = {}) {
         { errno: err?.code },
       );
     }
-    if (!res.redirect) return { url: url.toString(), status: res.status, html: res.body };
+    if (!res.redirect) {
+      if (types === HTML_TYPES && nestsTooDeep(res.body)) {
+        throw new PageFetchError('too_deep', 'The page nests its elements too deeply to read');
+      }
+      return { url: url.toString(), status: res.status, html: res.body };
+    }
     if (hops >= maxRedirects) {
       throw new PageFetchError('too_many_redirects', 'The page redirects too many times');
     }

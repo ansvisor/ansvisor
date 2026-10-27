@@ -14,10 +14,15 @@ const PART_TYPES = {
   metaTitle: ['PlainText'],
   metaDescription: ['PlainText'],
   jsonLd: ['PlainText'],
+  date: ['DateTime'],
 };
 const PAGE_PARTS = Object.keys(PART_TYPES);
-/** Webflow's own fields: every item has them, and Send to CMS always fills them. */
-const OWN_FIELDS = new Set(['name', 'slug']);
+/**
+ * Webflow's own fields: every item has them. Send to CMS always fills its
+ * name and slug; Webflow keeps its dates (getCollection leaves them out, as
+ * they aren't editable).
+ */
+const OWN_FIELDS = new Set(['name', 'slug', 'created-on', 'updated-on', 'published-on']);
 
 /** A Webflow call that didn't go, with the code the web names to the person. */
 export class WebflowError extends Error {
@@ -234,12 +239,15 @@ const HINTS = {
   metaTitle: [/(meta|seo)-?title/],
   metaDescription: [/(meta|seo)-?desc/, /summary/, /excerpt/, /description/],
   jsonLd: [/json-?ld/, /schema/, /structured/],
+  date: [/publish/, /\bdate\b/, /\bposted\b/],
 };
 
 /**
  * The field map a collection's fields suggest: for each part, the first
  * field of a type it may go to whose slug (or name) reads as that part, one
  * field a part; a page's body falls back to the collection's first rich text.
+ * The date goes only to a date the collection requires: the one that reads
+ * as a date, else its only one.
  */
 export function suggestFieldMap(fields) {
   const map = {};
@@ -247,7 +255,11 @@ export function suggestFieldMap(fields) {
   const words = (f) => `${f.slug} ${f.name.toLowerCase().replace(/\s+/g, '-')}`;
   for (const part of PAGE_PARTS) {
     const fits = fields.filter(
-      (f) => PART_TYPES[part].includes(f.type) && !OWN_FIELDS.has(f.slug) && !taken.has(f.slug),
+      (f) =>
+        PART_TYPES[part].includes(f.type) &&
+        !OWN_FIELDS.has(f.slug) &&
+        !taken.has(f.slug) &&
+        (part !== 'date' || f.required),
     );
     let pick = null;
     for (const hint of HINTS[part]) {
@@ -255,6 +267,7 @@ export function suggestFieldMap(fields) {
       if (pick) break;
     }
     if (!pick && part === 'body') pick = fits[0] ?? null;
+    if (!pick && part === 'date' && fits.length === 1) pick = fits[0];
     if (pick) {
       map[part] = pick.slug;
       taken.add(pick.slug);
@@ -265,10 +278,11 @@ export function suggestFieldMap(fields) {
 
 /**
  * The parts every page has: its meta title falls back to its title, its
- * meta description to its opening words. A page may have no JSON-LD, so
- * that field can't be one the collection requires.
+ * meta description to its opening words, and its date is the day it's first
+ * sent. A page may have no JSON-LD, so that field can't be one the
+ * collection requires.
  */
-const ALWAYS_FILLED = new Set(['body', 'metaTitle', 'metaDescription']);
+const ALWAYS_FILLED = new Set(['body', 'metaTitle', 'metaDescription', 'date']);
 
 /**
  * Whether a field map fits the collection: a page's body has a rich text

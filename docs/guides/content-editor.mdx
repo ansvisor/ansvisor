@@ -20,12 +20,12 @@ The **Content plan** lists the work for the last 7, 30 or 90 days. Pick the peri
 
 ### Cards
 
-| Card | What it counts |
-|---|---|
-| **Create** | New pages AI needs: open opportunities with no page on your site yet. |
-| **Optimize** | Pages losing ground, and opportunities to improve a page you already have. |
-| **Protect** | Your top pages (cited at least 5 times in the period and not losing ground, up to 5), and opportunities to defend a page. |
-| **Priority** | Rows your team marked as a priority. |
+| Card         | What it counts                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| **Create**   | New pages AI needs: open opportunities with no page on your site yet.                                                     |
+| **Optimize** | Pages losing ground, and opportunities to improve a page you already have.                                                |
+| **Protect**  | Your top pages (cited at least 5 times in the period and not losing ground, up to 5), and opportunities to defend a page. |
+| **Priority** | Rows your team marked as a priority.                                                                                      |
 
 Click a card to filter the list to it; click it again to clear the filter.
 
@@ -56,7 +56,8 @@ The score runs from 0 to 100 and is built from four factors:
 Hover over the score, or focus it, to see **How this score is worked out**: each factor with the points it gave, and the total. The badge's level (critical, high, medium or low) uses the Plan's own cut-offs, and only a page losing citations can reach critical.
 
 <Note>
-This score ranks the Plan only. The Action Center scores its tasks on its own: see [Action Center](/guides/action-center).
+  This score ranks the Plan only. The Action Center scores its tasks on its own:
+  see [Action Center](/guides/action-center).
 </Note>
 
 ### Row menu
@@ -74,7 +75,9 @@ The **What AI cites in your topics** section opens with **Show**. For each page 
 The shares cover only the cited addresses whose type can be read. Forums, encyclopedias, news and the long tail of less cited pages are left out, and a line under the section says what share of the period's citations is covered.
 
 <Tip>
-The page types follow your brand's **Site type** (B2B SaaS, E-commerce or B2C) in the brand settings: feature and comparison pages for B2B SaaS, product and category pages for e-commerce, destination and help pages for B2C.
+  The page types follow your brand's **Site type** (B2B SaaS, E-commerce or B2C)
+  in the brand settings: feature and comparison pages for B2B SaaS, product and
+  category pages for e-commerce, destination and help pages for B2C.
 </Tip>
 
 ## New content
@@ -92,11 +95,13 @@ The page types follow your brand's **Site type** (B2B SaaS, E-commerce or B2C) i
     - **Page URL**: a page on your brand's site (its domains are in the brand settings). **Import** brings in its main text, headings, links and schema; menus and footers stay out.
     - **Paste text** from Word, Google Docs or a web page. Headings, lists, links and tables are kept.
     - **Upload file**: Word, Markdown, HTML or text, up to 10 MB.
+
   </Step>
   <Step title="Pick the page type">
     Click **Continue**. Ansvisor picks a **Page type** from the title, the content, the page or the opportunity, and says which. Pick another if it's wrong; you can also change it later in the editor.
 
     For a new page, **Overview** lists your pages AI already cites for the same prompts, with how many of those prompts each one answers, its AI citations and its Google position. You can choose **Optimize *page* instead**, or **Create a new page**.
+
   </Step>
   <Step title="Choose who does it">
     | Who does it | What happens |
@@ -150,7 +155,7 @@ The Content Agent never changes these passages. If you edit one, the editor asks
 - **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.
 - **Export** downloads the page as **Word**, **HTML** or **Markdown**. Only the HTML file carries the schema (JSON-LD).
 - **Add HTML** in the toolbar adds an HTML block: an embed, a widget or a form, kept exactly as written. Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.
-- **Send to CMS** (admins and managers) sends the page to your workflow tool through the brand's webhook, for it to create the post in your CMS. See [Send to CMS](/guides/send-to-cms).
+- **Send to CMS** (admins and managers) sends the page to the brand's Webflow collection as a draft item, or to your workflow tool through the brand's webhook, for it to create the post in your CMS. See [Send to CMS](/guides/send-to-cms).
 - **Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site, or send it to your CMS.
 - **Mark published** (the Library's **Status** menu, or the header's **Next step** once the page is ready, when Quality is on): once the page is live, tell Ansvisor where. It asks for the live address, starting from the page it optimizes or your site with the page's slug, and the **Live page** tab measures that address from then. If the draft came from the Action Center, its Publish task is completed once all the action's work is live. On a published page, the header's **Published** button changes the address. A page your CMS reports live, or one published in Webflow, gets its address on its own. An archived page is restored first.
 - Click **Ready** in the header to move the page back to **In review**. A task that Mark ready completed is open again (**In Progress**), unless someone changed it in the Action Center since or the action is closed.
@@ -159,16 +164,16 @@ The Content Agent never changes these passages. If you edit one, the editor asks
 
 The **Library** lists the drafts by status, each tab with its count:
 
-| Tab | What's in it |
-|---|---|
-| **All** | Every draft that isn't archived. |
-| **In progress** | Drafts being written. |
-| **In review** | Drafts the Content Agent wrote, waiting for a person. |
-| **Ready** | Drafts marked ready. |
-| **Published** | Drafts marked published, by you or your CMS. |
-| **Archived** | Drafts sent to the archive. They keep their status for when they're restored. |
+| Tab             | What's in it                                                                  |
+| --------------- | ----------------------------------------------------------------------------- |
+| **All**         | Every draft that isn't archived.                                              |
+| **In progress** | Drafts being written.                                                         |
+| **In review**   | Drafts the Content Agent wrote, waiting for a person.                         |
+| **Ready**       | Drafts marked ready.                                                          |
+| **Published**   | Drafts marked published, by you or your CMS.                                  |
+| **Archived**    | Drafts sent to the archive. They keep their status for when they're restored. |
 
-The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. Click a row to open the draft in the editor. The **Created** filter narrows the list to the last 7, 30 or 90 days.
+The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. Click a row to open the draft in the editor. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, a **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published (see [Send to CMS](/guides/send-to-cms)).
 
 ### Row menu
 
@@ -180,7 +185,7 @@ The columns are Content, Type, Method (Create or Optimize), By (you, the Content
 
 ### Export
 
-**Export** in the header downloads the drafts listed, that is the current tab within the **Created** range, with their pages:
+**Export** in the header downloads the drafts listed, that is the current tab within the **Created** range and the **Last send** filter, with their pages:
 
 - **Export CSV** and **Export Excel**: one row per draft, with its title, status, method, page type, author, dates, page URL, length and text.
 - **Export Word**: one document, each draft starting on a page of its own.
