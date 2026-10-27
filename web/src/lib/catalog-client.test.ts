@@ -231,7 +231,8 @@ describe('sign-in platforms (#1270)', () => {
 });
 
 describe('StoreError', () => {
-  // Every code, so a new one fails the typecheck here until it has its words.
+  // Every code, so a new one fails the typecheck here until it has its words;
+  // but 'subscription', which opens the upgrade dialog instead of saying one.
   const CODES = {
     connect_failed: true,
     not_connected: true,
@@ -248,7 +249,7 @@ describe('StoreError', () => {
     workspace: true,
     busy: true,
     failed: true,
-  } satisfies Record<StoreError, true>;
+  } satisfies Record<Exclude<StoreError, 'subscription'>, true>;
 
   it('has words for every reason a store call fails', () => {
     for (const code of Object.keys(CODES)) {
