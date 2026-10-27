@@ -18,6 +18,7 @@
  */
 
 import supabaseAdmin from '../config/supabase.js';
+import { activeOrgFilter } from './active-subscriptions.js';
 import { isComposioConfigured, runGaReport } from './composio.js';
 import { AI_SOURCES_VERSION, classifyAiSurface } from './ai-sources.js';
 import {
@@ -576,7 +577,10 @@ export async function runGaSync({ organizationId, brandId, aiHistory = false } =
   if (organizationId) connQuery = connQuery.eq('organization_id', organizationId);
   const { data: connections, error: connError } = await connQuery;
   if (connError) throw new Error(connError.message);
-  const connectedOrgIds = [...new Set((connections || []).map((c) => c.organization_id))];
+  // …on an active subscription: once the plan has ended, nothing is synced.
+  const orgIds = [...new Set((connections || []).map((c) => c.organization_id))];
+  const isActive = await activeOrgFilter(orgIds);
+  const connectedOrgIds = orgIds.filter(isActive);
   if (connectedOrgIds.length === 0) return { synced: 0, skipped: 0, results: [] };
 
   // …and their active brands with a mapped property.
