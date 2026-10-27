@@ -28,6 +28,10 @@ export interface ProductCardRow {
   shelf: string;
   /** Its place on the shelf, from 1. */
   rank: number;
+  /** The price the answer showed for it, and on which channel. */
+  price?: number | null;
+  currency?: string | null;
+  platform?: string;
 }
 
 /** AI visits and orders per product (00361). */
@@ -113,6 +117,34 @@ export interface ProductRow {
   currency: string | null;
   readiness: number;
   missing: ReadinessCheck[];
+  /**
+   * A price an AI answer showed for it that isn't the catalog's (more than
+   * PRICE_TOLERANCE off, in the same currency), the latest; null for none.
+   */
+  wrongPrice: { seen: number; currency: string | null; platform: string | null } | null;
+}
+
+/** An answer's price this far from the catalog's is wrong (ECOM-016). */
+export const PRICE_TOLERANCE = 0.02;
+
+function wrongPrice(
+  product: CatalogProductRow,
+  cards: readonly ProductCardRow[],
+): ProductRow['wrongPrice'] {
+  if (product.price === null || product.price <= 0) return null;
+  const off = cards.find(
+    (card) =>
+      typeof card.price === 'number' &&
+      (!card.currency || !product.currency || card.currency === product.currency) &&
+      Math.abs(card.price - product.price!) / product.price! > PRICE_TOLERANCE,
+  );
+  return off && typeof off.price === 'number'
+    ? {
+        seen: off.price,
+        currency: off.currency ?? product.currency,
+        platform: off.platform ?? null,
+      }
+    : null;
 }
 
 /** The table's ready-made views (ECOM-007), the AI Traffic "Cited, not clicked" pattern. */
@@ -124,15 +156,19 @@ export function productRows(
   cards: readonly ProductCardRow[],
   stats: readonly ProductAiStats[],
 ): ProductRow[] {
-  const byProduct = new Map<string, { shelves: Set<string>; ranks: number[] }>();
+  const byProduct = new Map<
+    string,
+    { shelves: Set<string>; ranks: number[]; cards: ProductCardRow[] }
+  >();
   for (const card of cards) {
     let entry = byProduct.get(card.productId);
     if (!entry) {
-      entry = { shelves: new Set(), ranks: [] };
+      entry = { shelves: new Set(), ranks: [], cards: [] };
       byProduct.set(card.productId, entry);
     }
     entry.shelves.add(card.shelf);
     entry.ranks.push(card.rank);
+    entry.cards.push(card);
   }
   const statsOf = new Map(stats.map((s) => [s.productId, s]));
   return products.map((product) => {
@@ -151,6 +187,7 @@ export function productRows(
       currency: ai?.currency ?? null,
       readiness: ready.score,
       missing: ready.missing,
+      wrongPrice: wrongPrice(product, shown?.cards ?? []),
     };
   });
 }

@@ -90,6 +90,7 @@ import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import type { CategoryRow } from '@/lib/shopping/categories';
+import { readinessChecklist } from '@/lib/shopping/readiness';
 import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { googleSourceStatus } from '@/lib/traffic-sources';
@@ -97,6 +98,7 @@ import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { ProductDataStrip, useProductSources } from './_data-strip';
 import { CategoriesTable } from './_categories-table';
 import { ProductsTable } from './_products-table';
+import { ReadinessTab } from './_readiness';
 import { ShelfKpis, ShelfRows } from './_shelf';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { WhyDialog } from './_why-dialog';
@@ -110,7 +112,7 @@ import { useOpenAiIndex } from './use_openai_index';
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
 /** The page's tabs, the one open in the URL (?tab=products). */
-const SHOPPING_TABS = ['shelf', 'categories', 'products', 'competitors'] as const;
+const SHOPPING_TABS = ['shelf', 'categories', 'products', 'readiness', 'competitors'] as const;
 type ShoppingTab = (typeof SHOPPING_TABS)[number];
 
 // Theme tokens in globals.css ship as full oklch values; reference them
@@ -431,6 +433,7 @@ export default function ShoppingPage() {
                 )}
               </TabsTrigger>
               <TabsTrigger value="products">{t('tabProducts')}</TabsTrigger>
+              <TabsTrigger value="readiness">{t('tabReadiness')}</TabsTrigger>
               <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
             </TabsList>
 
@@ -476,14 +479,6 @@ export default function ShoppingPage() {
                       loading={loading}
                     />
                   </div>
-                  {showOpenAiIndex && (
-                    <OpenAiIndexCard
-                      read={openAiIndex.read}
-                      loading={openAiIndex.loading}
-                      canManage={canManage}
-                      onDirectFeedChange={openAiIndex.setDirectFeed}
-                    />
-                  )}
                 </>
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
@@ -566,6 +561,45 @@ export default function ShoppingPage() {
                     onRowClick={setSelectedProduct}
                   />
                 </>
+              ) : (
+                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+              )}
+            </TabsContent>
+
+            <TabsContent value="readiness" className="space-y-6">
+              {hasFullAccess ? (
+                <ReadinessTab
+                  market={shoppingMarket.shown ?? 'us'}
+                  tracked={filterOpts.platforms}
+                  ownSlots={
+                    new Map(
+                      (shelf && shelf !== 'failed' ? shelf.stats.channels : []).map((c) => [
+                        c.platform,
+                        c.ownSlots,
+                      ]),
+                    )
+                  }
+                  {...readinessChecklist({
+                    market: shoppingMarket.shown ?? 'us',
+                    catalog: sources.catalog,
+                    products: catalogTable && catalogTable !== 'failed' ? catalogTable.rows : null,
+                    openAi: showOpenAiIndex ? openAiIndex.read : null,
+                    cheaperResellers: destinationsLoading ? null : destinations.priceAlerts.length,
+                    amazonDrop: amazonShareDropAlert
+                      ? { from: amazonShareDropAlert.fromShare, to: amazonShareDropAlert.toShare }
+                      : null,
+                  })}
+                  onProducts={() => changeTab('products')}
+                >
+                  {showOpenAiIndex && (
+                    <OpenAiIndexCard
+                      read={openAiIndex.read}
+                      loading={openAiIndex.loading}
+                      canManage={canManage}
+                      onDirectFeedChange={openAiIndex.setDirectFeed}
+                    />
+                  )}
+                </ReadinessTab>
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}

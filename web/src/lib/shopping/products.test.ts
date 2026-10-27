@@ -122,3 +122,45 @@ describe('productRows and the views', () => {
     expect(rows.every((row) => inView(row, 'all'))).toBe(true);
   });
 });
+
+describe('wrongPrice', () => {
+  it("flags an AI answer's price more than 2% off the catalog's, in the same currency", () => {
+    const [row] = productRows(
+      [product({ id: 'p', price: 129, currency: 'USD' })],
+      [
+        {
+          productId: 'p',
+          shelf: 'a',
+          rank: 1,
+          price: 130,
+          currency: 'USD',
+          platform: 'copilot-web',
+        },
+        {
+          productId: 'p',
+          shelf: 'b',
+          rank: 1,
+          price: 99,
+          currency: 'EUR',
+          platform: 'copilot-web',
+        },
+        {
+          productId: 'p',
+          shelf: 'c',
+          rank: 2,
+          price: 139,
+          currency: 'USD',
+          platform: 'chatgpt-shopping',
+        },
+      ],
+      [],
+    );
+    expect(row.wrongPrice).toEqual({ seen: 139, currency: 'USD', platform: 'chatgpt-shopping' });
+    const [right] = productRows(
+      [product({ id: 'p', price: 129 })],
+      [{ productId: 'p', shelf: 'a', rank: 1, price: 129.5, currency: 'USD' }],
+      [],
+    );
+    expect(right.wrongPrice).toBeNull();
+  });
+});

@@ -1427,13 +1427,15 @@ export async function getShoppingProducts(
       catalog_product_id: string;
       position: number;
       platform: string;
+      price_amount: number | null;
+      price_currency: string | null;
       prompt_results: { prompt_id: string } | null;
     }>(() =>
       cardsInWindow(
         supabase,
         brandId,
         filters,
-        'catalog_product_id, position, platform, prompt_results:prompt_result_id ( prompt_id )',
+        'catalog_product_id, position, platform, price_amount, price_currency, prompt_results:prompt_result_id ( prompt_id )',
       )
         .eq('matched_brand_role', 'own')
         .not('catalog_product_id', 'is', null),
@@ -1450,6 +1452,9 @@ export async function getShoppingProducts(
     productId: card.catalog_product_id,
     shelf: `${card.prompt_results?.prompt_id ?? '?'}:${card.platform}`,
     rank: card.position + 1,
+    price: card.price_amount === null ? null : Number(card.price_amount),
+    currency: card.price_currency,
+    platform: card.platform,
   }));
   const aiStats: ProductAiStats[] = (stats.data ?? []).map((row) => ({
     productId: row.product_id,
