@@ -6,6 +6,7 @@ import messages from '../../../../../../../../messages/en.json';
 import type { ContentAuthor } from '@/lib/content/authors';
 import { eeat, trust, trustBlocks, type TrustRead } from '@/lib/content/quality-checks';
 import { qualityTodos } from '@/lib/content/quality-todos';
+import type { ShoppingLinks } from '@/lib/content/shopping-check';
 import type { SiteTrust } from '@/lib/content/site-trust';
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
@@ -184,45 +185,80 @@ afterEach(() => {
 });
 
 describe('BeforePublish', () => {
-  it("says which shopping links to swap, the category page's, or that they work (shopping path)", async () => {
+  describe('shopping links (shopping path)', () => {
     const product = (title: string, state: 'ok' | 'sold_out' | 'refused' | 'gone') => ({
       key: `shop.example/products/${title}`,
       title,
       state,
+      inPath: true,
     });
-    await render(quality(), {
-      shopping: {
-        categoryLinked: true,
-        linked: [product('Canyon', 'sold_out'), product('Ridge', 'refused')],
-        bad: [product('Canyon', 'sold_out'), product('Ridge', 'refused')],
-        products: 4,
-        categories: 1,
-      },
+    const links = (over: Partial<ShoppingLinks> = {}): ShoppingLinks => ({
+      categoryLinked: true,
+      linked: [],
+      bad: [],
+      products: 4,
+      want: 0,
+      categories: 1,
+      ...over,
     });
-    const bad = rows().find((r) => r?.startsWith('2 product links to swap'));
-    expect(bad).toContain(
-      'Canyon (sold out), Ridge (Merchant Center refuses it). Swap them in Brief › Shopping path.',
-    );
+    const shoppingRow = () => rows().find((r) => r?.startsWith('Shopping links'));
 
-    await render(quality(), {
-      shopping: { categoryLinked: false, linked: [], bad: [], products: 4, categories: 1 },
-    });
-    expect(rows().join('|')).toContain('No link to the category page');
+    it('names the links to remove or replace, the first three and how many more', async () => {
+      await render(quality(), {
+        shopping: links({ bad: [product('Canyon', 'sold_out'), product('Ridge', 'refused')] }),
+      });
+      const bad = rows().find((r) => r?.startsWith('2 product links to remove or replace'));
+      expect(bad).toContain(
+        'Canyon (sold out), Ridge (Merchant Center refuses it). Remove or replace these links on the page',
+      );
 
-    await render(quality(), {
-      shopping: {
-        categoryLinked: true,
-        linked: [product('Summit', 'ok')],
-        bad: [],
-        products: 4,
-        categories: 1,
-      },
+      const five = ['A', 'B', 'C', 'D', 'E'].map((t) => product(t, 'gone'));
+      await render(quality(), { shopping: links({ bad: five }) });
+      expect(rows().find((r) => r?.startsWith('5 product links'))).toContain(
+        'A (no longer in the catalog), B (no longer in the catalog), C (no longer in the catalog) +2 more.',
+      );
     });
-    const ok = rows().find((r) => r?.startsWith('Shopping links work'));
-    expect(ok).toContain('1 product linked, in stock and accepted by Merchant Center.');
 
-    await render(quality());
-    expect(rows().join('|')).not.toContain('Shopping links');
+    it('asks for the category page, then the products the rule wants', async () => {
+      await render(quality(), { shopping: links({ categoryLinked: false, want: 3 }) });
+      expect(rows().join('|')).toContain('No link to the category page');
+
+      await render(quality(), {
+        shopping: links({ linked: [product('Summit', 'ok')], want: 3 }),
+      });
+      expect(rows().join('|')).toContain('1 of 3 products linked');
+      expect(rows().join('|')).not.toContain('Shopping links work');
+    });
+
+    it('says they work, with the words for no product linked by whether the category page is', async () => {
+      await render(quality(), {
+        shopping: links({ linked: [product('Summit', 'ok')], want: 1 }),
+      });
+      expect(rows().find((r) => r?.startsWith('Shopping links work'))).toContain(
+        '1 product linked, in stock and accepted by Merchant Center.',
+      );
+
+      await render(quality(), { shopping: links() });
+      expect(rows().find((r) => r?.startsWith('Shopping links work'))).toContain(
+        'No product linked yet; the category page is.',
+      );
+      await render(quality(), { shopping: links({ categories: 0, categoryLinked: false }) });
+      const none = rows().find((r) => r?.startsWith('Shopping links work'));
+      expect(none).toContain('No product linked yet.');
+      expect(none).not.toContain('category page');
+    });
+
+    it('says the catalog is being read, or couldn’t be, and shows no row without a path', async () => {
+      await render(quality(), { shopping: 'reading' });
+      expect(shoppingRow()).toBe(
+        "Shopping links · check itReading your catalog for the linked products' stock…",
+      );
+      await render(quality(), { shopping: 'failed' });
+      expect(rows().join('|')).toContain("Couldn't read your catalog");
+
+      await render(quality());
+      expect(rows().join('|')).not.toContain('Shopping links');
+    });
   });
 
   it('warns under Trust 60 with the biggest reason, and logs Mark ready anyway', async () => {

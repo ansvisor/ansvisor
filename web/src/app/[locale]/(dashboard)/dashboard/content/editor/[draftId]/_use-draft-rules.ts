@@ -116,9 +116,11 @@ export function useDraftRules({
   catalog?: CatalogMatch | 'reading' | null;
   /**
    * The draft's shopping path against the catalog (useShoppingCheck), for the
-   * Shopping rules; they're shown while it has one (shopping path, part 6).
+   * Shopping rules (shopping path, part 6): shown once it's read and has one,
+   * or couldn't be read; not while it's first read, so a draft without a
+   * path never shows them.
    */
-  shopping?: ShoppingCheck | 'reading' | null;
+  shopping?: ShoppingCheck | 'reading' | 'failed' | null;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -190,7 +192,7 @@ export function useDraftRules({
           keywords,
           language,
           length: effective.importLength,
-          shopping: shopping !== null,
+          shopping: shopping !== null && shopping !== 'reading',
         }),
         effective,
       ),

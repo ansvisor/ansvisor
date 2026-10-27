@@ -6,46 +6,64 @@ import type { SiteType } from '@/lib/content/page-types';
 import type { ShoppingCheck } from '@/lib/content/shopping-check';
 import { shoppingPathFits } from '@/lib/content/shopping-path';
 
+export interface ShoppingCheckRead {
+  /**
+   * The draft's shopping path against the catalog: 'reading' until it's
+   * first read, 'failed' when it couldn't be, null without a path or on a
+   * page that takes none.
+   */
+  check: ShoppingCheck | 'reading' | 'failed' | null;
+  /** Read again (`reload`) and not back yet: `check` is the last read until then. */
+  refreshing: boolean;
+  /** Reads it again: Before you publish asks for it fresh, Brief › Shopping path after a change. */
+  reload: () => void;
+}
+
 /**
  * The draft's shopping path read against the catalog now (shopping path,
- * part 6), for the Shopping rules and Before you publish: 'reading' while
- * it's read, null without a path or on a page that takes none. `reload`
- * reads it again: Before you publish asks for it fresh.
+ * part 6), for the Shopping rules and Before you publish. A read again
+ * keeps the last one meanwhile, so the rules don't come and go with it.
  */
 export function useShoppingCheck({
   draftId,
-  brandId,
   siteType,
   pageType,
 }: {
   draftId: string;
-  brandId: string;
   siteType: SiteType;
   pageType: string | null;
-}): { check: ShoppingCheck | 'reading' | null; reload: () => void } {
+}): ShoppingCheckRead {
   const fits = shoppingPathFits(siteType, pageType);
-  const [state, setState] = useState<{ key: string; check: ShoppingCheck | null } | null>(null);
+  // The draft read, and each read of it: a new draft starts from 'reading'.
+  const draftKey = `${draftId}|${fits}`;
   const [reads, setReads] = useState(0);
-  const key = `${draftId}|${brandId}|${fits}|${reads}`;
+  const key = `${draftKey}|${reads}`;
+  const [state, setState] = useState<{
+    draftKey: string;
+    key: string;
+    check: ShoppingCheck | 'failed' | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!fits) return;
     let cancelled = false;
-    getShoppingCheck(draftId, brandId).then(
+    getShoppingCheck(draftId).then(
       (check) => {
-        if (!cancelled) setState({ key, check });
+        if (!cancelled) setState({ draftKey, key, check });
       },
       (err) => {
         console.error('Failed to read the shopping links:', err);
-        if (!cancelled) setState({ key, check: null });
+        if (!cancelled) setState({ draftKey, key, check: 'failed' });
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [draftId, brandId, fits, key]);
+  }, [draftId, fits, draftKey, key]);
 
   const reload = useCallback(() => setReads((n) => n + 1), []);
-  if (!fits) return { check: null, reload };
-  return { check: state?.key === key ? state.check : 'reading', reload };
+  if (!fits) return { check: null, refreshing: false, reload };
+  const last = state?.draftKey === draftKey ? state : null;
+  if (!last) return { check: 'reading', refreshing: false, reload };
+  return { check: last.check, refreshing: last.key !== key, reload };
 }

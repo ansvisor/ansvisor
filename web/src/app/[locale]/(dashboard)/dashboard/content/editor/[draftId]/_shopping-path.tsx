@@ -71,16 +71,19 @@ const PICK_AGAIN: readonly (NoPathReason | null)[] = [null, 'no_match', 'other']
  * API for its topic (in stock, accepted by Merchant Center), with where each
  * goes. The person locks, swaps, removes or adds a product; Pick again
  * builds it anew, their choices kept. Shown for a page type that takes one
- * on an e-commerce brand.
+ * on an e-commerce brand. `onPathChange` follows each change saved or
+ * built, and one found made meanwhile: the Shopping rules read it again.
  */
 export function ShoppingPathSection({
   draftId,
   brandId,
   pageType,
+  onPathChange,
 }: {
   draftId: string;
   brandId: string;
   pageType: string | null;
+  onPathChange?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.shopping');
   const [state, setState] = useState<PathState>({ status: 'loading' });
@@ -143,6 +146,8 @@ export function ShoppingPathSection({
       { builtAt: from.builtAt, savedAt: from.savedAt ?? null },
       choicesOf(next),
     );
+    // Saved, or changed meanwhile: the path kept isn't the one read either way.
+    onPathChange?.();
     if ('error' in saved) {
       // A build or another change since it was read: shown as it is now, not overwritten.
       toast.error(t('changed'));
@@ -168,9 +173,11 @@ export function ShoppingPathSection({
       const result = await buildDraftShoppingPath(draftId, brandId);
       if (!('error' in result)) {
         setState({ status: 'ready', path: result.path, none: result.path ? null : result.reason });
+        onPathChange?.();
       } else if (result.error === 'changed') {
         toast.error(t('changed'));
         void load();
+        onPathChange?.();
       } else {
         toast.error(t(result.error === 'rate_limited' ? 'rateLimited' : 'buildFailed'));
       }
