@@ -465,6 +465,9 @@ export default function ShoppingPage() {
                     platforms={filterOpts.platforms}
                     platform={platform}
                     onPlatform={setPlatform}
+                    products={
+                      catalogTable && catalogTable !== 'failed' ? catalogTable.rows : undefined
+                    }
                   />
                   <h2 className="pt-2 text-sm font-semibold">{t('shelf.trends')}</h2>
                   <div className="grid gap-4 lg:grid-cols-2">

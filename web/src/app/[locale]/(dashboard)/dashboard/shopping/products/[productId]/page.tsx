@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -20,18 +20,27 @@ import { ProductDetailView } from '../../_product-detail';
 export default function ShoppingProductPage() {
   const t = useTranslations('shopping.detail');
   const { productId } = useParams<{ productId: string }>();
+  // Opened from the Shelf's "Why not you?": the shelf to explain first.
+  const search = useSearchParams();
+  const prompt = search.get('prompt');
+  const platform = search.get('platform');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { canUse } = useFeatureGate();
   const [read, setRead] = useState<{
     key: string;
     detail: ShoppingProductDetail | null | 'failed';
   } | null>(null);
-  const key = `${activeBrandId}:${productId}`;
+  const key = `${activeBrandId}:${productId}:${prompt ?? ''}:${platform ?? ''}`;
 
   useEffect(() => {
     if (!activeBrandId || !productId) return;
     let cancelled = false;
-    getShoppingProductDetail(activeBrandId, productId, { datePreset: '30d' })
+    getShoppingProductDetail(
+      activeBrandId,
+      productId,
+      { datePreset: '30d' },
+      prompt ? { promptId: prompt, platform } : null,
+    )
       .then((detail) => {
         if (!cancelled) setRead({ key, detail });
       })
@@ -42,7 +51,7 @@ export default function ShoppingProductPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, productId, key]);
+  }, [activeBrandId, productId, key, prompt, platform]);
 
   const back = (
     <Link

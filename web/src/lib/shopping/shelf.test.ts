@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildShelf, inPriceBand, shelfStats, SHELF_CARDS, type ShelfCardRow } from './shelf';
+import type { ProductRow } from './products';
+import {
+  buildShelf,
+  inPriceBand,
+  shelfStats,
+  SHELF_CARDS,
+  whyNotYou,
+  type ShelfCardRow,
+} from './shelf';
 
 /** Product Visibility's Shelf (ECOM-006). */
 
@@ -153,5 +161,71 @@ describe('inPriceBand', () => {
     expect(inPriceBand(row, 'under50')).toBe(false);
     const [noPrices] = buildShelf([card({ price_amount: null })], NOW);
     expect(inPriceBand(noPrices, 'over200')).toBe(false);
+  });
+});
+
+describe('whyNotYou', () => {
+  const productRow = (
+    id: string,
+    over: Partial<ProductRow['product']> = {},
+    readiness = 50,
+  ): ProductRow => ({
+    product: {
+      id,
+      title: `Product ${id}`,
+      url: null,
+      productType: null,
+      brand: null,
+      description: null,
+      image: null,
+      category: null,
+      price: 100,
+      currency: 'USD',
+      inStock: true,
+      hasGtin: true,
+      ...over,
+    },
+    shelves: 0,
+    winRate: null,
+    avgRank: null,
+    aiVisits: 0,
+    orders: 0,
+    revenue: null,
+    currency: null,
+    readiness,
+    missing: [],
+    wrongPrice: null,
+  });
+  const absent = buildShelf(
+    [
+      card({
+        prompt_text: 'lightweight hiking backpack for women',
+        matched_brand_role: 'competitor',
+      }),
+    ],
+    NOW,
+  )[0];
+
+  it('names the product the question asks for most, by its title, category and type', () => {
+    const products = [
+      productRow('boot', { title: 'Peak Hiking Boot' }),
+      productRow('ridge', { title: 'Ridge 30L', category: 'Bags > Hiking backpacks' }),
+      productRow('trail', { title: 'Trail Daypack', productType: 'Backpack' }, 90),
+    ];
+    // Ridge shares "hiking" and "backpack"; the others one word each.
+    expect(whyNotYou(absent, products)?.product.id).toBe('ridge');
+    // On a tie, the readier one.
+    expect(
+      whyNotYou(absent, [
+        productRow('a', { title: 'Backpack A' }, 40),
+        productRow('b', { title: 'Backpack B' }, 80),
+      ])?.product.id,
+    ).toBe('b');
+  });
+
+  it('names none for a shelf the brand is on, or when nothing shares a word with the question', () => {
+    expect(whyNotYou(absent, [productRow('mug', { title: 'Coffee mug' })])).toBeNull();
+    const on = { ...absent, ownRank: 2 };
+    expect(whyNotYou(on, [productRow('ridge', { title: 'Hiking backpack' })])).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ShoppingBag, Star } from 'lucide-react';
+import { ChevronRight, ShoppingBag, Star } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,9 +23,11 @@ import { getPlatformName } from '@/lib/traffic-platforms';
 import { cn } from '@/lib/utils';
 import { priceText } from '@/lib/shopping/price';
 import type { ShoppingAiOrders, ShoppingShelf } from '@/lib/actions/shopping';
+import type { ProductRow } from '@/lib/shopping/products';
 import {
   PRICE_BANDS,
   inPriceBand,
+  whyNotYou,
   type PriceBand,
   type ShelfCard,
   type ShelfRow,
@@ -254,8 +256,58 @@ function ProductCard({ card }: { card: ShelfCard }) {
   );
 }
 
-function ShelfRowCard({ row }: { row: ShelfRow }) {
+/**
+ * "Why not you?" on a shelf the brand isn't on: its product the question
+ * asks for most, greyed after the shelf's own, and the way to its page
+ * opened on this shelf, beside the product AI picked.
+ */
+function WhyNotYouCard({ row, product }: { row: ShelfRow; product: ProductRow }) {
+  const t = useTranslations('shopping.shelf.whyNot');
+  const { product: p } = product;
+  const href = `/dashboard/shopping/products/${p.id}?${new URLSearchParams({
+    prompt: row.promptId,
+    platform: row.platform,
+  })}`;
+  return (
+    <li className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-dashed bg-muted/30 p-2.5">
+      <span className="text-xs font-semibold text-muted-foreground">{t('yours')}</span>
+      <div className="grid h-20 place-items-center overflow-hidden rounded bg-muted/50 opacity-60 grayscale">
+        {p.image ? (
+          // eslint-disable-next-line @next/next/no-img-element -- catalog images from any host
+          <img
+            src={p.image}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <ShoppingBag className="h-6 w-6 text-muted-foreground/40" aria-hidden />
+        )}
+      </div>
+      <p className="line-clamp-2 text-xs font-medium text-muted-foreground" title={p.title}>
+        {p.title}
+      </p>
+      {p.price !== null && (
+        <p className="text-[11px] text-muted-foreground tabular-nums">
+          {priceText(p.price, p.currency)}
+        </p>
+      )}
+      <Link
+        href={href}
+        className="mt-auto inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+        aria-label={t('linkLabel', { product: p.title })}
+      >
+        {t('link')}
+        <ChevronRight className="h-3 w-3" aria-hidden />
+      </Link>
+    </li>
+  );
+}
+
+function ShelfRowCard({ row, products }: { row: ShelfRow; products: readonly ProductRow[] }) {
   const t = useTranslations('shopping.shelf');
+  const missing = whyNotYou(row, products);
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -295,9 +347,11 @@ function ShelfRowCard({ row }: { row: ShelfRow }) {
           </span>
         </div>
         <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-          {row.cards.map((card) => (
+          {/* Room for the brand's own beside a full shelf: its last card gives way. */}
+          {(missing ? row.cards.slice(0, 5) : row.cards).map((card) => (
             <ProductCard key={card.rank} card={card} />
           ))}
+          {missing && <WhyNotYouCard row={row} product={missing} />}
         </ol>
       </CardContent>
     </Card>
@@ -315,12 +369,15 @@ export function ShelfRows({
   platforms,
   platform,
   onPlatform,
+  products = [],
 }: {
   shelf: ShoppingShelf | null;
   /** The channels with data, for the chips. */
   platforms: string[];
   platform: string;
   onPlatform: (platform: string) => void;
+  /** The catalog's products (the Products table's rows), for "Why not you?". */
+  products?: readonly ProductRow[];
 }) {
   const t = useTranslations('shopping.shelf');
   const [band, setBand] = useState<PriceBand>('all');
@@ -388,7 +445,7 @@ export function ShelfRows({
       ) : (
         <>
           {rows.slice(0, shown).map((row) => (
-            <ShelfRowCard key={row.key} row={row} />
+            <ShelfRowCard key={row.key} row={row} products={products} />
           ))}
           {rows.length > shown && (
             <div className="flex justify-center">

@@ -7352,6 +7352,11 @@
       "you": "You",
       "via": "via {place}",
       "absent": "You're not on this shelf",
+      "whyNot": {
+        "yours": "Yours, not here",
+        "link": "Why not you?",
+        "linkLabel": "Why isn't {product} on this shelf? Open it beside the product AI picked"
+      },
       "rank": "You: #{rank}",
       "rankWeek": "You: #{rank} · {own} of {count} shelves this week",
       "price": {
