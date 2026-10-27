@@ -7,7 +7,7 @@ import { linkHref, linkKey } from './content-links.js';
 import { foldLetters } from './letters.js';
 import { logger } from './logger.js';
 import { readAllRpcRows } from './rpc-pages.js';
-import { MAX_PRODUCTS, PRODUCTS_FOR, readShoppingPath } from './shopping-path.js';
+import { MAX_PRODUCTS, PRODUCTS_FOR, TITLE_CHARS, readShoppingPath } from './shopping-path.js';
 
 /**
  * The Content Agent's side of a draft's shopping path (shopping path, part
@@ -102,18 +102,20 @@ function priceSpellings(product) {
  * "kadın", "İç" as "iç").
  */
 function readable(text, fold) {
-  let out = '';
+  const out = [];
   const from = [];
   const to = [];
   let at = 0;
+  let space = false;
   for (const char of String(text ?? '')) {
     const end = at + char.length;
     let read = /\s/u.test(char) ? ' ' : /['’‘ʼ]/u.test(char) ? "'" : char;
-    if (read === ' ' && out.endsWith(' ')) {
+    if (read === ' ' && space) {
       to[to.length - 1] = end;
     } else {
       if (fold) read = foldLetters(read);
-      out += read;
+      out.push(read);
+      space = read.endsWith(' ');
       for (let i = 0; i < read.length; i += 1) {
         from.push(at);
         to.push(end);
@@ -121,7 +123,7 @@ function readable(text, fold) {
     }
     at = end;
   }
-  return { text: out, from, to };
+  return { text: out.join(''), from, to };
 }
 
 /** A name as it's compared: a category's folded, a product's as written (case kept: "Pro" isn't "a pro tip"). */
@@ -185,16 +187,17 @@ export function withShopping(targets, path) {
 }
 
 /**
- * The products with their stock as the catalog has it now: the best of
- * their live variants' (none read: nothing is said of it); as the path
- * saved it when the read fails.
+ * The products with their price and stock as the catalog has them now, both
+ * from one live variant: the best stock, then the lowest price at it. A
+ * product with no live variant left is gone from the catalog: nothing is
+ * said of its price or stock. As the path saved them when the read fails.
  */
-async function withStock(db, brandId, products, draftId) {
+async function withOffer(db, brandId, products, draftId) {
   if (!products.length) return products;
   const { data, error } = await readAllRpcRows('catalog_variants', (from, to) =>
     db
       .from('catalog_variants')
-      .select('id, product_id, availability')
+      .select('id, product_id, availability, price, sale_price, currency')
       .eq('brand_id', brandId)
       .in(
         'product_id',
@@ -208,13 +211,32 @@ async function withStock(db, brandId, products, draftId) {
     logger.warn({ err: error, draftId }, "[shopping-links] reading stock failed; the path's used");
     return products;
   }
+  // A stock it can't read comes last, and nothing is said of it.
+  const rankOf = (v) => {
+    const rank = STOCK_ORDER.indexOf(stockWords(v.availability));
+    return rank === -1 ? STOCK_ORDER.length : rank;
+  };
+  const amount = (v) => amountOf({ price: v.price, salePrice: v.sale_price }) ?? Infinity;
   const best = new Map();
   for (const variant of data) {
-    const rank = STOCK_ORDER.indexOf(stockWords(variant.availability));
-    if (rank === -1 || best.get(variant.product_id)?.rank <= rank) continue;
-    best.set(variant.product_id, { rank, availability: stockKey(variant.availability) });
+    const held = best.get(variant.product_id);
+    const rank = rankOf(variant);
+    if (held && (held.rank < rank || (held.rank === rank && amount(held) <= amount(variant)))) {
+      continue;
+    }
+    best.set(variant.product_id, { ...variant, rank });
   }
-  return products.map((p) => ({ ...p, availability: best.get(p.id)?.availability ?? '' }));
+  return products.map((p) => {
+    const v = best.get(p.id);
+    if (!v) return { ...p, price: null, salePrice: null, availability: '' };
+    return {
+      ...p,
+      price: v.price ?? null,
+      salePrice: v.sale_price ?? null,
+      currency: v.currency ?? null,
+      availability: v.rank < STOCK_ORDER.length ? stockKey(v.availability) : '',
+    };
+  });
 }
 
 /**
@@ -235,8 +257,10 @@ export async function shoppingPathFor(draft, { db = supabaseAdmin } = {}) {
     return null;
   }
   const onSite = (page) => shopHref(page.url) && onBrandDomain(page.url, site);
-  const categories = path.categories.filter(onSite);
-  const products = path.products.filter(onSite);
+  // A name longer than the build ever keeps isn't the build's: left out.
+  const named = (name) => String(name ?? '').length <= TITLE_CHARS;
+  const categories = path.categories.filter((c) => onSite(c) && named(c.name));
+  const products = path.products.filter((p) => onSite(p) && named(p.title));
   const off = path.categories.length + path.products.length - categories.length - products.length;
   if (off) {
     logger.warn(
@@ -247,7 +271,7 @@ export async function shoppingPathFor(draft, { db = supabaseAdmin } = {}) {
   return {
     ...path,
     categories,
-    products: await withStock(db, draft.brand_id, products, draft.id),
+    products: await withOffer(db, draft.brand_id, products, draft.id),
   };
 }
 

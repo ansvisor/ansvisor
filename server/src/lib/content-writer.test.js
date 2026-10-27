@@ -587,7 +587,9 @@ describe('runDraftWriting on a new page', () => {
     });
     rows.brand_domains = [{ domain: 'shop.example' }];
     // Sold out since the path was built: the catalog's stock now.
-    rows.catalog_variants = [{ id: 'v1', product_id: 'p1', availability: 'out of stock' }];
+    rows.catalog_variants = [
+      { id: 'v1', product_id: 'p1', availability: 'out of stock', price: 189, currency: 'USD' },
+    ];
     await expect(run(draftRow({ shopping_path: shoppingPath() }))).resolves.toEqual({
       written: true,
     });

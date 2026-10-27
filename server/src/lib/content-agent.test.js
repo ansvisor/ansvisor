@@ -1742,6 +1742,9 @@ describe('fixDraftRules', () => {
       },
     };
     rows.brand_domains = [{ domain: 'shop.example' }];
+    rows.catalog_variants = [
+      { id: 'v1', product_id: 'k1', availability: 'in stock', price: 49, currency: 'USD' },
+    ];
     generateObject.mockResolvedValue({
       object: {
         suggestions: [
