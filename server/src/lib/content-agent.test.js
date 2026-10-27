@@ -1742,6 +1742,19 @@ describe('fixDraftRules', () => {
       },
     };
     rows.brand_domains = [{ domain: 'shop.example' }];
+    // The price and stock are read fresh from the catalog at write time.
+    rows.catalog_variants = [
+      {
+        id: 'kv1',
+        brand_id: BRAND,
+        product_id: 'k1',
+        availability: 'in_stock',
+        price: 49,
+        sale_price: null,
+        currency: 'USD',
+        removed_at: null,
+      },
+    ];
     generateObject.mockResolvedValue({
       object: {
         suggestions: [
