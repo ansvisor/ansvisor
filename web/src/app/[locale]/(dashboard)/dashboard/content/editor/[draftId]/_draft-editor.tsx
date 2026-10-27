@@ -450,6 +450,10 @@ export function DraftEditor({
   // (thirdStepTried, thirdStepPasses).
   const [thirdStep, setThirdStep] = useState<ThirdStepStore>(() => readThirdStep(draft.id));
   const thirdStepNow = useRef(thirdStep);
+  // What the read of its run (below) found the attempt kept from before to
+  // be now: a run begun while the read was out that then doesn't run puts
+  // that back, not the attempt as it was.
+  const attemptRead = useRef<{ of: ThirdTry; now: ThirdTry | null } | null>(null);
   const nextStepNow = useRef<NextStepId | null>(null);
   // An attempt kept from before the editor opened, not yet taken: whether
   // its run was read (below). Until then no step passes on it.
@@ -2009,13 +2013,20 @@ export function DraftEditor({
   // (rules.ts RewriteReach). A later Fix run's batch doesn't hide it.
   const [lastRewrite, setLastRewrite] = useState<(LastRewrite & { html: string }) | null>(null);
   const shownRewriteId = pageSuggestion?.id ?? null;
+  // The rewrite shown when it was last read (or failed to be): the Length's
+  // state waits for the read for the rewrite shown now.
+  const [lastRewriteReadFor, setLastRewriteReadFor] = useState<string | null>();
+  const lastRewriteRead = lastRewriteReadFor === shownRewriteId;
   useEffect(() => {
     let cancelled = false;
     getLastPageRewrite(draft.id)
       .then((last) => {
         if (!cancelled) setLastRewrite(last);
       })
-      .catch((err) => console.error("Failed to read the page's last rewrite:", err));
+      .catch((err) => console.error("Failed to read the page's last rewrite:", err))
+      .finally(() => {
+        if (!cancelled) setLastRewriteReadFor(shownRewriteId);
+      });
     return () => {
       cancelled = true;
     };
@@ -2333,6 +2344,10 @@ export function DraftEditor({
       }
       setSuggestions((prev) => prev.map((x) => (x.id === s.id ? { ...x, status: to } : x)));
       if (to === 'accepted') {
+        // A page written again, as Start's: the steps passed on the page
+        // before are passed no longer (#1556 review). The rewrite's own
+        // attempt stays, to pass its step.
+        saveThirdStep({ ...thirdStepNow.current, passes: {} });
         toast.success(t('rewrite.acceptedToast'));
         // The rewrite is the whole batch: as Accept all.
         nudgeAfterRead();
@@ -2448,7 +2463,9 @@ export function DraftEditor({
     third: { prev: ThirdTry | null } | null = null,
   ) => {
     const untried = () => {
-      if (third) saveThirdTry(third.prev);
+      if (!third) return;
+      const read = attemptRead.current;
+      saveThirdTry(read && read.of === third.prev ? read.now : third.prev);
     };
     const nothing = () => {
       const now = thirdStepNow.current.attempt;
@@ -3263,16 +3280,21 @@ export function DraftEditor({
   }, [staleSkips, draft.id]);
   // A step the agent took passes with the rules open and the Length as they
   // read once its changes are decided: while they read so, Next moves on; a
-  // rule the agent never saw, or a Length that moved, brings it back. The
+  // rule the agent never saw, or a Length that moved (far off, for Fix open
+  // rules: thirdStepPasses), brings it back. The
   // rules read the page a beat behind a decision (PAGE_READ_DELAY_MS, then a
   // deferred read), so the pass waits for that, and keeps the page as it
   // reads after; and for an attempt kept from before, for its run to be read.
+  // It waits only for what a pass reads (thirdPassOf, #1556 review): the
+  // rules, the quoted passages that hold some, and the last rewrite the
+  // Length's reach reads; not Quality's reads, which a failed one would hold.
+  const thirdRead = rulesSettled && citedRead && lastRewriteRead;
   const nextStateNow = useRef(nextState);
   useEffect(() => {
     nextStateNow.current = nextState;
   });
   useEffect(() => {
-    if (!thirdTaken || !nextRead || !attemptChecked) return;
+    if (!thirdTaken || !thirdRead || !attemptChecked) return;
     const timer = setTimeout(() => {
       const { attempt, passes } = thirdStepNow.current;
       if (!attempt) return;
@@ -3284,11 +3306,11 @@ export function DraftEditor({
     return () => clearTimeout(timer);
     // pageHtml: each read of the page starts the wait again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thirdTaken, nextRead, attemptChecked, pageHtml]);
+  }, [thirdTaken, thirdRead, attemptChecked, pageHtml]);
   // A pass that no longer holds is dropped, as a stale skip is, so a page
   // that reads as it did again later doesn't bring it back to life.
   const stalePasses =
-    nextRead && Object.keys(thirdStep.passes).length !== thirdStepPasses(nextState).size;
+    thirdRead && Object.keys(thirdStep.passes).length !== thirdStepPasses(nextState).size;
   useEffect(() => {
     if (!stalePasses) return;
     const held = thirdStepPasses(nextStateNow.current);
@@ -3304,8 +3326,10 @@ export function DraftEditor({
   // An attempt whose run failed or was stopped while the editor was closed
   // (a rewrite runs on its waiting page) is none: a later batch from anything
   // else must not pass the step. A Stop writes stopped_at before the run's
-  // outcome, so a stopped run with no outcome yet is stopped. A run still
-  // under way is left to finish: its batch passes the step.
+  // outcome, so a stopped run with no outcome yet is stopped. A Fix that
+  // found nothing left no batch: it ended, as agentOutcome reads it. A run
+  // still under way is left to finish: its batch passes the step. Only the
+  // attempt read is changed: one begun since is the newer run's (#1556 review).
   useEffect(() => {
     const attempt = thirdStepNow.current.attempt;
     if (!attempt || attempt.ended) return;
@@ -3322,9 +3346,14 @@ export function DraftEditor({
           if (!live || !run || Date.parse(run.startedAt) < Date.parse(attempt.at) - 60_000) {
             return;
           }
-          if (run.outcome === 'failed' || run.outcome === 'stopped' || run.stoppedAt) {
-            saveThirdTry(null);
-          }
+          const now =
+            run.outcome === 'failed' || run.outcome === 'stopped' || run.stoppedAt
+              ? null
+              : attempt.kind === 'fix' && run.outcome === 'done' && !run.steps[2]?.count
+                ? { ...attempt, ended: true }
+                : attempt;
+          attemptRead.current = { of: attempt, now };
+          if (now !== attempt && thirdStepNow.current.attempt === attempt) saveThirdTry(now);
         },
         () => {},
       )

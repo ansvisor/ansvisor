@@ -386,7 +386,11 @@ export function NextStepButton({
                 {p.state === 'done' ? <Check className="h-2.5 w-2.5" /> : i + 1}
               </span>
               <span className="min-w-0 [overflow-wrap:anywhere]">
-                {stepName(t, p.id, state)}
+                {/* A step the agent took is crossed out as a done one is; its
+                    note, the person's part, isn't (editor test 2026-10-27). */}
+                <span className={cn(p.state === 'passed' && 'line-through')}>
+                  {stepName(t, p.id, state)}
+                </span>
                 {(p.state === 'skipped' || p.state === 'passed') && (
                   <span aria-hidden className="ml-1.5 text-xs no-underline">
                     {t(p.state)}

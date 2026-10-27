@@ -35,7 +35,13 @@ function from(table) {
     }
     if (table === 'content_rule_sets') {
       const types = q.filters.find(([op]) => op === 'in')?.[2] ?? [];
-      return { data: db.ruleSets.filter((r) => types.includes(r.page_type)), error: null };
+      const site = q.filters.find(([op, col]) => op === 'eq' && col === 'site_type')?.[2];
+      return {
+        data: db.ruleSets.filter(
+          (r) => types.includes(r.page_type) && (!r.site_type || r.site_type === site),
+        ),
+        error: null,
+      };
     }
     if (table === 'content_drafts') {
       const ids = q.filters.find(([op]) => op === 'in')?.[2];
@@ -43,7 +49,10 @@ function from(table) {
     }
     if (table === 'webhook_configs') return { data: db.configs, error: null };
     if (table === 'brand_cms_connections') return { data: db.webflow, error: null };
-    if (table === 'brands') return { data: db.brand, error: null };
+    if (table === 'brands') {
+      db.brandReads += 1;
+      return { data: db.brand, error: null };
+    }
     if (table === 'brand_domains') return { data: [{ domain: 'acme.example' }], error: null };
     return { data: null, error: null };
   };
@@ -117,6 +126,7 @@ const draft = (id, over = {}) => ({
 
 beforeEach(() => {
   db.brand = { id: 'b1', name: 'Acme Coffee', industry: 'Coffee', language: null };
+  db.brandReads = 0;
   db.drafts = [draft(page().draftId)];
   db.ruleSets = [];
   db.told = null;
@@ -320,14 +330,35 @@ describe('sendContentPages', () => {
   });
 
   it('reads the language from My rules for a draft no one has set rules on, as the editor does', async () => {
-    db.ruleSets = [{ page_type: 'blog_post', overrides: { language: { value: 'French' } } }];
+    // A set for each kind of site (00227): the brand's kind's is read.
+    db.ruleSets = [
+      {
+        page_type: 'blog_post',
+        site_type: 'ecommerce',
+        overrides: { language: { value: 'German' } },
+      },
+      { page_type: 'blog_post', site_type: 'b2b', overrides: { language: { value: 'French' } } },
+    ];
     await send();
     expect(JSON.parse(postJson.mock.calls[0][1]).page.language).toBe('fr');
+    // The brand read once, for the package and its kind of site (#1544 review).
+    expect(db.brandReads).toBe(1);
+
+    // A shop (Shopping mode on): the e-commerce set's.
+    db.brand = { ...db.brand, shopping_mode_enabled: true };
+    await send();
+    expect(JSON.parse(postJson.mock.calls[1][1]).page.language).toBe('de');
+
+    // The brand unread: no kind of site's set, never the B2B one.
+    db.brand = null;
+    await send();
+    expect(JSON.parse(postJson.mock.calls[2][1]).page.language).toBe('en');
 
     // The draft's own choices win once it has any.
+    db.brand = { id: 'b1', name: 'Acme Coffee', industry: 'Coffee', language: null };
     db.drafts[0].rules = { source: 'default', overrides: {}, textRules: [] };
     await send();
-    expect(JSON.parse(postJson.mock.calls[1][1]).page.language).toBe('en');
+    expect(JSON.parse(postJson.mock.calls[3][1]).page.language).toBe('en');
   });
 
   it('takes JSON-LD however its script type is written, as the clean keeps it', async () => {

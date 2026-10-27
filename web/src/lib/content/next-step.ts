@@ -209,13 +209,16 @@ export function thirdPassOf(s: NextStepState): ThirdPass {
  * The steps passed that still hold: the Length reads as it did and, for Fix
  * open rules, every rule open now was open when the agent took it (one it
  * never saw brings the step back, one it couldn't close doesn't). A step
- * whose page has moved on is the agent's again.
+ * whose page has moved on is the agent's again. Fix open rules holds while
+ * the person brings the page within its Length (#1556 review): only a
+ * Length far off now, and not as it was, brings it back.
  */
 export function thirdStepPasses(s: NextStepState): Set<ThirdStepId> {
   const held = new Set<ThirdStepId>();
   const length = stepState('length', s);
   for (const [id, pass] of Object.entries(s.thirdPasses ?? {}) as [ThirdStepId, ThirdPass][]) {
-    if (!pass || pass.length !== length) continue;
+    if (!pass) continue;
+    if (pass.length !== length && (id === 'length' || length !== '')) continue;
     if (id === 'fixRules' && !s.openRules.every((rule) => pass.rules.includes(rule))) continue;
     held.add(id);
   }

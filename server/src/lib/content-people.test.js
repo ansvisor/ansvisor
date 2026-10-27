@@ -265,6 +265,23 @@ describe('guardPeople: what the review found', () => {
     expect(fix('It was explained by Marco Rossi.')).toBe(`It was explained by ${NAME}.`);
   });
 
+  it('reads a long run of spaces quickly, after a quote mark too (review, #1544)', () => {
+    // A character past Latin-1 (’, “): V8 skips no position then.
+    const texts = (run) => [
+      `Ürün’${run}sarah, our head of growth.`,
+      `“Pour slowly”${run}says it.`,
+      `"Pour slowly"${run}it says.`,
+    ];
+    texts(' ').forEach((text) => guardPeople(text, people));
+    for (const space of [' ', '\u00a0', '\n']) {
+      for (const text of texts(space.repeat(30_000))) {
+        const started = Date.now();
+        guardPeople(text, people);
+        expect(Date.now() - started).toBeLessThan(150);
+      }
+    }
+  });
+
   it('reads long text quickly, whatever its words', () => {
     const word = `A${'a'.repeat(400)}`;
     const long = `${word} ${word} ${word} said. `.repeat(10);
@@ -606,5 +623,52 @@ describe('authorWords', () => {
     await expect(authorWords(down, 'o1', log)).resolves.toEqual([]);
     expect(log.warn).toHaveBeenCalledTimes(2);
     expect(log.warn.mock.calls[0][0]).toMatchObject({ organizationId: 'o1' });
+  });
+});
+
+describe('long input read quickly (#1544 review)', () => {
+  const none = knownPeople('');
+  const time = (read) => {
+    const started = Date.now();
+    read();
+    return Date.now() - started;
+  };
+
+  it('reads letters joined by apostrophes, and an opening bracket with no closing one', () => {
+    // A character past Latin-1 (Ü, ’) in each: V8 skips no position then.
+    const texts = (n) => [
+      `Ürün ${'Ab’'.repeat(n)} said it.`,
+      `Ürün ${'A’'.repeat(n)} said it.`,
+      `Ürün ${'a’Aa’A'.repeat(Math.ceil(n / 2))} said it.`,
+      `Ürün ${"''A".repeat(n)} said it.`,
+      `Ürün ${'[a '.repeat(n)}Marco Rossi said it.`,
+    ];
+    // Compiled once, apart from the timing.
+    texts(2).forEach((text) => guardPeople(text, none));
+    for (const text of texts(20_000)) {
+      expect(
+        time(() => guardPeople(text, none)),
+        text.slice(0, 12),
+      ).toBeLessThan(150);
+    }
+    // A name after an opening quote mark is still read, and an apostrophe's own name.
+    expect(guardPeople("'Jane Doe said it twice.", none).text).toBe(`'${NAME} said it twice.`);
+    expect(guardPeople("Bob O'Neil said it twice.", none).text).toBe(`${NAME} said it twice.`);
+  });
+
+  it('puts thousands of names on one line in time near its length', () => {
+    // 20,000 names: checked against every edit kept, or rebuilt per edit,
+    // they took over a second (main, 2026-10-26); read once, about 30 ms.
+    const line = 'Marco Rossi said it. '.repeat(20_000);
+    guardPeople('Marco Rossi said it.', none);
+    let out;
+    expect(time(() => (out = guardPeople(`Ürün: ${line}`, none)))).toBeLessThan(150);
+    expect(out.edits).toHaveLength(20_000);
+    let html;
+    expect(
+      time(() => (html = guardPeopleInHtml(`<p>Ürün: <b>x</b> ${line}</p>`, none))),
+    ).toBeLessThan(300);
+    expect(html.count).toBe(20_000);
+    expect(html.html).toBe(`<p>Ürün: <b>x</b> ${`${NAME} said it. `.repeat(20_000)}</p>`);
   });
 });
