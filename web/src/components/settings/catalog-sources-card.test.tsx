@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { CatalogSource } from '@/lib/catalog';
+import type { CatalogSourcesRead } from './catalog-sources-card';
 
 const listCatalogSources = vi.fn();
 const addFeedSource = vi.fn();
@@ -78,6 +79,29 @@ const STORE: CatalogSource = {
   lastCounts: null,
 };
 
+/** A Google Merchant Center account (#1270), named "Acme Outdoor" in Merchant Center. */
+const GMC: CatalogSource = {
+  ...FEED,
+  id: 'gmc1',
+  kind: 'merchant_center',
+  url: 'https://merchants.google.com/mc/overview?a=123456789',
+  account: '123456789',
+  label: 'Acme Outdoor',
+  lastCounts: {
+    ...FEED.lastCounts!,
+    skipped: 0,
+    errors: [],
+    issues: { items: 3, disapproved: 1, demoted: 2, not_impacted: 0 },
+  },
+  products: 40,
+};
+const GMC_SIGN_IN = {
+  kind: 'merchant_center',
+  label: 'Google Merchant Center',
+  provider: 'google-merchant-center',
+  configured: true,
+};
+
 const ACME = {
   kind: 'acme_store',
   label: 'Acme Store',
@@ -93,11 +117,11 @@ const ACME = {
   ],
 };
 
-async function render(refreshKey?: number) {
+async function render(refreshKey?: number, onSources?: (read: CatalogSourcesRead | null) => void) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <CatalogSourcesCard refreshKey={refreshKey} />
+        <CatalogSourcesCard refreshKey={refreshKey} onSources={onSources} />
       </NextIntlClientProvider>,
     );
   });
@@ -112,6 +136,12 @@ async function type(input: HTMLInputElement, value: string) {
     setter.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+}
+/** The text of each source's row. */
+const rows = () => [...container.querySelectorAll('li')].map((li) => li.textContent ?? '');
+function remount() {
+  act(() => root.unmount());
+  root = createRoot(container);
 }
 const storeForm = () =>
   container.querySelector<HTMLFormElement>('form[aria-label="Acme Store sign-in"]');
@@ -294,35 +324,8 @@ describe('CatalogSourcesCard', () => {
   });
 
   it('names a Merchant Center account by its name and id, with its items that have issues (#1270)', async () => {
-    listStoreConnectors.mockResolvedValue({
-      connectors: [],
-      ready: true,
-      signIns: [
-        {
-          kind: 'merchant_center',
-          label: 'Google Merchant Center',
-          provider: 'google-merchant-center',
-          configured: true,
-        },
-      ],
-    });
-    listCatalogSources.mockResolvedValue([
-      {
-        ...FEED,
-        id: 'gmc1',
-        kind: 'merchant_center',
-        url: 'https://merchants.google.com/mc/overview?a=123456789',
-        account: '123456789',
-        label: 'Acme Outdoor',
-        lastCounts: {
-          ...FEED.lastCounts!,
-          skipped: 0,
-          errors: [],
-          issues: { items: 3, disapproved: 1, demoted: 2, not_impacted: 0 },
-        },
-        products: 40,
-      },
-    ]);
+    listStoreConnectors.mockResolvedValue({ connectors: [], ready: true, signIns: [GMC_SIGN_IN] });
+    listCatalogSources.mockResolvedValue([GMC]);
     await render();
     const text = container.textContent ?? '';
     expect(text).toContain('Google Merchant Center · Acme Outdoor (123456789)');
@@ -332,10 +335,74 @@ describe('CatalogSourcesCard', () => {
     expect(button('Sync now')).toBeDefined();
   });
 
+  it("names a Merchant Center account by its platform when the API's connectors can't be read or don't list it", async () => {
+    listCatalogSources.mockResolvedValue([GMC]);
+    listStoreConnectors.mockResolvedValue(null);
+    await render();
+    expect(rows()[0]).toContain('Google Merchant Center · Acme Outdoor (123456789)');
+    expect(rows()[0]).not.toContain('Acme Outdoor · 123456789');
+
+    // An API that doesn't list its sign-in platforms (yet).
+    listStoreConnectors.mockResolvedValue({ connectors: [], ready: true, signIns: [] });
+    remount();
+    await render();
+    expect(rows()[0]).toContain('Google Merchant Center · Acme Outdoor (123456789)');
+  });
+
+  it('says one item with an issue, and nothing of issues when there are none or no counts yet', async () => {
+    listCatalogSources.mockResolvedValue([
+      {
+        ...GMC,
+        lastCounts: {
+          ...GMC.lastCounts!,
+          issues: { items: 1, disapproved: 0, demoted: 1, not_impacted: 0 },
+        },
+      },
+      {
+        ...GMC,
+        id: 'gmc2',
+        account: '222',
+        products: 12,
+        lastCounts: {
+          ...GMC.lastCounts!,
+          issues: { items: 0, disapproved: 0, demoted: 0, not_impacted: 0 },
+        },
+      },
+      { ...GMC, id: 'gmc3', account: '333', products: 5, lastCounts: null },
+    ]);
+    await render();
+    const [one, none, unread] = rows();
+    expect(one).toContain('40 products · 1 with an issue · synced');
+    expect(none).toContain('12 products · synced');
+    expect(none).not.toContain('with');
+    expect(unread).toContain('5 products · synced');
+    expect(unread).not.toContain('with');
+  });
+
+  it("says when a source's workspace sign-in isn't connected anymore", async () => {
+    listCatalogSources.mockResolvedValue([GMC]);
+    removeStore.mockResolvedValue({ ok: false, code: 'not_connected', message: null });
+    await render();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await act(async () => button('Remove')!.click());
+    expect(removeStore).toHaveBeenCalledWith('gmc1');
+    expect(toast.error).toHaveBeenCalledWith(
+      "The workspace sign-in this source is read with isn't connected anymore. Connect it again above.",
+    );
+  });
+
   it('reads the sources again when the page asks (an account added above)', async () => {
     await render(0);
     expect(listCatalogSources).toHaveBeenCalledTimes(1);
     await render(1);
     expect(listCatalogSources).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells the page what it read, for the brand', async () => {
+    const onSources = vi.fn();
+    await render(0, onSources);
+    expect(onSources).toHaveBeenLastCalledWith(
+      expect.objectContaining({ brandId: 'b1', sources: [FEED] }),
+    );
   });
 });

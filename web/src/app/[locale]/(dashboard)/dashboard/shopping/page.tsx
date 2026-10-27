@@ -95,6 +95,7 @@ import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
+import { CatalogNote } from './catalog_note';
 import { MerchantSplitCard } from './merchant_split_card';
 import { OpenAiIndexCard } from './openai_index_card';
 import { ProductMatchScores } from './product_match_scores';
@@ -431,18 +432,7 @@ export default function ShoppingPage() {
                       {tCommon('exportCsv')}
                     </Button>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {t.rich('connectCatalog', {
-                      link: (chunks) => (
-                        <Link
-                          href="/dashboard/settings?tab=integrations"
-                          className="font-medium text-foreground underline underline-offset-4"
-                        >
-                          {chunks}
-                        </Link>
-                      ),
-                    })}
-                  </p>
+                  <CatalogNote brandId={activeBrandId} />
                   <ProductTable
                     t={t}
                     products={ownProducts}

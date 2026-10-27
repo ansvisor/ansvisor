@@ -7307,7 +7307,7 @@
     "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
     "tabOverview": "Overview",
     "tabMyProducts": "My Products",
-    "connectCatalog": "Bring in your product catalog: connect Google Merchant Center or a product feed in <link>Settings › Integrations</link>.",
+    "connectCatalog": "These are your products as AI shopping cards showed them. Connect your product catalog (Google Merchant Center or a product feed) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",
     "colProductTitle": "Product Title",
     "colPlatforms": "Platforms",
@@ -7870,6 +7870,7 @@
     "integrations_notMapped": "Not mapped",
     "integrations_selectProperty": "Select a property",
     "integrations_stores": "Stores and marketplaces",
+    "integrations_cms": "Content management systems",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -7887,7 +7888,7 @@
       },
       "products": "{count, plural, one {# product} other {# products}}",
       "lastSync": "synced {when}",
-      "issues": "{count, plural, one {# with issues} other {# with issues}}",
+      "issues": "{count, plural, one {# with an issue} other {# with issues}}",
       "skipped": "{count, plural, one {# product was skipped} other {# products were skipped}}",
       "syncNow": "Sync now",
       "remove": "Remove",
@@ -7932,6 +7933,7 @@
           "too_many": "A brand can have 10 sources at most.",
           "other_account": "This sign-in is for another store. Add that store as a new source.",
           "not_configured": "Store connections aren't set up on this server yet.",
+          "not_connected": "The workspace sign-in this source is read with isn't connected anymore. Connect it again above.",
           "forbidden": "Only admins and managers can change the catalog.",
           "not_found": "This store no longer exists.",
           "invalid": "Fill in every field.",
@@ -7949,15 +7951,19 @@
       "noBrand": "Pick a brand to add its Merchant Center account.",
       "pick": "Choose an account",
       "add": "Add account",
-      "none": "This Google sign-in doesn't open any Merchant Center account. Ask an admin of the account to add you in Merchant Center, then reload this page.",
-      "connected": "{account} added. Its products are being read now.",
+      "none": "This Google sign-in doesn't open any Merchant Center account. Ask an admin of the account to add you in Merchant Center, then try again.",
+      "retry": "Try again",
+      "alreadyAdded": "{account} · already added",
+      "managersOnly": "Admins and managers pick {brand}'s Merchant Center account. Once added, it's listed in Product catalog below.",
+      "connected": "{account} added to {brand}. Its products are being read now.",
+      "addFailed": "Couldn't add the account. Try again in a moment.",
       "errors": {
         "not_connected": "The Google sign-in no longer opens Merchant Center. Disconnect it and connect again.",
         "connect_failed": "This Google sign-in can't open that account. Pick another one.",
         "unreachable": "Merchant Center couldn't be reached. Try again in a moment.",
         "duplicate": "This account is added to the brand already.",
         "not_configured": "Merchant Center isn't set up on this server yet.",
-        "failed": "Couldn't read the Merchant Center accounts. Try again later."
+        "failed": "Couldn't read the Merchant Center accounts."
       }
     },
     "webflow": {

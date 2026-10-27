@@ -176,4 +176,42 @@ describe('sign-in platforms (#1270)', () => {
       input: { account: '123' },
     });
   });
+
+  it("names why the account couldn't be connected, with the platform's own words when it can't open it", async () => {
+    answer(409, { code: 'not_connected', error: 'Connect Google Merchant Center first.' });
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'not_connected',
+      message: null,
+    });
+    answer(400, {
+      code: 'connect_failed',
+      error: "This Google sign-in can't open that Merchant Center account.",
+    });
+    expect(await connectSignInAccount('b1', 'merchant_center', '999')).toEqual({
+      ok: false,
+      code: 'connect_failed',
+      message: "This Google sign-in can't open that Merchant Center account.",
+    });
+    answer(409, { code: 'duplicate' });
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'duplicate',
+      message: null,
+    });
+    answer(502, {});
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'failed',
+      message: null,
+    });
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({
+      ok: false,
+      code: 'failed',
+      message: null,
+    });
+    quiet.mockRestore();
+  });
 });

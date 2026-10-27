@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserRole } from '@/hooks/use-user-role';
 import { addFeedSource, listCatalogSources, removeCatalogSource } from '@/lib/actions/catalog';
-import { isStoreSource, type CatalogSource } from '@/lib/catalog';
+import { isStoreSource, SIGN_IN_PLATFORM_LABELS, type CatalogSource } from '@/lib/catalog';
 import {
   connectStore,
   listStoreConnectors,
@@ -26,6 +26,12 @@ import {
 import { useBrandStore } from '@/stores/use-brand-store';
 import { StoreSignInForm } from './catalog-store-form';
 
+/** A brand's sources as the card read them: null when they couldn't be read. */
+export interface CatalogSourcesRead {
+  brandId: string;
+  sources: CatalogSource[] | null;
+}
+
 /**
  * Product catalog (#1263): where the active brand's catalog comes from, a
  * product feed URL read daily, a CSV / feed file uploaded, or a store
@@ -36,9 +42,16 @@ import { StoreSignInForm } from './catalog-store-form';
  * remove; members see the sources and how they went.
  *
  * `refreshKey`: changed by the page to read the sources again (an account
- * added elsewhere).
+ * added elsewhere). `onSources` hears each read, for the Merchant Center
+ * picker to mark the accounts the brand has already.
  */
-export function CatalogSourcesCard({ refreshKey = 0 }: { refreshKey?: number }) {
+export function CatalogSourcesCard({
+  refreshKey = 0,
+  onSources,
+}: {
+  refreshKey?: number;
+  onSources?: (read: CatalogSourcesRead | null) => void;
+}) {
   const t = useTranslations('settings.catalog');
   const format = useFormatter();
   const { activeBrandId, brands } = useBrandStore();
@@ -99,6 +112,9 @@ export function CatalogSourcesCard({ refreshKey = 0 }: { refreshKey?: number }) 
   }, [activeBrandId, reads, refreshKey]);
 
   const current = loaded?.brandId === activeBrandId ? loaded : null;
+  useEffect(() => {
+    onSources?.(current);
+  }, [current, onSources]);
   const sources = current?.sources ?? null;
   const failed = current !== null && current.sources === null;
   const now = current?.at ?? new Date();
@@ -182,12 +198,13 @@ export function CatalogSourcesCard({ refreshKey = 0 }: { refreshKey?: number }) 
   const nameOf = (source: CatalogSource) => {
     if (source.kind === 'feed_url') return source.url;
     if (source.kind === 'upload') return t('upload');
-    const signIn = signInOf(source.kind);
-    // A sign-in platform's account by its name and id ("Google Merchant Center · Acme (123)").
+    // A sign-in platform's account by its name and id ("Google Merchant Center · Acme (123)"),
+    // named by the platform even before (or without) the API's connectors.
+    const signIn = signInOf(source.kind)?.label ?? SIGN_IN_PLATFORM_LABELS[source.kind];
     if (signIn) {
       const account =
         source.label && source.account ? `${source.label} (${source.account})` : source.account;
-      return account ? `${signIn.label} · ${account}` : signIn.label;
+      return account ? `${signIn} · ${account}` : signIn;
     }
     const platform = connectorOf(source.kind)?.label ?? source.label ?? source.kind;
     return source.account ? `${platform} · ${source.account}` : platform;

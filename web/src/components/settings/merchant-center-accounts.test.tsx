@@ -1,8 +1,11 @@
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import type { CatalogSource } from '@/lib/catalog';
+import type { StoreResult } from '@/lib/catalog-client';
+import type { CatalogSourcesRead } from './catalog-sources-card';
 
 const listSignInAccounts = vi.fn();
 const connectSignInAccount = vi.fn();
@@ -12,9 +15,15 @@ vi.mock('@/lib/catalog-client', () => ({
 }));
 const role = vi.hoisted(() => ({ canManage: true }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
-vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: () => ({ activeBrandId: 'b1', brands: [{ id: 'b1', name: 'Acme' }] }),
+// Two brands, the active one switched by the tests.
+const brandStore = vi.hoisted(() => ({
+  activeBrandId: 'b1' as string | null,
+  brands: [
+    { id: 'b1', name: 'Acme' },
+    { id: 'b2', name: 'Bolt' },
+  ],
 }));
+vi.mock('@/stores/use-brand-store', () => ({ useBrandStore: () => brandStore }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 // The picker's popup isn't what's tested: a plain select stands in for it.
@@ -22,11 +31,11 @@ vi.mock('@/components/ui/select', () => ({
   Select: ({
     value,
     onValueChange,
-    items,
+    children,
   }: {
     value: string | null;
     onValueChange: (v: string | null) => void;
-    items: { value: string; label: string }[];
+    children: ReactNode;
   }) => (
     <select
       aria-label="Choose an account"
@@ -34,15 +43,23 @@ vi.mock('@/components/ui/select', () => ({
       onChange={(e) => onValueChange(e.target.value || null)}
     >
       <option value="" />
-      {items.map((item) => (
-        <option key={item.value} value={item.value}>
-          {item.label}
-        </option>
-      ))}
+      {children}
     </select>
   ),
-  SelectContent: () => null,
-  SelectItem: () => null,
+  SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SelectItem: ({
+    value,
+    disabled,
+    children,
+  }: {
+    value: string;
+    disabled?: boolean;
+    children: ReactNode;
+  }) => (
+    <option value={value} disabled={disabled}>
+      {children}
+    </option>
+  ),
   SelectTrigger: () => null,
   SelectValue: () => null,
 }));
@@ -58,27 +75,53 @@ let container: HTMLDivElement;
 let root: Root;
 const onConnected = vi.fn();
 
-async function render() {
+async function render(sources?: CatalogSourcesRead | null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <MerchantCenterAccounts onConnected={onConnected} />
+        <MerchantCenterAccounts onConnected={onConnected} sources={sources} />
       </NextIntlClientProvider>,
     );
   });
 }
 const button = (label: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === label);
+const select = () => container.querySelector('select')!;
+const options = () => [...container.querySelectorAll('option')];
 async function pick(value: string) {
-  const select = container.querySelector('select')!;
   await act(async () => {
-    select.value = value;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    select().value = value;
+    select().dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
+/** Switches the active brand, as the sidebar's brand switcher does. */
+async function switchTo(brandId: string) {
+  brandStore.activeBrandId = brandId;
+  await render();
+}
+/** A connect that answers when the test says. */
+function heldConnect() {
+  let answer!: (result: StoreResult) => void;
+  connectSignInAccount.mockReturnValue(new Promise<StoreResult>((r) => (answer = r)));
+  return (result: StoreResult) => act(async () => answer(result));
+}
+const source = (account: string): CatalogSource => ({
+  id: `gmc-${account}`,
+  kind: 'merchant_center',
+  format: 'auto',
+  url: null,
+  account,
+  label: null,
+  lastSyncedAt: null,
+  lastStatus: null,
+  lastError: null,
+  lastCounts: null,
+  products: 0,
+});
 
 beforeEach(() => {
   role.canManage = true;
+  brandStore.activeBrandId = 'b1';
   listSignInAccounts.mockReset().mockResolvedValue({
     ok: true,
     accounts: [
@@ -112,20 +155,89 @@ describe('MerchantCenterAccounts', () => {
     expect(listSignInAccounts).toHaveBeenCalledWith('b1', 'merchant_center');
     const text = container.textContent ?? '';
     expect(text).toContain('Merchant Center account for Acme');
-    expect([...container.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
-      '',
-      'Acme Outdoor (123)',
-      '456',
-    ]);
+    expect(options().map((o) => o.textContent)).toEqual(['', 'Acme Outdoor (123)', '456']);
     expect(button('Add account')!.disabled).toBe(true);
 
     await pick('123');
     await act(async () => button('Add account')!.click());
     expect(connectSignInAccount).toHaveBeenCalledWith('b1', 'merchant_center', '123');
     expect(toast.success).toHaveBeenCalledWith(
-      'Acme Outdoor (123) added. Its products are being read now.',
+      'Acme Outdoor (123) added to Acme. Its products are being read now.',
     );
     expect(onConnected).toHaveBeenCalledTimes(1);
+    expect(select().value).toBe('');
+  });
+
+  it("drops the pick when the brand changes: another brand never adds the first one's account", async () => {
+    await render();
+    await pick('123');
+    expect(button('Add account')!.disabled).toBe(false);
+
+    await switchTo('b2');
+    expect(listSignInAccounts).toHaveBeenLastCalledWith('b2', 'merchant_center');
+    expect(container.textContent).toContain('Merchant Center account for Bolt');
+    expect(select().value).toBe('');
+    expect(button('Add account')!.disabled).toBe(true);
+    await act(async () => button('Add account')!.click());
+    expect(connectSignInAccount).not.toHaveBeenCalled();
+
+    // Nor does the second brand's pick carry back to the first.
+    await pick('456');
+    await switchTo('b1');
+    expect(select().value).toBe('');
+    expect(button('Add account')!.disabled).toBe(true);
+  });
+
+  it('adds the account to the brand it was picked for when the brand changes while adding', async () => {
+    const answer = heldConnect();
+    await render();
+    await pick('123');
+    await act(async () => button('Add account')!.click());
+    await switchTo('b2');
+    // One add at a time, and Bolt's picker has nothing picked.
+    expect(button('Add account')!.disabled).toBe(true);
+    expect(select().value).toBe('');
+
+    await answer({ ok: true });
+    expect(connectSignInAccount).toHaveBeenCalledTimes(1);
+    expect(connectSignInAccount).toHaveBeenCalledWith('b1', 'merchant_center', '123');
+    expect(toast.success).toHaveBeenCalledWith(
+      'Acme Outdoor (123) added to Acme. Its products are being read now.',
+    );
+    expect(container.textContent).toContain('Merchant Center account for Bolt');
+    expect(select().value).toBe('');
+    await pick('456');
+    expect(button('Add account')!.disabled).toBe(false);
+  });
+
+  it('adds once when the button is clicked twice while adding', async () => {
+    const answer = heldConnect();
+    await render();
+    await pick('123');
+    await act(async () => {
+      button('Add account')!.click();
+      button('Add account')!.click();
+    });
+    expect(button('Add account')!.disabled).toBe(true);
+    await act(async () => button('Add account')!.click());
+    await answer({ ok: true });
+    expect(connectSignInAccount).toHaveBeenCalledTimes(1);
+    expect(onConnected).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the accounts the brand has already, and they cannot be picked', async () => {
+    await render({ brandId: 'b1', sources: [source('123')] });
+    const [, added, other] = options();
+    expect(added.textContent).toBe('Acme Outdoor (123) · already added');
+    expect(added.disabled).toBe(true);
+    expect(other.textContent).toBe('456');
+    expect(other.disabled).toBe(false);
+    await pick('123');
+    expect(button('Add account')!.disabled).toBe(true);
+
+    // Another brand's sources mark nothing here.
+    await render({ brandId: 'b2', sources: [source('123')] });
+    expect(options()[1].disabled).toBe(false);
   });
 
   it("says why it couldn't add the account, in plain words", async () => {
@@ -134,7 +246,35 @@ describe('MerchantCenterAccounts', () => {
     await pick('123');
     await act(async () => button('Add account')!.click());
     expect(toast.error).toHaveBeenCalledWith('This account is added to the brand already.');
+
+    connectSignInAccount.mockResolvedValue({ ok: false, code: 'failed', message: null });
+    await act(async () => button('Add account')!.click());
+    expect(toast.error).toHaveBeenLastCalledWith(
+      "Couldn't add the account. Try again in a moment.",
+    );
     expect(onConnected).not.toHaveBeenCalled();
+    // The pick stays, to try again.
+    expect(select().value).toBe('123');
+  });
+
+  it("reads the accounts again with Try again when they couldn't be read", async () => {
+    listSignInAccounts.mockResolvedValue({ ok: false, code: 'failed' });
+    await render();
+    expect(container.textContent).toContain("Couldn't read the Merchant Center accounts.");
+    expect(container.querySelector('select')).toBeNull();
+
+    listSignInAccounts.mockResolvedValue({ ok: false, code: 'unreachable' });
+    await act(async () => button('Try again')!.click());
+    expect(listSignInAccounts).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain(
+      "Merchant Center couldn't be reached. Try again in a moment.",
+    );
+
+    listSignInAccounts.mockResolvedValue({ ok: true, accounts: [{ id: '123', name: 'Acme' }] });
+    await act(async () => button('Try again')!.click());
+    expect(listSignInAccounts).toHaveBeenCalledTimes(3);
+    expect(options().map((o) => o.textContent)).toEqual(['', 'Acme (123)']);
+    expect(button('Try again')).toBeUndefined();
   });
 
   it('says when the sign-in no longer opens Merchant Center, or opens no account', async () => {
@@ -149,14 +289,26 @@ describe('MerchantCenterAccounts', () => {
     root = createRoot(container);
     await render();
     expect(container.textContent).toContain(
-      "This Google sign-in doesn't open any Merchant Center account.",
+      "This Google sign-in doesn't open any Merchant Center account. Ask an admin of the account to add you in Merchant Center, then try again.",
     );
+    expect(button('Try again')).toBeDefined();
   });
 
-  it("asks nothing of members who aren't admins or managers", async () => {
+  it("offers no Try again when Merchant Center isn't set up on the server", async () => {
+    listSignInAccounts.mockResolvedValue({ ok: false, code: 'not_configured' });
+    await render();
+    expect(container.textContent).toContain("Merchant Center isn't set up on this server yet.");
+    expect(button('Try again')).toBeUndefined();
+  });
+
+  it('tells members who picks the account, in words of its own, and asks the API nothing', async () => {
     role.canManage = false;
     await render();
     expect(listSignInAccounts).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('Admins and managers can add and sync sources.');
+    expect(container.textContent).toContain(
+      "Admins and managers pick Acme's Merchant Center account.",
+    );
+    // The catalog card below says this one already.
+    expect(container.textContent).not.toContain('Admins and managers can add and sync sources.');
   });
 });

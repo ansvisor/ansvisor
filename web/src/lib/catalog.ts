@@ -9,6 +9,18 @@ export type CatalogFormat = 'auto' | 'google_xml' | 'csv' | 'meta_csv';
 /** `auth_failed`: the store refused the saved sign-in. */
 export type CatalogSyncStatus = 'ok' | 'failed' | 'format_error' | 'auth_failed';
 
+/** A Google Merchant Center account's kind (#1270), read with the workspace's Google sign-in. */
+export const MERCHANT_CENTER_KIND = 'merchant_center';
+export const MERCHANT_CENTER_LABEL = 'Google Merchant Center';
+
+/**
+ * The platforms read with the workspace's sign-in, named by their kind: the
+ * name a source's row keeps when the API's connectors can't be read.
+ */
+export const SIGN_IN_PLATFORM_LABELS: Readonly<Partial<Record<string, string>>> = {
+  [MERCHANT_CENTER_KIND]: MERCHANT_CENTER_LABEL,
+};
+
 /** Whether a source is a store, read with its sign-in, rather than a feed or an upload. */
 export function isStoreSource(kind: CatalogSourceKind): boolean {
   return kind !== 'feed_url' && kind !== 'upload';
