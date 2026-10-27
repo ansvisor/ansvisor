@@ -146,7 +146,7 @@
       "progress": "{current} of {total} answers",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
-      "link": "Follow it on Visibility"
+      "link": "Follow it on Brand Visibility"
     },
     "pages": {
       "actions": "What should you do now, ranked by your KPI goals.",
@@ -1624,12 +1624,12 @@
           ]
         },
         "visibility": {
-          "title": "See where you stand in Visibility",
+          "title": "See where you stand in Brand Visibility",
           "summary": "Your share of AI answers vs competitors.",
-          "open": "Open Visibility",
+          "open": "Open Brand Visibility",
           "doneWhen": "Page opened",
           "why": ["Your share of AI answers vs competitors.", "The starting point for every goal."],
-          "how": ["Open Visibility", "Check your rank and the leader", "Note your weakest platform"]
+          "how": ["Open Brand Visibility", "Check your rank and the leader", "Note your weakest platform"]
         },
         "answers": {
           "title": "Read your first AI answers",
