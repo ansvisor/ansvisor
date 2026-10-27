@@ -150,6 +150,7 @@ export function EditorSidePanel({
   onConfirmIntro,
   onChangeType,
   handOff = null,
+  onShoppingPathChange,
 }: {
   draft: ContentDraft;
   /**
@@ -235,6 +236,8 @@ export function EditorSidePanel({
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
   handOff?: HandOff | null;
+  /** Brief › Shopping path changed: the Shopping rules read it again (shopping path, part 6). */
+  onShoppingPathChange?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -466,6 +469,7 @@ export function EditorSidePanel({
                   draftId={draft.id}
                   brandId={draft.brandId}
                   pageType={pageType}
+                  onPathChange={onShoppingPathChange}
                 />
               )}
               <BriefTab

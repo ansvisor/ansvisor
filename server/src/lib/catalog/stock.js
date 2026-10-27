@@ -1,6 +1,6 @@
 /**
  * A catalog variant's stock, read one way everywhere: as the editor's feed
- * match reads it (web/src/lib/content/feed-match.ts, feedStock) and as
+ * match reads it (web/src/lib/content/feed-match.ts, variantStock) and as
  * catalog_category_counts (00350) counts it. Feeds and stores spell it many
  * ways ("in stock", "IN_STOCK", "limited-availability"), so it is read
  * lowercased, with spaces and hyphens as "_". stock.test.js checks the three

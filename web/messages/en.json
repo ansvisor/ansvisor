@@ -4109,6 +4109,7 @@
         "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
+        "notForAgentShopping": "Content Agent doesn't change which products the page links: remove or replace the links to sold-out, refused or gone products yourself.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
@@ -4228,9 +4229,12 @@
           "table": "Table",
           "tableHint": "Insert a table on this line",
           "image": "Image",
-          "imageHint": "Insert an image on this line"
+          "imageHint": "Insert an image on this line",
+          "products": "Products",
+          "productsHint": "Insert products from your catalog on this line"
         },
         "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
+        "products": "Insert products from your catalog",
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
@@ -4540,6 +4544,24 @@
           "other": "can't be linked"
         },
         "untitled": "Untitled product"
+      },
+      "productBlock": {
+        "title": "Add products",
+        "description": "Pick 1 to {max} products in stock from your catalog. One shows as a card, more as a grid, each with its picture, name and price, linked to its page.",
+        "searchLabel": "Search the catalog",
+        "placeholder": "Product name…",
+        "empty": "No product with that name.",
+        "searchFailed": "Couldn't search the catalog. Try again.",
+        "soldOut": "Sold out",
+        "noPage": "No page to link",
+        "picked": "{count} of {max} picked",
+        "unpick": "Remove {title}",
+        "insert": "Insert",
+        "inserting": "Inserting…",
+        "cancel": "Cancel",
+        "leftOut": "Left out, not in stock now: {titles}",
+        "noLink": "These products have no page to link.",
+        "failed": "Couldn't read the products. Try again."
       },
       "brief": {
         "loadError": "Couldn't load the brief.",
@@ -5061,6 +5083,20 @@
           "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.",
           "otherDetailTyped": "Check what your CMS adds for it. The code Ansvisor gives here is for articles, product pages and category pages."
         },
+        "shopping": {
+          "title": "Shopping links",
+          "reading": "Reading your catalog for the linked products' stock…",
+          "failed": "Couldn't read your catalog: check the products the page links are in stock before you publish.",
+          "ok": "Shopping links work",
+          "okDetail": "{count, plural, =0 {{category, select, yes {No product linked yet; the category page is.} other {No product linked yet.}}} one {# product linked, in stock and accepted by Merchant Center.} other {# products linked, in stock and accepted by Merchant Center.}}",
+          "bad": "{count, plural, one {# product link to remove or replace} other {# product links to remove or replace}}",
+          "badDetail": "{list}{more, plural, =0 {} other { +# more}}. Remove or replace these links on the page: Brief › Shopping path lists products that sell.",
+          "item": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+          "noCategory": "No link to the category page",
+          "noCategoryDetail": "Link the category page in Brief › Shopping path, so readers reach the products.",
+          "few": "{count} of {want} products linked",
+          "fewDetail": "Link more of the products in Brief › Shopping path that are in stock: a product card or grid counts."
+        },
         "disclosure": {
           "ok": "Disclosure",
           "okDetail": "The page says so: \"{line}\"",
@@ -5528,6 +5564,9 @@
           "fairness": "Fair: name where the competitor wins",
           "specsTable": "Specs table",
           "feedMatch": "Price, GTIN and stock match the feed",
+          "shopCategoryLink": "Links its category page",
+          "shopProductLinks": "Links the shopping path's products",
+          "shopLinksLive": "No sold-out or refused product linked",
           "fitQuestions": "Answer fit and sizing questions",
           "first40Words": "Type + key attributes in the first 40 words",
           "introText": "Intro text above products",
@@ -5551,6 +5590,9 @@
           "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
           "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
+          "shopCategoryLink": "A link to the category page in Brief › Shopping path, so readers and AI answers reach the products.",
+          "shopProductLinks": "Links to the products in Brief › Shopping path that are in stock and accepted by Merchant Center: this many, or all of them when fewer are. A product card or grid counts.",
+          "shopLinksLive": "Every product the page links from its shopping path, or removed from it, is in stock, accepted by Merchant Center for free listings, and still in the catalog. Remove or replace a link to one that isn't, on the page.",
           "definitionFirst": "The paragraph under the H1 says what the term is (\"X is …\") in a few words: what answer engines quote for \"what is\" prompts.",
           "measureSteps": "The longest numbered list on the page counts as the steps."
         },
@@ -5599,6 +5641,9 @@
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",
           "noSizes": "No sizes",
+          "noShoppingPath": "Pick in Brief",
+          "shoppingReading": "Reading catalog",
+          "shoppingFailed": "Couldn't read",
           "numberCheck": "Number check"
         },
         "mineName": "My rules · {type}",
@@ -5639,6 +5684,8 @@
         "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
+        "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
+        "shopItem": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {

@@ -463,7 +463,11 @@ router.post('/bulk', requireFeature('content_optimization'), async (req, res) =>
 router.get('/quota', async (req, res) => {
   try {
     const orgId = await getOrgIdForUser(req.user?.id);
-    const quota = await getSiteAuditQuotaStatus(orgId);
+    if (!orgId) {
+      return res.status(400).json({ success: false, message: 'No organization found for user.' });
+    }
+    // Read-only once the plan has ended (2026-10-27): no plan reads as a limit of 0.
+    const quota = await getSiteAuditQuotaStatus(orgId, { readOnly: true });
     return res.json({ success: true, quota });
   } catch (err) {
     if (err instanceof PlanLimitError) {
@@ -967,11 +971,12 @@ async function canChangeSettings(userId) {
 /**
  * Site Audit settings as the Settings dialog shows them (SA-006): the org's
  * auto-audit switch and e-mail, the brand's exclude patterns and pinned
- * pages.
+ * pages. Without an active plan (read-only, 2026-10-27), auto-audit reads as
+ * off with a limit of 0, and the rest as kept.
  */
 async function readAuditSettings(brandId, orgId) {
   const [quota, excludePatterns, { data: pinned, error }] = await Promise.all([
-    getSiteAuditQuotaStatus(orgId),
+    getSiteAuditQuotaStatus(orgId, { readOnly: true }),
     readExcludePatterns(brandId),
     supabaseAdmin
       .from('site_audit_page_prefs')
