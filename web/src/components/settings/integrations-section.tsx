@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { BarChart3, Loader2, Search, Unplug } from 'lucide-react';
+import { BarChart3, Loader2, Search, ShoppingBag, Unplug } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   getIntegrationStatus,
@@ -38,7 +38,9 @@ import {
   type IntegrationStatus,
 } from '@/lib/actions/integrations';
 import { matchProperty } from '@/lib/property-match';
-import { CatalogSourcesCard } from './catalog-sources-card';
+import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
+import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
+import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 
@@ -49,9 +51,18 @@ import { useIntegrationConnect } from '@/hooks/use-integration-connect';
  * without Composio env) → not connected → connecting (OAuth popup open,
  * polling) → connected — so the card and its state live in one place and each
  * provider only supplies its labels and any post-connection UI of its own.
+ *
+ * Stores and marketplaces (#1270): Google Merchant Center connects the same
+ * way, then each brand picks its account, whose products land in the
+ * product catalog card below it. Content management systems: where Send to
+ * CMS puts a brand's pages.
  */
 export function IntegrationsSection() {
   const t = useTranslations('settings');
+  // Bumped when a brand adds a Merchant Center account, so the catalog card lists it.
+  const [catalogReads, setCatalogReads] = useState(0);
+  // The catalog's sources as its card read them, for the picker to mark the accounts added.
+  const [catalogSources, setCatalogSources] = useState<CatalogSourcesRead | null>(null);
   return (
     <Card>
       <CardHeader>
@@ -79,11 +90,45 @@ export function IntegrationsSection() {
           <GaPropertyMapping />
         </IntegrationCard>
 
-        <CatalogSourcesCard />
+        <IntegrationGroup title={t('integrations_stores')}>
+          <IntegrationCard
+            provider="google-merchant-center"
+            label={MERCHANT_CENTER_LABEL}
+            description={t('merchantCenter.description')}
+            icon={<ShoppingBag className="h-5 w-5 text-muted-foreground" />}
+            authConfigEnv="COMPOSIO_GMC_AUTH_CONFIG_ID"
+          >
+            <MerchantCenterAccounts
+              sources={catalogSources}
+              onConnected={() => setCatalogReads((n) => n + 1)}
+            />
+          </IntegrationCard>
 
-        <WebflowCard />
+          <CatalogSourcesCard refreshKey={catalogReads} onSources={setCatalogSources} />
+        </IntegrationGroup>
+
+        {/* Send to CMS destinations: a new CMS's card goes in this group. */}
+        <IntegrationGroup title={t('integrations_cms')}>
+          <WebflowCard />
+        </IntegrationGroup>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * A group of integration cards under its heading: a section the heading
+ * names, so a screen reader lists the heading and the group by it.
+ */
+function IntegrationGroup({ title, children }: { title: string; children: ReactNode }) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className="space-y-4">
+      <h3 id={id} className="pt-2 text-sm font-medium text-muted-foreground">
+        {title}
+      </h3>
+      {children}
+    </section>
   );
 }
 
