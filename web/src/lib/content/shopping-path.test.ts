@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_REMOVED,
+  leftOutReason,
   placementOf,
   shoppingPathFits,
   shoppingPathSchema,
@@ -68,15 +70,73 @@ describe('changes', () => {
     expect(added.added).toEqual(['b', 'a']);
     expect(added.removed).toEqual([]);
   });
+
+  it("keeps to the API's caps: past them, the oldest removal is forgotten", () => {
+    const full = { ...PATH, removed: Array.from({ length: MAX_REMOVED }, (_, i) => `r${i}`) };
+    const removed = withRemoved(full, 'a').removed;
+    expect(removed).toHaveLength(MAX_REMOVED);
+    expect(removed[0]).toBe('r1');
+    expect(removed.at(-1)).toBe('a');
+  });
 });
 
 describe('shoppingPathSchema', () => {
   it("reads the API's path, and refuses another shape", () => {
     expect(shoppingPathSchema.safeParse(PATH).success).toBe(true);
     expect(shoppingPathSchema.safeParse({ ...PATH, version: 2 }).success).toBe(false);
+  });
+
+  it('keeps the time of the last change, which a save and a build write over', () => {
+    const saved = { ...PATH, savedAt: '2026-10-27T13:00:00.000Z' };
+    expect(shoppingPathSchema.parse(saved).savedAt).toBe('2026-10-27T13:00:00.000Z');
+    expect(shoppingPathSchema.parse(PATH).savedAt).toBeUndefined();
+  });
+
+  it('reads a product gone from the catalog, with no title, and a reason added since', () => {
+    const leftOut = [
+      { id: 'x', title: null, reason: 'gone' },
+      { id: 'y', title: 'Boot y', reason: 'recalled' },
+    ];
+    expect(shoppingPathSchema.parse({ ...PATH, leftOut }).leftOut).toEqual(leftOut);
+    expect(leftOutReason('gone')).toBe('gone');
+    expect(leftOutReason('recalled')).toBe('other');
+  });
+
+  it("refuses a path past the API's caps", () => {
+    const products = Array.from({ length: 41 }, (_, i) => product(`p${i}`));
+    expect(shoppingPathSchema.safeParse({ ...PATH, products }).success).toBe(false);
+    const issues = Array.from({ length: 21 }, (_, i) => ({ code: `c${i}`, attribute: null }));
     expect(
-      shoppingPathSchema.safeParse({ ...PATH, leftOut: [{ id: 'x', title: 'X', reason: 'gone' }] })
-        .success,
+      shoppingPathSchema.safeParse({ ...PATH, products: [{ ...product('a'), issues }] }).success,
     ).toBe(false);
+    const leftOut = Array.from({ length: 11 }, (_, i) => ({
+      id: `l${i}`,
+      title: null,
+      reason: 'gone',
+    }));
+    expect(shoppingPathSchema.safeParse({ ...PATH, leftOut }).success).toBe(false);
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `i${i}`);
+    expect(shoppingPathSchema.safeParse({ ...PATH, locked: ids(41) }).success).toBe(false);
+    expect(shoppingPathSchema.safeParse({ ...PATH, added: ids(41) }).success).toBe(false);
+    expect(shoppingPathSchema.safeParse({ ...PATH, removed: ids(200) }).success).toBe(true);
+    expect(shoppingPathSchema.safeParse({ ...PATH, removed: ids(201) }).success).toBe(false);
+    const long = { ...product('a'), title: 'x'.repeat(201) };
+    expect(shoppingPathSchema.safeParse({ ...PATH, products: [long] }).success).toBe(false);
+  });
+
+  it('reads stock as the API spells it, and only http(s) links', () => {
+    const read = shoppingPathSchema.parse({
+      ...PATH,
+      categories: [{ name: 'Boots', url: 'javascript:alert(1)', title: null }],
+      products: [
+        { ...product('a'), availability: 'Limited Availability', image: 'data:image/png;base64,x' },
+        { ...product('b'), url: '/p/b', availability: 'IN-STOCK', image: 'http://s.example/b.jpg' },
+      ],
+    });
+    expect(read.categories[0].url).toBeNull();
+    expect(read.products.map((p) => [p.url, p.availability, p.image])).toEqual([
+      ['https://s.example/p/a', 'limited_availability', null],
+      [null, 'in_stock', 'http://s.example/b.jpg'],
+    ]);
   });
 });

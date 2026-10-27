@@ -4413,7 +4413,6 @@
       },
       "shopping": {
         "title": "Shopping path",
-        "fromCatalog": "From your catalog",
         "description": "Where this page sends readers. Picked by topic, stock and Merchant Center status. Prices and specs come from the catalog only.",
         "empty": "Pick the category page and the products in stock this page links, from your catalog.",
         "build": "Pick from the catalog",
@@ -4422,11 +4421,16 @@
         "loadError": "Couldn't read the shopping path.",
         "retry": "Try again",
         "buildFailed": "Couldn't pick from the catalog. Try again in a moment.",
+        "rateLimited": "Too many picks in a short time. Try again in a few minutes.",
         "saveFailed": "Couldn't save the change. Try again.",
+        "changed": "The shopping path changed meanwhile. It's shown as it is now: make your change again.",
+        "unreadable": "The saved shopping path can't be read. Pick from the catalog to start it again.",
         "noPath": {
           "not_a_shop": "Shopping paths are for brands that sell online. Set the site type to E-commerce in Brand settings.",
           "page_type": "This page type doesn't link products. Buying guides, best-of lists, comparisons, guides and blog posts do.",
-          "no_catalog": "There's no catalog to pick from yet. Connect Google Merchant Center or a product feed in Settings › Integrations."
+          "no_catalog": "There's no catalog to pick from yet. Connect Google Merchant Center or a product feed in Settings › Integrations.",
+          "no_match": "Nothing in your catalog matches this page's topic. Name what you sell in the title or the brief's keywords, then pick again.",
+          "other": "No shopping path fits this page right now. Try again later."
         },
         "category": "Category page",
         "categoryPlace": "In the intro, and again at the end",
@@ -4455,23 +4459,33 @@
         "searchLabel": "Search the catalog",
         "searchPlaceholder": "Product name…",
         "searchEmpty": "No product with that name.",
+        "searchFailed": "Couldn't search the catalog. Try again.",
         "addThis": "Add {title}",
         "leftOut": "Left out",
         "reason": {
           "sold_out": "sold out",
           "refused": "Merchant Center refuses it",
-          "no_link": "no page to link"
-        }
+          "no_link": "no page to link",
+          "gone": "no longer in the catalog",
+          "other": "can't be linked"
+        },
+        "untitled": "Untitled product"
       },
       "productBlock": {
         "title": "Add products",
-        "description": "Pick 1 to {max} products from your catalog. One shows as a card, more as a grid, each with its picture, name and price, linked to its page.",
+        "description": "Pick 1 to {max} products in stock from your catalog. One shows as a card, more as a grid, each with its picture, name and price, linked to its page.",
         "searchLabel": "Search the catalog",
         "placeholder": "Product name…",
         "empty": "No product with that name.",
+        "searchFailed": "Couldn't search the catalog. Try again.",
+        "soldOut": "Sold out",
+        "noPage": "No page to link",
         "picked": "{count} of {max} picked",
+        "unpick": "Remove {title}",
         "insert": "Insert",
+        "inserting": "Inserting…",
         "cancel": "Cancel",
+        "leftOut": "Left out, not in stock now: {titles}",
         "noLink": "These products have no page to link.",
         "failed": "Couldn't read the products. Try again."
       },
@@ -7991,7 +8005,6 @@
         "category": "Category",
         "productsHeading": "Products",
         "pageHeading": "Page on your site",
-        "howHeading": "How we found it",
         "actions": "Actions",
         "products": "{products, plural, one {# product} other {# products}} · {inStock} in stock",
         "noPage": "No page",
@@ -8014,6 +8027,7 @@
         "errors": {
           "invalid": "That isn't a web address. Paste the page's address.",
           "off_site": "The page must be on the brand's own site.",
+          "not_found": "This category isn't in the catalog any more. Reload the page.",
           "forbidden": "Only admins and managers can change this.",
           "session": "Your session expired. Sign in again.",
           "workspace": "This brand isn't in your workspace.",

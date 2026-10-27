@@ -1,11 +1,12 @@
 import * as cheerio from 'cheerio';
+import { isInStock } from './catalog/stock.js';
 import { linkHref } from './content-links.js';
 
 /**
  * The product grid a new page gets from its shopping path (shopping path,
- * part 5): the path's products as an HTML block, each its picture, name and
- * price, linked to its page, put at the end of the section that names them
- * most. The markup is the editor's product card and grid
+ * part 5): the path's products in stock as an HTML block, each its picture,
+ * name and price, linked to its page, put at the end of the section that
+ * names them most. The markup is the editor's product card and grid
  * (web/src/lib/content/product-block.ts): keep the two alike. Stored as the
  * editor stores an HTML block: UTF-8 in base64, in a data attribute.
  */
@@ -18,9 +19,17 @@ export const GRID_PAGE_TYPES = new Set(['best_of', 'buying_guide', 'comparison',
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const escape = (text) => String(text).replace(/[&<>"']/g, (c) => ENTITIES[c]);
 
-/** A product's price as the editor's card reads it ("$189.00"), the sale price first; null without one. */
+/** An amount above 0, or null: a price of 0 is none given. */
+const positive = (value) => (value != null && Number(value) > 0 ? Number(value) : null);
+
+/**
+ * A product's price as the editor's card reads it ("$189.00"): the sale
+ * price when it's under the price, else the price; null without one.
+ */
 export function priceText({ price, salePrice, currency }) {
-  const amount = salePrice ?? price;
+  const regular = positive(price);
+  const sale = positive(salePrice);
+  const amount = sale != null && regular != null && sale < regular ? sale : regular;
   if (amount == null) return null;
   try {
     return currency
@@ -31,11 +40,17 @@ export function priceText({ price, salePrice, currency }) {
   }
 }
 
-/** An http(s) image address as the block may show it, or null. */
-function imageUrl(value) {
+/** The page a card links to, as the editor's productHref: https only, without tracking or a hash; else null. */
+export function productHref(url) {
+  const href = linkHref(url);
+  return href && href.startsWith('https:') ? href : null;
+}
+
+/** An https picture the card shows, or null. */
+function imageSrc(value) {
   try {
     const url = new URL(String(value ?? ''));
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+    return url.protocol === 'https:' ? url.href : null;
   } catch {
     return null;
   }
@@ -44,20 +59,25 @@ function imageUrl(value) {
 /** The block's HTML, as the editor's productBlockHtml writes it; '' with none to show. */
 export function productBlockHtml(products) {
   const items = products
-    .slice(0, MAX_BLOCK_PRODUCTS)
-    .map((p) => ({ ...p, url: linkHref(p.url), image: imageUrl(p.image) }))
-    .filter((p) => p.url && String(p.title ?? '').trim());
+    .map((p) => ({ ...p, url: productHref(p.url), image: imageSrc(p.image) }))
+    .filter((p) => p.url && String(p.title ?? '').trim())
+    .slice(0, MAX_BLOCK_PRODUCTS);
   if (!items.length) return '';
+  // A space before the price and a line between cards: where the styles
+  // are dropped (a text export, a CMS's rich text), each product reads
+  // "Name $189.00" on its own.
   const cards = items.map((p) => {
+    // The name as alt too: a text export reads an image by its alt (draft-export.ts), and
+    // an empty one would print "[Image]" there.
     const image = p.image
-      ? `<img src="${escape(p.image)}" alt="${escape(p.title)}" loading="lazy" style="display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px">`
+      ? `<img src="${escape(p.image)}" alt="${escape(String(p.title).trim())}" loading="lazy" style="display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px">`
       : '';
     const price = p.price
-      ? `<span style="display:block;margin-top:4px">${escape(p.price)}</span>`
+      ? ` <span style="display:block;margin-top:4px">${escape(p.price)}</span>`
       : '';
     return `<a class="ansvisor-product" href="${escape(p.url)}" style="display:block;border:1px solid #e5e5e5;border-radius:12px;padding:12px;text-decoration:none;color:inherit">${image}<strong style="display:block;margin-top:8px">${escape(String(p.title).trim())}</strong>${price}</a>`;
   });
-  return `<div class="ansvisor-products" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin:16px 0">${cards.join('')}</div>`;
+  return `<div class="ansvisor-products" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin:16px 0">${cards.join('\n')}</div>`;
 }
 
 /** An HTML block as a draft stores it (html-allowlist.ts htmlBlockElement). */
@@ -66,21 +86,25 @@ export function htmlBlockElement(code) {
 }
 
 /**
- * A new page with its shopping path's products as a grid: at the end of the
- * H2 section that links them most, else before the last H2 (a FAQ, most
- * often), else at the end. Only for a list, a buying guide or a comparison
- * with two products or more; any other page is returned as it is.
+ * A new page with its shopping path's products in stock as a grid: at the
+ * end of the H2 section that links them most, else before the last H2 (a
+ * FAQ, most often), else, with no H2, at the end. Only for a list, a buying
+ * guide or a comparison with two such products or more; any other page is
+ * returned as it is. The path is shoppingPathFor's (shopping-links.js): its
+ * pages on the brand's site, its stock and prices as the catalog has them now.
  */
 export function insertProductGrid(html, path) {
   if (!html || !GRID_PAGE_TYPES.has(path?.pageType)) return html;
-  const products = (path?.products ?? []).filter((p) => linkHref(p.url));
+  const products = (path?.products ?? []).filter(
+    (p) => isInStock(p.availability) && productHref(p.url),
+  );
   if (products.length < 2) return html;
   const code = productBlockHtml(
     products.map((p) => ({ title: p.title, url: p.url, image: p.image, price: priceText(p) })),
   );
   if (!code) return html;
   const block = htmlBlockElement(code);
-  const keys = new Set(products.map((p) => linkHref(p.url)));
+  const keys = new Set(products.map((p) => productHref(p.url)));
 
   const $ = cheerio.load(html, null, false);
   const top = $.root().children().toArray();
@@ -97,11 +121,10 @@ export function insertProductGrid(html, path) {
     const links = top
       .slice(from + 1, to)
       .flatMap((el) => $(el).find('a[href]').addBack('a[href]').toArray())
-      .filter((a) => keys.has(linkHref($(a).attr('href')))).length;
+      .filter((a) => keys.has(productHref($(a).attr('href')))).length;
     if (links > 0 && (!best || links > best.links)) best = { links, last: top[to - 1] };
   });
   if (best) $(best.last).after(block);
-  else if (headings.length > 1) $(headings[headings.length - 1]).before(block);
-  else $.root().append(block);
+  else $(headings.at(-1)).before(block);
   return $.html();
 }

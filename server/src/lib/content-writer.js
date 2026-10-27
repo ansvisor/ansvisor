@@ -33,7 +33,13 @@ import { inputSources, readDraftInputs } from './content-inputs.js';
 import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { insertProductGrid } from './shopping-blocks.js';
-import { linkShoppingPath, shoppingGiven, shoppingPrompt, withShopping } from './shopping-links.js';
+import {
+  linkShoppingPath,
+  shoppingGiven,
+  shoppingPathFor,
+  shoppingPrompt,
+  withShopping,
+} from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
@@ -48,6 +54,7 @@ import {
   sourceWords,
   stripSourceIds,
   todayText,
+  withNamedNumbers,
 } from './content-sources.js';
 import {
   MAX_PAGE_HTML,
@@ -574,6 +581,7 @@ async function letGo(draft) {
 async function rewritePage({
   attributable,
   draft,
+  shoppingPath,
   brand,
   model,
   input,
@@ -597,7 +605,7 @@ async function rewritePage({
       sourceUrl: draft.source_url,
       ruleKeys,
     }),
-    draft.shopping_path,
+    shoppingPath,
   );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
@@ -848,7 +856,7 @@ function startWritingRun(draft, input, rewrite) {
 /** The run itself, step by step: nothing is kept once it is stopped. */
 async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
   await advanceRun(run, 1);
-  const [prompts, inputRow, opportunityRes] = await Promise.all([
+  const [prompts, inputRow, opportunityRes, shoppingPath] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
     readDraftInputs(draft.id),
     draft.opportunity_id && !draft.brief
@@ -859,6 +867,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
           .eq('brand_id', draft.brand_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    // Its shopping path, checked: none when it isn't one (shopping path, part 4).
+    shoppingPathFor(draft),
   ]);
   if (opportunityRes.error) throw opportunityRes.error;
   // A new page's writer has no links rule: the brief's planned links are left out for it.
@@ -869,8 +879,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   // "/top-37-tools", "/interview-with-john-smith"), as sourceWords keeps a
   // cited page's out.
   const briefGiven = brief.replace(/https?:\/\/\S+/g, ' ');
-  // The shopping path's names and prices (shopping path, part 4): the catalog's, written unmarked.
-  const shopping = shoppingGiven(draft.shopping_path);
+  // The shopping path's prices and names (shopping path, part 4): the catalog's, written unmarked.
+  const shopping = shoppingGiven(shoppingPath);
   // The data it writes from, numbered (CE-033), Brief › Your input last
   // (CE-048); the numbers a suggestion may write unmarked (the page's, the
   // brand's, the brief's, the rules', today's), and those a page written
@@ -882,19 +892,25 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     queries: input.sources.queries,
     inputs: inputSources(inputRow, brand.name),
   });
-  const known = knownNumbers(
-    htmlText(draft.body_html),
-    draft.title,
-    brand.name,
-    brand.industry,
-    brand.description,
-    briefGiven,
-    shopping,
-    ...input.rules.flatMap((r) => [r.name, r.detail]),
-    ...input.textRules,
-    todayText(),
+  const known = withNamedNumbers(
+    knownNumbers(
+      htmlText(draft.body_html),
+      draft.title,
+      brand.name,
+      brand.industry,
+      brand.description,
+      briefGiven,
+      shopping.prices,
+      ...input.rules.flatMap((r) => [r.name, r.detail]),
+      ...input.textRules,
+      todayText(),
+    ),
+    shopping.names,
   );
-  const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
+  const knownInPage = withNamedNumbers(
+    new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]),
+    shopping.names,
+  );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
   const authors = await authorWords(supabaseAdmin, brand.organization_id);
   const people = knownPeople(
@@ -904,7 +920,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     brand.industry,
     brand.description,
     briefGiven,
-    shopping,
+    ...shopping.names,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     ...numbered.map(sourceWords),
@@ -924,6 +940,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     return await rewritePage({
       attributable,
       draft,
+      shoppingPath,
       brand,
       model,
       input,
@@ -949,7 +966,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
           numbered,
           brief,
           input,
-          linkTargets: shoppingPrompt(draft.shopping_path),
+          linkTargets: shoppingPrompt(shoppingPath),
         }),
         abortSignal,
       }),
@@ -977,8 +994,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
         // The shopping path's names it wrote, linked (shopping-links.js), and
         // its products as a grid where the page names them most (shopping-blocks.js).
         body_html: insertProductGrid(
-          linkShoppingPath(renderPage({ ...written, title }), draft.shopping_path).html,
-          draft.shopping_path && { ...draft.shopping_path, pageType: draft.page_type },
+          linkShoppingPath(renderPage({ ...written, title }), shoppingPath).html,
+          shoppingPath && { ...shoppingPath, pageType: draft.page_type },
         ),
         status: 'in_review',
         author: 'agent',
@@ -1003,7 +1020,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       sourceUrl: draft.source_url,
       ruleKeys,
     }),
-    draft.shopping_path,
+    shoppingPath,
   );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
