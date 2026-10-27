@@ -7307,6 +7307,7 @@
     "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
     "tabOverview": "Overview",
     "tabMyProducts": "My Products",
+    "connectCatalog": "Bring in your product catalog: connect Google Merchant Center or a product feed in <link>Settings › Integrations</link>.",
     "tabCompetitors": "Competitors",
     "colProductTitle": "Product Title",
     "colPlatforms": "Platforms",
@@ -7868,6 +7869,7 @@
     "integrations_propertyMapping": "Property mapping",
     "integrations_notMapped": "Not mapped",
     "integrations_selectProperty": "Select a property",
+    "integrations_stores": "Stores and marketplaces",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -7885,6 +7887,7 @@
       },
       "products": "{count, plural, one {# product} other {# products}}",
       "lastSync": "synced {when}",
+      "issues": "{count, plural, one {# with issues} other {# with issues}}",
       "skipped": "{count, plural, one {# product was skipped} other {# products were skipped}}",
       "syncNow": "Sync now",
       "remove": "Remove",
@@ -7937,6 +7940,24 @@
           "busy": "Too many requests. Wait a few minutes.",
           "failed": "Couldn't reach the catalog. Try again later."
         }
+      }
+    },
+    "merchantCenter": {
+      "description": "Your products and the problems Merchant Center reports for them. Google AI Overviews and AI Mode show products from it.",
+      "title": "Merchant Center account for {brand}",
+      "hint": "Pick the account that sells this brand's products. They're read every day into the brand's product catalog below, with their issues.",
+      "noBrand": "Pick a brand to add its Merchant Center account.",
+      "pick": "Choose an account",
+      "add": "Add account",
+      "none": "This Google sign-in doesn't open any Merchant Center account. Ask an admin of the account to add you in Merchant Center, then reload this page.",
+      "connected": "{account} added. Its products are being read now.",
+      "errors": {
+        "not_connected": "The Google sign-in no longer opens Merchant Center. Disconnect it and connect again.",
+        "connect_failed": "This Google sign-in can't open that account. Pick another one.",
+        "unreachable": "Merchant Center couldn't be reached. Try again in a moment.",
+        "duplicate": "This account is added to the brand already.",
+        "not_configured": "Merchant Center isn't set up on this server yet.",
+        "failed": "Couldn't read the Merchant Center accounts. Try again later."
       }
     },
     "webflow": {

@@ -9,7 +9,9 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 const {
+  connectSignInAccount,
   connectStore,
+  listSignInAccounts,
   listStoreConnectors,
   removeStore,
   syncCatalogSource,
@@ -79,6 +81,7 @@ describe('stores (00282)', () => {
     expect(await listStoreConnectors()).toEqual({
       connectors: [{ kind: 'acme_store', label: 'Acme Store', fields: [] }],
       ready: true,
+      signIns: [],
     });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/aeo/api/catalog/connectors');
     answer(500, {});
@@ -124,5 +127,53 @@ describe('stores (00282)', () => {
     });
     answer(429, { message: 'Too many requests' });
     expect(await updateStoreSignIn('st1', {})).toEqual({ ok: false, code: 'busy', message: null });
+  });
+});
+
+describe('sign-in platforms (#1270)', () => {
+  const GMC = {
+    kind: 'merchant_center',
+    label: 'Google Merchant Center',
+    provider: 'google-merchant-center',
+    configured: true,
+  };
+
+  it('lists them with the stores', async () => {
+    answer(200, { connectors: [], ready: false, signIns: [GMC] });
+    expect(await listStoreConnectors()).toEqual({ connectors: [], ready: false, signIns: [GMC] });
+  });
+
+  it("reads the accounts the workspace's sign-in opens, for the brand", async () => {
+    answer(200, { accounts: [{ id: '123', name: 'Acme' }] });
+    expect(await listSignInAccounts('b1', 'merchant_center')).toEqual({
+      ok: true,
+      accounts: [{ id: '123', name: 'Acme' }],
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/catalog/accounts?brandId=b1&kind=merchant_center');
+    expect(init).toMatchObject({ headers: { Authorization: 'Bearer tok' } });
+
+    answer(409, { code: 'not_connected', error: 'Connect Google Merchant Center first.' });
+    expect(await listSignInAccounts('b1', 'merchant_center')).toEqual({
+      ok: false,
+      code: 'not_connected',
+    });
+    answer(500, {});
+    expect(await listSignInAccounts('b1', 'merchant_center')).toEqual({
+      ok: false,
+      code: 'failed',
+    });
+  });
+
+  it('connects the picked account as the input', async () => {
+    answer(201, { id: 'gmc1', account: '123' });
+    expect(await connectSignInAccount('b1', 'merchant_center', '123')).toEqual({ ok: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/catalog/sources');
+    expect(JSON.parse(init.body)).toEqual({
+      brandId: 'b1',
+      kind: 'merchant_center',
+      input: { account: '123' },
+    });
   });
 });

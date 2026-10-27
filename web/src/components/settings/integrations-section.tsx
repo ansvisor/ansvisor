@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { BarChart3, Loader2, Search, Unplug } from 'lucide-react';
+import { BarChart3, Loader2, Search, ShoppingBag, Unplug } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   getIntegrationStatus,
@@ -39,6 +39,7 @@ import {
 } from '@/lib/actions/integrations';
 import { matchProperty } from '@/lib/property-match';
 import { CatalogSourcesCard } from './catalog-sources-card';
+import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 
@@ -49,9 +50,15 @@ import { useIntegrationConnect } from '@/hooks/use-integration-connect';
  * without Composio env) → not connected → connecting (OAuth popup open,
  * polling) → connected — so the card and its state live in one place and each
  * provider only supplies its labels and any post-connection UI of its own.
+ *
+ * Stores and marketplaces (#1270): Google Merchant Center connects the same
+ * way, then each brand picks its account, whose products land in the
+ * product catalog card below it.
  */
 export function IntegrationsSection() {
   const t = useTranslations('settings');
+  // Bumped when a brand adds a Merchant Center account, so the catalog card lists it.
+  const [catalogReads, setCatalogReads] = useState(0);
   return (
     <Card>
       <CardHeader>
@@ -79,7 +86,19 @@ export function IntegrationsSection() {
           <GaPropertyMapping />
         </IntegrationCard>
 
-        <CatalogSourcesCard />
+        <p className="pt-2 text-sm font-medium text-muted-foreground">{t('integrations_stores')}</p>
+
+        <IntegrationCard
+          provider="google-merchant-center"
+          label="Google Merchant Center"
+          description={t('merchantCenter.description')}
+          icon={<ShoppingBag className="h-5 w-5 text-muted-foreground" />}
+          authConfigEnv="COMPOSIO_GMC_AUTH_CONFIG_ID"
+        >
+          <MerchantCenterAccounts onConnected={() => setCatalogReads((n) => n + 1)} />
+        </IntegrationCard>
+
+        <CatalogSourcesCard refreshKey={catalogReads} />
 
         <WebflowCard />
       </CardContent>

@@ -93,11 +93,11 @@ const ACME = {
   ],
 };
 
-async function render() {
+async function render(refreshKey?: number) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <CatalogSourcesCard />
+        <CatalogSourcesCard refreshKey={refreshKey} />
       </NextIntlClientProvider>,
     );
   });
@@ -136,7 +136,7 @@ beforeEach(() => {
     counts: { items: 12 },
   });
   uploadCatalogFile.mockReset();
-  listStoreConnectors.mockReset().mockResolvedValue({ connectors: [], ready: true });
+  listStoreConnectors.mockReset().mockResolvedValue({ connectors: [], ready: true, signIns: [] });
   connectStore.mockReset().mockResolvedValue({ ok: true });
   updateStoreSignIn.mockReset().mockResolvedValue({ ok: true });
   removeStore.mockReset().mockResolvedValue({ ok: true });
@@ -228,7 +228,7 @@ describe('CatalogSourcesCard', () => {
   });
 
   it('connects a store with the fields its connector asks for, the secret one hidden', async () => {
-    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true });
+    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true, signIns: [] });
     await render();
     expect(container.textContent).toContain('Connect a store');
     await act(async () => button('Connect Acme Store')!.click());
@@ -249,7 +249,7 @@ describe('CatalogSourcesCard', () => {
   });
 
   it("shows the store's own words when it couldn't connect, and keeps the form", async () => {
-    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true });
+    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true, signIns: [] });
     connectStore.mockResolvedValue({
       ok: false,
       code: 'connect_failed',
@@ -263,14 +263,14 @@ describe('CatalogSourcesCard', () => {
   });
 
   it("says the server can't keep a sign-in yet, instead of offering the stores", async () => {
-    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: false });
+    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: false, signIns: [] });
     await render();
     expect(container.textContent).toContain("Store connections aren't set up on this server yet.");
     expect(button('Connect Acme Store')).toBeUndefined();
   });
 
   it('names a store by its platform and account, replaces its sign-in, and removes it through the API', async () => {
-    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true });
+    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true, signIns: [] });
     listCatalogSources.mockResolvedValue([STORE]);
     await render();
     const text = container.textContent ?? '';
@@ -291,5 +291,51 @@ describe('CatalogSourcesCard', () => {
     await act(async () => button('Remove')!.click());
     expect(removeStore).toHaveBeenCalledWith('st1');
     expect(removeCatalogSource).not.toHaveBeenCalled();
+  });
+
+  it('names a Merchant Center account by its name and id, with its items that have issues (#1270)', async () => {
+    listStoreConnectors.mockResolvedValue({
+      connectors: [],
+      ready: true,
+      signIns: [
+        {
+          kind: 'merchant_center',
+          label: 'Google Merchant Center',
+          provider: 'google-merchant-center',
+          configured: true,
+        },
+      ],
+    });
+    listCatalogSources.mockResolvedValue([
+      {
+        ...FEED,
+        id: 'gmc1',
+        kind: 'merchant_center',
+        url: 'https://merchants.google.com/mc/overview?a=123456789',
+        account: '123456789',
+        label: 'Acme Outdoor',
+        lastCounts: {
+          ...FEED.lastCounts!,
+          skipped: 0,
+          errors: [],
+          issues: { items: 3, disapproved: 1, demoted: 2, not_impacted: 0 },
+        },
+        products: 40,
+      },
+    ]);
+    await render();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Google Merchant Center · Acme Outdoor (123456789)');
+    expect(text).toContain('40 products · 3 with issues · synced');
+    // Its sign-in is the workspace's Google one: there's none to update here.
+    expect(button('Update sign-in')).toBeUndefined();
+    expect(button('Sync now')).toBeDefined();
+  });
+
+  it('reads the sources again when the page asks (an account added above)', async () => {
+    await render(0);
+    expect(listCatalogSources).toHaveBeenCalledTimes(1);
+    await render(1);
+    expect(listCatalogSources).toHaveBeenCalledTimes(2);
   });
 });

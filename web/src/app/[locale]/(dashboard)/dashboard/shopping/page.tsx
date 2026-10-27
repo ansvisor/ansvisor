@@ -431,6 +431,18 @@ export default function ShoppingPage() {
                       {tCommon('exportCsv')}
                     </Button>
                   </div>
+                  <p className="text-sm text-muted-foreground">
+                    {t.rich('connectCatalog', {
+                      link: (chunks) => (
+                        <Link
+                          href="/dashboard/settings?tab=integrations"
+                          className="font-medium text-foreground underline underline-offset-4"
+                        >
+                          {chunks}
+                        </Link>
+                      ),
+                    })}
+                  </p>
                   <ProductTable
                     t={t}
                     products={ownProducts}

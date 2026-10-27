@@ -24,6 +24,11 @@ export interface CatalogCounts {
   errors: string[];
   products: { added: number; changed: number; removed: number; unchanged: number };
   variants: { added: number; changed: number; removed: number; unchanged: number };
+  /**
+   * The issues a platform reports per item (Google Merchant Center, #1270,
+   * 00296): the items with at least one, and the issues per severity.
+   */
+  issues?: { items: number; disapproved: number; demoted: number; not_impacted: number };
 }
 
 export interface CatalogSource {
