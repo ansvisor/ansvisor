@@ -10,6 +10,7 @@ import { isWebflowConfigured } from './composio.js';
 import { credentialsConfigured } from './catalog/credentials.js';
 import { sendToWebflow } from './cms/webflow-delivery.js';
 import { sendToWordPress } from './cms/wordpress-delivery.js';
+import { sendToFramer } from './cms/framer-delivery.js';
 
 /**
  * Send to CMS, phase 1 (#1331): an admin or manager sends Content Editor
@@ -27,8 +28,9 @@ import { sendToWordPress } from './cms/wordpress-delivery.js';
  * the workspace's next send (reserve_content_deliveries).
  *
  * Phase 2: a page can go to the brand's Webflow collection instead (00283,
- * cms/webflow-delivery.js), as a draft item, or to its WordPress site
- * (00294, cms/wordpress-delivery.js), as a draft post, under the same cap,
+ * cms/webflow-delivery.js), as a draft item, to its WordPress site (00294,
+ * cms/wordpress-delivery.js), as a draft post, or to its Framer collection
+ * (00295, cms/framer-delivery.js), as a draft item, under the same cap,
  * batches and delivery rows; a delivery says where it went (`target`).
  */
 
@@ -63,8 +65,11 @@ export const deliveryPage = z.object({
     .default(null),
 });
 
-/** Where pages go: the brand's webhook (phase 1), its Webflow collection or its WordPress site (phase 2). */
-const DELIVERY_TARGETS = ['webhook', 'webflow', 'wordpress'];
+/**
+ * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
+ * WordPress site or its Framer collection (phase 2).
+ */
+const DELIVERY_TARGETS = ['webhook', 'webflow', 'wordpress', 'framer'];
 
 export const sendInput = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
@@ -78,7 +83,8 @@ export class DeliveryError extends Error {
   /**
    * @param {'no_webhook'|'webhook_not_subscribed'|'webflow_not_configured'|'no_webflow'|
    *   'webflow_refused'|'webflow_not_ready'|'wordpress_not_configured'|'no_wordpress'|
-   *   'wordpress_refused'|'in_progress'|'not_found'|'daily_limit'} code
+   *   'wordpress_refused'|'framer_not_configured'|'no_framer'|'framer_refused'|
+   *   'framer_not_ready'|'in_progress'|'not_found'|'daily_limit'} code
    */
   constructor(code, message, status) {
     super(message);
@@ -293,10 +299,46 @@ async function wordpressFor(brandId) {
   return data;
 }
 
+/**
+ * The brand's Framer connection (00295), its key kept by the API, ready to
+ * take pages: a collection with its title and body fields.
+ */
+async function framerFor(brandId) {
+  if (!credentialsConfigured()) {
+    throw new DeliveryError('framer_not_configured', 'Framer is not set up on this server.', 503);
+  }
+  const { data, error } = await supabaseAdmin
+    .from('brand_cms_connections')
+    .select('id, brand_id, status, site_id, collection_id, field_map, updated_at')
+    .eq('brand_id', brandId)
+    .eq('provider', 'framer')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new DeliveryError('no_framer', 'Connect Framer in Settings › Integrations.', 409);
+  }
+  if (data.status === 'auth_failed') {
+    throw new DeliveryError(
+      'framer_refused',
+      'Framer refused the API key. Connect it again in Settings › Integrations.',
+      409,
+    );
+  }
+  if (!data.collection_id || !data.field_map?.title || !data.field_map?.body) {
+    throw new DeliveryError(
+      'framer_not_ready',
+      'Pick the Framer collection and its fields in Settings › Integrations.',
+      409,
+    );
+  }
+  return data;
+}
+
 /** A CMS a page goes to itself, not through the webhook: its connection, and how a page is sent. */
 const NATIVE = {
   webflow: { label: 'Webflow', connect: webflowFor, send: sendToWebflow },
   wordpress: { label: 'WordPress', connect: wordpressFor, send: sendToWordPress },
+  framer: { label: 'Framer', connect: framerFor, send: sendToFramer },
 };
 
 async function brandFor(brandId) {
@@ -369,10 +411,10 @@ async function sendToWebhooks({ delivery, page, brand, html, jsonLd, configs }) 
 
 /**
  * Sends one queued delivery, to the brand's webhooks or its CMS (a Webflow
- * collection, a WordPress site), and writes how it went: sent, or failed
- * with the reason. A Webflow item's or WordPress post's id, and its
- * collection or site, are kept on the delivery, so the page's next send
- * updates it. A webhook's callback can land before the
+ * or Framer collection, a WordPress site), and writes how it went: sent, or
+ * failed with the reason. A Webflow or Framer item's or WordPress post's id,
+ * and its collection or site, are kept on the delivery, so the page's next
+ * send updates it. A webhook's callback can land before the
  * webhook answers (an automation that publishes, or fails, first): then the
  * delivery keeps what the callback said, and that is what comes back.
  */
@@ -392,7 +434,8 @@ async function deliver({ delivery, page, brand, configs, native }) {
       : {}),
   };
   // How the CMS took it, for the one page's answer (and the batch); not kept.
-  // live: WordPress had the page's post live, so a new draft was made.
+  // live: WordPress had the page's post live, so a new draft was made;
+  // Framer's item updated isn't a draft, so it goes live with the site's next publish.
   const how = native
     ? sent.taken
       ? { updated: sent.updated, changed: sent.changed, live: sent.live }
@@ -505,8 +548,8 @@ async function myRuleSets(orgId, siteType, drafts) {
 
 /**
  * Sends pages of one brand: checks they are the brand's (not archived), that
- * a webhook takes the event (or the brand's Webflow collection is ready, or
- * its WordPress site connected, for those targets), reserves them against the day's cap (those past
+ * a webhook takes the event (or the brand's Webflow or Framer collection is
+ * ready, or its WordPress site connected, for those targets), reserves them against the day's cap (those past
  * it don't go), keeps each page's slug and meta on its draft, then sends
  * them. One page is sent before this returns; more go on in the background,
  * so a CMS isn't sent 25 posts at once.
@@ -554,7 +597,7 @@ export async function sendContentPages({
     },
   );
   if (reserveError) {
-    // 00284, 00294: a page already on its way to the CMS isn't sent there again meanwhile.
+    // 00284, 00294, 00295: a page already on its way to the CMS isn't sent there again meanwhile.
     if (/delivery_in_progress/.test(reserveError.message ?? '')) {
       throw new DeliveryError(
         'in_progress',
