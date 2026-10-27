@@ -51,7 +51,6 @@ vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: 
 
 const {
   CHANGED_BELOW,
-  MAX_DEPTH,
   MIN_CHANGED_RUNS,
   changedRuns,
   checkKind,
@@ -61,7 +60,6 @@ const {
   similarity,
   sketch,
   sweepTaskChecks,
-  tooDeep,
   visibleText,
 } = await import('./task-checks.js');
 
@@ -163,21 +161,18 @@ describe('visibleText', () => {
     const deep = `<html><body>${'<div>'.repeat(10_000)}deep words${'</div>'.repeat(10_000)}</body></html>`;
     expect(visibleText(deep)).toContain('deep words');
   });
-});
 
-describe('tooDeep', () => {
-  const nested = (depth) => `${'<div>'.repeat(depth)}words${'</div>'.repeat(depth)}`;
-
-  it('reads a page nested up to the limit, not one past it', () => {
-    expect(tooDeep(nested(MAX_DEPTH))).toBe(false);
-    expect(tooDeep(nested(MAX_DEPTH + 1))).toBe(true);
-    // Left open, they count as nested too.
-    expect(tooDeep('<div>'.repeat(MAX_DEPTH + 1))).toBe(true);
+  it('ends a block’s words with it, before the text after it', () => {
+    const read = visibleText('<html><body><h2>Pricing</h2>Plans</body></html>');
+    expect(read.replace(/\s+/g, ' ').trim()).toBe('Pricing Plans');
   });
 
-  it('counts implied closes: a paragraph opened in each paragraph closes the last', () => {
-    expect(tooDeep(`<html><body>${'<p>words '.repeat(5_000)}</body></html>`)).toBe(false);
-    expect(tooDeep(html('words'))).toBe(false);
+  it('reads blocks that each leave a different formatting element open in time', () => {
+    const blocks = Array.from({ length: 2_000 }, (_, i) => `<div><b c${i}>word${i}</div>`);
+    const page = `<html><body>${blocks.join('')}</body></html>`;
+    const started = Date.now();
+    expect(visibleText(page)).toContain('word1999');
+    expect(Date.now() - started).toBeLessThan(2_000);
   });
 });
 
@@ -383,17 +378,14 @@ describe('checkPage', () => {
     ).toBeNull();
   });
 
-  it('reads a page nested past the limit as no answer, without parsing it', async () => {
-    const levels = 300_000;
-    const deep = `<html><body>${'<div>'.repeat(levels)}<p>${essay(300)}</p>${'</div>'.repeat(levels)}</body></html>`;
-    expect(deep.length).toBeGreaterThan(3 * 1024 * 1024);
-    const fetch = fetchOf({ [PAGE]: deep });
-    const started = Date.now();
-    for (const kind of ['changed', 'published', 'structuredData', 'crawlers']) {
+  it('reads a page the reader turns away as nested too deep as no answer', async () => {
+    const fetch = vi.fn(async () => {
+      throw Object.assign(new Error('deep'), { code: 'too_deep' });
+    });
+    for (const kind of ['answers', 'changed', 'published', 'structuredData', 'crawlers']) {
       expect(await checkPage(kind, PAGE, { fetch })).toBeNull();
     }
     expect(await checkPage('text', PAGE, { after: 'w1', fetch })).toBeNull();
-    expect(Date.now() - started).toBeLessThan(2_000);
     // Nested as deep as real pages go, it's read.
     const nested = `<html><body>${'<div>'.repeat(500)}<p>${essay(300)}</p>${'</div>'.repeat(500)}</body></html>`;
     expect(await checkPage('changed', PAGE, { fetch: fetchOf({ [PAGE]: nested }) })).toMatchObject({

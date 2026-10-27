@@ -26,7 +26,6 @@
 
 import { createHash } from 'crypto';
 import * as cheerio from 'cheerio';
-import { Parser } from 'htmlparser2';
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
@@ -60,9 +59,6 @@ const RECHECK_AFTER_MS = 20 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
 /** The most of a page or a robots.txt read: the check runs on the API's process. */
 const MAX_PAGE_BYTES = 512 * 1024;
-/** Deeper than this, a page isn't read: browsers stop nesting at 512. */
-export const MAX_DEPTH = 1000;
-const TOO_DEEP = new Error('too deep');
 const OPEN = ['todo', 'in_progress'];
 
 /**
@@ -160,6 +156,16 @@ const words = (value) =>
 const CODE = new Set(['script', 'style', 'noscript', 'template', 'iframe', 'svg']);
 /** Elements whose words aren't the page's own unless they hold most of them: menus, header, footer, forms. */
 const AROUND = new Set(['nav', 'header', 'footer', 'aside', 'form', 'button']);
+/** Read after an element's children: its last word ends with it. */
+const AFTER = { type: 'text', data: ' ' };
+
+/**
+ * A page, parsed by htmlparser2: fetchPage's depth count (html-depth.js)
+ * follows its tree, so the count bounds the parse. parse5, cheerio's default,
+ * reopens formatting elements a closed block left open, so its tree can grow
+ * far past the page's own nesting.
+ */
+const loadPage = (html) => cheerio.load(html, { xml: { xmlMode: false } });
 
 /**
  * Each element's text length under `start`, code left out: one pass, children
@@ -200,7 +206,7 @@ function textLengths(start) {
  * @param {string} html
  * @param {import('cheerio').CheerioAPI} [$] the page, when it is parsed already
  */
-export function visibleText(html, $ = cheerio.load(html)) {
+export function visibleText(html, $ = loadPage(html)) {
   const head = [$('title').first().text(), $('meta[name="description"]').attr('content')];
   const start = $('body')[0] ?? $.root()[0];
   if (!start) return head.filter(Boolean).join(' ');
@@ -217,8 +223,9 @@ export function visibleText(html, $ = cheerio.load(html)) {
     if (node.type !== 'tag' || CODE.has(node.name)) continue;
     const aside = AROUND.has(node.name) || furnitureNamed(node.attribs);
     if (aside && (lengths.get(node) ?? 0) <= most) continue;
-    // A block's words end with it: "Pricing" and "Plans" never run together.
+    // A block's words start and end with it: "Pricing" and "Plans" never run together.
     out.push(' ');
+    stack.push(AFTER);
     for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]);
   }
   return [...head, out.join('')].filter(Boolean).join(' ');
@@ -286,34 +293,6 @@ function changedSince(previous, url, visible) {
     : { passed: false, missing: ['not_changed'], sketch: first };
 }
 
-/**
- * Whether a page nests deeper than MAX_DEPTH: one pass, stopped at the
- * limit. The read is bounded, but parsing a deeply nested page isn't
- * linear in its depth.
- */
-export function tooDeep(html) {
-  let depth = 0;
-  const parser = new Parser(
-    {
-      onopentag() {
-        depth += 1;
-        if (depth > MAX_DEPTH) throw TOO_DEEP;
-      },
-      onclosetag() {
-        depth -= 1;
-      },
-    },
-    { decodeEntities: false },
-  );
-  try {
-    parser.end(html);
-    return false;
-  } catch (err) {
-    if (err === TOO_DEEP) return true;
-    throw err;
-  }
-}
-
 /** An HTML page served where robots.txt should be: no robots.txt. */
 const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
 
@@ -352,7 +331,8 @@ export async function checkPage(
     page = await fetch(url, read);
   } catch (err) {
     // "Not there" (404, 410) is an answer. Another 4xx (bot protection, a
-    // rate limit), a server error or none at all says nothing.
+    // rate limit), a server error, none at all or a page nested too deep to
+    // parse ('too_deep') says nothing.
     if (err?.code === 'http_error' && (err.status === 404 || err.status === 410)) {
       return { passed: false, missing: ['page_error'], wasMissing: true };
     }
@@ -362,9 +342,7 @@ export async function checkPage(
   if (domains && !onBrandDomain(page.url, domains)) return { passed: false, missing: ['off_site'] };
   if (kind === 'answers') return { passed: true, missing: [] };
 
-  // A page nested past what any browser builds isn't parsed: no answer.
-  if (tooDeep(page.html)) return null;
-  const $ = cheerio.load(page.html);
+  const $ = loadPage(page.html);
   if (kind === 'structuredData') {
     const named = auditChecks.filter((key) => STRUCTURED_CHECKS[key]);
     const failing = (named.length ? named : DEFAULT_STRUCTURED).filter((key) => {
