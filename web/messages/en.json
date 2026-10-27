@@ -3383,6 +3383,16 @@
         "90d": "Last 90 days",
         "empty": "Nothing in this tab was created in this period."
       },
+      "lastSend": {
+        "label": "Last send",
+        "all": "Any",
+        "never": "Never sent",
+        "queued": "Sending",
+        "sent": "Sent",
+        "failed": "Failed",
+        "published": "Published",
+        "empty": "No page in this tab matches the Last send filter."
+      },
       "title": "Library",
       "description": "Everything you and the agents wrote or changed.",
       "selectBrand": "Select a brand to see its content.",
