@@ -73,13 +73,18 @@ export function pageHrefs(html, base = null) {
 /**
  * Each product's state as the catalog has it now, by id: 'gone' (not in the
  * brand's catalog, or removed from it), 'sold_out' (no variant in stock),
- * 'refused' (Merchant Center refuses every variant in stock) or 'ok'.
+ * 'refused' (Merchant Center refuses every variant in stock) or 'ok'; and
+ * its page in the catalog (its link, else a variant's), for a product the
+ * path keeps no link for.
+ *
+ * @returns {Promise<{ states: Map<string, string>, pages: Map<string, string> }>}
  */
 export async function productStates(db, brandId, ids) {
   const unique = [...new Set(ids)];
   const states = new Map(unique.map((id) => [id, 'gone']));
-  if (!unique.length) return states;
-  const products = await readIn(db, 'catalog_products', 'id, removed_at', 'id', unique, {
+  const pages = new Map();
+  if (!unique.length) return { states, pages };
+  const products = await readIn(db, 'catalog_products', 'id, url, removed_at', 'id', unique, {
     order: 'id',
     more: (q) => q.eq('brand_id', brandId),
   });
@@ -87,11 +92,15 @@ export async function productStates(db, brandId, ids) {
   const variants = await readIn(
     db,
     'catalog_variants',
-    'id, product_id, external_id, availability',
+    'id, product_id, external_id, url, availability',
     'product_id',
     live,
-    { order: 'id', more: (q) => q.is('removed_at', null) },
+    { order: 'id', more: (q) => q.eq('brand_id', brandId).is('removed_at', null) },
   );
+  for (const product of products) {
+    const url = product.url ?? variants.find((v) => v.product_id === product.id && v.url)?.url;
+    if (url) pages.set(product.id, url);
+  }
   const inStock = variants.filter((v) => isInStock(v.availability));
   const issues = await readIn(
     db,
@@ -113,34 +122,71 @@ export async function productStates(db, brandId, ids) {
           : 'ok',
     );
   }
-  return states;
+  return { states, pages };
+}
+
+/** A path's products and the ones the person removed or it left out: every id to read. */
+export function pathProductIds(path) {
+  return [
+    ...new Set([
+      ...path.products.map((p) => p.id),
+      ...path.removed,
+      ...path.leftOut.map((p) => p.id),
+    ]),
+  ];
 }
 
 /**
- * What a page's links do with its path: how many of its category pages and
- * products it links, and the linked products that no longer sell.
+ * What a page's links do with its path, as the editor's Rules read them
+ * (web lib/content/shopping-check.ts): how many of its category pages and
+ * of its products that sell it links, and the products it links that no
+ * longer sell. A product the person removed or the path left out counts
+ * only when it no longer sells: the page may still link it.
+ *
+ * @param {{ states: Map<string, string>, pages: Map<string, string> }} catalog
  */
-export function linkCheck(hrefs, path, states) {
+export function linkCheck(hrefs, path, { states, pages }) {
   const keys = new Set(hrefs.map((href) => linkKey(href)).filter(Boolean));
   const categories = [...new Set(path.categories.map((c) => linkKey(c.url)).filter(Boolean))];
+  const inPath = new Set(path.products.map((p) => p.id));
+  const leftOutTitles = new Map(path.leftOut.map((p) => [p.id, p.title]));
+  const checked = [
+    ...path.products.map((p) => ({ id: p.id, title: p.title, url: p.url, inPath: true })),
+    ...[...new Set([...path.removed, ...path.leftOut.map((p) => p.id)])]
+      .filter((id) => !inPath.has(id))
+      .map((id) => ({
+        id,
+        title: leftOutTitles.get(id) ?? null,
+        url: pages.get(id),
+        inPath: false,
+      })),
+  ];
   const linked = [];
-  const seen = new Set();
-  for (const product of path.products) {
-    const key = linkKey(product.url);
-    if (!key || !keys.has(key) || seen.has(product.id)) continue;
-    seen.add(product.id);
+  const seenPages = new Set();
+  for (const product of checked) {
+    const key = product.url ? linkKey(product.url) : null;
+    // One per page: the path's first, before a removed one with the same page.
+    if (!key || !keys.has(key) || seenPages.has(key)) continue;
+    seenPages.add(key);
+    const state = states.get(product.id) ?? 'gone';
+    if (!product.inPath && state === 'ok') continue;
     linked.push({
       id: product.id,
-      title: product.title.slice(0, TITLE_CHARS),
-      state: states.get(product.id) ?? 'gone',
+      title: String(product.title ?? '').slice(0, TITLE_CHARS),
+      state,
+      inPath: product.inPath,
     });
   }
+  const selling = path.products.filter((p) => (states.get(p.id) ?? 'gone') === 'ok').length;
   return {
     categories: categories.length,
     categoriesLinked: categories.filter((key) => keys.has(key)).length,
-    products: path.products.length,
-    productsLinked: linked.length,
-    bad: linked.filter((p) => p.state !== 'ok').slice(0, MAX_BAD),
+    products: selling,
+    productsLinked: linked.filter((p) => p.inPath && p.state === 'ok').length,
+    bad: linked
+      .filter((p) => p.state !== 'ok')
+      .map(({ inPath: _inPath, ...p }) => p)
+      .slice(0, MAX_BAD),
   };
 }
 
@@ -164,6 +210,18 @@ async function liveHrefs(url, readPage) {
   } catch {
     return null;
   }
+}
+
+/** The brand's primary site, as a base for a draft's relative links; null when none. */
+async function primarySite(db, brandId) {
+  const { data, error } = await db
+    .from('brand_domains')
+    .select('domain')
+    .eq('brand_id', brandId)
+    .eq('is_primary', true)
+    .maybeSingle();
+  if (error || !data?.domain) return null;
+  return /^https?:\/\//i.test(data.domain) ? data.domain : `https://${data.domain}`;
 }
 
 /** The brand's drafts with a shopping path, a batch at a time, in id order. */
@@ -212,6 +270,7 @@ export async function checkShoppingLinks(
   { db = supabaseAdmin, now = new Date(), readPage = fetchPage, livePages = MAX_LIVE_PAGES } = {},
 ) {
   const started = Date.now();
+  const site = await primarySite(db, brandId);
   const kept = new Set();
   let live = 0;
   let attention = 0;
@@ -223,10 +282,10 @@ export async function checkShoppingLinks(
     const paths = drafts
       .map((d) => ({ draft: d, path: readShoppingPath(d.shopping_path, { draftId: d.id }) }))
       .filter((d) => d.path);
-    const states = await productStates(
+    const catalog = await productStates(
       db,
       brandId,
-      paths.flatMap((d) => d.path.products.map((p) => p.id)),
+      paths.flatMap((d) => pathProductIds(d.path)),
     );
     const rows = [];
     for (const { draft, path } of paths) {
@@ -234,7 +293,9 @@ export async function checkShoppingLinks(
       const canRead = url && live < livePages && Date.now() - started < LIVE_PAGES_DEADLINE_MS;
       const fromPage = canRead ? await liveHrefs(url, readPage) : null;
       if (canRead) live += 1;
-      const check = linkCheck(fromPage ?? pageHrefs(draft.body_html), path, states);
+      // A draft's relative link ("/products/x") is read against its page, else the brand's site.
+      const base = url ?? draft.source_url ?? site;
+      const check = linkCheck(fromPage ?? pageHrefs(draft.body_html, base), path, catalog);
       if (check.bad.length) attention += 1;
       kept.add(draft.id);
       rows.push({

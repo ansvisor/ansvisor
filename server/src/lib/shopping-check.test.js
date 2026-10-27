@@ -61,6 +61,7 @@ function catalog(fake, products) {
     for (const [availability, externalId] of variants) {
       fake.rows('catalog_variants').push({
         id: `v-${externalId}`,
+        brand_id: BRAND,
         product_id: id,
         external_id: externalId,
         availability,
@@ -142,7 +143,7 @@ describe('productStates', () => {
         reporting_context: '',
       },
     );
-    const states = await productStates(fake.db, BRAND, [
+    const { states } = await productStates(fake.db, BRAND, [
       'p-ok',
       'p-limited',
       'p-sold',
@@ -173,12 +174,13 @@ describe('productStates', () => {
     // The one variant in stock sorts after the first 1000.
     fake.rows('catalog_variants').push({
       id: 'v-zzzz',
+      brand_id: BRAND,
       product_id: 'p1',
       external_id: 'zzzz',
       availability: 'in_stock',
       removed_at: null,
     });
-    expect((await productStates(fake.db, BRAND, ['p1'])).get('p1')).toBe('ok');
+    expect((await productStates(fake.db, BRAND, ['p1'])).states.get('p1')).toBe('ok');
   });
 });
 
@@ -197,15 +199,51 @@ describe('linkCheck', () => {
         'https://shop.example/products/p2',
       ],
       path([product('p1'), product('p2'), product('p3'), product('p4')]),
-      states,
+      { states, pages: new Map() },
     );
+    // Of the four, p1 and p4 sell (p4 isn't read: gone); p1 is linked and sells.
     expect(check).toEqual({
       categories: 1,
       categoriesLinked: 1,
-      products: 4,
-      productsLinked: 2,
+      products: 1,
+      productsLinked: 1,
       bad: [{ id: 'p2', title: 'Boot p2', state: 'sold_out' }],
     });
+  });
+
+  it('counts a removed or left-out product the page still links, only when it no longer sells', () => {
+    const removedPath = {
+      ...path([product('p1')]),
+      removed: ['r-sold', 'r-ok'],
+      leftOut: [{ id: 'l-gone', title: 'Old Boot', reason: 'gone' }],
+    };
+    const check = linkCheck(
+      [
+        'https://shop.example/products/p1',
+        'https://shop.example/products/r-sold',
+        'https://shop.example/products/r-ok',
+        'https://shop.example/products/l-gone',
+      ],
+      removedPath,
+      {
+        states: new Map([
+          ['p1', 'ok'],
+          ['r-sold', 'sold_out'],
+          ['r-ok', 'ok'],
+          ['l-gone', 'gone'],
+        ]),
+        pages: new Map([
+          ['r-sold', 'https://shop.example/products/r-sold'],
+          ['r-ok', 'https://shop.example/products/r-ok'],
+          ['l-gone', 'https://shop.example/products/l-gone'],
+        ]),
+      },
+    );
+    expect(check.productsLinked).toBe(1);
+    expect(check.bad).toEqual([
+      { id: 'r-sold', title: '', state: 'sold_out' },
+      { id: 'l-gone', title: 'Old Boot', state: 'gone' },
+    ]);
   });
 });
 
@@ -290,8 +328,9 @@ describe('checkShoppingLinks', () => {
       page_url: null,
       categories: 1,
       categories_linked: 1,
-      products: 2,
-      products_linked: 2,
+      // p2 sold out: one of the two sells, and the page links it.
+      products: 1,
+      products_linked: 1,
       bad: [{ id: 'p2', title: 'Boot p2', state: 'sold_out' }],
       checked_at: NOW.toISOString(),
     });
@@ -302,6 +341,16 @@ describe('checkShoppingLinks', () => {
       products_linked: 1,
       bad: [],
     });
+  });
+
+  it("reads a draft's relative links against the brand's site", async () => {
+    const fake = setup();
+    fake.rows('brand_domains').push({ brand_id: BRAND, domain: 'shop.example', is_primary: true });
+    fake.rows('content_drafts').push(draft('d1', { body_html: '<a href="/products/p2">two</a>' }));
+    await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
+    expect(fake.rows('content_shopping_checks')[0].bad).toEqual([
+      { id: 'p2', title: 'Boot p2', state: 'sold_out' },
+    ]);
   });
 
   it("reads a live page it can't reach, or one that answers an error, from its draft", async () => {
