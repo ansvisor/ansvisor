@@ -146,6 +146,22 @@ export const catalogCategoryLimiter = rateLimit({
   },
 });
 
+// A draft's shopping path built from the brand's catalog (shopping path,
+// 00351): each build reads up to 2,000 products and their details, and the
+// Brief tab asks on a person's click (Pick again, Swap, Add), so a bucket of
+// its own.
+export const shoppingPathLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // A brand's CMS connection (Send to CMS, #1331): each call reaches Webflow
 // through Composio, so a member's are few.
 export const cmsLimiter = rateLimit({
