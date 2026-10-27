@@ -204,7 +204,7 @@ export function PagesCard({
   const pageActions = usePageActions(brandId, dateWindow);
   // A read-only workspace (plan not active): Audit page, and Add prompts (its
   // dialog asks the AI as it opens), open the upgrade dialog instead.
-  const { guard } = useUpgradeGate();
+  const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   // The page whose suggested prompts are open (part B2); each opening starts
   // afresh, and tracking some reads the list again for its prompt counts.
@@ -364,7 +364,7 @@ export function PagesCard({
           .slice(0, PAGE_ACTION_MAX)
           .map((row) => pageUrl(domain, row.page))
       : [];
-  const block = auditBlock(pageActions.quota, auditUrls.length);
+  const block = auditBlock(pageActions.quota, auditUrls.length, isLocked);
 
   return (
     <Card aria-busy={stale} className={cn('transition-opacity', stale && 'opacity-60')}>

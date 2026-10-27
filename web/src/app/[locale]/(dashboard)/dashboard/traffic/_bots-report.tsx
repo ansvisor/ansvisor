@@ -28,6 +28,8 @@ import { formatTrafficBucketDate } from './_charts';
 import { BotsDialog } from './_bots-connect';
 import { getBotConnections, getTrafficBots } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { usePlanContext } from '@/components/providers/plan-provider';
 
 /** Where Upgrade goes, as on the Prompts page's usage cards. */
 const PLAN_PAGE = '/dashboard/settings?tab=billing';
@@ -231,6 +233,10 @@ export function BotsReportSection({
   } | null>(null);
   const [preview, setPreview] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
+  // Without an active plan the caps read 0: the plan it was on decides the lock.
+  const { isLocked } = useUpgradeGate();
+  const { planId } = usePlanContext();
+  const plan = { isLocked, planId };
 
   useEffect(() => {
     let cancelled = false;
@@ -275,7 +281,7 @@ export function BotsReportSection({
   // that read fails: taken down, it would lose the new connection's secret
   // and settings.
   const dialogInfo = info ?? connections?.lastInfo ?? null;
-  const state = info ? botReportState(info, report) : null;
+  const state = info ? botReportState(info, report, plan) : null;
   const pausedUntil = info ? rowsPausedUntil(info.usage) : null;
   // Past the raw cap log files aren't read: the report stops mid-month.
   const logsPaused = info ? logsPausedUntil(info) : null;
@@ -402,7 +408,7 @@ export function BotsReportSection({
         )}
       </div>
 
-      {dialogInfo && botReportState(dialogInfo, null) !== 'locked' && (
+      {dialogInfo && botReportState(dialogInfo, null, plan) !== 'locked' && (
         <BotsDialog
           brandId={brandId}
           open={connectOpen}

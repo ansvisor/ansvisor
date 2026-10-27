@@ -34,6 +34,7 @@ import {
 import { SourceCard } from './_source-card';
 import { getBotConnections } from '@/lib/traffic-reads';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { usePlanContext } from '@/components/providers/plan-provider';
 
 const KINDS: BotConnectionKind[] = ['cloudflare_worker', 'cloudflare_logpush', 'vercel_drain'];
 
@@ -385,6 +386,9 @@ export function BotsSource({
     failed: boolean;
   } | null>(null);
   const [open, setOpen] = useState(false);
+  // Without an active plan the caps read 0: the plan it was on decides the lock.
+  const { isLocked } = useUpgradeGate();
+  const { planId } = usePlanContext();
 
   const load = useCallback(() => {
     const done = (next: BotConnections | null) =>
@@ -415,7 +419,7 @@ export function BotsSource({
     );
   }
 
-  const state = botsCardState(info);
+  const state = botsCardState(info, { isLocked, planId });
   const button = (label: string, primary: boolean) => (
     <Button
       size="sm"

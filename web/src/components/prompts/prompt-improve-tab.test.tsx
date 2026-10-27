@@ -134,29 +134,6 @@ describe('the Improve tab’s budget', () => {
     expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
   });
 
-  // The server reads a budget of 0 with `noPlan` once the plan has ended.
-  it('says "No active plan", not "used up", without one, and keeps Generate clickable', async () => {
-    const improve = controller(
-      { unlimited: false, exhausted: true, generationsLeft: 0, percentLeft: 0, noPlan: true },
-      'starter',
-    );
-    await act(async () => {
-      root.render(
-        <NextIntlClientProvider locale="en" messages={messages}>
-          <ImproveTab improve={improve} />
-        </NextIntlClientProvider>,
-      );
-    });
-    expect(container.textContent).toContain('No active plan');
-    expect(container.textContent).not.toContain('used up');
-    expect(container.querySelector('.text-red-600')).toBeNull();
-    expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
-    expect(generateButton().disabled).toBe(false);
-    await act(async () => generateButton().click());
-    // On a read-only workspace useImprove's generate opens the upgrade dialog (below).
-    expect(improve.generate).toHaveBeenCalledOnce();
-  });
-
   it('says nothing on an unlimited plan', async () => {
     await render(
       { unlimited: true, exhausted: false, generationsLeft: null, percentLeft: null },

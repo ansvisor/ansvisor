@@ -1490,7 +1490,7 @@ export default function OnboardingPage() {
             {promptGenError && (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                 {promptGenError === 'dailyLimit' ? (
-                  tWizard('suggestionsUsedUp')
+                  tWizard('promptSuggestionsUsedUp')
                 ) : (
                   <>
                     Couldn&apos;t generate prompt suggestions right now — add your own to each topic

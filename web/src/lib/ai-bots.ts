@@ -5,10 +5,12 @@
 
 import type { BotConnection, BotConnections, BotUsage } from '@/lib/actions/ai-bots';
 import type { TrafficBots } from '@/lib/actions/traffic';
+import { isNoPlan } from '@/lib/billing/no-plan';
+import { PLANS, type PlanId } from '@/config/plans';
 
 /**
- * locked — the plan has no bot report (Starter: Upgrade); never without an
- *   active plan (`noPlan`), whose caps read 0 too: its own data still shows;
+ * locked — the plan has no bot report (Starter: Upgrade); without an active
+ *   plan, the plan it was on decides (reportLocked);
  * off — nothing connected yet;
  * waiting — connected, no request has arrived yet;
  * on — requests arrive.
@@ -24,16 +26,32 @@ export function lastBotEvent(connections: BotConnection[]): string | null {
 }
 
 /**
- * The report is locked on a plan without it (cap 0). Without an active plan
- * the caps read 0 as well, but that isn't the plan's: its connections and
- * stored data still show, and connecting opens the plan dialog.
+ * Read-only once the plan has ended: the workspace is locked (`isLocked`,
+ * useUpgradeGate) and the plan it was on (`planId`, usePlanContext).
  */
-function reportLocked(usage: BotUsage): boolean {
-  return !usage.noPlan && usage.cap === 0;
+export interface BotPlan {
+  isLocked?: boolean;
+  planId?: PlanId;
 }
 
-export function botsCardState({ connections, usage }: BotConnections): BotsCardState {
-  if (reportLocked(usage)) return 'locked';
+/**
+ * The report is locked on a plan without it (cap 0). Without an active plan
+ * (isNoPlan) the caps read 0 whatever the plan was, so the plan it was on
+ * decides: one without the report (Starter) keeps its Upgrade; one with it
+ * shows its connections and stored data, and connecting opens the plan dialog.
+ */
+function reportLocked(usage: BotUsage, { isLocked = false, planId }: BotPlan): boolean {
+  if (isNoPlan(usage, isLocked)) {
+    return planId !== undefined && PLANS[planId]?.limits.maxBotEventsPerMonth === 0;
+  }
+  return usage.cap === 0;
+}
+
+export function botsCardState(
+  { connections, usage }: BotConnections,
+  plan: BotPlan = {},
+): BotsCardState {
+  if (reportLocked(usage, plan)) return 'locked';
   if (connections.length === 0) return 'off';
   return lastBotEvent(connections) ? 'on' : 'waiting';
 }
@@ -83,8 +101,12 @@ export function logsPausedUntil(info: BotConnections): string | null {
  */
 export type BotReportState = 'locked' | 'off' | 'waiting' | 'data';
 
-export function botReportState(info: BotConnections, report: TrafficBots | null): BotReportState {
-  if (reportLocked(info.usage)) return 'locked';
+export function botReportState(
+  info: BotConnections,
+  report: TrafficBots | null,
+  plan: BotPlan = {},
+): BotReportState {
+  if (reportLocked(info.usage, plan)) return 'locked';
   // Bots counted before a connection was revoked still show.
   if (report?.lastSeen) return 'data';
   return info.connections.length === 0 ? 'off' : 'waiting';

@@ -244,6 +244,10 @@ describe('the usage card and New without an active plan', () => {
     )!;
     expect(card.textContent).toContain('New opportunities2');
     expect(card.querySelector('.text-red-600, .bg-red-500')).toBeNull();
+    // Nothing renews without a plan: the hint says what counts, not when it resets.
+    const hint = card.querySelector('[title]')!.getAttribute('title');
+    expect(hint).toContain('Every new opportunity counts once');
+    expect(hint).not.toContain('when your subscription renews');
     expect(buttonNamed('New').disabled).toBe(false);
     await act(async () => buttonNamed('New').click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Generating opportunities needs a plan');
@@ -260,6 +264,12 @@ describe('the usage card and New without an active plan', () => {
     expect(container.textContent).toContain('Limit reached');
     expect(container.textContent).toContain('Growth plan');
     expect(container.textContent).not.toContain('No active plan');
+    const card = [...container.querySelectorAll('[data-slot="card"]')].find((el) =>
+      el.textContent?.includes('This billing period'),
+    )!;
+    expect(card.querySelector('[title]')!.getAttribute('title')).toContain(
+      "Unused allowance doesn't carry over. Both reset on Nov 1, when your subscription renews.",
+    );
     expect(buttonNamed('New').disabled).toBe(true);
   });
 });

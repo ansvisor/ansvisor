@@ -34,10 +34,13 @@ vi.mock('@/lib/actions/tracking', () => ({
 }));
 vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
 const contentUsage = vi.hoisted(() => ({ value: null as object | null }));
+const getOpenSuggestionForPrompt = vi.hoisted(() =>
+  vi.fn(async (): Promise<string | null> => null),
+);
 vi.mock('@/lib/actions/content', () => ({
   getContentUsage: vi.fn(async () => contentUsage.value),
   getGenerationJobStatus: vi.fn(),
-  getOpenSuggestionForPrompt: vi.fn(async () => null),
+  getOpenSuggestionForPrompt,
   suggestContentForPrompt: vi.fn(),
 }));
 vi.mock('@/lib/actions/content-drafts', () => ({ getDraftForPrompt: vi.fn(async () => null) }));
@@ -57,7 +60,7 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
 // The route names the tab: Tracked unless a test opens Insights.
-const nav = vi.hoisted(() => ({ pathname: '/dashboard/prompts/tracked' }));
+const nav = vi.hoisted(() => ({ pathname: '/dashboard/prompts/tracked', push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: ReactNode }) => (
     <a href={href} {...props}>
@@ -65,7 +68,7 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
   usePathname: () => nav.pathname,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: nav.push, replace: vi.fn() }),
 }));
 const toast = vi.hoisted(() =>
   Object.assign(vi.fn(), {
@@ -127,6 +130,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   nav.pathname = '/dashboard/prompts/tracked';
   contentUsage.value = null;
+  getOpenSuggestionForPrompt.mockResolvedValue(null);
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({ ok: false, json: async () => ({}) })),
@@ -289,6 +293,32 @@ describe('the volume quota without an active plan', () => {
     expect(suggest.hasAttribute('data-disabled')).toBe(false);
     await act(async () => suggest.click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Suggesting content needs a plan');
+  });
+
+  it("opens the prompt's content suggestion from the row menu, which costs nothing", async () => {
+    contentUsage.value = {
+      plan: 'growth',
+      planName: 'Growth',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      opportunities: { used: 2, limit: 0, remaining: 0, perRequest: 0, noPlan: true },
+      briefs: { used: 0, limit: 0, remaining: 0, noPlan: true },
+      noPlan: true,
+    };
+    getOpenSuggestionForPrompt.mockResolvedValue('opp-1');
+    await render(true);
+    const trigger = container.querySelector<HTMLElement>(
+      `[aria-label="Actions for ${prompt.text}"]`,
+    )!;
+    await act(async () => trigger.click());
+    expect(getOpenSuggestionForPrompt).toHaveBeenCalledWith('p1');
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    const open = items.find((el) => el.textContent === 'Open content suggestion')!;
+    expect(open).toBeDefined();
+    expect(items.some((el) => el.textContent?.startsWith('Suggest content'))).toBe(false);
+    await act(async () => open.click());
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/content?opportunity=opp-1');
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 
   it('says "No active plan" on Insights, not a red 0/0 or "limit reached"', async () => {

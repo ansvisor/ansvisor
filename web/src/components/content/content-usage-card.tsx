@@ -62,6 +62,10 @@ export function ContentUsageCard({
   const exhausted =
     !noPlan &&
     (usageTone(usage.opportunities) === 'exhausted' || usageTone(usage.briefs) === 'exhausted');
+  // Without an active plan there's no renewal to reset them on.
+  const tooltip = noPlan
+    ? t('tooltip')
+    : `${t('tooltip')} ${t('tooltipResets', { date: resets ?? '' })}`;
 
   return (
     <Card className={className}>
@@ -70,11 +74,7 @@ export function ContentUsageCard({
           {t('title')}
         </CardTitle>
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-          <span
-            className="inline-flex cursor-help"
-            title={t('tooltip', { date: resets ?? '' })}
-            aria-label={t('tooltip', { date: resets ?? '' })}
-          >
+          <span className="inline-flex cursor-help" title={tooltip} aria-label={tooltip}>
             <Info className="h-3.5 w-3.5" />
           </span>
           <Gauge className="h-3.5 w-3.5" />

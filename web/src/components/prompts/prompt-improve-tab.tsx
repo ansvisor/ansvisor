@@ -38,7 +38,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { isNoPlan } from '@/lib/billing/no-plan';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { PLANS, hasFeature, type PlanId } from '@/config/plans';
 import {
@@ -280,9 +279,7 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
     sending,
   } = improve;
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
-  // Without an active plan the budget reads 0: not used up. Generate stays
-  // clickable, and opens the plan dialog.
-  const outOfQuota = !!quota?.exhausted && !isNoPlan(quota);
+  const outOfQuota = !!quota?.exhausted;
 
   if (status === 'locked') return <LockedImprove />;
   if (status === 'error') {
@@ -477,14 +474,7 @@ function QuotaNote({
   className?: string;
 }) {
   const t = useTranslations('prompts.improve.quota');
-  const tReadOnly = useTranslations('readOnly');
   if (!quota || quota.unlimited) return null;
-  // Without an active plan the budget reads 0: that there's no plan, not "used up".
-  if (isNoPlan(quota)) {
-    return (
-      <span className={cn('text-xs text-muted-foreground', className)}>{tReadOnly('noPlan')}</span>
-    );
-  }
   return (
     <span
       className={cn(
