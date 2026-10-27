@@ -39,6 +39,7 @@ import {
 } from '@/lib/actions/integrations';
 import { matchProperty } from '@/lib/property-match';
 import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
+import { isCloud } from '@/config/plans';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
@@ -97,6 +98,7 @@ export function IntegrationsSection() {
             description={t('merchantCenter.description')}
             icon={<ShoppingBag className="h-5 w-5 text-muted-foreground" />}
             authConfigEnv="COMPOSIO_GMC_AUTH_CONFIG_ID"
+            hideUnavailable
           >
             <MerchantCenterAccounts
               sources={catalogSources}
@@ -135,6 +137,10 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
 /**
  * One integration row: status badge, Connect / Disconnect, and whatever the
  * provider wants to render once connected (`children`).
+ *
+ * `hideUnavailable`: a newer integration's card isn't shown while its status
+ * can't be read (an API older than the web), nor on the cloud while it isn't
+ * set up there; a self-hosted server keeps the set-up line.
  */
 function IntegrationCard({
   provider,
@@ -142,6 +148,7 @@ function IntegrationCard({
   description,
   icon,
   authConfigEnv,
+  hideUnavailable = false,
   children,
 }: {
   provider: IntegrationProvider;
@@ -149,10 +156,12 @@ function IntegrationCard({
   description: string;
   icon: ReactNode;
   authConfigEnv: string;
+  hideUnavailable?: boolean;
   children?: ReactNode;
 }) {
   const t = useTranslations('settings');
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const [unreadable, setUnreadable] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const { connecting, connect: handleConnect } = useIntegrationConnect(provider, {
     label,
@@ -166,10 +175,14 @@ function IntegrationCard({
       setStatus(result.status);
     } catch (err) {
       console.error(`Failed to load ${provider} status:`, err);
+      if (hideUnavailable) {
+        setUnreadable(true);
+        return;
+      }
       toast.error('Failed to load integration status');
       setStatus('not_connected');
     }
-  }, [provider]);
+  }, [provider, hideUnavailable]);
 
   useEffect(() => {
     load();
@@ -187,6 +200,8 @@ function IntegrationCard({
       setDisconnecting(false);
     }
   };
+
+  if (hideUnavailable && (unreadable || (status === 'not_configured' && isCloud()))) return null;
 
   return (
     <div className="space-y-4">
