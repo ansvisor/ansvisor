@@ -550,6 +550,36 @@ describe('runDraftWriting on a new page', () => {
     expect(written).not.toContain('3,400');
   });
 
+  it('saves the title as its H1 reads, a capital first, in the brand’s language', async () => {
+    generateObject.mockResolvedValue({
+      object: { ...page, title: 'latest news on pour-over coffee' },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await expect(run(draftRow())).resolves.toEqual({ written: true });
+    const saved = draftUpdates().find((u) => u.body_html);
+    expect(saved.title).toBe('Latest news on pour-over coffee');
+    expect(saved.body_html).toContain('<h1>Latest news on pour-over coffee</h1>');
+
+    // Turkish: "i" is "İ", in the title column as in the H1.
+    writes = [];
+    generateObject.mockResolvedValue({
+      object: { ...page, title: 'istanbul’da filtre kahve' },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await expect(
+      runDraftWriting({
+        draft: draftRow(),
+        brand: { ...brand, language: 'tr' },
+        model: 'model:m',
+        input: input(),
+        budget,
+      }),
+    ).resolves.toEqual({ written: true });
+    const tr = draftUpdates().find((u) => u.body_html);
+    expect(tr.title).toBe('İstanbul’da filtre kahve');
+    expect(tr.body_html).toContain('<h1>İstanbul’da filtre kahve</h1>');
+  });
+
   /** A draft's shopping path as content_drafts.shopping_path keeps it. */
   const shoppingPath = (over = {}) => ({
     version: 1,

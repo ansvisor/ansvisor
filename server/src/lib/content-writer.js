@@ -994,7 +994,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     await advanceRun(run, 3);
     // No number without a source: a placeholder where one had none.
     const written = sourcedPage(object, knownInPage, people);
-    const title = clean(written.title).slice(0, 300) || draft.title;
+    // The title column as the H1 reads it: a capital first (headingCase).
+    const title = headingCase(clean(written.title).slice(0, 300), language) || draft.title;
     // Stopped meanwhile: the page stays as it was, and History with it.
     await stopIfStopped(run);
     // Try again over a page the person has written in: History keeps it
