@@ -84,7 +84,7 @@ describe('suggestions.build', () => {
     const written = [];
     const db = {
       from: (table) => ({
-        insert: async (list) => {
+        upsert: async (list) => {
           written.push([table, list.length]);
           return { error: null };
         },

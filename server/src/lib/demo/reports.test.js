@@ -71,7 +71,7 @@ describe('reports.build', () => {
     let written = null;
     const db = {
       from: (table) => ({
-        insert: async (list) => {
+        upsert: async (list) => {
           written = [table, list.length];
           return { error: null };
         },
