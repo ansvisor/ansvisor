@@ -20,6 +20,13 @@ export const MAX_SOURCE_PAGES = 20;
 /** Query parameters that only track a visit. */
 const TRACKING = /^(utm_\w+|gclid|fbclid|msclkid|mc_cid|mc_eid|ref)$/i;
 
+/** A path without the slashes it ends in, read back from its end. */
+function withoutTrailingSlashes(path) {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === '/') end -= 1;
+  return path.slice(0, end);
+}
+
 /**
  * A URL as links compare: an http(s) address, its host lower-cased without
  * www, no hash, no tracking parameters, no trailing slash. Null for anything else.
@@ -35,8 +42,7 @@ export function linkKey(url) {
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
   const params = [...parsed.searchParams].filter(([name]) => !TRACKING.test(name));
   const search = params.length ? `?${new URLSearchParams(params).toString()}` : '';
-  const path = parsed.pathname.replace(/\/+$/, '');
-  return `${host}${path}${search}`;
+  return `${host}${withoutTrailingSlashes(parsed.pathname)}${search}`;
 }
 
 /** A URL as a link keeps it: without tracking parameters or a hash; null when not http(s). */
@@ -138,10 +144,19 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
   return { own, sources };
 }
 
-/** The targets as the model reads them, by the rules asked for; '' when there are none. */
+/**
+ * The targets as the model reads them, by the rules asked for; '' when there
+ * are none. A draft's shopping path (shopping-links.js withShopping) comes
+ * first, whatever the rules: it's the page's plan.
+ */
 export function linkTargetsPrompt(targets, ruleKeys) {
   const lines = (list) => list.map((p) => `- ${p.title} — ${p.url}`).join('\n');
   const parts = [];
+  if (targets.shopping?.length) {
+    parts.push(
+      `The shopping path, the brand's shop pages this page sends readers to: link each where the page names it, once:\n${lines(targets.shopping)}`,
+    );
+  }
   if (targets.own.length && ruleKeys.has('internalLinks')) {
     parts.push(
       `Pages on the brand's site you may link to (internal links):\n${lines(targets.own)}`,
@@ -160,5 +175,10 @@ export function linkTargetsPrompt(targets, ruleKeys) {
  * else is unwrapped.
  */
 export function linkAllowList(targets) {
-  return new Map([...targets.own, ...targets.sources].map((p) => [linkKey(p.url), p.url]));
+  return new Map(
+    [...targets.own, ...targets.sources, ...(targets.shopping ?? [])].map((p) => [
+      linkKey(p.url),
+      p.url,
+    ]),
+  );
 }

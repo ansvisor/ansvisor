@@ -11,9 +11,11 @@ import logger from './lib/logger.js';
 import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
+import { requireActiveSubscription } from './middleware/subscription.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
+import cloroCallbackRoutes from './routes/cloro-callback.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -28,11 +30,9 @@ import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/cita
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
+import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
-import { parseScraperResponse } from './lib/cloro-scraper.js';
-import { handleScraperResult } from './lib/cloro-result-handler.js';
-import { verifyCloroWebhook } from './lib/cloro-webhook-verify.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -52,6 +52,7 @@ import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
 import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
+import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 
@@ -183,6 +184,13 @@ async function runDailyTracking() {
     logger.error({ err }, '[task-writer] daily sweep crashed');
   });
 
+  // Check the open tasks checked `auto` on their pages (AC-010): a page
+  // fetched again with the free reader, one at a time, bounded per night. A
+  // task that passes is completed. Fire-and-forget like the rest.
+  sweepTaskChecks().catch((err) => {
+    logger.error({ err }, '[task-checks] daily sweep crashed');
+  });
+
   // Insights rollup backstop (00066). Re-refreshes the trailing days for
   // every brand, so days whose run never stamped (partial, crashed) and
   // out-of-run writes (a prompt analyzed right after being added) appear the
@@ -291,9 +299,16 @@ async function runDailyTracking() {
   });
 
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
-  sweepCatalogSources().catch((err) => {
-    logger.error({ err }, '[catalog] daily sweep failed');
-  });
+  // Then the products removed from their source over 90 days ago are
+  // deleted: after the sweep, so it isn't deleting while a sync brings one back.
+  sweepCatalogSources()
+    .catch((err) => {
+      logger.error({ err }, '[catalog] daily sweep failed');
+    })
+    .then(() => purgeRemovedCatalogProducts())
+    .catch((err) => {
+      logger.error({ err }, '[catalog] daily purge failed');
+    });
 
   // Pages sent to Webflow, published there since (#1331): read once a day.
   sweepWebflowPublished().catch((err) => {
@@ -462,7 +477,8 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
     if (!orgId) {
       return res.status(400).json({ success: false, message: 'orgId is required' });
     }
-    const quota = await getSiteAuditQuotaStatus(orgId);
+    // A read, as the dashboard's: a plan that ended reads as a limit of 0.
+    const quota = await getSiteAuditQuotaStatus(orgId, { readOnly: true });
     return res.json({ success: true, quota });
   } catch (err) {
     if (err.statusCode) {
@@ -594,150 +610,9 @@ app.post('/api/internal/analyze-volumes', async (req, res) => {
   }
 });
 
-// --- Cloro webhook callback ---
-// Signature verification (HMAC-SHA256, see lib/cloro-webhook-verify.js) runs when
-// CLORO_WEBHOOK_SECRET is set. When it's unset (self-hosted installs, or signing not
-// yet enabled in the Cloro dashboard) we fall back to the original defence:
-// task_id entropy + cloro_pending_tasks lookup.
-app.post('/cloro/callback', async (req, res) => {
-  const webhookSecret = process.env.CLORO_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const verdict = verifyCloroWebhook({
-      rawBody: Buffer.isBuffer(req.body) ? req.body : Buffer.from(''),
-      signatureHeader: req.headers['x-cloro-signature'],
-      timestampHeader: req.headers['x-cloro-timestamp'],
-      secret: webhookSecret,
-    });
-    if (!verdict.ok) {
-      req.log.warn(
-        {
-          reason: verdict.reason,
-          webhookId: req.headers['x-cloro-webhook-id'] || null,
-          ip: req.ip,
-        },
-        'cloro callback rejected delivery',
-      );
-      return res.status(verdict.status).json({ error: verdict.reason });
-    }
-  }
-
-  // Parse only after the signature check has passed (raw body arrives as a Buffer).
-  let payload;
-  try {
-    payload = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString('utf8') || '{}') : req.body;
-  } catch {
-    req.log.warn({ ip: req.ip }, 'cloro callback rejected: malformed JSON body');
-    return res.status(400).json({ error: 'malformed JSON body' });
-  }
-
-  // Always ack quickly so Cloro doesn't retry on slow processing
-  res.status(200).send();
-
-  try {
-    const { task, response } = payload || {};
-    const taskId = task?.id;
-    const status = task?.status;
-
-    if (!taskId) {
-      req.log.warn('cloro callback missing task.id in payload');
-      return;
-    }
-
-    const { data: pending } = await supabaseAdmin
-      .from('cloro_pending_tasks')
-      .select('*')
-      .eq('task_id', taskId)
-      .maybeSingle();
-
-    if (!pending) {
-      req.log.info({ taskId }, 'cloro callback: no pending task (already processed?)');
-      return;
-    }
-
-    if (status === 'FAILED') {
-      req.log.error({ taskId, scraperId: pending.scraper_id }, 'cloro callback: task failed');
-      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
-      return;
-    }
-
-    if (status !== 'COMPLETED') {
-      req.log.info({ taskId, status }, 'cloro callback: task status ignored');
-      return;
-    }
-
-    if (!response) {
-      req.log.error({ taskId }, 'cloro callback: task completed but missing response');
-      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
-      return;
-    }
-
-    // Fetch context for result handler
-    const [{ data: brand }, { data: domains }, { data: competitorRows }] = await Promise.all([
-      supabaseAdmin.from('brands').select('id, name').eq('id', pending.brand_id).single(),
-      supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', pending.brand_id),
-      supabaseAdmin.from('competitors').select('id, name, domain').eq('brand_id', pending.brand_id),
-    ]);
-
-    if (!brand) {
-      req.log.error(
-        { taskId, brandId: pending.brand_id },
-        'cloro callback: brand not found — dropping',
-      );
-      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
-      return;
-    }
-
-    const brandInfo = {
-      brandName: brand.name,
-      domains: (domains || []).map((d) => d.domain),
-    };
-    const competitors = (competitorRows || []).map((c) => ({
-      id: c.id,
-      name: c.name,
-      domain: c.domain || '',
-    }));
-
-    // A completed task with nothing to store — google-aio for a query Google
-    // shows no AI Overview for — is a finished task, not a failed delivery.
-    // Leaving its pending row behind held every tracking run open: the worker
-    // waited out its stall window and the run's stamp its late deadline, for
-    // answers that had arrived seconds after submission.
-    let aiResponse;
-    try {
-      aiResponse = parseScraperResponse(response, pending.scraper_id);
-    } catch (err) {
-      req.log.info(
-        { taskId, scraperId: pending.scraper_id, reason: err.message },
-        'cloro callback: task completed with no answer to store',
-      );
-      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
-      return;
-    }
-
-    try {
-      await handleScraperResult({
-        aiResponse,
-        scraperId: pending.scraper_id,
-        promptId: pending.prompt_id,
-        brandId: pending.brand_id,
-        region: pending.region,
-        brandInfo,
-        competitors,
-      });
-    } finally {
-      // Cloro does not deliver again after our 200, so a task that failed to
-      // store will never come back; keeping its row only holds the run open.
-      await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
-    }
-
-    req.log.info(
-      { taskId, scraperId: pending.scraper_id },
-      'cloro callback: task processed and inserted',
-    );
-  } catch (err) {
-    req.log.error({ err }, 'cloro callback: error processing webhook');
-  }
-});
+// --- Cloro webhook callback (routes/cloro-callback.js) ---
+// After the raw body parser mounted for this path at the top.
+app.use('/cloro/callback', cloroCallbackRoutes);
 
 // Public, webhook-secret-authenticated status callback for external workflows.
 // It is mounted outside /api so no dashboard JWT is required; the router has its own stricter limiter.
@@ -745,7 +620,10 @@ app.use('/webhooks/content', webhookContentCallbackRoutes);
 app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 
 // --- Authenticated API routes ---
-app.use('/api', Middleware.decodeToken.bind(Middleware), routes);
+// Read-only once the plan has ended (middleware/subscription.js): checked
+// once the person is known, before any route. The webhooks, callbacks and
+// internal endpoints above never reach it.
+app.use('/api', Middleware.decodeToken.bind(Middleware), requireActiveSubscription, routes);
 
 // Health check
 app.get('/', (req, res) => {

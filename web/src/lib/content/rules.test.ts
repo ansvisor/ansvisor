@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import messages from '../../../messages/en.json';
+import { htmlBlockElement } from './html-allowlist';
+import { productBlockHtml } from './product-block';
+import type { ShoppingCheck, ShoppingLinkState } from './shopping-check';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
@@ -37,6 +41,7 @@ import {
   keptOutOfReach,
   lengthOutOfReach,
   rewriteAdvice,
+  SHOPPING_RULE_KEYS,
   type RuleStatus,
 } from './rules';
 
@@ -449,6 +454,193 @@ describe('links and sources', () => {
       state: 'bad',
       code: 'missing',
     });
+  });
+});
+
+describe('shopping path rules (shopping path, part 6)', () => {
+  const item = (n: number, title: string, state: ShoppingLinkState, inPath = true) => ({
+    key: `shop.example/products/p${n}`,
+    title,
+    state,
+    inPath,
+  });
+  const shopping: ShoppingCheck = {
+    categories: ['shop.example/collections/hiking-boots'],
+    products: [
+      item(1, 'Summit', 'ok'),
+      item(2, 'Trail', 'sold_out'),
+      item(3, 'Ridge', 'ok'),
+      item(4, 'Alpine', 'ok'),
+    ],
+    site: 'https://shop.example/blog/boots',
+    merchantCenter: true,
+  };
+  const shopRule = (key: string, value?: string) => {
+    const found = activeRules(
+      ruleSet('buying_guide', { shopping: true }),
+      value === undefined ? NO_DRAFT_RULES : { overrides: { [key]: { value } } },
+    ).find((r) => r.key === key);
+    if (!found) throw new Error(`no rule ${key}`);
+    return found;
+  };
+  const grid = (hrefs: string[]) =>
+    htmlBlockElement(hrefs.map((h) => `<a class="ansvisor-product" href="${h}">x</a>`).join(''));
+  const html =
+    '<h1>Boots</h1><p>Our <a href="https://shop.example/collections/hiking-boots/">hiking boots</a>.</p>' +
+    '<p>The <a href="https://www.shop.example/products/p1?utm_source=x">Summit</a>.</p>' +
+    grid(['https://shop.example/products/p2', 'https://shop.example/products/p3']);
+  const status = (
+    key: string,
+    read = page(html),
+    with_: RuleContext['shopping'] = shopping,
+    value?: string,
+  ) => checkRule(shopRule(key, value), read, { ...ctx, shopping: with_ });
+
+  it('come only on an online shop’s page that takes a shopping path', () => {
+    const keys = (pageType: Parameters<typeof ruleSet>[0], on: boolean) =>
+      ruleSet(pageType, { shopping: on })
+        .map((r) => r.key)
+        .filter((k) => SHOPPING_RULE_KEYS.has(k));
+    expect(keys('buying_guide', true)).toEqual([
+      'shopCategoryLink',
+      'shopProductLinks',
+      'shopLinksLive',
+    ]);
+    expect(keys('buying_guide', false)).toEqual([]);
+    expect(keys('product_page', true)).toEqual([]);
+    expect(NOT_FOR_AGENT.has('shopLinksLive')).toBe(true);
+  });
+
+  it('read every link on the page: the text’s, a heading’s, a table’s and a product grid’s, each once', () => {
+    const read = page(
+      '<h2><a href="https://shop.example/products/p4">Alpine</a></h2>' +
+        '<table><tr><td><a href="https://shop.example/products/p3">Ridge</a></td></tr></table>' +
+        '<ul><li><a href="https://shop.example/products/p1">Summit</a></li></ul>' +
+        grid(['https://shop.example/products/p1', 'https://shop.example/products/p2']),
+    );
+    expect(read.links).toEqual([
+      'https://shop.example/products/p4',
+      'https://shop.example/products/p3',
+      'https://shop.example/products/p1',
+      'https://shop.example/products/p2',
+    ]);
+    expect(status('shopProductLinks', read)).toEqual({ state: 'ok' });
+    expect(status('shopCategoryLink')).toEqual({ state: 'ok' });
+  });
+
+  it('read the product cards with the price each shows, from the editor’s own markup (#1610)', () => {
+    const block = productBlockHtml([
+      { title: 'Summit', url: 'https://shop.example/products/p1', image: null, price: '$189.00' },
+      { title: 'Trail', url: 'https://shop.example/products/p2', image: null, price: null },
+    ]);
+    const read = page(`<p>Intro</p>${htmlBlockElement(block)}`);
+    expect(read.cards).toEqual([
+      { href: 'https://shop.example/products/p1', price: '$189.00' },
+      { href: 'https://shop.example/products/p2', price: null },
+    ]);
+    // A link in the text is no card.
+    expect(page('<p><a href="https://shop.example/products/p1">Summit</a></p>').cards).toEqual([]);
+  });
+
+  it('count only the products that sell towards the number, and name the ones that don’t', () => {
+    // Summit and Ridge sell; Trail, in the grid, is sold out: 2 of 3.
+    expect(status('shopProductLinks')).toEqual({ state: 'bad', code: 'partOf', count: 2, of: 3 });
+    expect(status('shopLinksLive')).toEqual({
+      state: 'bad',
+      code: 'found',
+      count: 1,
+      items: [{ title: 'Trail', state: 'sold_out' }],
+    });
+    // A path of three, one sold out: both rules can be met, by the two that sell.
+    const three = { ...shopping, products: shopping.products.slice(0, 3) };
+    const two = page(
+      '<p><a href="https://shop.example/products/p1">a</a> <a href="https://shop.example/products/p3">b</a></p>',
+    );
+    expect(status('shopProductLinks', two, three)).toEqual({ state: 'ok' });
+    expect(status('shopLinksLive', two, three)).toEqual({ state: 'ok' });
+  });
+
+  it('find a link to a product removed from the path that no longer sells', () => {
+    const removed = {
+      ...shopping,
+      products: [...shopping.products, item(9, 'Canyon', 'gone', false)],
+    };
+    const read = page('<p><a href="/products/p9">Canyon</a></p>');
+    expect(status('shopLinksLive', read, removed)).toEqual({
+      state: 'bad',
+      code: 'found',
+      count: 1,
+      items: [{ title: 'Canyon', state: 'gone' }],
+    });
+    // Not one of the path's: it never counts towards the products linked.
+    expect(status('shopProductLinks', read, removed, '1')).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 0,
+      of: 1,
+    });
+  });
+
+  it('want the category page, three products or all of a smaller path, none sold out', () => {
+    const bare = page('<p>Nothing linked.</p>');
+    expect(status('shopCategoryLink', bare)).toEqual({ state: 'bad', code: 'missing' });
+    expect(status('shopProductLinks', bare)).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 0,
+      of: 3,
+    });
+    expect(
+      status('shopProductLinks', bare, { ...shopping, products: shopping.products.slice(0, 2) }),
+    ).toEqual({ state: 'bad', code: 'partOf', count: 0, of: 1 });
+    expect(status('shopLinksLive', bare)).toEqual({ state: 'ok' });
+  });
+
+  it('wait for the path, say when there is none, and when it can’t be read', () => {
+    expect(status('shopProductLinks', page(html), 'reading')).toEqual({
+      state: 'info',
+      code: 'shoppingReading',
+    });
+    expect(status('shopLinksLive', page(html), 'failed')).toEqual({
+      state: 'info',
+      code: 'shoppingFailed',
+    });
+    expect(status('shopLinksLive', page(html), null)).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
+    });
+    expect(status('shopCategoryLink', page(html), { ...shopping, categories: [] })).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
+    });
+    // Every product sold out: none to link, pick again in Brief.
+    const soldOut = { ...shopping, products: [item(2, 'Trail', 'sold_out')] };
+    expect(status('shopProductLinks', page(html), soldOut)).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
+    });
+  });
+
+  it('says what to do instead when only a sold-out link is open, and both when the feed’s is too', () => {
+    expect(notForAgentMessage([{ rule: { key: 'shopLinksLive' } }])).toBe('notForAgentShopping');
+    expect(
+      notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'feedMatch' } }]),
+    ).toBe('notForAgentFeedShopping');
+    expect(
+      notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'oneH1' } }]),
+    ).toBe('notForAgent');
+  });
+
+  it('has a message in the editor for each of its answers', () => {
+    const answers = [
+      [{ rule: { key: 'oneH1' } }],
+      [{ rule: { key: 'feedMatch' } }],
+      [{ rule: { key: 'shopLinksLive' } }],
+      [{ rule: { key: 'feedMatch' } }, { rule: { key: 'shopLinksLive' } }],
+    ].map(notForAgentMessage);
+    expect(new Set(answers).size).toBe(4);
+    const suggestions: Record<string, unknown> = messages.contentEditor.editor.suggestions;
+    for (const key of answers) expect(suggestions[key]).toEqual(expect.any(String));
   });
 });
 
@@ -1039,6 +1231,14 @@ describe('My rules and text rules', () => {
   it('starts only a page brought in to optimize at its own length (F)', () => {
     expect(pageTextLength('<h1>Pricing</h1><p>Plans &amp; prices</p>')).toBe(22);
     expect(pageTextLength('<p>a<script>x()</script>  b</p><style>p{}</style>')).toBe(3);
+    // Tags left open are read in time near the page's size.
+    expect(pageTextLength('<p>a</p><script>b')).toBe('a b'.length);
+    for (const tag of ['<p', '<script', '<style ', '<', '</div']) {
+      const html = `<p>Lead</p>${tag.repeat(Math.ceil(100_000 / tag.length))}`;
+      const started = performance.now();
+      expect(pageTextLength(html)).toBeGreaterThan(4);
+      expect(performance.now() - started).toBeLessThan(2000);
+    }
     const page = `<h1>Pricing</h1><p>${'word '.repeat(40)}</p>`;
     expect(startingRules('optimize', page)).toEqual({ ...NO_DRAFT_RULES, importLength: 207 });
     // Within the range the Length rule takes.

@@ -165,6 +165,16 @@ const brandState = vi.hoisted(() => ({
 }));
 const updateBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ updateBrand }));
+// Brief › Shopping path (shopping path, part 3) reads its own path: none here.
+const getShoppingCheck = vi.hoisted(() => vi.fn(async (): Promise<unknown> => null));
+vi.mock('@/lib/actions/shopping-path', () => ({
+  getDraftShoppingPath: vi.fn(async () => ({ path: null })),
+  buildDraftShoppingPath: vi.fn(),
+  saveDraftShoppingPath: vi.fn(),
+  searchCatalogProducts: vi.fn(async () => []),
+  getProductsForBlock: vi.fn(async () => []),
+  getShoppingCheck,
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
@@ -182,7 +192,8 @@ vi.mock('mammoth', () => ({
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
-const readDraftCms = vi.hoisted(() => vi.fn());
+// The header reads the page's last send as it opens: none, unless a test says.
+const readDraftCms = vi.hoisted(() => vi.fn(async () => null as unknown));
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
 // The brand's Webflow connection (#1331, phase 2): none here.
@@ -2873,6 +2884,53 @@ describe('the side panel', () => {
     await act(async () => button('Hide side panel')!.click());
     expect(panel()).toBeNull();
     expect(rail()).not.toBeNull();
+  });
+
+  // Brief › Shopping path (shopping path, part 3): an online shop's page that links products.
+  it.each([
+    [{ siteType: 'ecommerce', pageType: 'buying_guide' }, true],
+    [{ siteType: 'b2b', pageType: 'buying_guide' }, false],
+    [{ siteType: 'ecommerce', pageType: 'product_page' }, false],
+  ] as const)('shows the shopping path in Brief for %o: %s', async (over, shown) => {
+    getContentDraft.mockResolvedValue(draft(over));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Brief');
+    expect(panel()!.querySelector('section[aria-label="Shopping path"]') !== null).toBe(shown);
+  });
+
+  it('shows the Shopping rules once the path is read, and reads it again after a change in Brief', async () => {
+    let land!: (value: unknown) => void;
+    getShoppingCheck.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+    );
+    try {
+      getContentDraft.mockResolvedValue(draft({ siteType: 'ecommerce', pageType: 'buying_guide' }));
+      window.innerWidth = 1440;
+      await renderPage();
+      await pickTab('Rules');
+      // While it's first read: no Shopping rules, and no count that would change.
+      expect(panel()!.textContent).not.toContain('Links its category page');
+      expect(panel()!.textContent).toContain('Reading the rules…');
+      await act(async () =>
+        land({ categories: ['shop.example/collections/boots'], products: [], site: null }),
+      );
+      expect(panel()!.textContent).toContain('Links its category page');
+      expect(panel()!.textContent).toMatch(/\d+ of \d+ rules met/);
+
+      // Brief › Shopping path picks again: the rules read the path again.
+      const { buildDraftShoppingPath } = await import('@/lib/actions/shopping-path');
+      vi.mocked(buildDraftShoppingPath).mockResolvedValueOnce({ path: null, reason: 'no_match' });
+      await pickTab('Brief');
+      const reads = getShoppingCheck.mock.calls.length;
+      await act(async () => button('Pick from the catalog')!.click());
+      expect(getShoppingCheck.mock.calls.length).toBe(reads + 1);
+    } finally {
+      getShoppingCheck.mockReset().mockResolvedValue(null);
+    }
   });
 
   it('points a page without fan-outs to Sources, where its prompts are added', async () => {
@@ -5707,6 +5765,78 @@ describe('the side panel', () => {
       expect(scrolled).toHaveBeenCalled();
     });
 
+    it("names the shopping links to remove from the page as published, a product grid's too (shopping path)", async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      const { productBlockHtml } = await import('@/lib/content/product-block');
+      const product = (n: number, title: string, state: string) => ({
+        key: `shop.example/products/${n}`,
+        title,
+        state,
+        inPath: true,
+      });
+      const check = (trail: string) => ({
+        categories: ['shop.example/collections/boots'],
+        products: [
+          product(1, 'Summit', 'ok'),
+          product(2, 'Trail', trail),
+          product(3, 'Ridge', 'ok'),
+        ],
+        site: 'https://shop.example/blog/boots',
+      });
+      getShoppingCheck.mockResolvedValue(check('ok'));
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            siteType: 'ecommerce',
+            pageType: 'buying_guide',
+            bodyHtml:
+              '<h1>Hiking boots</h1>' +
+              '<h2>Our <a href="/collections/boots">boots</a></h2>' +
+              htmlBlockElement(
+                productBlockHtml([
+                  {
+                    title: 'Summit',
+                    url: 'https://shop.example/products/1',
+                    image: null,
+                    price: null,
+                  },
+                  {
+                    title: 'Trail',
+                    url: 'https://shop.example/products/2',
+                    image: null,
+                    price: null,
+                  },
+                ]),
+              ),
+          }),
+        );
+        await renderPage();
+        const reads = getShoppingCheck.mock.calls.length;
+        // Read fresh when it opens: Trail sold out since.
+        let land!: (value: unknown) => void;
+        getShoppingCheck.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              land = resolve;
+            }),
+        );
+        await act(async () => button('Mark ready')!.click());
+        expect(getShoppingCheck.mock.calls.length).toBe(reads + 1);
+        expect(getShoppingCheck).toHaveBeenLastCalledWith('d1');
+        expect(dialogText()).toContain("Reading your catalog for the linked products' stock…");
+        expect(dialogText()).not.toContain('Trail');
+        await act(async () => land(check('sold_out')));
+        expect(dialogText()).not.toContain('Reading your catalog');
+        expect(dialogText()).toContain('1 product link to remove or replace');
+        expect(dialogText()).toContain(
+          'Trail (not in stock). Remove or replace these links on the page',
+        );
+        expect(dialogText()).not.toContain('No link to the category page');
+      } finally {
+        getShoppingCheck.mockReset().mockResolvedValue(null);
+      }
+    });
+
     it('marks it ready at once while Quality is off', async () => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
       getContentDraft.mockResolvedValue(draft());
@@ -5794,9 +5924,22 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(
         draft({ pageType: 'blog_post', authorConfirmed: { real: true, profile: false } }),
       );
+      // Trust reads once the brand's domains are in: until then Before you publish asks.
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
       await renderPage();
       await act(async () => button('Send to CMS')!.click());
-      await act(async () => inDialog('Continue to send').click());
+      // Nothing for Before you publish to ask about: straight to the Send dialog.
+      expect(dialog()!.textContent).toContain('Meta description');
       await act(async () => inDialog('Send').click());
       // The CMS keeps its own author.
       expect(sendPagesToCms).toHaveBeenCalledWith(
@@ -5806,10 +5949,52 @@ describe('the side panel', () => {
       );
     });
 
+    it('says in the header where the page went, once sent', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(container.textContent).not.toContain('Sent to your CMS');
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Send').click());
+      expect(container.textContent).toContain('Sent to your CMS');
+    });
+
+    it('says in the header that a send failed, while the dialog says why', async () => {
+      sendPagesToCms.mockResolvedValueOnce({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'failed', http_status: 500, error: null }],
+      });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Send').click());
+      expect(dialog()!.querySelector('[role="alert"]')!.textContent).toContain(
+        "The webhook answered 500 and didn't take the page.",
+      );
+      expect(container.textContent).toContain('Send failed');
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+      expect(container.textContent).toContain('Send failed');
+    });
+
+    it('says in the header, as the page opens, that it is in Webflow as a draft', async () => {
+      readDraftCms.mockResolvedValue({
+        fields: {},
+        publishedUrl: null,
+        last: { status: 'sent', target: 'webflow', at: '2026-10-27T09:00:00Z', error: null },
+      });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(container.textContent).toContain('In Webflow · draft');
+    });
+
     it('opens Before you publish first while Quality is on', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
       await renderPage();
+      // The header's read, as the page opened: the dialog's own comes after.
+      readDraftCms.mockClear();
       await act(async () => button('Send to CMS')!.click());
       expect(dialog()!.textContent).toContain('Before you publish');
       expect(readDraftCms).not.toHaveBeenCalled();
@@ -5837,6 +6022,7 @@ describe('the side panel', () => {
     it('saves what is waiting before it sends, as Mark ready does', async () => {
       getContentDraft.mockResolvedValue(draft());
       await renderPage();
+      readDraftCms.mockClear();
       await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
       expect(saveContentDraft).not.toHaveBeenCalled();
       await act(async () => button('Send to CMS')!.click());
@@ -5860,6 +6046,7 @@ describe('the side panel', () => {
       saveContentDraft.mockResolvedValue({ ok: false, reason: 'conflict' });
       getContentDraft.mockResolvedValue(draft());
       await renderPage();
+      readDraftCms.mockClear();
       await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
       await act(async () => button('Send to CMS')!.click());
       await act(async () => {});
@@ -5904,6 +6091,30 @@ describe('the side panel', () => {
       await act(async () => {});
       expect(dialog()!.textContent).toContain('Send to CMS');
       await act(async () => inDialog('Cancel').click());
+    });
+
+    it('keeps the focus on the placeholder Fill now selects in the HTML view, not on the header’s button', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Send to CMS')!.focus();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
     });
 
     it('is for admins and managers only', async () => {
@@ -6130,7 +6341,7 @@ describe('the side panel', () => {
       expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
     });
 
-    it('says where a placeholder only an HTML block holds is', async () => {
+    it('keeps the focus on the placeholder Export’s Fill now selects in the HTML view, not on the header’s button', async () => {
       const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
       getContentDraft.mockResolvedValue(
         draft({
@@ -6140,6 +6351,32 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Export')!.focus();
+      await act(async () => button('Export')!.click());
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
+    });
+
+    it('selects a placeholder only an HTML block holds in the HTML view, and says where it is', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // The toolbar counts it, though the page doesn't show it.
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeTruthy();
       await act(async () => button('Export')!.click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Review').click());
@@ -6148,8 +6385,48 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Fill now').click());
       expect(toast).toHaveBeenCalledWith(
-        'The placeholders are in an HTML block: open it with </> to fill them.',
+        "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view (</>): type over it, then apply.",
       );
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+    });
+
+    it('opens the HTML view at the placeholder the page hides from Show in HTML, past the five it shows', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1>' +
+            '<p>Ask [competitor] and [name of a real person].</p>' +
+            '<p><img src="https://cdn.example.com/a.jpg" alt="[photo of the founder]"></p>' +
+            '<p>Costs [price], since [year], at [city].</p>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('6 placeholders to fill');
+      await act(async () => button('Show in HTML')!.click());
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[photo of the founder]'),
+      )!;
+      expect(area).toBeTruthy();
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe(
+        '[photo of the founder]',
+      );
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      expect(editor.state.selection.empty).toBe(true);
+    });
+
+    it("counts a code block's placeholder once in the toolbar", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><pre><code>token = "[api key]"</code></pre>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeFalsy();
     });
 
     it('puts the byline under the H1 for a brand that adds it to content, and says so', async () => {

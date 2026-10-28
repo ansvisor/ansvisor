@@ -25,6 +25,7 @@ vi.mock('../config/supabase.js', () => ({
         in: () => chain,
         gt: () => chain,
         order: () => chain,
+        range: () => chain,
         then: (resolve) => resolve(result()),
         limit: async () => result(),
         insert: async (value) => (writes.push({ table, value }), { error: null }),
@@ -1712,6 +1713,86 @@ describe('cleanInsertHtml', () => {
 });
 
 describe('fixDraftRules', () => {
+  it("knows the shopping path's prices and names, a product's number only beside its name, and links its pages", async () => {
+    rows.content_drafts = {
+      ...rows.content_drafts,
+      shopping_path: {
+        version: 1,
+        builtAt: '2026-10-27T10:00:00.000Z',
+        pageType: 'guide',
+        categories: [],
+        products: [
+          {
+            id: 'k1',
+            title: 'Ruth Miller Kettle 600',
+            url: 'https://shop.example/products/k1',
+            price: 49,
+            salePrice: null,
+            currency: 'USD',
+            availability: 'in_stock',
+            image: null,
+            issues: [],
+            score: 9,
+          },
+        ],
+        leftOut: [],
+        locked: [],
+        removed: [],
+        added: [],
+      },
+    };
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    rows.catalog_variants = [
+      { id: 'v1', product_id: 'k1', availability: 'in stock', price: 49, currency: 'USD' },
+    ];
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          suggestion({
+            after:
+              'good coffee and the <a href="https://shop.example/products/k1">Ruth Miller Kettle 600</a> at $49',
+            sources: [],
+            marks: [],
+          }),
+          // The name's number alone: a number with no source.
+          suggestion({
+            passage: 3,
+            before: 'A dripper',
+            after: 'A 600 ml dripper',
+            sources: [],
+            marks: [],
+          }),
+          // A name the path has, next to a role.
+          suggestion({
+            passage: 2,
+            before: 'tastes better than other methods',
+            after: 'tastes better, says designer Ruth Miller',
+            sources: [],
+            marks: [],
+          }),
+        ],
+      },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    const result = await fixDraftRules({
+      draftId: DRAFT,
+      brandId: BRAND,
+      input: input({ locked: [] }),
+    });
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      '- Ruth Miller Kettle 600 — https://shop.example/products/k1',
+    );
+    expect(result.count).toBe(2);
+    const batch = writes.find((w) => w.table === 'content_draft_suggestions');
+    expect(batch.value.map((r) => r.after_text)).toEqual([
+      'good coffee and the Ruth Miller Kettle 600 at $49',
+      'tastes better, says designer Ruth Miller',
+    ]);
+    expect(batch.value[0].after_links).toEqual([
+      { start: 20, end: 42, href: 'https://shop.example/products/k1' },
+    ]);
+  });
+
   it('reads attributions in the page’s language: its Language rule, or My rules’ when it has none', async () => {
     // ", per E-Mail." gives a claim to a source on an English page, never on a German one.
     const perEmail = suggestion({

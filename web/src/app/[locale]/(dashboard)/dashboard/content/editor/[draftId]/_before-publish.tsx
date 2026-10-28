@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,6 +27,7 @@ import {
 } from '@/lib/content/page-schema';
 import { qualityPhase } from '@/lib/content/quality';
 import { checksOff } from '@/lib/content/quality-profiles';
+import { listed, type CardPrice, type ShoppingLinks } from '@/lib/content/shopping-check';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -71,6 +72,11 @@ export interface ReadyToPaste {
  * write one, from the page's facts only. Mark ready anyway is logged with
  * the Trust the page had; on Export it goes on to Export, and on Send to CMS
  * to the Send dialog (#1331). Rendered only while open.
+ *
+ * On Send to CMS, a page with nothing to ask about (Trust read and 60 or
+ * more, the authors and a category's products read, nothing missing,
+ * nothing still being read) goes straight on to the Send dialog, and the
+ * code, for a CMS that doesn't write it, is folded away.
  */
 /** The below-60 warning, as each way on says what it does. */
 const WARNING = { markReady: 'warning', export: 'warningExport', send: 'warningSend' } as const;
@@ -100,7 +106,15 @@ export function BeforePublish({
   onAddDisclosure,
   product = null,
   category = null,
+  shopping = null,
 }: {
+  /**
+   * The page's shopping links against the catalog now (shopping path, part
+   * 6): the products that no longer sell, the category page, the products
+   * linked; 'reading' while it's read again, 'failed' when it couldn't be;
+   * null on a page without a shopping path.
+   */
+  shopping?: ShoppingLinks | 'reading' | 'failed' | null;
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
    * paragraph, its images and the price it states (pageOffer); null on
@@ -352,8 +366,50 @@ export function BeforePublish({
                 },
         ]
       : []),
+    ...(shopping ? [shoppingRow(t, shopping)] : []),
+    ...(typeof shopping === 'object' && shopping?.prices?.length
+      ? [cardPricesRow(t, shopping.prices)]
+      : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
+  // Nothing to ask about as Send opens it: straight on to the Send dialog.
+  // Only once all is read: Trust, the authors, a category's products and the
+  // shopping links not read yet may still have something to ask. A Trust
+  // read with no score has nothing to score (no figure, no dated source):
+  // nothing to ask.
+  const [skipped] = useState(
+    () =>
+      mode === 'send' &&
+      quality.trust !== null &&
+      !below &&
+      authorsRead &&
+      category?.status !== 'reading' &&
+      shopping !== 'reading' &&
+      rows.every((row) => row.state !== 'missing') &&
+      linksPending === 0 &&
+      !quality.claimsReading &&
+      !quality.pageReading,
+  );
+  // Once, as it opens: StrictMode runs an effect twice, and the Send dialog opens once.
+  const continued = useRef(false);
+  useEffect(() => {
+    if (!skipped || continued.current) return;
+    continued.current = true;
+    onContinue?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as it opens
+  }, [skipped]);
+  // The page goes to the CMS: the code is only for one that doesn't write it.
+  const [codeShown, setCodeShown] = useState(mode !== 'send');
+  const codeId = useId();
+  const codeRef = useRef<HTMLPreElement>(null);
+  // Show the JSON-LD takes the focus to the code it opens.
+  const focusCode = useRef(false);
+  useEffect(() => {
+    if (!codeShown || !focusCode.current) return;
+    focusCode.current = false;
+    codeRef.current?.focus();
+  }, [codeShown]);
+  if (skipped) return null;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -468,21 +524,46 @@ export function BeforePublish({
         </ul>
         {jsonLd && (
           <div className="space-y-1.5">
-            <pre
-              aria-label={t('jsonLd')}
-              tabIndex={0}
-              className="max-h-48 overflow-auto rounded-xl border bg-muted/40 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
-            >
-              {jsonLd}
-            </pre>
+            {mode === 'send' && (
+              <button
+                type="button"
+                aria-expanded={codeShown}
+                aria-controls={codeShown ? codeId : undefined}
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                onClick={() => {
+                  focusCode.current = !codeShown;
+                  setCodeShown(!codeShown);
+                }}
+              >
+                <ChevronDown
+                  aria-hidden
+                  className={cn('h-3.5 w-3.5 transition-transform', !codeShown && '-rotate-90')}
+                />
+                {t('showCode')}
+              </button>
+            )}
+            {codeShown && (
+              <pre
+                id={codeId}
+                ref={codeRef}
+                aria-label={t('jsonLd')}
+                tabIndex={0}
+                className="max-h-48 overflow-auto rounded-xl border bg-muted/40 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+              >
+                {jsonLd}
+              </pre>
+            )}
+            {/* Said folded too: the code that goes, or is copied, leaves it out. */}
             {(article || itemListLd) && titleHasPlaceholder(title) && (
               <p className="text-xs text-amber-700 dark:text-amber-300">
                 {t(itemListLd ? 'nameLeftOut' : 'headlineLeftOut')}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">
-              {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
-            </p>
+            {codeShown && (
+              <p className="text-xs text-muted-foreground">
+                {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
+              </p>
+            )}
           </div>
         )}
         <DialogFooter className="gap-2 sm:justify-between">
@@ -570,4 +651,70 @@ function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
     };
   }
   return { state: 'ok', title: t('paste.title'), detail: t('paste.ok') };
+}
+
+/**
+ * The product cards that show a price the catalog no longer has (#1610): a
+ * card's price is written when it goes in. Put in again, it shows today's.
+ */
+function cardPricesRow(t: T, prices: CardPrice[]): Row {
+  const { shown, more } = listed(prices);
+  return {
+    state: 'check',
+    title: t('shopping.prices', { count: prices.length }),
+    detail: t('shopping.pricesDetail', {
+      list: shown
+        .map((p) => t('shopping.priceItem', { title: p.title, page: p.page, now: p.now ?? 'none' }))
+        .join('; '),
+      more,
+    }),
+  };
+}
+
+/**
+ * The shopping links' row (shopping path, part 6): the products the page
+ * links that no longer sell, by name, to remove or replace on the page;
+ * else a missing link to the category page; else too few products linked;
+ * else how many work. While the catalog is read, or when it can't be, a
+ * check of its own.
+ */
+function shoppingRow(t: T, shopping: ShoppingLinks | 'reading' | 'failed'): Row {
+  if (shopping === 'reading' || shopping === 'failed') {
+    return { state: 'check', title: t('shopping.title'), detail: t(`shopping.${shopping}`) };
+  }
+  if (shopping.bad.length) {
+    const { shown, more } = listed(shopping.bad);
+    return {
+      state: 'missing',
+      title: t('shopping.bad', { count: shopping.bad.length }),
+      detail: t('shopping.badDetail', {
+        list: shown.map((p) => t('shopping.item', { title: p.title, state: p.state })).join(', '),
+        more,
+      }),
+    };
+  }
+  if (shopping.categories > 0 && !shopping.categoryLinked) {
+    return {
+      state: 'missing',
+      title: t('shopping.noCategory'),
+      detail: t('shopping.noCategoryDetail'),
+    };
+  }
+  if (shopping.linked.length < shopping.want) {
+    return {
+      state: 'missing',
+      title: t('shopping.few', { count: shopping.linked.length, want: shopping.want }),
+      detail: t('shopping.fewDetail'),
+    };
+  }
+  return {
+    state: 'ok',
+    title: t('shopping.ok'),
+    detail: t('shopping.okDetail', {
+      count: shopping.linked.length,
+      category: shopping.categoryLinked ? 'yes' : 'no',
+      // Accepted by Merchant Center is said only where it was read.
+      merchantCenter: shopping.merchantCenter ? 'yes' : 'no',
+    }),
+  };
 }

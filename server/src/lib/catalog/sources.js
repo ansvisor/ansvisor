@@ -1,11 +1,15 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { isSubscriptionActive } from '../../config/plans.js';
-import { connectorFor, isStore } from '../../connectors/index.js';
+import { connectorFor, isSignIn, isStore } from '../../connectors/index.js';
 import { ConnectorHttpError, requestJson } from '../../connectors/http.js';
 import { FeedFormatError, parseFeed } from '../feeds/index.js';
+import { isComposioConfigured } from '../composio.js';
 import { PageFetchError } from '../safe-fetch.js';
 import { logger } from '../logger.js';
+import { queueShoppingCheck } from '../shopping-check.js';
 import { CredentialsKeyError, readCredentials } from './credentials.js';
+import { saveItemIssues } from './issues.js';
+import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
 import { syncCatalog } from './sync.js';
 
 /**
@@ -13,7 +17,9 @@ import { syncCatalog } from './sync.js';
  * feed URL or a store, read through its connector, daily and on demand; or
  * an uploaded CSV. Each source keeps its own products under `sourceKey(id)`,
  * and its last sync's outcome on its row (`last_*`), which the Settings card
- * shows. A store is read with its saved sign-in (credentials.js).
+ * shows. A store is read with its saved sign-in (credentials.js); a
+ * platform like Google Merchant Center with the workspace's own sign-in
+ * (sign-in.js), and the issues it reports per item are kept (issues.js).
  */
 
 /** Feeds and stores read again after this long, by the daily run. */
@@ -47,8 +53,34 @@ const STORE_WORDS = {
 };
 
 /** Why a sync failed, in words a person can act on. No page, feed or store text. */
-export function failureOf(err) {
+export function failureOf(err, connector = null) {
   if (err instanceof FeedFormatError) return { status: 'format_error', error: err.message };
+  if (err instanceof ConnectorHttpError && isSignIn(connector)) {
+    // The workspace's sign-in, not the source's: it's reconnected in Settings › Integrations.
+    if (err.code === 'auth') {
+      return {
+        status: 'auth_failed',
+        error: `The Google sign-in can't open this ${connector.label} account anymore. Reconnect it in Settings › Integrations.`,
+      };
+    }
+    if (err.code === 'not_set_up') {
+      // This server's own setup, or Google's for this account: reconnecting wouldn't help.
+      return {
+        status: 'failed',
+        error: `${connector.label} isn't set up correctly on this server, or the Google account connected in Settings › Integrations can't open this account. The next daily run tries again.`,
+      };
+    }
+    if (err.code === 'rate_limited') {
+      return {
+        status: 'failed',
+        error: `${connector.label} asked to wait. The next daily run tries again.`,
+      };
+    }
+    return {
+      status: 'failed',
+      error: `${connector.label} couldn't be read just now. The next daily run tries again.`,
+    };
+  }
   if (err instanceof ConnectorHttpError) {
     if (err.code === 'auth') {
       return {
@@ -119,12 +151,16 @@ async function record(db, id, at, outcome) {
  * A source being read already isn't read again at once: the answer says so,
  * and nothing is recorded. A store's calls stop after `readMs` (STORE_READ_MS).
  *
+ * After a sync that read the catalog, the brand's pages' shopping links are
+ * checked against it (shopping-check.js), behind the answer.
+ *
  * @param {{ id: string, brand_id: string, kind: string, format: string, url?: string|null, account?: string|null }} source
- * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, connectors?: object, readMs?: number }} [options]
- *   `fetch` (a feed's), `request` (a store's HTTP client), `connectors` and
- *   `readMs` are the tests' stand-ins
+ * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number, afterSync?: Function }} [options]
+ *   `fetch` (a feed's), `request` (a store's HTTP client), `signInRequest`
+ *   (the workspace sign-in's, sign-in.js), `connectors`, `readMs` and
+ *   `afterSync` (the shopping check's queue) are the tests' stand-ins
  */
-export async function syncSource(source, options = {}) {
+export async function syncSource(source, { afterSync = queueShoppingCheck, ...options } = {}) {
   if (reading.has(source.id)) {
     return {
       status: 'failed',
@@ -132,11 +168,14 @@ export async function syncSource(source, options = {}) {
     };
   }
   reading.add(source.id);
+  let outcome;
   try {
-    return await syncOnce(source, options);
+    outcome = await syncOnce(source, options);
   } finally {
     reading.delete(source.id);
   }
+  if (outcome.status === 'ok') afterSync(source.brand_id, options.db ? { db: options.db } : {});
+  return outcome;
 }
 
 async function syncOnce(
@@ -147,6 +186,7 @@ async function syncOnce(
     now = new Date(),
     fetch,
     request = requestJson,
+    signInRequest = workspaceSignIn,
     connectors,
     readMs = STORE_READ_MS,
   },
@@ -154,14 +194,28 @@ async function syncOnce(
   const at = now.toISOString();
   let outcome;
   let credentials = null;
+  let connector = null;
   try {
     let parsed;
     if (text !== undefined) {
       parsed = parseFeed(text, source.format);
     } else {
-      const connector = connectorFor(source.kind, connectors);
+      connector = connectorFor(source.kind, connectors);
       if (!connector) {
         outcome = { status: 'failed', error: "This server can't read this kind of source." };
+      } else if (isSignIn(connector) && !isComposioConfigured(connector.signIn)) {
+        outcome = { status: 'failed', error: `${connector.label} isn't set up on this server.` };
+      } else if (isSignIn(connector)) {
+        const signedIn = signInRequest(
+          connector.signIn,
+          await workspaceEntity(source.brand_id, { db }),
+          { hosts: connector.hosts },
+        );
+        // Every call the read makes stops at its deadline.
+        const deadline = AbortSignal.timeout(readMs);
+        parsed = await connector.readCatalog(source, {
+          request: (address, opts = {}) => signedIn(address, { ...opts, signal: deadline }),
+        });
       } else if (isStore(connector)) {
         credentials = await readCredentials(source.id, { db });
         // Every call the read makes stops at its deadline.
@@ -193,9 +247,14 @@ async function syncOnce(
           variants: counts.variants,
         },
       };
+      // An item listed again (another language or feed label), kept once: not skipped.
+      if (Number.isInteger(parsed.repeated)) outcome.counts.repeated = parsed.repeated;
+      if (Array.isArray(parsed.issues)) {
+        outcome.counts.issues = await saveItemIssues(source, parsed.issues, { db, now });
+      }
     }
   } catch (err) {
-    outcome = failureOf(err);
+    outcome = failureOf(err, connector);
     const told = err instanceof PageFetchError || err instanceof ConnectorHttpError;
     if (outcome.status === 'failed' && !told) {
       logger.error(

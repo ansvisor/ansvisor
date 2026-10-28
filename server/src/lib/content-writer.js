@@ -13,6 +13,7 @@ import {
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
+  PLACEHOLDER_RULE,
   draftPassages,
   hasOpenSuggestions,
   keepSuggestions,
@@ -32,6 +33,14 @@ import {
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
+import { insertProductGrid } from './shopping-blocks.js';
+import {
+  linkShoppingPath,
+  shoppingGiven,
+  shoppingPathFor,
+  shoppingPrompt,
+  withShopping,
+} from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
@@ -46,6 +55,7 @@ import {
   sourceWords,
   stripSourceIds,
   todayText,
+  withNamedNumbers,
 } from './content-sources.js';
 import {
   MAX_PAGE_HTML,
@@ -166,6 +176,7 @@ How to write:
 - Follow every rule listed, and the writer's own rules.
 - For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand, the brief and your data. Never invent numbers, prices, dates, names, customers, sources or quotes. When the page needs a fact you don't have, write a placeholder in square brackets, e.g. [price], [figure, source, year]. A number that isn't in them becomes a placeholder.
+${PLACEHOLDER_RULE}
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
 
@@ -200,6 +211,7 @@ ${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
+${PLACEHOLDER_RULE}
 ${SOURCES_RULE}
 ${ATTRIBUTION_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
@@ -211,16 +223,38 @@ const escapeText = (value) => String(value).replace(/[&<>"']/g, (c) => ENTITIES[
 const clean = (value) => String(value ?? '').trim();
 
 /**
- * The written page as the editor's HTML: an H1, the opening paragraphs, an
- * H2 per section with its paragraphs and list, and the FAQ as H3 questions.
- * Every text is escaped: the model writes text, never markup.
+ * A heading as a reader sees one: its first letter a capital when its first
+ * word is all lowercase, as a fan-out's words come ("latest news ChatGPT"),
+ * in the page's language (Turkish "i" → "İ"). A name written lowercase on
+ * purpose ("iPhone", "eBay") stays as it is.
  */
-export function renderPage(page) {
+export function headingCase(text, language) {
+  const value = clean(text);
+  const [first = ''] = value.split(/\s+/u);
+  if (!first || first !== first.toLowerCase() || first === first.toUpperCase()) return value;
+  const chars = Array.from(value);
+  let capital;
+  try {
+    capital = chars[0].toLocaleUpperCase(language || undefined);
+  } catch {
+    capital = chars[0].toUpperCase();
+  }
+  return capital + chars.slice(1).join('');
+}
+
+/**
+ * The written page as the editor's HTML: an H1, the opening paragraphs, an
+ * H2 per section with its paragraphs and list, and the FAQ as H3 questions,
+ * each heading starting with a capital (headingCase). Every text is escaped:
+ * the model writes text, never markup.
+ */
+export function renderPage(page, { language = null } = {}) {
   const p = (text) => (clean(text) ? `<p>${escapeText(clean(text))}</p>` : '');
-  const parts = [`<h1>${escapeText(clean(page.title))}</h1>`, ...page.intro.map(p)];
+  const h = (level, text) => `<h${level}>${escapeText(headingCase(text, language))}</h${level}>`;
+  const parts = [h(1, page.title), ...page.intro.map(p)];
   for (const section of page.sections) {
     if (!clean(section.heading)) continue;
-    parts.push(`<h2>${escapeText(clean(section.heading))}</h2>`, ...section.paragraphs.map(p));
+    parts.push(h(2, section.heading), ...section.paragraphs.map(p));
     const bullets = section.bullets.filter((b) => clean(b));
     if (bullets.length) {
       parts.push(`<ul>${bullets.map((b) => `<li>${p(b)}</li>`).join('')}</ul>`);
@@ -228,9 +262,9 @@ export function renderPage(page) {
   }
   const faq = page.faq.filter((item) => clean(item.question) && clean(item.answer));
   if (faq.length && clean(page.faqHeading)) {
-    parts.push(`<h2>${escapeText(clean(page.faqHeading))}</h2>`);
+    parts.push(h(2, page.faqHeading));
     for (const item of faq) {
-      parts.push(`<h3>${escapeText(clean(item.question))}</h3>`, p(item.answer));
+      parts.push(h(3, item.question), p(item.answer));
     }
   }
   return parts.filter(Boolean).join('');
@@ -291,8 +325,26 @@ Call to action: ${opportunityBrief.callToAction || '—'}`;
 }
 
 /**
+ * An existing page's length now against its Length, and what its
+ * suggestions should do about it: a page told only the Length doesn't know
+ * it's already twice as long (editor test 2026-10-26).
+ */
+export function lengthNow(now, target) {
+  const top = Math.round(target * (1 + LENGTH_TOLERANCE));
+  const bottom = Math.round(target * (1 - LENGTH_TOLERANCE));
+  if (now > top) {
+    return `The page is about ${now} characters now, over its Length: suggest cuts (repetition, filler, the least useful detail) before anything new, and keep each addition short.`;
+  }
+  if (now < bottom) {
+    return `The page is about ${now} characters now, under its Length: add what the questions and rules ask for.`;
+  }
+  return `The page is about ${now} characters now: keep it about this long.`;
+}
+
+/**
  * What the model is told, for a new page, an existing one (passage by
- * passage) or one it rewrites whole (`current`: keepBlocks' page).
+ * passage, with its length now: lengthNow) or one it rewrites whole
+ * (`current`: keepBlocks' page).
  */
 export function buildWritePrompt({
   brand,
@@ -307,6 +359,13 @@ export function buildWritePrompt({
   current = null,
 }) {
   const { sources } = input;
+  // An existing page's length now, when its Length is among the rules (as
+  // overLengthLine): Length off keeps the page's length. A rewrite's page
+  // says it in its own lines.
+  const now =
+    passages && !current && input.rules.some((r) => r.key === 'length')
+      ? textLength(draft.body_html ?? '')
+      : null;
   // The data, numbered (S1, S2…) as the agent cites it (CE-033).
   const of = (kind) => numbered.filter((s) => s.kind === kind);
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
@@ -332,7 +391,7 @@ Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page type: ${pageTypeFormat(draft.page_type)}
-Length: about ${sources.length} characters.
+Length: about ${sources.length} characters.${now === null ? '' : ` ${lengthNow(now, sources.length)}`}
 
 Brief:
 ${brief}
@@ -403,7 +462,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
+      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id, shopping_path',
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -572,6 +631,7 @@ async function letGo(draft) {
 async function rewritePage({
   attributable,
   draft,
+  shoppingPath,
   brand,
   model,
   input,
@@ -587,12 +647,16 @@ async function rewritePage({
   // The Length rule's target; with Length off, the page keeps its length.
   const length = ruleKeys.has('length') ? input.sources.length : textLength(draft.body_html);
   // Where it may link: the brand's pages and the draft's sources (A).
-  const targets = await readLinkTargets({
-    brandId: draft.brand_id,
-    draftId: draft.id,
-    sourceUrl: draft.source_url,
-    ruleKeys,
-  });
+  // …and its shopping path's shop pages (shopping path, part 4).
+  const targets = withShopping(
+    await readLinkTargets({
+      brandId: draft.brand_id,
+      draftId: draft.id,
+      sourceUrl: draft.source_url,
+      ruleKeys,
+    }),
+    shoppingPath,
+  );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({
@@ -842,7 +906,7 @@ function startWritingRun(draft, input, rewrite) {
 /** The run itself, step by step: nothing is kept once it is stopped. */
 async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
   await advanceRun(run, 1);
-  const [prompts, inputRow, opportunityRes] = await Promise.all([
+  const [prompts, inputRow, opportunityRes, shoppingPath] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
     readDraftInputs(draft.id),
     draft.opportunity_id && !draft.brief
@@ -853,6 +917,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
           .eq('brand_id', draft.brand_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    // Its shopping path, checked: none when it isn't one (shopping path, part 4).
+    shoppingPathFor(draft),
   ]);
   if (opportunityRes.error) throw opportunityRes.error;
   // A new page's writer has no links rule: the brief's planned links are left out for it.
@@ -863,6 +929,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   // "/top-37-tools", "/interview-with-john-smith"), as sourceWords keeps a
   // cited page's out.
   const briefGiven = brief.replace(/https?:\/\/\S+/g, ' ');
+  // The shopping path's prices and names (shopping path, part 4): the catalog's, written unmarked.
+  const shopping = shoppingGiven(shoppingPath);
   // The data it writes from, numbered (CE-033), Brief › Your input last
   // (CE-048); the numbers a suggestion may write unmarked (the page's, the
   // brand's, the brief's, the rules', today's), and those a page written
@@ -874,18 +942,25 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     queries: input.sources.queries,
     inputs: inputSources(inputRow, brand.name),
   });
-  const known = knownNumbers(
-    htmlText(draft.body_html),
-    draft.title,
-    brand.name,
-    brand.industry,
-    brand.description,
-    briefGiven,
-    ...input.rules.flatMap((r) => [r.name, r.detail]),
-    ...input.textRules,
-    todayText(),
+  const known = withNamedNumbers(
+    knownNumbers(
+      htmlText(draft.body_html),
+      draft.title,
+      brand.name,
+      brand.industry,
+      brand.description,
+      briefGiven,
+      shopping.prices,
+      ...input.rules.flatMap((r) => [r.name, r.detail]),
+      ...input.textRules,
+      todayText(),
+    ),
+    shopping.names,
   );
-  const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
+  const knownInPage = withNamedNumbers(
+    new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]),
+    shopping.names,
+  );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
   const authors = await authorWords(supabaseAdmin, brand.organization_id);
   const people = knownPeople(
@@ -895,6 +970,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     brand.industry,
     brand.description,
     briefGiven,
+    ...shopping.names,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     ...numbered.map(sourceWords),
@@ -902,18 +978,16 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   );
   // The sources a claim may be given to: the ones the page gives claims to,
   // its Your input and authors (editor test 2026-10-25).
-  const attributable = attributableSources(
-    draft.body_html,
-    numbered,
-    authors,
-    await draftLanguage(draft, brand),
-    [brand.name],
-  );
+  const language = await draftLanguage(draft, brand);
+  const attributable = attributableSources(draft.body_html, numbered, authors, language, [
+    brand.name,
+  ]);
 
   if (rewrite) {
     return await rewritePage({
       attributable,
       draft,
+      shoppingPath,
       brand,
       model,
       input,
@@ -933,7 +1007,14 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
         model,
         schema: pageSchema,
         system: writeSystemPrompt(),
-        prompt: buildWritePrompt({ brand, draft, numbered, brief, input }),
+        prompt: buildWritePrompt({
+          brand,
+          draft,
+          numbered,
+          brief,
+          input,
+          linkTargets: shoppingPrompt(shoppingPath),
+        }),
         abortSignal,
       }),
     );
@@ -941,7 +1022,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     await advanceRun(run, 3);
     // No number without a source: a placeholder where one had none.
     const written = sourcedPage(object, knownInPage, people);
-    const title = clean(written.title).slice(0, 300) || draft.title;
+    // The title column as the H1 reads it: a capital first (headingCase).
+    const title = headingCase(clean(written.title).slice(0, 300), language) || draft.title;
     // Stopped meanwhile: the page stays as it was, and History with it.
     await stopIfStopped(run);
     // Try again over a page the person has written in: History keeps it
@@ -957,7 +1039,12 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       draft,
       {
         title,
-        body_html: renderPage({ ...written, title }),
+        // The shopping path's names it wrote, linked (shopping-links.js), and
+        // its products as a grid where the page names them most (shopping-blocks.js).
+        body_html: insertProductGrid(
+          linkShoppingPath(renderPage({ ...written, title }, { language }), shoppingPath).html,
+          shoppingPath && { ...shoppingPath, pageType: draft.page_type },
+        ),
         status: 'in_review',
         author: 'agent',
         agent_state: null,
@@ -973,12 +1060,16 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // Where it may link: the brand's pages and the draft's sources (A).
-  const targets = await readLinkTargets({
-    brandId: draft.brand_id,
-    draftId: draft.id,
-    sourceUrl: draft.source_url,
-    ruleKeys,
-  });
+  // …and its shopping path's shop pages (shopping path, part 4).
+  const targets = withShopping(
+    await readLinkTargets({
+      brandId: draft.brand_id,
+      draftId: draft.id,
+      sourceUrl: draft.source_url,
+      ruleKeys,
+    }),
+    shoppingPath,
+  );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({

@@ -46,6 +46,7 @@ import {
   type RuleStatus,
   type TextRule,
 } from '@/lib/content/rules';
+import { listed } from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -65,6 +66,9 @@ const HINTED = new Set([
   'whoFor',
   'first40Words',
   'feedMatch',
+  'shopCategoryLink',
+  'shopProductLinks',
+  'shopLinksLive',
 ]);
 
 /**
@@ -457,12 +461,15 @@ export function RulesTab({
                   onChange={(change) => state.change(rule.key, change)}
                   agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
                   onOpenSources={onOpenSources}
+                  merchantCenter={state.merchantCenter ?? false}
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
                       : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
                         ? t('heldSentence')
-                        : undefined
+                        : rule.key === 'shopLinksLive'
+                          ? shoppingNote(t, status)
+                          : undefined
                   }
                 />
               ))}
@@ -559,6 +566,22 @@ function TextRuleRow({
   );
 }
 
+/**
+ * The linked products that no longer sell, by name and why, the first few
+ * (No sold-out or refused product linked, shopping path); none while it's met.
+ */
+function shoppingNote(
+  t: (key: string, values?: Record<string, string | number>) => string,
+  status: RuleStatus,
+): string | undefined {
+  if (status.state !== 'bad' || status.code !== 'found' || !status.items?.length) return undefined;
+  const { shown, more } = listed(status.items);
+  return t('shopLinksLiveNote', {
+    list: shown.map((item) => t('shopItem', { title: item.title, state: item.state })).join(', '),
+    more,
+  });
+}
+
 /** Write a rule, or paste many: each line becomes a rule (bullets and numbering taken off). */
 function AddTextRules({ onAdd }: { onAdd: (lines: string[]) => void }) {
   const t = useTranslations('contentEditor.editor.rules.text');
@@ -642,6 +665,7 @@ function RuleRow({
   onChange,
   agentFix,
   onOpenSources,
+  merchantCenter,
   note,
 }: {
   rule: ActiveRule;
@@ -650,6 +674,8 @@ function RuleRow({
   /** "Remove AI traces" offers Fix: the agent rewrites only those phrases. */
   agentFix?: AgentFix;
   onOpenSources?: () => void;
+  /** The brand has a Merchant Center account: the Shopping hints say it's checked. */
+  merchantCenter: boolean;
   /** A warning under the rule: Length, when the other rules can't fit in it. */
   note?: string;
 }) {
@@ -670,7 +696,11 @@ function RuleRow({
         )}
         <span
           className="min-w-0 flex-1 text-xs"
-          title={HINTED.has(rule.key) ? t(`hints.${rule.key}`) : undefined}
+          title={
+            HINTED.has(rule.key)
+              ? t(`hints.${rule.key}`, { merchantCenter: merchantCenter ? 'yes' : 'no' })
+              : undefined
+          }
         >
           {name}
         </span>

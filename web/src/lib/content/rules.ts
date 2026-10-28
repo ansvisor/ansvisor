@@ -8,6 +8,13 @@ import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
 import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
+import {
+  shoppingLinks,
+  type PageCard,
+  type ShoppingCheck,
+  type ShoppingLinkState,
+} from '@/lib/content/shopping-check';
+import { PRODUCTS_FOR } from '@/lib/content/shopping-path';
 
 /**
  * The editor's Rules tab (Content Editor CE-009, spec §10): the rules a page
@@ -259,16 +266,46 @@ export function languageRuleValue(code: string | null | undefined): string {
 }
 
 /**
+ * A shopping path's rules (shopping path, part 6), on an online shop's page
+ * that takes one: it links its category page, enough of its products, and
+ * none that no longer sells.
+ */
+const SHOPPING_RULES: RuleDef[] = [
+  { key: 'shopCategoryLink', group: 'links', kind: 'switch', value: '', check: 'page' },
+  {
+    key: 'shopProductLinks',
+    group: 'links',
+    kind: 'number',
+    value: '3',
+    unit: 'links',
+    check: 'page',
+  },
+  { key: 'shopLinksLive', group: 'links', kind: 'switch', value: '', check: 'page' },
+];
+
+/** The Shopping rules' keys: checked against the shopping path (shoppingStatus). */
+export const SHOPPING_RULE_KEYS: ReadonlySet<string> = new Set(SHOPPING_RULES.map((r) => r.key));
+
+/**
  * The rules of a set: the type's own, then the shared groups, with the
- * type's length, or the page's own when it was brought in to optimize.
+ * type's length, or the page's own when it was brought in to optimize; and
+ * a shopping path's on an online shop's page that takes one (`shopping`).
  */
 export function ruleSet(
   pageType: PageType | null,
-  defaults: { keywords?: string[]; language?: string | null; length?: number | null } = {},
+  defaults: {
+    keywords?: string[];
+    language?: string | null;
+    length?: number | null;
+    shopping?: boolean;
+  } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
+  const shopping =
+    defaults.shopping && pageType && Object.hasOwn(PRODUCTS_FOR, pageType) ? SHOPPING_RULES : [];
   return [
     ...own,
+    ...shopping,
     ...SHARED_RULES.map((rule) => {
       if (rule.key === 'length') {
         return { ...rule, value: String(defaults.length ?? lengthTarget(pageType)) };
@@ -417,6 +454,102 @@ export function setToSave(rules: DraftRules, mine: SavedRuleSet | undefined): Sa
   };
 }
 
+/*
+ * The tag passes below read each '<' once, left to right, and give what the
+ * regex each names would, in time near the text's length however its tags
+ * are left open. The same as textLength's on the server
+ * (server/src/lib/page-content.js).
+ */
+
+/** ASCII letters lower-cased, nothing else: every index stays where it was. */
+const asciiLower = (text: string) => text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
+
+/** A letter, digit or _, as \b reads a word. */
+const isWordChar = (code: number) =>
+  (code >= 48 && code <= 57) ||
+  (code >= 65 && code <= 90) ||
+  (code >= 97 && code <= 122) ||
+  code === 95;
+
+/** Each script and style element as a space: /<(script|style)\b[\s\S]*?<\/\1>/gi. */
+function withoutScripts(text: string): string {
+  const lower = asciiLower(text);
+  // A name with no closing tag left closes nowhere after it either.
+  const open = new Set(['script', 'style']);
+  let out = '';
+  let kept = 0;
+  for (let at = lower.indexOf('<'); at !== -1 && open.size; ) {
+    const name = [...open].find((tag) => lower.startsWith(tag, at + 1));
+    const after = name ? at + 1 + name.length : 0;
+    if (name && !isWordChar(lower.charCodeAt(after))) {
+      const close = lower.indexOf(`</${name}>`, after);
+      if (close !== -1) {
+        out += `${text.slice(kept, at)} `;
+        kept = close + name.length + 3;
+        at = lower.indexOf('<', kept);
+        continue;
+      }
+      open.delete(name);
+    }
+    at = lower.indexOf('<', at + 1);
+  }
+  return out + text.slice(kept);
+}
+
+const SPACED_TAGS = new Set([
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'li',
+  'td',
+  'th',
+  'blockquote',
+  'br',
+  'div',
+]);
+
+/** Each block tag, opening or closing, as a space: /<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi. */
+function withoutBlockTags(text: string): string {
+  const lower = asciiLower(text);
+  let out = '';
+  let kept = 0;
+  for (let at = lower.indexOf('<'); at !== -1; ) {
+    const from = lower[at + 1] === '/' ? at + 2 : at + 1;
+    let end = from;
+    while (isWordChar(lower.charCodeAt(end))) end += 1;
+    if (SPACED_TAGS.has(lower.slice(from, end))) {
+      const close = lower.indexOf('>', end);
+      // No '>' left: no tag after this one ends either.
+      if (close === -1) break;
+      out += `${text.slice(kept, at)} `;
+      kept = close + 1;
+      at = lower.indexOf('<', kept);
+      continue;
+    }
+    // The word holds no '<': the next tag starts after it.
+    at = lower.indexOf('<', Math.max(at + 1, end));
+  }
+  return out + text.slice(kept);
+}
+
+/** Every other tag dropped: /<[^>]*>/g. */
+function withoutTags(text: string): string {
+  let out = '';
+  let kept = 0;
+  for (let at = text.indexOf('<'); at !== -1; ) {
+    const close = text.indexOf('>', at + 1);
+    if (close === -1) break;
+    out += text.slice(kept, at);
+    kept = close + 1;
+    at = text.indexOf('<', kept);
+  }
+  return out + text.slice(kept);
+}
+
 /**
  * A page's text length in characters, about as the editor counts it: the
  * words without tags, runs of spaces as one (a space between blocks, where
@@ -424,10 +557,7 @@ export function setToSave(rules: DraftRules, mine: SavedRuleSet | undefined): Sa
  * to count: on the server, and before a draft opens.
  */
 export function pageTextLength(html: string): number {
-  return html
-    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
+  return withoutTags(withoutBlockTags(withoutScripts(html)))
     .replace(/&nbsp;/g, ' ')
     .replace(/&[#a-z0-9]+;/gi, 'x')
     .replace(/\s+/g, ' ')
@@ -531,6 +661,14 @@ export interface PageRead {
   characters: number;
   /** H1s with words inside the page's HTML blocks. */
   htmlBlockH1s?: number;
+  /**
+   * Every link on the page, each once: in any block (a heading's, a table's
+   * too) and inside its HTML blocks (a product card or grid's). What the
+   * Shopping rules and Before you publish read (shopping path).
+   */
+  links?: string[];
+  /** The product cards in its HTML blocks, with the price each shows (Before you publish). */
+  cards?: PageCard[];
 }
 
 const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
@@ -556,6 +694,12 @@ export function readPage(html: string, characters: number): PageRead {
   // An HTML block's H1s are the page's too (One H1 per page): the editor
   // doesn't rewrite them, so the rule says so.
   let htmlBlockH1s = 0;
+  // Every link, whatever block holds it, an HTML block's too: a product
+  // card's or grid's counts for the Shopping rules.
+  const links = new Set(
+    [...doc.body.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? ''),
+  );
+  const cards: PageCard[] = [];
   for (const el of doc.body.querySelectorAll('[data-html-block]')) {
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (!inner) continue;
@@ -563,6 +707,12 @@ export function readPage(html: string, characters: number): PageRead {
     htmlBlockH1s += [...block.body.querySelectorAll('h1')].filter((h) =>
       h.textContent?.trim(),
     ).length;
+    for (const a of block.body.querySelectorAll('a[href]')) links.add(a.getAttribute('href') ?? '');
+    // A card's price is its span, after the name (product-block.ts).
+    for (const a of block.body.querySelectorAll('a.ansvisor-product[href]')) {
+      const price = a.querySelector('span')?.textContent?.trim();
+      cards.push({ href: a.getAttribute('href') ?? '', price: price || null });
+    }
   }
   return {
     blocks,
@@ -572,6 +722,8 @@ export function readPage(html: string, characters: number): PageRead {
       .join(' '),
     characters,
     htmlBlockH1s,
+    links: [...links].filter((href) => href.trim()),
+    cards,
   };
 }
 
@@ -584,7 +736,13 @@ const isQuestion = (b: PageBlock) => b.text.trim().endsWith('?');
 /** A rule's status: met, not met (with what's missing), or one the page can't say. */
 export type RuleStatus =
   | { state: 'ok' }
-  | { state: 'bad'; code: 'over' | 'found'; count: number }
+  | {
+      state: 'bad';
+      code: 'over' | 'found';
+      count: number;
+      /** The linked products that no longer sell, by name and why (shopLinksLive). */
+      items?: { title: string; state: ShoppingLinkState }[];
+    }
   | {
       state: 'bad';
       code: 'partOf';
@@ -614,7 +772,11 @@ export type RuleStatus =
         | 'addKeywords'
         | 'notHowTo'
         | 'englishOnly'
-        | 'noSizes';
+        | 'noSizes'
+        /** No shopping path yet, it's being read, or it couldn't be (shopping path, part 6). */
+        | 'noShoppingPath'
+        | 'shoppingReading'
+        | 'shoppingFailed';
     };
 
 export interface RuleContext {
@@ -630,6 +792,12 @@ export interface RuleContext {
    * is read; none where the feed isn't checked (before Phase 3, other types).
    */
   catalog?: CatalogMatch | 'reading' | null;
+  /**
+   * The page's shopping path read against the catalog now (shopping-check.ts),
+   * for the Shopping rules: 'reading' while it is read, 'failed' when it
+   * couldn't be; none without a path.
+   */
+  shopping?: ShoppingCheck | 'reading' | 'failed' | null;
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -763,13 +931,22 @@ const atLeast = (have: number, want: number): RuleStatus =>
  * Rules the Content Agent can't fix: it changes words and adds blocks, never
  * a heading's level, so a page's extra H1s are made H2s in the editor; a
  * price, GTIN or stock that differs from the feed is the person's to check
- * (the page or the feed may be the one that's wrong).
+ * (the page or the feed may be the one that's wrong); a linked product that
+ * no longer sells is the person's to remove or replace.
  */
-export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch']);
+export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch', 'shopLinksLive']);
 
-/** What to do instead, for the open rules the agent doesn't fix: its message's key. */
-export const notForAgentMessage = (open: readonly { rule: { key: string } }[]) =>
-  open.some(({ rule }) => rule.key === 'oneH1') ? 'notForAgent' : 'notForAgentFeed';
+/**
+ * What to do instead, for the open rules the agent doesn't fix: its
+ * message's key, the extra H1s' first, then the feed's and the shopping
+ * links', one message for both when both are open.
+ */
+export const notForAgentMessage = (open: readonly { rule: { key: string } }[]) => {
+  const has = (key: string) => open.some(({ rule }) => rule.key === key);
+  if (has('oneH1')) return 'notForAgent';
+  if (!has('shopLinksLive')) return 'notForAgentFeed';
+  return has('feedMatch') ? 'notForAgentFeedShopping' : 'notForAgentShopping';
+};
 
 /**
  * The fan-outs a rule still needs (fanoutH2, fanoutFaq), quoted for the
@@ -1051,13 +1228,51 @@ function feedStatus(
     : { state: 'ok' };
 }
 
+/**
+ * A Shopping rule's status (shopping path, part 6), from every link on the
+ * page (PageRead's `links`): the category page linked; at least `n` of the
+ * path's products that sell, or all of them when fewer do; none that no
+ * longer sells, by name.
+ */
+function shoppingStatus(
+  key: string,
+  n: number,
+  hrefs: string[],
+  check: RuleContext['shopping'],
+): RuleStatus {
+  if (check === 'reading') return { state: 'info', code: 'shoppingReading' };
+  if (check === 'failed') return { state: 'info', code: 'shoppingFailed' };
+  if (!check) return { state: 'info', code: 'noShoppingPath' };
+  const read = shoppingLinks(hrefs, check, n);
+  if (key === 'shopCategoryLink') {
+    if (!check.categories.length) return { state: 'info', code: 'noShoppingPath' };
+    return read.categoryLinked ? { state: 'ok' } : { state: 'bad', code: 'missing' };
+  }
+  if (key === 'shopProductLinks') {
+    if (!read.products) return { state: 'info', code: 'noShoppingPath' };
+    return atLeast(read.linked.length, read.want);
+  }
+  return read.bad.length
+    ? {
+        state: 'bad',
+        code: 'found',
+        count: read.bad.length,
+        items: read.bad.map((p) => ({ title: p.title, state: p.state })),
+      }
+    : { state: 'ok' };
+}
+
+/** A number rule's value as the checks read it: a whole number, 0 when it isn't one. */
+export const ruleNumber = (rule: Pick<ActiveRule, 'current'>) =>
+  Math.max(0, Math.floor(Number(rule.current) || 0));
+
 /** Checks one rule against the page as written. */
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
   if (rule.check === 'feed') return feedStatus(page, ctx.catalog);
   if (rule.key === 'whoFor' && !rule.current.trim()) return { state: 'bad', code: 'notSet' };
   if (rule.check === 'ai') return { state: 'info', code: 'aiCheck' };
 
-  const n = Math.max(0, Math.floor(Number(rule.current) || 0));
+  const n = ruleNumber(rule);
   const { blocks } = page;
   const h1 = blocks.findIndex((b) => b.tag === 'h1');
   const firstH2 = blocks.findIndex((b) => b.tag === 'h2');
@@ -1067,6 +1282,9 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
   const own = ctx.brandDomains.map(normalizeDomain);
   const competitors = ctx.competitorDomains.map(normalizeDomain);
   const links = blocks.flatMap((b) => (isText(b) ? b.links : []));
+  if (SHOPPING_RULE_KEYS.has(rule.key)) {
+    return shoppingStatus(rule.key, n, page.links ?? [], ctx.shopping);
+  }
   const outbound = (href: string) => {
     const host = linkHost(href);
     if (!host) return false;

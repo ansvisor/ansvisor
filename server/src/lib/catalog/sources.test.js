@@ -12,7 +12,7 @@ import { PageFetchError } from '../safe-fetch.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
 import { saveCredentials } from './credentials.js';
 import feedUrl, { FEED_MAX_BYTES, FEED_TYPES } from '../../connectors/feed-url/index.js';
-import { redact, sourceKey, sweepCatalogSources, syncSource } from './sources.js';
+import { failureOf, redact, sourceKey, sweepCatalogSources, syncSource } from './sources.js';
 
 const fixture = (name) =>
   readFileSync(new URL(`../feeds/__fixtures__/${name}`, import.meta.url), 'utf8');
@@ -118,6 +118,25 @@ describe('syncSource', () => {
     expect(outcome.error).toMatch(/no id, link, price, availability column/);
     // A broken feed doesn't mark the catalog removed.
     expect(fake.rows('catalog_products').every((p) => p.removed_at === null)).toBe(true);
+  });
+
+  it("checks the brand's pages' shopping links after a sync that read the catalog, only then", async () => {
+    const afterSync = vi.fn();
+    await syncSource(source, {
+      db: fake.db,
+      now: NOW,
+      fetch: async () => ({ html: fixture('google-feed.xml') }),
+      afterSync,
+    });
+    expect(afterSync).toHaveBeenCalledWith('brand-1', { db: fake.db });
+    afterSync.mockClear();
+    await syncSource(source, {
+      db: fake.db,
+      now: NOW,
+      fetch: async () => ({ html: 'name,email\nAda,ada@example.com' }),
+      afterSync,
+    });
+    expect(afterSync).not.toHaveBeenCalled();
   });
 });
 
@@ -311,6 +330,115 @@ describe('syncSource for a store (00282)', () => {
     expect(outcome).toEqual({
       status: 'failed',
       error: "This server can't read this kind of source.",
+    });
+  });
+});
+
+describe('syncSource with the workspace sign-in (#1270)', () => {
+  const GMC_ID = '3c8d6a1e-2a3c-4d5e-8f90-123456789abc';
+  const PRODUCTS = 'https://merchantapi.googleapis.com/products/v1/accounts/123/products';
+  let gmcSource;
+  const platform = (readCatalog) => ({
+    kind: 'merchant_center',
+    label: 'Google Merchant Center',
+    signIn: 'google-merchant-center',
+    hosts: ['merchantapi.googleapis.com'],
+    readCatalog: vi.fn(readCatalog),
+  });
+
+  beforeEach(() => {
+    vi.stubEnv('COMPOSIO_API_KEY', 'test-composio-key');
+    vi.stubEnv('COMPOSIO_GMC_AUTH_CONFIG_ID', 'ac_gmc');
+    fake.rows('brands').push({ id: 'brand-1', organization_id: 'org-1' });
+    gmcSource = {
+      id: GMC_ID,
+      brand_id: 'brand-1',
+      kind: 'merchant_center',
+      format: 'auto',
+      url: null,
+      account: '123',
+    };
+    fake.rows('catalog_sources').push({ ...gmcSource, last_synced_at: null });
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("stops every call of the read at one deadline, through the workspace's sign-in", async () => {
+    const signals = [];
+    const signedIn = vi.fn(async (_address, { signal } = {}) => {
+      signals.push(signal);
+      if (signals.length === 1) return { status: 200, headers: {}, data: null };
+      // The second page answers only when the read's deadline stops it.
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () =>
+          reject(new ConnectorHttpError('timeout', 'GET took too long')),
+        );
+      });
+    });
+    const signInRequest = vi.fn(() => signedIn);
+    const gmc = platform(async (_source, ctx) => {
+      await ctx.request(PRODUCTS);
+      await ctx.request(PRODUCTS, { query: { pageToken: 'p2' } });
+      return { items: [], errors: [], format: 'merchant_center' };
+    });
+    const outcome = await syncSource(gmcSource, {
+      db: fake.db,
+      now: NOW,
+      signInRequest,
+      readMs: 20,
+      connectors: { merchant_center: gmc },
+    });
+    expect(signInRequest).toHaveBeenCalledWith('google-merchant-center', 'org_org-1', {
+      hosts: ['merchantapi.googleapis.com'],
+    });
+    expect(signals).toHaveLength(2);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+    expect(signals[1]).toBe(signals[0]);
+    expect(signals[0].aborted).toBe(true);
+    expect(outcome).toEqual({
+      status: 'failed',
+      error: "Google Merchant Center couldn't be read just now. The next daily run tries again.",
+    });
+  });
+});
+
+describe('failureOf, for a platform read with the workspace sign-in', () => {
+  const gmc = {
+    kind: 'merchant_center',
+    label: 'Google Merchant Center',
+    signIn: 'google-merchant-center',
+  };
+  const of = (code, status) => failureOf(new ConnectorHttpError(code, 'GET x', { status }), gmc);
+
+  it('says what to do: reconnect, ask for the setup, or wait for the next run', () => {
+    expect(of('auth', 401)).toEqual({
+      status: 'auth_failed',
+      error:
+        "The Google sign-in can't open this Google Merchant Center account anymore. Reconnect it in Settings › Integrations.",
+    });
+    const notSetUp = {
+      status: 'failed',
+      error:
+        "Google Merchant Center isn't set up correctly on this server, or the Google account connected in Settings › Integrations can't open this account. The next daily run tries again.",
+    };
+    expect(of('not_set_up')).toEqual(notSetUp);
+    expect(of('not_set_up', 403)).toEqual(notSetUp);
+    expect(of('rate_limited', 429)).toEqual({
+      status: 'failed',
+      error: 'Google Merchant Center asked to wait. The next daily run tries again.',
+    });
+    for (const code of ['http_error', 'unreachable', 'timeout', 'blocked', 'bad_response']) {
+      expect(of(code)).toEqual({
+        status: 'failed',
+        error: "Google Merchant Center couldn't be read just now. The next daily run tries again.",
+      });
+    }
+    // A store's are a store's words.
+    const store = { kind: 'acme_store', label: 'Acme Store', connect() {} };
+    expect(failureOf(new ConnectorHttpError('rate_limited', 'GET x'), store)).toEqual({
+      status: 'failed',
+      error: 'The store asked to wait. The next daily run tries again.',
     });
   });
 });

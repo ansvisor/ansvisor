@@ -54,8 +54,8 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions and the seven person-sent kinds', () => {
-    expect(ACTION_KINDS).toHaveLength(69);
+  it("holds copy for all sixty-two definitions, the seven person-sent kinds and the catalog check's", () => {
+    expect(ACTION_KINDS).toHaveLength(70);
   });
 
   it('names pages sent from AI Traffic after their list and page, or how many (AT-006)', () => {
@@ -208,6 +208,37 @@ describe('actionTexts', () => {
         t,
       ).title,
     ).not.toBe('');
+  });
+
+  it('names a live page linking products that no longer sell after it (shopping path, part 7)', () => {
+    const products = [
+      { id: 'p1', title: 'Storm Shell 2', state: 'sold_out' },
+      { id: 'p2', title: 'Pack-Lite Jacket', state: 'sold_out' },
+    ];
+    const soldOut = actionTexts(
+      action({
+        kind: 'shopping_links',
+        payload: { title: 'Best rain jackets for 2026', products, soldOut: true },
+      }),
+      t,
+    );
+    expect(soldOut.title).toBe('Best rain jackets for 2026: 2 products are sold out');
+    expect(soldOut.description).toContain('2 products');
+    // Not all sold out, and no title: the page's path, and "no longer sells".
+    expect(
+      actionTexts(
+        action({
+          kind: 'shopping_links',
+          payload: {
+            pageUrl: 'https://shop.example/blog/rain-jackets/',
+            products,
+            soldOut: false,
+          },
+        }),
+        t,
+      ).title,
+    ).toBe('/blog/rain-jackets: 2 products no longer sell');
+    expect(actionContextTags(action({ kind: 'shopping_links', payload: {} }), t)).toEqual([]);
   });
 
   /**
@@ -460,6 +491,13 @@ describe('History events', () => {
     );
     expect(eventText('tasks_generated', { count: 0, reviews: 2 })).toBe(
       "0 tasks written from the action's evidence; 2 wait for review",
+    );
+  });
+
+  /** A task its automatic check closed, named as the drawer names it (AC-010). */
+  it('says a task passed its automatic check', () => {
+    expect(eventText('task_checked', { task: 'Refresh outdated content', title: '' })).toBe(
+      'Checked automatically and done: Refresh outdated content',
     );
   });
 

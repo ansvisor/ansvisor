@@ -179,6 +179,18 @@ describe('the rewrite', () => {
     expect(textLength('<h1>Ab</h1><p>c  d &amp; e</p>')).toBe('Ab c d x e'.length);
   });
 
+  it('counts a long page with tags left open in time near its size', () => {
+    // As the regexes read them: a tag never closed is text, a script never closed too.
+    expect(textLength('<p>a</p><script>b')).toBe('a b'.length);
+    expect(textLength('a <b c')).toBe('a <b c'.length);
+    for (const tag of ['<p', '<script', '<style ', '<', '</div']) {
+      const html = `<p>Lead</p>${tag.repeat(Math.ceil(100_000 / tag.length))}`;
+      const started = Date.now();
+      expect(textLength(html)).toBeGreaterThan(4);
+      expect(Date.now() - started).toBeLessThan(2000);
+    }
+  });
+
   it('tells the model to keep every kept line, the facts and one H1, in HTML', () => {
     expect(REWRITE_SYSTEM_PROMPT).toContain('never change, split, merge or drop one');
     expect(REWRITE_SYSTEM_PROMPT).toContain('Never invent numbers');

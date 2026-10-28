@@ -45,15 +45,23 @@ import {
   AGENT_POLL_MS,
   CREATED_RANGES,
   LIBRARY_TABS,
+  SEND_FILTERS,
   contentEditorPath,
   draftsCreatedIn,
   draftsInTab,
+  draftsLastSent,
   type ContentDraftListItem,
   type CreatedRange,
   type DraftStatus,
   type LibraryTab,
+  type SendFilter,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
+import {
+  SHOPPING_FILTERS,
+  draftsByShopping,
+  type ShoppingFilter,
+} from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -79,6 +87,8 @@ interface LibraryRead {
  * send it to the CMS (#1331), archive, restore and delete. The tab lives in
  * the URL (?tab=in_review), so a link can open "Library › In review";
  * ?new=1 opens New content (Content › Editor with no draft to go back to).
+ * An online shop's pages show their shopping path's links, and a filter
+ * lists the ones that need attention (?shopping=attention, 00352).
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
@@ -88,6 +98,10 @@ export default function ContentLibraryPage() {
   const [tab, setTab] = useState<LibraryTab>('all');
   // When the drafts listed (and exported) were created: ?created=30d.
   const [created, setCreated] = useState<CreatedRange>('all');
+  // How the listed drafts' last send to the CMS stands (#1331): ?sent=failed.
+  const [sent, setSent] = useState<SendFilter>('all');
+  // Which shopping paths are listed, on an online shop: ?shopping=attention.
+  const [shoppingFilter, setShoppingFilter] = useState<ShoppingFilter>('all');
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
@@ -102,6 +116,8 @@ export default function ContentLibraryPage() {
   const [publishing, setPublishing] = useState<string | null>(null);
   // Each draft's last send, beside its status; read with the list.
   const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
+  // The drafts the sends above were read for, in any order.
+  const [cmsReadFor, setCmsReadFor] = useState<ReadonlySet<string>>(new Set());
   // The rows picked to send together, for the brand they were picked in.
   const [picked, setPicked] = useState<{ brandId: string | null; ids: ReadonlySet<string> }>({
     brandId: null,
@@ -119,6 +135,8 @@ export default function ContentLibraryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setTab(readUrlChoice('tab', LIBRARY_TABS, 'all'));
     setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
+    setSent(readUrlChoice('sent', SEND_FILTERS, 'all'));
+    setShoppingFilter(readUrlChoice('shopping', SHOPPING_FILTERS, 'all'));
     // Once: closed, it doesn't open again on a reload.
     if (readUrlParam('new') === '1') {
       setStarting(true);
@@ -161,8 +179,16 @@ export default function ContentLibraryPage() {
     if (!readIds) return;
     let cancelled = false;
     readCmsStatuses(readIds.split(','))
-      .then((statuses) => !cancelled && setCms(statuses))
-      .catch((err) => console.error('Failed to read the pages’ sends:', err));
+      .then((statuses) => {
+        if (cancelled) return;
+        setCms(statuses);
+        setCmsReadFor(new Set(readIds.split(',')));
+      })
+      .catch((err) => {
+        console.error('Failed to read the pages’ sends:', err);
+        // The filter lists what it has rather than wait for good.
+        if (!cancelled) setCmsReadFor(new Set(readIds.split(',')));
+      });
     return () => {
       cancelled = true;
     };
@@ -290,6 +316,16 @@ export default function ContentLibraryPage() {
     clearPicked();
     writeUrlParams({ created: next }, { created: 'all' });
   };
+  const changeSent = (next: SendFilter) => {
+    setSent(next);
+    clearPicked();
+    writeUrlParams({ sent: next }, { sent: 'all' });
+  };
+  const changeShopping = (next: ShoppingFilter) => {
+    setShoppingFilter(next);
+    clearPicked();
+    writeUrlParams({ shopping: next }, { shopping: 'all' });
+  };
 
   if (!activeBrandId) {
     return (
@@ -304,7 +340,17 @@ export default function ContentLibraryPage() {
   const drafts = current?.drafts ?? null;
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
-  const listed = draftsCreatedIn(inTab, created);
+  const createdIn = draftsCreatedIn(inTab, created);
+  // Shopping paths are an online shop's (shopping path, 00351).
+  const isShop = siteTypeOf(activeBrand ?? {}) === 'ecommerce';
+  const shopped = isShop ? draftsByShopping(createdIn, shoppingFilter) : createdIn;
+  // Filtered by their last send only once these drafts' sends are read (a
+  // list read again in another order needn't wait); till then, none listed
+  // to export or pick.
+  const sendsRead = sent === 'all' || !drafts || drafts.every((draft) => cmsReadFor.has(draft.id));
+  const listed = sendsRead ? draftsLastSent(shopped, cms, sent) : [];
+  // Any of this brand's drafts sent: the sends of the last brand don't count.
+  const anySent = !!drafts?.some((draft) => cms.has(draft.id));
   // Picked rows still listed (a read may have moved some), never archived ones.
   const pickedIds = picked.brandId === activeBrandId ? picked.ids : new Set<string>();
   const pickedDrafts = listed.filter((draft) => pickedIds.has(draft.id) && !draft.archivedAt);
@@ -364,26 +410,71 @@ export default function ContentLibraryPage() {
             ))}
           </TabsList>
         </Tabs>
-        <Select
-          value={created}
-          onValueChange={(value) => changeCreated(value as CreatedRange)}
-          items={CREATED_RANGES.map((range) => ({
-            value: range,
-            label: `${t('created.label')}: ${t(`created.${range}`)}`,
-          }))}
-        >
-          {/* On the tabs' line when it fits, else on its own, on the right. */}
-          <SelectTrigger size="sm" className="ml-auto" aria-label={t('created.label')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="end">
-            {CREATED_RANGES.map((range) => (
-              <SelectItem key={range} value={range}>
-                {t(`created.${range}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* On the tabs' line when they fit, else on their own, on the right. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {/* Once a page of the brand's was sent, or while the URL names one. */}
+          {(anySent || sent !== 'all') && (
+            <Select
+              value={sent}
+              onValueChange={(value) => changeSent(value as SendFilter)}
+              items={SEND_FILTERS.map((filter) => ({
+                value: filter,
+                label: `${t('lastSend.label')}: ${t(`lastSend.${filter}`)}`,
+              }))}
+            >
+              <SelectTrigger size="sm" aria-label={t('lastSend.label')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {SEND_FILTERS.map((filter) => (
+                  <SelectItem key={filter} value={filter}>
+                    {t(`lastSend.${filter}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select
+            value={created}
+            onValueChange={(value) => changeCreated(value as CreatedRange)}
+            items={CREATED_RANGES.map((range) => ({
+              value: range,
+              label: `${t('created.label')}: ${t(`created.${range}`)}`,
+            }))}
+          >
+            <SelectTrigger size="sm" aria-label={t('created.label')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {CREATED_RANGES.map((range) => (
+                <SelectItem key={range} value={range}>
+                  {t(`created.${range}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {isShop && (
+            <Select
+              value={shoppingFilter}
+              onValueChange={(value) => changeShopping(value as ShoppingFilter)}
+              items={SHOPPING_FILTERS.map((filter) => ({
+                value: filter,
+                label: `${t('shopping.label')}: ${t(`shopping.filters.${filter}`)}`,
+              }))}
+            >
+              <SelectTrigger size="sm" aria-label={t('shopping.label')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {SHOPPING_FILTERS.map((filter) => (
+                  <SelectItem key={filter} value={filter}>
+                    {t(`shopping.filters.${filter}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </div>
 
       <Card className="py-0">
@@ -436,13 +527,19 @@ export default function ContentLibraryPage() {
                 {t('retry')}
               </Button>
             </div>
-          ) : drafts === null ? (
+          ) : drafts === null || !sendsRead ? (
             <div className="flex items-center justify-center py-12" aria-busy="true">
               <LoadingDots size="md" className="text-muted-foreground" />
             </div>
           ) : listed.length === 0 && inTab.length > 0 ? (
             <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-              {t('created.empty')}
+              {t(
+                createdIn.length === 0
+                  ? 'created.empty'
+                  : shopped.length === 0
+                    ? 'shopping.empty'
+                    : 'lastSend.empty',
+              )}
             </p>
           ) : (
             <LibraryTable
@@ -451,6 +548,7 @@ export default function ContentLibraryPage() {
               actions={rowActions}
               cms={cms}
               selection={selection}
+              shopping={isShop}
             />
           )}
         </CardContent>
@@ -520,14 +618,19 @@ export default function ContentLibraryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {counts && created === 'all' && listed.length < counts[tab] && (
-        <p className="text-xs text-muted-foreground">
-          {t('latestOnly', {
-            shown: formatNumber(listed.length),
-            count: formatNumber(counts[tab]),
-          })}
-        </p>
-      )}
+      {/* The cap's note: a filter that narrows the list isn't the cap. */}
+      {counts &&
+        created === 'all' &&
+        sent === 'all' &&
+        (!isShop || shoppingFilter === 'all') &&
+        listed.length < counts[tab] && (
+          <p className="text-xs text-muted-foreground">
+            {t('latestOnly', {
+              shown: formatNumber(listed.length),
+              count: formatNumber(counts[tab]),
+            })}
+          </p>
+        )}
     </div>
   );
 }

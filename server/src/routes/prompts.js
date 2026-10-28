@@ -5,6 +5,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents } from '../lib/intent-extraction.js';
+import { promptsFromTopicsSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
   PlanLimitError,
@@ -801,12 +802,12 @@ const topicPromptSchema = z.object({
  */
 router.post('/from-topics', async (req, res) => {
   try {
-    const { brandName, industry, description, topics, language } = req.body;
-    const langName = getLanguageName(language);
-
-    if (!brandName || !topics?.length) {
-      return res.status(400).json({ error: 'brandName and topics are required' });
+    const parsed = promptsFromTopicsSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
     }
+    const { brandName, industry, description, topics, language } = parsed.data;
+    const langName = getLanguageName(language);
 
     const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
     const aiModel = resolveModel(promptModel);
@@ -1034,6 +1035,8 @@ function publicQuota(q) {
     percentLeft: q.percentLeft,
     // The free trial's: more comes with starting the plan, not a bigger one.
     trial: q.trial === true,
+    // No plan (read-only, 2026-10-27): nothing left until one is chosen.
+    ...(q.noPlan ? { noPlan: true } : {}),
   };
 }
 
@@ -1045,8 +1048,10 @@ function improveModelId() {
   );
 }
 
-// Read the cached set; never generates.
-router.get('/:promptId/improve', requireFeature('prompt_improve'), async (req, res) => {
+// Read the cached set; never generates. A workspace whose plan ended still
+// reads it (readOnly).
+const readImprove = requireFeature('prompt_improve', { readOnly: true });
+router.get('/:promptId/improve', readImprove, async (req, res) => {
   try {
     const range = parseImproveRange(req.query);
     const { brand, brandId } = await loadImprovePrompt(req.params.promptId, req.user.id);
@@ -1059,7 +1064,9 @@ router.get('/:promptId/improve', requireFeature('prompt_improve'), async (req, r
         .eq('region', range.region)
         .maybeSingle(),
       improveResultsQuery('created_at', { promptId: req.params.promptId, brandId, range }).limit(1),
-      getImproveQuotaStatus(brand.organization_id, improveModelId()),
+      // Read-only once the plan has ended (2026-10-27): the kept set still
+      // comes back, with a budget of 0.
+      getImproveQuotaStatus(brand.organization_id, improveModelId(), { readOnly: true }),
     ]);
     return res.json({
       improve: improveResponse(

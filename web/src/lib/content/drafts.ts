@@ -6,6 +6,7 @@
 
 import type { SiteType } from './page-types';
 import type { DraftRules } from '@/lib/content/rules';
+import type { DraftShopping } from '@/lib/content/shopping-check';
 
 /** Draft → In review (an agent's draft waiting for a person) → Ready → Published. */
 export const DRAFT_STATUSES = ['draft', 'in_review', 'ready', 'published'] as const;
@@ -135,6 +136,8 @@ export interface ContentDraftListItem {
   updatedAt: string;
   /** When an admin or manager archived it (00233); null when it isn't archived. */
   archivedAt: string | null;
+  /** Its shopping path's links as the last catalog sync left them (00352); none when absent. */
+  shopping?: DraftShopping;
 }
 
 /**
@@ -299,6 +302,27 @@ export function draftsCreatedIn(
   if (range === 'all') return drafts;
   const since = now - Number.parseInt(range, 10) * 86_400_000;
   return drafts.filter((d) => new Date(d.createdAt).getTime() >= since);
+}
+
+/**
+ * The Library's Last send filter (#1331): any, never sent, or how the last
+ * send to the CMS stands, as the row's mark shows it.
+ */
+export const SEND_FILTERS = ['all', 'never', 'queued', 'sent', 'failed', 'published'] as const;
+export type SendFilter = (typeof SEND_FILTERS)[number];
+
+/**
+ * The drafts whose last send is as picked, read from each draft's last send
+ * (readCmsStatuses: one left queued past its half hour reads as failed).
+ */
+export function draftsLastSent(
+  drafts: ContentDraftListItem[],
+  sends: ReadonlyMap<string, { status: string }>,
+  filter: SendFilter,
+): ContentDraftListItem[] {
+  if (filter === 'all') return drafts;
+  if (filter === 'never') return drafts.filter((d) => !sends.has(d.id));
+  return drafts.filter((d) => sends.get(d.id)?.status === filter);
 }
 
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {
