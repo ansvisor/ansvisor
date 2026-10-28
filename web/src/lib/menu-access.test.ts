@@ -8,6 +8,7 @@ import {
   WORK_AREA_IDS,
   cleanMenuSections,
   hiddenMenuSections,
+  hiddenWithWorkAreas,
   menuOfProfile,
   menuSectionOf,
   readRoleHidden,
@@ -113,6 +114,20 @@ describe('workAreaSections', () => {
 
   it('is null for no known area', () => {
     expect(workAreaSections([])).toBeNull();
+  });
+});
+
+describe('hiddenWithWorkAreas', () => {
+  it('keeps what the admin takes off and narrows the rest to the areas', () => {
+    expect(hiddenWithWorkAreas(['mentions'], ['brand'])).toEqual([
+      'content',
+      'audit',
+      'prompts',
+      'mentions',
+      'shopping',
+      'traffic',
+    ]);
+    expect(hiddenWithWorkAreas(['mentions'], [])).toEqual(['mentions']);
   });
 });
 
