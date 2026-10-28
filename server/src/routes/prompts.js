@@ -1148,13 +1148,17 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     }));
     // What Site Audit's checks found on the cited pages, where Analyze
     // competitor content read them lately (learning C2). None read: as before.
+    // A read that fails goes without them, said in the log.
     const stored = await storedFeatures(
       brandId,
       collected.flatMap((p) => [
         ...p.evidence.competitorUrls.map((u) => u.url),
         ...p.evidence.brandPages.map((u) => u.url),
       ]),
-    ).catch(() => new Map());
+    ).catch((err) => {
+      req.log.warn({ err, promptId }, 'prompt improve page checks read failed');
+      return new Map();
+    });
     const withEvidence = collected.map((p) => ({
       ...p,
       evidence: withPageChecks(p.evidence, stored),
