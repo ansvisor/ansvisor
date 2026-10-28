@@ -2,19 +2,22 @@
  * What the pages AI answers cite have (learning C1).
  *
  * "Analyze competitor content" was a step for a person: nothing looked at the
- * pages AI engines cite where the brand isn't named. This reads them: the
- * pages cited in the brand's own tracked answers for the action's prompts
- * lately, a competitor's first, and the brand's own page cited there. Each is
- * fetched free (safe-fetch: public addresses only, never a paid scraper) and
- * run through Site Audit's own rule checks that read the page alone —
- * structure, FAQ, schema, statistics, dates, length. What the checks found is
- * kept (cited_page_features, 00369), never the page's text, and nothing is
- * summarised by AI. The result is the checks most of the competitor pages
- * pass that the brand's page doesn't.
+ * pages AI engines cite instead of the brand's. This reads them: the pages
+ * cited in the brand's own tracked answers for the action's prompts lately —
+ * its competitors' pages, then pages cited in answers that don't name the
+ * brand — and the brand's own page cited there. An action that names no
+ * prompts reads its topics' prompts, else the brand's tracked ones. Each page
+ * is fetched free (safe-fetch: public addresses only, never a paid scraper),
+ * unless its site's robots.txt shuts the reader out, and run through Site
+ * Audit's own rule checks that read the page alone — structure, FAQ, schema,
+ * statistics, dates, length. What the checks found is kept
+ * (cited_page_features, 00369), never the page's text, and nothing is
+ * summarised by AI. The result is the checks at least half of the competitor
+ * pages pass that the brand's page doesn't.
  *
  * Only addresses the brand's own answers cited are read — never one a request
  * names — at most `perBrandPerDay` new reads a day for a brand, and a page
- * read in the last `freshDays` isn't read again.
+ * read (or found unreadable) in the last `freshDays` isn't read again.
  */
 
 import * as cheerio from 'cheerio';
@@ -25,6 +28,9 @@ import { extractHostname } from '../response-parser.js';
 import { signalRegistry } from '../audit/signals/index.js';
 import { describeSignal } from '../audit/rubric.js';
 import { opportunityKey } from '../audit/opportunities.js';
+import { robotsGroups } from '../audit/signals/trust.js';
+import { logger } from '../logger.js';
+import { topicPromptIds } from './basket-metrics.js';
 import { promptIdsOf } from './priority.js';
 
 const { competitorPages: C } = resolve();
@@ -33,6 +39,18 @@ const DAY_MS = 86_400_000;
 const READ_TIMEOUT_MS = 8_000;
 /** Answers read for the action's prompts, newest first. */
 const ANSWERS_READ = 300;
+/** Prompts whose answers are read, at most. */
+const PROMPTS_READ = 50;
+/**
+ * Less text than this, and what was read is a wall (a consent or sign-in
+ * page, a page drawn by script), not the page: as content-cited-length.js's
+ * CITED_MIN_CHARACTERS.
+ */
+export const MIN_PAGE_CHARACTERS = 500;
+/** safe-fetch's User-Agent, as robots.txt names a crawler. */
+const ROBOTS_AGENT = 'ansvisorbot';
+/** The most of a robots.txt read (RFC 9309 asks crawlers to read 500 KiB). */
+const ROBOTS_MAX_BYTES = 512 * 1024;
 
 /**
  * The checks compared: Site Audit's that read the page alone, never its
@@ -57,13 +75,21 @@ export const FEATURE_CHECKS = Object.freeze([
 ]);
 
 /**
- * A run that read no competitor page because the brand's reads for the day
- * are spent: its task waits for the next night, as one waiting on approval.
+ * A run that leaves its task as it was (execution/run.js reads `retryLater`):
+ * the brand's reads for the day can't cover it, so it waits for the next
+ * night; or it found nothing to compare, so the task stays a person's, shows
+ * `output` (why), and isn't tried again for `retryDays`.
  */
 export class ReadLaterError extends Error {
-  constructor(message) {
+  /**
+   * @param {string} message
+   * @param {{ output?: object | null, retryDays?: number }} [later]
+   */
+  constructor(message, { output = null, retryDays = 0 } = {}) {
     super(message);
     this.retryLater = true;
+    this.output = output;
+    this.retryDays = retryDays;
   }
 }
 
@@ -92,9 +118,13 @@ export function pageContext(url, html, now = Date.now()) {
   };
 }
 
-/** A page's features: its words and each compared check's status. */
+/**
+ * A page's features: its words and each compared check's status; null when
+ * what was read is a wall rather than the page (MIN_PAGE_CHARACTERS).
+ */
 export async function pageFeatures(url, html, now = Date.now()) {
   const ctx = pageContext(url, html, now);
+  if (ctx.text.length < MIN_PAGE_CHARACTERS) return null;
   const checks = {};
   for (const signal of signalRegistry) {
     if (!FEATURE_CHECKS.includes(signal.key)) continue;
@@ -150,14 +180,15 @@ export function citedPages(answers, { ownDomains, competitorDomains, perAction =
 }
 
 /**
- * The checks at least half of the competitor pages pass (one at least) that
- * the brand's page doesn't, the most passed first; every such check when no
- * page of the brand's was cited.
+ * The checks at least half of the competitor pages pass that the brand's
+ * page doesn't, the most passed first; every such check when no page of the
+ * brand's was read. None from fewer than `minPages` pages: one page isn't
+ * what "their pages" have.
  */
-export function featureGaps(competitorPages, yourPage) {
+export function featureGaps(competitorPages, yourPage, { minPages = C.minPages } = {}) {
   const read = competitorPages.filter((page) => page.checks);
-  if (read.length === 0) return [];
-  const needed = Math.max(1, Math.ceil(read.length / 2));
+  if (read.length < Math.max(1, minPages)) return [];
+  const needed = Math.ceil(read.length / 2);
   return FEATURE_CHECKS.map((key) => ({
     key,
     label: describeSignal(key)?.label ?? key,
@@ -171,8 +202,77 @@ export function featureGaps(competitorPages, yourPage) {
 const passing = (checks) => FEATURE_CHECKS.filter((key) => checks?.[key] === 'pass');
 
 /**
+ * Whether a site's robots.txt shuts this reader out of the whole site: the
+ * groups naming it, else those for every crawler ('*'), disallow "/" and
+ * none allows it back. Rules for single paths aren't read (robotsGroups).
+ */
+export function robotsDisallow(robotsTxt) {
+  const groups = robotsGroups(robotsTxt);
+  const own = groups.filter((group) => group.agents.includes(ROBOTS_AGENT));
+  const apply = own.length > 0 ? own : groups.filter((group) => group.agents.includes('*'));
+  return apply.some((group) => group.disallowAll) && !apply.some((group) => group.allowAll);
+}
+
+/** An HTML page served where robots.txt should be: no robots.txt. */
+const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
+
+/**
+ * Whether the reader may read pages on the site at `url`. No robots.txt (a
+ * 4xx) lets it in; one that can't be read (a server error, asked to wait,
+ * no answer) keeps it out, as RFC 9309 asks.
+ */
+async function robotsAllow(url, read) {
+  try {
+    const robots = await read(new URL('/robots.txt', url).href, {
+      timeoutMs: READ_TIMEOUT_MS,
+      // Crawlers read it whatever its type (S3 serves it as octet-stream).
+      types: /(?:)/,
+      accept: 'text/plain',
+      maxBytes: ROBOTS_MAX_BYTES,
+      truncate: true,
+    });
+    return isHtml(robots.html) || !robotsDisallow(robots.html);
+  } catch (err) {
+    return err?.code === 'http_error' && err.status < 500 && err.status !== 429;
+  }
+}
+
+/**
+ * The prompts whose answers are read: the ones the action names; else its
+ * topics' prompts; else (an action about competitors or sources) the brand's
+ * tracked prompts. At most PROMPTS_READ.
+ */
+export async function scopePromptIds(brandId, payload) {
+  const named = promptIdsOf([payload]);
+  if (named.length > 0) return named.slice(0, PROMPTS_READ);
+  if ((payload?.entity ?? payload?.targetEntity) === 'topics') {
+    const listed = Array.isArray(payload.targetIds)
+      ? payload.targetIds
+      : (Array.isArray(payload.targets) ? payload.targets : []).map((target) => target?.id);
+    const topicIds = [...new Set([payload.topicId, ...listed])].filter(
+      (id) => typeof id === 'string' && id,
+    );
+    return (await topicPromptIds(brandId, topicIds)).slice(0, PROMPTS_READ);
+  }
+  const { data, error } = await supabaseAdmin
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(PROMPTS_READ);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.id);
+}
+
+/**
  * The "Analyze competitor content" task's result: the competitor pages read,
  * the brand's, and the checks the first pass that the second doesn't.
+ *
+ * It throws ReadLaterError when it can't give one: the day's reads left
+ * can't cover the pages (the next night), or there is nothing to compare —
+ * no prompts, no page cited, none readable (`retryDays`, the reason as the
+ * task's output).
  *
  * @param {{ brandId: string, payload: object, now?: Date, read?: typeof fetchPage }} input
  *   read: the page reader, for tests
@@ -183,9 +283,21 @@ export async function analyzeCompetitorPages({
   now = new Date(),
   read = fetchPage,
 }) {
-  const promptIds = promptIdsOf([payload]);
-  const empty = (reason) => ({ competitorPages: [], yourPage: null, gaps: [], reason });
-  if (promptIds.length === 0) return empty('no_prompts');
+  const nothing = (reason, message, found = {}) =>
+    new ReadLaterError(message, {
+      output: {
+        competitorPages: [],
+        yourPage: null,
+        gaps: [],
+        unreadable: 0,
+        ...found,
+        reason,
+      },
+      retryDays: C.retryDays,
+    });
+
+  const promptIds = await scopePromptIds(brandId, payload);
+  if (promptIds.length === 0) throw nothing('no_prompts', 'no prompts to read the answers of');
 
   const since = new Date(now.getTime() - C.answersDays * DAY_MS).toISOString();
   const [answersRes, domainsRes, competitorsRes] = await Promise.all([
@@ -194,7 +306,7 @@ export async function analyzeCompetitorPages({
       .select('mention_count, citations')
       .eq('brand_id', brandId)
       .neq('platform', 'chatgpt-shopping')
-      .in('prompt_id', promptIds.slice(0, 50))
+      .in('prompt_id', promptIds)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(ANSWERS_READ),
@@ -208,9 +320,11 @@ export async function analyzeCompetitorPages({
     ownDomains: (domainsRes.data ?? []).map((row) => row.domain).filter(Boolean),
     competitorDomains: (competitorsRes.data ?? []).map((row) => row.domain).filter(Boolean),
   });
-  if (picked.competitors.length === 0) return empty('none_cited');
+  if (picked.competitors.length === 0) {
+    throw nothing('none_cited', 'no competitor page cited for these prompts lately');
+  }
 
-  // What was read lately is reused; a day's new reads stop at the cap.
+  // What was read lately is reused, a page found unreadable too.
   const pages = [...picked.competitors, ...(picked.yours ? [{ ...picked.yours, own: true }] : [])];
   const [knownRes, todayRes] = await Promise.all([
     supabaseAdmin
@@ -233,44 +347,56 @@ export async function analyzeCompetitorPages({
   const fresh = new Map(
     (knownRes.data ?? [])
       .filter((row) => Date.parse(row.read_at) >= freshSince)
-      .map((row) => [row.page_key, row.features]),
+      .map((row) => [row.page_key, row.features ?? {}]),
   );
-  let left = C.perBrandPerDay - (todayRes.count ?? 0);
-  let capped = 0;
-  let unreadable = 0;
+  // All of an action's pages are read the same night, or none: a run that
+  // read some would compare a part, and its task wouldn't run again.
+  const toRead = pages.filter((page) => !fresh.has(page.key)).length;
+  if (toRead > C.perBrandPerDay - (todayRes.count ?? 0)) {
+    throw new ReadLaterError("the brand's page reads for today can't cover this action's");
+  }
 
+  const allowed = new Map();
   for (const page of pages) {
     if (fresh.has(page.key)) {
-      page.features = fresh.get(page.key);
+      const known = fresh.get(page.key);
+      if (!known.unreadable) page.features = known;
       continue;
     }
-    if (left <= 0) {
-      capped += 1;
-      continue;
-    }
-    left -= 1;
+    let features = null;
+    let disallowed = false;
     try {
-      const fetched = await read(page.url, { timeoutMs: READ_TIMEOUT_MS });
-      page.features = await pageFeatures(fetched.url, fetched.html, now.getTime());
-      const { error } = await supabaseAdmin.from('cited_page_features').upsert(
-        {
-          brand_id: brandId,
-          page_key: page.key,
-          url: page.url,
-          domain: page.domain,
-          own: Boolean(page.own),
-          features: page.features,
-          read_at: now.toISOString(),
-        },
-        { onConflict: 'brand_id,page_key' },
-      );
-      if (error) throw new Error(error.message);
+      const origin = new URL(page.url).origin;
+      if (!allowed.has(origin)) allowed.set(origin, await robotsAllow(page.url, read));
+      disallowed = !allowed.get(origin);
+      if (!disallowed) {
+        const fetched = await read(page.url, { timeoutMs: READ_TIMEOUT_MS });
+        features = await pageFeatures(fetched.url, fetched.html, now.getTime());
+      }
     } catch {
-      // A page that blocks the reader, or isn't one: counted, not a failure.
-      unreadable += 1;
+      // A page that blocks the reader, or isn't one: unreadable, not a failure.
+    }
+    if (features) page.features = features;
+    // An unreadable page is kept too: it counts against the day's reads and
+    // isn't tried again while it would be fresh.
+    const { error } = await supabaseAdmin.from('cited_page_features').upsert(
+      {
+        brand_id: brandId,
+        page_key: page.key,
+        url: page.url,
+        domain: page.domain,
+        own: Boolean(page.own),
+        features: features ?? { unreadable: true, ...(disallowed ? { disallowed: true } : {}) },
+        read_at: now.toISOString(),
+      },
+      { onConflict: 'brand_id,page_key' },
+    );
+    if (error) {
+      logger.warn({ err: error, brandId, page: page.key }, '[competitor-pages] read not kept');
     }
   }
 
+  const unreadable = pages.filter((page) => !page.features).length;
   const competitorPages = pages
     .filter((page) => !page.own && page.features)
     .map((page) => ({
@@ -280,11 +406,15 @@ export async function analyzeCompetitorPages({
       words: page.features.words ?? null,
       checks: page.features.checks ?? {},
     }));
-  if (competitorPages.length === 0 && capped > 0) {
-    throw new ReadLaterError("the brand's page reads for today are spent");
+  const own = pages.find((page) => page.own);
+  const yourPageStatus = !own ? 'not_cited' : own.features ? 'read' : 'unreadable';
+  if (competitorPages.length === 0) {
+    throw nothing('unreadable', 'no competitor page cited could be read', {
+      yourPageStatus,
+      unreadable,
+    });
   }
-  const own = pages.find((page) => page.own && page.features);
-  const yourPage = own
+  const yourPage = own?.features
     ? {
         url: own.url,
         cited: own.count,
@@ -297,9 +427,10 @@ export async function analyzeCompetitorPages({
   return {
     competitorPages: competitorPages.map(shown),
     yourPage: yourPage ? shown(yourPage) : null,
+    yourPageStatus,
     gaps: featureGaps(competitorPages, yourPage),
-    capped,
+    // Fewer pages than this, and nothing is compared (featureGaps).
+    compared: competitorPages.length >= C.minPages,
     unreadable,
-    ...(competitorPages.length === 0 ? { reason: 'unreadable' } : {}),
   };
 }
