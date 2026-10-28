@@ -35,6 +35,7 @@
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working.",
+      "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
       "otherLimits": "Other limits this month",
@@ -1365,7 +1366,8 @@
             "not_open": "This task is already done or skipped.",
             "no_answer": "Couldn't read the page. Try again later.",
             "changed": "The task changed while it was checked. Try again.",
-            "closed": "This action is closed."
+            "closed": "This action is closed.",
+            "no_shopping_path": "This page's draft has no shopping path left to check: it was archived, or its path was removed."
           },
           "checkFailed": "Couldn't check the task. Try again.",
           "type": "Type",
@@ -1457,6 +1459,7 @@
         "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
+        "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
         "topicOpportunity": {
           "source": "Source",
           "sourceValue": "Insights › Opportunities",
@@ -1477,6 +1480,20 @@
           "newPage": "A new page",
           "prompts": "Prompts it should answer",
           "promptsValue": "{count, plural, one {# prompt} other {# prompts}}"
+        },
+        "shoppingLinks": {
+          "source": "Source",
+          "sourceValue": "The catalog check after each sync",
+          "openDraft": "Swap in the editor",
+          "page": "Page",
+          "products": "Products it links that no longer sell",
+          "states": {
+            "sold_out": "Sold out",
+            "refused": "Refused by Merchant Center",
+            "gone": "Gone from your catalog"
+          },
+          "swaps": "In stock, from its shopping path",
+          "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
         },
         "mentionReview": {
           "source": "Source",
@@ -2232,6 +2249,14 @@
         "optimizeTitle": "Optimize: {title}",
         "description": "Sent from the Content Editor: a draft for someone on the team to write, with its page type and the prompts it should answer.",
         "goal": "Publish the page and get the brand into AI answers for these prompts."
+      },
+      "shopping_links": {
+        "title": "Swap the products that no longer sell on {targets}",
+        "titleGeneric": "Swap the products that no longer sell",
+        "soldOutTitle": "{page}: {count, plural, one {# product is sold out} other {# products are sold out}}",
+        "namedTitle": "{page}: {count, plural, one {# product no longer sells} other {# products no longer sell}}",
+        "description": "From the catalog: the page links {count, plural, one {a product} other {# products}} you can't buy now. Readers and AI answers that follow those links land on a dead end.",
+        "goal": "Link only products that sell, so readers can buy what the page recommends."
       }
     },
     "actionTasks": {
@@ -2473,7 +2498,8 @@
       "not_changed": "the page hasn't changed since the first look",
       "change_not_found": "the new text isn't on the page",
       "old_text_still_there": "the text it replaces is still on the page",
-      "off_site": "the page isn't on the brand's site"
+      "off_site": "the page isn't on the brand's site",
+      "links_not_for_sale": "the page still links products that no longer sell"
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",
@@ -3472,6 +3498,46 @@
         "toggle": "{count, plural, one {# hidden row} other {# hidden rows}} · {open, select, true {Hide} other {Show}}",
         "show": "Show again"
       },
+      "shopping": {
+        "title": "Shopping opportunities",
+        "lead": "Pages that lead readers, and AI answers, to your category pages and products",
+        "catalog": "Catalog: {products, plural, one {# product} other {# products}} in {categories, plural, one {# category} other {# categories}}",
+        "columns": {
+          "page": "Page to make",
+          "why": "Why",
+          "category": "Category",
+          "score": "Priority",
+          "action": "Action"
+        },
+        "kinds": {
+          "guide": "Buying guide",
+          "fix": "Existing post"
+        },
+        "badges": {
+          "new": "New",
+          "draft": "Draft",
+          "fix": "Fix"
+        },
+        "guideTitle": "How to choose {category}",
+        "why": {
+          "prompts": "AI is asked about {category} in {count, plural, one {# of your prompts} other {# of your prompts}}, and no page of yours answers it.",
+          "noPrompts": "No page of yours guides shoppers to your {category} yet.",
+          "draft": "A draft for it is being written.",
+          "noCategoryPage": "It has no category page to link: set one in Settings › Integrations › Product catalog.",
+          "noCategoryLink": "No link to the {category} page.",
+          "categoryLinks": "It links {linked} of its {count} category pages.",
+          "soldOut": "{count, plural, one {# product it links is sold out.} other {# products it links are sold out.}}",
+          "noLongerSell": "{count, plural, one {# product it links no longer sells.} other {# products it links no longer sell.}}"
+        },
+        "stock": "{products, plural, one {# product} other {# products}} · {inStock} in stock",
+        "categoryGone": "No longer in your catalog",
+        "empty": "No shopping opportunities right now: each category in stock has a page, and your posts link products that sell.",
+        "create": "Create",
+        "open": "Open draft",
+        "optimize": "Optimize",
+        "createFailed": "Couldn't start the guide. Try again.",
+        "note": "Shopping opportunities show for shops with a product catalog. The Plan's other rows stay below."
+      },
       "assign": {
         "title": "Assign “{title}”",
         "description": "It goes to the Action Center as a task for this teammate.",
@@ -3514,6 +3580,30 @@
         "published": "Published",
         "empty": "No page in this tab matches the Last send filter."
       },
+      "shopping": {
+        "label": "Shopping path",
+        "filters": {
+          "all": "All",
+          "attention": "Needs attention",
+          "ok": "OK",
+          "none": "None"
+        },
+        "empty": "No page listed here has a shopping path like this.",
+        "none": "None",
+        "unchecked": "Not checked yet",
+        "uncheckedHint": "Its links are checked against your catalog after the next catalog sync.",
+        "ok": "OK",
+        "soldOut": "{count} sold out",
+        "notForSale": "{count} not for sale",
+        "linked": "Links {categoriesLinked} of {categories, plural, one {# category page} other {# category pages}} and {productsLinked} of {products, plural, one {# product} other {# products}} in its shopping path.",
+        "states": {
+          "sold_out": "{title}: sold out",
+          "refused": "{title}: refused by Google Merchant Center",
+          "gone": "{title}: no longer in your catalog"
+        },
+        "checkedPage": "Checked on the live page after the catalog sync of {when}.",
+        "checkedDraft": "Checked in the draft after the catalog sync of {when}."
+      },
       "title": "Library",
       "description": "Everything you and the agents wrote or changed.",
       "selectBrand": "Select a brand to see its content.",
@@ -3534,7 +3624,8 @@
         "status": "Status",
         "created": "Created",
         "updated": "Updated",
-        "menu": "Row actions"
+        "menu": "Row actions",
+        "shopping": "Shopping path"
       },
       "rowMenu": {
         "label": "Actions for {title}",
@@ -4081,9 +4172,10 @@
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "breaks": "Would break {names}",
         "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+        "notForAgentFeedShopping": "Content Agent doesn't change a price, GTIN or stock, or which products the page links: check which is right, the page or your product feed, and fix that one; then remove or replace the links to products that are out of stock, refused or gone.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
-        "notForAgentShopping": "Content Agent doesn't change which products the page links: remove or replace the links to sold-out, refused or gone products yourself.",
+        "notForAgentShopping": "Content Agent doesn't change which products the page links: remove or replace the links to products that are out of stock, refused or gone yourself.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
@@ -4461,7 +4553,7 @@
       },
       "shopping": {
         "title": "Shopping path",
-        "description": "Where this page sends readers. Picked by topic, stock and Merchant Center status. Prices and specs come from the catalog only.",
+        "description": "Where this page sends readers. Picked by topic and stock, and by Merchant Center status once it's connected. Prices and specs come from the catalog only.",
         "empty": "Pick the category page and the products in stock this page links, from your catalog.",
         "build": "Pick from the catalog",
         "rebuild": "Pick again",
@@ -4476,7 +4568,7 @@
         "noPath": {
           "not_a_shop": "Shopping paths are for brands that sell online. Set the site type to E-commerce in Brand settings.",
           "page_type": "This page type doesn't link products. Buying guides, best-of lists, comparisons, guides and blog posts do.",
-          "no_catalog": "There's no catalog to pick from yet. Connect Google Merchant Center or a product feed in Settings › Integrations.",
+          "no_catalog": "There's no catalog to pick from yet. Add a product feed URL or upload a file in Settings › Integrations › Product catalog.",
           "no_match": "Nothing in your catalog matches this page's topic. Name what you sell in the title or the brief's keywords, then pick again.",
           "other": "No shopping path fits this page right now. Try again later."
         },
@@ -4511,7 +4603,7 @@
         "addThis": "Add {title}",
         "leftOut": "Left out",
         "reason": {
-          "sold_out": "sold out",
+          "sold_out": "not in stock",
           "refused": "Merchant Center refuses it",
           "no_link": "no page to link",
           "gone": "no longer in the catalog",
@@ -4526,7 +4618,7 @@
         "placeholder": "Product name…",
         "empty": "No product with that name.",
         "searchFailed": "Couldn't search the catalog. Try again.",
-        "soldOut": "Sold out",
+        "notInStock": "Not in stock",
         "noPage": "No page to link",
         "picked": "{count} of {max} picked",
         "unpick": "Remove {title}",
@@ -4678,6 +4770,20 @@
         "html": "Export HTML",
         "md": "Export Markdown",
         "failed": "Couldn't export the page. Try again."
+      },
+      "sentChip": {
+        "webflow": {
+          "queued": "Sending to Webflow…",
+          "sent": "In Webflow · draft",
+          "failed": "Webflow send failed",
+          "published": "Live"
+        },
+        "webhook": {
+          "queued": "Sending to your CMS…",
+          "sent": "Sent to your CMS",
+          "failed": "Send failed",
+          "published": "Live"
+        }
       },
       "send": {
         "button": "Send to CMS",
@@ -4987,10 +5093,19 @@
         "copied": "Copied for {destination}: paste it in.",
         "copiedHtml": "HTML copied.",
         "copiedAsHtml": "Copied as HTML: paste it into the editor's HTML or code view.",
-        "inHtmlBlock": "The placeholders are in an HTML block: open it with {html} to fill them.",
         "copyFailed": "Couldn't copy. Open the HTML view and copy it from there.",
         "failed": "Couldn't export the page. Try again.",
         "cancel": "Cancel"
+      },
+      "placeholders": {
+        "label": "Placeholders to fill",
+        "left": "{count, plural, =0 {No placeholders left to fill} one {# placeholder to fill} other {# placeholders to fill}}",
+        "onOf": "Placeholder {on} of {count}",
+        "previous": "Previous placeholder",
+        "next": "Next placeholder",
+        "showHidden": "Show in HTML",
+        "hiddenHint": "In an image's alt text, the JSON-LD or an HTML block: the page doesn't show them.",
+        "inHtmlView": "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view ({html}): type over it, then apply."
       },
       "beforePublish": {
         "title": "Before you publish",
@@ -5062,14 +5177,17 @@
           "reading": "Reading your catalog for the linked products' stock…",
           "failed": "Couldn't read your catalog: check the products the page links are in stock before you publish.",
           "ok": "Shopping links work",
-          "okDetail": "{count, plural, =0 {{category, select, yes {No product linked yet; the category page is.} other {No product linked yet.}}} one {# product linked, in stock and accepted by Merchant Center.} other {# products linked, in stock and accepted by Merchant Center.}}",
+          "okDetail": "{count, plural, =0 {{category, select, yes {No product linked yet; the category page is.} other {No product linked yet.}}} one {# product linked, {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}.} other {# products linked, {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}.}}",
           "bad": "{count, plural, one {# product link to remove or replace} other {# product links to remove or replace}}",
           "badDetail": "{list}{more, plural, =0 {} other { +# more}}. Remove or replace these links on the page: Brief › Shopping path lists products that sell.",
-          "item": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+          "item": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
           "noCategory": "No link to the category page",
           "noCategoryDetail": "Link the category page in Brief › Shopping path, so readers reach the products.",
           "few": "{count} of {want} products linked",
-          "fewDetail": "Link more of the products in Brief › Shopping path that are in stock: a product card or grid counts."
+          "fewDetail": "Link more of the products in Brief › Shopping path that are in stock: a product card or grid counts.",
+          "prices": "{count, plural, one {# product card shows an old price} other {# product cards show an old price}}",
+          "pricesDetail": "{list}{more, plural, =0 {} other { +# more}}. A card keeps the price it was put in with. To show today's, replace the card: delete it and add the product again (Add › Products).",
+          "priceItem": "{title}: {page} on the page, {now, select, none {no price} other {{now}}} now"
         },
         "disclosure": {
           "ok": "Disclosure",
@@ -5097,6 +5215,7 @@
         },
         "jsonLd": "JSON-LD for this page",
         "copy": "Copy JSON-LD",
+        "showCode": "Show the JSON-LD, for a CMS that doesn't add it",
         "copied": "JSON-LD copied",
         "copyFailed": "Couldn't copy the JSON-LD. Select it and copy it yourself.",
         "fixFirst": "Fix first",
@@ -5165,7 +5284,7 @@
         "confirmCaseFull": "This page keeps 50 confirmations already.",
         "feed": {
           "none": "Price and stock aren't checked: no product feed is connected for this brand yet.",
-          "connect": "Connect a feed",
+          "connect": "Add a feed URL or a file",
           "notFound": "Price and stock aren't checked: no product in your feed has this page's URL or title."
         },
         "weightsFor": {
@@ -5540,7 +5659,7 @@
           "feedMatch": "Price, GTIN and stock match the feed",
           "shopCategoryLink": "Links its category page",
           "shopProductLinks": "Links the shopping path's products",
-          "shopLinksLive": "No sold-out or refused product linked",
+          "shopLinksLive": "No out-of-stock or refused product linked",
           "fitQuestions": "Answer fit and sizing questions",
           "first40Words": "Type + key attributes in the first 40 words",
           "introText": "Intro text above products",
@@ -5565,8 +5684,8 @@
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
           "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
           "shopCategoryLink": "A link to the category page in Brief › Shopping path, so readers and AI answers reach the products.",
-          "shopProductLinks": "Links to the products in Brief › Shopping path that are in stock and accepted by Merchant Center: this many, or all of them when fewer are. A product card or grid counts.",
-          "shopLinksLive": "Every product the page links from its shopping path, or removed from it, is in stock, accepted by Merchant Center for free listings, and still in the catalog. Remove or replace a link to one that isn't, on the page.",
+          "shopProductLinks": "Links to the products in Brief › Shopping path that are {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}: this many, or all of them when fewer are. A product card or grid counts.",
+          "shopLinksLive": "Every product the page links from its shopping path, or removed from it, is in stock{merchantCenter, select, yes {, accepted by Merchant Center for free listings,} other {}} and still in the catalog. Remove or replace a link to one that isn't, on the page.",
           "definitionFirst": "The paragraph under the H1 says what the term is (\"X is …\") in a few words: what answer engines quote for \"what is\" prompts.",
           "measureSteps": "The longest numbered list on the page counts as the steps."
         },
@@ -5659,7 +5778,7 @@
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
-        "shopItem": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+        "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
@@ -6032,6 +6151,7 @@
       "testFailed": "Webhook test failed: {error}",
       "testRedirect": "The address redirects (HTTP {status}) to {location}. Nothing is sent on to it: use that address instead.",
       "testForbidden": "Only admins and managers can test the webhook.",
+      "readOnly": "Only admins and managers can change or test this webhook.",
       "save": "Save Webhook",
       "saving": "Saving...",
       "saved": "Webhook saved!",
@@ -6054,7 +6174,8 @@
     "sentToWorkflow": "Sent to workflow!",
     "sendError": "Failed to send",
     "dismissError": "Failed to dismiss",
-    "bulkSentToast": "Sent {sent} opportunities to workflow",
+    "bulkSentToast": "Sent {sent, plural, one {# opportunity} other {# opportunities}} to workflow",
+    "bulkSendRedirect": "Nothing was sent: the webhook address redirects. Use the address it redirects to.",
     "bulkSendPartialError": "{failed} failed to send",
     "bulkSendError": "Failed to send opportunities.",
     "bulkDoneToast": "Marked {updated} opportunities as done",
@@ -6882,6 +7003,8 @@
       "show": "Show",
       "hide": "Hide",
       "planPill": "{plan} plan",
+      "planPillEnded": "{plan} plan · ended",
+      "ended": "Your {plan} plan has ended",
       "planLabel": {
         "self_hosted": "Self-Hosted",
         "starter": "Starter",
@@ -6908,7 +7031,8 @@
       "cta": {
         "upgrade_growth": "Upgrade to Growth",
         "upgrade": "Upgrade plan",
-        "contact": "Contact us"
+        "contact": "Contact us",
+        "choose_plan": "Choose a plan"
       },
       "footer": "Click a card to filter the table (Active · Paused · All).",
       "updated": "Counts updated {when}",
@@ -7443,6 +7567,9 @@
     "kpiTopMerchantSub": "Most frequent merchant domain",
     "platformBreakdownTitle": "Card rate by platform",
     "trendTitle": "Your shopping presence — last 30 days",
+    "seriesCardRate": "Card rate",
+    "seriesOwnCards": "Your cards",
+    "seriesAllCards": "All cards",
     "amazonShareDropAlert": "Amazon's share fell from {from}% to {to}% over the last seven days. AI may be leaving Amazon out; your own store link matters more.",
     "filterRegion": "Region",
     "filterPlatform": "Platform",
@@ -7463,7 +7590,7 @@
     "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
     "tabOverview": "Overview",
     "tabMyProducts": "My Products",
-    "connectCatalog": "These are your products as AI shopping cards showed them. Connect your product catalog (Google Merchant Center or a product feed) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
+    "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",
     "colProductTitle": "Product Title",
     "colPlatforms": "Platforms",
@@ -7809,11 +7936,11 @@
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",
-        "content": "Content Editor (briefs, Content Agent)",
+        "content": "Content Editor (briefs, Content Agent, quality checks)",
         "action_center": "Action Center task writing",
-        "quality": "Content Editor quality checks",
         "other": "Other"
       },
+      "none": "No AI usage yet this period.",
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
       "failed": "Couldn't read this period's AI usage. Try again later."
     },
@@ -8142,6 +8269,7 @@
     },
     "merchantCenter": {
       "description": "Your products and the problems Merchant Center reports for them. Google AI Overviews and AI Mode show products from it.",
+      "comingSoon": "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
       "title": "Merchant Center account for {brand}",
       "hint": "Pick the account that sells this brand's products. They're read every day into the brand's product catalog below, with their issues.",
       "noBrand": "Pick a brand to add its Merchant Center account.",
@@ -8191,6 +8319,7 @@
       "connecting": "Connecting…",
       "connectedToast": "Webflow connected",
       "connectedSetupToast": "Webflow connected. Now pick a collection and save.",
+      "connectedPickSiteToast": "Webflow connected. Now pick the site and the collection, and save.",
       "refusedNote": "Webflow refused the saved token. Paste a new one to send pages again.",
       "replaceToken": "Replace token",
       "cancel": "Cancel",
@@ -8201,6 +8330,7 @@
       "siteLabel": "Site",
       "sitePlaceholder": "Pick a site",
       "setupStep": "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.",
+      "setupStepSite": "Last step: pick the site and the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.",
       "collectionLabel": "Collection",
       "collectionPlaceholder": "Pick a collection",
       "loadingCollections": "Reading the site's collections…",
@@ -8230,7 +8360,7 @@
         "forbidden": "Only admins and managers can change the Webflow connection.",
         "not_connected": "Connect Webflow first.",
         "auth_failed": "Webflow refused this token. Check it and try again.",
-        "missing_scopes": "The token needs Sites: Read and CMS: Read and write. Generate one with them.",
+        "missing_scopes": "The token needs CMS: Read and write and Sites: Read-only. Generate a new one with them.",
         "no_access": "The token doesn't reach this site or collection.",
         "no_site": "This token reaches no Webflow site.",
         "not_found": "That site or collection is gone. Pick another.",
@@ -8244,6 +8374,7 @@
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
+    "integrations_comingSoon": "Coming soon",
     "integrations_disconnect": "Disconnect",
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",
