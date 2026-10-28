@@ -268,7 +268,8 @@ export default function ShoppingPage() {
 
   // The Shelf (ECOM-006) and the Products table (ECOM-007) read once per
   // brand and filters, apart from the rest: neither waits for the other, nor
-  // for the older tables. The Products table reads when its tab is open.
+  // for the older tables. The Products table reads when its tab, or
+  // Readiness, is open.
   const readKey = `${activeBrandId}:${JSON.stringify(filters)}`;
   const canRead = !!activeBrandId && hasFullAccess && shoppingMarket.ready;
   // Null while it reads.
@@ -280,7 +281,7 @@ export default function ShoppingPage() {
       'the shelves',
     ) ?? null;
   const productsRead = useKeyedRead(
-    canRead && activeTab === 'products',
+    canRead && (activeTab === 'products' || activeTab === 'readiness'),
     readKey,
     () => getShoppingProducts(activeBrandId!, filters),
     'the products',
@@ -604,6 +605,11 @@ export default function ShoppingPage() {
                       ? { from: amazonShareDropAlert.fromShare, to: amazonShareDropAlert.toShare }
                       : null,
                   })}
+                  loading={!sources.loaded || productsLoading}
+                  unread={[
+                    ...(sources.loaded && sources.catalog === null ? (['sources'] as const) : []),
+                    ...(catalogTable === 'failed' ? (['products'] as const) : []),
+                  ]}
                   onProducts={() => changeTab('products')}
                 >
                   {showOpenAiIndex && (

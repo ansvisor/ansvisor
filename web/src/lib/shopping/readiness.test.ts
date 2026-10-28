@@ -126,6 +126,21 @@ describe('readinessChecklist', () => {
       ['merchantCenter', 'fail', 'settings'],
     ]);
   });
+
+  it("doesn't fail Merchant Center on catalog sources that couldn't be read", () => {
+    const { items } = readinessChecklist({
+      market: 'europe',
+      catalog: null,
+      products: null,
+      openAi: null,
+      cheaperResellers: null,
+      amazonDrop: null,
+    });
+    expect(items.map((item) => [item.key, item.state, item.action])).toEqual([
+      ['catalog', 'unknown', 'settings'],
+      ['merchantCenter', 'unknown', undefined],
+    ]);
+  });
 });
 
 describe('channelState', () => {

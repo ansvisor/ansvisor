@@ -7533,6 +7533,10 @@
       },
       "view": "View products",
       "connect": "Connect",
+      "unread": {
+        "sources": "Couldn't read your catalog sources right now, so the score waits until they can be. Try again in a moment.",
+        "products": "Couldn't read your catalog's products right now, so their checks and the score wait until they can be. Try again in a moment."
+      },
       "checks": {
         "catalog": {
           "title": "Catalog connected",
@@ -7544,7 +7548,8 @@
           "title": "Google Merchant Center feed connected",
           "pass": "Feeds Google AI Overviews and AI Mode shopping results.",
           "warn": "Connect it to feed Google AI Overviews and AI Mode shopping results.",
-          "fail": "In Europe it decides ChatGPT too: connect it."
+          "fail": "In Europe it decides ChatGPT too: connect it.",
+          "unknown": "Couldn't read your catalog sources right now."
         },
         "openAiIndex": {
           "title": "Catalog in OpenAI's product index",

@@ -85,4 +85,40 @@ describe('ReadinessTab', () => {
     act(() => (container.querySelector('button') as HTMLButtonElement).click());
     expect(onProducts).toHaveBeenCalled();
   });
+
+  function renderTab(props: { loading?: boolean; unread?: ('sources' | 'products')[] }) {
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <ReadinessTab
+            market="us"
+            tracked={[]}
+            ownSlots={new Map()}
+            score={80}
+            items={[{ key: 'catalog', state: 'pass', values: { count: 320 } }]}
+            onProducts={vi.fn()}
+            {...props}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    return container.textContent ?? '';
+  }
+
+  it('waits for the sources and products it reads, without a score or checks', () => {
+    const text = renderTab({ loading: true });
+    expect(text).not.toContain('80 / 100');
+    expect(text).not.toContain('Catalog connected');
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  });
+
+  it("says what couldn't be read, and shows no score without it", () => {
+    const text = renderTab({ unread: ['products'] });
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "Couldn't read your catalog's products right now, so their checks and the score wait until they can be. Try again in a moment.",
+    );
+    expect(text).not.toContain('80 / 100');
+    expect(text).toContain('Catalog connected');
+    expect(renderTab({})).toContain('AI shopping readiness80 / 100');
+  });
 });
