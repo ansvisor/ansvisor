@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
+import { assertWritable } from '@/lib/subscription-guard';
 import {
   WORK_AREA_IDS,
   canManageMenus,
@@ -152,6 +153,7 @@ export async function getMenuAccessSettings(): Promise<MenuAccessSettings> {
 
 /** The sections a role doesn't see. */
 export async function setRoleMenu(role: MenuRole, hidden: string[]) {
+  await assertWritable();
   const profile = await requireMenuManager();
   if (!MENU_ROLES.includes(role)) throw new Error('Nobody sets the admins’ menu');
   const parsed = sections.parse(hidden);
@@ -174,6 +176,7 @@ export async function setRoleMenu(role: MenuRole, hidden: string[]) {
  * hides them, and hidden although it shows them. Empty both = the role's menu.
  */
 export async function setMemberMenu(memberId: string, menu: { shown: string[]; hidden: string[] }) {
+  await assertWritable();
   const profile = await requireMenuManager();
   const id = userId.parse(memberId);
   const shown = cleanMenuSections(sections.parse(menu.shown));
@@ -201,6 +204,7 @@ export async function setMemberMenu(memberId: string, menu: { shown: string[]; h
 
 /** Lets a manager change menus, or takes it back. Admins only. */
 export async function setMenuManager(memberId: string, allowed: boolean) {
+  await assertWritable();
   const profile = await currentProfile();
   if (profile.role !== 'admin') throw new Error('Only admins can choose who changes menus');
   const id = userId.parse(memberId);
