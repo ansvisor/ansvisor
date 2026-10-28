@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **50 tools**. Descriptions below match
+The MCP server exposes **53 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -334,7 +334,12 @@ Drafts are read and written as a person would in the editor. Ansvisor never publ
 | `list_signals` | Detected changes (visibility, citations, traffic), each with `where` (prompt, topic, platforms, locations, domain, competitor), `change` (labelled figures with unit and period), `evidence` (detection dates, app links) and `used_by_actions`. | |
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
+| `list_task_reviews` | Tasks waiting for review, as the **Needs review** tab shows them: tasks an AI writer gave without the exact page, the change, Done when or how it is checked, each with `missing` (the fields to fill). Admins and managers only. | |
+| `approve_task_review` | Approve one onto its action's task list, as the tab's **Approve** does: the fields given (`url`, `change`, `done_when`, `check`, and optionally `title`, `where`, `why`, `how`) replace what was written, and all four must be filled. Admins and managers only. | **yes** |
+| `dismiss_task_review` | Dismiss one, as the tab's **Dismiss** does: it never reaches its action. Admins and managers only. | **yes** |
 | `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
+
+The review queue is also available over REST: `GET /api/mcp/task-reviews?brand_id=<brand_id>`, and `POST /api/mcp/task-reviews/<id>/approve` (the fields as JSON) or `/dismiss`.
 
 #### Export an action
 

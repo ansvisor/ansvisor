@@ -4899,7 +4899,12 @@ export type Database = {
       }
       apply_prompt_locations: { Args: { p_updates: Json }; Returns: number }
       approve_action_task_review: {
-        Args: { p_details: Json; p_review_id: string; p_title: string }
+        Args: {
+          p_details: Json
+          p_review_id: string
+          p_title: string
+          p_user_id?: string
+        }
         Returns: string
       }
       brand_ai_conversions: {

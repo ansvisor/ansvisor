@@ -76,6 +76,12 @@ import {
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
+import {
+  approveTaskReviewFor,
+  dismissTaskReviewFor,
+  listTaskReviewsFor,
+  taskReviewEditShape,
+} from './task-reviews';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -1762,6 +1768,84 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         };
       }
       return result ? json(result) : notFound('Draft');
+    },
+  );
+
+  // ─── Tasks waiting for review (AC-010, B4): the Needs review tab ───
+
+  /** A review tool's refusal, as text the assistant can act on. */
+  const refused = (message: string) => ({
+    content: [{ type: 'text' as const, text: message }],
+    isError: true,
+  });
+
+  server.registerTool(
+    'list_task_reviews',
+    {
+      title: 'Tasks waiting for review',
+      description:
+        "List the brand's tasks waiting for review, as the Action Center's Needs review tab shows them, oldest first: tasks an AI writer gave without the exact page (url), the change (change.after), Done when (done_when) or how it is checked (check: auto, rerun or manual). Each has its action (action_id, action_no), its title, `missing` (the fields to fill), `details` as written (get_action's task shape) and who wrote it (`source`). They aren't tasks yet: approve_task_review puts one on its action's list, dismiss_task_review drops it. Only for an admin or a manager of the brand's organization.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Row cap (default 50, max 200).'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const reviews = await listTaskReviewsFor(auth, { brandId: args.brand_id, limit: args.limit });
+      if (reviews === null) return notFound('Brand');
+      return 'error' in reviews ? refused(reviews.message) : json(reviews);
+    },
+  );
+
+  server.registerTool(
+    'approve_task_review',
+    {
+      title: 'Approve a task waiting for review',
+      description:
+        "Approve a task waiting for review onto its action's task list, as the Needs review tab's Approve does: the fields given here replace what was written, the rest stays, and it needs all four — url (the exact page), change.after (the change to make), done_when and check — filled once merged. Title optional (the written one stays). The task goes after the action's last task, as the key's user's (the trail says they added it). Refused on an action that is closed or deleted. Only for an admin or a manager of the brand's organization. It is a write — only on the user's explicit decision for this review, never as part of exploring.",
+      inputSchema: {
+        review_id: relaxedUuid.describe('Task review UUID, from list_task_reviews.'),
+        ...taskReviewEditShape,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ review_id, ...edit }) => {
+      const result = await approveTaskReviewFor(auth, review_id, edit);
+      return 'error' in result ? refused(result.message) : json(result);
+    },
+  );
+
+  server.registerTool(
+    'dismiss_task_review',
+    {
+      title: 'Dismiss a task waiting for review',
+      description:
+        "Dismiss a task waiting for review, as the Needs review tab's Dismiss does: it never reaches its action, and can't be brought back. Only for an admin or a manager of the brand's organization. It is a write — only on the user's explicit decision for this review.",
+      inputSchema: {
+        review_id: relaxedUuid.describe('Task review UUID, from list_task_reviews.'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args) => {
+      const result = await dismissTaskReviewFor(auth, args.review_id);
+      return 'error' in result ? refused(result.message) : json(result);
     },
   );
 

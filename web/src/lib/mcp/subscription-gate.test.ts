@@ -78,14 +78,16 @@ describe('the MCP tools on a read-only workspace', () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const names = tools.map((tool) => tool.name);
-    expect(names.filter(isReadTool)).toHaveLength(36);
+    expect(names.filter(isReadTool)).toHaveLength(37);
     expect(names.filter((name) => !isReadTool(name)).sort()).toEqual([
       'accept_prompt_suggestion',
       'accept_topic_suggestion',
       'add_content_source',
+      'approve_task_review',
       'create_content_draft',
       'create_improve_action',
       'dismiss_prompt_suggestion',
+      'dismiss_task_review',
       'dismiss_topic_suggestion',
       'generate_content_brief',
       'override_mention_sentiment',
@@ -111,7 +113,7 @@ describe('the MCP tools on a read-only workspace', () => {
       }
     )._registeredTools;
     const gated = Object.keys(registered).filter((name) => !isReadTool(name));
-    expect(gated).toHaveLength(14);
+    expect(gated).toHaveLength(16);
     for (const name of gated) {
       const result = (await registered[name].handler({}, {})) as {
         isError?: boolean;
