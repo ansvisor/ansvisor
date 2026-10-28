@@ -66,6 +66,16 @@ vi.mock('@/lib/webflow-client', () => ({
   readWebflow: async () => ({ ok: true, configured: false, connection: null }),
 }));
 vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
+// The workspace's plan: active unless a test says it's read-only.
+const gate = vi.hoisted(() => ({ isLocked: false }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade: vi.fn(),
+    guard: (fn: () => unknown) => fn,
+  }),
+  useUpgradeDialog: () => null,
+}));
 
 /** jsdom's Blob has no text(): read it as a browser's FileReader would. */
 const readText = (blob: Blob) =>
@@ -135,6 +145,7 @@ const tab = (name: string) =>
 
 beforeEach(() => {
   brandState.activeBrandId = 'brand-1';
+  gate.isLocked = false;
   window.history.replaceState(null, '', '/dashboard/content/library');
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -552,6 +563,30 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(getContentDrafts).toHaveBeenCalledTimes(2);
     // Once a brand per visit, however often the list is read.
     expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('doesn’t ask Webflow by itself while the workspace is read-only', async () => {
+    gate.isLocked = true;
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'webflow',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    // What is stored is listed; nothing is asked of the API.
+    expect(container.textContent).toContain('Pipeline forecasting');
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
   });
 
   it('doesn’t ask Webflow for a brand with no page there', async () => {

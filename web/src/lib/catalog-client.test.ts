@@ -54,6 +54,9 @@ describe('syncCatalogSource', () => {
     expect(await syncCatalogSource('s1')).toEqual({ ok: false, code: 'workspace' });
     answer(429, { message: 'Too many requests' });
     expect(await syncCatalogSource('s1')).toEqual({ ok: false, code: 'busy' });
+    // A read-only workspace (plan not active): the upgrade dialog's.
+    answer(402, { error: 'plan_limit', code: 'subscription_inactive' });
+    expect(await syncCatalogSource('s1')).toEqual({ ok: false, code: 'subscription' });
     answer(500, { code: 'failed' });
     expect(await syncCatalogSource('s1')).toEqual({ ok: false, code: 'failed' });
   });
@@ -132,6 +135,12 @@ describe('stores (00282)', () => {
     });
     answer(429, { message: 'Too many requests' });
     expect(await updateStoreSignIn('st1', {})).toEqual({ ok: false, code: 'busy', message: null });
+    answer(402, { error: 'plan_limit', code: 'subscription_inactive' });
+    expect(await updateStoreSignIn('st1', {})).toEqual({
+      ok: false,
+      code: 'subscription',
+      message: null,
+    });
   });
 });
 
@@ -222,7 +231,8 @@ describe('sign-in platforms (#1270)', () => {
 });
 
 describe('StoreError', () => {
-  // Every code, so a new one fails the typecheck here until it has its words.
+  // Every code, so a new one fails the typecheck here until it has its words;
+  // but 'subscription', which opens the upgrade dialog instead of saying one.
   const CODES = {
     connect_failed: true,
     not_connected: true,
@@ -239,7 +249,7 @@ describe('StoreError', () => {
     workspace: true,
     busy: true,
     failed: true,
-  } satisfies Record<StoreError, true>;
+  } satisfies Record<Exclude<StoreError, 'subscription'>, true>;
 
   it('has words for every reason a store call fails', () => {
     for (const code of Object.keys(CODES)) {

@@ -27,9 +27,11 @@ import {
   FIRST_MONTH_CODE,
   annualSaving,
   periodPrice,
+  subscriptionEnded,
   type BillingInterval,
 } from '@/lib/billing/plan-purchase';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
@@ -46,26 +48,36 @@ interface SubscriptionData {
 interface PlanSwitcherProps {
   subscription: SubscriptionData;
   onUpdate: (data: SubscriptionData) => void;
+  /** The organization a new subscription is for, once the old one has ended. */
+  organizationId?: string | null;
 }
 
-export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
+export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: PlanSwitcherProps) {
   const t = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
   // Buying or changing the plan charges the organization's card: admins only,
   // as the subscription route checks.
   const { canAdmin } = useUserRole();
+  // A change can unlock a read-only workspace: the layout reads the plan again.
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   // The plan a card's button asked for: bought now during a trial, or changed to.
   const [pending, setPending] = useState<{ planId: PlanId; buy: boolean } | null>(null);
   const [promoCode, setPromoCode] = useState(FIRST_MONTH_CODE);
+  // The plan whose Checkout is opening, once the subscription has ended.
+  const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
 
   const currentPlanId = subscription.planId as PlanId;
   const currentInterval: BillingInterval = subscription.interval === 'year' ? 'year' : 'month';
   const [period, setPeriod] = useState<BillingInterval>(currentInterval);
   // A trial is bought outright: any plan, either period, paid today.
   const trialing = subscription.status === 'trialing';
+  // A canceled or never-started plan: no subscription to change, so a card
+  // starts a new one through Stripe Checkout (the workspace is read-only
+  // until then).
+  const ended = subscriptionEnded(subscription.status);
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
 
   async function handleConfirm() {
@@ -98,6 +110,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
       }
       const data = await res.json();
       onUpdate(data);
+      router.refresh();
       toast.success(
         pending.buy ? t('planBought', { plan: PLANS[pending.planId].name }) : t('planChanged'),
       );
@@ -106,6 +119,25 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
       toast.error(err instanceof Error ? err.message : 'Failed to change plan');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCheckout(planId: PlanId) {
+    if (!organizationId) return;
+    setCheckoutPlan(planId);
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId, organizationId, interval: period, returnTo: 'billing' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || t('checkoutFailed'));
+      window.location.href = data.url;
+      // No loading reset — we're navigating away to Stripe.
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('checkoutFailed'));
+      setCheckoutPlan(null);
     }
   }
 
@@ -149,6 +181,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
         status: data.status,
         currentPeriodEnd: data.currentPeriodEnd,
       });
+      router.refresh();
       toast.success(t('subscriptionReactivated'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reactivate');
@@ -231,6 +264,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
   return (
     <div className="space-y-4">
       {!canAdmin && <p className="text-sm text-muted-foreground">{t('planAdminOnly')}</p>}
+      {ended && canAdmin && <p className="text-sm text-muted-foreground">{t('planEnded')}</p>}
       {/* Billing period: a year up front saves 20% */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
@@ -271,20 +305,24 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {SUBSCRIBABLE_PLANS.map((planId) => {
           const plan = PLANS[planId];
-          const isCurrent = planId === currentPlanId;
+          // An ended plan is no one's current plan any more.
+          const isCurrent = !ended && planId === currentPlanId;
           const upgrade = isUpgrade(planId);
           const price = periodPrice(planId, period);
           const fullYear = plan.pricing ? plan.pricing.monthly * 12 : null;
           const planSaving = annualSaving(planId);
-          // What its button does: buy it now during a trial; otherwise switch
-          // the period of the current plan, or change to this one.
-          const action = trialing
-            ? 'buy'
-            : isCurrent
-              ? period === currentInterval
-                ? null
-                : 'period'
-              : 'change';
+          // What its button does: start a new subscription once the old one
+          // has ended; buy it now during a trial; otherwise switch the period
+          // of the current plan, or change to this one.
+          const action = ended
+            ? 'subscribe'
+            : trialing
+              ? 'buy'
+              : isCurrent
+                ? period === currentInterval
+                  ? null
+                  : 'period'
+                : 'change';
 
           return (
             <Card key={planId} className={isCurrent ? 'border-primary' : undefined}>
@@ -350,21 +388,41 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
                   <Button
                     className="w-full"
                     variant={
-                      action === 'buy'
-                        ? isCurrent
+                      action === 'subscribe'
+                        ? plan.highlighted
                           ? 'default'
                           : 'outline'
-                        : upgrade
-                          ? 'default'
-                          : 'outline'
+                        : action === 'buy'
+                          ? isCurrent
+                            ? 'default'
+                            : 'outline'
+                          : upgrade
+                            ? 'default'
+                            : 'outline'
                     }
-                    disabled={price == null}
+                    disabled={
+                      price == null ||
+                      (action === 'subscribe' && (!organizationId || checkoutPlan != null))
+                    }
                     onClick={() => {
+                      if (action === 'subscribe') {
+                        void handleCheckout(planId);
+                        return;
+                      }
                       setPromoCode(FIRST_MONTH_CODE);
                       setPending({ planId, buy: action === 'buy' });
                     }}
                   >
-                    {action === 'buy' ? (
+                    {action === 'subscribe' ? (
+                      checkoutPlan === planId ? (
+                        t('processing')
+                      ) : (
+                        <>
+                          <ShoppingCart className="mr-1 h-4 w-4" />
+                          {t('choosePlanFor', { plan: plan.name })}
+                        </>
+                      )
+                    ) : action === 'buy' ? (
                       <>
                         <ShoppingCart className="mr-1 h-4 w-4" />
                         {t('buyPlanNow', { plan: plan.name })}
@@ -523,8 +581,9 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
         </ul>
       </div>
 
-      {/* Cancel / Reactivate + Stripe billing portal */}
-      {subscription.cancelAtPeriodEnd && (
+      {/* Cancel / Reactivate + Stripe billing portal. An ended plan has
+          neither: a card above starts a new one. */}
+      {subscription.cancelAtPeriodEnd && !ended && (
         <div className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 p-4">
           <div>
             <p className="text-sm font-medium">
@@ -548,7 +607,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
       )}
       <div className="flex items-center justify-between gap-4">
         {/* Cancelling is the admins', as changing the plan is. */}
-        {subscription.cancelAtPeriodEnd || !canAdmin ? (
+        {subscription.cancelAtPeriodEnd || !canAdmin || ended ? (
           <span />
         ) : (
           <Button

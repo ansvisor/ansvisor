@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { PlanProvider } from '@/components/providers/plan-provider';
+import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -3429,6 +3431,46 @@ describe('the side panel', () => {
     afterEach(() => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
       vi.useRealTimers();
+    });
+
+    it('asks the API nothing by itself while the workspace is read-only (plan not active)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            bodyHtml:
+              readable.bodyHtml + '<p>See <a href="https://example.com/guide">the guide</a>.</p>',
+          }),
+        );
+        await act(async () => {
+          root.render(
+            <NextIntlClientProvider locale="en" messages={messages}>
+              <PlanProvider
+                planId="starter"
+                subscriptionActive={false}
+                subscriptionStatus="canceled"
+              >
+                <RoleProvider role="admin">
+                  <UpgradeDialogProvider>
+                    <ContentEditorPage />
+                  </UpgradeDialogProvider>
+                </RoleProvider>
+              </PlanProvider>
+            </NextIntlClientProvider>,
+          );
+        });
+        await act(async () => {});
+        await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS + 3_000)));
+        // The page opens with what is stored; no link, claim or proof read is asked for.
+        expect(container.querySelector('.ProseMirror')).not.toBeNull();
+        expect(readDraftPage).not.toHaveBeenCalled();
+        expect(checkDraftClaims).not.toHaveBeenCalled();
+        expect(checkDraftLinks).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
 
     it('weighs the checks by the page type in phase 3, and follows a type changed from Quality (CE-052)', async () => {

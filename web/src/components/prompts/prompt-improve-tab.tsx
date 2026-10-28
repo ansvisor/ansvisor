@@ -37,6 +37,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { PLANS, hasFeature, type PlanId } from '@/config/plans';
 import {
@@ -102,6 +103,9 @@ export function useImprove({
   planId: PlanId | null;
 }): ImproveController {
   const locked = planId !== null && !hasFeature(PLANS[planId], 'prompt_improve');
+  // A read-only workspace (plan not active): the set isn't read (the API
+  // refuses it), the tab opens empty, and Generate opens the upgrade dialog.
+  const { isLocked: readOnly, openUpgrade } = useUpgradeGate();
   const key = promptId ? `${promptId}|${JSON.stringify(range)}` : '';
   const [state, setState] = useState<{
     key: string;
@@ -171,22 +175,26 @@ export function useImprove({
   }, [promptId, range, apply]);
 
   useEffect(() => {
-    if (!promptId || locked) return;
+    if (!promptId || locked || readOnly) return;
     reload();
     // `key` covers the prompt and the range.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, locked]);
+  }, [key, locked, readOnly]);
 
   const generate = useCallback(() => {
     if (!promptId) return;
+    if (readOnly) {
+      openUpgrade();
+      return;
+    }
     const forKey = keyRef.current;
     setState((s) => ({ ...s, key: forKey, status: 'generating', error: null }));
     generateImproveSuggestions(promptId, range).then((r) => apply(forKey, 'generate', r));
-  }, [promptId, range, apply]);
+  }, [promptId, range, apply, readOnly, openUpgrade]);
 
   const current = state.key === key ? state : null;
-  const status: Status = locked ? 'locked' : (current?.status ?? 'idle');
-  const set = current?.set ?? null;
+  const status: Status = locked ? 'locked' : readOnly ? 'ready' : (current?.status ?? 'idle');
+  const set = readOnly ? null : (current?.set ?? null);
 
   const send = useCallback(() => {
     if (!promptId || !state.set || sending) return;

@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   WEBFLOW_PARTS,
   WEBFLOW_PART_TYPES,
@@ -75,6 +76,8 @@ export function WebflowCard() {
   const t = useTranslations('settings.webflow');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
+  // A read-only workspace's refusal opens the upgrade dialog, not a toast.
+  const { openUpgrade } = useUpgradeGate();
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
 
   // The connection as read for a brand: another brand's never shows.
@@ -125,7 +128,8 @@ export function WebflowCard() {
     const result = await disconnectWebflow(activeBrandId);
     setDisconnecting(false);
     if (!result.ok) {
-      toast.error(t(`errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else toast.error(t(`errors.${result.code}`));
       return;
     }
     setConnection(null);
@@ -283,6 +287,7 @@ function TokenForm({
   onCancel?: () => void;
 }) {
   const t = useTranslations('settings.webflow');
+  const { openUpgrade } = useUpgradeGate();
   const [token, setToken] = useState('');
   const [connecting, setConnecting] = useState(false);
 
@@ -291,7 +296,9 @@ function TokenForm({
     const result = await connectWebflow(brandId, token.trim());
     setConnecting(false);
     if (!result.ok) {
-      toast.error(t(result.code === 'invalid' ? 'errors.invalidToken' : `errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else
+        toast.error(t(result.code === 'invalid' ? 'errors.invalidToken' : `errors.${result.code}`));
       return;
     }
     setToken('');
@@ -379,6 +386,7 @@ function WebflowMapping({
   onStale: () => void;
 }) {
   const t = useTranslations('settings.webflow');
+  const { openUpgrade } = useUpgradeGate();
   // The saved settings, for the fields read: a save doesn't read them again.
   const saved = useRef(connection);
   useEffect(() => {
@@ -390,6 +398,10 @@ function WebflowMapping({
   }, [onStale]);
   /** Says what went wrong, and reads the connection again when it changed. */
   const report = (code: WebflowError) => {
+    if (code === 'subscription') {
+      openUpgrade();
+      return;
+    }
     toast.error(t(`errors.${code}`));
     if (STALE.includes(code)) stale.current();
   };

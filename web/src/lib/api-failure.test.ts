@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { apiFailure } from './api-failure';
+import { apiFailure, isSubscriptionInactive } from './api-failure';
 
 describe('apiFailure', () => {
   it('reads a bad or expired session from 401 only', () => {
@@ -13,6 +13,17 @@ describe('apiFailure', () => {
     expect(apiFailure(429, { error: 'quota_exhausted' })).toBe('limit');
     expect(apiFailure(403, { error: 'plan_limit' })).toBe('plan');
     expect(apiFailure(402, { error: 'no_subscription' })).toBe('plan');
+  });
+
+  it("tells a workspace whose plan isn't active from a plan without the feature", () => {
+    // The server's 402 for any change while the workspace is read-only.
+    expect(apiFailure(402, { error: 'plan_limit', code: 'subscription_inactive' })).toBe(
+      'subscription',
+    );
+    // Any other 402 is still the plan.
+    expect(apiFailure(402, { error: 'plan_limit' })).toBe('plan');
+    // A session that expired is still a session first.
+    expect(apiFailure(401, { code: 'subscription_inactive' })).toBe('session');
   });
 
   it('reads a rate limit as busy, never as an allowance to upgrade', () => {
@@ -44,5 +55,22 @@ describe('apiFailure', () => {
     expect(apiFailure(404, { error: 'Opportunity not found' })).toBe('not_found');
     expect(apiFailure(500, {})).toBe('failed');
     expect(apiFailure(502)).toBe('failed');
+  });
+});
+
+describe('isSubscriptionInactive', () => {
+  const body = { error: 'plan_limit', code: 'subscription_inactive', message: 'Read-only' };
+
+  it('reads the code from a body, or from the text an error carries', () => {
+    expect(isSubscriptionInactive(body)).toBe(true);
+    // The AI SDK's chat transport: new Error(await response.text()).
+    expect(isSubscriptionInactive(new Error(JSON.stringify(body)).message)).toBe(true);
+  });
+
+  it('is false for anything else', () => {
+    expect(isSubscriptionInactive({ error: 'plan_limit' })).toBe(false);
+    expect(isSubscriptionInactive('Failed to fetch the chat response.')).toBe(false);
+    expect(isSubscriptionInactive(null)).toBe(false);
+    expect(isSubscriptionInactive(undefined)).toBe(false);
   });
 });

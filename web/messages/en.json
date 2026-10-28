@@ -4,13 +4,15 @@
     "workspace": "This brand isn't in your workspace. Switch to one of your brands.",
     "not_found": "This no longer exists. Reload the page and start again.",
     "plan": "Your plan doesn't include this. Upgrade to use it.",
+    "subscription": "Your workspace's plan isn't active, so changes are paused. Choose a plan to use Ansvisor again.",
     "limit": "You've used this month's allowance. Upgrade, or wait until it resets.",
     "busy": "Too many requests. Wait a minute and try again.",
     "failed": "Something went wrong. Try again.",
     "signIn": "Sign in",
     "yourBrands": "Your brands",
     "reload": "Reload",
-    "upgrade": "Upgrade"
+    "upgrade": "Upgrade",
+    "choosePlan": "Choose a plan"
   },
   "aiUsage": {
     "meter": {
@@ -52,6 +54,33 @@
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
     }
+  },
+  "readOnly": {
+    "banner": {
+      "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
+      "payment_failed": "Your last payment didn't go through, so your workspace is read-only. You can look around; adding, running and AI need the payment method updated.",
+      "seePlans": "See plans"
+    },
+    "dialog": {
+      "title": {
+        "ended": "Choose a plan to keep going",
+        "payment_failed": "Update your payment method to keep going"
+      },
+      "body": {
+        "ended": "Your workspace has no active plan, so it's read-only. Everything you set up is still here: pick a plan to track, write and run your agents again.",
+        "payment_failed": "Your last payment didn't go through, so your workspace is read-only. Everything you set up is still here: update the payment method to track, write and run your agents again."
+      },
+      "notNow": "Not now"
+    },
+    "ask": {
+      "ended": "Ask your workspace admin to choose a plan.",
+      "endedNamed": "Ask {name}, your workspace admin, to choose a plan.",
+      "payment_failed": "Ask your workspace admin to update the payment method.",
+      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method."
+    },
+    "choosePlan": "Choose a plan",
+    "updatePayment": "Update payment method",
+    "portalFailed": "Couldn't open the billing page. Try again."
   },
   "common": {
     "loading": "Loading...",
@@ -8226,6 +8255,10 @@
     "regularPrice": "Regular price",
     "firstMonthOffer": "50% off your first month with code {code}",
     "buyPlanNow": "Buy {plan} now",
+    "choosePlanTitle": "Choose a plan",
+    "choosePlanFor": "Choose {plan}",
+    "planEnded": "Your plan isn't active. Choose one to start it again; you'll pay on Stripe's secure checkout.",
+    "checkoutFailed": "Couldn't open the checkout. Try again.",
     "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
     "seeAllPlanFeatures": "See everything each plan includes",
     "switchToAnnual": "Switch to annual billing",

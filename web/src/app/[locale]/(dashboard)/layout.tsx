@@ -15,7 +15,8 @@ import { getBrands } from '@/lib/actions/brand';
 import { menuOfProfile, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, type PlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
-import { SubscriptionExpiredNotice } from '@/components/billing/subscription-expired-notice';
+import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -42,10 +43,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const role = (profile.role ?? 'analyst') as TeamRole;
 
-  const [{ data: org }, brands, roleHidden] = await Promise.all([
+  const [{ data: org, error: orgError }, brands, roleHidden] = await Promise.all([
     supabase
       .from('organizations')
-      .select('plan, subscription_status, plan_overrides')
+      .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
       .eq('id', profile.organization_id)
       .single(),
     getBrands(profile.organization_id),
@@ -54,23 +55,30 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
   const menu = menuOfProfile({ ...profile, role }, roleHidden);
 
-  // Cloud mode: gate access when the subscription isn't active/trialing.
-  // Admins (incl. the owner) are routed to the renew/payment flow; everyone
-  // else is blocked with a contact-your-owner notice — so an invited member
-  // can neither reach the payment screen nor walk back into onboarding to
-  // re-create the brand / competitors.
-  if (isCloud()) {
+  // Cloud mode: when the subscription isn't active/trialing, the dashboard is
+  // read-only — every page opens (Billing included, to choose a plan), and an
+  // action opens the upgrade dialog instead of running. Only an admin of a
+  // new account that never had a subscription goes back to onboarding's plan
+  // step, where its trial starts. An org row that couldn't be read decides
+  // nothing: no redirect and no lock (the API still refuses a lapsed plan's
+  // changes with 402).
+  const subscriptionStatus = (org?.subscription_status as string | null) ?? null;
+  let subscriptionActive = true;
+  let adminName: string | null = null;
+  if (isCloud() && !orgError) {
     const access = await evaluateSubscriptionAccess(
       supabase,
       profile.organization_id,
       role,
-      (org?.subscription_status as string | null) ?? null,
+      subscriptionStatus,
+      Boolean(org?.stripe_subscription_id),
     );
-    if (access.state === 'needs_payment') {
+    if (access.state === 'choose_plan') {
       redirect('/dashboard/onboarding');
     }
-    if (access.state === 'blocked') {
-      return <SubscriptionExpiredNotice ownerName={access.ownerName} />;
+    if (access.state === 'read_only') {
+      subscriptionActive = false;
+      adminName = access.adminName;
     }
   }
 
@@ -100,31 +108,39 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <AuthProvider user={user} />
       <BrandLoader brands={brands} />
       <GettingStartedPageOpened />
-      <PlanProvider planId={planId} allowedModelIds={allowedModelIds}>
+      <PlanProvider
+        planId={planId}
+        allowedModelIds={allowedModelIds}
+        subscriptionActive={subscriptionActive}
+        subscriptionStatus={subscriptionStatus}
+      >
         <RoleProvider role={role}>
-          <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
-            <AiUsageProvider>
-              <div className="flex h-screen overflow-hidden">
-                {/* Desktop sidebar */}
-                <div className="relative hidden md:flex md:flex-shrink-0">
-                  <SidebarErrorBoundary>
-                    <Sidebar />
-                  </SidebarErrorBoundary>
-                </div>
-
-                {/* Main area */}
-                <div className="flex flex-1 flex-col overflow-hidden">
-                  <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                    <MobileNav />
+          <UpgradeDialogProvider adminName={adminName}>
+            <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
+              <AiUsageProvider>
+                <div className="flex h-screen overflow-hidden">
+                  {/* Desktop sidebar */}
+                  <div className="relative hidden md:flex md:flex-shrink-0">
+                    <SidebarErrorBoundary>
+                      <Sidebar />
+                    </SidebarErrorBoundary>
                   </div>
-                  <main className="flex-1 overflow-y-auto bg-background p-6">
-                    <BrandGuard>{children}</BrandGuard>
-                  </main>
-                  <TrackingJobHandoff />
+
+                  {/* Main area */}
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                      <MobileNav />
+                    </div>
+                    <ReadOnlyBanner />
+                    <main className="flex-1 overflow-y-auto bg-background p-6">
+                      <BrandGuard>{children}</BrandGuard>
+                    </main>
+                    <TrackingJobHandoff />
+                  </div>
                 </div>
-              </div>
-            </AiUsageProvider>
-          </MenuAccessProvider>
+              </AiUsageProvider>
+            </MenuAccessProvider>
+          </UpgradeDialogProvider>
         </RoleProvider>
       </PlanProvider>
     </>

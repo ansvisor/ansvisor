@@ -74,3 +74,20 @@ export function planChange(
   }
   return { kind: 'change', planId, interval };
 }
+
+/**
+ * Stripe statuses with a subscription still there to change or fix: billing
+ * on it, a payment being retried (`past_due`, `unpaid`; the card is updated
+ * in Stripe's billing page), or a trial paused for a card.
+ */
+const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
+
+/**
+ * Whether the organization has no subscription left to change — a canceled
+ * plan, an expired first payment, or none ever — so choosing a plan starts a
+ * new one through Checkout instead of changing the old one, which Stripe
+ * refuses once it has ended.
+ */
+export function subscriptionEnded(status: string | null | undefined): boolean {
+  return !status || !LIVE_STATUSES.has(status);
+}

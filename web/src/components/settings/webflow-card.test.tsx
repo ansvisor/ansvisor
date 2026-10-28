@@ -24,6 +24,11 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// The read-only workspace's upgrade dialog.
+const openUpgrade = vi.hoisted(() => vi.fn());
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({ isLocked: false, openUpgrade, guard: (fn: () => unknown) => fn }),
+}));
 
 const { WebflowCard } = await import('./webflow-card');
 
@@ -419,6 +424,24 @@ describe('WebflowCard', () => {
     expect(client.disconnectWebflow).toHaveBeenCalledWith('b1');
     expect(toast.success).toHaveBeenCalledWith('Webflow disconnected');
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
+  });
+
+  it('opens the upgrade dialog, not an error, for a read-only workspace', async () => {
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.disconnectWebflow.mockResolvedValue({ ok: false, code: 'subscription' });
+    openUpgrade.mockClear();
+    await render();
+    await act(async () => {
+      button('Disconnect')!.click();
+    });
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await act(async () => {
+      confirm[confirm.length - 1].click();
+    });
+    expect(openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('gives another collection its own suggested map, not the saved one', async () => {

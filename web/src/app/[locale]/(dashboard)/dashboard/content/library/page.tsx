@@ -27,6 +27,7 @@ import { NewContentDialog } from '@/components/content/new-content-dialog';
 import { PublishDialog } from '@/components/content/publish-dialog';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useRouter } from '@/i18n/navigation';
 import {
   archiveContentDraft,
@@ -106,6 +107,9 @@ export default function ContentLibraryPage() {
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): the reads the Library asks for
+  // by itself are left out, and it lists what is stored.
+  const { isLocked } = useUpgradeGate();
   // The draft whose Delete waits for a confirmation.
   const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
   const [deletePending, setDeletePending] = useState(false);
@@ -210,14 +214,14 @@ export default function ContentLibraryPage() {
   );
   const webflowRead = useRef(new Set<string>());
   useEffect(() => {
-    if (!inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
+    if (isLocked || !inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
     webflowRead.current.add(activeBrandId);
     // Not cancelled with the effect: a filter or search changing meanwhile
     // still reads the list again, the brand's pages marked.
     void refreshWebflowPublished(activeBrandId).then((published) => {
       if (published.length) setAttempt((n) => n + 1);
     });
-  }, [inWebflow, activeBrandId]);
+  }, [isLocked, inWebflow, activeBrandId]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
