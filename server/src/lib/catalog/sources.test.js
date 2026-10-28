@@ -585,6 +585,49 @@ describe("the plan's product cap (ECOM-019)", () => {
     expect(kept().last_counts).toMatchObject({ overLimit: 1, limit: 2 });
   });
 
+  it("caps a Google Merchant Center account's products too, read with the workspace sign-in", async () => {
+    process.env.IS_CLOUD = 'true';
+    vi.stubEnv('COMPOSIO_API_KEY', 'test-composio-key');
+    vi.stubEnv('COMPOSIO_GMC_AUTH_CONFIG_ID', 'ac_gmc');
+    try {
+      const gmcSource = {
+        id: '3c8d6a1e-2a3c-4d5e-8f90-123456789abc',
+        brand_id: 'brand-1',
+        kind: 'merchant_center',
+        format: 'auto',
+        url: null,
+        account: '123',
+      };
+      fake.rows('catalog_sources').push({ ...gmcSource, last_synced_at: null });
+      // The feed fixture's two products, as the account's.
+      const gmc = {
+        kind: 'merchant_center',
+        label: 'Google Merchant Center',
+        signIn: 'google-merchant-center',
+        hosts: ['merchantapi.googleapis.com'],
+        readCatalog: vi.fn(async (_source, { request }) => {
+          await request('https://merchantapi.googleapis.com/products/v1/accounts/123/products');
+          return feedUrl.readCatalog(source, {
+            fetch: vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') }),
+          });
+        }),
+      };
+      const outcome = await syncSource(gmcSource, {
+        db: fake.db,
+        now: NOW,
+        signInRequest: () => vi.fn(async () => ({ status: 200, headers: {}, data: null })),
+        connectors: { merchant_center: gmc },
+      });
+      // A cap of 3, less the workspace's two other live products (p1, p4).
+      expect(outcome).toMatchObject({
+        status: 'ok',
+        counts: { products: { added: 1 }, overLimit: 1, limit: 3 },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("records a workspace without an active subscription in the plan's words", () => {
     expect(failureOf(new PlanLimitError('An active subscription is required.', 402))).toEqual({
       status: 'failed',
