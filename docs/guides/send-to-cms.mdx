@@ -1,14 +1,15 @@
 ---
 title: "Send to CMS"
-description: "Send Content Editor pages to Webflow as draft items, or to your CMS through your workflow tool, and see where they went."
+description: "Send Content Editor pages to Webflow as draft items, to WordPress as draft posts, or to your CMS through your workflow tool, and see where they went."
 ---
 
-**Send to CMS** sends a Content Editor page to your CMS in one of two ways:
+**Send to CMS** sends a Content Editor page to your CMS in one of three ways:
 
 - **Webflow:** the page goes straight into a collection of your brand's Webflow site as a **draft item**. You publish it in Webflow.
+- **WordPress:** the page goes straight to your brand's WordPress site as a **draft post**. You publish it in WordPress.
 - **Your workflow:** the page goes to your brand's webhook as a content package (the page ready to publish, its title, slug, meta title, meta description, author and featured image). Your workflow tool (n8n, Make, Zapier or your own endpoint) turns it into a post or page in your CMS, and decides whether it lands as a draft or goes live.
 
-Ansvisor never publishes on its own. When your workflow tells Ansvisor where the page went live, or once you publish the item in Webflow, the draft becomes **Published** and its address shows in the Library.
+Ansvisor never publishes on its own. When your workflow tells Ansvisor where the page went live, or once you publish the item in Webflow or the post in WordPress, the draft becomes **Published** and its address shows in the Library.
 
 ## Connect Webflow
 
@@ -37,6 +38,34 @@ A site token is one site's, so each brand connects its own. **Replace token** ch
 **Self-hosting:** Webflow goes through Composio. Set `COMPOSIO_API_KEY` and `COMPOSIO_WEBFLOW_AUTH_CONFIG_ID` (a Composio auth config of the Webflow toolkit with API-key auth) on the API server. Without them, the card says Webflow isn't set up, and pages go to your workflow only.
 </Note>
 
+## Connect WordPress
+
+1. In WordPress, sign in as the user pages should be written by. A separate user with the **Author** role is enough, since Ansvisor writes drafts only. Open **Users → Profile**, type a name under **Application Passwords** (`Ansvisor`, for example) and click **Add New Application Password**. Copy the password WordPress shows: 24 letters and digits, in groups of four. It's shown once. Application Passwords come with WordPress 5.6 and later.
+2. In Ansvisor, open **Settings → Integrations** with the brand selected. In the **WordPress** card, enter the **Site address**, the **User** and the **Application Password**, and click **Connect**.
+   - Type the address as you visit the site. `https://` is added, and `/wp-admin` or `/wp-json` copied with it is taken off. A site in a folder (`example.com/blog`) keeps it. WordPress takes an Application Password over https only, and Ansvisor reaches the standard port only: an `http://` address, or one with a port, isn't taken.
+   - Paste the Application Password, not the user's own password. **Connect** stays off for a password too short to be one.
+
+Before anything is kept, Ansvisor checks that the site answers as WordPress, takes Application Passwords, and that the user can write posts. The password goes to the site only once it answers as WordPress, or when the site keeps its REST API from visitors. The API server encrypts it before it's kept in Ansvisor's database, and it's never shown again. Only **admins and managers** can connect WordPress, change the sign-in or disconnect; members see where the brand's pages go.
+
+If the check fails, a toast says why:
+
+| The toast says | What to do |
+|---|---|
+| WordPress refused the user or the Application Password | Check the user name, and paste the Application Password, not the user's own password. |
+| There's no WordPress REST API at that address | Check the address. In WordPress, set **Settings → Permalinks** to anything but **Plain**. |
+| Application Passwords are turned off | Update WordPress to 5.6 or later. A security plugin may turn them off: allow them. WordPress also turns them off when it doesn't see its own https, behind a proxy or a CDN: ask your host. |
+| The server didn't pass the sign-in on | Save **Settings → Permalinks** once, or ask your host to pass the `Authorization` header. On Apache: `SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1` in `.htaccess`. |
+| The site hides its users | A security plugin hides users from the REST API. Let signed-in users reach `/wp-json/wp/v2/users/me`. |
+| The site refused the request | A firewall or a security plugin blocks the REST API. Allow it. |
+| The site sends `/wp-json/` on to another address | Use the address it goes to, with or without `www`. If it isn't a WordPress site, there's no WordPress there to connect. |
+| This user can't write posts | Use an Author, an Editor or an Administrator. |
+
+Each brand connects its own site. **Change sign-in** takes a new password, user or site address, and revokes the old Application Password where the site allows it. After a switch to another site, pages sent again make new posts there, and posts on the old site are no longer checked. **Disconnect** removes the sign-in, and revokes the Application Password where the site allows it (WordPress 5.7 and later); when it can't, the toast says to delete it in WordPress under **Users → Profile**. Posts already sent stay in WordPress. If WordPress refuses the saved sign-in (the password revoked, or the user removed), the card says **Sign-in refused** and asks for a new password.
+
+<Note>
+**Self-hosting:** WordPress sign-ins are encrypted with `CONNECTOR_CREDENTIALS_KEY` on the API server, the same key as the product catalog's store connections: 32 bytes in base64 (`openssl rand -base64 32`). Without it, the card says WordPress isn't set up, and pages go to Webflow or your workflow only. Changing the key makes saved sign-ins unreadable until they're entered again. The API server reaches the site over public https.
+</Note>
+
 ## Set up your workflow
 
 1. Open **Content → Opportunities → Webhook Settings**.
@@ -49,7 +78,11 @@ Only **admins and managers** can send pages.
 
 ## Choose where pages go
 
-Once the brand's Webflow collection is ready, the Send dialog offers **Webflow** (first) or **Your workflow**. Your choice, and where you last sent, is remembered for the brand in your browser. If Webflow is connected but not ready (its token refused, or no collection picked), it shows but can't be picked, with what to fix, so a page doesn't go to your workflow unnoticed. If the dialog can't check Webflow just then, the page goes to your workflow; if you chose Webflow before, the dialog says so, with **Try again**.
+Once the brand's Webflow collection is ready or its WordPress site is connected, the Send dialog offers them beside **Your workflow**: Webflow, WordPress, then your workflow. Your choice, and where you last sent, is remembered for the brand in your browser. With nothing remembered, or the one remembered no longer connected, the first one ready is picked.
+
+A CMS connected but not ready shows but can't be picked, with what to fix, so a page doesn't go to your workflow unnoticed. Webflow isn't ready when its token is refused or no collection is picked; WordPress isn't ready when its sign-in is refused. If you chose that CMS before, the page goes to your workflow, never to the other CMS.
+
+If the dialog can't check Webflow or WordPress just then, it leaves that one out. If you chose it before, the page goes to your workflow and the dialog says so, with **Try again**.
 
 ## Send one page
 
@@ -76,6 +109,20 @@ The toast says whether the item was made or updated, and what changed on the way
 
 Once you publish it in Webflow, the page becomes **Published** at its address on your site: `/{collection}/{slug}` on the custom domain the site was last published to, or on its `webflow.io` address when it has none. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page published in Webflow later than that stays "In Webflow as a draft item"; sending it again starts the check over. A page sent again stays sent until Webflow publishes it again, and a page whose item you deleted in Webflow reads "Removed in Webflow"; send it again to make a new item.
 
+**To WordPress**, the page becomes a draft post on the site, written by the connected user: the title, the slug, the page as its content, and the meta description as its excerpt.
+
+- The meta title isn't sent. Set it in your SEO plugin (Yoast, Rank Math…).
+- JSON-LD is left out: WordPress keeps a `<script>` only for users allowed unfiltered HTML, and shows the others' as text in the post. Add schema with your SEO plugin.
+- Tables go as tables. Images keep their addresses: Ansvisor doesn't upload them to your Media Library.
+- No featured image or category is set: pick them in WordPress.
+- WordPress may adjust the slug: lowercase, accents dropped and dots turned into `-`. If another post has it when the post is published, WordPress adds `-2` (or the next free number).
+
+Sending the page again **updates** the same post while it's still a draft or pending review. WordPress has no draft of a published post: whatever is written to it goes live at once. So a page whose post is published, scheduled or private goes as a **new draft post**. Move the text over in WordPress; published as it is, its slug gets `-2`. A post in the trash, or deleted, gets a new one.
+
+The toast says whether the draft post was made or updated, whether the post was already published or scheduled, and when JSON-LD was left out.
+
+Once you publish the post in WordPress, the page becomes **Published** at the post's address. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A post published later than that stays "In WordPress as a draft post"; sending the page again then makes a new draft post, as for a published one. A post moved to the trash or deleted reads "Removed in WordPress"; send the page again to make a new post. A site that stops answering as WordPress (moved, or its permalinks set to Plain) closes nothing.
+
 The page goes as **Export** makes it: the HTML without its H1 (your CMS's title field carries it), with the byline line if your brand adds the byline to its content. Ansvisor holds the send while:
 
 - a placeholder such as `[figure, source]` is still open: **Fill now** selects the first one, in the page or, when it's in an image's alt text, the JSON-LD or an HTML block, in the HTML view. The editor's toolbar counts those left and steps through them;
@@ -88,7 +135,7 @@ In the **Library**, tick the rows to send (up to 25 at once) and click **Send to
 
 The pages are sent one after another in the background, with a short pause between them so your CMS isn't flooded. The dialog follows them and says how many went, and you can close it at any time: the Library keeps following them. Very long pages go in more than one request, each once the one before has gone; closing the dialog while one waits stops the rest, and it says how many didn't go.
 
-A workspace can send **200 pages in 24 hours**, to Webflow and to your workflow together. A page already on its way to Webflow can't be sent there again until it has gone.
+A workspace can send **200 pages in 24 hours**, to Webflow, WordPress and your workflow together. A page already on its way to Webflow or WordPress can't be sent there again until it has gone. To WordPress, a page whose post is published or scheduled goes as a new draft post, as for one page.
 
 ## See how a send went
 
@@ -97,7 +144,7 @@ Beside each row's status, the Library shows its last send:
 | Icon | Meaning |
 |---|---|
 | Clock | On its way. |
-| Paper plane | Your workflow took it (it answered with a 2xx status), or it's a draft item in Webflow. |
+| Paper plane | Your workflow took it (it answered with a 2xx status), it's a draft item in Webflow, or it's a draft post in WordPress. |
 | Red warning | It failed. Hover it to see what your workflow answered or reported, or why it couldn't be reached. |
 | Blue link | Published. Click it to open the live page. |
 

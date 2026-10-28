@@ -35,6 +35,7 @@ import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
+import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -42,7 +43,7 @@ import { sendImproveActionForKeyUser } from './routes/prompts.js';
 import { liveAddress, publishDraftForKeyUser } from './lib/content-published.js';
 import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
-import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
+import { PlanLimitError, getAiUsage, getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
@@ -349,6 +350,10 @@ async function runDailyTracking() {
   sweepWebflowPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[webflow-status] daily sweep failed');
   });
+  // And to WordPress (00294), once a day too.
+  sweepWordPressPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wordpress-status] daily sweep failed');
+  });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
   // above: independent, never blocks or fails the tracking run, no-ops when
@@ -522,6 +527,35 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
     req.log.error({ err }, 'internal site audit quota error');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal AI usage endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// Read-only: this period's AI usage for the org, as GET /api/billing/ai-usage
+// answers a member (getAiUsage), so the MCP `get_ai_usage` tool reads the
+// Billing meter's own numbers. The web MCP layer passes its authenticated org
+// id. Without an active plan there is no allowance to meter: 402 plan_limit.
+app.get('/api/internal/ai-usage', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  try {
+    const raw = req.query.orgId;
+    const orgId = z.guid().safeParse(Array.isArray(raw) ? raw[0] : raw);
+    if (!orgId.success) {
+      return res.status(400).json({ success: false, message: 'orgId must be a UUID' });
+    }
+    return res.json({ success: true, usage: await getAiUsage(orgId.data) });
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'plan_limit', message: err.message });
+    }
+    req.log.error({ err }, 'internal AI usage error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });

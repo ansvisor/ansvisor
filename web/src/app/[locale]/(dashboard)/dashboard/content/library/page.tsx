@@ -40,6 +40,7 @@ import { CMS_PAGES_PER_SEND, type CmsSource } from '@/lib/content/cms-send';
 import {
   readCmsStatuses,
   refreshWebflowPublished,
+  refreshWordPressPublished,
   type CmsStatus,
 } from '@/lib/content/cms-send-client';
 import {
@@ -209,13 +210,16 @@ export default function ContentLibraryPage() {
     return () => clearTimeout(timer);
   }, [cmsGoing, cms]);
 
-  // Pages in Webflow as draft items: Webflow says when one goes live, so the
-  // API reads them once as the Library opens for the brand (and daily); the
-  // list is read again when it marked any published.
-  const inWebflow = [...cms.values()].some(
-    (status) => status.target === 'webflow' && status.status === 'sent',
-  );
+  // Pages in Webflow as draft items, or in WordPress as draft posts: the CMS
+  // says when one goes live, so the API reads them once as the Library opens
+  // for the brand (and daily); the list is read again when it marked any
+  // published.
+  const sentTo = (target: CmsStatus['target']) =>
+    [...cms.values()].some((status) => status.target === target && status.status === 'sent');
+  const inWebflow = sentTo('webflow');
+  const inWordPress = sentTo('wordpress');
   const webflowRead = useRef(new Set<string>());
+  const wordpressRead = useRef(new Set<string>());
   useEffect(() => {
     if (isLocked || !inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
     webflowRead.current.add(activeBrandId);
@@ -225,6 +229,16 @@ export default function ContentLibraryPage() {
       if (published.length) setAttempt((n) => n + 1);
     });
   }, [isLocked, inWebflow, activeBrandId]);
+  useEffect(() => {
+    if (isLocked || !inWordPress || !activeBrandId || wordpressRead.current.has(activeBrandId)) {
+      return;
+    }
+    wordpressRead.current.add(activeBrandId);
+    // As Webflow's: not cancelled with the effect.
+    void refreshWordPressPublished(activeBrandId).then((published) => {
+      if (published.length) setAttempt((n) => n + 1);
+    });
+  }, [isLocked, inWordPress, activeBrandId]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
