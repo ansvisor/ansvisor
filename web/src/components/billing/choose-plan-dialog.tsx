@@ -523,15 +523,13 @@ export function ChoosePlanDialog({
                           ? tOffer('buyNow')
                           : tSettings('choosePlanFor', { plan: plan.name })}
                     </Button>
-                    {(firstPrice != null || trialOffered) && (
+                    {/* The first month's price is the card's own, above: not again here. */}
+                    {trialOffered && (
                       <p
                         data-slot="buy-terms"
                         className="text-center text-xs text-muted-foreground"
                       >
-                        {firstPrice != null &&
-                          monthly != null &&
-                          tOffer('buyPrice', { first: money(firstPrice), price: money(monthly) })}
-                        {trialOffered && <span className="block">{tOffer('fullPlan')}</span>}
+                        {tOffer('fullPlan')}
                       </p>
                     )}
                     {trialOffered && (
