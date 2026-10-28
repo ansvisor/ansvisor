@@ -28,7 +28,7 @@ let jsonRpcMissing = false;
 let positionCalls: { fn: string; ranged: boolean }[] = [];
 /** When set, each heavy read takes a moment, counted while it runs. */
 let slowReads: { running: number; most: number } | null = null;
-const slowRead = async <T>(read: () => T): Promise<T> => {
+const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
   if (!slowReads) return read();
   const reads = slowReads;
   reads.most = Math.max(reads.most, ++reads.running);
