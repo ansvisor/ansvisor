@@ -1,3 +1,4 @@
+import { parseHtml } from './dom';
 import { LANGUAGES } from '@/config/prompt-options';
 
 /**
@@ -136,7 +137,7 @@ export function ownText(el: Element): string {
 
 /** The page's headings and prose, in order: a quote once, each list item on its own. */
 export function readBlocks(html: string): ReadBlock[] {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   const blocks: ReadBlock[] = [];
   for (const el of doc.body.querySelectorAll('h1, h2, h3, p, li, blockquote')) {
     const tag = el.tagName.toLowerCase() as ReadBlock['tag'];

@@ -1,3 +1,4 @@
+import { ELEMENT_NODE, TEXT_NODE, contentDom } from './dom';
 import { slugify } from '@/lib/slug';
 import type { ContentAuthor } from './authors';
 import { cleanHref, jsonLdText } from './html-allowlist';
@@ -21,7 +22,7 @@ import { languageCode } from './readability';
  * it is (DOMParser's body would move it).
  */
 export function fragment(html: string): HTMLElement {
-  const doc = document.implementation.createHTMLDocument('');
+  const doc = contentDom().document.implementation.createHTMLDocument('');
   const root = doc.createElement('div');
   root.innerHTML = html;
   return root;
@@ -35,8 +36,8 @@ function textNodes(root: Node): Text[] {
   const out: Text[] = [];
   const walk = (node: Node) => {
     for (const child of Array.from(node.childNodes)) {
-      if (child.nodeType === Node.TEXT_NODE) out.push(child as Text);
-      else if (child.nodeType === Node.ELEMENT_NODE) {
+      if (child.nodeType === TEXT_NODE) out.push(child as Text);
+      else if (child.nodeType === ELEMENT_NODE) {
         const tag = (child as Element).tagName.toLowerCase();
         if (tag !== 'script' && tag !== 'style' && tag !== 'template') walk(child);
       }
