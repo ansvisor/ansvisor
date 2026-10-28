@@ -2,6 +2,7 @@ import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 (
   globalThis as typeof globalThis & {
@@ -32,16 +33,17 @@ vi.mock('@/stores/use-brand-store', () => ({
     selector({ getActiveBrand: () => brand }),
 }));
 
-const { getKpiSnapshots, seedKpiPresets, getKpiPresetPreview } = vi.hoisted(() => ({
+const { getKpiSnapshots, seedKpiPresets, getKpiPresetPreview, removeKpi } = vi.hoisted(() => ({
   getKpiSnapshots: vi.fn(),
   seedKpiPresets: vi.fn(),
   getKpiPresetPreview: vi.fn(),
+  removeKpi: vi.fn(),
 }));
 vi.mock('@/lib/actions/kpis', () => ({
   getKpiSnapshots,
   seedKpiPresets,
   getKpiPresetPreview,
-  removeKpi: vi.fn(),
+  removeKpi,
 }));
 
 let canManage = true;
@@ -99,12 +101,19 @@ const snapshot = (key: string) => ({
   status: 'on_track',
 });
 
-async function renderPage() {
+const openUpgrade = vi.fn();
+async function renderPage(isLocked = false) {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
   await act(async () => {
-    root.render(<ActionCenterKpisPage />);
+    root.render(
+      <UpgradeDialogContext.Provider
+        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+      >
+        <ActionCenterKpisPage />
+      </UpgradeDialogContext.Provider>,
+    );
   });
   return { container, root };
 }
@@ -139,11 +148,39 @@ describe('the ready-made KPIs', () => {
 
     expect(seedKpiPresets).not.toHaveBeenCalled();
     expect(container.textContent).toContain('presets.preview');
+    expect(container.textContent).not.toContain('presets.previewReadOnly');
     expect(container.textContent).not.toContain('editKpis');
     expect(container.textContent).not.toContain('addKpi');
     const props = KpiTable.mock.calls.at(-1)?.[0] as { onEdit?: unknown; kpis: unknown[] };
     expect(props.kpis).toHaveLength(2);
     expect(props.onEdit).toBeUndefined();
+    await act(async () => root.unmount());
+  });
+
+  // next-intl is mocked: the upgrade dialog's label is its key.
+  it('saves nothing on a read-only workspace: the set shows unsaved, as to a member', async () => {
+    getKpiSnapshots.mockResolvedValue({ configured: false, kpis: [], everSetUp: false });
+    getKpiPresetPreview.mockResolvedValue([snapshot('mentions')]);
+    const { container, root } = await renderPage(true);
+    expect(seedKpiPresets).not.toHaveBeenCalled();
+    // Not "saved the first time an admin opens this tab": an admin just did.
+    expect(container.textContent).toContain('presets.previewReadOnly');
+    await act(async () => root.unmount());
+  });
+
+  it('edits and removes nothing on a read-only workspace: the upgrade dialog instead', async () => {
+    openUpgrade.mockReset();
+    getKpiSnapshots.mockResolvedValue({ configured: true, kpis: [snapshot('mentions')] });
+    const { container, root } = await renderPage(true);
+    const edit = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'editKpis',
+    )!;
+    await act(async () => edit.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('editKpis');
+    const props = KpiTable.mock.calls.at(-1)?.[0] as { onRemove: (key: string) => void };
+    await act(async () => props.onRemove('mentions'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('removeKpis');
+    expect(removeKpi).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 

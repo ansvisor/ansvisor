@@ -1,8 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { stripe, PRICE_IDS } from '@/lib/stripe';
+import { stripe, PRICE_IDS, priceIdFor } from '@/lib/stripe';
 import { TRIAL_DAYS, hasUsedTrial } from '@/lib/billing/trial';
+import { subscriptionEnded, takesPromoCode } from '@/lib/billing/plan-purchase';
+import { findPromotionCode } from '@/lib/billing/promo-code';
+
+/** POST /api/stripe/checkout's body. */
+const checkoutSchema = z.object({
+  planId: z.enum(['starter', 'growth']),
+  organizationId: z.string().min(1),
+  /** A year up front, from Billing's annual cards; monthly otherwise. */
+  interval: z.enum(['month', 'year']).optional(),
+  /** Where a canceled checkout goes back to: Billing, or onboarding's plan step. */
+  returnTo: z.literal('billing').optional(),
+  /**
+   * A promotion code the plan dialog checked, for a monthly plan: Checkout
+   * opens with it applied. Checked again here; the caller's word isn't taken.
+   */
+  promotionCode: z.string().trim().min(1).max(64).optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,15 +33,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { planId, organizationId } = body as {
-      planId: 'starter' | 'growth';
-      organizationId: string;
-    };
-
-    if (!planId || !organizationId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    const parsed = checkoutSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
+    const { planId, organizationId, interval, returnTo, promotionCode } = parsed.data;
 
     // The org id arrives in the request body, so confirm the caller is
     // actually in it. Row-level security used to be the only thing standing
@@ -31,15 +45,23 @@ export async function POST(req: NextRequest) {
     // written with the service role, which answers to nothing but this check.
     const { data: callerProfile } = await supabase
       .from('profiles')
-      .select('organization_id')
+      .select('organization_id, role')
       .eq('id', user.id)
       .single();
 
     if (callerProfile?.organization_id !== organizationId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    // Buying a plan charges the organization's card: admins only, as the
+    // subscription route has it (a new account's creator is its admin).
+    if (callerProfile.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only admins can change the plan', code: 'admin_only' },
+        { status: 403 },
+      );
+    }
 
-    const priceId = PRICE_IDS[planId]?.monthly;
+    const priceId = priceIdFor(planId, interval === 'year' ? 'year' : 'month');
     if (!priceId) {
       console.error(
         '[stripe/checkout] Missing price ID for plan:',
@@ -53,11 +75,44 @@ export async function POST(req: NextRequest) {
     // Fetch org to check for existing Stripe customer
     const { data: org } = await supabase
       .from('organizations')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, stripe_subscription_id, subscription_status')
       .eq('id', organizationId)
       .single();
 
+    // A subscription still there (billing, trialing, or a payment being
+    // retried) is changed or fixed in Billing: a second Checkout would start
+    // a second subscription on the same card.
+    if (
+      org?.stripe_subscription_id &&
+      !subscriptionEnded(org.subscription_status as string | null)
+    ) {
+      return NextResponse.json(
+        { error: 'This organization already has a subscription', code: 'subscription_exists' },
+        { status: 409 },
+      );
+    }
+
     let customerId = org?.stripe_customer_id as string | null;
+
+    // A code goes with a monthly plan only (a year has its own discount), and
+    // must be one Stripe can redeem now: looked up here, not taken on trust.
+    let promotionCodeId: string | null = null;
+    if (promotionCode) {
+      if (!takesPromoCode(interval ?? 'month')) {
+        return NextResponse.json(
+          { error: 'Promo codes are for monthly plans', code: 'promo_code_monthly_only' },
+          { status: 400 },
+        );
+      }
+      const found = await findPromotionCode(stripe, promotionCode, customerId);
+      if (!found) {
+        return NextResponse.json(
+          { error: "That promo code isn't valid", code: 'invalid_promo_code' },
+          { status: 400 },
+        );
+      }
+      promotionCodeId = found.id;
+    }
 
     // Create Stripe customer if none exists
     if (!customerId) {
@@ -92,8 +147,11 @@ export async function POST(req: NextRequest) {
         metadata: { organization_id: organizationId, plan_id: planId },
       },
       success_url: `${appUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/dashboard/onboarding`,
-      allow_promotion_codes: true,
+      cancel_url: `${appUrl}${returnTo === 'billing' ? '/dashboard/settings/billing' : '/dashboard/onboarding'}`,
+      // Stripe takes either a code applied here or its own code box, not both.
+      ...(promotionCodeId
+        ? { discounts: [{ promotion_code: promotionCodeId }] }
+        : { allow_promotion_codes: true }),
       // Collect billing address + VAT/tax ID up front so invoices are
       // complete; later edits happen in the Customer Portal (/api/stripe/portal).
       billing_address_collection: 'required',
