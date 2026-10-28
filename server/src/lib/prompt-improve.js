@@ -366,7 +366,7 @@ function historyBlock(history) {
     const suggestions = round.suggestions
       .map(
         (s) =>
-          `[${s.platform ? name(s.platform) : 'any'}] "${s.title}" (${SUGGESTION_STATUS_WORDS[s.status] ?? 'not done'})`,
+          `[${s.platform ? name(s.platform) : 'any'}] "${s.title.replace(/"/g, "'")}" (${SUGGESTION_STATUS_WORDS[s.status] ?? 'not done'})`,
       )
       .join('; ');
     const sent = round.sent

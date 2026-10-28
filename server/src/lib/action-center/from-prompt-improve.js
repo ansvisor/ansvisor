@@ -113,6 +113,9 @@ export function improveBaseline(snapshots, capturedAt, window) {
 /** Earlier Improve rounds on a prompt the next generation is shown (learning B5). */
 export const IMPROVE_PAST_ROUNDS = 2;
 
+/** Suggestions of one earlier round the next generation is shown, in task order. */
+export const IMPROVE_ROUND_TASKS = 12;
+
 const DAY_MS = 86_400_000;
 
 /** How the next generation reads a task's status: done, skipped by the team, or neither. */
@@ -157,9 +160,11 @@ export function improveRound(action, tasks, now = new Date()) {
       })),
     suggestions: tasks
       .filter((task) => typeof task.title === 'string' && task.title.trim())
+      .slice(0, IMPROVE_ROUND_TASKS)
       .map((task) => ({
         platform: task.details?.platform ?? null,
-        title: task.title.trim(),
+        // One line in the prompt, however the title was edited.
+        title: task.title.replace(/\s+/g, ' ').trim(),
         status: suggestionStatus(task.status),
       })),
   };

@@ -25,6 +25,7 @@ vi.mock('../../config/supabase.js', () => ({
 }));
 
 const {
+  IMPROVE_ROUND_TASKS,
   improveBaseline,
   improveRound,
   loadImproveRounds,
@@ -279,6 +280,21 @@ describe('improveRound', () => {
     expect(improveRound(weekIn, [], now).platforms).toEqual([
       { id: 'gemini-web', verdict: 'unchanged' },
     ]);
+  });
+});
+
+describe('improveRound suggestions', () => {
+  it('keeps the first 12 suggestions, in task order, each title on one line', () => {
+    const tasks = Array.from({ length: 15 }, (_, i) => ({
+      title: i === 0 ? 'Add a table\n  to /pricing\r\n' : `Task ${i + 1}`,
+      status: 'todo',
+      details: null,
+    }));
+    const { suggestions } = improveRound({ status: 'new' }, tasks);
+    expect(IMPROVE_ROUND_TASKS).toBe(12);
+    expect(suggestions).toHaveLength(12);
+    expect(suggestions[0].title).toBe('Add a table to /pricing');
+    expect(suggestions.at(-1).title).toBe('Task 12');
   });
 });
 

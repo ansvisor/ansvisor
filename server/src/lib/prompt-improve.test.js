@@ -361,6 +361,44 @@ describe('buildImprovePrompt', () => {
     expect(prompt).toContain('Do not suggest again what the team skipped.');
   });
 
+  it("keeps an earlier suggestion's own double quotes from closing its quoted title", () => {
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand: { name: 'Acme', domains: [] },
+      platforms: [
+        {
+          id: 'gemini-web',
+          state: 'not_mentioned',
+          evidence: {
+            fanouts: [],
+            citedDomains: [],
+            competitors: [],
+            competitorUrls: [],
+            brandPages: [],
+            excerpt: '',
+          },
+        },
+      ],
+      history: [
+        {
+          sent: '2026-09-10',
+          daysAgo: 48,
+          open: false,
+          final: true,
+          platforms: [{ id: 'gemini-web', verdict: 'improved' }],
+          suggestions: [
+            {
+              platform: 'gemini-web',
+              title: 'Answer "is it worth it" on /pricing',
+              status: 'done',
+            },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain(`[Gemini] "Answer 'is it worth it' on /pricing" (done)`);
+  });
+
   /** A round sent under a week ago has no read of its own yet (learning B5). */
   it('says a round sent days ago is too early to read, not that it did not move', () => {
     const { prompt } = buildImprovePrompt({
