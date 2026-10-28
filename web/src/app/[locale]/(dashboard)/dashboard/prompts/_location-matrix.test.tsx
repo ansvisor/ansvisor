@@ -318,11 +318,12 @@ describe('a prompt with no answers yet, in the Table view', () => {
     p: Prompt,
     region?: string,
     window: { to?: string } = {},
+    awaiting = true,
   ): Promise<{ shown: string; tip: string | null }> {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-          <LocationPending prompt={p} region={region} window={window} awaiting />
+          <LocationPending prompt={p} region={region} window={window} awaiting={awaiting} />
         </NextIntlClientProvider>,
       );
     });
@@ -348,6 +349,32 @@ describe('a prompt with no answers yet, in the Table view', () => {
     );
     expect(shown).toBe('Paused');
     expect(tip).toBe("This prompt is paused, so it isn't asked anywhere until you resume it.");
+  });
+
+  it("shows the plain dash for an older prompt with no answers in the range: it isn't waiting", async () => {
+    const { shown, tip } = await renderPending(
+      prompt('p1', 'older prompt', ['US']),
+      undefined,
+      {},
+      false,
+    );
+    expect(shown).toBe('—');
+    expect(tip).toBeNull();
+    // With a location picked, the dash says there were no answers there.
+    await renderPending(prompt('p1', 'older prompt', ['US']), 'US', {}, false);
+    expect(container.querySelector('span[title="No answers here in this period"]')).not.toBeNull();
+  });
+
+  it('says Paused, or No engine here, whatever its age', async () => {
+    // Copilot answers from Türkiye, not Kenya.
+    getTrackingCountries.mockResolvedValue([
+      { code: 'TR', models: ['chatgpt', 'copilot'] },
+      { code: 'KE', models: ['chatgpt'] },
+    ]);
+    const paused = prompt('p1', 'paused prompt', ['US'], 'Coffee', { isActive: false });
+    expect((await renderPending(paused, undefined, {}, false)).shown).toBe('Paused');
+    const copilot = prompt('p2', 'copilot only', ['KE'], 'Coffee', { platforms: ['copilot-web'] });
+    expect((await renderPending(copilot, 'KE', {}, false)).shown).toBe('No engine here');
   });
 
   it('shows the plain dash for a custom range that ended before today', async () => {

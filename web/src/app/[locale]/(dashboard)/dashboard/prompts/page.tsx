@@ -3953,8 +3953,9 @@ function AllPromptsTab({
                 const vol = volumeByPromptId.get(p.id);
                 const vis = visibility[p.id];
                 const status = promptStatus(p, now);
-                // Its empty location columns wait for their first answers only
-                // while it's new, or answered elsewhere (a location just added).
+                // With no answers (in a location column, or at all), it waits for
+                // its first ones only while it's new, or answered elsewhere (a
+                // location just added); otherwise a dash.
                 const awaiting = awaitsFirstAnswers(
                   p,
                   Boolean(vis) ||
@@ -3974,7 +3975,7 @@ function AllPromptsTab({
                       prompt={p}
                       region={regionFilter || undefined}
                       window={positionsWindow}
-                      awaiting
+                      awaiting={awaiting}
                     />
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
