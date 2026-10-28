@@ -122,7 +122,8 @@ export function clearLocationMatrixCache() {
 /**
  * A location a prompt is tracked in that has no answers yet, and why: a
  * paused prompt; none of its engines answering from there; or, usually,
- * just added: the next daily run asks it, within 24 hours.
+ * just added: the next daily run asks it, within 24 hours. Without a
+ * location, the same for the prompt in the Table view (pendingColumn).
  */
 export function LocationPending({
   prompt,
@@ -131,7 +132,8 @@ export function LocationPending({
   className,
 }: {
   prompt: Pick<Prompt, 'isActive' | 'platforms' | 'models'>;
-  region: string;
+  /** Undefined for the prompt across every location it's tracked in. */
+  region?: string;
   /** The table's window: one that ended before today just had no answers there. */
   window: { to?: string };
   className?: string;
@@ -139,10 +141,13 @@ export function LocationPending({
   const t = useTranslations('prompts.locations');
   const countries = useTrackingCountries();
   const tipId = useId();
-  const parsed = parseLocation(region);
+  const parsed = region ? parseLocation(region) : null;
   if (!reachesToday(window)) {
     return (
-      <span className={cn('text-xs text-muted-foreground', className)} title={t('noAnswers')}>
+      <span
+        className={cn('text-xs text-muted-foreground', className)}
+        title={region ? t('noAnswers') : undefined}
+      >
         —
       </span>
     );
@@ -152,7 +157,10 @@ export function LocationPending({
     : parsed && !answersFrom(prompt, parsed, countries)
       ? 'noEngine'
       : 'pending';
-  const tip = t(`${state}Tip`, { location: regionLabel(region) });
+  const tip =
+    !region && state === 'pending'
+      ? t('promptPendingTip')
+      : t(`${state}Tip`, { location: region ? regionLabel(region) : '' });
   // Why, on hover and on keyboard focus; and for a screen reader, as the
   // label's description.
   return (

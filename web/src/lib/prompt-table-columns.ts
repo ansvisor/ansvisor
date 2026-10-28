@@ -150,6 +150,45 @@ export function sameView(a: PromptColumnsView, b: PromptColumnsView): boolean {
   );
 }
 
+/** The columns that read a prompt's answers in the window: each a dash until it has some. */
+export const ANSWER_COLUMNS: readonly PromptColumnId[] = [
+  'visibility',
+  'mentions',
+  'citations',
+  'positions',
+  'runs',
+  'lastRun',
+];
+
+/**
+ * Where a row with no answers in the window says when they come, or why
+ * not (LocationPending): once, in the first answer column shown, rather
+ * than in each. Null when it has answers; when the location picked is one
+ * it isn't tracked in, so none will come; when it's paused and the Status
+ * column already says so; or when no answer column shows.
+ */
+export function pendingColumn(
+  prompt: { isActive: boolean; regions: readonly string[] },
+  {
+    hasAnswers,
+    region,
+    columns,
+  }: {
+    hasAnswers: boolean;
+    /** The location picked; empty for every location. */
+    region: string;
+    columns: readonly TableColumnId[];
+  },
+): PromptColumnId | null {
+  if (hasAnswers) return null;
+  if (region && !prompt.regions.includes(region)) return null;
+  if (!prompt.isActive && columns.includes('status')) return null;
+  return (
+    columns.find((id): id is PromptColumnId => ANSWER_COLUMNS.includes(id as PromptColumnId)) ??
+    null
+  );
+}
+
 /** The view a person sees: theirs, else the brand's, else the default. */
 export function effectiveView(
   mine: PromptColumnsView | null,
