@@ -32,6 +32,8 @@ const sections = z.array(z.string().max(64)).max(64);
 export interface MyMenu {
   /** Sections off this person's left menu. */
   hidden: string[];
+  /** Of those, the ones their role or an exception takes off, whatever their work areas. */
+  hiddenByAdmin: string[];
   workAreas: WorkAreaId[];
   /** Whether they answered (or skipped) "What do you work on?". */
   workAreasAsked: boolean;
@@ -136,15 +138,16 @@ export async function getMyMenu(): Promise<MyMenu> {
     roleHidden = data?.hidden_sections ?? [];
   }
 
-  const hidden = hiddenMenuSections({
+  const access = {
     role: profile.role,
     roleHidden,
     shown: profile.menu_shown ?? [],
     hidden: profile.menu_hidden ?? [],
-    workAreas,
-  });
+  };
+  const hidden = hiddenMenuSections({ ...access, workAreas });
   return {
     hidden: [...hidden],
+    hiddenByAdmin: [...hiddenMenuSections({ ...access, workAreas: [] })],
     workAreas,
     workAreasAsked: profile.work_areas_asked_at !== null,
     canManageMenus: canManage(profile),

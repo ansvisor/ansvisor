@@ -21,6 +21,7 @@ import { NotificationsSection } from '@/components/settings/notifications-sectio
 import { IntegrationsSection } from '@/components/settings/integrations-section';
 import { OrganizationSection } from '@/components/settings/organization-section';
 import { MenuAccessSection } from '@/components/settings/menu-access-section';
+import { WorkAreasCard } from '@/components/settings/work-areas-card';
 import { useCanManageMenus } from '@/components/providers/menu-access-provider';
 import { Badge } from '@/components/ui/badge';
 import { updateAccountName } from '@/lib/actions/organization';
@@ -181,6 +182,13 @@ export function SettingsView({ section }: { section: SettingsSection }) {
                 </Button>
               </CardContent>
             </Card>
+          )}
+
+          {/* What the person works on or leads: it narrows their own menu. */}
+          {active === 'account' && (
+            <div className="mt-6">
+              <WorkAreasCard />
+            </div>
           )}
 
           {/* Organization */}

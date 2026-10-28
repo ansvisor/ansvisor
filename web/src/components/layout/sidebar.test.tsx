@@ -60,6 +60,7 @@ vi.stubGlobal('localStorage', {
 });
 
 const { Sidebar } = await import('./sidebar');
+const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
 
 /** The dashboard sidebar, expanded (it opens collapsed). */
@@ -99,5 +100,34 @@ describe('Sidebar', () => {
     // A plain item keeps its own.
     const actions = container.querySelector('a[href="/dashboard/action-center"]');
     expect(actions!.querySelector('[data-slot="badge"]')?.textContent).toBe('New');
+  });
+
+  it('leaves the viewer’s hidden sections off, and says where to change it', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <MenuAccessProvider hidden={['content']} canManageMenus={false}>
+            <Sidebar />
+          </MenuAccessProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.querySelector('[data-submenu="/dashboard/content"]')).toBeNull();
+    expect(container.querySelector('a[href="/dashboard/action-center"]')).not.toBeNull();
+    expect(container.textContent).toContain('1 section off your menu. Change');
+    expect(container.querySelector('a[href="/dashboard/settings/account"]')?.textContent).toBe(
+      'Change',
+    );
+  });
+
+  it('says nothing when the whole menu shows', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <Sidebar />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.textContent).not.toContain('off your menu');
   });
 });

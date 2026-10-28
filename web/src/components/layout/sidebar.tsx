@@ -541,6 +541,18 @@ export function Sidebar() {
         </ScrollArea>
 
         <div className="space-y-1 p-2">
+          {/* Menu access: how much is off the viewer's menu, and where they change it. */}
+          {!compact && hiddenSections.size > 0 && (
+            <p className="px-2 pb-1 text-[11px] text-muted-foreground">
+              {t('menuOff', { count: hiddenSections.size })}{' '}
+              <Link
+                href="/dashboard/settings/account"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {t('menuOffChange')}
+              </Link>
+            </p>
+          )}
           <a
             href={siteConfig.links.feedback}
             target="_blank"
