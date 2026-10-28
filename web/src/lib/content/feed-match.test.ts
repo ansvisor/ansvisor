@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { feedCheck, feedStock, pageKey, stockOnPage, type FeedVariant } from './feed-match';
+import {
+  feedCheck,
+  feedStock,
+  pageKey,
+  stockOnPage,
+  variantStock,
+  type FeedVariant,
+} from './feed-match';
 
 /** A product page against its product feed (Quality spec §11, CE-053). */
 
@@ -70,6 +77,17 @@ describe('feedStock', () => {
     expect(feedStock([variant({ availability: 'preorder' })])).toBeNull();
     expect(feedStock([variant({ availability: null })])).toBeNull();
     expect(feedStock([])).toBeNull();
+  });
+});
+
+describe('variantStock', () => {
+  it("reads a variant's stock as the API does, whatever its case, spaces or hyphens", () => {
+    expect(variantStock('In Stock')).toBe('in');
+    expect(variantStock('Limited-Availability')).toBe('in');
+    expect(variantStock('SOLD OUT')).toBe('out');
+    expect(variantStock('preorder')).toBeNull();
+    expect(variantStock('')).toBeNull();
+    expect(variantStock(null)).toBeNull();
   });
 });
 

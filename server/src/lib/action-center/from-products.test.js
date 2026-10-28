@@ -56,6 +56,12 @@ function table(name) {
 vi.mock('../../config/supabase.js', () => ({ default: { from: (name) => table(name) } }));
 vi.mock('./priority-data.js', () => ({ priorityOnCreate: async () => ({ priority_score: 55 }) }));
 vi.mock('./sources.js', () => ({ resolveBrandSources: async () => new Set() }));
+// The planner, as it is, unless a test has it plan nothing.
+let planNothing = false;
+vi.mock('./tasks/plan.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, planTasks: (...args) => (planNothing ? [] : actual.planTasks(...args)) };
+});
 
 const { modeFor, productActionDedupKey, productTasks, sendProductActions } =
   await import('./from-products.js');
@@ -69,6 +75,7 @@ beforeEach(() => {
   openRow = null;
   inserted = [];
   reads = [];
+  planNothing = false;
 });
 
 const insertedInto = (name) => inserted.filter((i) => i.table === name).map((i) => i.row);
@@ -189,5 +196,21 @@ describe('sendProductActions', () => {
       }),
     ).rejects.toMatchObject({ status: 404 });
     expect(productActionDedupKey({ type: 'category', id: 'c' })).toBe('shopping_category:c');
+  });
+
+  it('opens no action for work with no task to plan, and says so', async () => {
+    planNothing = true;
+    await expect(
+      sendProductActions(BRAND, {
+        target: { type: 'product', id: PRODUCT },
+        work: [{ type: 'technical', who: 'me' }],
+        promptIds: [],
+        userId: 'u1',
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      message: 'None of the work picked has a task to plan for this brand.',
+    });
+    expect(inserted).toEqual([]);
   });
 });

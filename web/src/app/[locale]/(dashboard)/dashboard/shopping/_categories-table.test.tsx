@@ -110,6 +110,8 @@ describe('CategoriesTable', () => {
     const plan = [...container.querySelectorAll('button')].find(
       (b) => b.textContent === 'Plan actions',
     )!;
+    // Named for its row's category, the visible text first.
+    expect(plan.getAttribute('aria-label')).toBe('Plan actions for Hiking backpacks');
     act(() => plan.click());
     expect(document.body.textContent).toContain('Category actions · Hiking backpacks');
     expect(document.body.textContent).toContain('Buying guide: how to choose hiking backpacks');

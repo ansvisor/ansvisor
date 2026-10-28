@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The task writer end to end (AC-004), on an in-memory database and a
@@ -8,6 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 let db;
 let ops;
+// The columns each read asked for.
+let selects;
+
+/** A row's value at a column, or at an embed's (`brands.organizations.…`). */
+const valueAt = (row, col) => col.split('.').reduce((value, key) => value?.[key], row);
 
 /** A query builder over `db`, recording every write. */
 function table(name) {
@@ -28,8 +33,8 @@ function table(name) {
           col === 'action_signals.action_id'
             ? true
             : Array.isArray(value)
-              ? value.includes(row[col])
-              : row[col] === value,
+              ? value.includes(valueAt(row, col))
+              : valueAt(row, col) === value,
         ),
       );
   const run = () => {
@@ -55,7 +60,11 @@ function table(name) {
     return { data: null, error: null };
   };
   const chain = {
-    select: () => ((q.returning = q.op !== 'select'), chain),
+    select: (columns) => (
+      q.op === 'select' && selects.push({ table: name, columns }),
+      (q.returning = q.op !== 'select'),
+      chain
+    ),
     // Only the claim uses or(): a free action, or one whose writer died.
     or: () => ((q.free = true), chain),
     eq: (col, value) => (q.filters.push([col, value]), chain),
@@ -121,6 +130,7 @@ const answer = (tasks) => ({ object: { tasks }, usage: { inputTokens: 1000, outp
 
 beforeEach(() => {
   ops = [];
+  selects = [];
   generateObject.mockReset();
   charges.length = 0;
   release.mockReset();
@@ -441,5 +451,51 @@ describe('sweepActionTasks', () => {
     const outcome = await sweepActionTasks();
     expect(outcome).toEqual({ written: 0, skipped: 0, failed: 1 });
     expect(reserveAiBudget).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Once the plan has ended (2026-10-27), on the cloud: its actions are left
+   * out by the query itself, so they never reach the model or the budget.
+   */
+  describe('on the cloud', () => {
+    beforeEach(() => vi.stubEnv('IS_CLOUD', 'true'));
+    afterEach(() => vi.unstubAllEnvs());
+
+    const onPlan = (status) => ({ organizations: { subscription_status: status } });
+
+    it("writes no task for an organization whose plan has ended, and the paying one's still", async () => {
+      db.actions = [
+        { ...db.actions[0], id: 'lapsed', brand_id: 'b-lapsed', brands: onPlan('canceled') },
+        { ...db.actions[0], id: 'paying', brand_id: 'b1', brands: onPlan('active') },
+      ];
+      db.action_tasks = [];
+      generateObject.mockResolvedValue(answer([task()]));
+
+      const outcome = await sweepActionTasks();
+
+      expect(outcome).toEqual({ written: 1, skipped: 0, failed: 0 });
+      expect(selects).toContainEqual({
+        table: 'actions',
+        columns:
+          'id, brand_id, kind, status, brands!inner(organizations!inner(subscription_status))',
+      });
+      expect(reserveAiBudget).toHaveBeenCalledTimes(1);
+      expect(ops.filter((op) => op.table === 'actions' && op.op === 'update')).not.toContainEqual(
+        expect.objectContaining({ filters: expect.arrayContaining([['id', 'lapsed']]) }),
+      );
+    });
+  });
+
+  describe('self-hosted', () => {
+    beforeEach(() => vi.stubEnv('IS_CLOUD', 'false'));
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('reads every action, unfiltered', async () => {
+      db.action_tasks = [];
+      generateObject.mockResolvedValue(answer([task()]));
+
+      expect(await sweepActionTasks()).toEqual({ written: 1, skipped: 0, failed: 0 });
+      expect(selects).toContainEqual({ table: 'actions', columns: 'id, brand_id, kind, status' });
+    });
   });
 });
