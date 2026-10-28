@@ -78,6 +78,8 @@ const badges = () =>
   [...container.querySelectorAll('[data-slot="badge"]')].map((b) => b.textContent);
 const SETUP_STEP =
   "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.";
+const SETUP_STEP_SITE =
+  "Last step: pick the site and the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.";
 const option = (text: string) =>
   [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
     (o) => o.textContent === text,
@@ -184,9 +186,7 @@ describe('WebflowCard', () => {
     expect(toast.success).toHaveBeenCalledWith(
       'Webflow connected. Now pick the site and the collection, and save.',
     );
-    expect(container.textContent).toContain(
-      "Last step: pick the site and the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.",
-    );
+    expect(container.textContent).toContain(SETUP_STEP_SITE);
     expect(document.activeElement).toBe(picker('Site'));
 
     await click(picker('Site'));
@@ -198,6 +198,40 @@ describe('WebflowCard', () => {
     expect(client.listWebflowCollections).toHaveBeenLastCalledWith('b1', 's2');
     // The site picked, the line asks for the collection alone.
     expect(container.textContent).toContain(SETUP_STEP);
+  });
+
+  it('asks for the site while the sites are read, not for the collection alone first (#1601)', async () => {
+    client.readWebflow.mockResolvedValue({
+      ok: true,
+      configured: true,
+      connection: {
+        ...CONNECTED,
+        siteId: null,
+        collectionId: null,
+        collectionName: null,
+        fieldMap: {},
+      },
+    });
+    let answer!: (value: unknown) => void;
+    client.listWebflowCollections.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await render();
+    expect(container.textContent).toContain("Reading the site's collections…");
+    expect(container.textContent).toContain(SETUP_STEP_SITE);
+    expect(container.textContent).not.toContain(SETUP_STEP);
+
+    await act(async () => {
+      answer({
+        ok: true,
+        sites: [
+          { id: 's1', name: 'Acme' },
+          { id: 's2', name: 'Acme Shop' },
+        ],
+        siteId: null,
+        collections: [],
+      });
+    });
+    expect(container.textContent).toContain(SETUP_STEP_SITE);
+    expect(container.textContent).not.toContain(SETUP_STEP);
   });
 
   it('says the setup isn’t finished until a collection is saved', async () => {
