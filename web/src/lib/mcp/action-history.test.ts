@@ -4,7 +4,8 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 /**
  * list_action_history says whether an action's outcome is the result or a
  * reading so far (learning B1): an action is read 7, 14 and 30 days after it
- * closed, and only the day-30 reading is final.
+ * closed, and only the day-30 reading is final. It also gives its change net
+ * of the control basket (learning B2) and why it was dismissed (learning A5).
  */
 
 let actionRows: Record<string, unknown>[] = [];
@@ -96,5 +97,47 @@ describe('listActionHistoryFor readings', () => {
   it('is not final while its first reading is pending', async () => {
     actionRows = [action('pending_measurement', null)];
     expect(await row()).toMatchObject({ final: false, reading_day: null });
+  });
+});
+
+describe('listActionHistoryFor results', () => {
+  beforeEach(() => {
+    actionRows = [];
+  });
+
+  it('gives its change net of the control basket, the metrics it can name', async () => {
+    actionRows = [
+      action('improved', {
+        control: {
+          basis: 'topics',
+          prompts: 24,
+          net: [
+            { metric: 'visibility', net: 4.2, unit: 'points', control: { before: 30, after: 31 } },
+            { metric: 'citations', net: 18.5, unit: 'percent' },
+            { metric: 'sessions', net: 3, unit: 'sessions' },
+          ],
+        },
+      }),
+    ];
+    expect((await row())?.net_of_control).toEqual({
+      basis: 'topics',
+      control_prompts: 24,
+      metrics: [
+        { metric: 'visibility', net: 4.2, unit: 'points' },
+        { metric: 'citations', net: 18.5, unit: 'percent' },
+      ],
+    });
+  });
+
+  it('gives none when it could not be netted', async () => {
+    actionRows = [action('improved', { metrics: [] })];
+    expect((await row())?.net_of_control).toBeNull();
+  });
+
+  it('says why a dismissed one was turned down, and nothing it does not know', async () => {
+    actionRows = [{ ...action(null, null), status: 'dismissed', dismiss_reason: 'already_done' }];
+    expect(await row()).toMatchObject({ status: 'dismissed', dismiss_reason: 'already_done' });
+    actionRows = [{ ...action(null, null), status: 'dismissed', dismiss_reason: 'bored' }];
+    expect((await row())?.dismiss_reason).toBeNull();
   });
 });

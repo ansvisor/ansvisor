@@ -7,7 +7,9 @@ import { qualityPhase } from '../lib/content-quality.js';
 import { briefRules, rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { NoShoppingPath, buildShoppingPath } from '../lib/shopping-path.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
+import { checkFramerPublished } from '../lib/cms/framer-status.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
+import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
 import { cmsLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
@@ -22,7 +24,7 @@ import { PlanLimitError } from '../lib/plan-guard.js';
  * (CE-018); Hand off has it fix the page's open Quality checks (CE-051);
  * Start's Agent has the Content Agent do the page (CE-015);
  * Stop ends the agent's run under way, changing nothing (v1.1 CE-027); and
- * Send to CMS sends pages to the brand's webhook or its Webflow collection (#1331).
+ * Send to CMS sends pages to the brand's webhook, its Webflow or Framer collection or its WordPress site (#1331).
  */
 
 const router = Router();
@@ -48,7 +50,7 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, target?: 'webhook' | 'webflow', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
  * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
  */
@@ -164,6 +166,76 @@ router.post('/webflow-status', cmsLimiter, async (req, res) => {
       'content draft webflow status error',
     );
     return res.status(502).json({ error: 'Webflow could not be read', code: 'failed' });
+  }
+});
+
+/** A brand's WordPress posts read at most this often on demand (the daily sweep reads them too). */
+const wordpressChecked = new Map();
+
+/**
+ * POST /api/content-drafts/wordpress-status
+ * Body: { brandId }. Pages the brand sent to WordPress, published there
+ * since, marked published at the post's link (cms/wordpress-status.js). As
+ * /webflow-status: any member, a brand at most every two minutes.
+ */
+router.post('/wordpress-status', cmsLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = wordpressChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    wordpressChecked.set(brandId, Date.now());
+    return res.json(await checkWordPressPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, code: err?.code } },
+      'content draft wordpress status error',
+    );
+    return res.status(502).json({ error: 'WordPress could not be read', code: 'failed' });
+  }
+});
+
+/** A brand's Framer items read at most this often on demand (the daily sweep reads them too). */
+const framerChecked = new Map();
+
+/**
+ * POST /api/content-drafts/framer-status
+ * Body: { brandId }. Pages the brand sent to Framer, published there since,
+ * marked published at the item's page (cms/framer-status.js). As
+ * /webflow-status: any member, a brand at most every two minutes.
+ */
+router.post('/framer-status', cmsLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = framerChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    framerChecked.set(brandId, Date.now());
+    return res.json(await checkFramerPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, code: err?.code } },
+      'content draft framer status error',
+    );
+    return res.status(502).json({ error: 'Framer could not be read', code: 'failed' });
   }
 });
 
