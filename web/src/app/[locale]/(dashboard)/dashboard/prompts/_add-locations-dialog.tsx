@@ -114,8 +114,6 @@ export function AddLocationsDialog({
   }, [open, brandId]);
 
   const chosenTopic = topic || topics[0] || '';
-  // What can be stopped: the locations the prompts shown track.
-  const trackedHere = useMemo(() => trackedLocations(prompts), [prompts]);
   // A cell's prompt the rows no longer show is no prompt, never every prompt.
   const targets =
     scope === 'one'
@@ -128,6 +126,16 @@ export function AddLocationsDialog({
           ? prompts.filter((p) => p.category?.trim() === chosenTopic)
           : prompts;
   const removing = mode === 'remove';
+  // What can be stopped: the locations the chosen prompts track, with how
+  // many of them track each, and any picked already, so choosing other
+  // prompts never hides a pick.
+  const tracked = trackedLocations(targets);
+  const trackedHere = [
+    ...tracked,
+    ...locations
+      .filter((code) => !tracked.some((l) => l.code === code))
+      .map((code) => ({ code, count: 0 })),
+  ];
   const change = planBulkLocationChange(
     targets.map((p) => ({ id: p.id, regions: p.regions, isActive: p.isActive })),
     mode,
@@ -149,19 +157,24 @@ export function AddLocationsDialog({
   const save = async () => {
     setSaving(true);
     setError(null);
-    const result = await bulkUpdatePromptLocations(
-      targets.map((p) => p.id),
-      mode,
-      locations,
-    );
-    setSaving(false);
-    if ('error' in result) {
-      setError(result.error);
-      return;
+    // A refused write (a plan no longer active) still rejects, for the
+    // dashboard's upgrade dialog; the button never stays spinning.
+    try {
+      const result = await bulkUpdatePromptLocations(
+        targets.map((p) => p.id),
+        mode,
+        locations,
+      );
+      if ('error' in result) {
+        setError(result.error);
+        return;
+      }
+      toast.success(t(removing ? 'removed' : 'done', { count: result.updated }));
+      onOpenChange(false);
+      onDone();
+    } finally {
+      setSaving(false);
     }
-    toast.success(t(removing ? 'removed' : 'done', { count: result.updated }));
-    onOpenChange(false);
-    onDone();
   };
 
   const scopes: { id: Scope; label: string; count: number }[] = [
@@ -239,6 +252,7 @@ export function AddLocationsDialog({
                         key={code}
                         type="button"
                         aria-pressed={on}
+                        aria-label={t('removeChip', { location: regionLabel(code), count })}
                         onClick={() =>
                           setLocations((prev) =>
                             on ? prev.filter((c) => c !== code) : [...prev, code],

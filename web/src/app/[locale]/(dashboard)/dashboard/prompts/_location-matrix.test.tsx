@@ -191,19 +191,31 @@ describe('LocationMatrix', () => {
     await act(async () => items[0].click());
     expect(onStopTracking).toHaveBeenCalledWith(null, 'TR');
 
-    // Each tracked cell has its own, the counterpart of + Track; an untracked one hasn't.
+    // Each tracked cell has its own, the counterpart of + Track, and it opens
+    // no Positions panel: the cell's own button is beside it, not under it.
     const stop = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Stop tracking “same day coffee delivery near me” in United States"]',
+      'button[aria-label="Stop tracking “best specialty coffee subscription” in United States"]',
     )!;
     expect(stop.title).toBe('Stop tracking here');
-    stop.click();
-    expect(onStopTracking).toHaveBeenLastCalledWith(rows[1], 'US');
+    // Clickable only while it shows: a touch screen, with no hover, can't hit it unseen.
+    expect(stop.className).toContain('pointer-events-none');
+    expect(stop.className).toContain('group-hover/cell:pointer-events-auto');
+    expect(stop.className).toContain('focus-visible:pointer-events-auto');
+    await act(async () => stop.click());
+    expect(onStopTracking).toHaveBeenLastCalledWith(rows[0], 'US');
+    expect(onOpenCell).not.toHaveBeenCalled();
+    // An untracked cell has none, and neither has a prompt's last location.
     expect(
       container.querySelector(
         'button[aria-label="Stop tracking “same day coffee delivery near me” in Türkiye"]',
       ),
     ).toBeNull();
-    expect(container.querySelectorAll('button[aria-label^="Stop tracking “"]')).toHaveLength(3);
+    expect(
+      container.querySelector(
+        'button[aria-label="Stop tracking “same day coffee delivery near me” in United States"]',
+      ),
+    ).toBeNull();
+    expect(container.querySelectorAll('button[aria-label^="Stop tracking “"]')).toHaveLength(2);
   });
 
   it("offers no + Track to a member who can't edit, and says when nothing is tracked in a location", async () => {

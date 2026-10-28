@@ -7610,6 +7610,7 @@
       "locations": "Locations to add",
       "removeLocations": "Locations to stop",
       "removeNoLocations": "These prompts aren't tracked in any location.",
+      "removeChip": "{location}, tracked by {count, plural, =0 {none of these prompts} one {# prompt} other {# prompts}}",
       "picked": "picked",
       "scope": "Ask these prompts there",
       "removeScope": "Stop it for these prompts",

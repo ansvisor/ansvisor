@@ -215,8 +215,8 @@ function locationKind(code: string): 'country' | 'state' | 'city' {
  * location the brand tracks, side by side, for one metric at a time, in
  * Brand Visibility's Topics vs competitors shades. A cell opens the
  * prompt's Positions panel for that location; one the prompt isn't tracked
- * in offers + Track, one it is offers Stop tracking here, and a location's
- * column menu stops it for the prompts shown.
+ * in offers + Track, one it is (and not only there) offers Stop tracking
+ * here, and a location's column menu stops it for the prompts shown.
  */
 export function LocationMatrix({
   brandId,
@@ -530,14 +530,16 @@ export function LocationMatrix({
                       </TableCell>
                     );
                   }
-                  // The counterpart of + Track, on hover or keyboard focus.
-                  const stop = onStopTracking && (
+                  // The counterpart of + Track, on hover or keyboard focus; never
+                  // clickable unseen (a touch screen has no hover), and not on a
+                  // prompt's last location, which it keeps.
+                  const stop = onStopTracking && p.regions.some((code) => code !== r) && (
                     <button
                       type="button"
                       aria-label={t('stopLabel', { prompt: p.text, location: where })}
                       title={t('stop')}
                       onClick={() => onStopTracking(p, r)}
-                      className="absolute right-1.5 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/cell:opacity-100"
+                      className="pointer-events-none absolute right-1.5 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/cell:pointer-events-auto group-hover/cell:opacity-100"
                     >
                       <X className="h-2.5 w-2.5" aria-hidden />
                     </button>

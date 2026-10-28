@@ -204,15 +204,44 @@ describe('AddLocationsDialog', () => {
       { ...prompt('p3', ['DE', 'TR'], 'Buying'), isActive: false } as Prompt,
     ];
 
+    const chips = () =>
+      [...document.body.querySelectorAll('fieldset button')].map((b) =>
+        b.textContent?.replace(/\s+/g, ' ').trim(),
+      );
+
     it('offers the locations the prompts track, with how many track each', async () => {
       const text = await render({ mode: 'remove' }, tracked);
       expect(text).toContain('Stop tracking in locations');
       expect(button('Remove').getAttribute('aria-pressed')).toBe('true');
-      const chips = [...document.body.querySelectorAll('fieldset button')].map((b) =>
-        b.textContent?.replace(/\s+/g, ' ').trim(),
-      );
-      expect(chips).toEqual(['🇩🇪 Germany2', '🇺🇸 United States2', '🇹🇷 Türkiye1']);
+      expect(chips()).toEqual(['🇩🇪 Germany2', '🇺🇸 United States2', '🇹🇷 Türkiye1']);
+      // A screen reader hears what the number counts.
+      expect(
+        [...document.body.querySelectorAll('fieldset button')].map((b) =>
+          b.getAttribute('aria-label'),
+        ),
+      ).toEqual([
+        'Germany, tracked by 2 prompts',
+        'United States, tracked by 2 prompts',
+        'Türkiye, tracked by 1 prompt',
+      ]);
       expect(stopSubmit().disabled).toBe(true);
+    });
+
+    it('counts the prompts chosen, not every prompt shown, and keeps a pick', async () => {
+      await render({ mode: 'remove', locations: ['US'] }, tracked);
+      expect(chips()).toEqual(['🇩🇪 Germany2', '🇺🇸 United States2', '🇹🇷 Türkiye1']);
+      // The Buying topic is p3 alone: Germany and Türkiye once each, and the
+      // US, picked already, stays to be unpicked, tracked by none of them.
+      await act(async () => scope('Topic').click());
+      expect(chips()).toEqual(['🇩🇪 Germany1', '🇹🇷 Türkiye1', '🇺🇸 United States0']);
+      expect(
+        document.body
+          .querySelector('fieldset button[aria-pressed="true"]')
+          ?.getAttribute('aria-label'),
+      ).toBe('United States, tracked by none of these prompts');
+      expect(document.body.textContent).toContain(
+        'None of these prompts is tracked in these locations.',
+      );
     });
 
     it('prices a column stop: what goes, what the plan gets back, and who keeps it', async () => {
@@ -261,8 +290,24 @@ describe('AddLocationsDialog', () => {
     it('starts on the selection, and says when it has none of the locations', async () => {
       const text = await render({ mode: 'remove', locations: ['TR'] }, tracked, new Set(['p1']));
       expect(scope('The 1 prompt selected').checked).toBe(true);
+      expect(chips()).toEqual(['🇺🇸 United States1', '🇹🇷 Türkiye0']);
       expect(text).toContain('None of these prompts is tracked in these locations.');
       expect(stopSubmit().disabled).toBe(true);
+    });
+
+    it('says what the server refused, keeps the dialog, and lets it be tried again', async () => {
+      actions.bulkUpdatePromptLocations.mockResolvedValue({
+        error: 'None of the selected prompts are available.',
+      });
+      await render({ mode: 'remove', promptId: 'p2', locations: ['DE'] }, tracked);
+      await act(async () => stopSubmit().click());
+      expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(
+        'None of the selected prompts are available.',
+      );
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(onDone).not.toHaveBeenCalled();
+      expect(stopSubmit().disabled).toBe(false);
+      expect(stopSubmit().querySelector('.animate-spin')).toBeNull();
     });
 
     it('never runs the add checks: no limit stop, no city note', async () => {
