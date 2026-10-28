@@ -15,21 +15,36 @@ interface PlanContextValue {
    * per-customer overrides.
    */
   allowedModelIds: string[] | null;
+  /**
+   * Whether the org's plan is active (or trialing). When it isn't, the
+   * dashboard is read-only: every page opens, and an action opens the
+   * upgrade dialog instead of running (useUpgradeGate). Always true
+   * self-hosted.
+   */
+  subscriptionActive: boolean;
+  /** Stripe's subscription status, for why it isn't active; null self-hosted. */
+  subscriptionStatus: string | null;
 }
 
 const PlanContext = createContext<PlanContextValue>({
   planId: 'self_hosted',
   isCloud: false,
   allowedModelIds: null,
+  subscriptionActive: true,
+  subscriptionStatus: null,
 });
 
 export function PlanProvider({
   planId,
   allowedModelIds = null,
+  subscriptionActive = true,
+  subscriptionStatus = null,
   children,
 }: {
   planId: PlanId;
   allowedModelIds?: string[] | null;
+  subscriptionActive?: boolean;
+  subscriptionStatus?: string | null;
   children: React.ReactNode;
 }) {
   const isCloud = process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
@@ -41,6 +56,8 @@ export function PlanProvider({
         planId: effectivePlan,
         isCloud,
         allowedModelIds: isCloud ? allowedModelIds : null,
+        subscriptionActive: isCloud ? subscriptionActive : true,
+        subscriptionStatus: isCloud ? subscriptionStatus : null,
       }}
     >
       {children}

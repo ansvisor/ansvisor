@@ -6,7 +6,7 @@ import { BrandAvatar } from '@/components/brand-avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Link } from '@/i18n/navigation';
+import { AddBrandLink } from '@/components/dashboard/add-brand-link';
 import { Building2, Plus, ChevronRight } from 'lucide-react';
 import { usePathname } from '@/i18n/navigation';
 
@@ -81,12 +81,12 @@ function NoBrandsState() {
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
         Create your first brand to start tracking how AI engines talk about you.
       </p>
-      <Link href="/dashboard/brands/new" className="mt-6">
+      <AddBrandLink className="mt-6">
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
           Create Brand
         </Button>
-      </Link>
+      </AddBrandLink>
     </div>
   );
 }

@@ -26,6 +26,7 @@ import { updateTargetUrlStats } from './target-url-stats.js';
 import { persistCitationRows } from './citation-rows.js';
 import { logger } from './logger.js';
 import { classifyMerchant } from './merchant-detection.js';
+import { catalogIndexFor, matchCard } from './catalog/card-match.js';
 
 /**
  * @param {object} args
@@ -238,12 +239,41 @@ export async function persistShoppingCards({
   });
   if (rows.length === 0) return 0;
 
+  // The brand's own cards, matched to its catalog's products (00360): what
+  // Product Visibility counts on the shelf. The catalog may be unreadable;
+  // the cards are written all the same, and the next sweep matches them.
+  const own = rows.filter((row) => row.matched_brand_role === 'own');
+  if (own.length) {
+    const index = await catalogIndexFor(brandId, { brandName: brandInfo.brandName }).catch(
+      (err) => {
+        logger.warn({ err: err?.message, brandId }, '[cloro-result] catalog unreadable for cards');
+        return null;
+      },
+    );
+    for (const row of index ? own : []) {
+      const found = matchCard(row, index);
+      if (found) {
+        row.catalog_product_id = found.productId;
+        row.catalog_match = found.match;
+      }
+    }
+  }
+
   // `onConflict: 'prompt_result_id,position' ignoreDuplicates: true` keeps
   // the call idempotent — re-running the backfill or a retry on the same
   // prompt_result won't duplicate or error.
-  const { error } = await supabaseAdmin
-    .from('prompt_result_shopping_cards')
-    .upsert(rows, { onConflict: 'prompt_result_id,position', ignoreDuplicates: true });
+  const write = (values) =>
+    supabaseAdmin
+      .from('prompt_result_shopping_cards')
+      .upsert(values, { onConflict: 'prompt_result_id,position', ignoreDuplicates: true });
+  let { error } = await write(rows);
+  // An API deployed before its migration (00360): the cards go in without
+  // their matches rather than not at all.
+  if (error && /catalog_(product_id|match)/.test(error.message ?? '')) {
+    ({ error } = await write(
+      rows.map(({ catalog_product_id: _p, catalog_match: _m, ...row }) => row),
+    ));
+  }
 
   if (error) {
     logger.error(

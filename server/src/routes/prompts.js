@@ -19,6 +19,7 @@ import {
 import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
+import { getCatalogSuggestionCandidates } from '../lib/catalog-suggestions.js';
 import { suggestPromptsForPage } from '../lib/page-prompt-suggestions.js';
 import { UNTRACKED_QUERY_SCAN, untrackedGoogleQueries } from '../lib/untracked-queries.js';
 import { RELEVANCE_SCALE, ratingCostUsd, toRelevance } from '../lib/suggestion-relevance.js';
@@ -38,6 +39,7 @@ import {
   loadImproveRounds,
   sendImproveToActionCenter,
 } from '../lib/action-center/from-prompt-improve.js';
+import { brandPromptKeys, demandResponse } from '../lib/prompt-demand.js';
 
 const router = Router();
 
@@ -162,9 +164,11 @@ async function loadSuggestionContext(brandId) {
 const SUGGESTIONS_PER_REFRESH = 25;
 const MIN_SUGGESTIONS = 15;
 // Floors for suggestions drawn from the brand's own data, when it has any —
-// about two in five from Search Console and one in four from Analytics.
+// about two in five from Search Console and one in four from Analytics, and
+// a few shopping questions from its catalog (ECOM-003).
 const MIN_FROM_SEARCH_CONSOLE = 10;
 const MIN_FROM_ANALYTICS = 6;
+const MIN_FROM_CATALOG = 5;
 
 const newSuggestionSchema = z.object({
   suggestions: z
@@ -209,6 +213,13 @@ const newSuggestionSchema = z.object({
           .optional()
           .describe(
             'ONLY when this suggestion was derived from one of the provided Analytics pages: the EXACT landing page path, verbatim. Omit for all other suggestions.',
+          ),
+        sourceCategory: z
+          .string()
+          .max(750)
+          .optional()
+          .describe(
+            'ONLY when this suggestion was derived from one of the provided catalog categories: the EXACT category name, verbatim. Omit for all other suggestions.',
           ),
       }),
     )
@@ -297,6 +308,10 @@ async function generateSuggestions(brandId, { orgId, log }) {
   // brands that have neither.
   const gaCandidates = await getGaSuggestionCandidates(brandId, ctx.existingPromptTexts);
 
+  // What the brand sells (ECOM-003): its catalog's categories and price bands
+  // — [] without a catalog, which keeps every prompt block below unchanged.
+  const catalogCandidates = await getCatalogSuggestionCandidates(brandId);
+
   const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
   const aiModel = resolveModel(promptModel);
   const reservation = await reserveRating(orgId, brandId, promptModel, log);
@@ -327,6 +342,11 @@ RULES:
     gaCandidates.length
       ? `
 - THE BRAND'S OWN ANALYTICS: a list of pages from this brand's Google Analytics is provided, each with what the page itself says it is about. Derive at least ${Math.min(MIN_FROM_ANALYTICS, gaCandidates.length)} suggestions from those pages. Write the prompt at the level of the need the page serves, NOT the page's product name or URL — a model number nobody types into an AI assistant becomes the category question that leads to it ("best noise-cancelling headphones", not "ANS-2400 Pro Black"). For each such suggestion set sourcePage to the EXACT landing page path, verbatim. Never set sourcePage on suggestions that did not come from that list, and never set both sourceQuery and sourcePage on the same suggestion.`
+      : ''
+  }${
+    catalogCandidates.length
+      ? `
+- WHAT THE BRAND SELLS: a list of its product catalog's categories is provided, each with how many products it sells and their price band. Derive at least ${Math.min(MIN_FROM_CATALOG, catalogCandidates.length)} shopping suggestions from those categories: the questions a shopper asks an AI assistant before buying in the category — best-of, under a budget (use the category's price band and currency, written as a shopper writes it), for a use or a person, or which type to choose. Use the category's own words, not the brand's or a product's name. For each such suggestion set sourceCategory to the EXACT category name, verbatim. Never set sourceCategory on suggestions that did not come from that list, and never set it together with sourceQuery or sourcePage.`
       : ''
   }`;
 
@@ -384,6 +404,20 @@ ${gaCandidates
       : ''
   }
 
+${
+  catalogCandidates.length
+    ? `
+
+The brand's product catalog categories (live products, price band):
+${catalogCandidates
+  .map(
+    (c) =>
+      `  • "${c.category}" — ${c.products.toLocaleString('en-US')} products${c.currency ? `, ${c.priceLow}–${c.priceHigh} ${c.currency} (most under ${c.priceUnder} ${c.currency})` : ''}`,
+  )
+  .join('\n')}`
+    : ''
+}
+
 Suggest the next ${SUGGESTIONS_PER_REFRESH} prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
 
   // #379 pattern — bounded retry: generateObject throws "No object generated:
@@ -406,7 +440,7 @@ Suggest the next ${SUGGESTIONS_PER_REFRESH} prompts this brand should start trac
       { attempts: REFRESH_ATTEMPTS, baseDelayMs: 500, label: 'suggestion-refresh' },
     );
     usage = callUsage;
-    return { suggestions: object.suggestions, gscCandidates, gaCandidates };
+    return { suggestions: object.suggestions, gscCandidates, gaCandidates, catalogCandidates };
   } finally {
     if (rate) await settleRating(log, reservation, { modelId: promptModel, attempts, usage });
   }
@@ -437,10 +471,11 @@ router.post(
   async (req, res) => {
     try {
       const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
-      const { suggestions, gscCandidates, gaCandidates } = await generateSuggestions(
-        req.params.brandId,
-        { orgId: brand.organization_id, log: req.log },
-      );
+      const { suggestions, gscCandidates, gaCandidates, catalogCandidates } =
+        await generateSuggestions(req.params.brandId, {
+          orgId: brand.organization_id,
+          log: req.log,
+        });
 
       await supabaseAdmin
         .from('prompt_suggestions')
@@ -458,6 +493,9 @@ router.post(
       const normalizeQuery = (q) => q.trim().toLowerCase();
       const candidateByQuery = new Map(gscCandidates.map((c) => [normalizeQuery(c.query), c]));
       const candidateByPage = new Map(gaCandidates.map((c) => [normalizeQuery(c.landingPage), c]));
+      const candidateByCategory = new Map(
+        catalogCandidates.map((c) => [normalizeQuery(c.category), c]),
+      );
 
       const rows = [];
       for (const s of suggestions) {
@@ -472,6 +510,12 @@ router.post(
           !candidate && s.sourcePage
             ? candidateByPage.get(normalizeQuery(s.sourcePage))
             : undefined;
+        // A category only when neither Google source claims it: both are
+        // measured demand, the catalog is what the brand sells.
+        const catalogCandidate =
+          !candidate && !gaCandidate && s.sourceCategory
+            ? candidateByCategory.get(normalizeQuery(s.sourceCategory))
+            : undefined;
         rows.push({
           brand_id: req.params.brandId,
           suggested_text: s.text,
@@ -482,7 +526,7 @@ router.post(
           // estimate must cap out, not reject the whole generated batch.
           est_volume: Math.min(s.estVolume, 10_000_000),
           relevance: toRelevance(s.relevance),
-          source: candidate ? 'gsc' : gaCandidate ? 'ga' : 'llm',
+          source: candidate ? 'gsc' : gaCandidate ? 'ga' : catalogCandidate ? 'catalog' : 'llm',
           source_data: candidate
             ? {
                 query: candidate.query,
@@ -505,7 +549,16 @@ router.post(
                   aiPlatforms: gaCandidate.aiPlatforms,
                   pageTitle: gaCandidate.page?.title ?? null,
                 }
-              : null,
+              : catalogCandidate
+                ? {
+                    category: catalogCandidate.category,
+                    products: catalogCandidate.products,
+                    priceLow: catalogCandidate.priceLow,
+                    priceHigh: catalogCandidate.priceHigh,
+                    priceUnder: catalogCandidate.priceUnder,
+                    currency: catalogCandidate.currency,
+                  }
+                : null,
           status: 'new',
           expires_at: expiresAt,
         });
@@ -1082,6 +1135,38 @@ router.get('/:promptId/improve', readImprove, async (req, res) => {
     return res
       .status(error.status || 500)
       .json({ error: error.message || 'Failed to load suggestions' });
+  }
+});
+
+// The prompt's real demand (PROMPT-014): the signals the nightly sweep read
+// and their level, for the Demand card, each People Also Ask question with
+// whether the brand already tracks it. A read: a workspace whose plan has
+// ended still sees what was read.
+router.get('/:promptId/demand', async (req, res) => {
+  try {
+    const promptId = req.params.promptId;
+    const { brandId } = await loadImprovePrompt(promptId, req.user.id);
+    const [demand, volume] = await Promise.all([
+      supabaseAdmin.from('prompt_demand').select('*').eq('prompt_id', promptId).maybeSingle(),
+      supabaseAdmin
+        .from('prompt_volumes')
+        .select('google_volumes, location_code, language_code, fetched_at')
+        .eq('prompt_id', promptId)
+        .order('fetched_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (demand.error) throw demand.error;
+    if (volume.error) throw volume.error;
+    const trackedKeys = demand.data?.paa?.questions?.length
+      ? await brandPromptKeys(brandId)
+      : undefined;
+    return res.json({ demand: demandResponse(demand.data, volume.data, { trackedKeys }) });
+  } catch (error) {
+    req.log.error({ err: error }, 'prompt demand read error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.status ? error.message : 'Failed to load demand' });
   }
 });
 

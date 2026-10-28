@@ -14,7 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { actionGoal, actionTexts } from '@/lib/action-center/display';
-import type { ActionHistoryItem } from '@/lib/action-center/history';
+import { FINAL_READING_DAY, type ActionHistoryItem } from '@/lib/action-center/history';
 import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { ActionIcon, PriorityBadge } from './action-table';
 import { HistoryStatusBadge } from './history-table';
@@ -91,6 +91,8 @@ export function HistoryDrawer({
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
   const tSources = useTranslations('actionCenter.signalsPage.sources');
   const tRegistry = useTranslations('actionCenter.registry');
+  const tDismiss = useTranslations('actionCenter.dismissReason');
+  const tOutcome = useTranslations('actionCenter.actionOutcome');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
   const router = useRouter();
 
@@ -135,6 +137,8 @@ export function HistoryDrawer({
   );
   const date = item.completedAt ?? item.createdAt;
   const measured = item.results.length > 0;
+  // Its net of the brand's prompts it didn't touch (learning B2), in the metrics it can name.
+  const controlNet = item.controlNet?.net.filter((m) => tRegistry.has(`${m.metric}.name`)) ?? [];
   const completedTasks = item.tasks.filter((task) => task.status === 'completed').length;
   const countedTasks = item.tasks.filter(
     (task) => !UNCOUNTED_TASK_STATUSES.includes(task.status),
@@ -208,9 +212,44 @@ export function HistoryDrawer({
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.result')}</p>
+            {item.status === 'dismissed' && item.dismissReason && (
+              <p className="mt-1 text-xs">
+                {t('drawer.dismissedBecause', {
+                  reason: tDismiss(`${item.dismissReason}.label`),
+                })}
+              </p>
+            )}
+            {!!item.readings?.length && (
+              <p className="mt-1 text-xs">
+                {t('drawer.readings', {
+                  list: item.readings
+                    .map((r) => t('drawer.reading', { day: r.day, outcome: tOutcome(r.outcome) }))
+                    .join(' · '),
+                })}
+                {!item.outcomeFinal && (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    {t('drawer.finalOn', { day: FINAL_READING_DAY })}
+                  </span>
+                )}
+              </p>
+            )}
+            {item.primaryMetric && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('drawer.primary', { metric: tRegistry(`${item.primaryMetric}.name`) })}
+              </p>
+            )}
             {item.measuredOn && (
               <p className="mt-1 text-xs text-muted-foreground">
                 {t('drawer.measuredOn', { ...item.measuredOn })}
+              </p>
+            )}
+            {item.dataGaps && (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                {t(item.dataGaps.tooMany ? 'drawer.gapsTooMany' : 'drawer.gaps', {
+                  before: item.dataGaps.before,
+                  after: item.dataGaps.after,
+                })}
               </p>
             )}
             {item.auditAfter && (
@@ -230,7 +269,9 @@ export function HistoryDrawer({
               // line is recorded; the effect is not, because nothing re-reads
               // these metrics after an action closes.
               <p className="mt-1 text-xs text-muted-foreground">
-                {t(`outcomeExplain.${item.outcome}`)}
+                {item.status === 'dismissed'
+                  ? t('dismissedResult.explain')
+                  : t(`outcomeExplain.${item.outcome}`)}
               </p>
             )}
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -260,6 +301,23 @@ export function HistoryDrawer({
                 {t('drawer.brandWide', {
                   list: item.brandWideResults
                     .map((m) => `${tRegistry(`${m.metric}.name`)} ${m.before} → ${m.after}`)
+                    .join(' · '),
+                })}
+              </p>
+            )}
+            {item.controlNet && controlNet.length > 0 && (
+              // Net of the brand's prompts it didn't touch (learning B2).
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('drawer.controlNet', {
+                  basis: item.controlNet.basis,
+                  prompts: item.controlNet.prompts,
+                  list: controlNet
+                    .map((m) =>
+                      t(m.unit === 'points' ? 'drawer.netPoints' : 'drawer.netPercent', {
+                        metric: tRegistry(`${m.metric}.name`),
+                        value: `${m.net > 0 ? '+' : m.net < 0 ? '−' : ''}${Math.abs(m.net)}`,
+                      }),
+                    )
                     .join(' · '),
                 })}
               </p>

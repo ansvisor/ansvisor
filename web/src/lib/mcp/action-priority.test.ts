@@ -46,6 +46,8 @@ const ACTIONS = [
 
 let actionRows: Record<string, unknown>[] = ACTIONS;
 let taskRows: Record<string, unknown>[] = [];
+/** What get_action's own row adds to the first action. */
+let detail: Record<string, unknown> = {};
 
 function builder(table: string) {
   const chain = {
@@ -61,7 +63,7 @@ function builder(table: string) {
     maybeSingle: async () => ({
       data:
         table === 'actions'
-          ? { ...ACTIONS[0], brand_id: 'brand-1', payload: {} }
+          ? { ...ACTIONS[0], brand_id: 'brand-1', payload: {}, ...detail }
           : { id: 'brand-1' },
       error: null,
     }),
@@ -196,6 +198,57 @@ describe('getActionFor', () => {
       expect(action?.tasks[1].details).toBeNull();
     } finally {
       taskRows = [];
+    }
+  });
+
+  it('gives a task planned while its template was Automatic its Manual check (AC-010)', async () => {
+    taskRows = [
+      {
+        id: 't4',
+        position: 1,
+        task_key: 'improve_cta_path',
+        title: null,
+        status: 'todo',
+        details: { check: 'auto', source: 'template' },
+      },
+    ];
+    try {
+      const action = await getActionFor(auth, 'a1');
+      expect(action?.tasks[0].details).toMatchObject({ check: 'manual' });
+    } finally {
+      taskRows = [];
+    }
+  });
+
+  it('gives a closed action its change net of the control and why it was dismissed', async () => {
+    detail = {
+      status: 'completed',
+      outcome: 'improved',
+      validation: {
+        control: {
+          basis: 'brand',
+          prompts: 40,
+          net: [{ metric: 'mentions', net: 2.5, unit: 'points' }],
+        },
+      },
+      dismiss_reason: null,
+    };
+    try {
+      expect(await getActionFor(auth, 'a1')).toMatchObject({
+        net_of_control: {
+          basis: 'brand',
+          control_prompts: 40,
+          metrics: [{ metric: 'mentions', net: 2.5, unit: 'points' }],
+        },
+        dismiss_reason: null,
+      });
+      detail = { status: 'dismissed', validation: null, dismiss_reason: 'wrong_data' };
+      expect(await getActionFor(auth, 'a1')).toMatchObject({
+        net_of_control: null,
+        dismiss_reason: 'wrong_data',
+      });
+    } finally {
+      detail = {};
     }
   });
 
