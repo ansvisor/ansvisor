@@ -51,6 +51,16 @@ export interface ActionTaskDetails {
   role: string | null;
   /** Where the task was sent (AC-004): the Content opportunity it became, the webhook. */
   sent: TaskSent;
+  /** Its last automatic check (AC-010): when, whether it passed, and what was missing. */
+  lastCheck: TaskLastCheck | null;
+}
+
+/** What an automatic check (AC-010) found, as the server keeps it (task-checks.js). */
+export interface TaskLastCheck {
+  at: string;
+  passed: boolean;
+  /** Codes, worded by en.json actionCenter.taskCheckMissing. */
+  missing: string[];
 }
 
 export interface TaskSent {
@@ -143,6 +153,7 @@ export function parseTaskDetails(raw: unknown): ActionTaskDetails | null {
         : null,
       webhook: text(webhook.at) ? { at: text(webhook.at)! } : null,
     },
+    lastCheck: parseLastCheck(r.autoCheck),
   };
   return hasTaskDetails(details) ? details : null;
 }
@@ -179,6 +190,17 @@ export function withoutTemplateDoneWhen<T extends TaskDetailsEdit>(
   return template && edit.doneWhen.trim() === template ? { ...edit, doneWhen: '' } : edit;
 }
 
+function parseLastCheck(raw: unknown): TaskLastCheck | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const c = raw as Record<string, unknown>;
+  const at = text(c.at);
+  if (!at || typeof c.passed !== 'boolean') return null;
+  const missing = Array.isArray(c.missing)
+    ? c.missing.filter((code): code is string => typeof code === 'string' && code.length > 0)
+    : [];
+  return { at, passed: c.passed, missing };
+}
+
 /** Whether any field says something. */
 export function hasTaskDetails(details: ActionTaskDetails): boolean {
   return (
@@ -187,6 +209,7 @@ export function hasTaskDetails(details: ActionTaskDetails): boolean {
     details.sources.length > 0 ||
     details.sent.content !== null ||
     details.sent.webhook !== null ||
+    details.lastCheck !== null ||
     hasTaskSpec(details)
   );
 }

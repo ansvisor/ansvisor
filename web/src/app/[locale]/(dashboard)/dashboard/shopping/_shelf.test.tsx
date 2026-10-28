@@ -9,8 +9,10 @@ import { buildShelf, shelfStats, type ShelfCardRow } from '@/lib/shopping/shelf'
 /** The Shelf's numbers and rows (ECOM-006). */
 
 vi.mock('@/i18n/navigation', () => ({
-  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -187,6 +189,10 @@ describe('ShelfRows', () => {
     expect(text).toContain('Yours, not here');
     const link = container.querySelector('a[href^="/dashboard/shopping/products/ridge"]')!;
     expect(link.textContent).toBe('Why not you?');
+    // Its name for a screen reader starts with what it shows.
+    expect(link.getAttribute('aria-label')).toBe(
+      'Why not you? Open Ridge 30L Hiking Backpack beside the product AI picked on this shelf',
+    );
     expect(link.getAttribute('href')).toBe(
       '/dashboard/shopping/products/ridge?prompt=p1&platform=chatgpt-shopping',
     );

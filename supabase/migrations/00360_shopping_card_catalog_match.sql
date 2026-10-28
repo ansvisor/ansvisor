@@ -31,6 +31,12 @@ create index if not exists prompt_result_shopping_cards_catalog_product_idx
   on public.prompt_result_shopping_cards (brand_id, catalog_product_id)
   where catalog_product_id is not null;
 
+-- A catalog product's cards by the product alone: what `on delete set null`
+-- looks up when a product is deleted, which the index above can't serve.
+create index if not exists prompt_result_shopping_cards_catalog_product_id_idx
+  on public.prompt_result_shopping_cards (catalog_product_id)
+  where catalog_product_id is not null;
+
 comment on column public.prompt_result_shopping_cards.catalog_product_id is
   'Product visibility (00360): the brand''s catalog product this card shows, matched by its listing, GTIN, link or title; null for none.';
 comment on column public.prompt_result_shopping_cards.catalog_match is

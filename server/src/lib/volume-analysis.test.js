@@ -109,7 +109,7 @@ function seed({ activeCount = 0, inactiveCount = 0, withVolumes = [] } = {}) {
     prompts.push({ id: `off${i}`, text: `off ${i}`, prompt_set_id: 's1', is_active: false });
   }
   return {
-    brands: [{ id: 'b1', region: 'US', language: 'en' }],
+    brands: [{ id: 'b1', region: 'US', language: 'en', organization_id: 'o1' }],
     prompt_sets: [{ id: 's1', brand_id: 'b1' }],
     prompts,
     prompt_volumes: withVolumes.map((id) => ({
@@ -122,12 +122,14 @@ function seed({ activeCount = 0, inactiveCount = 0, withVolumes = [] } = {}) {
 
 const extractIntentKeywords = vi.fn();
 const getSearchVolumes = vi.fn();
+const isOrgActive = vi.fn();
 
 async function load(db) {
   const { client, queries } = makeSupabase(db);
   vi.resetModules();
   vi.doMock('../config/supabase.js', () => ({ default: client }));
   vi.doMock('./dataforseo.js', () => ({ getSearchVolumes }));
+  vi.doMock('./active-subscriptions.js', () => ({ isOrgActive }));
   vi.doMock('./ai-provider.js', () => ({ resolveModel: () => 'model' }));
   vi.doMock('./intent-extraction.js', () => ({
     AI_VOLUME_MULTIPLIER: 0.15,
@@ -144,6 +146,8 @@ async function load(db) {
 beforeEach(() => {
   vi.clearAllMocks();
   extractIntentKeywords.mockResolvedValue({ intent: 'informational', keywords: ['a', 'b'] });
+  // Every organization on a plan unless a test says otherwise.
+  isOrgActive.mockResolvedValue(true);
   getSearchVolumes.mockResolvedValue({
     a: { volume: 10, competitionIndex: 50, competition: 'MEDIUM' },
   });
@@ -156,6 +160,30 @@ beforeEach(() => {
  * reason to refuse it.
  */
 describe('analyzeBrandVolumes', () => {
+  /**
+   * Once the plan has ended (2026-10-27): no model call, no DataForSEO
+   * request, nothing written, whoever asks (the internal trigger has no 402
+   * in front of it).
+   */
+  it("looks up nothing for a brand whose organization's plan has ended", async () => {
+    isOrgActive.mockResolvedValue(false);
+    const { analyzeBrandVolumes, queries } = await load(seed({ activeCount: 3 }));
+
+    expect(await analyzeBrandVolumes('b1', { onlyMissing: true })).toEqual([]);
+    expect(isOrgActive).toHaveBeenCalledWith('o1');
+    expect(extractIntentKeywords).not.toHaveBeenCalled();
+    expect(getSearchVolumes).not.toHaveBeenCalled();
+    expect(queries.map((q) => q.table)).toEqual(['brands']);
+  });
+
+  it("asks about the brand's own organization, and goes on when it is on a plan", async () => {
+    const { analyzeBrandVolumes } = await load(seed({ activeCount: 2 }));
+
+    expect(await analyzeBrandVolumes('b1', { onlyMissing: true })).toHaveLength(2);
+    expect(isOrgActive).toHaveBeenCalledWith('o1');
+    expect(getSearchVolumes).toHaveBeenCalled();
+  });
+
   it('analyzes a brand far past the old 50-prompt refusal', async () => {
     const { analyzeBrandVolumes } = await load(seed({ activeCount: 100 }));
 

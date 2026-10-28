@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 const db = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('../config/supabase.js', () => ({ default: db }));
+const activeOrgFilter = vi.hoisted(() => vi.fn(async () => () => true));
+vi.mock('./active-subscriptions.js', () => ({ activeOrgFilter }));
+vi.mock('./logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import {
   classifyCitationState,
@@ -11,6 +14,7 @@ import {
   detectPageOpportunitiesInWindow,
   mapVisibilityRows,
   pickValueSignal,
+  runPageOpportunityDetection,
   scorePages,
 } from './page-opportunities.js';
 
@@ -441,5 +445,57 @@ describe('detectPageOpportunitiesInWindow', () => {
       order: () => ({ range: async () => ({ data: null, error: { message: 'timeout' } }) }),
     });
     await expect(detectPageOpportunitiesInWindow('b1')).rejects.toThrow('timeout');
+  });
+});
+
+/**
+ * Once an organization's plan has ended (2026-10-27), the nightly detection
+ * leaves its brands out: nothing new is found for it.
+ */
+describe('runPageOpportunityDetection', () => {
+  const brandsRead = (rows) => {
+    const tables = [];
+    db.rpc.mockReset();
+    db.from.mockReset().mockImplementation((table) => {
+      tables.push(table);
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        not: () => chain,
+        then: (resolve) => resolve({ data: table === 'brands' ? rows : [], error: null }),
+      };
+      return chain;
+    });
+    return tables;
+  };
+
+  it('finds nothing for a brand whose organization is off a plan', async () => {
+    const tables = brandsRead([
+      { id: 'b-lapsed', organization_id: 'lapsed' },
+      { id: 'b-lapsed-2', organization_id: 'lapsed' },
+    ]);
+    activeOrgFilter.mockResolvedValueOnce((orgId) => orgId === 'paying');
+
+    expect(await runPageOpportunityDetection()).toEqual({ scanned: 0, results: [] });
+    expect(activeOrgFilter).toHaveBeenLastCalledWith(['lapsed', 'lapsed']);
+    // Only the brand list was read: no page of theirs.
+    expect(tables).toEqual(['brands']);
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
+  it('keeps to the brands on a plan', async () => {
+    brandsRead([
+      { id: 'b-paying', organization_id: 'paying' },
+      { id: 'b-lapsed', organization_id: 'lapsed' },
+    ]);
+    activeOrgFilter.mockResolvedValueOnce((orgId) => orgId === 'paying');
+    db.rpc.mockReset().mockReturnValue({
+      order: () => ({ range: async () => ({ data: null, error: { message: 'stop here' } }) }),
+    });
+
+    const result = await runPageOpportunityDetection();
+
+    expect(result.scanned).toBe(1);
+    expect(result.results.map((r) => r.brandId)).toEqual(['b-paying']);
   });
 });
