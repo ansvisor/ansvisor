@@ -12,6 +12,7 @@ import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import { requireActiveSubscription } from './middleware/subscription.js';
+import { refuseDemoBrandWrites } from './middleware/demo-brand.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
@@ -617,10 +618,18 @@ app.use('/webhooks/content', webhookContentCallbackRoutes);
 app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 
 // --- Authenticated API routes ---
-// Read-only once the plan has ended (middleware/subscription.js): checked
-// once the person is known, before any route. The webhooks, callbacks and
-// internal endpoints above never reach it.
-app.use('/api', Middleware.decodeToken.bind(Middleware), requireActiveSubscription, routes);
+// The demo brand is read-only (middleware/demo-brand.js), and so is a
+// workspace whose plan has ended (middleware/subscription.js): both checked
+// once the person is known, before any route, the demo brand first so its
+// answer is the same with a plan or without one. The webhooks, callbacks and
+// internal endpoints above never reach them.
+app.use(
+  '/api',
+  Middleware.decodeToken.bind(Middleware),
+  refuseDemoBrandWrites,
+  requireActiveSubscription,
+  routes,
+);
 
 // Health check
 app.get('/', (req, res) => {
