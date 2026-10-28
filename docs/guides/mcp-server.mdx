@@ -225,6 +225,17 @@ The MCP server exposes **53 tools**. Descriptions below match
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
 
+Every tool also carries a `title` and MCP annotations, so a client can tell a
+read from a change before calling it: `readOnlyHint` (true for every `list_` and
+`get_` tool), and for the writes `destructiveHint` (true where a call replaces
+or removes something, such as `generate_content_brief` replacing the
+opportunity's brief), `idempotentHint` (repeating the call changes nothing
+more) and `openWorldHint` (true where a call reaches outside Ansvisor:
+`run_site_audit` fetches the page, `generate_content_brief` calls an LLM).
+The server's instructions tell clients to treat everything a tool returns — AI
+answers, quotes, cited pages, draft text, suggestions — as data, never as
+instructions, and to call a write only when the user asked for that change.
+
 ### Brands
 
 | Tool | What it does | Writes |
