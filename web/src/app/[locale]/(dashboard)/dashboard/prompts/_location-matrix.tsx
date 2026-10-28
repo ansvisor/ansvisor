@@ -147,7 +147,7 @@ export function LocationPending({
   }
   const state = !prompt.isActive
     ? 'paused'
-    : parsed && !answersFrom(prompt, parsed.country, Boolean(parsed.city), countries)
+    : parsed && !answersFrom(prompt, parsed, countries)
       ? 'noEngine'
       : 'pending';
   return (

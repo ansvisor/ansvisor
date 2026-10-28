@@ -30,6 +30,13 @@ export const PLATFORM_MODELS: Record<string, string> = {
 /** Engines that answer from a city, by the provider's model name (PROMPT-015d). */
 export const CITY_MODELS: ReadonlySet<string> = new Set(['aimode', 'aioverview']);
 
+/**
+ * Engines that can't ask from a US state, by the provider's model name: the
+ * API runs them country-wide and records their answers as the country's
+ * (COUNTRY_ONLY_SCRAPERS, #691), so a state's column never gets them.
+ */
+export const COUNTRY_ONLY_MODELS: ReadonlySet<string> = new Set(['aimode', 'aioverview']);
+
 export interface TrackingCountry {
   code: string;
   /** The provider's engines that answer from it. */
@@ -75,22 +82,27 @@ export function missingEngines(
 }
 
 /**
- * Whether any of a prompt's engines answers from a country (a city of it,
- * when `city`). The API models answer from anywhere; an engine the provider
- * doesn't list is given the benefit of the doubt; with no lists read, all do.
+ * Whether any of a prompt's engines gets answers recorded for a location, as
+ * the tracking run asks them: a city only of the engines that ask from one,
+ * a US state only of those that don't run country-wide, and either only
+ * where the engine answers from the country. The API models answer from
+ * anywhere. An engine the provider doesn't list, or has no list read for, is
+ * given the benefit of the doubt, as the run gives it; with no lists read,
+ * all are.
  */
 export function answersFrom(
   engines: { platforms: readonly string[]; models?: readonly string[] | null },
-  country: string,
-  city: boolean,
+  location: { country: string; state?: string | null; city?: string | null },
   countries: readonly TrackingCountry[] | null,
 ): boolean {
-  if (!countries?.length || (engines.models?.length ?? 0) > 0) return true;
-  const entry = countries.find((c) => c.code === country);
+  if ((engines.models?.length ?? 0) > 0) return true;
+  const listed = new Set((countries ?? []).flatMap((c) => c.models));
+  const entry = countries?.find((c) => c.code === location.country);
   return engines.platforms.some((platform) => {
     const model = PLATFORM_MODELS[platform];
     if (!model) return true;
-    if (city && !CITY_MODELS.has(model)) return false;
-    return Boolean(entry?.models.includes(model));
+    if (location.city && !CITY_MODELS.has(model)) return false;
+    if (location.state && COUNTRY_ONLY_MODELS.has(model)) return false;
+    return !listed.has(model) || Boolean(entry?.models.includes(model));
   });
 }
