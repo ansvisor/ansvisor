@@ -17,6 +17,7 @@ import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 import type { ReadOnlyReason } from '@/lib/billing/subscription-access';
 import { offerChoice } from '@/lib/billing/plan-purchase';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
+import { useBrandStore } from '@/stores/use-brand-store';
 
 /**
  * A thin band across the top of the dashboard while the workspace is
@@ -30,8 +31,10 @@ import { TRIAL_DAYS } from '@/lib/billing/trial';
  */
 export function ReadOnlyBanner() {
   const state = useUpgradeDialog();
-  // The demo brand has its own band: one band at a time.
-  if (!state?.isLocked || state.isDemo || state.reason === 'demo') return null;
+  // The demo brand has its own band: one band at a time. Which brand is on
+  // screen is known once the brands are loaded; nothing until then.
+  const brandsLoaded = useBrandStore((s) => s.loaded);
+  if (!brandsLoaded || !state?.isLocked || state.isDemo || state.reason === 'demo') return null;
   return <Band reason={state.reason} adminName={state.adminName} openUpgrade={state.openUpgrade} />;
 }
 

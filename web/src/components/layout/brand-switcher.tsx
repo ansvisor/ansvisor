@@ -48,6 +48,7 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
   const pathname = usePathname();
   const {
     brands,
+    loaded,
     activeBrandId,
     setActiveBrand,
     addBrand: addToList,
@@ -108,7 +109,8 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
   };
 
   if (brands.length === 0) {
-    if (!canManage) return null;
+    // Before the brands are loaded, none listed isn't none at all.
+    if (!loaded || !canManage) return null;
     return (
       <button
         onClick={addBrand}
