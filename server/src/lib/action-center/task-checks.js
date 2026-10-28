@@ -98,7 +98,12 @@ const STRUCTURED_MISSING = {
   'json-ld-relevance': 'structured_data_irrelevant',
   'faq-schema': 'no_faq_schema',
 };
-/** A fix raised without the audit's checks named: its JSON-LD must at least be valid. */
+/**
+ * A fix raised without the audit's checks named (another action's, F06's
+ * brand-entity, say): its JSON-LD must at least be valid, and since a page
+ * may have had a valid block all along (a site-wide Organization), it
+ * passes only after a check on the page found it failing (`sawFailing`).
+ */
 const DEFAULT_STRUCTURED = ['json-ld-validity'];
 /** Checks whose warn is still the problem: a block that doesn't parse. */
 const PASS_ONLY = new Set(['json-ld-validity']);
@@ -305,7 +310,7 @@ function changedSince(previous, url, visible) {
 const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
 
 /**
- * A task's check on its page: `{ passed, missing, sketch?, wasMissing? }`,
+ * A task's check on its page: `{ passed, missing, sketch?, wasMissing?, sawFailing? }`,
  * or null when the page couldn't be read (no answer, a timeout, a server
  * error, a 4xx other than "not there", a page nested too deep to parse):
  * nothing but the try is kept then.
@@ -357,7 +362,18 @@ export async function checkPage(
       const { status } = STRUCTURED_CHECKS[key].evaluate({ $ });
       return status === 'fail' || (PASS_ONLY.has(key) && status !== 'pass');
     });
-    return { passed: !failing.length, missing: failing.map((key) => STRUCTURED_MISSING[key]) };
+    if (failing.length) {
+      return {
+        passed: false,
+        missing: failing.map((key) => STRUCTURED_MISSING[key]),
+        ...(named.length ? {} : { sawFailing: true }),
+      };
+    }
+    // None named, and never seen failing on this page: valid all along, not fixed.
+    if (!named.length && !(previous?.sawFailing && previous.url === url)) {
+      return { passed: false, missing: ['valid_before'] };
+    }
+    return { passed: true, missing: [] };
   }
 
   if (kind === 'crawlers') {
@@ -590,6 +606,10 @@ export async function runTaskCheck(task, action, { fetch = fetchPage, now = new 
         missing: found.missing,
         ...(kept ? { sketch: kept } : {}),
         ...(found.wasMissing ? { wasMissing: true } : {}),
+        // Kept for the page, so a fix after a failing check passes.
+        ...(found.sawFailing || (samePageAsBefore && previous?.sawFailing)
+          ? { sawFailing: true }
+          : {}),
         ...(held ? { held: true } : {}),
       }
     : { ...(previous ?? {}), triedAt: now.toISOString() };

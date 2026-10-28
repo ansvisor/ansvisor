@@ -267,9 +267,10 @@ describe('checkPage', () => {
     const FAQ = ld(
       '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"a"},{"@type":"Question","name":"b"}]}',
     );
-    const check = (head, auditChecks) =>
+    const check = (head, auditChecks, previous = null) =>
       checkPage('structuredData', PAGE, {
         auditChecks,
+        previous,
         fetch: fetchOf({ [PAGE]: html('x', head) }),
       });
     // A FAQ schema fix isn't passed by the site's Organization block.
@@ -278,11 +279,21 @@ describe('checkPage', () => {
       missing: ['no_faq_schema'],
     });
     expect(await check(`${ORG}${FAQ}`, ['faq-schema'])).toEqual({ passed: true, missing: [] });
-    // No checks named: the JSON-LD must be valid schema.org; {"foo":1} isn't.
-    expect(await check(ORG, [])).toEqual({ passed: true, missing: [] });
-    expect(await check(ld('{"foo":1}'), [])).toEqual({
+    // No checks named (another action's fix, #1565 B): the JSON-LD must be
+    // valid schema.org, {"foo":1} isn't, and a page valid all along (the
+    // site's Organization block) isn't fixed by it…
+    expect(await check(ORG, [])).toEqual({ passed: false, missing: ['valid_before'] });
+    const failed = await check(ld('{"foo":1}'), []);
+    expect(failed).toEqual({
       passed: false,
       missing: ['structured_data_invalid'],
+      sawFailing: true,
+    });
+    // …it passes once a check on this page found it failing.
+    expect(await check(ORG, [], { ...failed, url: PAGE })).toEqual({ passed: true, missing: [] });
+    expect(await check(ORG, [], { ...failed, url: 'https://acme.example/other' })).toEqual({
+      passed: false,
+      missing: ['valid_before'],
     });
     expect(await check('', ['json-ld-presence', 'json-ld-validity'])).toEqual({
       passed: false,
@@ -301,7 +312,7 @@ describe('checkPage', () => {
     // A good block beside one that doesn't parse: validity's warn, still open.
     const broken = `${ORG}${ld('{"@type":"Product",')}`;
     for (const auditChecks of [['json-ld-validity'], []]) {
-      expect(await check(broken, auditChecks)).toEqual({
+      expect(await check(broken, auditChecks)).toMatchObject({
         passed: false,
         missing: ['structured_data_invalid'],
       });
@@ -556,6 +567,38 @@ describe('runTaskCheck', () => {
     db.brand_domains = [{ domain: 'https://www.acme.example/' }];
     const fetch = fetchOf({ 'https://www.acme.example/pricing': html('x') });
     expect((await runTaskCheck(task(), action, { fetch, now })).autoCheck.passed).toBe(true);
+  });
+
+  it('passes another action’s structured data fix only after a check found the page failing (#1565 B)', async () => {
+    // F06's brand-entity raised it: none of its checks is a structured data check.
+    db.actions = { targets: [{ id: PAGE, checks: ['brand-entity'] }] };
+    const ORG =
+      '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Acme"}</script>';
+    const run = (autoCheck, head) =>
+      runTaskCheck(
+        task({
+          task_key: 'fix_structured_data',
+          details: {
+            check: 'auto',
+            url: '/pricing',
+            source: 'template',
+            ...(autoCheck ? { autoCheck } : {}),
+          },
+        }),
+        action,
+        { fetch: fetchOf({ [PAGE]: html('x', head) }), now },
+      );
+    // The site's Organization block was there all along: not fixed by it.
+    const first = await run(null, ORG);
+    expect(first.autoCheck).toMatchObject({ passed: false, missing: ['valid_before'] });
+    expect(first.autoCheck).not.toHaveProperty('sawFailing');
+    // No valid block now: kept as seen failing…
+    const broken = await run(first.autoCheck, '');
+    expect(broken.autoCheck).toMatchObject({ passed: false, sawFailing: true });
+    // …through a read that found it failing again, and then fixed: passed.
+    const still = await run(broken.autoCheck, '');
+    expect(still.autoCheck.sawFailing).toBe(true);
+    expect((await run(still.autoCheck, ORG)).autoCheck).toMatchObject({ passed: true });
   });
 
   it('checks structured data by the checks its page failed, and a crawler fix only from the audit', async () => {

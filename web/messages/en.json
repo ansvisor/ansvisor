@@ -2499,6 +2499,7 @@
       "change_not_found": "the new text isn't on the page",
       "old_text_still_there": "the text it replaces is still on the page",
       "off_site": "the page isn't on the brand's site",
+      "valid_before": "the structured data was valid before the fix. Mark the task done once it's fixed",
       "links_not_for_sale": "the page still links products that no longer sell"
     },
     "taskChecks": {
