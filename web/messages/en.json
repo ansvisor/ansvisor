@@ -5068,7 +5068,7 @@
           "few": "{count} of {want} products linked",
           "fewDetail": "Link more of the products in Brief › Shopping path that are in stock: a product card or grid counts.",
           "prices": "{count, plural, one {# product card shows an old price} other {# product cards show an old price}}",
-          "pricesDetail": "{list}{more, plural, =0 {} other { +# more}}. A card keeps the price it was put in with: put the product in again (Insert › Products) to show today's.",
+          "pricesDetail": "{list}{more, plural, =0 {} other { +# more}}. A card keeps the price it was put in with. To show today's, replace the card: delete it and add the product again (Add › Products).",
           "priceItem": "{title}: {page} on the page, {now, select, none {no price} other {{now}}} now"
         },
         "disclosure": {

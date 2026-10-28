@@ -231,7 +231,7 @@ describe('BeforePublish', () => {
         }),
       });
       expect(rows().find((r) => r?.startsWith('2 product cards show an old price'))).toContain(
-        "Summit: $199.00 on the page, $179.00 now; Trail: $50.00 on the page, no price now. A card keeps the price it was put in with: put the product in again (Insert › Products) to show today's.",
+        "Summit: $199.00 on the page, $179.00 now; Trail: $50.00 on the page, no price now. A card keeps the price it was put in with. To show today's, replace the card: delete it and add the product again (Add › Products).",
       );
       // The links themselves still work.
       expect(rows().join('|')).toContain('Shopping links work');
