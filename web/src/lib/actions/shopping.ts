@@ -19,7 +19,17 @@ import {
 } from '@/lib/shopping/shelf';
 import { categoryRows, type CategoryCardRow, type CategoryRow } from '@/lib/shopping/categories';
 import {
+  comparison,
+  focusShelf,
+  productShelves,
+  type ComparisonRow,
+  type DetailCard,
+  type ProductShelfLine,
+} from '@/lib/shopping/product-detail';
+import { priceText } from '@/lib/shopping/price';
+import {
   productRows,
+  readiness,
   type CatalogProductRow,
   type ProductAiStats,
   type ProductCardRow,
@@ -1634,4 +1644,125 @@ export async function getShoppingCategories(
       ),
     },
   );
+}
+
+// ── A product's page (Product Visibility, ECOM-011) ───────────────────────────
+
+export interface ShoppingProductDetail {
+  product: CatalogProductRow;
+  readiness: ReturnType<typeof readiness>;
+  /** The questions it belongs on, each channel's latest shelf. */
+  shelves: ProductShelfLine[];
+  /** The shelf "Why not your product?" explains, and its rows. */
+  focus: ProductShelfLine | null;
+  comparison: ComparisonRow[];
+  /** AI visits to its page and the orders they led to, over the window (00361). */
+  ai: { visits: number; orders: number; revenue: number | null; currency: string | null };
+}
+
+/** A product of the brand's catalog, on the AI shelves of the questions it belongs on. Null when it isn't the brand's. */
+export async function getShoppingProductDetail(
+  brandId: string,
+  productId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingProductDetail | null> {
+  if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(productId).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const { from } = resolveDateRange(filters);
+  const [[product], cards, stats, domain] = await Promise.all([
+    readCatalogProducts(supabase, brandId, [productId]),
+    fetchAllCards<{
+      prompt_result_id: string;
+      position: number;
+      created_at: string;
+      platform: string;
+      product_title: string | null;
+      price_amount: number | null;
+      price_currency: string | null;
+      rating: number | null;
+      review_count: number | null;
+      merchant_domain: string | null;
+      image_url: string | null;
+      matched_brand_role: string;
+      catalog_product_id: string | null;
+      prompt_results: {
+        search_queries: unknown;
+        prompt: { id: string; text: string } | null;
+      } | null;
+    }>(() =>
+      cardsInWindow(
+        supabase,
+        brandId,
+        filters,
+        'prompt_result_id, position, created_at, platform, product_title, price_amount, price_currency, rating, review_count, merchant_domain, image_url, matched_brand_role, catalog_product_id, prompt_results:prompt_result_id ( search_queries, prompt:prompt_id ( id, text ) )',
+      ),
+    ),
+    // Its own row only (00361), none without AI visits or orders.
+    supabase.rpc('catalog_product_ai_stats', {
+      p_brand_id: brandId,
+      p_from: from ?? daysAgoIso(90),
+      p_product_id: productId,
+    }),
+    supabase
+      .from('brand_domains')
+      .select('domain')
+      .eq('brand_id', brandId)
+      .eq('is_primary', true)
+      .maybeSingle(),
+  ]);
+  if (!product) return null;
+  if (stats.error) throw new Error(stats.error.message);
+
+  const detailCards: DetailCard[] = cards.flatMap((card) => {
+    const prompt = card.prompt_results?.prompt;
+    if (!prompt || !card.product_title?.trim()) return [];
+    return [
+      {
+        promptId: prompt.id,
+        promptText: prompt.text,
+        platform: card.platform,
+        promptResultId: card.prompt_result_id,
+        at: card.created_at,
+        position: card.position,
+        title: card.product_title.trim(),
+        price: card.price_amount,
+        currency: card.price_currency,
+        rating: card.rating,
+        reviews: card.review_count,
+        merchant: card.merchant_domain,
+        image: card.image_url,
+        role: card.matched_brand_role,
+        productId: card.catalog_product_id,
+        searches: searchesOf(card.prompt_results?.search_queries),
+      },
+    ];
+  });
+  // How the answers showed it, its latest card first: its rating there.
+  const shown = detailCards
+    .filter((card) => card.productId === productId)
+    .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  const shelves = productShelves(product, detailCards);
+  const focus = focusShelf(shelves);
+  const ai = (stats.data ?? []).find((row) => row.product_id === productId);
+  return {
+    product,
+    readiness: readiness(product),
+    shelves,
+    focus,
+    comparison: focus
+      ? comparison(product, focus, {
+          own: shown ? { rating: shown.rating, reviews: shown.reviews } : null,
+          price: priceText,
+          storeDomain: domain.data?.domain ?? null,
+        })
+      : [],
+    ai: {
+      visits: Number(ai?.ai_visits ?? 0),
+      orders: Number(ai?.orders ?? 0),
+      revenue: ai?.revenue === null || ai?.revenue === undefined ? null : Number(ai.revenue),
+      currency: ai?.currency ?? null,
+    },
+  };
 }

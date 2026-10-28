@@ -1,10 +1,19 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { productRows, type CatalogProductRow } from '@/lib/shopping/products';
-import { ProductsTable } from './_products-table';
+
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
+const { ProductsTable } = await import('./_products-table');
 
 /** The Products table (ECOM-007). */
 
@@ -97,6 +106,13 @@ describe('ProductsTable', () => {
     ) as HTMLButtonElement;
     act(() => never.click());
     expect(bodyRows().map((row) => row[0])).toEqual(['Ridge 30L BackpackBackpacks · $119']);
+  });
+
+  it('links each product to its page', () => {
+    render(<ProductsTable products={{ rows, total: 2 }} loading={false} />);
+    expect(container.querySelector('a[href="/dashboard/shopping/products/p2"]')?.textContent).toBe(
+      'StormShell Jacket',
+    );
   });
 
   it('says when the catalog is larger than the table reads, and counts All and Never shown out of it', () => {

@@ -1,0 +1,161 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../../../../../../messages/en.json';
+import type { ShoppingProductDetail } from '@/lib/actions/shopping';
+
+/** A product's page (ECOM-011). */
+
+const getShoppingProductDetail = vi.hoisted(() => vi.fn());
+const gate = vi.hoisted(() => ({ allowed: true }));
+vi.mock('@/lib/actions/shopping', () => ({ getShoppingProductDetail }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ productId: 'p1' }) }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (select: (s: { activeBrandId: string }) => unknown) =>
+    select({ activeBrandId: 'b1' }),
+}));
+vi.mock('@/hooks/use-feature-gate', () => ({
+  useFeatureGate: () => ({ canUse: () => gate.allowed }),
+}));
+vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
+  HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+const { default: ShoppingProductPage } = await import('./page');
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+let container: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+  gate.allowed = true;
+  getShoppingProductDetail.mockReset();
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+async function render() {
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <ShoppingProductPage />
+      </NextIntlClientProvider>,
+    );
+  });
+  return container.textContent ?? '';
+}
+
+const line = {
+  promptId: 'q1',
+  promptText: 'lightweight 30L hiking backpack for women',
+  platform: 'chatgpt-shopping',
+  rank: null,
+  winner: {
+    title: 'Summit Daypack 30 W',
+    price: 110,
+    currency: 'USD',
+    rating: 4.8,
+    reviews: 2140,
+    merchant: 'summitgear.example',
+    image: null,
+  },
+  score: 41,
+  winnerScore: 88,
+  missing: ['women', 'lightweight'],
+};
+const detail: ShoppingProductDetail = {
+  product: {
+    id: 'p1',
+    title: 'Ridge 30L Backpack',
+    url: 'https://northwind.example/products/ridge-30',
+    productType: 'Backpacks',
+    brand: 'Northwind',
+    description: null,
+    image: null,
+    category: 'Bags > Hiking backpacks',
+    price: 119,
+    currency: 'USD',
+    inStock: true,
+    hasGtin: false,
+  },
+  readiness: { score: 48, missing: ['gtin', 'description'] },
+  shelves: [
+    line,
+    {
+      ...line,
+      promptId: 'q2',
+      promptText: 'durable daypack',
+      rank: 1,
+      winner: null,
+      winnerScore: null,
+      score: 60,
+      missing: [],
+    },
+  ],
+  focus: line,
+  comparison: [
+    {
+      key: 'score',
+      you: '41',
+      winner: '88',
+      state: 'missing',
+      note: { key: 'missingWords', values: { words: 'women, lightweight' } },
+    },
+    { key: 'price', you: '$119', winner: '$110', state: 'match', note: { key: 'close' } },
+    { key: 'gtin', you: null, winner: null, state: 'missing' },
+  ],
+  ai: { visits: 4, orders: 0, revenue: null, currency: null },
+};
+
+describe('ShoppingProductPage', () => {
+  it('shows the product, where it shows, and why AI picked another one', async () => {
+    getShoppingProductDetail.mockResolvedValue(detail);
+    const text = await render();
+    expect(getShoppingProductDetail).toHaveBeenCalledWith('b1', 'p1', { datePreset: '30d' });
+    expect(text).toContain('Ridge 30L Backpack');
+    expect(text).toContain('$119 · Hiking backpacks · On 1 of 2 shelves · Readiness 48');
+    expect(text).toContain(
+      '“lightweight 30L hiking backpack for women” · ChatGPT Shopping picked Summit Daypack 30 W',
+    );
+    const rows = [...container.querySelectorAll('table')[0].querySelectorAll('tbody tr')].map(
+      (tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent),
+    );
+    // Each row's state in words too, beside its icon.
+    expect(rows).toEqual([
+      ['Match with the question, missing', '41', '88', 'Missing: women, lightweight'],
+      ['Price, in place', '$119', '$110', 'Close'],
+      ['GTIN in the feed, missing', '✕', '—', ''],
+    ]);
+    expect(
+      [...container.querySelectorAll('table')[0].querySelectorAll('.sr-only')].map(
+        (span) => span.textContent,
+      ),
+    ).toEqual([', missing', ', in place', ', missing']);
+    expect(text).toContain('Not on the shelf');
+    expect(text).toContain('Missing: a GTIN (−20)');
+    expect(container.querySelector('a[href="/dashboard/shopping?tab=products"]')).not.toBeNull();
+  });
+
+  it('says when the product is gone, or locked', async () => {
+    getShoppingProductDetail.mockResolvedValue(null);
+    expect(await render()).toContain("This product isn't in your catalog anymore.");
+    gate.allowed = false;
+    expect(await render()).toContain('Product Visibility comes with the Growth plan.');
+  });
+});
