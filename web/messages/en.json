@@ -1286,7 +1286,7 @@
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
-          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -2596,6 +2596,7 @@
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
         "brandWide": "Brand-wide over the same days: {list}",
+        "primary": "Judged by {metric}, its main metric.",
         "auditAfter": "Audited again since it closed: {passed} of {audited} {audited, plural, one {page passes} other {pages pass}}.",
         "auditNotYet": "None of its {pages, plural, one {page} other {# pages}} was audited again since it closed: the result is from the metrics.",
         "signalsAfter": "Of the {total, plural, one {signal} other {# signals}} that raised it, when measured: {ended} ended{replaced, plural, =0 {} other {, # turned into another}}{dismissed, plural, =0 {} other {, # dismissed}}{open, plural, =0 {} other {, # still open}}.",
@@ -2635,21 +2636,29 @@
       "outcomeHint": {
         "pending_measurement": "no result recorded",
         "improved": "vs before",
+        "mixed": "vs before",
         "no_meaningful_change": "vs before",
         "declined": "vs before",
-        "not_measurable": "action was dismissed"
+        "not_measurable": "nothing to read"
       },
       "outcomeExplain": {
         "pending_measurement": "This action's effect has not been measured. The metrics below fill in once validation runs.",
         "improved": "Measured after this action closed.",
+        "mixed": "Measured after this action closed; some metrics moved up and others down, or only some of its pages pass.",
         "no_meaningful_change": "Measured after this action closed; the metrics did not move.",
         "declined": "Measured after this action closed; the metrics moved the wrong way.",
-        "not_measurable": "This action was dismissed, so nothing was measured."
+        "not_measurable": "Measured after this action closed; nothing it aims at could be read."
+      },
+      "dismissedResult": {
+        "label": "Not measured",
+        "hint": "dismissed",
+        "explain": "Not measured: it was dismissed, and only a completed action is measured."
       }
     },
     "actionOutcome": {
       "pending_measurement": "Not measured",
       "improved": "Improved",
+      "mixed": "Mixed",
       "no_meaningful_change": "No meaningful change",
       "declined": "Declined",
       "not_measurable": "Not measurable"

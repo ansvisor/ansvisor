@@ -75,6 +75,8 @@ interface ValidationSnapshot {
   brandWide?: ValidationSnapshot['metrics'];
   /** A Site Audit fix's pages audited again (learning A2). */
   audit?: { pages?: number; audited?: number; passed?: number };
+  /** The metric its result is judged by (learning A4). */
+  primary?: string;
 }
 
 /** A Site Audit fix's pages audited again, when the sweep read them. */
@@ -311,6 +313,10 @@ export async function getActionHistory(
       signalsAfter: signalsFrom(row.validation),
       measuredOn: measuredOnFrom(row.validation),
       auditAfter: auditFrom(row.validation),
+      // Shown only when it was measured: a main metric with no pair says nothing.
+      primaryMetric: resultsFrom(row.validation).some((m) => m.metric === row.validation?.primary)
+        ? (row.validation?.primary ?? null)
+        : null,
       brandWideResults: resultsFrom(
         row.validation?.brandWide ? { ...row.validation, metrics: row.validation.brandWide } : null,
       ),

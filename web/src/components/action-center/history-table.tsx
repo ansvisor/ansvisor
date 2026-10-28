@@ -100,6 +100,17 @@ function ResultCell({ item }: { item: ActionHistoryItem }) {
 
   if (position) return <div className="space-y-0.5">{position}</div>;
 
+  // Only a completed action is measured. A dismissed one's outcome reads
+  // pending, or not measurable from before (00084): neither says why.
+  if (item.status === 'dismissed') {
+    return (
+      <div className="space-y-0.5">
+        <p className="text-xs text-muted-foreground">{t('dismissedResult.label')}</p>
+        <p className="text-[11px] text-muted-foreground/70">{t('dismissedResult.hint')}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-0.5">
       <p className="text-xs text-muted-foreground">{tOutcome(item.outcome)}</p>

@@ -1263,7 +1263,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_action_history',
     {
       description:
-        'List closed Action Center actions (completed or dismissed) for a brand with their measured result, most recently closed first. `outcome` is the verdict (improved, no_meaningful_change, declined, not_measurable, or pending_measurement while the after-window is still open) and `results` holds the before/after values the validation sweep measured. Use this to answer "did what we did last month work?".',
+        'List closed Action Center actions (completed or dismissed) for a brand with their measured result, most recently closed first. `outcome` is the verdict (improved, mixed when its metrics moved both ways or only some of a fix\u2019s pages pass, no_meaningful_change, declined, not_measurable, or pending_measurement while the after-window is still open) and `results` holds the before/after values the validation sweep measured. Use this to answer "did what we did last month work?".',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z

@@ -208,6 +208,43 @@ describe('HistoryDrawer', () => {
     );
   });
 
+  it('names the main metric it was judged by, and reads a mixed result (learning A4)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, outcome: 'mixed', results: [], primaryMetric: 'citations' }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    const result = under('Result');
+    expect(result).toMatch(/Judged by \S.*, its main metric\./);
+    expect(result).toContain(
+      'some metrics moved up and others down, or only some of its pages pass',
+    );
+  });
+
+  it('says a dismissed action was not measured, not that nothing could be read', async () => {
+    getActionSignals.mockResolvedValue([]);
+    for (const outcome of ['not_measurable', 'pending_measurement'] as const) {
+      render(
+        <HistoryDrawer
+          brandId="b1"
+          item={{ ...item, status: 'dismissed', outcome }}
+          onOpenChange={() => {}}
+        />,
+      );
+      await act(async () => {});
+      const result = under('Result');
+      expect(result).toContain(
+        'Not measured: it was dismissed, and only a completed action is measured.',
+      );
+      expect(result).not.toContain('could be read');
+      expect(result).not.toContain('fill in once validation runs');
+    }
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);
