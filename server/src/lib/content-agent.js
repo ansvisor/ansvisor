@@ -1353,16 +1353,18 @@ async function fixWithRun({
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The rules here people at the brand mostly reject its changes for
   // (learning B6): kept small, and named on the run's rules step, which the
-  // editor's agent card shows. A read that fails leaves the run as it was.
-  const careful = (
-    await carefulRules(brandId).catch((err) => {
-      logger.warn(
-        { err: { message: err?.message }, draftId },
-        '[content-agent] decisions not read',
-      );
-      return [];
-    })
-  ).filter(({ key }) => ruleKeys.has(key));
+  // editor's agent card shows. Apply rules with Agent only: Quality's
+  // hand-off (CE-051), whose card doesn't show it, runs as it was. A read
+  // that fails leaves the run as it was.
+  const careful = handoff
+    ? []
+    : await carefulRules(brandId, { keys: ruleKeys }).catch((err) => {
+        logger.warn(
+          { err: { message: err?.message }, draftId },
+          '[content-agent] decisions not read',
+        );
+        return [];
+      });
   if (careful.length && run?.steps?.[0]) {
     run.steps[0] = { ...run.steps[0], careful: careful.map(({ key }) => key) };
   }

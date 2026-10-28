@@ -13,6 +13,8 @@ import supabaseAdmin from '../config/supabase.js';
 export const DECISION_WINDOW_DAYS = 90;
 /** Decided suggestions for a rule before its share means anything. */
 export const CAREFUL_MIN_DECIDED = 5;
+/** Drafts they were decided on: one Reject all alone doesn't make a habit. */
+export const CAREFUL_MIN_DRAFTS = 2;
 /** The share rejected past which the agent is careful with a rule. */
 export const CAREFUL_REJECT_SHARE = 0.7;
 /** Rules named at most, the most rejected first. */
@@ -22,25 +24,34 @@ const DAY_MS = 86_400_000;
 
 /**
  * The rules the brand mostly rejects the agent's suggestions for, each with
- * its counts, the most rejected first: `[{ key, accepted, rejected }]`.
- * Empty when it has decided too few to tell.
+ * its counts, the most rejected first: `[{ key, accepted, rejected, drafts }]`.
+ * `keys`, when given, are the only rules looked at (a run's own), so others
+ * never take their places. Empty when it has decided too few to tell.
  */
-export async function carefulRules(brandId, { now = new Date(), db = supabaseAdmin } = {}) {
+export async function carefulRules(brandId, { keys, now = new Date(), db = supabaseAdmin } = {}) {
   const since = new Date(now.getTime() - DECISION_WINDOW_DAYS * DAY_MS).toISOString();
   const { data, error } = await db.rpc('content_suggestion_decisions', {
     p_brand_id: brandId,
     p_since: since,
   });
   if (error) throw new Error(`content_suggestion_decisions: ${error.message}`);
+  const wanted = keys ? new Set(keys) : null;
   return (data ?? [])
     .map((row) => ({
       key: String(row.rule_key ?? ''),
       accepted: Number(row.accepted) || 0,
       rejected: Number(row.rejected) || 0,
+      drafts: Number(row.drafts) || 0,
     }))
-    .filter(({ key, accepted, rejected }) => {
+    .filter(({ key, accepted, rejected, drafts }) => {
       const decided = accepted + rejected;
-      return key && decided >= CAREFUL_MIN_DECIDED && rejected / decided >= CAREFUL_REJECT_SHARE;
+      return (
+        key &&
+        (!wanted || wanted.has(key)) &&
+        decided >= CAREFUL_MIN_DECIDED &&
+        drafts >= CAREFUL_MIN_DRAFTS &&
+        rejected / decided >= CAREFUL_REJECT_SHARE
+      );
     })
     .sort((a, b) => b.rejected - a.rejected || a.key.localeCompare(b.key))
     .slice(0, CAREFUL_MAX);
