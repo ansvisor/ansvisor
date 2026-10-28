@@ -62,6 +62,20 @@ for (const action of actions) {
       `Evidence: ${e.pages.length} pages, ${e.prompts.length} prompts, ${e.domains.length} domains, ${e.competitors.length} competitors · $${result.costUsd.toFixed(4)}`,
       '',
     );
+    // The earlier rounds it was shown (learning B5), so a reviewer can tell
+    // whether the tasks built on them.
+    if (result.history?.length) {
+      lines.push(
+        `Earlier rounds: ${result.history
+          .map((round) =>
+            round.dismissed
+              ? `${round.closed} dismissed (${round.reason ?? 'no reason'})`
+              : `${round.closed} ${round.result}${round.final ? '' : ' so far'}, ${round.done.length} done`,
+          )
+          .join(' · ')}`,
+        '',
+      );
+    }
     result.tasks.forEach((task, i) => {
       lines.push(
         `${i + 1}. **${task.title}** · ${task.type}`,

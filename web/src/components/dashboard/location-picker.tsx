@@ -3,8 +3,18 @@
 import { useMemo } from 'react';
 import { X } from 'lucide-react';
 
-import { REGIONS, US_STATES } from '@/config/prompt-options';
-import { formatRegionDisplay, locationCode, parseLocation } from '@/lib/region';
+import { CITIES } from '@/config/cities';
+import { TRACKING_COUNTRIES, US_STATES } from '@/config/prompt-options';
+import {
+  cityCode,
+  formatRegionDisplay,
+  locationCode,
+  locationSearchText,
+  parseLocation,
+  regionLabel,
+} from '@/lib/region';
+import { useTrackingCountries } from '@/lib/use-tracking-countries';
+import { CITY_MODELS, ENGINE_LABELS, countryName, missingEngines } from '@/lib/tracking-countries';
 import { Badge } from '@/components/ui/badge';
 import {
   Combobox,
@@ -48,6 +58,9 @@ export interface LocationPickerProps {
   allowEmpty?: boolean;
 }
 
+/** The brand regions first, as people look for them, then every other country by name. */
+const POPULAR = TRACKING_COUNTRIES.slice(0, 18).map((c) => c.code);
+
 /** Engines with no sub-country mechanism — mirrors the worker's collapse. */
 const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
 
@@ -56,7 +69,7 @@ const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
  *
  * Follows the card's existing "add, then chip" idiom (the Platform & Models
  * picker): the list adds, the chips below remove. It is a Combobox rather
- * than a Select because the list is 18 countries plus 50 states — long
+ * than a Select because the list is about 50 countries plus 50 states — long
  * enough that scrolling to a known name is worse than typing it.
  *
  * Two things this picker must say out loud, because both cost money or
@@ -74,21 +87,54 @@ export function LocationPicker({
   countNoun = 'tracked',
   allowEmpty = false,
 }: LocationPickerProps) {
-  const options = useMemo<LocationOption[]>(
-    () => [
-      ...REGIONS.map((region) => ({
-        value: region.code,
-        label: region.label,
-        sublabel: 'Country',
-      })),
+  // The countries the engines answer from, as the API last read them; until
+  // then, or without a read, the picker's own list (PROMPT-015e).
+  const engineCountries = useTrackingCountries();
+  const options = useMemo<LocationOption[]>(() => {
+    const read = engineCountries?.length ? engineCountries : null;
+    const countries = read
+      ? [...read]
+          .sort(
+            (a, b) =>
+              (POPULAR.includes(a.code) ? POPULAR.indexOf(a.code) : 99) -
+                (POPULAR.includes(b.code) ? POPULAR.indexOf(b.code) : 99) ||
+              countryName(a.code).localeCompare(countryName(b.code)),
+          )
+          .map((country) => {
+            const missing = missingEngines(country, read).map((m) => ENGINE_LABELS[m] ?? m);
+            return {
+              value: country.code,
+              // Found by its other names too: "Turkey" or "Turkiye" finds Türkiye.
+              label: locationSearchText(country.code),
+              sublabel: missing.length ? `Country · not on ${missing.join(', ')}` : 'Country',
+            };
+          })
+      : TRACKING_COUNTRIES.map((region) => ({
+          value: region.code,
+          label: locationSearchText(region.code),
+          sublabel: 'Country',
+        }));
+    // A city only where Google's engines answer from its country.
+    const cityCountries = read
+      ? new Set(read.filter((c) => c.models.some((m) => CITY_MODELS.has(m))).map((c) => c.code))
+      : null;
+    return [
+      ...countries,
       ...US_STATES.map((state) => ({
         value: locationCode('US', state.code),
         label: state.label,
         sublabel: 'United States · state',
       })),
-    ],
-    [],
-  );
+      // Cities (PROMPT-015d): asked by Google's engines and the API models.
+      ...CITIES.filter((city) => !cityCountries || cityCountries.has(city.country)).map((city) => ({
+        value: cityCode(city.country, city.id),
+        // Found typed with or without its marks, or by its country: "Ist" finds
+        // İstanbul, "Sao" São Paulo, "Turkey" every city in Türkiye.
+        label: locationSearchText(cityCode(city.country, city.id)),
+        sublabel: `City · ${regionLabel(city.country)}`,
+      })),
+    ];
+  }, [engineCountries]);
 
   const selected = new Set(value);
   const atCap = maxSelectable !== null && value.length >= maxSelectable;
@@ -98,6 +144,7 @@ export function LocationPicker({
   const canRemove = allowEmpty || value.length > 1;
 
   const hasStatePick = value.some((code) => parseLocation(code)?.state);
+  const hasCityPick = value.some((code) => parseLocation(code)?.city);
   const countryOnlyEngines = (platforms ?? []).filter((id) => COUNTRY_ONLY_PLATFORMS.has(id));
   const showCountryOnlyNote = hasStatePick && countryOnlyEngines.length > 0;
 
@@ -125,7 +172,7 @@ export function LocationPicker({
       <Combobox items={options} value={null} onValueChange={add}>
         <ComboboxTrigger className="w-full">
           <span className="truncate text-muted-foreground">
-            {atCap ? 'Plan limit reached' : 'Add a country or US state'}
+            {atCap ? 'Plan limit reached' : 'Add a country, US state or city'}
           </span>
         </ComboboxTrigger>
         <ComboboxContent>
@@ -171,9 +218,16 @@ export function LocationPicker({
         </div>
       )}
 
+      {hasCityPick && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Perplexity,
+          Copilot, Gemini and Grok answer per country, so track the country too to see them.
+        </p>
+      )}
+
       {showCountryOnlyNote && (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Google AI Overview and AI Mode have no state-level targeting — they run once per country,
+          Google AI Overviews and AI Mode have no state-level targeting — they run once per country,
           so your state picks cost one location each but are answered country-wide there.
         </p>
       )}

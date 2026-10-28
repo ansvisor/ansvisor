@@ -32,6 +32,7 @@ import {
 } from '@/lib/content/rules';
 import { buildSourceGroups } from '@/lib/content/sources';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { DraftReads } from './_use-draft-reads';
 
 export interface DraftRulesState {
@@ -57,6 +58,11 @@ export interface DraftRulesState {
   settled?: boolean;
   /** The sections and questions the rules ask for take more than Length allows. */
   lengthConflict: { need: number; max: number } | null;
+  /**
+   * The draft's brand reads a Google Merchant Center account into its
+   * catalog (the shopping check's): the Shopping hints say what it accepts.
+   */
+  merchantCenter?: boolean;
   /**
    * The rules checked against another page (an agent's change applied to a
    * copy): what it would meet and break (editor test 2026-10-25).
@@ -124,6 +130,14 @@ export function useDraftRules({
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  // A read-only workspace (plan not active): a rule changed, a set picked or
+  // saved as My rules opens the upgrade dialog instead, and nothing changes.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const locked = () => {
+    if (isLocked) openUpgrade(tActions('editRules'));
+    return isLocked;
+  };
   const [choices, setChoices] = useState<DraftRules>(draft.rules);
   // My rules as read, and for which site type: they are kept per type
   // (00227), so after a switch they count as unread until read again.
@@ -251,6 +265,7 @@ export function useDraftRules({
       });
   };
   const save = (next: DraftRules, message: string) => {
+    if (locked()) return;
     // Before My rules are read, the draft would save Ansvisor's set over the workspace's.
     if (!mineRead) return;
     // Past the database's size check the save would fail: the change stays out.
@@ -278,6 +293,7 @@ export function useDraftRules({
     total,
     length: ruleLength(rules, setType),
     lengthConflict: conflict,
+    merchantCenter: typeof shopping === 'object' && shopping !== null && shopping.merchantCenter,
     checkHtml,
     change: (key, change) =>
       edited({
@@ -329,7 +345,7 @@ export function useDraftRules({
       );
     },
     saveAsMine: () => {
-      if (!setType) return;
+      if (!setType || locked()) return;
       const set = setToSave(effective, mine[setType]);
       if (!ruleSetFits(set)) {
         toast.error(t('tooLongMine'));

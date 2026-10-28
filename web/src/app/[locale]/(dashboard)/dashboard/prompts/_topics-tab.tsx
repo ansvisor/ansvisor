@@ -6,7 +6,9 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { getTopicsOverview, type TopicOverviewRow } from '@/lib/actions/topic';
+import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 import { customUtcWindow } from '@/lib/topic-trend';
 import type { PromptRange, PromptRangePreset } from '@/config/prompt-options';
 import { TopicSuggestionsCard } from './_topic-suggestions-card';
@@ -244,6 +246,9 @@ export function TopicsTab({
     (s) => s.brands.find((brand) => brand.id === s.activeBrandId) ?? null,
   );
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): Add Topic opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [topics, setTopics] = useState<TopicOverviewRow[]>([]);
   const [unassignedPromptCount, setUnassignedPromptCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -251,6 +256,7 @@ export function TopicsTab({
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [open, setOpen] = useState(false);
+  const openAddTopic = guard(() => setOpen(true), { action: tActions('addTopics') });
   // Default matches the previous hard-coded order (#597): visibility descending.
   const [sortKey, setSortKey] = useState<TopicSortKey>('visibility');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -426,7 +432,7 @@ export function TopicsTab({
         createPortal(
           <>
             {canManage && (
-              <Button type="button" size="sm" className="gap-2" onClick={() => setOpen(true)}>
+              <Button type="button" size="sm" className="gap-2" onClick={openAddTopic}>
                 <Plus className="h-4 w-4" />
                 {t('addTopic')}
               </Button>
@@ -472,6 +478,7 @@ export function TopicsTab({
             <div className="flex gap-2">
               <Input
                 placeholder="e.g. Industry, Comparison..."
+                maxLength={TOPIC_NAME_CHARS}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAddTopic()}
@@ -588,7 +595,7 @@ export function TopicsTab({
               <p className="mt-2">{t('emptyTitle')}</p>
               <p className="text-xs">{t('emptyBody')}</p>
               {canManage && (
-                <Button className="mt-4" onClick={() => setOpen(true)}>
+                <Button className="mt-4" onClick={openAddTopic}>
                   <Plus className="mr-2 h-4 w-4" />
                   {t('addTopic')}
                 </Button>

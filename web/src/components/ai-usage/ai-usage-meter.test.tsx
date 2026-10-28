@@ -208,7 +208,7 @@ describe('AiUsageMeter', () => {
     const rows = [...popup()!.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toEqual([
       'Improve suggestions4%',
-      'Content Editor (briefs, Content Agent)17.2%',
+      'Content Editor (briefs, Content Agent, quality checks)17.2%',
       'Action Center task writing0.2%',
       'Agent Chat, on your own AI keyNot counted',
       'Site Audit pages42 of 500',
@@ -221,6 +221,29 @@ describe('AiUsageMeter', () => {
       ['Get more AI usage', '/dashboard/settings/billing'],
       ['Use your own key', '/dashboard/settings/ai-providers'],
       ['See details', '/dashboard/settings/billing#ai-usage'],
+    ]);
+  });
+
+  it('lists only what used some, a sliver as under a tenth, and says when nothing has', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(
+      usage({ percentUsed: 0, features: [{ feature: 'content', percent: 0 }] }),
+    );
+    await render();
+    await open();
+    expect([...popup()!.querySelectorAll('li')].map((li) => li.textContent)).toContain(
+      'Content Editor (briefs, Content Agent, quality checks)<0.1%',
+    );
+    expect(popup()!.textContent).not.toContain('Improve suggestions');
+    expect(popup()!.textContent).not.toContain('No AI usage yet');
+
+    vi.mocked(readAiUsage).mockResolvedValue(usage({ percentUsed: 0, features: [] }));
+    await remount();
+    await open();
+    expect(popup()!.textContent).toContain('No AI usage yet this month.');
+    expect([...popup()!.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'Agent Chat, on your own AI keyNot counted',
+      'Site Audit pages42 of 500',
+      'Prompt locations1,148 of 2,000',
     ]);
   });
 

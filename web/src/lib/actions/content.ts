@@ -5,6 +5,8 @@ import type { ContentBrief, ContentOpportunity, OpportunityBasket, WebhookConfig
 import { API_BASE_URL } from '@/config/api';
 import { apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ContentUsage } from '@/lib/content-usage';
+import { assertWritable } from '@/lib/subscription-guard';
+import type { NoPlanMark } from '@/lib/billing/no-plan';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -338,7 +340,7 @@ export async function getOpportunityBasket(id: string): Promise<OpportunityBaske
   return res.json();
 }
 
-export interface BriefQuota {
+export interface BriefQuota extends NoPlanMark {
   used: number;
   limit: number;
   remaining: number;
@@ -561,6 +563,8 @@ export type BulkSendResult =
       success: true;
       sent: number;
       failed: number;
+      /** Of the failed, those whose webhook redirects (0 from an API before #1590's follow-up). */
+      redirected: number;
     }
   | {
       success: false;
@@ -593,6 +597,7 @@ export async function bulkSendToWebhook(ids: string[]): Promise<BulkSendResult> 
     success: true,
     sent: data.sent,
     failed: data.failed,
+    redirected: data.redirected ?? 0,
   };
 }
 
@@ -629,6 +634,7 @@ export async function saveWebhookConfig(
     isActive?: boolean;
   },
 ): Promise<WebhookConfig> {
+  await assertWritable();
   const supabase = await createClient();
   const allowedEvents = [
     'opportunity.sent',

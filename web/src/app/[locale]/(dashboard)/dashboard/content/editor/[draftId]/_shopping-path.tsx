@@ -7,6 +7,7 @@ import { Lock, LockOpen, Plus, RefreshCw, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingDots } from '@/components/ui/loading-dots';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   buildDraftShoppingPath,
   getDraftShoppingPath,
@@ -18,38 +19,17 @@ import {
   choicesOf,
   leftOutReason,
   placementOf,
+  priceText,
   withAdded,
   withLocked,
   withRemoved,
   type NoPathReason,
   type ShoppingPath,
-  type ShoppingProduct,
 } from '@/lib/content/shopping-path';
 import { pagePath } from '@/lib/content/overlap';
 
-/** An amount above 0, or null: a price of 0 is none given. */
-const positive = (value: number | null) => (value != null && value > 0 ? value : null);
-
-/**
- * A product's price as the catalog has it, in its currency: the sale price
- * when it's under the price, else the price; null without one.
- */
-export function priceText(product: Pick<ShoppingProduct, 'price' | 'salePrice' | 'currency'>) {
-  const price = positive(product.price);
-  const sale = positive(product.salePrice);
-  const amount = sale != null && price != null && sale < price ? sale : price;
-  if (amount == null) return null;
-  try {
-    return product.currency
-      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: product.currency }).format(
-          amount,
-        )
-      : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    // A currency code Intl doesn't know: the amount and the code as the catalog has them.
-    return `${amount} ${product.currency}`;
-  }
-}
+// Where the product dialog and the tests read it.
+export { priceText };
 
 type PathState =
   | { status: 'loading' }
@@ -73,6 +53,8 @@ const PICK_AGAIN: readonly (NoPathReason | null)[] = [null, 'no_match', 'other']
  * builds it anew, their choices kept. Shown for a page type that takes one
  * on an e-commerce brand. `onPathChange` follows each change saved or
  * built, and one found made meanwhile: the Shopping rules read it again.
+ * On a read-only workspace (plan not active) the path shows, and each
+ * change or new pick opens the upgrade dialog instead.
  */
 export function ShoppingPathSection({
   draftId,
@@ -92,6 +74,9 @@ export function ShoppingPathSection({
   const [query, setQuery] = useState('');
   // The catalog's products for what's typed; 'failed' when the search failed.
   const [hits, setHits] = useState<CatalogProductHit[] | 'failed' | null>(null);
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const needsPlan = { action: tActions('changeShoppingPath') };
 
   const load = useCallback(async () => {
     setState({ status: 'loading' });
@@ -162,7 +147,7 @@ export function ShoppingPathSection({
    * is saved when there's one. The saved change is shown whether the build
    * then works or not.
    */
-  const build = async (change?: { from: ShoppingPath; next: ShoppingPath }) => {
+  const build = guard(async (change?: { from: ShoppingPath; next: ShoppingPath }) => {
     setBusy('build');
     try {
       if (change) {
@@ -187,10 +172,10 @@ export function ShoppingPathSection({
     } finally {
       setBusy(null);
     }
-  };
+  }, needsPlan);
 
   /** Saves a change made here (a lock, a removal), shown at once; put back when it fails. */
-  const save = async (from: ShoppingPath, next: ShoppingPath) => {
+  const save = guard(async (from: ShoppingPath, next: ShoppingPath) => {
     const before = state;
     setState({ status: 'ready', path: next, none: null });
     setBusy('save');
@@ -204,7 +189,7 @@ export function ShoppingPathSection({
     } finally {
       setBusy(null);
     }
-  };
+  }, needsPlan);
 
   const header = (path: ShoppingPath | null) => (
     <div className="flex items-center gap-2">
@@ -307,10 +292,10 @@ export function ShoppingPathSection({
           className="h-7 gap-1 px-2 text-xs"
           aria-expanded={adding}
           disabled={busy !== null}
-          onClick={() => {
+          onClick={guard(() => {
             setAdding(!adding);
             setQuery('');
-          }}
+          }, needsPlan)}
         >
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
           {t('add')}

@@ -1,0 +1,114 @@
+import { NextResponse } from 'next/server';
+import { isCloud, isSubscriptionActive } from '@/config/plans';
+import { createClient } from '@/lib/supabase/server';
+
+/**
+ * Ansvisor Cloud's read-only mode for the web app's own writes: while a
+ * workspace's plan isn't active — its trial ended, or it was canceled — the
+ * server actions and Next routes that write straight to Supabase refuse, as
+ * the API's requireActiveSubscription refuses its writes and the MCP surface
+ * its tools (lib/mcp/subscription-gate.ts). The buttons are guarded already;
+ * this keeps the rule when an action is called anyway. Self-hosted is never
+ * gated.
+ */
+export const SUBSCRIPTION_INACTIVE = {
+  error: 'plan_limit',
+  code: 'subscription_inactive',
+  message:
+    "This workspace's plan isn't active (its free trial ended or it was canceled), so it is " +
+    'read-only: reading still works, but nothing can be changed, run or generated until an ' +
+    'admin chooses a plan in Settings › Billing.',
+} as const;
+
+/**
+ * A call that writes, runs or spends, refused while the workspace is
+ * read-only. Its digest is the code: production masks a server action's
+ * error but keeps a digest it was thrown with, so the browser can still tell
+ * this refusal (isSubscriptionInactive in lib/api-failure.ts) and open the
+ * upgrade dialog.
+ */
+export class SubscriptionInactiveError extends Error {
+  readonly code = SUBSCRIPTION_INACTIVE.code;
+  readonly digest = SUBSCRIPTION_INACTIVE.code;
+
+  constructor() {
+    super(SUBSCRIPTION_INACTIVE.message);
+    this.name = 'SubscriptionInactiveError';
+  }
+}
+
+/** The REST routes' answer to a write while read-only. */
+export function subscriptionInactiveResponse(): NextResponse {
+  return NextResponse.json(SUBSCRIPTION_INACTIVE, { status: 402 });
+}
+
+/**
+ * A REST route's answer to a call that threw: 402 subscription_inactive when
+ * it was refused (assertWritable, assertSubscriptionActive), else 500 with
+ * the error's message.
+ */
+export function failedCallResponse(err: unknown): NextResponse {
+  if (err instanceof SubscriptionInactiveError) return subscriptionInactiveResponse();
+  const message = err instanceof Error ? err.message : 'Failed';
+  return NextResponse.json({ error: message }, { status: 500 });
+}
+
+/**
+ * Refuse a write while the signed-in person's workspace is read-only, before
+ * anything is written. On the cloud it reads their organization through
+ * their session and throws SubscriptionInactiveError unless its subscription
+ * is active or trialing. A plan that can't be read refuses too (an Error),
+ * and so does a call with no one signed in.
+ *
+ * `onboarding`: setup's own writes (the organization, the brand, its topics,
+ * prompts and competitors), open to an organization that never had a
+ * subscription, so setup works before its plan step — as the API's
+ * ONBOARDING_ROUTES. A plan that ended still refuses them.
+ */
+export async function assertWritable({
+  onboarding = false,
+}: { onboarding?: boolean } = {}): Promise<void> {
+  if (!isCloud()) return;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  // The organization comes with the profile (profiles_organization_id_fkey): one round trip.
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select(
+      'organization_id, organizations!profiles_organization_id_fkey(subscription_status, stripe_subscription_id)',
+    )
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the workspace's plan: ${error.message}`);
+  if (!profile) throw new SubscriptionInactiveError();
+  // Setup creates the organization first: without one, nothing was ever subscribed.
+  if (!profile.organization_id) {
+    if (onboarding) return;
+    throw new SubscriptionInactiveError();
+  }
+
+  const org = profile.organizations;
+  if (!org) throw new SubscriptionInactiveError();
+  if (isSubscriptionActive(org.subscription_status)) return;
+  // Never subscribed: the Stripe subscription id, which only billing writes, stays once given.
+  if (onboarding && !org.stripe_subscription_id) return;
+  throw new SubscriptionInactiveError();
+}
+
+/**
+ * A Next route's check before it writes: null when it may, else its answer —
+ * 402 subscription_inactive while read-only, 500 when the plan can't be read.
+ * Call it after the route's own sign-in check, so a missing session stays a 401.
+ */
+export async function writeRefusal(): Promise<NextResponse | null> {
+  try {
+    await assertWritable();
+    return null;
+  } catch (err) {
+    return failedCallResponse(err);
+  }
+}

@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 import type { PlanOpportunity, PlanPage } from '@/lib/content/plan';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import ContentPlanPage from './page';
 
 const getContentPlan = vi.fn();
@@ -27,6 +28,20 @@ vi.mock('./_assign-dialog', () => ({
   AssignDialog: ({ row }: { row: { title: string } | null }) =>
     row ? <div data-testid="assign-dialog">{row.title}</div> : null,
 }));
+// Shopping opportunities are _shopping-opportunities.test.tsx's; here, for
+// which brands, and that a new period's read keeps them (each mount reads).
+const shopping = vi.hoisted(() => ({ mounts: 0 }));
+vi.mock('./_shopping-opportunities', async () => {
+  const { useEffect } = await import('react');
+  return {
+    ShoppingOpportunities: ({ brandId, hidden }: { brandId: string; hidden?: boolean }) => {
+      useEffect(() => {
+        shopping.mounts += 1;
+      }, []);
+      return hidden ? null : <div data-testid="shopping-opportunities">{brandId}</div>;
+    },
+  };
+});
 const role = vi.hoisted(() => ({ canManage: true }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
@@ -50,7 +65,10 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'brand-1' as string | null,
-  brands: [{ id: 'brand-1', siteType: 'b2b' }],
+  brands: [
+    { id: 'brand-1', siteType: 'b2b' },
+    { id: 'shop-1', siteType: 'ecommerce' },
+  ],
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
@@ -555,6 +573,39 @@ describe('the Content plan', () => {
     expect(getContentPlanInsights).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a shop its Shopping opportunities above the list, and no other brand (shopping path, part 7)', async () => {
+    await renderPage();
+    expect(container.querySelector('[data-testid="shopping-opportunities"]')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    brandState.activeBrandId = 'shop-1';
+    await renderPage();
+    const section = container.querySelector('[data-testid="shopping-opportunities"]');
+    expect(section?.textContent).toBe('shop-1');
+    // Above the ranked list.
+    const list = [...container.querySelectorAll('h2')].find(
+      (h) => h.textContent === 'Priority list',
+    );
+    expect(section!.compareDocumentPosition(list!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the Shopping opportunities through another period’s read, hidden while it loads', async () => {
+    brandState.activeBrandId = 'shop-1';
+    await renderPage();
+    const section = () => container.querySelector('[data-testid="shopping-opportunities"]');
+    expect(section()).not.toBeNull();
+    const mounts = shopping.mounts;
+    let resolve: (plan: typeof PLAN) => void = () => {};
+    getContentPlan.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+    await act(async () => button('Last 7 days').click());
+    // The list loads: one spinner, the section kept but not shown.
+    expect(section()).toBeNull();
+    await act(async () => resolve(PLAN));
+    expect(section()?.textContent).toBe('shop-1');
+    // Not read again: the same section, never mounted anew.
+    expect(shopping.mounts).toBe(mounts);
+  });
+
   it('says so when the plan can’t be read, and tries again', async () => {
     getContentPlan.mockRejectedValueOnce(new Error('boom'));
     await renderPage();
@@ -741,5 +792,78 @@ describe('Getting started’s content steps (00234)', () => {
     expect(button('Optimize').getAttribute('aria-pressed')).toBe('true');
     expect(dialog.props).toMatchObject({ open: false });
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Content plan on a read-only workspace (plan not active)', () => {
+  const openUpgrade = vi.fn();
+  const render = async (isLocked: boolean) => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <ContentPlanPage />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  };
+  const clickItem = async (title: string, item: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    const found = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === item,
+    )!;
+    await act(async () => found.click());
+  };
+
+  beforeEach(() => openUpgrade.mockReset());
+
+  it('opens the upgrade dialog from New content, Start and the row menu, and runs nothing', async () => {
+    await render(true);
+    await act(async () => button('New content').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Creating content needs a plan');
+    const rows = container.querySelectorAll('tbody tr');
+    await act(async () => rows[1].querySelector<HTMLButtonElement>(START)!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Optimizing content needs a plan');
+    expect(dialog.props).toMatchObject({ open: false, preset: null });
+
+    await clickItem('Espresso guide', 'Mark as priority');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Marking priorities needs a plan');
+    await clickItem('Espresso guide', 'Hide from the plan');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Hiding rows needs a plan');
+    await clickItem('Espresso guide', 'Assign to…');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Assigning content needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(5);
+    expect(setPlanRowPriority).not.toHaveBeenCalled();
+    expect(hidePlanRow).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="assign-dialog"]')).toBeNull();
+    // Browsing stays open: a card still filters the list.
+    await act(async () => button('Protect').click());
+    expect(rowTexts().map((r) => r[1])).toEqual(['Protect']);
+  });
+
+  it('opens on Getting started’s card and starts nothing by itself', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=create');
+    await render(true);
+    expect(button('Create').getAttribute('aria-pressed')).toBe('true');
+    expect(dialog.props).toMatchObject({ open: false });
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('starts a row on an active plan', async () => {
+    await render(false);
+    const rows = container.querySelectorAll('tbody tr');
+    await act(async () => rows[0].querySelector<HTMLButtonElement>(START)!.click());
+    expect(dialog.props).toMatchObject({ open: true, preset: { kind: 'opportunity', id: 'o1' } });
+    await clickItem('Espresso guide', 'Mark as priority');
+    expect(setPlanRowPriority).toHaveBeenCalledWith(
+      'brand-1',
+      'page:acme.example/guides/espresso',
+      true,
+    );
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 });
