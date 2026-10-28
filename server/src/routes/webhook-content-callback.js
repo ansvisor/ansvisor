@@ -6,8 +6,15 @@ import {
 } from '../middleware/rate-limiter.js';
 import { sourceDataForStatus, VALID_OPPORTUNITY_STATUSES } from '../lib/opportunity-status.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
+import { isBrandActive } from '../lib/active-subscriptions.js';
 
 const router = Router();
+
+/**
+ * The answer once the brand's plan has ended (2026-10-27): a 2xx, so the
+ * workflow neither fails nor retries, and nothing written.
+ */
+const IGNORED = { success: false, ignored: true, code: 'subscription_inactive' };
 
 // This endpoint is public by design. The supplied secret hash gives each
 // webhook its own budget; the second limiter counts failed (401) attempts by IP.
@@ -50,6 +57,8 @@ router.post('/:id/status', async (req, res) => {
     if (!webhookSecretsMatch(webhookConfig?.webhook_secret, req.get('X-Webhook-Secret'))) {
       return res.status(401).json({ error: 'Invalid webhook credentials' });
     }
+    // Asked only once the secret matched, so the answer tells a stranger nothing.
+    if (!(await isBrandActive(current.brand_id))) return res.status(202).json(IGNORED);
 
     const { status, reason } = req.body ?? {};
     if (!VALID_OPPORTUNITY_STATUSES.includes(status)) {

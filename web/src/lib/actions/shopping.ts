@@ -2,6 +2,7 @@
 
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
+import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
   detectAmazonShareDrop,
@@ -1246,7 +1247,13 @@ export async function getShoppingAiOrders(brandId: string): Promise<ShoppingAiOr
 /** Catalog products the table reads at most. */
 const PRODUCTS_TABLE_MAX = 2000;
 const CATALOG_PAGE = 1000;
+/** Product ids one catalog read filters by: each request's address stays short. */
+const IDS_PER_READ = 100;
+/** Such reads in flight at once. */
+const ID_READS_AT_ONCE = 6;
 const IN_STOCK = new Set(['in_stock', 'instock', 'available', 'limited_availability']);
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface ShoppingProducts {
   rows: ProductRow[];
@@ -1270,28 +1277,173 @@ async function readCatalogRows<T>(
   return rows;
 }
 
+/** A catalog table's rows for these ids: IDS_PER_READ ids a read, ID_READS_AT_ONCE reads at a time. */
+async function readForIds<T>(ids: readonly string[], read: (some: string[]) => Promise<T[]>) {
+  const slices: string[][] = [];
+  for (let i = 0; i < ids.length; i += IDS_PER_READ) slices.push(ids.slice(i, i + IDS_PER_READ));
+  const out: T[][] = [];
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(ID_READS_AT_ONCE, slices.length) }, async () => {
+      while (next < slices.length) {
+        const at = next++;
+        out[at] = await read(slices[at]);
+      }
+    }),
+  );
+  return out.flat();
+}
+
+/**
+ * Per product, its AI visits and orders over the window (00361): only the
+ * products with either, every page of them.
+ */
+async function readProductAiStats(supabase: ServerClient, brandId: string, from: string) {
+  return readAllRpcRows((start, end) =>
+    supabase
+      .rpc('catalog_product_ai_stats', { p_brand_id: brandId, p_from: from })
+      .order('product_id')
+      .range(start, end),
+  );
+}
+
 /**
  * The Products table: the brand's catalog, each product with its shelves,
  * win rate and average place over the filter window (its cards, 00360),
  * the AI visits its page got and the orders they led to (00361), and its
  * readiness. Null when the brand has no catalog.
+ *
+ * Past PRODUCTS_TABLE_MAX products, the table holds the products on a
+ * shelf or visited from AI first (those with orders, then the most shelves,
+ * then the most visits), then the rest by id; `total` counts them all.
  */
-type ServerClient = Awaited<ReturnType<typeof createClient>>;
+export async function getShoppingProducts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingProducts | null> {
+  const supabase = await createClient();
+  const { count: total, error: countErr } = await supabase
+    .from('catalog_products')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .is('removed_at', null);
+  if (countErr) throw new Error(countErr.message);
+  if (!total) return null;
+
+  const { from } = resolveDateRange(filters);
+  const [cards, stats] = await Promise.all([
+    fetchAllCards<{
+      catalog_product_id: string;
+      position: number;
+      platform: string;
+      price_amount: number | null;
+      price_currency: string | null;
+      created_at: string;
+      prompt_results: { prompt_id: string } | null;
+    }>(() =>
+      cardsInWindow(
+        supabase,
+        brandId,
+        filters,
+        'catalog_product_id, position, platform, price_amount, price_currency, created_at, prompt_results:prompt_result_id ( prompt_id )',
+      )
+        .eq('matched_brand_role', 'own')
+        .not('catalog_product_id', 'is', null),
+    ),
+    // All time reads the last 90 days of visits and orders.
+    readProductAiStats(supabase, brandId, from ?? daysAgoIso(90)),
+  ]);
+
+  const shelfCards: ProductCardRow[] = cards.map((card) => ({
+    productId: card.catalog_product_id,
+    shelf: `${card.prompt_results?.prompt_id ?? '?'}:${card.platform}`,
+    rank: card.position + 1,
+    price: card.price_amount === null ? null : Number(card.price_amount),
+    currency: card.price_currency,
+    platform: card.platform,
+    at: card.created_at,
+  }));
+  const aiStats: ProductAiStats[] = stats.map((row) => ({
+    productId: row.product_id,
+    aiVisits: Number(row.ai_visits),
+    orders: Number(row.orders),
+    revenue: row.revenue === null ? null : Number(row.revenue),
+    currency: row.currency,
+  }));
+  const ids =
+    total > PRODUCTS_TABLE_MAX
+      ? await tableProductIds(supabase, brandId, shelfCards, aiStats)
+      : null;
+  const catalog = await readCatalogProducts(supabase, brandId, ids);
+  return { rows: productRows(catalog, shelfCards, aiStats), total };
+}
+
+/**
+ * The PRODUCTS_TABLE_MAX products a catalog bigger than that lists: those on
+ * a shelf or visited from AI, the ones with orders first, then the most
+ * shelves, then the most visits; then the rest of the catalog by id.
+ */
+async function tableProductIds(
+  supabase: ServerClient,
+  brandId: string,
+  cards: readonly ProductCardRow[],
+  stats: readonly ProductAiStats[],
+): Promise<string[]> {
+  const shelvesOf = new Map<string, Set<string>>();
+  for (const card of cards) {
+    if (!shelvesOf.has(card.productId)) shelvesOf.set(card.productId, new Set());
+    shelvesOf.get(card.productId)!.add(card.shelf);
+  }
+  const statsOf = new Map(stats.map((row) => [row.productId, row]));
+  const active = [...new Set([...shelvesOf.keys(), ...statsOf.keys()])].sort(
+    (a, b) =>
+      (statsOf.get(b)?.orders ?? 0) - (statsOf.get(a)?.orders ?? 0) ||
+      (shelvesOf.get(b)?.size ?? 0) - (shelvesOf.get(a)?.size ?? 0) ||
+      (statsOf.get(b)?.aiVisits ?? 0) - (statsOf.get(a)?.aiVisits ?? 0) ||
+      (a < b ? -1 : 1),
+  );
+  const ids = new Set(active.slice(0, PRODUCTS_TABLE_MAX));
+  if (ids.size < PRODUCTS_TABLE_MAX) {
+    // The rest, by id: as many as could be needed past those already in.
+    const rest = await readCatalogRows<{ id: string }>(
+      () =>
+        supabase
+          .from('catalog_products')
+          .select('id')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
+      PRODUCTS_TABLE_MAX,
+    );
+    for (const { id } of rest) {
+      if (ids.size >= PRODUCTS_TABLE_MAX) break;
+      ids.add(id);
+    }
+  }
+  return [...ids];
+}
 
 /**
  * The brand's live catalog products as Product Visibility reads them, with
- * their variants' stock, price and GTIN, first photo and category: all of
- * them up to PRODUCTS_TABLE_MAX, or the one product `only` names.
+ * their variants' stock, price and GTIN, first photo and category: the
+ * whole catalog (up to PRODUCTS_TABLE_MAX) for `ids` null, else the products
+ * `ids` names, their rows read IDS_PER_READ ids at a time.
  */
 async function readCatalogProducts(
   supabase: ServerClient,
   brandId: string,
-  only?: string,
+  ids: readonly string[] | null,
 ): Promise<CatalogProductRow[]> {
-  const one = <Q extends { eq: (column: string, value: string) => Q }>(q: Q, column: string) =>
-    only ? q.eq(column, only) : q;
+  // Each table read for the whole catalog, or for the ids, a slice at a time.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
+  const each = <T>(column: string, build: () => any, max: number): Promise<T[]> =>
+    ids === null
+      ? readCatalogRows<T>(build, max)
+      : readForIds(ids, (some) =>
+          readCatalogRows<T>(() => build().in(column, some), CARD_MAX_ROWS),
+        );
   const [products, variants, images, categories] = await Promise.all([
-    readCatalogRows<{
+    each<{
       id: string;
       title: string;
       url: string | null;
@@ -1299,18 +1451,17 @@ async function readCatalogProducts(
       product_brand: string | null;
       description: string | null;
     }>(
+      'id',
       () =>
-        one(
-          supabase
-            .from('catalog_products')
-            .select('id, title, url, product_type, product_brand, description')
-            .eq('brand_id', brandId)
-            .is('removed_at', null),
-          'id',
-        ).order('id'),
+        supabase
+          .from('catalog_products')
+          .select('id, title, url, product_type, product_brand, description')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
       PRODUCTS_TABLE_MAX,
     ),
-    readCatalogRows<{
+    each<{
       product_id: string;
       gtin: string | null;
       price: number | null;
@@ -1318,37 +1469,33 @@ async function readCatalogProducts(
       currency: string | null;
       availability: string | null;
     }>(
+      'product_id',
       () =>
-        one(
-          supabase
-            .from('catalog_variants')
-            .select('product_id, gtin, price, sale_price, currency, availability')
-            .eq('brand_id', brandId)
-            .is('removed_at', null),
-          'product_id',
-        ).order('id'),
+        supabase
+          .from('catalog_variants')
+          .select('product_id, gtin, price, sale_price, currency, availability')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
       CARD_MAX_ROWS,
     ),
-    readCatalogRows<{ product_id: string; url: string; position: number }>(
+    each<{ product_id: string; url: string; position: number }>(
+      'product_id',
       () =>
-        one(
-          supabase
-            .from('catalog_images')
-            .select('product_id, url, position')
-            .eq('brand_id', brandId),
-          'product_id',
-        ).order('id'),
+        supabase
+          .from('catalog_images')
+          .select('product_id, url, position')
+          .eq('brand_id', brandId)
+          .order('id'),
       CARD_MAX_ROWS,
     ),
-    readCatalogRows<{ product_id: string; category: { name: string } | null }>(
+    each<{ product_id: string; category: { name: string } | null }>(
+      'product_id',
       () =>
-        one(
-          supabase
-            .from('catalog_product_categories')
-            .select('product_id, category:category_id ( name )')
-            .eq('brand_id', brandId),
-          'product_id',
-        )
+        supabase
+          .from('catalog_product_categories')
+          .select('product_id, category:category_id ( name )')
+          .eq('brand_id', brandId)
           .order('product_id')
           .order('category_id'),
       CARD_MAX_ROWS,
@@ -1395,75 +1542,16 @@ async function readCatalogProducts(
       category: categoryOf.get(p.id) ?? null,
       price: priced[0] ? Number(priced[0].price) : null,
       currency: priced[0]?.currency ?? null,
+      // Each variant's price and sale price, in or out of stock.
+      prices: own.flatMap((v) =>
+        [v.price, v.sale_price]
+          .filter((price): price is number => price !== null)
+          .map((price) => ({ price: Number(price), currency: v.currency })),
+      ),
       inStock: stocked.length > 0,
       hasGtin: own.some((v) => !!v.gtin),
     };
   });
-}
-
-/**
- * The Products table: the brand's catalog, each product with its shelves,
- * win rate and average place over the filter window (its cards, 00360),
- * the AI visits its page got and the orders they led to (00361), and its
- * readiness. Null when the brand has no catalog.
- */
-export async function getShoppingProducts(
-  brandId: string,
-  filters: ShoppingFilters,
-): Promise<ShoppingProducts | null> {
-  const supabase = await createClient();
-  const { count: total, error: countErr } = await supabase
-    .from('catalog_products')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId)
-    .is('removed_at', null);
-  if (countErr) throw new Error(countErr.message);
-  if (!total) return null;
-
-  const { from } = resolveDateRange(filters);
-  const [catalog, cards, stats] = await Promise.all([
-    readCatalogProducts(supabase, brandId),
-    fetchAllCards<{
-      catalog_product_id: string;
-      position: number;
-      platform: string;
-      price_amount: number | null;
-      price_currency: string | null;
-      prompt_results: { prompt_id: string } | null;
-    }>(() =>
-      cardsInWindow(
-        supabase,
-        brandId,
-        filters,
-        'catalog_product_id, position, platform, price_amount, price_currency, prompt_results:prompt_result_id ( prompt_id )',
-      )
-        .eq('matched_brand_role', 'own')
-        .not('catalog_product_id', 'is', null),
-    ),
-    supabase.rpc('catalog_product_ai_stats', {
-      p_brand_id: brandId,
-      // All time reads the last 90 days of visits and orders.
-      p_from: from ?? daysAgoIso(90),
-    }),
-  ]);
-  if (stats.error) throw new Error(stats.error.message);
-
-  const shelfCards: ProductCardRow[] = cards.map((card) => ({
-    productId: card.catalog_product_id,
-    shelf: `${card.prompt_results?.prompt_id ?? '?'}:${card.platform}`,
-    rank: card.position + 1,
-    price: card.price_amount === null ? null : Number(card.price_amount),
-    currency: card.price_currency,
-    platform: card.platform,
-  }));
-  const aiStats: ProductAiStats[] = (stats.data ?? []).map((row) => ({
-    productId: row.product_id,
-    aiVisits: Number(row.ai_visits),
-    orders: Number(row.orders),
-    revenue: row.revenue === null ? null : Number(row.revenue),
-    currency: row.currency,
-  }));
-  return { rows: productRows(catalog, shelfCards, aiStats), total };
 }
 
 // ── Categories (Product Visibility, ECOM-008) ─────────────────────────────────
@@ -1524,13 +1612,9 @@ export async function getShoppingCategories(
       ),
     ),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
-    supabase.rpc('catalog_product_ai_stats', {
-      p_brand_id: brandId,
-      p_from: from ?? daysAgoIso(90),
-    }),
+    readProductAiStats(supabase, brandId, from ?? daysAgoIso(90)),
   ]);
   if (competitors.error) throw new Error(competitors.error.message);
-  if (stats.error) throw new Error(stats.error.message);
 
   const liveIds = new Set(live.map((row) => row.id));
   const productsOf = new Map<string, string[]>();
@@ -1566,7 +1650,7 @@ export async function getShoppingCategories(
         (competitors.data ?? []).map((c) => [c.id, { name: c.name, domain: c.domain }]),
       ),
       revenueOf: new Map(
-        (stats.data ?? []).flatMap((row) =>
+        stats.flatMap((row) =>
           row.orders && row.revenue !== null
             ? [[row.product_id, { value: Number(row.revenue), currency: row.currency }] as const]
             : [],
@@ -1605,7 +1689,7 @@ export async function getShoppingProductDetail(
   const supabase = await createClient();
   const { from } = resolveDateRange(filters);
   const [[product], cards, stats, domain] = await Promise.all([
-    readCatalogProducts(supabase, brandId, productId),
+    readCatalogProducts(supabase, brandId, [productId]),
     fetchAllCards<{
       prompt_result_id: string;
       position: number;
@@ -1632,9 +1716,11 @@ export async function getShoppingProductDetail(
         'prompt_result_id, position, created_at, platform, product_title, price_amount, price_currency, rating, review_count, merchant_domain, image_url, matched_brand_role, catalog_product_id, prompt_results:prompt_result_id ( search_queries, prompt:prompt_id ( id, text ) )',
       ),
     ),
+    // Its own row only (00361), none without AI visits or orders.
     supabase.rpc('catalog_product_ai_stats', {
       p_brand_id: brandId,
       p_from: from ?? daysAgoIso(90),
+      p_product_id: productId,
     }),
     supabase
       .from('brand_domains')

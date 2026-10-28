@@ -115,9 +115,16 @@ describe('ProductsTable', () => {
     );
   });
 
-  it('says when the catalog is larger than the table reads', () => {
+  it('says when the catalog is larger than the table reads, and counts All and Never shown out of it', () => {
     expect(render(<ProductsTable products={{ rows, total: 2400 }} loading={false} />)).toContain(
-      'Showing the first 2 of 2,400 products.',
+      'Showing 2 of 2,400 products: every one AI showed or sent visits to, then the rest.',
     );
+    expect(views()).toEqual([
+      'All2,400',
+      'Never shown2,399',
+      'Shown, not clicked0',
+      'Clicked, not bought0',
+      'Top sellers from AI1',
+    ]);
   });
 });

@@ -148,6 +148,7 @@ export function CategoriesTable({
                     variant={row.needsAttention ? 'default' : 'outline'}
                     size="sm"
                     className="h-7 text-xs"
+                    aria-label={t('planFor', { category: row.leaf })}
                     onClick={() => setPlanning(row)}
                   >
                     {t('plan')}
