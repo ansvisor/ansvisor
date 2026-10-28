@@ -11,9 +11,10 @@
  *  - robots.txt lets the AI crawlers in, and the page isn't noindex
  *    (fix_crawler_access raised by the audit's ai-bot-access);
  *  - it changed since the first look, by more than a date, a price or a
- *    rotating quote moving (optimize, refresh, strengthen, the call to
- *    action): the first look keeps a sketch of the page's words, and
- *    enough of them must have changed;
+ *    rotating quote moving (optimize, refresh, strengthen): the first look
+ *    keeps a sketch of the page's words, and enough of them must have
+ *    changed. A call to action is confirmed by hand: a re-fetch can't tell
+ *    (tasks/templates.js);
  *  - a written task's new text is on it, and the text it replaces gone;
  *  - a shopping links task's page links no product that no longer sells,
  *    read as the catalog sync's shopping check reads it (shopping-check.js;
@@ -53,11 +54,15 @@ export const CHECKS = Object.freeze({
   refresh_content: 'changed',
   strengthen_reference_asset: 'changed',
   strengthen_entity_content: 'changed',
-  improve_cta_path: 'changed',
 });
 
 /** The most open tasks one nightly sweep checks: pages are fetched one at a time. */
 export const SWEEP_LIMIT = 200;
+/** The most of one brand's tasks a night's sweep checks: a brand with many new tasks doesn't hold the others back. */
+export const SWEEP_PER_BRAND = 20;
+/** Rows the sweep reads a page at a time to fill a night past the brands' caps, and pages at most. */
+const SWEEP_PAGE = 1000;
+const SWEEP_PAGES = 5;
 /** A task tried this recently isn't tried again by the sweep. */
 const RECHECK_AFTER_MS = 20 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -142,7 +147,12 @@ const STRUCTURED_MISSING = {
   'json-ld-relevance': 'structured_data_irrelevant',
   'faq-schema': 'no_faq_schema',
 };
-/** A fix raised without the audit's checks named: its JSON-LD must at least be valid. */
+/**
+ * A fix raised without the audit's checks named (another action's, F06's
+ * brand-entity, say): its JSON-LD must at least be valid, and since a page
+ * may have had a valid block all along (a site-wide Organization), it
+ * passes only after a check on the page found it failing (`sawFailing`).
+ */
 const DEFAULT_STRUCTURED = ['json-ld-validity'];
 /** Checks whose warn is still the problem: a block that doesn't parse. */
 const PASS_ONLY = new Set(['json-ld-validity']);
@@ -159,6 +169,19 @@ export function checkKind(task) {
   if (d.source === SHOPPING_SOURCE) return 'shoppingLinks';
   if (task.task_key) return CHECKS[task.task_key] ?? null;
   return text(d.change?.after) ? 'text' : null;
+}
+
+/**
+ * Why a task has no check here, by what it lacks, as Check now says it
+ * (en.json checkNot): no page, a written task with no new text to look
+ * for, or a library task checked elsewhere (a Site Audit fix, by the next
+ * audit).
+ */
+function uncheckable(task) {
+  const d = task.details ?? {};
+  if (d.check === 'auto' && !text(d.url)) return 'no_address';
+  if (d.check === 'auto' && !task.task_key) return 'no_change_text';
+  return 'not_checkable';
 }
 
 /** A name's last label that is a file's, not a domain's: "pricing.html" is a page. */
@@ -359,7 +382,7 @@ function changedSince(previous, url, visible) {
 const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
 
 /**
- * A task's check on its page: `{ passed, missing, sketch?, wasMissing? }`,
+ * A task's check on its page: `{ passed, missing, sketch?, wasMissing?, sawFailing? }`,
  * or null when the page couldn't be read (no answer, a timeout, a server
  * error, a 4xx other than "not there", a page nested too deep to parse):
  * nothing but the try is kept then.
@@ -411,7 +434,18 @@ export async function checkPage(
       const { status } = STRUCTURED_CHECKS[key].evaluate({ $ });
       return status === 'fail' || (PASS_ONLY.has(key) && status !== 'pass');
     });
-    return { passed: !failing.length, missing: failing.map((key) => STRUCTURED_MISSING[key]) };
+    if (failing.length) {
+      return {
+        passed: false,
+        missing: failing.map((key) => STRUCTURED_MISSING[key]),
+        ...(named.length ? {} : { sawFailing: true }),
+      };
+    }
+    // None named, and never seen failing on this page: valid all along, not fixed.
+    if (!named.length && !(previous?.sawFailing && previous.url === url)) {
+      return { passed: false, missing: ['valid_before'] };
+    }
+    return { passed: true, missing: [] };
   }
 
   if (kind === 'crawlers') {
@@ -594,28 +628,29 @@ async function checkShoppingTask(task, action, { fetch, now }) {
  *   status: string, details: object|null, updated_at?: string }} task
  * @param {{ brand_id: string }} action
  */
-export async function runTaskCheck(task, action, { fetch = fetchPage, now = new Date() } = {}) {
-  const kind = checkKind(task);
-  if (!kind) return { reason: 'not_checkable' };
-  if (!OPEN.includes(task.status)) return { reason: 'not_open' };
-  if (kind === 'shoppingLinks') return checkShoppingTask(task, action, { fetch, now });
-  const d = task.details ?? {};
+export async function runTaskCheck(read, action, { fetch = fetchPage, now = new Date() } = {}) {
+  const kind = checkKind(read);
+  if (!kind) return { reason: uncheckable(read) };
+  if (!OPEN.includes(read.status)) return { reason: 'not_open' };
+  if (kind === 'shoppingLinks') return checkShoppingTask(read, action, { fetch, now });
+  const d = read.details ?? {};
+  const previous = d.autoCheck ?? null;
+  // Tried now, before anything is read: a task that can't be checked here
+  // (no address, a read that throws) leaves the head of the sweep's queue,
+  // and a second run that read the task before this one isn't let check it too.
+  const claim = { ...d, autoCheck: { ...(previous ?? {}), triedAt: now.toISOString() } };
+  if (!(await writeCheck(read, claim, { now }))) return { reason: 'changed' };
+  const task = { ...read, details: claim, updated_at: now.toISOString() };
   const domains = await brandDomains(action.brand_id);
   const url = pageAddress(d.url, storedHost(domains[0]));
-  if (!url) return { reason: 'not_checkable' };
-  const previous = d.autoCheck ?? null;
+  if (!url) return { reason: 'no_address' };
   let auditChecks = [];
   if (kind === 'structuredData' || kind === 'crawlers') {
     auditChecks = await auditChecksFor(task.action_id, url);
     // Raised from the bot logs (a cited page crawlers never read): robots.txt
-    // can't say it's fixed. Its try is kept, so the sweep goes on to others.
+    // can't say it's fixed. Its try is kept (the claim), so the sweep goes on to others.
     if (kind === 'crawlers' && !auditChecks.includes('ai-bot-access')) {
-      await writeCheck(
-        task,
-        { ...d, autoCheck: { ...(previous ?? {}), triedAt: now.toISOString() } },
-        { now },
-      );
-      return { reason: 'not_checkable' };
+      return { reason: 'from_bot_logs' };
     }
   }
 
@@ -646,6 +681,10 @@ export async function runTaskCheck(task, action, { fetch = fetchPage, now = new 
         missing: found.missing,
         ...(kept ? { sketch: kept } : {}),
         ...(found.wasMissing ? { wasMissing: true } : {}),
+        // Kept for the page, so a fix after a failing check passes.
+        ...(found.sawFailing || (samePageAsBefore && previous?.sawFailing)
+          ? { sawFailing: true }
+          : {}),
         ...(held ? { held: true } : {}),
       }
     : { ...(previous ?? {}), triedAt: now.toISOString() };
@@ -681,7 +720,7 @@ export async function runTaskCheck(task, action, { fetch = fetchPage, now = new 
  * library task with a check, or a written one with its new text) and have a
  * page, of open actions, not held (reopened after they passed), the least
  * recently tried first, none tried in the last day, one page at a time, at
- * most SWEEP_LIMIT. A failure on one task
+ * most SWEEP_LIMIT and SWEEP_PER_BRAND of one brand's. A failure on one task
  * is logged and the rest go on.
  *
  * @returns {Promise<{ checked: number, passed: number }>}
@@ -691,35 +730,43 @@ export async function sweepTaskChecks({
   fetch = fetchPage,
   now = new Date(),
 } = {}) {
-  const { data: rows, error } = await supabaseAdmin
-    .from('action_tasks')
-    .select(
-      'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at)',
-    )
-    .in('status', OPEN)
-    .eq('details->>check', 'auto')
-    .not('details->>url', 'is', null)
-    .or(
-      `task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null)`,
-    )
-    // A task reopened after it passed is the person's call: Check now still reads it.
-    .is('details->autoCheck->>held', null)
-    .is('actions.deleted_at', null)
-    .not('actions.status', 'in', '(completed,dismissed)')
-    .order('details->autoCheck->>triedAt', { ascending: true, nullsFirst: true })
-    .limit(limit);
-  if (error) throw new Error(error.message);
-
   const since = now.getTime() - RECHECK_AFTER_MS;
-  // A shopping links task is checked after each catalog sync, not here.
-  const due = (rows ?? []).filter((row) => {
-    const kind = checkKind(row);
-    return (
-      kind &&
-      kind !== 'shoppingLinks' &&
-      !(Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since)
-    );
-  });
+  const due = [];
+  const perBrand = new Map();
+  for (let page = 0; page < SWEEP_PAGES && due.length < limit; page += 1) {
+    const { data: rows, error } = await supabaseAdmin
+      .from('action_tasks')
+      .select(
+        'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at)',
+      )
+      .in('status', OPEN)
+      .eq('details->>check', 'auto')
+      .not('details->>url', 'is', null)
+      .or(
+        `task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null)`,
+      )
+      // A task reopened after it passed is the person's call: Check now still reads it.
+      .is('details->autoCheck->>held', null)
+      .is('actions.deleted_at', null)
+      .not('actions.status', 'in', '(completed,dismissed)')
+      .order('details->autoCheck->>triedAt', { ascending: true, nullsFirst: true })
+      .order('id')
+      .range(page * SWEEP_PAGE, (page + 1) * SWEEP_PAGE - 1);
+    if (error) throw new Error(error.message);
+    for (const row of rows ?? []) {
+      if (due.length >= limit) break;
+      const kind = checkKind(row);
+      // A shopping links task is checked after each catalog sync, not here.
+      if (!kind || kind === 'shoppingLinks') continue;
+      if (Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since) continue;
+      const action = Array.isArray(row.actions) ? row.actions[0] : row.actions;
+      const taken = perBrand.get(action?.brand_id) ?? 0;
+      if (taken >= SWEEP_PER_BRAND) continue;
+      perBrand.set(action?.brand_id, taken + 1);
+      due.push(row);
+    }
+    if ((rows ?? []).length < SWEEP_PAGE) break;
+  }
   let checked = 0;
   let passed = 0;
   for (const row of due) {
