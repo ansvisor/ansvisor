@@ -14,6 +14,19 @@ description: "Common questions about Ansvisor."
     Rough back-of-envelope: a brand tracking 30 prompts daily across 4 AI engines costs ~$5–15/month in API fees, depending on response length and provider mix.
   </Accordion>
 
+  <Accordion title="What happens when my plan ends?">
+    On Ansvisor Cloud, a workspace becomes **read-only** when its 14-day free trial ends, when its plan is cancelled during the trial, or when a cancelled paid plan reaches the end of its period. A failed payment does the same until the payment method is updated. Everything you set up stays.
+
+    While it's read-only:
+
+    - Everyone can still sign in, open every page and read everything.
+    - Adding, running, writing and AI open a **Choose a plan to keep going** dialog. Admins choose a plan from it (or update the payment method after a failed payment); other members are asked to turn to an admin.
+    - These still work: **Billing** and choosing a plan, your own profile and signing out; disconnecting Search Console, Analytics, Webflow, an AI-bot log or a store; deleting API keys, removing members and revoking invitations; creating API keys (the [MCP server](/guides/mcp-server) only reads for this workspace); and deleting a brand.
+    - Nothing runs on its own: no tracking, scraping or AI, no agents, no syncs with outside services, no new signals, actions or suggestions. AI-bot logs, the tracking snippet's visits and [webhook](/api-reference/webhooks) callbacks are answered but not stored.
+
+    Once an admin chooses a plan, the workspace works as before. Self-hosted installs are never read-only. Setup is unchanged: a new workspace that has never had a plan goes through setup and its plan step as before, and setup can suggest its topics, prompts and competitors up to 20 times a day.
+  </Accordion>
+
   <Accordion title="Why don't you scrape ChatGPT/Gemini directly?">
     For programmable AI engines (OpenAI, Anthropic, Google Gemini API), Ansvisor uses official APIs — most reliable, well-priced, and TOS-compliant. For *web* AI engines that don't have public APIs (like ChatGPT.com search results), Ansvisor uses Cloro as a managed scraping backend. Cloro handles browser fingerprinting, captcha bypass, and rate-limiting at scale.
 

@@ -367,6 +367,31 @@ Ask your client things like:
 The model picks the right tool, fills in the brand id and filters, and
 answers in plain English using the returned data.
 
+## When the plan has ended
+
+On Ansvisor Cloud, a workspace without an active plan is read-only (see
+[What happens when my plan ends?](/faq)). Its API keys keep working for
+reading:
+
+- `list_` and `get_` tools run as usual.
+- Every other tool (each one marked **writes** above) is refused before it
+  runs. The call fails with this text:
+
+  ```json
+  {
+    "error": "plan_limit",
+    "code": "subscription_inactive",
+    "message": "This workspace's plan isn't active (its free trial ended or it was canceled), so it is read-only: reading still works, but nothing can be changed, run or generated until an admin chooses a plan in Settings › Billing."
+  }
+  ```
+
+- The REST routes under `/api/mcp/…` answer a `POST`, `PUT`, `PATCH` or
+  `DELETE` with `402` and the same body.
+
+Retrying doesn't help: an admin has to choose a plan first. New API keys
+can still be created; on a read-only workspace they only read. A self-hosted
+instance is never read-only.
+
 ## Revoking access
 
 If a key leaks or you stop using a client, open **Settings → API Keys** and

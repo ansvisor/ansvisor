@@ -366,6 +366,13 @@ an LLM. Call one **only** when the user asked for that specific change
 "to be helpful". Say what you are about to do in one line first. The
 change is logged under the API key's user.
 
+If a tool fails with `"code": "subscription_inactive"`, the workspace's
+plan has ended (trial over, plan cancelled or payment failed) and it is
+read-only: `list_` and `get_` tools still work, every other tool is
+refused. Tell the user their plan has ended and that an admin can choose
+a plan (or update the payment method) in **Settings → Billing**. Don't
+retry, and don't try another write tool instead.
+
 ## Core workflows
 
 ### 1. Brand snapshot ("how am I doing?")
