@@ -39,7 +39,7 @@ import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-ca
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
 import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
-import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
+import { PlanLimitError, getAiUsage, getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
@@ -502,6 +502,35 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
         .json({ success: false, error: 'quota_exceeded', message: err.message });
     }
     req.log.error({ err }, 'internal site audit quota error');
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal AI usage endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// Read-only: this period's AI usage for the org, as GET /api/billing/ai-usage
+// answers a member (getAiUsage), so the MCP `get_ai_usage` tool reads the
+// Billing meter's own numbers. The web MCP layer passes its authenticated org
+// id. Without an active plan there is no allowance to meter: 402 plan_limit.
+app.get('/api/internal/ai-usage', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  try {
+    const raw = req.query.orgId;
+    const orgId = Array.isArray(raw) ? raw[0] : raw;
+    if (!orgId) {
+      return res.status(400).json({ success: false, message: 'orgId is required' });
+    }
+    return res.json({ success: true, usage: await getAiUsage(orgId) });
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return res
+        .status(err.statusCode)
+        .json({ success: false, error: 'plan_limit', message: err.message });
+    }
+    req.log.error({ err }, 'internal AI usage error');
     return res.status(500).json({ success: false, message: err.message });
   }
 });
