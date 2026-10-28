@@ -56,10 +56,18 @@ vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
-vi.mock('@/components/providers/brand-loader', () => ({ BrandLoader: none }));
+// The brands the layout hands the brand store.
+let loaded: { id: string }[] = [];
+vi.mock('@/components/providers/brand-loader', () => ({
+  BrandLoader: ({ brands }: { brands: { id: string }[] }) => {
+    loaded = brands;
+    return null;
+  },
+}));
 vi.mock('@/components/providers/brand-guard', () => ({ BrandGuard: pass }));
 vi.mock('@/components/getting-started/page-opened', () => ({ GettingStartedPageOpened: none }));
-vi.mock('@/lib/actions/brand', () => ({ getBrands: async () => [] }));
+let orgBrands: { id: string; isDemo?: boolean; demoHiddenAt?: string | null }[] = [];
+vi.mock('@/lib/actions/brand', () => ({ getBrands: async () => orgBrands }));
 
 const { default: DashboardLayout } = await import('./layout');
 
@@ -103,6 +111,8 @@ beforeEach(() => {
   };
   orgError = null;
   owner = null;
+  orgBrands = [];
+  loaded = [];
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -170,5 +180,19 @@ describe('the dashboard layout', () => {
     expect(await open()).toBeNull();
     expect(container.textContent).toContain('Page content');
     expect(band()).toBeNull();
+  });
+});
+
+describe('the dashboard layout and the demo brand', () => {
+  it('lists the demo brand with the others', async () => {
+    orgBrands = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: null }];
+    expect(await open()).toBeNull();
+    expect(loaded.map((b) => b.id)).toEqual(['b1', 'demo']);
+  });
+
+  it('leaves a hidden demo brand out of the brand list', async () => {
+    orgBrands = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: '2026-10-28T00:00:00Z' }];
+    expect(await open()).toBeNull();
+    expect(loaded.map((b) => b.id)).toEqual(['b1']);
   });
 });

@@ -280,6 +280,13 @@
         "first_month": "Use it for your brand · 50% off"
       },
       "switchToOwnBrand": "Switch to your brand"
+    },
+    "switcher": {
+      "sampleData": "Demo · sample data",
+      "notTracked": "Not tracked yet",
+      "show": "Show the demo brand",
+      "hide": "Hide the demo brand",
+      "failed": "Couldn't change the demo brand. Try again."
     }
   },
   "common": {

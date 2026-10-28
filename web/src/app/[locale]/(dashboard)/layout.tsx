@@ -80,8 +80,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const planId = (org?.plan ?? 'starter') as PlanId;
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the
-  // dialog's offer reads whether the organization ever subscribed.
+  // dialog's offer reads whether the organization ever subscribed. Hidden
+  // (after a plan was bought), it is out of every brand list until it is
+  // shown again from the brand switcher.
   const demoBrand = brands.find((b) => b.isDemo) ?? null;
+  const listedBrands = brands.filter((b) => !(b.isDemo && b.demoHiddenAt));
 
   // Effective API-model allowlist for the client (null = all allowed).
   // Enterprise orgs can be switched on per customer via
@@ -99,7 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <>
       <AuthProvider user={user} />
-      <BrandLoader brands={brands} />
+      <BrandLoader brands={listedBrands} />
       <PlanProvider
         planId={planId}
         allowedModelIds={allowedModelIds}

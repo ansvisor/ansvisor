@@ -36,7 +36,8 @@ const NO_DEMO: DemoBrandState = {
   neverSubscribed: false,
 };
 
-const DemoBrandContext = createContext<DemoBrandState>(NO_DEMO);
+/** Given by DemoBrandProvider (the dashboard's layout); no demo outside it. */
+export const DemoBrandContext = createContext<DemoBrandState>(NO_DEMO);
 
 /**
  * The demo brand's state for the dashboard (its layout gives the org's demo

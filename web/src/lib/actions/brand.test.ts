@@ -8,6 +8,8 @@ import { PLANS, type Plan } from '@/config/plans';
  */
 
 let brandCount = 0;
+// The filters the brand count was read with.
+let countFilters: [string, unknown][] = [];
 let inserted: unknown[] = [];
 let updates: Record<string, unknown>[] = [];
 let plan: Plan;
@@ -21,7 +23,18 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: (table: string) => ({
-      select: () => ({ eq: async () => ({ count: brandCount, error: null }) }),
+      select: () => {
+        countFilters = [];
+        const query = {
+          eq: (column: string, value: unknown) => {
+            countFilters.push([column, value]);
+            return query;
+          },
+          then: (resolve: (value: { count: number; error: null }) => unknown) =>
+            resolve({ count: brandCount, error: null }),
+        };
+        return query;
+      },
       update: (payload: Record<string, unknown>) => {
         updates.push(payload);
         const row = {
@@ -85,6 +98,18 @@ describe('createBrand plan limit', () => {
 
     expect('brand' in result && result.brand.id).toBe('b1');
     expect(inserted).toHaveLength(1);
+  });
+
+  it("counts the organization's brands without its demo brand", async () => {
+    brandCount = 0;
+    plan = capped(1);
+
+    await createBrand(input);
+
+    expect(countFilters).toEqual([
+      ['organization_id', 'org-1'],
+      ['is_demo', false],
+    ]);
   });
 });
 

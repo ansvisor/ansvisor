@@ -102,10 +102,12 @@ export type CreateBrandResult = { brand: Brand } | { error: string; code: 'plan_
 export async function createBrand(input: CreateBrandInput): Promise<CreateBrandResult> {
   const supabase = await createClient();
 
+  // The demo brand (sample data) takes none of the plan's brands.
   const { count } = await supabase
     .from('brands')
     .select('id', { count: 'exact', head: true })
-    .eq('organization_id', input.organizationId);
+    .eq('organization_id', input.organizationId)
+    .eq('is_demo', false);
 
   const plan = await getOrgPlan(input.organizationId);
   if (!isWithinLimit(plan, 'maxBrands', count ?? 0)) {
