@@ -7,7 +7,9 @@
  *
  * It keeps itself current: a brand built with an older DEMO_VERSION, or
  * whose month of data has grown old, is rebuilt on the next visit, in place
- * (same brand id, same row ids), so links to it keep working. A product
+ * (same brand id, same row ids), so links to it keep working, and over its
+ * old rows, so whoever opens it meanwhile sees last week's data rather than
+ * empty pages (write.js). A product
  * change that the demo should show is a new module, or a change to one, and
  * a DEMO_VERSION bump; the coverage test (coverage.test.js) fails until every
  * brand-scoped table is either built by a module or listed as skipped.
@@ -21,6 +23,7 @@ import { content } from './content.js';
 import { core } from './core.js';
 import { reports } from './reports.js';
 import { suggestions } from './suggestions.js';
+import { demoWriter } from './write.js';
 
 /**
  * Bump to rebuild every demo brand on its next visit.
@@ -45,12 +48,22 @@ const WAIT_POLL_MS = 1000;
 
 /**
  * The modules that build the demo. Each is `{ name, tables, build(ctx),
- * after? }`: `tables` are the brand-scoped tables it owns (written, or
- * rebuilt by what it calls), cleared in reverse order before a rebuild. The
- * first runs alone; the others run together, each after the one it names in
- * `after` (Content after the Action Center: a draft points at the action its
- * opportunity was sent as). Site Audit, traffic and Product Visibility
- * follow as modules of their own.
+ * refresh?(ctx), after?, inPlace?, keys?, scopes? }`:
+ * - `tables`: the brand-scoped tables it owns (written, or rebuilt by what
+ *   it calls).
+ * - `build(ctx)` writes its rows; ctx is `{ brandId, now, rebuild, write }`.
+ *   `refresh(ctx)` then rebuilds what is derived from them (rollups).
+ * - The first module runs alone; the others run together (with the first
+ *   one's refresh), each after the one it names in `after`.
+ * - On a rebuild, a module marked `inPlace` writes every row through
+ *   `ctx.write(table, rows)`, which writes over the old rows (`keys` names a
+ *   table's key columns when they aren't 'id'; `scopes` how to find the
+ *   brand's rows of a table without a brand_id); the rows not written again
+ *   are deleted once it is built (on a first build, none are). Any other
+ *   module has its `tables` cleared, in reverse, just before it is built.
+ *   (Content after the Action Center: a draft points at the action its
+ *   opportunity was sent as.) Site Audit, traffic and Product Visibility
+ *   follow as modules of their own.
  */
 export const DEMO_MODULES = [core, suggestions, actionCenter, content, reports];
 
@@ -157,16 +170,54 @@ async function releaseBuild(brandId) {
   if (error) logger.warn({ brandId, err: error }, '[demo] failed build not released');
 }
 
-async function build(brandId, now, modules) {
+/**
+ * Writes one module's rows: over the old ones (`inPlace`) or after clearing
+ * its tables (`cleared`, when the clear was started earlier).
+ */
+async function writeModule(module, { brandId, now, rebuild, cleared }, built) {
+  if (!module.inPlace) await (cleared.get(module.name) ?? clearDemoData(brandId, [module]));
+  const writer = demoWriter({
+    db: supabaseAdmin,
+    brandId,
+    rebuild: rebuild && Boolean(module.inPlace),
+    keys: module.keys,
+    scopes: module.scopes,
+  });
+  const ctx = { brandId, now, rebuild, write: writer.write };
+  built[module.name] = await module.build(ctx);
+  const pruned = await writer.prune();
+  if (Object.keys(pruned).length > 0) built[`${module.name}Pruned`] = pruned;
+  return ctx;
+}
+
+/**
+ * Builds the demo brand's data. `rebuild` is false for a brand just created:
+ * no old rows to read back and prune.
+ */
+async function build(brandId, now, modules, { rebuild }) {
   const started = Date.now();
   const built = {};
+  // Even a brand just created isn't empty (its insert trigger starts Getting
+  // started): a module not rebuilt in place clears its tables first. On a
+  // first build nobody is looking yet, so every such module starts clearing
+  // at once, alongside the core; on a rebuild each clears just before it is
+  // built, so its old rows stay on show as long as they can.
+  const cleared = new Map();
+  if (!rebuild) {
+    for (const module of modules.filter((m) => !m.inPlace)) {
+      const clear = clearDemoData(brandId, [module]);
+      // Awaited when the module is built; a build failing earlier leaves it.
+      clear.catch(() => {});
+      cleared.set(module.name, clear);
+    }
+  }
+  const args = { brandId, now, rebuild, cleared };
   try {
-    await clearDemoData(brandId, modules);
     // The first module (core) lays down what every other one points at; the
     // rest write their own tables side by side, each after the module it
-    // names in `after`, if any.
+    // names in `after`, if any, while the first one's rollups are rebuilt.
     const [first, ...rest] = modules;
-    built[first.name] = await first.build({ brandId, now });
+    const firstCtx = await writeModule(first, args, built);
     const running = new Map();
     const run = (module) => {
       if (!running.has(module.name)) {
@@ -175,13 +226,17 @@ async function build(brandId, now, modules) {
           module.name,
           (async () => {
             if (before) await run(before);
-            built[module.name] = await module.build({ brandId, now });
+            const ctx = await writeModule(module, args, built);
+            if (module.refresh) await module.refresh(ctx);
           })(),
         );
       }
       return running.get(module.name);
     };
-    const results = await Promise.allSettled(rest.map(run));
+    const results = await Promise.allSettled([
+      first.refresh ? first.refresh(firstCtx) : null,
+      ...rest.map(run),
+    ]);
     const failed = results.find((r) => r.status === 'rejected');
     if (failed) throw failed.reason;
   } catch (err) {
@@ -212,7 +267,11 @@ async function waitForBuild(organizationId) {
 async function ensure(organizationId, now, modules) {
   let brand = await readDemoBrand(organizationId);
   let claimed = false;
-  if (!brand) ({ brand, claimed } = await createDemoBrand(organizationId, now));
+  let created = false;
+  if (!brand) {
+    ({ brand, claimed } = await createDemoBrand(organizationId, now));
+    created = claimed;
+  }
 
   if (!claimed) {
     let state = demoState(brand, now);
@@ -230,7 +289,8 @@ async function ensure(organizationId, now, modules) {
     }
   }
 
-  await build(brand.id, now, modules);
+  // A brand just created has no old data to prune.
+  await build(brand.id, now, modules, { rebuild: !created });
   return { brandId: brand.id, version: DEMO_VERSION, rebuilt: true };
 }
 
