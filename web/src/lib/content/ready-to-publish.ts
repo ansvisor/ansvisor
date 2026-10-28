@@ -176,9 +176,11 @@ function readTag(lower: string, open: number) {
  * <template> holds. With `words`, only what exportPlaceholders reads is left:
  * the words (a heading's brackets only in the agent's forms), alt and title
  * values, and a JSON-LD's strings; the tags, styles and other scripts go
- * too. For a search that must find what the page holds, not its code.
+ * too. For a search that must find what the page holds, not its code. With
+ * `words` and not `fields`, the alt and title values and the JSON-LD go as
+ * well: only the words the page's text shows are left.
  */
-export function blankCode(html: string, { words = false } = {}): string {
+export function blankCode(html: string, { words = false, fields = true } = {}): string {
   // ASCII letters only: lower-casing all of it could change the length.
   const lower = html.replace(/[A-Z]+/g, (s) => s.toLowerCase());
   const out: string[] = [];
@@ -198,7 +200,7 @@ export function blankCode(html: string, { words = false } = {}): string {
     if (!words) return keep(from, tagEnd);
     let at = from;
     for (const value of values) {
-      if (value.name !== 'alt' && value.name !== 'title') continue;
+      if (!fields || (value.name !== 'alt' && value.name !== 'title')) continue;
       blank(at, value.from);
       keep(value.from, value.to);
       at = value.to;
@@ -246,7 +248,7 @@ export function blankCode(html: string, { words = false } = {}): string {
       values.some(
         (v) => v.name === 'type' && lower.slice(v.from, v.to).trim() === 'application/ld+json',
       );
-    if (words && !jsonLd) {
+    if (words && (!jsonLd || !fields)) {
       blank(open, codeEnd);
     } else {
       tag(open, end, values);
@@ -387,7 +389,65 @@ function description(root: HTMLElement): string {
   return `${space > 0 ? short.slice(0, space) : short}…`;
 }
 
-/** A live page's own address part ("/blog/pour-over"), else the title as one. */
+/**
+ * Words an address or a meta title cut short shouldn't end on: they lead
+ * into what was cut ("…Unified Tracking Across"). English and Turkish, the
+ * languages the editor writes most.
+ */
+const DANGLING = new Set([
+  'a',
+  'an',
+  'the',
+  'and',
+  'or',
+  'of',
+  'to',
+  'for',
+  'in',
+  'on',
+  'at',
+  'by',
+  'with',
+  'from',
+  'across',
+  'into',
+  'vs',
+  'your',
+  'our',
+  've',
+  'ile',
+  'için',
+  'bir',
+]);
+
+/** The same words as a slug reads them: "için" is "icin" there. */
+const DANGLING_SLUGS = new Set([...DANGLING].map(slugify));
+
+/**
+ * Whether a word leads into what was cut: a title's word lowercased without
+ * the dot a capital "İ" leaves ("İçin" → "için", where toLowerCase gives
+ * "i\u0307çin"), or a slug's word ("icin").
+ */
+function dangles(word: string): boolean {
+  const key = word.toLowerCase().replace(/\u0307/gu, '');
+  return DANGLING.has(key) || DANGLING_SLUGS.has(key);
+}
+
+/** Words without the ones a cut leaves dangling at their end, keeping one at least. */
+export function withoutDangling(words: string[]): string[] {
+  const kept = [...words];
+  while (kept.length > 1 && dangles(kept.at(-1)!)) kept.pop();
+  return kept;
+}
+
+/** A slug from the title stops about here, at a word (#1331): an address, not a sentence. */
+const TITLE_SLUG_MAX = 60;
+
+/**
+ * A live page's own address part ("/blog/pour-over"), else the title as one:
+ * without a leading "the" or "a", cut at a word near 60 characters, never on
+ * a word that leads into what was cut.
+ */
 export function slugOf(title: string, sourceUrl: string | null): string {
   if (sourceUrl) {
     try {
@@ -400,11 +460,15 @@ export function slugOf(title: string, sourceUrl: string | null): string {
       // Not an address, or not one to read: the title's slug.
     }
   }
-  const slug = slugify(title);
-  if (slug.length <= 80) return slug;
+  const words = slugify(title).split('-').filter(Boolean);
+  // The title's own first word, not the slug's: "A-Frame houses" keeps its "a".
+  if (words.length > 1 && /^(the|a|an)\s/i.test(title.trim())) words.shift();
+  const slug = words.join('-');
+  if (slug.length <= TITLE_SLUG_MAX) return slug;
   // Cut at a word, not inside one: it becomes the page's address (Send to CMS).
-  const cut = slug.slice(0, 81).lastIndexOf('-');
-  return slug.slice(0, cut > 0 ? cut : 80).replace(/-+$/, '');
+  const cut = slug.slice(0, TITLE_SLUG_MAX + 1).lastIndexOf('-');
+  if (cut <= 0) return slug.slice(0, TITLE_SLUG_MAX);
+  return withoutDangling(slug.slice(0, cut).split('-')).join('-');
 }
 
 /**
