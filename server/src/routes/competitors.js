@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../lib/ai-provider.js';
+import { brandSetupSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import { withRetry } from '../lib/retry.js';
 import { webResearch } from '../lib/web-research.js';
@@ -53,13 +54,13 @@ function countryName(region) {
  */
 router.post('/suggest', async (req, res) => {
   try {
-    const { brandName, industry, description, website, region, language } = req.body;
+    const parsed = brandSetupSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+    }
+    const { brandName, industry, description, website, region, language } = parsed.data;
     const langName = getLanguageName(language);
     const country = countryName(region);
-
-    if (!brandName) {
-      return res.status(400).json({ error: 'brandName is required' });
-    }
 
     const competitorModel =
       process.env.COMPETITOR_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';

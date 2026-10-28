@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiUsageToastDue, aiUsageToastMark, type AiUsage } from './ai-usage';
+import { aiUsageFromApi, aiUsageToastDue, aiUsageToastMark, type AiUsage } from './ai-usage';
 
 /** The AI usage toast (AI usage spec §4): once a period in a browser, on reaching 80%. */
 
@@ -39,5 +39,38 @@ describe('aiUsageToastDue', () => {
     expect(aiUsageToastDue(usage({ percentUsed: 79.9 }), null)).toBe(false);
     expect(aiUsageToastDue(usage({ percentUsed: 100 }), null)).toBe(false);
     expect(aiUsageToastDue(usage({ unlimited: true, percentUsed: null }), null)).toBe(false);
+  });
+});
+
+describe('aiUsageFromApi', () => {
+  /** An API from before the quality checks joined the Content Editor's row. */
+  const old = (improve: number, content: number, action: number, quality: number) =>
+    usage({
+      features: [
+        { feature: 'improve', percent: improve },
+        { feature: 'content', percent: content },
+        { feature: 'action_center', percent: action },
+        { feature: 'quality' as AiUsage['features'][number]['feature'], percent: quality },
+      ],
+    });
+
+  it('drops an older API’s unused rows: nothing used reads as no usage', () => {
+    expect(aiUsageFromApi(old(0, 0, 0, 0)).features).toEqual([]);
+  });
+
+  it('adds an older API’s quality checks into the Content Editor, once rounded', () => {
+    expect(aiUsageFromApi(old(0, 1.2, 0, 0.1)).features).toEqual([
+      { feature: 'content', percent: 1.3 },
+    ]);
+    expect(aiUsageFromApi(old(4.5, 0, 0.2, 0.3)).features).toEqual([
+      { feature: 'improve', percent: 4.5 },
+      { feature: 'content', percent: 0.3 },
+      { feature: 'action_center', percent: 0.2 },
+    ]);
+  });
+
+  it('keeps a new API’s answer as it is, a listed 0 and all', () => {
+    const now = usage({ features: [{ feature: 'content', percent: 0 }] });
+    expect(aiUsageFromApi(now)).toBe(now);
   });
 });

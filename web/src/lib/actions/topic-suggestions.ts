@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createTopic } from '@/lib/actions/topic';
+import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 import { API_BASE_URL } from '@/config/api';
 
 const AEO_SERVER_URL = API_BASE_URL;
@@ -111,7 +112,8 @@ export async function acceptTopicSuggestion(suggestionId: string): Promise<{ top
     throw new Error('Suggestion not found or already processed');
   }
 
-  const topic = await createTopic(row.brand_id, row.name);
+  // A suggestion's name is the model's: cut to fit, not refused.
+  const topic = await createTopic(row.brand_id, row.name.trim().slice(0, TOPIC_NAME_CHARS));
 
   const ack = await fetch(`${AEO_SERVER_URL}/api/topics/suggestions/${suggestionId}/accept`, {
     method: 'POST',
