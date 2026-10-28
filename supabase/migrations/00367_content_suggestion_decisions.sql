@@ -12,8 +12,9 @@
 -- Only its small changes count, a passage's words replaced or blocks
 -- inserted: a whole page rewritten to the rules (kind 'page', 00247) names
 -- every rule it was asked for, and one rejected would count against each.
--- `drafts` is how many drafts a rule's suggestions were decided on, so one
--- Reject all on one draft isn't read as a habit.
+-- `drafts` is how many drafts a rule's suggestions were rejected on, so one
+-- Reject all on one draft isn't read as a habit, even beside an Accept on
+-- another.
 
 -- A database with an earlier shape of it (a dev database, before review)
 -- takes this one in its place: create or replace can't change its rows.
@@ -32,7 +33,7 @@ as $$
   select k.rule_key,
          count(*) filter (where s.status = 'accepted')::integer as accepted,
          count(*) filter (where s.status = 'rejected')::integer as rejected,
-         count(distinct s.draft_id)::integer as drafts
+         count(distinct s.draft_id) filter (where s.status = 'rejected')::integer as drafts
     from public.content_draft_suggestions s
     join public.content_drafts d on d.id = s.draft_id
     cross join lateral unnest(s.rule_keys) as k(rule_key)
@@ -47,6 +48,6 @@ revoke all on function public.content_suggestion_decisions(uuid, timestamptz) fr
 grant execute on function public.content_suggestion_decisions(uuid, timestamptz) to service_role;
 
 comment on function public.content_suggestion_decisions(uuid, timestamptz) is
-  'A brand''s accepted and rejected Content Agent suggestions since a day, by rule key, and the drafts they were decided on; small changes only, not page rewrites (00367, learning B6). Service role only.';
+  'A brand''s accepted and rejected Content Agent suggestions since a day, by rule key, and the drafts they were rejected on; small changes only, not page rewrites (00367, learning B6). Service role only.';
 
 notify pgrst, 'reload schema';

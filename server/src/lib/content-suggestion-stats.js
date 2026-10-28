@@ -13,7 +13,7 @@ import supabaseAdmin from '../config/supabase.js';
 export const DECISION_WINDOW_DAYS = 90;
 /** Decided suggestions for a rule before its share means anything. */
 export const CAREFUL_MIN_DECIDED = 5;
-/** Drafts they were decided on: one Reject all alone doesn't make a habit. */
+/** Drafts they were rejected on: one Reject all alone doesn't make a habit. */
 export const CAREFUL_MIN_DRAFTS = 2;
 /** The share rejected past which the agent is careful with a rule. */
 export const CAREFUL_REJECT_SHARE = 0.7;
