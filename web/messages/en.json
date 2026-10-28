@@ -7498,7 +7498,7 @@
       "whyNot": {
         "yours": "Yours, not here",
         "link": "Why not you?",
-        "linkLabel": "Why isn't {product} on this shelf? Open it beside the product AI picked"
+        "linkLabel": "Why not you? Open {product} beside the product AI picked on this shelf"
       },
       "rank": "You: #{rank}",
       "rankWeek": "You: #{rank} · {own} of {count} shelves this week",
