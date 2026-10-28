@@ -191,38 +191,51 @@ export function RunSteps({
   moving?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard.steps');
+  const tCard = useTranslations('contentEditor.editor.agentCard');
+  const tRules = useTranslations('contentEditor.editor.rules.names');
   const shown = shownSteps(run);
+  // The rules it kept its changes small for (learning B6), by their names.
+  const careful = (run.steps[0]?.careful ?? [])
+    .filter((key) => tRules.has(key))
+    .map((key) => tRules(key));
   return (
-    <ol className="mt-1 flex flex-wrap items-center gap-1 text-[12px]">
-      {shown.map(({ step, index }, i) => {
-        const { key, count } = stepMessage(step);
-        const done = index < run.step;
-        const now = index === run.step;
-        return (
-          <li key={step.key} className="flex items-center gap-1">
-            {i > 0 && (
-              <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-            )}
-            <span
-              aria-current={now ? 'step' : undefined}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5',
-                done &&
-                  'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
-                now && 'bg-background font-medium text-foreground',
-                now && moving && 'relative overflow-hidden',
-                !done && !now && 'border-dashed text-muted-foreground',
+    <>
+      <ol className="mt-1 flex flex-wrap items-center gap-1 text-[12px]">
+        {shown.map(({ step, index }, i) => {
+          const { key, count } = stepMessage(step);
+          const done = index < run.step;
+          const now = index === run.step;
+          return (
+            <li key={step.key} className="flex items-center gap-1">
+              {i > 0 && (
+                <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
               )}
-            >
-              {now && moving && <StepSweep />}
-              {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
-              {t(key, count === undefined ? {} : { count })}
-              {now && moving && <WorkingDots className="ml-0.5" />}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+              <span
+                aria-current={now ? 'step' : undefined}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5',
+                  done &&
+                    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+                  now && 'bg-background font-medium text-foreground',
+                  now && moving && 'relative overflow-hidden',
+                  !done && !now && 'border-dashed text-muted-foreground',
+                )}
+              >
+                {now && moving && <StepSweep />}
+                {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
+                {t(key, count === undefined ? {} : { count })}
+                {now && moving && <WorkingDots className="ml-0.5" />}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {careful.length > 0 && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {tCard('careful', { rules: careful.join(', ') })}
+        </p>
+      )}
+    </>
   );
 }
 

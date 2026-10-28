@@ -16,6 +16,8 @@ const reserveAiBudget = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
+    // A function's rows, by its name (content_suggestion_decisions, 00367).
+    rpc: async (name) => ({ data: rows[name] ?? [], error: null }),
     from: (table) => {
       const result = () => ({ data: rows[table] ?? null, error: null });
       const chain = {
@@ -1713,6 +1715,43 @@ describe('cleanInsertHtml', () => {
 });
 
 describe('fixDraftRules', () => {
+  it('keeps small the changes for rules people at the brand mostly reject, and says so on the run (learning B6)', async () => {
+    rows.content_suggestion_decisions = [
+      // One of this run's rules, mostly rejected.
+      { rule_key: 'faq', accepted: 1, rejected: 7 },
+      // Mostly rejected, but not a rule here.
+      { rule_key: 'tables', accepted: 0, rejected: 9 },
+      // A rule here people take.
+      { rule_key: 'dated', accepted: 6, rejected: 1 },
+    ];
+    const run = {
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 2 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    };
+    runs.startRun = async () => run;
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_suggestion_decisions;
+    }
+    const prompt = generateObject.mock.calls[0][0].prompt;
+    expect(prompt).toContain(
+      'People at this brand reject most of the changes suggested for these rules: faq (7 of 8 rejected).',
+    );
+    expect(prompt).not.toContain('tables (');
+    expect(run.steps[0]).toMatchObject({ key: 'read_rules', careful: ['faq'] });
+  });
+
   it("knows the shopping path's prices and names, a product's number only beside its name, and links its pages", async () => {
     rows.content_drafts = {
       ...rows.content_drafts,

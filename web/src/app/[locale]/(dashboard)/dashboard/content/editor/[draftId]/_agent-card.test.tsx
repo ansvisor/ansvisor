@@ -465,6 +465,13 @@ describe('AgentCard', () => {
     expect(onStop).toHaveBeenCalledTimes(1);
     await show(true);
     expect(container.querySelector('button')!.disabled).toBe(true);
+
+    // The rules it keeps small, as people at the brand mostly reject them (learning B6).
+    run.steps[0] = { key: 'read_rules', count: 14, careful: ['feedMatch', 'unknownRule'] };
+    await show(false);
+    expect(container.textContent).toContain(
+      'Kept its changes small for rules people here mostly reject: Price, GTIN and stock match the feed.',
+    );
   });
 
   it('stops all of its motion with reduced motion, in every state', async () => {

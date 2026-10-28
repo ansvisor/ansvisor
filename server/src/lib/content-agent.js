@@ -49,6 +49,8 @@ import { draftLanguage } from './content-language.js';
 import { editSpans } from './edit-spans.js';
 import { getLanguageName } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
+import { carefulLine, carefulRules } from './content-suggestion-stats.js';
+import { logger } from './logger.js';
 
 /**
  * Fix open rules with agent (Content Editor CE-018, spec §8): the Content
@@ -1114,6 +1116,7 @@ export function buildFixPrompt({
   linkTargets = '',
   sources = '',
   handoff = false,
+  careful = '',
 }) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
@@ -1133,7 +1136,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${over ? `${over}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -1348,6 +1351,21 @@ async function fixWithRun({
   const modelId = contentBriefModelId();
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
+  // The rules here people at the brand mostly reject its changes for
+  // (learning B6): kept small, and named on the run's rules step, which the
+  // editor's agent card shows. A read that fails leaves the run as it was.
+  const careful = (
+    await carefulRules(brandId).catch((err) => {
+      logger.warn(
+        { err: { message: err?.message }, draftId },
+        '[content-agent] decisions not read',
+      );
+      return [];
+    })
+  ).filter(({ key }) => ruleKeys.has(key));
+  if (careful.length && run?.steps?.[0]) {
+    run.steps[0] = { ...run.steps[0], careful: careful.map(({ key }) => key) };
+  }
   // The data it writes from, numbered, Brief › Your input last (CE-048);
   // the numbers it may write unmarked.
   await advanceRun(run, 1);
@@ -1448,6 +1466,7 @@ async function fixWithRun({
           linkTargets: linkTargetsPrompt(targets, linkKeys),
           sources: sourcesPrompt(numbered),
           handoff,
+          careful: carefulLine(careful),
         }),
         abortSignal,
       }),
