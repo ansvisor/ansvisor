@@ -4676,6 +4676,20 @@
         "md": "Export Markdown",
         "failed": "Couldn't export the page. Try again."
       },
+      "sentChip": {
+        "webflow": {
+          "queued": "Sending to Webflow…",
+          "sent": "In Webflow · draft",
+          "failed": "Webflow send failed",
+          "published": "Live"
+        },
+        "webhook": {
+          "queued": "Sending to your CMS…",
+          "sent": "Sent to your CMS",
+          "failed": "Send failed",
+          "published": "Live"
+        }
+      },
       "send": {
         "button": "Send to CMS",
         "hint": "Send the page to your CMS: Webflow, or your workflow through the brand's webhook",
@@ -5094,6 +5108,7 @@
         },
         "jsonLd": "JSON-LD for this page",
         "copy": "Copy JSON-LD",
+        "showCode": "Show the JSON-LD, for a CMS that doesn't add it",
         "copied": "JSON-LD copied",
         "copyFailed": "Couldn't copy the JSON-LD. Select it and copy it yourself.",
         "fixFirst": "Fix first",
