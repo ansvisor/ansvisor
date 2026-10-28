@@ -118,6 +118,7 @@ export function BulkSendDialog({
   const {
     webflow,
     wordpress,
+    framer,
     target,
     pick,
     sent: keepTarget,
@@ -129,6 +130,9 @@ export function BulkSendDialog({
     ? webflow.collection || tEditor('send.target.webflow.collection')
     : '';
   const site = wordpress?.ready ? wordpress.site : '';
+  const framerCollection = framer?.ready
+    ? framer.collection || tEditor('send.target.framer.collection')
+    : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -312,11 +316,20 @@ export function BulkSendDialog({
         : tEditor('send.errors.invalidField', { field: named });
     }
     // No page named: any of them may be the one on its way.
-    if (code === 'in_progress') return t(to === 'wordpress' ? 'inProgressWordPress' : 'inProgress');
+    if (code === 'in_progress') {
+      return t(
+        to === 'wordpress'
+          ? 'inProgressWordPress'
+          : to === 'framer'
+            ? 'inProgressFramer'
+            : 'inProgress',
+      );
+    }
     // No CMS ready sent the pages to the webhook: what to fix is the one connected.
-    if (code === 'no_webhook' && !webflow?.ready && !wordpress?.ready) {
+    if (code === 'no_webhook' && !webflow?.ready && !wordpress?.ready && !framer?.ready) {
       if (webflow) return tEditor('send.errors.no_webhookWebflow');
       if (wordpress) return tEditor('send.errors.no_webhookWordPress');
+      if (framer) return tEditor('send.errors.no_webhookFramer');
     }
     return tEditor(`send.errors.${code}`);
   };
@@ -344,16 +357,19 @@ export function BulkSendDialog({
                 ? t('descriptionWebflow', { collection })
                 : target === 'wordpress'
                   ? t('descriptionWordPress', { site })
-                  : t('description')}
+                  : target === 'framer'
+                    ? t('descriptionFramer', { collection: framerCollection })
+                    : t('description')}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Where the pages go, before they go: Webflow or WordPress once Settings has it ready. */}
-        {(webflow || wordpress) && target && !after && (
+        {/* Where the pages go, before they go: a CMS once Settings has it ready. */}
+        {(webflow || wordpress || framer) && target && !after && (
           <CmsTargetPicker
             value={target}
             webflow={webflow}
             wordpress={wordpress}
+            framer={framer}
             disabled={phase.kind === 'sending'}
             onChange={(next) => {
               pick(next);

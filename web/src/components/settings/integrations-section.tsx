@@ -42,6 +42,7 @@ import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
 import { isCloud } from '@/config/plans';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { CatalogCategoryPages } from './catalog-category-pages';
+import { FramerCard } from './framer-card';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { WordPressCard } from './wordpress-card';
@@ -132,6 +133,8 @@ export function IntegrationsSection() {
           <WebflowCard />
 
           <WordPressCard />
+
+          <FramerCard />
         </IntegrationGroup>
       </CardContent>
     </Card>

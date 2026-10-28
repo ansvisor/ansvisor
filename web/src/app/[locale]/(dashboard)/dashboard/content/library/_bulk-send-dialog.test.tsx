@@ -60,6 +60,31 @@ vi.mock('@/lib/wordpress-client', () => ({
         : null,
   }),
 }));
+// And its Framer collection (00295): none unless a test gives one. Not
+// ready: connected, but no field for the page's title picked yet.
+const framer = vi.hoisted(() => ({ ready: false, notReady: false, failed: false }));
+vi.mock('@/lib/framer-client', () => ({
+  readFramer: async () => ({
+    ok: !framer.failed,
+    code: 'failed',
+    configured: true,
+    connection:
+      framer.ready || framer.notReady
+        ? {
+            status: 'connected',
+            projectId: 'p1',
+            projectName: 'Acme Site',
+            siteUrl: 'https://acme.framer.website',
+            account: 'Ada Lovelace',
+            collectionId: 'fc1',
+            collectionName: 'Articles',
+            fieldMap: framer.ready ? { title: 'f-title', body: 'f-body' } : { body: 'f-body' },
+            connectedAt: '2026-10-27T10:00:00Z',
+            updatedAt: '2026-10-27T10:00:00Z',
+          }
+        : null,
+  }),
+}));
 // One request a page, so a test can refuse the second.
 const oneByOne = vi.hoisted(() => ({ on: false }));
 vi.mock('@/lib/content/cms-send', async (importOriginal) => {
@@ -132,6 +157,7 @@ beforeEach(() => {
   oneByOne.on = false;
   Object.assign(webflow, { ready: false, refused: false, failed: false });
   Object.assign(wordpress, { ready: false, refused: false, failed: false });
+  Object.assign(framer, { ready: false, notReady: false, failed: false });
   // The send target remembered per brand, in this browser.
   const kept = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -386,6 +412,106 @@ describe('BulkSendDialog', () => {
     expect(dialog().querySelector('[role="radio"]')).toBeNull();
     expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
       "Couldn't check WordPress just now, so this send goes to your workflow.",
+    );
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
+  });
+
+  it('sends the pages to the brand’s Framer collection as draft items', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    framer.ready = true;
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'queued' },
+        { id: 'x3', draftId: 'd3', status: 'queued' },
+      ],
+    });
+    readDeliveries.mockResolvedValue([
+      { id: 'x1', draftId: 'd1', status: 'sent', http_status: null, error: null },
+      { id: 'x3', draftId: 'd3', status: 'sent', http_status: null, error: null },
+    ]);
+    await render();
+    expect(dialog().textContent).toContain(
+      "Each page goes to Articles in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
+    );
+    expect(dialog().textContent).toContain(
+      "A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
+    );
+    const radios = [...dialog().querySelectorAll('[role="radio"]')];
+    expect(radios.map((r) => r.textContent)).toEqual([
+      'FramerA draft item in Articles',
+      "Your workflowThe brand's webhook (Zapier, Make, n8n)",
+    ]);
+    expect(radios[0].getAttribute('aria-checked')).toBe('true');
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('framer');
+    expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('framer');
+    await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe('2 pages sent.');
+  });
+
+  it('offers all four, two by two, starting from the remembered Framer', async () => {
+    webflow.ready = true;
+    wordpress.ready = true;
+    framer.ready = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'framer');
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'in_progress', field: null });
+    await render();
+    const radios = [...dialog().querySelectorAll('[role="radio"]')];
+    expect(radios.map((r) => r.querySelector('span')?.textContent)).toEqual([
+      'Webflow',
+      'WordPress',
+      'Framer',
+      'Your workflow',
+    ]);
+    expect(dialog().querySelector('[role="radiogroup"]')!.className).toContain(
+      'grid-cols-1 sm:grid-cols-2',
+    );
+    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'false',
+      'true',
+      'false',
+    ]);
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('framer');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      'A page is already on its way to Framer. Wait for it, then send again.',
+    );
+  });
+
+  it('says Framer isn’t ready when the brand has no webhook either', async () => {
+    framer.notReady = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'framer');
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'no_webhook', field: null });
+    await render();
+    const choice = [...dialog().querySelectorAll<HTMLButtonElement>('[role="radio"]')][0];
+    expect(choice.disabled).toBe(true);
+    expect(choice.textContent).toContain('Not ready: connect it again or pick its collection');
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      "This brand's Framer isn't ready, and it has no webhook. Connect Framer again or pick its collection and fields in Settings › Integrations.",
+    );
+  });
+
+  it('sends to the webhook when Framer can’t be read, saying so to a person who sent there', async () => {
+    framer.failed = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'framer');
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'sent' },
+        { id: 'x3', draftId: 'd3', status: 'sent' },
+      ],
+    });
+    await render();
+    expect(dialog().querySelector('[role="radio"]')).toBeNull();
+    expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
+      "Couldn't check Framer just now, so this send goes to your workflow.",
     );
     await act(async () => button('Send 2 pages').click());
     expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
