@@ -13,9 +13,6 @@ import messages from '../../../messages/en.json';
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
-const refresh = vi.fn();
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
-
 let canManageMenus = true;
 vi.mock('@/components/providers/menu-access-provider', () => ({
   useCanManageMenus: () => canManageMenus,
@@ -91,18 +88,57 @@ describe('MenuAccessSection', () => {
     await act(async () => box('Analyst sees Content')!.click());
     expect(actions.setRoleMenu).toHaveBeenCalledWith('analyst', ['audit']);
     expect(box('Analyst sees Content')?.getAttribute('aria-checked')).toBe('true');
-    expect(refresh).toHaveBeenCalled();
 
     await act(async () => box('Manager sees Reports')!.click());
     expect(actions.setRoleMenu).toHaveBeenLastCalledWith('manager', ['reports']);
   });
 
-  it('puts the box back when the save fails', async () => {
-    actions.setRoleMenu.mockRejectedValueOnce(new Error('nope'));
+  it('reads the menus again when a save fails, keeping a save that went through', async () => {
     await render();
-    await act(async () => box('Manager sees Mentions')!.click());
-    expect(box('Manager sees Mentions')?.getAttribute('aria-checked')).toBe('true');
+    // The first click's save fails after the second's went through.
+    actions.setRoleMenu.mockRejectedValueOnce(new Error('nope')).mockResolvedValueOnce(undefined);
+    actions.getMenuAccessSettings.mockResolvedValueOnce({
+      roles: { manager: ['reports'], analyst: ['content', 'audit'], agency_partner: [] },
+      members: [],
+      viewerIsAdmin: true,
+    });
+    await act(async () => {
+      box('Manager sees Mentions')!.click();
+      box('Manager sees Reports')!.click();
+    });
     expect(toast.error).toHaveBeenCalledWith("Couldn't save the menu. Try again.");
+    expect(box('Manager sees Mentions')?.getAttribute('aria-checked')).toBe('true');
+    expect(box('Manager sees Reports')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('fills a role from a ready-made set', async () => {
+    await render();
+    const trigger = container.querySelector(
+      '[aria-label="Fill Manager from a ready-made set"]',
+    ) as HTMLElement;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const option = [...document.querySelectorAll('[role="option"]')].find(
+      (o) => o.textContent === 'Brand & PR',
+    ) as HTMLElement;
+    // Base UI picks the highlighted option: the pointer moves onto it first.
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      option.click();
+    });
+    expect(actions.setRoleMenu).toHaveBeenCalledWith('manager', [
+      'content',
+      'audit',
+      'prompts',
+      'shopping',
+      'traffic',
+    ]);
+    expect(box('Manager sees Content')?.getAttribute('aria-checked')).toBe('false');
   });
 
   it('tells people who can’t change menus, without reading them', async () => {
