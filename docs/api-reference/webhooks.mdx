@@ -305,7 +305,7 @@ The test uses the URL and secret currently in the form, so you can check an endp
 
 ## When the plan has ended
 
-On Ansvisor Cloud, a workspace without an active plan is read-only: its trial ended, its plan was cancelled, or a payment failed. See [What happens when my plan ends?](/faq).
+On Ansvisor Cloud, a workspace without an active plan is read-only: a cancelled plan or free trial reached its end, or a payment failed. See [What happens when my plan ends?](/faq).
 
 - **Nothing is sent.** Sending an opportunity, a task or a page, and **Test Webhook**, are writes, so the API refuses them with the 402 below. No Daily Pulse is generated.
 - **Callbacks store nothing.** Both callbacks (`/webhooks/content/{id}/status` and `/webhooks/content-drafts/{deliveryId}/status`) check the secret first, so a wrong one still answers 401. With the right secret, they answer `202` with this body and change nothing, whatever you sent:
