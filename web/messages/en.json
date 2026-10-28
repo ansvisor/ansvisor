@@ -1693,6 +1693,7 @@
         "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
+        "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
         "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
         "topicOpportunity": {
           "source": "Source",
@@ -1728,6 +1729,13 @@
           },
           "swaps": "In stock, from its shopping path",
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
+        },
+        "auditPage": {
+          "source": "Source",
+          "sourceValue": "Site Audit report",
+          "openReport": "Open the report",
+          "page": "Page",
+          "checks": "{count, plural, one {The check it failed when sent} other {The # checks it failed when sent}}"
         },
         "mentionReview": {
           "source": "Source",
@@ -2476,6 +2484,14 @@
         "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
         "goal": "Earn AI-referred visits to these pages."
       },
+      "audit_page": {
+        "title": "Fix the issues Site Audit found on {targets}",
+        "titleGeneric": "Fix the issues Site Audit found on a page",
+        "pageTitle": "Fix the issues Site Audit found on {page}",
+        "description": "Sent from Site Audit: a page and the checks it fails.",
+        "checksDescription": "Sent from Site Audit: the page fails {count, plural, one {# check} other {# checks}}. Audit it again once fixed to see them pass.",
+        "goal": "Get the page to pass the checks it fails, so AI engines read and cite it."
+      },
       "content_draft": {
         "title": "Write a page for {targets}",
         "titleGeneric": "Write a page",
@@ -3174,6 +3190,20 @@
     "deleteAudit": "Delete audit",
     "loadFailed": "Couldn't load this audit",
     "reaudit": "Re-run audit",
+    "sendToAction": {
+      "button": "Send to Action Center",
+      "sending": "Sending to the Action Center…",
+      "sent": "Sent to the Action Center",
+      "sentDescription": "AC-{number}: fix the {count, plural, one {# check} other {# checks}} this page fails.",
+      "alreadySent": "Already in the Action Center",
+      "alreadySentDescription": "AC-{number} is open for this page.",
+      "failed": "Couldn't send to the Action Center",
+      "nothingToFix": "This page passes its checks: nothing to send.",
+      "newerAudit": "This page has a newer audit",
+      "newerAuditDescription": "Send it from its latest report, so the action names the checks it fails now.",
+      "openLatest": "Open the latest report",
+      "open": "Open"
+    },
     "deleteConfirm": "This permanently deletes this audit and its results. This can't be undone.",
     "cancel": "Cancel",
     "auditsLeft": "audits left this month",

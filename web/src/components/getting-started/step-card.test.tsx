@@ -95,12 +95,12 @@ afterEach(() => {
 });
 
 describe('GettingStartedStepCard', () => {
-  it('says why and how, with the video’s place, and when it counts as done', async () => {
+  it('says why and how, without a video place yet, and when it counts as done', async () => {
     await render(step({ key: 'competitors', progress: { value: 2, target: 3 } }));
     expect(text()).toContain('steps.competitors.title');
     expect(text()).toContain('steps.competitors.why 1');
     expect(text()).toContain('steps.competitors.how 2');
-    expect(text()).toContain('panel.videosSoon');
+    expect(text()).not.toContain('panel.videosSoon');
     expect(text()).toContain('panel.doneWhen · 2/3');
   });
 
