@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 
 import { CITIES } from '@/config/cities';
@@ -13,6 +13,14 @@ import {
   parseLocation,
   regionLabel,
 } from '@/lib/region';
+import { getTrackingCountries } from '@/lib/actions/tracking-countries';
+import {
+  CITY_MODELS,
+  ENGINE_LABELS,
+  countryName,
+  missingEngines,
+  type TrackingCountry,
+} from '@/lib/tracking-countries';
 import { Badge } from '@/components/ui/badge';
 import {
   Combobox,
@@ -56,6 +64,31 @@ export interface LocationPickerProps {
   allowEmpty?: boolean;
 }
 
+/** The engines' countries, read once per page (PROMPT-015e); empty when none were read. */
+let countriesRead: Promise<TrackingCountry[]> | null = null;
+
+function useTrackingCountries(): TrackingCountry[] | null {
+  const [countries, setCountries] = useState<TrackingCountry[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    countriesRead ??= getTrackingCountries().catch((err) => {
+      console.error('Failed to read the tracking countries:', err);
+      countriesRead = null;
+      return [];
+    });
+    countriesRead.then((list) => {
+      if (!cancelled) setCountries(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return countries;
+}
+
+/** The brand regions first, as people look for them, then every other country by name. */
+const POPULAR = TRACKING_COUNTRIES.slice(0, 18).map((c) => c.code);
+
 /** Engines with no sub-country mechanism — mirrors the worker's collapse. */
 const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
 
@@ -82,30 +115,54 @@ export function LocationPicker({
   countNoun = 'tracked',
   allowEmpty = false,
 }: LocationPickerProps) {
-  const options = useMemo<LocationOption[]>(
-    () => [
-      ...TRACKING_COUNTRIES.map((region) => ({
-        value: region.code,
-        // Found by its other names too: "Turkey" or "Turkiye" finds Türkiye.
-        label: locationSearchText(region.code),
-        sublabel: 'Country',
-      })),
+  // The countries the engines answer from, as the API last read them; until
+  // then, or without a read, the picker's own list (PROMPT-015e).
+  const engineCountries = useTrackingCountries();
+  const options = useMemo<LocationOption[]>(() => {
+    const read = engineCountries?.length ? engineCountries : null;
+    const countries = read
+      ? [...read]
+          .sort(
+            (a, b) =>
+              (POPULAR.includes(a.code) ? POPULAR.indexOf(a.code) : 99) -
+                (POPULAR.includes(b.code) ? POPULAR.indexOf(b.code) : 99) ||
+              countryName(a.code).localeCompare(countryName(b.code)),
+          )
+          .map((country) => {
+            const missing = missingEngines(country, read).map((m) => ENGINE_LABELS[m] ?? m);
+            return {
+              value: country.code,
+              // Found by its other names too: "Turkey" or "Turkiye" finds Türkiye.
+              label: locationSearchText(country.code),
+              sublabel: missing.length ? `Country · not on ${missing.join(', ')}` : 'Country',
+            };
+          })
+      : TRACKING_COUNTRIES.map((region) => ({
+          value: region.code,
+          label: locationSearchText(region.code),
+          sublabel: 'Country',
+        }));
+    // A city only where Google's engines answer from its country.
+    const cityCountries = read
+      ? new Set(read.filter((c) => c.models.some((m) => CITY_MODELS.has(m))).map((c) => c.code))
+      : null;
+    return [
+      ...countries,
       ...US_STATES.map((state) => ({
         value: locationCode('US', state.code),
         label: state.label,
         sublabel: 'United States · state',
       })),
       // Cities (PROMPT-015d): asked by Google's engines and the API models.
-      ...CITIES.map((city) => ({
+      ...CITIES.filter((city) => !cityCountries || cityCountries.has(city.country)).map((city) => ({
         value: cityCode(city.country, city.id),
         // Found typed with or without its marks, or by its country: "Ist" finds
         // İstanbul, "Sao" São Paulo, "Turkey" every city in Türkiye.
         label: locationSearchText(cityCode(city.country, city.id)),
         sublabel: `City · ${regionLabel(city.country)}`,
       })),
-    ],
-    [],
-  );
+    ];
+  }, [engineCountries]);
 
   const selected = new Set(value);
   const atCap = maxSelectable !== null && value.length >= maxSelectable;

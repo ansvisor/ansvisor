@@ -49,6 +49,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
     if (table === 'catalog_source_credentials') return row.source_id;
     if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
+    if (table === 'cloro_countries') return `${row.model}|${row.country}`;
     if (table === 'content_shopping_checks') return row.draft_id;
     return `${row.brand_id}|${row.source}|${row.external_id}`;
   };

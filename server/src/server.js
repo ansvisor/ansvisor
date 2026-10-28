@@ -57,6 +57,7 @@ import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
+import { refreshCloroCountries } from './lib/cloro-countries.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -146,6 +147,13 @@ async function runDailyTracking() {
   // Sweep orphaned Cloro pending tasks daily (runs in both cloud and
   // self-hosted, since both paths funnel through here).
   await cleanupStalePendingTasks();
+
+  // Read the countries each engine answers from (PROMPT-015e) before
+  // tracking, so today's runs skip what an engine doesn't support and the
+  // location picker offers what it does. A failed read keeps yesterday's.
+  await refreshCloroCountries().catch((err) => {
+    logger.error({ err }, '[cloro-countries] refresh crashed');
+  });
 
   // Recover pulses whose fire-and-forget trigger died with the process
   // (OOM, deploy, crash) after the run had already stamped. Non-blocking —

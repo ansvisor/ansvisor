@@ -1388,6 +1388,24 @@ export type Database = {
         }
         Relationships: []
       }
+      cloro_countries: {
+        Row: {
+          country: string
+          model: string
+          refreshed_at: string
+        }
+        Insert: {
+          country: string
+          model: string
+          refreshed_at?: string
+        }
+        Update: {
+          country?: string
+          model?: string
+          refreshed_at?: string
+        }
+        Relationships: []
+      }
       cloro_pending_tasks: {
         Row: {
           brand_id: string

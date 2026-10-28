@@ -10,7 +10,7 @@
 import logger from './logger.js';
 import { stripEntityMarkup } from './entity-markup.js';
 
-const CLORO_API = 'https://api.cloro.dev';
+export const CLORO_API = 'https://api.cloro.dev';
 
 export const SCRAPER_TASK_TYPES = {
   'chatgpt-web': 'CHATGPT',

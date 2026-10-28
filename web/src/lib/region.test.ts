@@ -78,6 +78,12 @@ describe('location codes', () => {
     expect(cityCode('tr', 'izmir')).toBe('TR~IZMIR');
   });
 
+  it('takes any country the engines may answer from, by its own name (PROMPT-015e)', () => {
+    expect(isValidLocation('BO')).toBe(true);
+    expect(regionLabel('BO')).toBe('Bolivia');
+    expect(isValidLocation('EU')).toBe(false);
+  });
+
   it('names Türkiye as Türkiye, and finds it and its cities by its other names too', () => {
     expect(regionLabel('TR')).toBe('Türkiye');
     expect(locationSearchText('TR')).toBe('Türkiye Turkiye Turkey');
