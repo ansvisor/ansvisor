@@ -11,7 +11,7 @@ import type { Database } from '@/types/supabase';
  */
 
 /** Where the Slots left card sends the user: billing to upgrade, or sales. */
-export type PromptUsageCta = 'upgrade_growth' | 'upgrade' | 'contact';
+export type PromptUsageCta = 'upgrade_growth' | 'upgrade' | 'contact' | 'choose_plan';
 
 export interface PromptUsageSummary {
   plan: {
@@ -22,6 +22,8 @@ export interface PromptUsageSummary {
     locationLimit: number | null;
     /** null on self-hosted, where there is no plan to change. */
     cta: PromptUsageCta | null;
+    /** The organization's plan has ended: it's the plan it was on, to choose again. */
+    ended?: true;
   };
   brand: { active: number; paused: number; total: number };
   account: { activePrompts: number; brands: number; locationsUsed: number };
@@ -42,13 +44,14 @@ const PLAN_CTA: Record<PlanId, PromptUsageCta | null> = {
  * planFromOrgRow), so the limit is the one the plan-limit guard enforces,
  * Enterprise overrides included.
  */
-export function usagePlan(plan: Plan): PromptUsageSummary['plan'] {
+export function usagePlan(plan: Plan, ended = false): PromptUsageSummary['plan'] {
   const max = plan.limits.maxPrompts;
   return {
     key: plan.id,
     name: `${plan.name} plan`,
     locationLimit: max === -1 ? null : max,
-    cta: PLAN_CTA[plan.id],
+    cta: ended ? 'choose_plan' : PLAN_CTA[plan.id],
+    ...(ended ? { ended: true as const } : {}),
   };
 }
 
@@ -76,9 +79,10 @@ export function toPromptUsageSummary(
   row: PromptUsageRow,
   plan: Plan,
   now: Date = new Date(),
+  { ended = false }: { ended?: boolean } = {},
 ): PromptUsageSummary {
   return {
-    plan: usagePlan(plan),
+    plan: usagePlan(plan, ended),
     brand: {
       active: row.brand_active,
       paused: row.brand_paused,

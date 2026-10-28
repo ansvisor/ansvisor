@@ -110,6 +110,30 @@ describe('PromptUsageCards', () => {
     expect(container.textContent).toContain('over limit');
   });
 
+  it('says an ended plan has ended, with no slots left and Choose a plan', () => {
+    render({
+      status: 'ready',
+      usage: summary({
+        plan: {
+          key: 'growth',
+          name: 'Growth plan',
+          locationLimit: 200,
+          cta: 'choose_plan',
+          ended: true,
+        },
+      }),
+    });
+
+    expect(values().slice(3)).toEqual(['46 / 200', '0']);
+    expect(container.textContent).toContain('Growth plan · ended');
+    expect(container.textContent).toContain('Your Growth plan has ended · Choose a plan');
+    expect(container.textContent).not.toContain('Starter');
+    const choose = [...container.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Choose a plan',
+    );
+    expect(choose).toBeDefined();
+  });
+
   it('asks an Enterprise account to contact us, against the limit set for it', () => {
     render({
       status: 'ready',

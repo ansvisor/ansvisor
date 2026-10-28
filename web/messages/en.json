@@ -6879,6 +6879,8 @@
       "show": "Show",
       "hide": "Hide",
       "planPill": "{plan} plan",
+      "planPillEnded": "{plan} plan · ended",
+      "ended": "Your {plan} plan has ended",
       "planLabel": {
         "self_hosted": "Self-Hosted",
         "starter": "Starter",
@@ -6905,7 +6907,8 @@
       "cta": {
         "upgrade_growth": "Upgrade to Growth",
         "upgrade": "Upgrade plan",
-        "contact": "Contact us"
+        "contact": "Contact us",
+        "choose_plan": "Choose a plan"
       },
       "footer": "Click a card to filter the table (Active · Paused · All).",
       "updated": "Counts updated {when}",
