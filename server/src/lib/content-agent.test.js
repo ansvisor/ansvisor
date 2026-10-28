@@ -13,11 +13,12 @@ let rows;
 let writes;
 const generateObject = vi.fn();
 const reserveAiBudget = vi.fn();
+/** The functions called, with what they were sent. */
+const rpc = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
-    // A function's rows, by its name (content_suggestion_decisions, 00367).
-    rpc: async (name) => ({ data: rows[name] ?? [], error: null }),
+    rpc: (...args) => rpc(...args),
     from: (table) => {
       const result = () => ({ data: rows[table] ?? null, error: null });
       const chain = {
@@ -147,6 +148,8 @@ const sourcing = { numbered: numberSources(SOURCES) };
 beforeEach(() => {
   stopIfStopped.mockReset().mockResolvedValue(undefined);
   writes = [];
+  // A function's rows, by its name (content_suggestion_decisions, 00367).
+  rpc.mockReset().mockImplementation(async (name) => ({ data: rows[name] ?? [], error: null }));
   rows = {
     content_drafts: {
       id: DRAFT,
@@ -1792,6 +1795,34 @@ describe('fixDraftRules', () => {
       key: 'gather_sources',
       live: { days: 30, citations: 12, before: 20, lost: 1 },
     });
+    // The brand's own page, at the address it optimizes, over the tab's 30 days.
+    expect(rpc).toHaveBeenCalledWith('content_page_impact', {
+      p_brand_id: BRAND,
+      p_page: 'https://acme.example/guide',
+      p_days: 30,
+    });
+  });
+
+  it('reads the live page where it was published, as the Live page tab does', async () => {
+    // Published at another address, then back to Draft: the tab reads that one.
+    rows.content_drafts = {
+      ...rows.content_drafts,
+      source_url: 'https://acme.example/guide',
+      published_url: 'https://acme.example/brew-guide',
+    };
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(rpc).toHaveBeenCalledWith(
+      'content_page_impact',
+      expect.objectContaining({ p_page: 'https://acme.example/brew-guide' }),
+    );
+    expect(rpc).not.toHaveBeenCalledWith(
+      'content_page_impact',
+      expect.objectContaining({ p_page: 'https://acme.example/guide' }),
+    );
   });
 
   it('tells nothing of a live page for a new page', async () => {

@@ -1211,7 +1211,7 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, agent_state, agent_state_at, shopping_path${handoff ? ', quality_handoff' : ''}`,
+      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, published_url, agent_state, agent_state_at, shopping_path${handoff ? ', quality_handoff' : ''}`,
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -1379,11 +1379,12 @@ async function fixWithRun({
     // Its shopping path, checked: none when it isn't one (shopping path, part 4).
     shoppingPathFor(draft),
     // How the page it optimizes does now (learning B5), as the Live page
-    // tab reads it: Apply rules with Agent only, as the careful rules. A
-    // read that fails leaves the run as it was.
+    // tab reads it: at the address it was published at, else the one it
+    // optimizes. Apply rules with Agent only, as the careful rules. A read
+    // that fails leaves the run as it was.
     handoff
       ? null
-      : readLivePage(brandId, draft.source_url).catch((err) => {
+      : readLivePage(brandId, draft.published_url ?? draft.source_url).catch((err) => {
           logger.warn(
             { err: { message: err?.message }, draftId },
             '[content-agent] live page not read',
