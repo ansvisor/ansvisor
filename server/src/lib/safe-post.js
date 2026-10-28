@@ -81,6 +81,8 @@ export async function postJson(address, body, opts = {}) {
   const lookup = opts.lookup ?? (cloud ? publicOnlyLookup : undefined);
   const signal = AbortSignal.timeout(timeoutMs);
   return new Promise((resolve, reject) => {
+    // Set once the status arrives: the answer's end, with what was read.
+    let answered = null;
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
       url,
@@ -122,9 +124,13 @@ export async function postJson(address, body, opts = {}) {
         // The status has arrived: an answer cut off after it is still that
         // answer, with what was read of it.
         res.on('error', done);
+        answered = done;
       },
     );
     req.on('error', (err) => {
+      // The time limit, or the connection dropping, after the status
+      // arrived: the request hears of it first, and the answer still holds.
+      if (answered) return answered();
       if (err instanceof PageFetchError) return reject(err);
       if (signal.aborted) {
         return reject(new PageFetchError('timeout', 'The webhook took too long to answer'));
