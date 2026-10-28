@@ -21,7 +21,8 @@ describe('parseCompetitorFindings', () => {
           { key: 'faq-schema', label: 'FAQ schema', competitors: 2, of: 3 },
           { key: 'tables', competitors: 1, of: 0 },
         ],
-        capped: 1,
+        yourPageStatus: 'read',
+        compared: true,
         unreadable: 0,
       }),
     ).toEqual({
@@ -41,10 +42,23 @@ describe('parseCompetitorFindings', () => {
         words: null,
         passes: [],
       },
+      yourPageStatus: 'read',
       gaps: [{ key: 'faq-schema', label: 'FAQ schema', competitors: 2, of: 3 }],
-      capped: 1,
+      compared: true,
       unreadable: 0,
       reason: null,
+    });
+  });
+
+  it("reads whether the brand's page was read and whether theirs were compared", () => {
+    const base = { competitorPages: [], yourPage: null, gaps: [] };
+    expect(
+      parseCompetitorFindings({ ...base, yourPageStatus: 'unreadable', compared: false }),
+    ).toMatchObject({ yourPageStatus: 'unreadable', compared: false });
+    // Not cited unless it says it couldn't be read; compared unless it says not.
+    expect(parseCompetitorFindings({ ...base, yourPageStatus: 'odd' })).toMatchObject({
+      yourPageStatus: 'not_cited',
+      compared: true,
     });
   });
 
