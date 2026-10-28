@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { X } from 'lucide-react';
 
-import { REGIONS, US_STATES } from '@/config/prompt-options';
+import { TRACKING_COUNTRIES, US_STATES } from '@/config/prompt-options';
 import { formatRegionDisplay, locationCode, parseLocation } from '@/lib/region';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -56,7 +56,7 @@ const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
  *
  * Follows the card's existing "add, then chip" idiom (the Platform & Models
  * picker): the list adds, the chips below remove. It is a Combobox rather
- * than a Select because the list is 18 countries plus 50 states — long
+ * than a Select because the list is about 50 countries plus 50 states — long
  * enough that scrolling to a known name is worse than typing it.
  *
  * Two things this picker must say out loud, because both cost money or
@@ -76,7 +76,7 @@ export function LocationPicker({
 }: LocationPickerProps) {
   const options = useMemo<LocationOption[]>(
     () => [
-      ...REGIONS.map((region) => ({
+      ...TRACKING_COUNTRIES.map((region) => ({
         value: region.code,
         label: region.label,
         sublabel: 'Country',

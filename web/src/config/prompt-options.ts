@@ -23,6 +23,51 @@ export const REGIONS = [
 
 export type RegionCode = (typeof REGIONS)[number]['code'];
 
+/**
+ * Countries a prompt can be tracked in (PROMPT-015c): the brand regions
+ * above, then more markets every tracking engine answers from (the AI
+ * engines' provider covers about 195 countries). A brand's own region stays
+ * the shorter list: volumes and audits are read for it.
+ */
+export const TRACKING_COUNTRIES: readonly { code: string; label: string }[] = [
+  ...REGIONS,
+  { code: 'AR', label: 'Argentina' },
+  { code: 'AT', label: 'Austria' },
+  { code: 'BE', label: 'Belgium' },
+  { code: 'CH', label: 'Switzerland' },
+  { code: 'CL', label: 'Chile' },
+  { code: 'CO', label: 'Colombia' },
+  { code: 'CZ', label: 'Czechia' },
+  { code: 'DK', label: 'Denmark' },
+  { code: 'EG', label: 'Egypt' },
+  { code: 'FI', label: 'Finland' },
+  { code: 'GR', label: 'Greece' },
+  { code: 'HU', label: 'Hungary' },
+  { code: 'ID', label: 'Indonesia' },
+  { code: 'IE', label: 'Ireland' },
+  { code: 'IL', label: 'Israel' },
+  { code: 'KE', label: 'Kenya' },
+  { code: 'KW', label: 'Kuwait' },
+  { code: 'MA', label: 'Morocco' },
+  { code: 'MY', label: 'Malaysia' },
+  { code: 'NG', label: 'Nigeria' },
+  { code: 'NO', label: 'Norway' },
+  { code: 'NZ', label: 'New Zealand' },
+  { code: 'PE', label: 'Peru' },
+  { code: 'PH', label: 'Philippines' },
+  { code: 'PK', label: 'Pakistan' },
+  { code: 'PL', label: 'Poland' },
+  { code: 'PT', label: 'Portugal' },
+  { code: 'QA', label: 'Qatar' },
+  { code: 'RO', label: 'Romania' },
+  { code: 'SA', label: 'Saudi Arabia' },
+  { code: 'TH', label: 'Thailand' },
+  { code: 'TW', label: 'Taiwan' },
+  { code: 'UA', label: 'Ukraine' },
+  { code: 'VN', label: 'Vietnam' },
+  { code: 'ZA', label: 'South Africa' },
+];
+
 /** `items` for a Select over REGIONS — without it the trigger shows the raw code. */
 export const REGION_ITEMS = REGIONS.map((r) => ({ value: r.code, label: r.label }));
 

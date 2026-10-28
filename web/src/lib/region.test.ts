@@ -66,6 +66,12 @@ describe('location codes', () => {
     expect(isValidLocation('ZZ')).toBe(false);
   });
 
+  it('takes the tracking countries beyond the brand regions (PROMPT-015c)', () => {
+    expect(isValidLocation('PL')).toBe(true);
+    expect(regionLabel('PL')).toBe('Poland');
+    expect(isValidLocation('ZA')).toBe(true);
+  });
+
   it('builds codes from a country and optional state', () => {
     expect(locationCode('US')).toBe('US');
     expect(locationCode('US', null)).toBe('US');
