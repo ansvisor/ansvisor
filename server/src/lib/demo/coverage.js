@@ -30,32 +30,25 @@ export const SKIPPED = {
     'Product images: the demo shows none, so no page of it ever loads an image from outside.',
   catalog_item_issues:
     "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
+
+  // demo-workflows
+  action_candidates:
+    "The nightly engine's queue of findings not yet raised as actions: no page reads it, and the engine never runs for a demo brand.",
+  action_task_runs:
+    "The audit trail of the agent's tool runs on a task: no page reads it, and no agent runs for a demo brand.",
+  signal_runs:
+    "The nightly signal pass's run log (one row per tracking run it covered): no page reads it, and the pass never runs for a demo brand.",
+  content_author_defaults:
+    "A brand's default author points at one of the organization's own content_authors: the demo adds no people to the person's organization, so its drafts name no author.",
 };
 
-const WORKFLOWS = 'demo-workflows (PR 2): Action Center, Content, suggestions, reports';
+const FOLLOW_UP =
+  'demo follow-up (PR 7): a draft with product links, checked against the demo catalog';
 const CHAT = 'demo Chat, once Chat ships (the demo shows Chat as Soon until then)';
 
 /** Tables a later demo PR builds; listed so the gap stays visible until then. */
 export const PENDING = {
-  actions: WORKFLOWS,
-  action_candidates: WORKFLOWS,
-  action_task_runs: WORKFLOWS,
-  signals: WORKFLOWS,
-  signal_runs: WORKFLOWS,
-  kpi_definitions: WORKFLOWS,
-  getting_started: WORKFLOWS,
-  getting_started_steps: WORKFLOWS,
-  content_opportunities: WORKFLOWS,
-  content_drafts: WORKFLOWS,
-  content_plan_marks: WORKFLOWS,
-  content_author_defaults: WORKFLOWS,
-  content_shopping_checks: WORKFLOWS,
-  prompt_suggestions: WORKFLOWS,
-  prompt_improve_suggestions: WORKFLOWS,
-  prompt_clusters: WORKFLOWS,
-  prompt_cluster_scopes: WORKFLOWS,
-  topic_suggestions: WORKFLOWS,
-  reports: WORKFLOWS,
+  content_shopping_checks: FOLLOW_UP,
 
   agent_conversations: CHAT,
 };

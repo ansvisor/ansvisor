@@ -128,7 +128,7 @@ export function group(kind, entity, rows, toTarget, source, extra = {}) {
 }
 
 /** A finding about one thing — a topic, a platform, a source, a competitor. */
-function single(kind, key, entity, target, source, values = {}, extra = {}) {
+export function single(kind, key, entity, target, source, values = {}, extra = {}) {
   return {
     kind,
     dedupKey: `${kind}:${key}`,
@@ -301,7 +301,7 @@ function trafficTarget(p) {
   };
 }
 
-const promptTarget = (texts) => (p) => ({
+export const promptTarget = (texts) => (p) => ({
   id: p.prompt_id,
   label: String(texts.get(p.prompt_id) ?? '').slice(0, 160),
   volume: p.volume ?? 0,
