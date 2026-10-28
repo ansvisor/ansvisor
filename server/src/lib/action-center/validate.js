@@ -78,14 +78,12 @@ export function readingWindow(closedAt, day) {
 /** Days a window may lack a tracking run and still be compared (learning A6). */
 export const MAX_GAP_DAYS = validation.maxGapDays;
 
-/** Metrics read from tracking's answers: a day without a run reads low in them. */
-const TRACKED_METRICS = new Set([
-  'ai_visibility',
-  'share_of_voice',
-  'competitor_lead',
-  'mentions',
-  'citations',
-]);
+/**
+ * Metrics tracking's answers add up night by night: a night without a run
+ * reads low in them. The rates (visibility, share of voice, the lead over a
+ * competitor) are shares of the answers there were, and don't drift from one.
+ */
+const COUNT_METRICS = new Set(['mentions', 'citations']);
 
 /** Every metric here reads higher-is-better; a drop is a decline. */
 const MEASURABLE_KPIS = {
@@ -230,9 +228,17 @@ async function measureTraffic(brandId, from, to) {
  * the other way. Without one measured, every metric counts, and movement
  * both ways is `mixed`: it used to read as improved, which taught that
  * anything moving up was the work paying off.
+ *
+ * Given `aims` (the success metrics the action names), only those and the
+ * main metric count: a basket reads every metric it can, and one the action
+ * never aimed at drifting the other way isn't a mixed result. The others
+ * stay in `metrics`, to see.
  */
-export function deriveOutcome(metrics, primary = null) {
-  const measured = metrics.filter((m) => m.before != null && m.after != null);
+export function deriveOutcome(metrics, primary = null, aims = null) {
+  const counted = aims ? new Set([...aims, ...(primary ? [primary] : [])]) : null;
+  const measured = metrics.filter(
+    (m) => m.before != null && m.after != null && (!counted || counted.has(m.metric)),
+  );
   if (measured.length === 0) return 'not_measurable';
 
   const direction = ({ before, after }) => {
@@ -282,6 +288,28 @@ export async function missingDays(brandId, window) {
     if (!ran.has(new Date(t).toISOString().slice(0, 10))) missing += 1;
   }
   return missing;
+}
+
+/**
+ * The counts read over windows tracking missed nights of, each at a full
+ * window's worth (learning A6): what the nights that ran read, per night,
+ * times the window's nights. Both windows on the same scale, a missed night
+ * no longer reads as a decline nobody caused. What was read stays as `raw`.
+ */
+export function fullWindowCounts(metrics, gaps) {
+  if (!metrics || !(gaps.before || gaps.after)) return metrics;
+  const full = (value, missing) => {
+    if (value == null || !missing) return value;
+    const ran = MEASUREMENT_WINDOW_DAYS - missing;
+    return ran > 0 ? Math.round(((value * MEASUREMENT_WINDOW_DAYS) / ran) * 10) / 10 : null;
+  };
+  return metrics.map((m) => {
+    if (!COUNT_METRICS.has(m.metric)) return m;
+    const before = full(m.before, gaps.before);
+    const after = full(m.after, gaps.after);
+    if (before === m.before && after === m.after) return m;
+    return { ...m, before, after, raw: { before: m.before, after: m.after } };
+  });
 }
 
 /** A target the night engine names that a basket can be measured on (learning A1). */
@@ -426,13 +454,18 @@ export async function validateAction(action, { now = new Date() } = {}) {
  * verdict, over the week `afterWindow` against the week before it was raised.
  */
 async function measureReading(action, { beforeWindow, afterWindow, signals, audit, now }) {
-  const finish = async (validation, outcome) => {
-    // A window tracking missed days of (A6): flagged, and past MAX_GAP_DAYS
-    // not compared, when the metrics read come from tracking's answers.
-    const tracked = (validation?.metrics ?? []).some(
-      (m) => TRACKED_METRICS.has(m.metric) && m.before != null && m.after != null,
+  // The verdict from the metrics kept, by its main metric; given `aims`,
+  // only the metrics the action names count (see deriveOutcome).
+  const finish = async (validation, aims = null) => {
+    // Nights tracking missed in either window (A6), when a count was read.
+    // Up to MAX_GAP_DAYS, its counts are read at a full window's worth; past
+    // it, too few nights ran to scale from: the counts stay as read and
+    // don't count toward the verdict, and an action whose main metric is a
+    // count can't be compared. The rates can.
+    const counted = [...(validation?.metrics ?? []), ...(validation?.brandWide ?? [])].some(
+      (m) => COUNT_METRICS.has(m.metric) && m.before != null && m.after != null,
     );
-    const [gapBefore, gapAfter] = tracked
+    const [gapBefore, gapAfter] = counted
       ? await Promise.all([
           missingDays(action.brand_id, beforeWindow),
           missingDays(action.brand_id, afterWindow),
@@ -443,12 +476,30 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
       gapBefore || gapAfter
         ? { gaps: { before: gapBefore, after: gapAfter, ...(tooMany ? { tooMany: true } : {}) } }
         : {};
+    const nights = { before: gapBefore, after: gapAfter };
+    const read =
+      validation && !tooMany
+        ? {
+            ...validation,
+            metrics: fullWindowCounts(validation.metrics, nights),
+            ...(validation.brandWide
+              ? { brandWide: fullWindowCounts(validation.brandWide, nights) }
+              : {}),
+          }
+        : validation;
     const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}), ...gaps };
     const kept =
-      validation || Object.keys(beside).length
-        ? { measuredAt: now.toISOString(), ...(validation ?? {}), ...beside }
+      read || Object.keys(beside).length
+        ? { measuredAt: now.toISOString(), ...(read ?? {}), ...beside }
         : null;
-    const verdict = (audit && auditOutcome(audit)) ?? (tooMany ? 'not_measurable' : outcome);
+    const comparable = tooMany
+      ? read?.metrics.filter((m) => !COUNT_METRICS.has(m.metric))
+      : read?.metrics;
+    const outcome =
+      !read || (tooMany && COUNT_METRICS.has(read.primary))
+        ? 'not_measurable'
+        : deriveOutcome(comparable, read.primary, aims);
+    const verdict = (audit && auditOutcome(audit)) ?? outcome;
     return { kept, verdict };
   };
 
@@ -490,7 +541,7 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
         primary,
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
       },
-      deriveOutcome(metrics, primary),
+      action.kpi_keys ?? [],
     );
   }
 
@@ -500,7 +551,11 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
   // them (learning A1): "recover 6 prompts" moves those 6, which the whole
   // brand's numbers can bury. The brand-wide figures stay as a second line.
   // A basket that measured nothing (no answers, citations of prompts) leaves
-  // the action to the brand-wide measure below.
+  // the action to the brand-wide measure below, and so does one that can't
+  // read its main metric (citations of prompts): judged by another, a basket
+  // could read "improved" while its aim fell brand-wide.
+  let brand = null;
+  let fallback = null;
   const targets = await targetScope(action);
   if (targets) {
     const asked = (action.kpi_keys ?? []).filter((key) => key in BASKET_KPIS);
@@ -521,7 +576,13 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
       before: before[metric] ?? null,
       after: after[metric] ?? null,
     }));
-    if (metrics.some((m) => m.before != null && m.after != null)) {
+    const read = (m) => m.before != null && m.after != null;
+    const named = {
+      entity: targets.entity,
+      prompts: targets.promptIds.length,
+      pages: targets.pages.length,
+    };
+    if (metrics.some((m) => m.metric === primary && read(m))) {
       const brandWide = kpiKeys.map((metric) => ({
         metric,
         unit: MEASURABLE_KPIS[metric],
@@ -535,28 +596,30 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
           afterWindow,
           metrics,
           primary,
-          scope: {
-            kind: 'targets',
-            entity: targets.entity,
-            prompts: targets.promptIds.length,
-            pages: targets.pages.length,
-          },
+          scope: { kind: 'targets', ...named },
           ...(brandWide.length ? { brandWide } : {}),
         },
-        deriveOutcome(metrics, primary),
+        asked,
       );
+    }
+    // Read already, for the brand-wide measure below.
+    if (kpiKeys.length) brand = { before: brandBefore, after: brandAfter };
+    if (metrics.some(read)) {
+      fallback = { kind: 'brand', reason: 'primary_not_in_basket', ...named };
     }
   }
 
   // An action with no success metrics has nothing to measure. That is a gap
   // in the rule that produced it, not a failure here — say so plainly rather
   // than inventing a metric it never claimed.
-  if (kpiKeys.length === 0) return finish(null, 'not_measurable');
+  if (kpiKeys.length === 0) return finish(null);
 
-  const [before, after] = await Promise.all([
-    measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
-    measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to),
-  ]);
+  const [before, after] = brand
+    ? [brand.before, brand.after]
+    : await Promise.all([
+        measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
+        measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to),
+      ]);
 
   const metrics = kpiKeys.map((metric) => ({
     metric,
@@ -565,12 +628,17 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
     after: after[metric] ?? null,
   }));
 
-  // Its aim: the first success metric its signals name.
+  // Its aim: the first success metric its signals name. Measured here for a
+  // basket that couldn't read it, the scope says so.
   const primary = kpiKeys[0];
-  return finish(
-    { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics, primary },
-    deriveOutcome(metrics, primary),
-  );
+  return finish({
+    measuredAt: now.toISOString(),
+    beforeWindow,
+    afterWindow,
+    metrics,
+    primary,
+    ...(fallback ? { scope: fallback } : {}),
+  });
 }
 
 async function write(actionId, validation, outcome, now, { day = null, final = false } = {}) {

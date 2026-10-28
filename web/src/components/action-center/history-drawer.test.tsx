@@ -236,7 +236,7 @@ describe('HistoryDrawer', () => {
     );
     await act(async () => {});
     expect(under('Result')).toContain(
-      'Tracking missed 1 night of the week before it and 2 nights of the week after it: mentions and citations read a little low there.',
+      'Tracking missed 1 night of the week before it and 2 nights of the week after it: mentions and citations are counted as for a full week.',
     );
 
     render(
@@ -248,7 +248,7 @@ describe('HistoryDrawer', () => {
     );
     await act(async () => {});
     expect(under('Result')).toContain(
-      'Tracking missed 4 nights of the week after it: too many to compare the weeks fairly, so the result reads not measurable.',
+      'Tracking missed 4 nights of the week after it: too many to compare mentions and citations fairly, so they are left out of the result.',
     );
   });
 
@@ -286,6 +286,26 @@ describe('HistoryDrawer', () => {
     expect(under('Result')).toContain(
       'Read after it closed: day 7, Improved · day 14, Mixed. The final reading is on day 30.',
     );
+  });
+
+  it('says a dismissed action was not measured, not that nothing could be read', async () => {
+    getActionSignals.mockResolvedValue([]);
+    for (const outcome of ['not_measurable', 'pending_measurement'] as const) {
+      render(
+        <HistoryDrawer
+          brandId="b1"
+          item={{ ...item, status: 'dismissed', outcome }}
+          onOpenChange={() => {}}
+        />,
+      );
+      await act(async () => {});
+      const result = under('Result');
+      expect(result).toContain(
+        'Not measured: it was dismissed, and only a completed action is measured.',
+      );
+      expect(result).not.toContain('could be read');
+      expect(result).not.toContain('fill in once validation runs');
+    }
   });
 
   it('keeps the general sentences when the signals cannot be read', async () => {
