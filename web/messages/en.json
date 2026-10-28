@@ -92,7 +92,9 @@
     "demo": {
       "dialog": {
         "title": "Use Ansvisor for your own brand",
+        "titleFor": "Use Ansvisor for {brand}",
         "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
+        "bodyFor": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for {brand}.",
         "action": "{action} works on your own brand",
         "label": "This is a demo brand with sample data"
       },
@@ -105,6 +107,7 @@
     "trialOffer": {
       "title": "Choose how to start",
       "body": "Everything you set up is here. Pick a plan and Ansvisor starts tracking, writing and fixing for your brand.",
+      "bodyFor": "Everything you set up for {brand} is here. Pick a plan and Ansvisor starts tracking, writing and fixing for it.",
       "label": "Your brand isn't tracked yet"
     },
     "actions": {
@@ -302,8 +305,10 @@
   "demo": {
     "band": {
       "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {Pick a plan to use it for your own brand.}}",
+      "textFor": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start tracking <b>{ownBrand}</b> with a {days}-day free trial, or get 50% off your first month.} trial {Start tracking <b>{ownBrand}</b> with a {days}-day free trial.} discount {Get 50% off your first month of tracking <b>{ownBrand}</b>.} other {Pick a plan to track <b>{ownBrand}</b>.}}",
       "textPlanActive": "You're exploring <b>{brand}</b>, a demo brand with sample data. Nothing here runs or uses AI.",
-      "switchToOwnBrand": "Switch to your brand"
+      "switchToOwnBrand": "Switch to your brand",
+      "switchToBrand": "Switch to {brand}"
     },
     "switcher": {
       "sampleData": "Demo · sample data",

@@ -23,8 +23,9 @@ import {
 } from '@/config/plans';
 import { useUserRole } from '@/hooks/use-user-role';
 import { FIRST_MONTH_CODE, choicePeriod, periodPrice } from '@/lib/billing/plan-purchase';
-import type { DemoOffer } from '@/lib/demo/demo-brand';
+import { ownBrandOf, type DemoOffer } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
 import {
   PlanDetailsList,
   PlanDetailsStack,
@@ -69,7 +70,8 @@ const PROMO_NOTE_ID = 'upgrade-promo-note';
  * Choose {plan}. And, for a workspace that never had a subscription
  * (`pitch.offer` 'trial'), the free trial, with no offer and limited AI
  * usage. A `pitch` also says where the dialog was opened from: the demo
- * brand, or a brand never tracked.
+ * brand, or a brand never tracked; either names the workspace's own brand
+ * once it has one.
  */
 export function ChoosePlanDialog({
   open,
@@ -95,6 +97,8 @@ export function ChoosePlanDialog({
   const tSettings = useTranslations('settings');
   const tOffer = useTranslations('planOffer');
   const { canAdmin } = useUserRole();
+  // The workspace's own brand, named in the demo's and a new brand's pitch.
+  const ownBrand = useBrandStore((s) => ownBrandOf(s)?.name ?? null);
 
   const [codeInput, setCodeInput] = useState('');
   // The code field, behind "Have a code?" until asked for.
@@ -220,16 +224,22 @@ export function ChoosePlanDialog({
           </span>
           <DialogTitle className="text-xl leading-tight font-bold tracking-tight">
             {pitch?.from === 'demo'
-              ? t('demo.dialog.title')
+              ? ownBrand
+                ? t('demo.dialog.titleFor', { brand: ownBrand })
+                : t('demo.dialog.title')
               : pitch?.from === 'own_brand'
                 ? t('trialOffer.title')
                 : t('dialog.title.ended')}
           </DialogTitle>
           <DialogDescription className="max-w-2xl">
             {demo
-              ? t('demo.dialog.body')
+              ? ownBrand
+                ? t('demo.dialog.bodyFor', { brand: ownBrand })
+                : t('demo.dialog.body')
               : pitch?.from === 'own_brand'
-                ? t('trialOffer.body')
+                ? ownBrand
+                  ? t('trialOffer.bodyFor', { brand: ownBrand })
+                  : t('trialOffer.body')
                 : t('dialog.body.ended')}
           </DialogDescription>
         </DialogHeader>

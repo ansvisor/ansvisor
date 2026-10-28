@@ -9,6 +9,7 @@ import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUpgradeDialog } from '@/components/providers/upgrade-gate';
 import { ensureDemoBrand } from '@/lib/demo/demo-client';
+import { ownBrandOf } from '@/lib/demo/demo-brand';
 import { offerChoice } from '@/lib/billing/plan-purchase';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -17,8 +18,9 @@ import { useBrandStore } from '@/stores/use-brand-store';
  * A thin band across the top of the dashboard while the demo brand is the
  * one on screen, where ReadOnlyBanner sits (one band at a time): that it is
  * a demo brand with sample data, and the way to the same thing for the
- * workspace's own brand — the plan dialog with the demo's offer, or, with a
- * plan active, the own brand itself. Nothing on another brand.
+ * workspace's own brand, by name once it has one — the plan dialog with the
+ * demo's offer, or, with a plan active, the own brand itself. Nothing on
+ * another brand.
  */
 export function DemoBanner() {
   const { isDemo } = useDemoBrand();
@@ -44,7 +46,8 @@ function Band() {
   const brandName = useBrandStore(
     (s) => s.brands.find((b) => b.id === s.activeBrandId)?.name ?? '',
   );
-  const ownBrandId = useBrandStore((s) => s.brands.find((b) => !b.isDemo)?.id ?? null);
+  const ownBrandId = useBrandStore((s) => ownBrandOf(s)?.id ?? null);
+  const ownBrandName = useBrandStore((s) => ownBrandOf(s)?.name ?? null);
   const setActiveBrand = useBrandStore((s) => s.setActiveBrand);
 
   // The demo follows the product: its sample data is written again when the
@@ -65,8 +68,9 @@ function Band() {
     >
       <PlayCircle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <p className="min-w-0 flex-1">
-        {t.rich(subscriptionActive ? 'textPlanActive' : 'text', {
+        {t.rich(subscriptionActive ? 'textPlanActive' : ownBrandName ? 'textFor' : 'text', {
           brand: brandName,
+          ownBrand: ownBrandName ?? '',
           days: TRIAL_DAYS,
           offer: offerChoice(offer === 'trial'),
           b: (chunks) => <strong className="font-semibold">{chunks}</strong>,
@@ -75,7 +79,7 @@ function Band() {
       {subscriptionActive ? (
         ownBrandId && (
           <Button variant="outline" size="sm" onClick={() => setActiveBrand(ownBrandId)}>
-            {t('switchToOwnBrand')}
+            {ownBrandName ? t('switchToBrand', { brand: ownBrandName }) : t('switchToOwnBrand')}
           </Button>
         )
       ) : (

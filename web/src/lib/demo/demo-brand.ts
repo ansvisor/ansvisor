@@ -30,6 +30,19 @@ export function isDemoSelected(state: {
 }
 
 /**
+ * The workspace's own brand, from the brand store's state: the one on
+ * screen unless that is the demo brand, else the first of its own. Null
+ * before it has one.
+ */
+export function ownBrandOf<B extends Pick<Brand, 'id' | 'isDemo'>>(state: {
+  brands: B[];
+  activeBrandId: string | null;
+}): B | null {
+  const own = state.brands.filter((b) => !b.isDemo);
+  return own.find((b) => b.id === state.activeBrandId) ?? own[0] ?? null;
+}
+
+/**
  * The plan the demo brand is shown with: Growth, the whole product, whatever
  * the workspace's own plan (or none). Only what it reads follows it: its
  * locked tabs, platforms and reports open, and the Growth marks go. Anything

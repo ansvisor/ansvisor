@@ -5,6 +5,7 @@ import {
   demoOffer,
   effectivePlanForBrand,
   effectivePlanIdForBrand,
+  ownBrandOf,
 } from './demo-brand';
 
 describe('demoOffer', () => {
@@ -66,5 +67,25 @@ describe('effectivePlanForBrand', () => {
     };
     expect(effectivePlanForBrand(custom, true)).toBe(custom);
     expect(effectivePlanForBrand(PLANS.starter, false)).toBe(PLANS.starter);
+  });
+});
+
+describe('ownBrandOf', () => {
+  const demo = { id: 'demo', isDemo: true };
+  const acme = { id: 'acme', isDemo: false };
+  const other = { id: 'other', isDemo: false };
+
+  it('is the brand on screen when it is one of the workspace’s own', () => {
+    expect(ownBrandOf({ brands: [demo, acme, other], activeBrandId: 'other' })).toBe(other);
+  });
+
+  it('is the first own brand while the demo brand is on screen', () => {
+    expect(ownBrandOf({ brands: [demo, acme, other], activeBrandId: 'demo' })).toBe(acme);
+    expect(ownBrandOf({ brands: [demo, acme], activeBrandId: null })).toBe(acme);
+  });
+
+  it('is none before the workspace has a brand of its own', () => {
+    expect(ownBrandOf({ brands: [demo], activeBrandId: 'demo' })).toBeNull();
+    expect(ownBrandOf({ brands: [], activeBrandId: null })).toBeNull();
   });
 });

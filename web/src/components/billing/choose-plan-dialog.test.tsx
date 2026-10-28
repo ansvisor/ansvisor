@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import messages from '../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { useBrandStore } from '@/stores/use-brand-store';
+import type { Brand } from '@/types';
 import { ChoosePlanDialog, type PlanPitch } from './choose-plan-dialog';
 
 /**
@@ -78,6 +79,21 @@ async function render({
       </NextIntlClientProvider>,
     );
   });
+}
+
+function brand(id: string, name: string, isDemo = false): Brand {
+  return {
+    id,
+    organizationId: 'org1',
+    name,
+    slug: id,
+    shoppingModeEnabled: false,
+    isActive: true,
+    isDemo,
+    domains: [],
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+  };
 }
 
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')!;
@@ -638,6 +654,19 @@ describe('ChoosePlanDialog from the demo brand', () => {
     expect(dialog().querySelector('[data-slot="card-note"]')?.textContent).toBe('Card required.');
   });
 
+  it('names the workspace’s own brand once it has one', async () => {
+    useBrandStore.setState({
+      brands: [brand('own', 'Acme Coffee'), brand('demo', 'Brewline Coffee', true)],
+      activeBrandId: 'demo',
+    });
+    await render({ demo: 'trial' });
+    expect(dialog().querySelector('h2')?.textContent).toBe('Use Ansvisor for Acme Coffee');
+    expect(dialog().textContent).toContain(
+      'Pick a plan and Ansvisor starts tracking, writing and fixing for Acme Coffee.',
+    );
+    expect(dialog().textContent).not.toContain('Brewline Coffee');
+  });
+
   it('shows the plain price and Choose with the offer off, the trial still there', async () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     try {
@@ -675,5 +704,16 @@ describe("ChoosePlanDialog for a brand that isn't tracked yet", () => {
     expect(startButton('starter').textContent).toBe('Buy now');
     await choose('trial');
     expect(startButton('starter').textContent).toBe('Start 14-day free trial');
+  });
+
+  it('names the brand on screen', async () => {
+    useBrandStore.setState({
+      brands: [brand('other', 'Other Brand'), brand('own', 'Acme Coffee')],
+      activeBrandId: 'own',
+    });
+    await render({ pitch: { from: 'own_brand', offer: 'trial' }, action: null });
+    expect(dialog().textContent).toContain(
+      'Everything you set up for Acme Coffee is here. Pick a plan and Ansvisor starts tracking, writing and fixing for it.',
+    );
   });
 });
