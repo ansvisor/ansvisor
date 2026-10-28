@@ -12,7 +12,9 @@ import supabaseAdmin from '../../config/supabase.js';
  *   A row whose content didn't change isn't written again (`content_hash`),
  *   so a sync of the same file writes nothing.
  * - A product or variant gone from the source is marked removed
- *   (`removed_at`), never deleted. One that comes back is live again.
+ *   (`removed_at`). One that comes back is live again. A product removed
+ *   over 90 days ago is deleted by the daily run, its variants with it
+ *   (purge.js).
  * - A changed product's images and categories are written again.
  *
  * Values are clipped to the columns' limits, and an address that isn't
