@@ -16,6 +16,7 @@ import {
 } from '@/lib/actions/prompt';
 import { getBrandById } from '@/lib/actions/brand';
 import { getTopics } from '@/lib/actions/topic';
+import { generatePromptsFromTopics } from '@/lib/ai-brand-setup';
 import { PromptSuggestionCard } from '@/components/dashboard/prompt-suggestion-card';
 import { LocationPicker } from '@/components/dashboard/location-picker';
 import { planBulkLocationChange } from '@/lib/prompt-locations';
@@ -203,35 +204,20 @@ export default function PromptsPage() {
     setSuggestions([]);
 
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const response = await fetch(`${AEO_SERVER_URL}/api/prompts/from-topics`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
+      // Setup's helper cuts the brand to the lengths the API takes and asks
+      // for the topics in batches it takes: every topic starts selected here.
+      const { topicPrompts } = await generatePromptsFromTopics(
+        {
           brandName: brand.name,
-          industry: brand.industry || undefined,
-          description: brand.description || undefined,
-          topics: generateTopics,
+          industry: brand.industry,
+          description: brand.description ?? '',
+          website: brand.domains.find((d) => d.isPrimary)?.domain ?? '',
           language: brand.language || 'en',
-        }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `Server error (${response.status})`);
-      }
-
-      const data = await response.json();
+        },
+        generateTopics,
+      );
       const allPrompts: SuggestedPrompt[] = [];
-      for (const tp of data.topicPrompts ?? []) {
+      for (const tp of topicPrompts) {
         for (const text of tp.prompts) {
           allPrompts.push({ text, category: tp.topic, isActive: true });
         }

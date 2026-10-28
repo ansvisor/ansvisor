@@ -39,6 +39,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { AssignDialog } from './_assign-dialog';
 import { AiResultsStrip, PageTypeMix } from './_plan-insights';
 import { PlanTable } from './_plan-table';
+import { ShoppingOpportunities } from './_shopping-opportunities';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 type PlanRead = {
@@ -88,7 +89,8 @@ function presetFor(row: PlanRow): DialogPreset {
  * assigns it to a teammate, and lets admins and managers mark it as a
  * priority or hide it; hidden rows can be shown again below the list. The
  * period lives in the URL (?days=7). Getting started's content steps open
- * the Plan on its top Create or Optimize row (?start=create, 00234).
+ * the Plan on its top Create or Optimize row (?start=create, 00234). A shop
+ * with a catalog sees its Shopping opportunities above the list.
  */
 export default function ContentPlanPage() {
   const t = useTranslations('contentEditor.plan');
@@ -388,7 +390,15 @@ export default function ContentPlanPage() {
               onSelect={setMixType}
             />
           )}
-
+        </>
+      )}
+      {/* Its own read, of the catalog: kept through another period's read,
+          hidden while that loads, so the page still opens in its final layout. */}
+      {siteType === 'ecommerce' && (
+        <ShoppingOpportunities brandId={activeBrandId} hidden={loading} />
+      )}
+      {!loading && (
+        <>
           <div className="space-y-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-sm font-medium">{t('listTitle')}</h2>

@@ -91,10 +91,14 @@ describe('content_suggestion_decisions (00367)', () => {
     'utf8',
   );
 
-  it('counts small changes only, never a whole page rewritten, and the drafts they were decided on', () => {
+  it('counts small changes only, never a whole page rewritten, and the drafts they were rejected on', () => {
     // The kinds a suggestion is (00217, 00247): every one but 'page'.
     expect(sql).toMatch(/and s\.kind in \('replace', 'insert'\)/);
-    expect(sql).toMatch(/count\(distinct s\.draft_id\)::integer as drafts/);
+    // Only the drafts with a rejection: a Reject all on one draft and an
+    // Accept on another are still one draft.
+    expect(sql).toMatch(
+      /count\(distinct s\.draft_id\) filter \(where s\.status = 'rejected'\)::integer as drafts/,
+    );
     expect(sql).toMatch(
       /returns table \(rule_key text, accepted integer, rejected integer, drafts integer\)/,
     );
