@@ -76,6 +76,7 @@ import {
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
+import { getCatalogSourcesFor, listCatalogProductsFor } from './catalog';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -1762,6 +1763,56 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         };
       }
       return result ? json(result) : notFound('Draft');
+    },
+  );
+
+  // ─── The product catalog (B6a) ───
+
+  server.registerTool(
+    'get_catalog_sources',
+    {
+      title: 'Catalog sources',
+      description:
+        "Where the brand's product catalog is read from, as Settings › Integrations › Catalog shows it: each source's kind (a feed URL, an upload, or a connected store such as Shopify or Google Merchant Center), its address or account, and its last sync — when, its status (ok, failed, format_error, or auth_failed when the store refused the saved sign-in), the error, and what it read (items, skipped and why, products added/changed/removed, Merchant Center issues, products past the plan's cap) — and how many of its products are in the catalog now. Empty for a brand with no catalog.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const sources = await getCatalogSourcesFor(auth, args.brand_id);
+      return sources ? json(sources) : notFound('Brand');
+    },
+  );
+
+  server.registerTool(
+    'list_catalog_products',
+    {
+      title: 'Catalog products',
+      description:
+        "The brand's live catalog products, by title, as Product Visibility reads them: title, page, brand, product type, category, photo, lowest price in stock, in stock, GTIN; `readiness` for AI shopping (0–100, and the checks it misses: gtin, image, inStock, price, description, typeFirst — what the product is in its description's first 40 words — category, brand); its Google Merchant Center issues by severity (disapproved, demoted, not_impacted; null without Merchant Center); and the AI visits its page got and the orders they led to over 30 days. `search` narrows to titles containing it. Paged: `limit` (default 50, max 200) and `offset`; `next_offset` is null on the last page, `total` counts the matches.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        search: z.string().max(200).optional().describe('Only products whose title contains it.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Products a page (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Where the page starts (default 0).'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const page = await listCatalogProductsFor(auth, {
+        brandId: args.brand_id,
+        search: args.search,
+        limit: args.limit,
+        offset: args.offset,
+      });
+      return page ? json(page) : notFound('Brand');
     },
   );
 

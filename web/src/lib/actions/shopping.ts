@@ -29,6 +29,12 @@ import {
   type ProductShelfLine,
 } from '@/lib/shopping/product-detail';
 import { priceText } from '@/lib/shopping/price';
+import {
+  PRODUCTS_TABLE_MAX,
+  readCatalogProducts,
+  readCatalogRows,
+  readForIds,
+} from '@/lib/shopping/catalog-read';
 import { productAiSays, type AiSaysAnswer, type ProductAiSays } from '@/lib/shopping/ai-says';
 import { FROM_PRODUCTS_KINDS } from '@/lib/action-center/registry';
 import {
@@ -1267,54 +1273,12 @@ export async function getShoppingAiOrders(brandId: string): Promise<ShoppingAiOr
 
 // ── Products (Product Visibility, ECOM-007) ───────────────────────────────────
 
-/** Catalog products the table reads at most. */
-const PRODUCTS_TABLE_MAX = 2000;
-const CATALOG_PAGE = 1000;
-/** Product ids one catalog read filters by: each request's address stays short. */
-const IDS_PER_READ = 100;
-/** Such reads in flight at once. */
-const ID_READS_AT_ONCE = 6;
-const IN_STOCK = new Set(['in_stock', 'instock', 'available', 'limited_availability']);
-
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface ShoppingProducts {
   rows: ProductRow[];
   /** The brand's live catalog products; more than `rows` when past PRODUCTS_TABLE_MAX. */
   total: number;
-}
-
-/** Every row of a brand's catalog table, in `.range()` pages, up to `max`. */
-async function readCatalogRows<T>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
-  build: () => any,
-  max: number,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let start = 0; start < max; start += CATALOG_PAGE) {
-    const { data, error } = await build().range(start, Math.min(start + CATALOG_PAGE, max) - 1);
-    if (error) throw new Error(error.message);
-    rows.push(...((data ?? []) as T[]));
-    if ((data ?? []).length < CATALOG_PAGE) break;
-  }
-  return rows;
-}
-
-/** A catalog table's rows for these ids: IDS_PER_READ ids a read, ID_READS_AT_ONCE reads at a time. */
-async function readForIds<T>(ids: readonly string[], read: (some: string[]) => Promise<T[]>) {
-  const slices: string[][] = [];
-  for (let i = 0; i < ids.length; i += IDS_PER_READ) slices.push(ids.slice(i, i + IDS_PER_READ));
-  const out: T[][] = [];
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(ID_READS_AT_ONCE, slices.length) }, async () => {
-      while (next < slices.length) {
-        const at = next++;
-        out[at] = await read(slices[at]);
-      }
-    }),
-  );
-  return out.flat();
 }
 
 /**
@@ -1444,137 +1408,6 @@ async function tableProductIds(
     }
   }
   return [...ids];
-}
-
-/**
- * The brand's live catalog products as Product Visibility reads them, with
- * their variants' stock, price and GTIN, first photo and category: the
- * whole catalog (up to PRODUCTS_TABLE_MAX) for `ids` null, else the products
- * `ids` names, their rows read IDS_PER_READ ids at a time.
- */
-async function readCatalogProducts(
-  supabase: ServerClient,
-  brandId: string,
-  ids: readonly string[] | null,
-): Promise<CatalogProductRow[]> {
-  // Each table read for the whole catalog, or for the ids, a slice at a time.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
-  const each = <T>(column: string, build: () => any, max: number): Promise<T[]> =>
-    ids === null
-      ? readCatalogRows<T>(build, max)
-      : readForIds(ids, (some) =>
-          readCatalogRows<T>(() => build().in(column, some), CARD_MAX_ROWS),
-        );
-  const [products, variants, images, categories] = await Promise.all([
-    each<{
-      id: string;
-      title: string;
-      url: string | null;
-      product_type: string | null;
-      product_brand: string | null;
-      description: string | null;
-    }>(
-      'id',
-      () =>
-        supabase
-          .from('catalog_products')
-          .select('id, title, url, product_type, product_brand, description')
-          .eq('brand_id', brandId)
-          .is('removed_at', null)
-          .order('id'),
-      PRODUCTS_TABLE_MAX,
-    ),
-    each<{
-      product_id: string;
-      gtin: string | null;
-      price: number | null;
-      sale_price: number | null;
-      currency: string | null;
-      availability: string | null;
-    }>(
-      'product_id',
-      () =>
-        supabase
-          .from('catalog_variants')
-          .select('product_id, gtin, price, sale_price, currency, availability')
-          .eq('brand_id', brandId)
-          .is('removed_at', null)
-          .order('id'),
-      CARD_MAX_ROWS,
-    ),
-    each<{ product_id: string; url: string; position: number }>(
-      'product_id',
-      () =>
-        supabase
-          .from('catalog_images')
-          .select('product_id, url, position')
-          .eq('brand_id', brandId)
-          .order('id'),
-      CARD_MAX_ROWS,
-    ),
-    each<{ product_id: string; category: { name: string } | null }>(
-      'product_id',
-      () =>
-        supabase
-          .from('catalog_product_categories')
-          .select('product_id, category:category_id ( name )')
-          .eq('brand_id', brandId)
-          .order('product_id')
-          .order('category_id'),
-      CARD_MAX_ROWS,
-    ),
-  ]);
-
-  const variantsOf = new Map<string, typeof variants>();
-  for (const v of variants) {
-    if (!variantsOf.has(v.product_id)) variantsOf.set(v.product_id, []);
-    variantsOf.get(v.product_id)!.push(v);
-  }
-  const imageOf = new Map<string, { url: string; position: number }>();
-  for (const image of images) {
-    const kept = imageOf.get(image.product_id);
-    if (!kept || image.position < kept.position) imageOf.set(image.product_id, image);
-  }
-  const categoryOf = new Map<string, string>();
-  for (const row of categories) {
-    if (row.category?.name && !categoryOf.has(row.product_id)) {
-      categoryOf.set(row.product_id, row.category.name);
-    }
-  }
-  return products.map((p) => {
-    const own = variantsOf.get(p.id) ?? [];
-    const stocked = own.filter((v) =>
-      IN_STOCK.has(
-        String(v.availability ?? '')
-          .toLowerCase()
-          .replace(/[\s-]+/g, '_'),
-      ),
-    );
-    const priced = (stocked.length ? stocked : own)
-      .map((v) => ({ price: v.sale_price ?? v.price, currency: v.currency }))
-      .filter((v): v is { price: number; currency: string | null } => v.price !== null)
-      .sort((a, b) => a.price - b.price);
-    return {
-      id: p.id,
-      title: p.title,
-      url: p.url,
-      productType: p.product_type,
-      brand: p.product_brand,
-      description: p.description,
-      image: imageOf.get(p.id)?.url ?? null,
-      category: categoryOf.get(p.id) ?? null,
-      price: priced[0] ? Number(priced[0].price) : null,
-      currency: priced[0]?.currency ?? null,
-      // Each variant's price and sale price, in or out of stock.
-      prices: own.flatMap((v) =>
-        [v.price, v.sale_price]
-          .filter((price): price is number => price !== null)
-          .map((price) => ({ price: Number(price), currency: v.currency })),
-      ),
-      inStock: stocked.length > 0,
-      hasGtin: own.some((v) => !!v.gtin),
-    };
-  });
 }
 
 // ── Categories (Product Visibility, ECOM-008) ─────────────────────────────────
