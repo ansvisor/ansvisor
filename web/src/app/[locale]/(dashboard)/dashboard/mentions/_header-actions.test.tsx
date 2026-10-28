@@ -218,6 +218,23 @@ describe('MentionsHeaderActions', () => {
     expect(toast.success).toHaveBeenCalledWith('Summary copied');
   });
 
+  it('takes the Total mentions change on the prompts both windows answered, as its card does', async () => {
+    // A prompt added this window brings 30 more mentions: on the same prompts, +10%.
+    getMentionsOverview.mockResolvedValue({
+      ...overview,
+      same: {
+        prompts: 18,
+        newPrompts: 2,
+        droppedPrompts: 0,
+        current: totals({ answers: 360, mentions: 80, occurrences: 110 }),
+        previous: totals({ answers: 360, mentions: 76, occurrences: 100 }),
+      },
+    });
+    render();
+    await click('Copy summary');
+    expect(writeText.mock.calls[0][0]).toContain('Total mentions: 130 (+10%)');
+  });
+
   it('names the filters in use, and marks a low sample instead of a split', async () => {
     getMentionsOverview.mockResolvedValue({
       ...overview,

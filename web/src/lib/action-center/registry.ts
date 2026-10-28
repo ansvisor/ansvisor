@@ -117,7 +117,10 @@ export type ActionKind =
   | 'content_draft'
   // Sent by a person from Product Visibility: a product, or a catalog category (ECOM-013).
   | 'shopping_product'
-  | 'shopping_category';
+  | 'shopping_category'
+  // Raised by the catalog check for a live page linking products that no
+  // longer sell (shopping path, part 7), and closed by it once fixed.
+  | 'shopping_links';
 
 export type TaskStatus =
   | 'todo'
@@ -256,6 +259,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'content_draft',
   'shopping_product',
   'shopping_category',
+  'shopping_links',
 ];
 
 /**
