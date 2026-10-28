@@ -307,6 +307,38 @@ describe('publishDraftForKeyUser', () => {
     ).toBeNull();
     expect(tables.content_drafts[0].published_url ?? null).toBeNull();
   });
+
+  it('changes nothing for a page already published at the address, its live-since kept', async () => {
+    ofOrg('org1');
+    const since = '2026-10-21T08:00:00Z';
+    Object.assign(tables.content_drafts[0], {
+      status: 'published',
+      published_url: LIVE,
+      published_at: since,
+      action_id: 'a1',
+    });
+    tables.action_tasks = [task('t1', 'publish_content')];
+    const before = clone(tables);
+
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).toEqual({
+      publishedUrl: LIVE,
+      publishedAt: since,
+      taskCompleted: false,
+      onBrandDomain: true,
+    });
+    expect(tables).toEqual(before);
+    expect(rpcs).toEqual([]);
+
+    // At another address, it moves, as the editor's Mark published moves it.
+    const moved = 'https://www.acme.example/blog/cold-brew-at-home';
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: moved, userId: 'u1', orgId: 'org1' }),
+    ).toMatchObject({ publishedUrl: moved });
+    expect(tables.content_drafts[0].published_url).toBe(moved);
+    expect(tables.content_drafts[0].published_at).not.toBe(since);
+  });
 });
 
 describe('markDeliveryPublished', () => {
