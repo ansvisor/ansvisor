@@ -52,8 +52,8 @@ const WAIT_POLL_MS = 1000;
  *   `ctx.write(table, rows)`, which writes over the old rows (`keys` names a
  *   table's key columns when they aren't 'id'; `scopes` how to find the
  *   brand's rows of a table without a brand_id); the rows not written again
- *   are deleted once it is built. Any other module has its `tables` cleared,
- *   in reverse, just before it is built. A first build clears nothing.
+ *   are deleted once it is built (on a first build, none are). Any other
+ *   module has its `tables` cleared, in reverse, just before it is built.
  * Action Center, Content, reports, Site Audit, traffic and Product
  * Visibility follow as modules of their own.
  */
@@ -163,11 +163,13 @@ async function releaseBuild(brandId) {
 }
 
 /**
- * Writes one module's rows: on a rebuild over the old ones (`inPlace`) or
- * after clearing its tables; on a first build, onto empty tables.
+ * Writes one module's rows: over the old ones (`inPlace`) or after clearing
+ * its tables. Even a brand just created isn't empty (its triggers start
+ * Getting started), so a module that isn't rebuilt in place clears its
+ * tables on a first build too.
  */
 async function writeModule(module, { brandId, now, rebuild }, built) {
-  if (rebuild && !module.inPlace) await clearDemoData(brandId, [module]);
+  if (!module.inPlace) await clearDemoData(brandId, [module]);
   const writer = demoWriter({
     db: supabaseAdmin,
     brandId,
@@ -183,8 +185,8 @@ async function writeModule(module, { brandId, now, rebuild }, built) {
 }
 
 /**
- * Builds the demo brand's data. `rebuild` is false for a brand just created
- * (nothing to clear or write over).
+ * Builds the demo brand's data. `rebuild` is false for a brand just created:
+ * no old rows to read back and prune.
  */
 async function build(brandId, now, modules, { rebuild }) {
   const started = Date.now();
@@ -267,7 +269,7 @@ async function ensure(organizationId, now, modules) {
     }
   }
 
-  // A brand just created has no data yet: nothing to clear or write over.
+  // A brand just created has no old data to prune.
   await build(brand.id, now, modules, { rebuild: !created });
   return { brandId: brand.id, version: DEMO_VERSION, rebuilt: true };
 }

@@ -153,8 +153,13 @@ describe('ensureDemoBrand', () => {
     });
     const ctx = { brandId: 'brand-2', now: NOW, rebuild: false, write: expect.any(Function) };
     expect(build.mock.calls.map(([c]) => c)).toEqual([ctx, ctx]);
-    // A brand just created has nothing to clear.
-    expect(state.cleared).toEqual([]);
+    // Each module's tables, in reverse, just before it is built: a new brand
+    // already holds what its triggers made.
+    expect(state.cleared).toEqual([
+      ['b', 'brand_id', 'brand-2'],
+      ['a', 'brand_id', 'brand-2'],
+      ['c', 'brand_id', 'brand-2'],
+    ]);
     // The real brand is untouched.
     expect(state.brands[0]).toEqual({ id: 'real-1', organization_id: 'org-1', is_demo: false });
   });
@@ -195,6 +200,20 @@ describe('ensureDemoBrand', () => {
     ];
     await ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: staged });
     expect(state.log).toEqual(['delete b', 'delete a', 'build one', 'delete c', 'build two']);
+  });
+
+  it('builds an in-place module over a new brand without reading anything back', async () => {
+    const inPlace = {
+      name: 'core',
+      tables: ['items'],
+      inPlace: true,
+      async build({ write }) {
+        await write('items', [{ id: 'i1', brand_id: 'brand-2' }]);
+      },
+    };
+    await ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: [inPlace] });
+    expect(state.log).toEqual(['upsert items']);
+    expect(state.cleared).toEqual([]);
   });
 
   it('rebuilds an in-place module over its old rows, deleting only the ones not written again', async () => {

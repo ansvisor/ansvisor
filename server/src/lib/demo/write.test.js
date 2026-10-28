@@ -173,12 +173,16 @@ describe('insertChunks', () => {
 });
 
 describe('demoWriter', () => {
-  it('inserts on a first build and has nothing to prune', async () => {
-    const db = fakeDb();
-    const writer = demoWriter({ db, brandId: 'b1' });
-    await writer.write('items', [{ id: 'x', brand_id: 'b1' }]);
+  it("writes over what a new brand's triggers made on a first build, and prunes nothing", async () => {
+    const db = fakeDb({ steps: [{ brand_id: 'b1', step: 'visibility', done: false }] });
+    const writer = demoWriter({ db, brandId: 'b1', keys: { steps: 'brand_id,step' } });
+    await writer.write('steps', [
+      { brand_id: 'b1', step: 'visibility', done: true },
+      { brand_id: 'b1', step: 'answers', done: true },
+    ]);
     expect(await writer.prune()).toEqual({});
-    expect(db.statements.map((s) => s.op)).toEqual(['insert']);
+    expect(db.statements.map((s) => s.op)).toEqual(['upsert']);
+    expect(db.tables.steps).toHaveLength(2);
   });
 
   it('shares one queue across tables written side by side', async () => {

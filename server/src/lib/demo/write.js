@@ -156,11 +156,12 @@ async function deleteKeys(db, table, columns, rows, run) {
 /**
  * A module's writer for one build of a demo brand.
  *
- * `write(table, rows)` inserts on a first build. On a rebuild it writes over
- * the rows with the same key (`keys[table]`, the table's key columns, 'id'
- * unless named) and remembers what it wrote; `prune()` then deletes the
- * brand's rows of those tables that this build didn't write, the last
- * table's first. A table without a brand_id names how to find the brand's
+ * `write(table, rows)` writes over the rows with the same key (`keys[table]`,
+ * the table's key columns, 'id' unless named): on a rebuild the old rows,
+ * on a first build the rows a new brand's triggers may have made. On a
+ * rebuild it remembers what it wrote; `prune()` then deletes the brand's
+ * rows of those tables that this build didn't write, the last table's
+ * first. A table without a brand_id names how to find the brand's
  * rows in `scopes[table]`: [its column, the written table that column points
  * at], e.g. prompts: ['prompt_set_id', 'prompt_sets'].
  *
@@ -188,11 +189,12 @@ export function demoWriter({
      * @param {{ chunk?: number }} [options]
      */
     async write(table, rows, { chunk } = {}) {
-      if (!rebuild) return insertChunks(db, table, rows, { chunk, run });
       const columns = columnsOf(table);
-      if (!written.has(table)) written.set(table, new Set());
-      const seen = written.get(table);
-      for (const row of rows) seen.add(keyOf(row, columns));
+      if (rebuild) {
+        if (!written.has(table)) written.set(table, new Set());
+        const seen = written.get(table);
+        for (const row of rows) seen.add(keyOf(row, columns));
+      }
       return insertChunks(db, table, rows, { chunk, run, onConflict: columns.join(',') });
     },
 

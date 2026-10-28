@@ -213,7 +213,7 @@ describe('core.build', () => {
     expect(brand.payload).toMatchObject({ name: 'Brewline Coffee', site_type: 'ecommerce' });
     expect(brand.payload).not.toHaveProperty('demo_hidden_at');
 
-    const inserted = [...new Set(db.calls.filter((c) => c.op === 'insert').map((c) => c.table))];
+    const inserted = [...new Set(db.calls.filter((c) => c.op === 'upsert').map((c) => c.table))];
     // Each step's tables side by side, after the ones they point at.
     expect(inserted).toEqual([
       'brand_domains',
@@ -251,7 +251,7 @@ describe('core.build', () => {
     expect(db.calls.some((c) => c.op === 'delete')).toBe(false);
   });
 
-  it('on a rebuild writes over the old rows, by each table’s key', async () => {
+  it('writes over the old rows, by each table’s key', async () => {
     const db = recordingDb();
     await core.build({ brandId: BRAND_ID, now: NOW, db, rebuild: true });
     const writes = db.calls.filter((c) => c.rows);
@@ -273,7 +273,7 @@ describe('core.build', () => {
       if (table !== 'prompt_results') return chain;
       return {
         ...chain,
-        insert: () => ({ then: (resolve) => resolve({ error: { message: 'full' } }) }),
+        upsert: () => ({ then: (resolve) => resolve({ error: { message: 'full' } }) }),
       };
     };
     await expect(core.build({ brandId: BRAND_ID, now: NOW, db })).rejects.toThrow(
