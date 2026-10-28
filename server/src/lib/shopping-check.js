@@ -49,6 +49,9 @@ export const MIN_WORDS = 20;
 /** A check stops reading live pages after this, and reads the rest from their drafts. */
 export const LIVE_PAGES_DEADLINE_MS = 3 * 60 * 1000;
 
+/** A link longer than this isn't read: no page's address is (as content_drafts caps its own). */
+export const MAX_HREF_CHARS = 2048;
+
 const TITLE_CHARS = 200;
 const MAX_BAD = 40;
 
@@ -56,7 +59,8 @@ const MAX_BAD = 40;
  * Every link's address in a page's HTML, and in the HTML blocks the editor
  * keeps base64-encoded (`div[data-html-block]`, a product grid among them).
  * A relative address is read against `base`, the live page's own; without
- * one it is dropped, as a draft's links are full addresses.
+ * one it is dropped, as a draft's links are full addresses. A link longer
+ * than MAX_HREF_CHARS is dropped too.
  */
 export function pageHrefs(html, base = null) {
   const hrefs = [];
@@ -64,7 +68,7 @@ export function pageHrefs(html, base = null) {
     const $ = cheerio.load(markup);
     $('a[href]').each((_, a) => {
       const href = String($(a).attr('href') ?? '').trim();
-      if (!href) return;
+      if (!href || href.length > MAX_HREF_CHARS) return;
       try {
         hrefs.push(base ? new URL(href, base).toString() : new URL(href).toString());
       } catch {
