@@ -109,7 +109,11 @@ const { WRITING_GUARDRAIL } = await import('./content-brief.js');
 const { REWRITE_SYSTEM_PROMPT } = await import('./content-rewrite.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { textLength } = await import('./content-rewrite.js');
-const { passageKey } = await import('./content-agent.js');
+const {
+  PLACEHOLDER_RULE,
+  SYSTEM_PROMPT: AGENT_SYSTEM_PROMPT,
+  passageKey,
+} = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -1230,6 +1234,20 @@ describe('the brief rules (2026) in the Content Agent', () => {
       ],
     },
   };
+
+  it('keeps placeholders for facts the person must find, never a page, a document or a competitor', () => {
+    // A page waited on "[About]", "[OpenAI release notes]" and "[competitor]".
+    for (const prompt of [
+      writeSystemPrompt(),
+      suggestSystemPrompt(),
+      rewriteSystemPrompt(),
+      AGENT_SYSTEM_PROMPT,
+    ]) {
+      expect(prompt).toContain(PLACEHOLDER_RULE);
+    }
+    expect(PLACEHOLDER_RULE).toContain('Never put a page, a document, a link');
+    expect(PLACEHOLDER_RULE).toContain('"OpenAI\'s release notes"');
+  });
 
   it('asks as before while they are off: the same prompts, the brief as version 1', () => {
     expect(writeSystemPrompt()).toBe(WRITE_SYSTEM_PROMPT);
