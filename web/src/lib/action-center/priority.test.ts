@@ -40,6 +40,8 @@ const reason = (over: Partial<PriorityReason> = {}): PriorityReason => ({
   heldBefore: true,
   days: 2,
   sources: 1,
+  realDemand: null,
+  pastSuccess: null,
   ...over,
 });
 
@@ -148,6 +150,41 @@ describe('priorityReasonText', () => {
     ).toBe('A gap to close on 2 platforms — high search demand, commercial intent.');
   });
 
+  /** Its kind's track at the brand (learning B4), once it moved the score a point. */
+  it('says how earlier actions of its kind did here', () => {
+    expect(
+      priorityReasonText(
+        reason({ commercial: false, pastSuccess: { improved: 3, results: 4, points: 3.33 } }),
+        t,
+      ),
+    ).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — previously visible, 3 of 4 earlier actions of this kind improved results here.',
+    );
+    expect(
+      priorityReasonText(
+        reason({ commercial: false, pastSuccess: { improved: 0, results: 1, points: -1.67 } }),
+        t,
+      ),
+    ).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — previously visible, only 0 of 1 earlier action of this kind improved results here.',
+    );
+    // A point's nudge or less isn't worth a word.
+    expect(
+      priorityReasonText(
+        reason({ commercial: false, pastSuccess: { improved: 1, results: 2, points: 0 } }),
+        t,
+      ),
+    ).toBe('Lost ground on 7 high-demand prompts 2 days ago — previously visible.');
+  });
+
+  it('reads a stored track defensively', () => {
+    expect(
+      parsePriorityReason({ pastSuccess: { improved: 2, results: 3, points: 1.4 } })?.pastSuccess,
+    ).toEqual({ improved: 2, results: 3, points: 1.4 });
+    expect(parsePriorityReason({ pastSuccess: { improved: 2 } })?.pastSuccess).toBeNull();
+    expect(parsePriorityReason({})?.pastSuccess).toBeNull();
+  });
+
   it('counts independent sources, and says today for a fresh finding', () => {
     expect(
       priorityReasonText(
@@ -164,6 +201,47 @@ describe('priorityReasonText', () => {
         t,
       ),
     ).toBe('Its findings have resolved.');
+  });
+
+  it("says the prompts' measured demand level, and reads it from what was stored", () => {
+    expect(priorityReasonText(reason({ realDemand: 'high' }), t)).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — measured demand High, commercial intent, previously visible.',
+    );
+    expect(
+      priorityReasonText(
+        reason({ demand: 'medium', realDemand: 'medium', commercial: false, heldBefore: false }),
+        t,
+      ),
+    ).toBe('Lost ground on 7 prompts 2 days ago — measured demand Medium.');
+    expect(parsePriorityReason({ change: 'gap', realDemand: 'medium' })?.realDemand).toBe('medium');
+    expect(parsePriorityReason({ change: 'gap', realDemand: 'huge' })?.realDemand).toBeNull();
+  });
+
+  it('says both the measured demand and the track, when a reason has both', () => {
+    const stored = parsePriorityReason({
+      change: 'lost',
+      subject: { entity: 'prompts', count: 7 },
+      demand: 'high',
+      heldBefore: true,
+      days: 2,
+      realDemand: 'high',
+      pastSuccess: { improved: 3, results: 4, points: 3.33 },
+    });
+    expect(priorityReasonText(stored!, t)).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — measured demand High, previously visible, 3 of 4 earlier actions of this kind improved results here.',
+    );
+  });
+
+  it('never gives Low as a reason: it raises nothing', () => {
+    const stored = parsePriorityReason({
+      change: 'dropped',
+      subject: { entity: 'prompts', count: 7 },
+      demand: 'medium',
+      realDemand: 'low',
+      days: 2,
+    });
+    expect(stored?.realDemand).toBeNull();
+    expect(priorityReasonText(stored!, t)).not.toContain('measured demand');
   });
 
   it('falls back to a plain subject when the count is unknown', () => {
