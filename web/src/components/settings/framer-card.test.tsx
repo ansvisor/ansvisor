@@ -147,6 +147,16 @@ async function open(label: string) {
   return [...list.querySelectorAll<HTMLElement>('[role="option"]')];
 }
 const texts = (options: HTMLElement[]) => options.map((o) => o.textContent);
+/** The badges by the card's title. */
+const badges = () =>
+  [...container.querySelectorAll('[data-slot="badge"]')].map((b) => b.textContent);
+/** Connected to a project, with no collection saved yet. */
+const NO_COLLECTION: FramerConnection = {
+  ...CONNECTED,
+  collectionId: null,
+  collectionName: null,
+  fieldMap: {},
+};
 const close = async () => {
   await act(async () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -216,6 +226,56 @@ describe('FramerCard', () => {
     );
     expect(client.readFramerCollections).toHaveBeenCalledWith('b1');
     expect(container.textContent).toContain('Pages go to Blog as draft items.');
+  });
+
+  it('leaves the collection for last on connecting a project, its picker focused', async () => {
+    client.connectFramer.mockResolvedValue({ ok: true, connection: NO_COLLECTION });
+    await render();
+    await type('Project address', `https://framer.com/projects/Acme--${PROJECT_ID}`);
+    await type('API key', KEY);
+    await submit();
+    expect(toast.success).toHaveBeenCalledWith('Framer connected. Now pick a collection and save.');
+    expect(badges()).toEqual(['Setup not finished']);
+    expect(container.textContent).toContain(TEXT.setupStep);
+    // The setup's last step: the collection picker, focused.
+    expect(document.activeElement).toBe(field('Collection'));
+  });
+
+  it('says the setup isn’t finished until a collection is saved', async () => {
+    connectedWith(NO_COLLECTION);
+    client.saveFramerTarget.mockResolvedValue({ ok: true, connection: CONNECTED });
+    await render();
+    expect(badges()).toEqual(['Setup not finished']);
+    expect(container.textContent).toContain(TEXT.setupStep);
+    // Read on opening the page, the picker isn't focused: only right after connecting.
+    expect(document.activeElement).not.toBe(field('Collection'));
+
+    await pick('Collection', 'Blog');
+    expect(container.textContent).toContain(TEXT.setupStep);
+    await click(button('Save'));
+    expect(client.saveFramerTarget).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({
+        collectionId: 'c1',
+      }),
+    );
+    expect(badges()).toEqual(['Connected']);
+    expect(container.textContent).not.toContain(TEXT.setupStep);
+    expect(container.textContent).toContain('Pages go to Blog as draft items.');
+  });
+
+  it('keeps the setup a new key for the same project keeps', async () => {
+    connectedWith(CONNECTED);
+    client.connectFramer.mockResolvedValue({ ok: true, connection: CONNECTED });
+    await render();
+    expect(badges()).toEqual(['Connected']);
+    await click(button('Replace key'));
+    await type('API key', KEY);
+    await submit();
+    expect(toast.success).toHaveBeenCalledWith('Framer connected');
+    expect(badges()).toEqual(['Connected']);
+    expect(container.textContent).not.toContain(TEXT.setupStep);
+    expect(document.activeElement).not.toBe(field('Collection'));
   });
 
   it('keeps Connect off until both are filled, and stops a key too short to be one', async () => {
@@ -378,7 +438,7 @@ describe('FramerCard', () => {
     expect(client.readFramer).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain('Project: Other Site');
     expect(client.readFramerCollections).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain(TEXT.noCollection);
+    expect(container.textContent).toContain(TEXT.setupStep);
   });
 
   it('asks to connect again when a save finds the connection gone', async () => {
@@ -564,7 +624,7 @@ describe('FramerCard', () => {
     for (const [connection, text] of [
       [null, 'Not connected. Admins and managers can connect Framer.'],
       [{ ...CONNECTED, status: 'auth_failed' }, TEXT.refusedMember],
-      [{ ...CONNECTED, collectionId: null, collectionName: null }, TEXT.noCollection],
+      [NO_COLLECTION, TEXT.noCollection],
     ] as const) {
       connectedWith(connection);
       act(() => root.unmount());
@@ -572,6 +632,12 @@ describe('FramerCard', () => {
       await render();
       expect(container.textContent).toContain(text);
     }
+    // Connected, no collection saved: pages can't go yet, and the step is the managers'.
+    expect(badges()).toEqual(['Setup not finished']);
+    expect(container.textContent).toContain(
+      "No collection picked yet. Pages can't go to Framer until an admin or manager finishes the setup.",
+    );
+    expect(container.textContent).not.toContain(TEXT.setupStep);
   });
 
   it('says when the server can’t keep a key, or the connection can’t be read', async () => {
