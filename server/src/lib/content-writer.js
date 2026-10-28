@@ -325,8 +325,26 @@ Call to action: ${opportunityBrief.callToAction || '—'}`;
 }
 
 /**
+ * An existing page's length now against its Length, and what its
+ * suggestions should do about it: a page told only the Length doesn't know
+ * it's already twice as long (editor test 2026-10-26).
+ */
+export function lengthNow(now, target) {
+  const top = Math.round(target * (1 + LENGTH_TOLERANCE));
+  const bottom = Math.round(target * (1 - LENGTH_TOLERANCE));
+  if (now > top) {
+    return `The page is about ${now} characters now, over its Length: suggest cuts (repetition, filler, the least useful detail) before anything new, and keep each addition short.`;
+  }
+  if (now < bottom) {
+    return `The page is about ${now} characters now, under its Length: add what the questions and rules ask for.`;
+  }
+  return `The page is about ${now} characters now: keep it about this long.`;
+}
+
+/**
  * What the model is told, for a new page, an existing one (passage by
- * passage) or one it rewrites whole (`current`: keepBlocks' page).
+ * passage, with its length now: lengthNow) or one it rewrites whole
+ * (`current`: keepBlocks' page).
  */
 export function buildWritePrompt({
   brand,
@@ -341,6 +359,13 @@ export function buildWritePrompt({
   current = null,
 }) {
   const { sources } = input;
+  // An existing page's length now, when its Length is among the rules (as
+  // overLengthLine): Length off keeps the page's length. A rewrite's page
+  // says it in its own lines.
+  const now =
+    passages && !current && input.rules.some((r) => r.key === 'length')
+      ? textLength(draft.body_html ?? '')
+      : null;
   // The data, numbered (S1, S2…) as the agent cites it (CE-033).
   const of = (kind) => numbered.filter((s) => s.kind === kind);
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
@@ -366,7 +391,7 @@ Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page type: ${pageTypeFormat(draft.page_type)}
-Length: about ${sources.length} characters.
+Length: about ${sources.length} characters.${now === null ? '' : ` ${lengthNow(now, sources.length)}`}
 
 Brief:
 ${brief}

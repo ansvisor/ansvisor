@@ -74,6 +74,7 @@ import { TopicOpportunityContext } from './topic-opportunity-context';
 import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
+import { ShoppingLinksContext } from './shopping-links-context';
 import {
   TaskDetailForm,
   TaskDetailView,
@@ -673,6 +674,11 @@ export function ActionDrawer({
                   <Separator />
                   <ContentDraftContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'shopping_links' ? (
+                <>
+                  <Separator />
+                  <ShoppingLinksContext payload={action.payload ?? {}} />
+                </>
               ) : opportunityId ? (
                 <>
                   <Separator />
@@ -779,9 +785,11 @@ export function ActionDrawer({
                             ? t('drawer.noSignalsTrafficPages')
                             : action.kind === 'audit_page'
                               ? t('drawer.noSignalsAuditPage')
-                              : opportunityId
-                                ? t('drawer.noSignalsOpportunity')
-                                : t('drawer.noSignals')}
+                              : action.kind === 'shopping_links'
+                                ? t('drawer.noSignalsShoppingLinks')
+                                : opportunityId
+                                  ? t('drawer.noSignalsOpportunity')
+                                  : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {

@@ -473,6 +473,7 @@ describe('shopping path rules (shopping path, part 6)', () => {
       item(4, 'Alpine', 'ok'),
     ],
     site: 'https://shop.example/blog/boots',
+    merchantCenter: true,
   };
   const shopRule = (key: string, value?: string) => {
     const found = activeRules(
@@ -1230,6 +1231,14 @@ describe('My rules and text rules', () => {
   it('starts only a page brought in to optimize at its own length (F)', () => {
     expect(pageTextLength('<h1>Pricing</h1><p>Plans &amp; prices</p>')).toBe(22);
     expect(pageTextLength('<p>a<script>x()</script>  b</p><style>p{}</style>')).toBe(3);
+    // Tags left open are read in time near the page's size.
+    expect(pageTextLength('<p>a</p><script>b')).toBe('a b'.length);
+    for (const tag of ['<p', '<script', '<style ', '<', '</div']) {
+      const html = `<p>Lead</p>${tag.repeat(Math.ceil(100_000 / tag.length))}`;
+      const started = performance.now();
+      expect(pageTextLength(html)).toBeGreaterThan(4);
+      expect(performance.now() - started).toBeLessThan(2000);
+    }
     const page = `<h1>Pricing</h1><p>${'word '.repeat(40)}</p>`;
     expect(startingRules('optimize', page)).toEqual({ ...NO_DRAFT_RULES, importLength: 207 });
     // Within the range the Length rule takes.

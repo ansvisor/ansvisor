@@ -176,9 +176,11 @@ function readTag(lower: string, open: number) {
  * <template> holds. With `words`, only what exportPlaceholders reads is left:
  * the words (a heading's brackets only in the agent's forms), alt and title
  * values, and a JSON-LD's strings; the tags, styles and other scripts go
- * too. For a search that must find what the page holds, not its code.
+ * too. For a search that must find what the page holds, not its code. With
+ * `words` and not `fields`, the alt and title values and the JSON-LD go as
+ * well: only the words the page's text shows are left.
  */
-export function blankCode(html: string, { words = false } = {}): string {
+export function blankCode(html: string, { words = false, fields = true } = {}): string {
   // ASCII letters only: lower-casing all of it could change the length.
   const lower = html.replace(/[A-Z]+/g, (s) => s.toLowerCase());
   const out: string[] = [];
@@ -198,7 +200,7 @@ export function blankCode(html: string, { words = false } = {}): string {
     if (!words) return keep(from, tagEnd);
     let at = from;
     for (const value of values) {
-      if (value.name !== 'alt' && value.name !== 'title') continue;
+      if (!fields || (value.name !== 'alt' && value.name !== 'title')) continue;
       blank(at, value.from);
       keep(value.from, value.to);
       at = value.to;
@@ -246,7 +248,7 @@ export function blankCode(html: string, { words = false } = {}): string {
       values.some(
         (v) => v.name === 'type' && lower.slice(v.from, v.to).trim() === 'application/ld+json',
       );
-    if (words && !jsonLd) {
+    if (words && (!jsonLd || !fields)) {
       blank(open, codeEnd);
     } else {
       tag(open, end, values);
