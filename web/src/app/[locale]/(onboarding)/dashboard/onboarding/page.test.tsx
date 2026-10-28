@@ -57,6 +57,7 @@ vi.mock('@/lib/actions/prompt', () => ({
 }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
+vi.mock('@/lib/actions/menu-access', () => ({ setMyWorkAreas: vi.fn() }));
 const setup = vi.hoisted(() => ({
   suggestTopics: vi.fn(),
   generatePromptsFromTopics: vi.fn(),
