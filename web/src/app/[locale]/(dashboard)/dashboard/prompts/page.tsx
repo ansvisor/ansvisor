@@ -198,6 +198,9 @@ import {
   type SortDir,
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
+import { ColumnsPanel } from './_columns-panel';
+import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
+import { effectiveView, visibleColumns, type PromptColumnId } from '@/lib/prompt-table-columns';
 import { promptsTableState } from './table-state';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import {
@@ -2881,6 +2884,30 @@ function AllPromptsTab({
   // bar's actions open the upgrade dialog instead.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const { canManage } = useUserRole();
+  const brandName = useBrandStore(
+    (st) => st.brands.find((b) => b.id === activeBrandId)?.name ?? '',
+  );
+  // The columns shown and their order (PROMPT-015a): the person's view, else
+  // the brand's shared one, else today's. Today's until read.
+  const [columnViews, setColumnViews] = useState<{
+    brandId: string;
+    views: PromptTableViews;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getPromptTableViews(activeBrandId)
+      .then((views) => {
+        if (!cancelled) setColumnViews({ brandId: activeBrandId, views });
+      })
+      .catch((err) => console.error('Failed to read the Tracked Prompts columns:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId]);
+  const tableViews =
+    columnViews?.brandId === activeBrandId ? columnViews.views : { mine: null, brand: null };
+  const columns = visibleColumns(effectiveView(tableViews.mine, tableViews.brand));
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -3580,6 +3607,130 @@ function AllPromptsTab({
   // A delete that fits in one call is over before the bar could say so.
   const showDeleteProgress = deleteProgress !== null && deleteProgress.total > PROMPT_DELETE_BATCH;
 
+  // The columns, by id, in today's order; the view picks and orders them (PROMPT-015a).
+  const headCells: Record<PromptColumnId, React.ReactNode> = {
+    topic: <TableHead key="topic">Topic</TableHead>,
+    status: (
+      <ColHead key="status" className="text-center" tooltip={tTips('status')}>
+        Status
+      </ColHead>
+    ),
+    work: (
+      <ColHead key="work" className="text-center" tooltip={tTips('work')}>
+        Work
+      </ColHead>
+    ),
+    visibility: (
+      <SortableHead
+        key="visibility"
+        className="text-right"
+        tooltip={tTips('visibility', { range: rangeLabel })}
+        sortKey="visibility"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        Visibility
+      </SortableHead>
+    ),
+    mentions: (
+      <SortableHead
+        key="mentions"
+        className="text-right"
+        tooltip={tTips('mentions', { range: rangeLabel })}
+        sortKey="mentions"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        Mentions
+      </SortableHead>
+    ),
+    citations: (
+      <SortableHead
+        key="citations"
+        className="text-right"
+        tooltip={tTips('citations', { range: rangeLabel })}
+        sortKey="citations"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        Citations
+      </SortableHead>
+    ),
+    positions: (
+      <SortableHead
+        key="positions"
+        className="pl-8"
+        tooltip={tTips('positions', { range: rangeLabel })}
+        sortKey="position"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        Positions
+      </SortableHead>
+    ),
+    volume: (
+      <SortableHead
+        key="volume"
+        className="text-right"
+        tooltip={tTips('volume')}
+        sortKey="volume"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        Volume
+      </SortableHead>
+    ),
+    competition: (
+      <ColHead key="competition" className="text-center" tooltip={tTips('competition')}>
+        Competition
+      </ColHead>
+    ),
+    runs: (
+      <SortableHead
+        key="runs"
+        className="text-right"
+        tooltip={tTips('runs', { range: rangeLabel })}
+        sortKey="runs"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        Runs
+      </SortableHead>
+    ),
+    added: (
+      <SortableHead
+        key="added"
+        className="text-right"
+        tooltip={tTips('added')}
+        sortKey="added"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        {tColumns('added')}
+      </SortableHead>
+    ),
+    lastRun: (
+      <SortableHead
+        key="lastRun"
+        className="text-right"
+        tooltip={tTips('lastRun')}
+        sortKey="lastRun"
+        activeSort={latenessOrder ? null : activeSort}
+        dir={dir}
+        onSort={handleSort}
+      >
+        Last run
+      </SortableHead>
+    ),
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -3666,6 +3817,13 @@ function AllPromptsTab({
                 className="pl-8 h-8 text-xs"
               />
             </div>
+            <ColumnsPanel
+              brandId={activeBrandId}
+              brandName={brandName}
+              canManage={canManage}
+              views={tableViews}
+              onViewsChange={(views) => setColumnViews({ brandId: activeBrandId, views })}
+            />
           </div>
         </div>
       </CardHeader>
@@ -3721,96 +3879,7 @@ function AllPromptsTab({
                   'Prompt'
                 )}
               </TableHead>
-              <TableHead>Topic</TableHead>
-              <ColHead className="text-center" tooltip={tTips('status')}>
-                Status
-              </ColHead>
-              <ColHead className="text-center" tooltip={tTips('work')}>
-                Work
-              </ColHead>
-              <SortableHead
-                className="text-right"
-                tooltip={tTips('visibility', { range: rangeLabel })}
-                sortKey="visibility"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                Visibility
-              </SortableHead>
-              <SortableHead
-                className="text-right"
-                tooltip={tTips('mentions', { range: rangeLabel })}
-                sortKey="mentions"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                Mentions
-              </SortableHead>
-              <SortableHead
-                className="text-right"
-                tooltip={tTips('citations', { range: rangeLabel })}
-                sortKey="citations"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                Citations
-              </SortableHead>
-              <SortableHead
-                className="pl-8"
-                tooltip={tTips('positions', { range: rangeLabel })}
-                sortKey="position"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                Positions
-              </SortableHead>
-              <SortableHead
-                className="text-right"
-                tooltip={tTips('volume')}
-                sortKey="volume"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                Volume
-              </SortableHead>
-              <ColHead className="text-center" tooltip={tTips('competition')}>
-                Competition
-              </ColHead>
-              <SortableHead
-                className="text-right"
-                tooltip={tTips('runs', { range: rangeLabel })}
-                sortKey="runs"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                Runs
-              </SortableHead>
-              <SortableHead
-                className="text-right"
-                tooltip={tTips('added')}
-                sortKey="added"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                {tColumns('added')}
-              </SortableHead>
-              <SortableHead
-                className="text-right"
-                tooltip={tTips('lastRun')}
-                sortKey="lastRun"
-                activeSort={latenessOrder ? null : activeSort}
-                dir={dir}
-                onSort={handleSort}
-              >
-                Last run
-              </SortableHead>
+              {columns.map((id) => headCells[id])}
               {onEditPrompt && (
                 <TableHead className="text-right pr-6 w-[60px]">
                   <span className="sr-only">Actions</span>
@@ -3823,31 +3892,9 @@ function AllPromptsTab({
               const vol = volumeByPromptId.get(p.id);
               const vis = visibility[p.id];
               const status = promptStatus(p, now);
-              return (
-                <TableRow key={p.id} className="hover:bg-muted/50">
-                  <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
-                    <div className="flex items-start gap-3">
-                      {onEditPrompt && (
-                        <Checkbox
-                          className="mt-0.5"
-                          checked={selectedIds.has(p.id)}
-                          onCheckedChange={(v) => toggleRow(p.id, v === true)}
-                          aria-label={`Select ${p.text}`}
-                        />
-                      )}
-                      <ClampedText
-                        handle={fullText}
-                        text={p.text}
-                        render={
-                          <Link
-                            href={`/dashboard/prompts/${p.id}`}
-                            className="line-clamp-2 transition-colors hover:text-primary hover:underline"
-                          />
-                        }
-                      />
-                    </div>
-                  </TableCell>
-                  <TableCell>
+              const cells: Record<PromptColumnId, React.ReactNode> = {
+                topic: (
+                  <TableCell key="topic">
                     {p.category?.trim() ? (
                       <ClampedText
                         handle={fullText}
@@ -3862,7 +3909,9 @@ function AllPromptsTab({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-center">
+                ),
+                status: (
+                  <TableCell key="status" className="text-center">
                     <Badge
                       variant="outline"
                       className={cn('text-xs', STATUS_BADGE[status])}
@@ -3871,7 +3920,9 @@ function AllPromptsTab({
                       {tStatus(status)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-center">
+                ),
+                work: (
+                  <TableCell key="work" className="text-center">
                     <div className="inline-flex flex-col items-center gap-0.5">
                       <WorkStatusBadge
                         status={statusOf(p)}
@@ -3898,7 +3949,9 @@ function AllPromptsTab({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                ),
+                visibility: (
+                  <TableCell key="visibility" className="text-right">
                     {vis ? (
                       <div
                         className="inline-flex items-center gap-2 justify-end min-w-[110px]"
@@ -3932,21 +3985,27 @@ function AllPromptsTab({
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">
+                ),
+                mentions: (
+                  <TableCell key="mentions" className="text-right tabular-nums text-sm">
                     {vis ? (
                       formatNumber(vis.totalMentions)
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">
+                ),
+                citations: (
+                  <TableCell key="citations" className="text-right tabular-nums text-sm">
                     {vis ? (
                       formatNumber(vis.totalCitations)
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="pl-8">
+                ),
+                positions: (
+                  <TableCell key="positions" className="pl-8">
                     {/* Fixed widths so the value, dots and See line up on every row. */}
                     <div className="inline-flex items-center gap-2">
                       <div className="w-[5.5rem] whitespace-nowrap">
@@ -3969,7 +4028,9 @@ function AllPromptsTab({
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                ),
+                volume: (
+                  <TableCell key="volume" className="text-right">
                     {vol ? (
                       <EstimateRange
                         estimate={estimateByPromptId.get(p.id)!}
@@ -3980,7 +4041,9 @@ function AllPromptsTab({
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-center">
+                ),
+                competition: (
+                  <TableCell key="competition" className="text-center">
                     <div className="flex justify-center">
                       <CompetitionBars
                         index={vol?.competitionIndex ?? null}
@@ -3988,14 +4051,19 @@ function AllPromptsTab({
                       />
                     </div>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-sm">
+                ),
+                runs: (
+                  <TableCell key="runs" className="text-right tabular-nums text-sm">
                     {vis ? (
                       formatNumber(vis.runs)
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
+                ),
+                added: (
                   <TableCell
+                    key="added"
                     className="text-right text-xs whitespace-nowrap text-muted-foreground"
                     title={new Date(p.createdAt).toLocaleString('en-US', {
                       dateStyle: 'medium',
@@ -4004,9 +4072,38 @@ function AllPromptsTab({
                   >
                     {formatDate(p.createdAt)}
                   </TableCell>
-                  <TableCell className="text-right text-xs text-muted-foreground">
+                ),
+                lastRun: (
+                  <TableCell key="lastRun" className="text-right text-xs text-muted-foreground">
                     {formatRelative(vis?.lastRunAt, tCommon)}
                   </TableCell>
+                ),
+              };
+              return (
+                <TableRow key={p.id} className="hover:bg-muted/50">
+                  <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
+                    <div className="flex items-start gap-3">
+                      {onEditPrompt && (
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={selectedIds.has(p.id)}
+                          onCheckedChange={(v) => toggleRow(p.id, v === true)}
+                          aria-label={`Select ${p.text}`}
+                        />
+                      )}
+                      <ClampedText
+                        handle={fullText}
+                        text={p.text}
+                        render={
+                          <Link
+                            href={`/dashboard/prompts/${p.id}`}
+                            className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                          />
+                        }
+                      />
+                    </div>
+                  </TableCell>
+                  {columns.map((id) => cells[id])}
                   {onEditPrompt && (
                     <TableCell className="text-right pr-6">
                       <RowActionsMenu

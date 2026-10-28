@@ -3849,6 +3849,41 @@ export type Database = {
           },
         ]
       }
+      prompt_table_views: {
+        Row: {
+          brand_id: string
+          columns: Json
+          id: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          columns: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          columns?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_table_views_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prompt_target_urls: {
         Row: {
           added_by: string | null

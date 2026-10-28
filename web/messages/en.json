@@ -7395,6 +7395,38 @@
     },
     "columns": {
       "added": "Added",
+      "labels": {
+        "topic": "Topic",
+        "status": "Status",
+        "work": "Work",
+        "visibility": "Visibility",
+        "mentions": "Mentions",
+        "citations": "Citations",
+        "positions": "Positions",
+        "volume": "Volume",
+        "competition": "Competition",
+        "runs": "Runs",
+        "added": "Added",
+        "lastRun": "Last run"
+      },
+      "picker": {
+        "button": "Columns · {count}",
+        "title": "Columns",
+        "mine": "Drag, or use the arrows, to reorder. Saved for you only.",
+        "fromBrand": "Showing the view shared on {brand}. Your changes are saved for you only.",
+        "sharedMine": "Drag, or use the arrows, to reorder. Shared on {brand}: your changes also update the brand's view.",
+        "promptColumn": "Prompt",
+        "always": "Always shown",
+        "moveUp": "Move {column} up",
+        "moveDown": "Move {column} down",
+        "share": "Share with everyone on {brand}",
+        "shareHint": "Your columns become the brand's view. Each person can still change their own, or go back to the brand's with Reset.",
+        "managersShare": "Admins and managers can share a view with everyone on the brand.",
+        "reset": "Reset to default",
+        "resetToBrand": "Reset to the brand's view",
+        "failed": "Couldn't save your columns. Try again.",
+        "forbidden": "Only admins and managers can share a view with the brand."
+      },
       "tips": {
         "status": "New: added in the last 24 hours. Active: being tracked. Paused: not tracked.",
         "work": "Your content work on this prompt.",

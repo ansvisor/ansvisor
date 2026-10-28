@@ -43,6 +43,10 @@ const OPEN_ACTIONS: Record<string, string> = {
     'checks the plan itself (isSubscriptionActive), to answer "plan" instead of throwing',
   'brand.ts:deleteBrand':
     'deleting a brand only removes what the person gave us (Ansvisor, 2026-10-27)',
+  'prompt-table-views.ts:savePromptTableView':
+    'a column layout: costs nothing, and read-only shows the data the same way',
+  'prompt-table-views.ts:removePromptTableView':
+    'a column layout: costs nothing, and read-only shows the data the same way',
   'menu-access.ts:setMyWorkAreas':
     'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
 };
