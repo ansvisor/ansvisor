@@ -291,3 +291,49 @@ describe('SuggestionsCard on a read-only workspace (plan not active)', () => {
     expect(openUpgrade).not.toHaveBeenCalled();
   });
 });
+
+describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', () => {
+  const fromCatalog: PromptSuggestion = {
+    ...suggestion(2),
+    suggestedText: 'best hiking backpacks under $150',
+    source: 'catalog',
+    sourceData: {
+      category: 'Bags > Hiking backpacks',
+      products: 18,
+      priceLow: 60,
+      priceHigh: 180,
+      priceUnder: 150,
+      currency: 'USD',
+    },
+  };
+
+  async function show(search = '') {
+    window.history.replaceState(null, '', `/dashboard/prompts${search}`);
+    actions.getPromptSuggestions.mockResolvedValue({ suggestions: [suggestion(1), fromCatalog] });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <SuggestionsCard brandId="b1" onAccepted={onAccepted} sourceStates={null} />
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('marks a suggestion drawn from the catalog as Your catalog', async () => {
+    await show();
+    const [plain, shopping] = [...rows()];
+    expect(plain.textContent).not.toContain('Your catalog');
+    expect(shopping.textContent).toContain('Your catalog');
+    expect(shopping.textContent).toContain('Ansvisor Agents');
+  });
+
+  it('lists only the shopping questions on ?source=shopping', async () => {
+    await show('?source=shopping');
+    expect([...rows()].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('best hiking backpacks under $150'),
+    ]);
+    expect(container.textContent).toContain('Shopping');
+  });
+});

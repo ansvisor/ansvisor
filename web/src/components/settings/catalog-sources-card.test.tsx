@@ -36,6 +36,13 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 const { CatalogSourcesCard } = await import('./catalog-sources-card');
 
@@ -302,6 +309,25 @@ describe('CatalogSourcesCard', () => {
     expect(toast.error).toHaveBeenLastCalledWith(
       "This isn't a Google product feed: it has no <rss> or <feed> element.",
     );
+  });
+
+  it("says how many products the plan's cap left out, with Upgrade for managers (ECOM-019)", async () => {
+    // Starter's cap (5,000).
+    const capped = { ...FEED, lastCounts: { ...FEED.lastCounts!, overLimit: 1240, limit: 5000 } };
+    listCatalogSources.mockResolvedValue([capped]);
+    await render();
+    expect(container.textContent).toContain(
+      "1,240 products aren't in the catalog: your plan tracks up to 5,000 products across your brands. Upgrade",
+    );
+    expect(container.querySelector('a[href="/dashboard/settings/billing"]')?.textContent).toBe(
+      'Upgrade',
+    );
+    act(() => root.unmount());
+    root = createRoot(container);
+    role.canManage = false;
+    await render();
+    expect(container.textContent).toContain("1,240 products aren't in the catalog");
+    expect(container.querySelector('a[href="/dashboard/settings/billing"]')).toBeNull();
   });
 
   it("shows the sources, not to change, to members who aren't admins or managers", async () => {

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { addFeedSource, listCatalogSources, removeCatalogSource } from '@/lib/actions/catalog';
@@ -40,7 +41,8 @@ export interface CatalogSourcesRead {
  * A Google Merchant Center account (#1270) is added above, under its
  * Integrations card, and listed here with how many of its products
  * Merchant Center reports issues for. Admins and managers add, sync and
- * remove; members see the sources and how they went.
+ * remove; members see the sources and how they went, and the products past
+ * the plan's cap left out (ECOM-019).
  *
  * `refreshKey`: changed by the page to read the sources again (an account
  * added elsewhere). `onSources` hears each read, for the Merchant Center
@@ -342,6 +344,25 @@ export function CatalogSourcesCard({
                           ))}
                         </ul>
                       </details>
+                    )}
+                    {source.lastStatus === 'ok' && (source.lastCounts?.overLimit ?? 0) > 0 && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        {t('overLimit', {
+                          count: source.lastCounts!.overLimit!,
+                          limit: source.lastCounts!.limit ?? 0,
+                        })}
+                        {canManage && (
+                          <>
+                            {' '}
+                            <Link
+                              href="/dashboard/settings/billing"
+                              className="font-medium underline underline-offset-2"
+                            >
+                              {t('upgrade')}
+                            </Link>
+                          </>
+                        )}
+                      </p>
                     )}
                     {signingIn === source.id && connectorOf(source.kind) && (
                       <StoreSignInForm

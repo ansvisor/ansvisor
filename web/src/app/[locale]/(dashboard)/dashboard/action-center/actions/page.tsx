@@ -39,6 +39,7 @@ import {
   ACTION_CATEGORIES,
   ACTION_SORTS,
   ACTION_STATUSES,
+  FROM_PRODUCTS_KINDS,
   OPEN_ACTION_STATUSES,
   type ActionCategory,
   type ActionDismissReason,
@@ -120,7 +121,16 @@ const GETTING_STARTED = 'getting_started';
 type CategoryChoice = ActionCategory | 'all' | typeof GETTING_STARTED;
 
 /** URL params that ask for the actions themselves, not Getting started. */
-const ACTIONS_PARAMS = ['category', 'action', 'priority', 'status', 'assignee', 'q', 'sort'];
+const ACTIONS_PARAMS = [
+  'category',
+  'action',
+  'priority',
+  'status',
+  'assignee',
+  'q',
+  'sort',
+  'from',
+];
 
 export default function ActionCenterActionsPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
@@ -178,6 +188,8 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const [loadFailed, setLoadFailed] = useState(false);
 
   const [category, setCategory] = useState<CategoryChoice>('all');
+  // "From Products" (ECOM-013): only what Product Visibility sent, beside the category.
+  const [fromProducts, setFromProducts] = useState(false);
   const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
   const [status, setStatus] = useState<ActionStatus | 'all'>('all');
   const [assignee, setAssignee] = useState<string>('all');
@@ -221,6 +233,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setAssignee(readUrlParam('assignee') || 'all');
     setSort(readUrlChoice<ActionSort>('sort', ACTION_SORTS, 'priority'));
     setSearch(readUrlParam('q'));
+    setFromProducts(readUrlParam('from') === 'products');
     setUrlRead(true);
   }, []);
 
@@ -230,13 +243,28 @@ function ActionsContent({ brand }: { brand: Brand }) {
     const timer = setTimeout(
       () =>
         writeUrlParams(
-          { category, priority, status, assignee, sort, q: search.trim() },
-          { category: 'all', priority: 'all', status: 'all', assignee: 'all', sort: 'priority' },
+          {
+            category,
+            priority,
+            status,
+            assignee,
+            sort,
+            q: search.trim(),
+            from: fromProducts ? 'products' : 'all',
+          },
+          {
+            category: 'all',
+            priority: 'all',
+            status: 'all',
+            assignee: 'all',
+            sort: 'priority',
+            from: 'all',
+          },
         ),
       300,
     );
     return () => clearTimeout(timer);
-  }, [urlRead, category, priority, status, assignee, sort, search]);
+  }, [urlRead, category, priority, status, assignee, sort, search, fromProducts]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -397,6 +425,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
       // Getting started's steps aren't actions: with its table not shown, all.
       if (category !== 'all' && category !== GETTING_STARTED && action.category !== category)
         return false;
+      if (fromProducts && !FROM_PRODUCTS_KINDS.includes(action.kind)) return false;
       if (priority !== 'all' && action.priorityLevel !== priority) return false;
       if (status !== 'all' && action.status !== status) return false;
       if (assignee !== 'all') {
@@ -423,7 +452,20 @@ function ActionsContent({ brand }: { brand: Brand }) {
           return comparePriority(a, b);
       }
     });
-  }, [actions, topIds, focus, category, priority, status, assignee, search, sort, tTexts, t]);
+  }, [
+    actions,
+    topIds,
+    focus,
+    category,
+    fromProducts,
+    priority,
+    status,
+    assignee,
+    search,
+    sort,
+    tTexts,
+    t,
+  ]);
 
   const handleExportCsv = useCallback(async () => {
     if (visible.length === 0) return;
@@ -476,6 +518,10 @@ function ActionsContent({ brand }: { brand: Brand }) {
     }
     return counts;
   }, [actions]);
+  const fromProductsCount = useMemo(
+    () => (actions ?? []).filter((action) => FROM_PRODUCTS_KINDS.includes(action.kind)).length,
+    [actions],
+  );
 
   const summary = useMemo(() => {
     const all = actions ?? [];
@@ -779,6 +825,16 @@ function ActionsContent({ brand }: { brand: Brand }) {
               onClick={() => setCategory(key)}
             />
           ))}
+          {/* A chip of its own beside the categories: on or off, whatever the category.
+              On from the URL, it shows with none too, to be turned off. */}
+          {(fromProducts || fromProductsCount > 0) && (
+            <CategoryPill
+              label={t('fromProducts')}
+              count={fromProductsCount}
+              isActive={fromProducts}
+              onClick={() => setFromProducts((on) => !on)}
+            />
+          )}
         </div>
         {!showSteps && (
           <Select
