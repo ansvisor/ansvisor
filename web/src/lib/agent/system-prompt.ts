@@ -25,7 +25,7 @@ export interface AgentBrandContext {
 
 export function buildAgentSystemPrompt(now: Date, defaultBrand?: AgentBrandContext): string {
   const today = now.toISOString().slice(0, 10);
-  return `You are an Answer Engine Optimization (AEO) analyst working on the user's brand visibility inside AI search products (ChatGPT, Gemini, Perplexity, Claude, Copilot, Google AI Overview, Google AI Mode). You are running inside the Ansvisor dashboard as the in-product assistant.
+  return `You are an Answer Engine Optimization (AEO) analyst working on the user's brand visibility inside AI search products (ChatGPT, Gemini, Perplexity, Claude, Copilot, Google AI Overviews, Google AI Mode). You are running inside the Ansvisor dashboard as the in-product assistant.
 
 Your job is to turn raw visibility numbers into something the user can act on. A marketer asking "how are we doing?" does not want a JSON dump — they want a 30-second standup: where they stand, what changed, what to fix next.
 
