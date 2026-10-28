@@ -28,6 +28,7 @@ import {
   type ActionHistoryTask,
   type ActionResultMetric,
   type AffectedEntity,
+  type SignalOutcome,
   type TriggerSignal,
 } from '@/lib/action-center/history';
 
@@ -57,14 +58,59 @@ const HISTORY_COLUMNS =
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
   measuredAt: string;
-  beforeWindow: { from: string; to: string };
-  afterWindow: { from: string; to: string };
-  metrics: {
+  // Absent for an action with no metric to measure, kept for its signals.
+  beforeWindow?: { from: string; to: string };
+  afterWindow?: { from: string; to: string };
+  metrics?: {
     metric: string;
     unit: string;
     before: number | null;
     after: number | null;
   }[];
+  /** What became of the signals that raised it (learning A3). */
+  signals?: SignalOutcome;
+  /** The basket it was measured on; 'targets' for the prompts or pages it named (learning A1). */
+  scope?: { kind?: string; entity?: string; prompts?: number; pages?: number };
+  /** The brand-wide figures, beside a measure on its targets. */
+  brandWide?: ValidationSnapshot['metrics'];
+  /** A Site Audit fix's pages audited again (learning A2). */
+  audit?: { pages?: number; audited?: number; passed?: number };
+}
+
+/** A Site Audit fix's pages audited again, when the sweep read them. */
+function auditFrom(
+  validation: ValidationSnapshot | null,
+): { pages: number; audited: number; passed: number } | null {
+  const a = validation?.audit;
+  const pages = Number(a?.pages) || 0;
+  if (!pages) return null;
+  return { pages, audited: Number(a?.audited) || 0, passed: Number(a?.passed) || 0 };
+}
+
+/** The prompts or pages it was measured on, when it was measured on its own targets. */
+function measuredOnFrom(
+  validation: ValidationSnapshot | null,
+): { entity: 'prompts' | 'pages'; count: number } | null {
+  const scope = validation?.scope;
+  if (scope?.kind !== 'targets') return null;
+  const entity = scope.entity === 'pages' ? 'pages' : 'prompts';
+  const count = Number(entity === 'pages' ? scope.pages : scope.prompts) || 0;
+  return count > 0 ? { entity, count } : null;
+}
+
+/** The signals' counts, when the sweep kept them and they add up. */
+function signalsFrom(validation: ValidationSnapshot | null): SignalOutcome | null {
+  const s = validation?.signals;
+  if (!s || typeof s !== 'object') return null;
+  const n = (value: unknown) => (typeof value === 'number' && value >= 0 ? value : 0);
+  const counts = {
+    total: n(s.total),
+    ended: n(s.ended),
+    replaced: n(s.replaced),
+    dismissed: n(s.dismissed),
+    open: n(s.open),
+  };
+  return counts.total > 0 ? counts : null;
 }
 
 /**
@@ -262,6 +308,12 @@ export async function getActionHistory(
       triggerSignals,
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
+      signalsAfter: signalsFrom(row.validation),
+      measuredOn: measuredOnFrom(row.validation),
+      auditAfter: auditFrom(row.validation),
+      brandWideResults: resultsFrom(
+        row.validation?.brandWide ? { ...row.validation, metrics: row.validation.brandWide } : null,
+      ),
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
       dueDate: row.due_date ?? null,

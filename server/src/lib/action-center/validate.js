@@ -28,6 +28,7 @@ import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
 import { BASKET_KPIS, basketScope, measureBasket } from './basket-metrics.js';
+import { auditOutcome, auditRecheck } from './audit-recheck.js';
 
 const DAY_MS = 86_400_000;
 
@@ -217,6 +218,79 @@ export function deriveOutcome(metrics) {
   return 'no_meaningful_change';
 }
 
+/** A target the night engine names that a basket can be measured on (learning A1). */
+const TARGET_BASKETS = new Set(['prompts', 'pages']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The brand's primary domain as a host, for a page target written as a path. */
+async function primaryHost(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('brand_domains')
+    .select('domain')
+    .eq('brand_id', brandId)
+    .order('is_primary', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`brand_domains: ${error.message}`);
+  const host = String(data?.domain ?? '')
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/[/?#].*$/, '');
+  return host || null;
+}
+
+/**
+ * The basket a night-engine action is measured on (learning A1): the
+ * prompts or pages its payload names, every one it counts (`targetIds`)
+ * when it shows fewer, a page written as a path read on the brand's primary
+ * domain. Null for another kind of target, or none: such an action is
+ * measured brand-wide, as before.
+ */
+export async function targetScope(action) {
+  const payload = action.payload ?? {};
+  if (!TARGET_BASKETS.has(payload.targetEntity)) return null;
+  const listed = Array.isArray(payload.targetIds)
+    ? payload.targetIds
+    : (Array.isArray(payload.targets) ? payload.targets : []).map((t) => t?.id);
+  const keys = [...new Set(listed.filter((k) => typeof k === 'string' && k.trim()))];
+  if (payload.targetEntity === 'prompts') {
+    const promptIds = keys.filter((k) => UUID.test(k));
+    return promptIds.length ? { entity: 'prompts', promptIds, pages: [] } : null;
+  }
+  const host = keys.some((k) => k.startsWith('/')) ? await primaryHost(action.brand_id) : null;
+  const pages = keys
+    .map((k) => (k.startsWith('/') ? (host ? `https://${host}${k}` : null) : k))
+    .filter((url) => url && /^https?:\/\//i.test(url));
+  return pages.length ? { entity: 'pages', promptIds: [], pages } : null;
+}
+
+/**
+ * What became of the signals that raised the action, when it is measured
+ * (learning A3): how many ended (resolved, the condition gone), turned into
+ * another kind of the same subject (resolved with `supersededBy`: still
+ * there), were dismissed by a person, or are still open. The closest
+ * measure to the action's own aim, and a cheap one. Null for an action no
+ * signal raised (one sent from Content, Insights, Mentions…).
+ */
+export async function signalOutcome(actionId) {
+  const { data, error } = await supabaseAdmin
+    .from('action_signals')
+    .select('signals(status, payload)')
+    .eq('action_id', actionId);
+  if (error) throw new Error(`action_signals: ${error.message}`);
+  const signals = (data ?? []).map((row) => row.signals).filter(Boolean);
+  if (!signals.length) return null;
+  const counts = { total: signals.length, ended: 0, replaced: 0, dismissed: 0, open: 0 };
+  for (const signal of signals) {
+    if (signal.status === 'resolved') {
+      if (signal.payload?.supersededBy) counts.replaced += 1;
+      else counts.ended += 1;
+    } else if (signal.status === 'dismissed') counts.dismissed += 1;
+    else counts.open += 1;
+  }
+  return counts;
+}
+
 /**
  * Measure one closed action and record the result.
  *
@@ -234,6 +308,22 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // not happened yet reads low for a reason that has nothing to do with the
   // action, and would file most recent work as a decline.
   if (afterWindow.to >= utcDay(now)) return null;
+
+  // What became of the signals that raised it (A3), and for a Site Audit
+  // fix whether its pages pass when audited again (A2), kept beside the
+  // metrics. A fix whose pages were audited again is judged by that: the
+  // check passing is its aim.
+  const [signals, audit] = await Promise.all([signalOutcome(action.id), auditRecheck(action)]);
+  const finish = async (validation, outcome) => {
+    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}) };
+    const kept =
+      validation || Object.keys(beside).length
+        ? { measuredAt: now.toISOString(), ...(validation ?? {}), ...beside }
+        : null;
+    const verdict = (audit && auditOutcome(audit)) ?? outcome;
+    await write(action.id, kept, verdict, now);
+    return verdict;
+  };
 
   // An action sent from a content opportunity is measured on its own prompts
   // and pages; the brand-wide numbers would bury a single piece of content.
@@ -262,9 +352,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
       before: before[metric],
       after: after[metric],
     }));
-    const outcome = deriveOutcome(metrics);
-    await write(
-      action.id,
+    return finish(
       {
         measuredAt: now.toISOString(),
         beforeWindow,
@@ -272,21 +360,65 @@ export async function validateAction(action, { now = new Date() } = {}) {
         metrics,
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
       },
-      outcome,
-      now,
+      deriveOutcome(metrics),
     );
-    return outcome;
   }
 
   const kpiKeys = (action.kpi_keys ?? []).filter((key) => key in MEASURABLE_KPIS);
 
+  // A night-engine action that names its prompts or pages is measured on
+  // them (learning A1): "recover 6 prompts" moves those 6, which the whole
+  // brand's numbers can bury. The brand-wide figures stay as a second line.
+  // A basket that measured nothing (no answers, citations of prompts) leaves
+  // the action to the brand-wide measure below.
+  const targets = await targetScope(action);
+  if (targets) {
+    const asked = (action.kpi_keys ?? []).filter((key) => key in BASKET_KPIS);
+    const keys = asked.length ? asked : Object.keys(BASKET_KPIS);
+    const [before, after, brandBefore, brandAfter] = await Promise.all([
+      measureBasket(action.brand_id, targets, beforeWindow.from, beforeWindow.to),
+      measureBasket(action.brand_id, targets, afterWindow.from, afterWindow.to),
+      kpiKeys.length
+        ? measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to)
+        : {},
+      kpiKeys.length ? measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to) : {},
+    ]);
+    const metrics = keys.map((metric) => ({
+      metric,
+      unit: BASKET_KPIS[metric],
+      before: before[metric] ?? null,
+      after: after[metric] ?? null,
+    }));
+    if (metrics.some((m) => m.before != null && m.after != null)) {
+      const brandWide = kpiKeys.map((metric) => ({
+        metric,
+        unit: MEASURABLE_KPIS[metric],
+        before: brandBefore[metric] ?? null,
+        after: brandAfter[metric] ?? null,
+      }));
+      return finish(
+        {
+          measuredAt: now.toISOString(),
+          beforeWindow,
+          afterWindow,
+          metrics,
+          scope: {
+            kind: 'targets',
+            entity: targets.entity,
+            prompts: targets.promptIds.length,
+            pages: targets.pages.length,
+          },
+          ...(brandWide.length ? { brandWide } : {}),
+        },
+        deriveOutcome(metrics),
+      );
+    }
+  }
+
   // An action with no success metrics has nothing to measure. That is a gap
   // in the rule that produced it, not a failure here — say so plainly rather
   // than inventing a metric it never claimed.
-  if (kpiKeys.length === 0) {
-    await write(action.id, null, 'not_measurable', now);
-    return 'not_measurable';
-  }
+  if (kpiKeys.length === 0) return finish(null, 'not_measurable');
 
   const [before, after] = await Promise.all([
     measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
@@ -300,14 +432,10 @@ export async function validateAction(action, { now = new Date() } = {}) {
     after: after[metric] ?? null,
   }));
 
-  const outcome = deriveOutcome(metrics);
-  await write(
-    action.id,
+  return finish(
     { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics },
-    outcome,
-    now,
+    deriveOutcome(metrics),
   );
-  return outcome;
 }
 
 async function write(actionId, validation, outcome, now) {

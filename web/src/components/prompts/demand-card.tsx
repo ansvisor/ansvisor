@@ -345,6 +345,9 @@ function PaaCard({
 function YoutubeCard({ demand }: { demand: PromptDemand }) {
   const t = useTranslations('promptDemand');
   const youtube = demand.youtube;
+  // The provider's link, only when it's a web page (the server keeps no other).
+  const topUrl =
+    youtube?.top?.url && /^https?:\/\//i.test(youtube.top.url) ? youtube.top.url : null;
   return (
     <SignalCard
       title={t('youtube.title')}
@@ -365,9 +368,9 @@ function YoutubeCard({ demand }: { demand: PromptDemand }) {
             </p>
             {youtube.top && (
               <p className="break-words text-xs text-muted-foreground">
-                {youtube.top.url ? (
+                {topUrl ? (
                   <a
-                    href={youtube.top.url}
+                    href={topUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-foreground hover:underline"

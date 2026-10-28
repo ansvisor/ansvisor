@@ -169,6 +169,17 @@ describe('DemandSection with every signal read', () => {
     );
   });
 
+  it("links the top video only when it's a web page", () => {
+    render(full());
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe(
+      'https://www.youtube.com/watch?v=abc123',
+    );
+    const top = full().youtube!.top!;
+    render(full({ youtube: { ...full().youtube!, top: { ...top, url: 'javascript:alert(1)' } } }));
+    expect(container.querySelector('a[target="_blank"]')).toBeNull();
+    expect(text()).toContain('Top: “How to track your brand in ChatGPT” · 310k views');
+  });
+
   it('says so when a read found nothing', () => {
     render(
       full({

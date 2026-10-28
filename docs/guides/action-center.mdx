@@ -83,13 +83,13 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 
 Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". Open a task to see its details: **What**, **URL** (the exact page), **Where**, **Why**, **Change** (the text before and after, or the text to add), **How** (one step per line), **Done when**, **How we check** (Automatic: we fetch the page again; Re-run: the prompts run again; Manual: you confirm it), **Type** (Content, On-page, Technical, Outreach, PR or Product), **Effort** and **Role**. Click **Edit** to change any of them. A task from the Action Center's own plan comes with its **Done when**, with **How we check** for most of them (not for a task measured over a GA4 or Search Console window), and with its **URL** when it changes a page and the action is about one page.
 
-A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, and when you click **Check now**), by what it changes:
+A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, at most 20 of one brand's, the least recently tried first, and when you click **Check now**), by what it changes:
 
 - **A broken page:** the page answers again.
 - **Publishing:** the page answers where it wasn't before. A page already live at the first check passes once it changes.
-- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions.
+- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions. When the action was raised by another check (the brand's entity, say), the page's structured data must be valid, after a check found it wasn't: a page that had valid structured data all along says so, and you mark the task done once it's fixed.
 - **Crawler access:** robots.txt lets the AI crawlers in, and the page isn't noindex. Only when the audit raised it; a page found uncrawled in the bot logs isn't checked here.
-- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a few words.
+- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a new short review: about a rewritten paragraph. A sidebar, testimonials, the latest or popular posts and similar blocks that change by themselves aren't counted.
 - **A task written with its new text:** that text is on the page, and the text it replaces is gone.
 
 Only pages on the brand's own site are read. One that passes is completed by itself, and History says so; one that doesn't shows **Last check** with what is still missing. A task you reopen after it passed stays open: its checks still show what they find, the nightly check leaves it, and the call is yours. Site Audit fixes are checked by your next audit.
@@ -191,7 +191,7 @@ The **History** tab lists actions once they are In Progress, On Hold, Completed 
 
 Click an action to see **What was the goal?**, **What happened?** (the signals it was built from), its affected items and tasks, and the **Result**:
 
-- When a completed action's week after closing is over, Ansvisor compares its metrics over the 7 days before it was raised with the 7 days after it closed. The result reads **Improved**, **No meaningful change** or **Declined**. It is measured after the action, not proven to be caused by it.
+- When a completed action's week after closing is over, Ansvisor compares its metrics over the 7 days before it was raised with the 7 days after it closed. The result reads **Improved**, **No meaningful change** or **Declined**. It is measured after the action, not proven to be caused by it. An action that names its prompts or pages is measured on them, with the brand-wide figures over the same days beside. A Site Audit fix is judged by its pages audited again since it closed: the check that raised it passing, or a low score past the line; with none audited again yet, by the metrics. The History drawer also says what became of the signals that raised it by then: how many ended, turned into another, were dismissed, or are still open.
 - A dismissed action is **Not measurable**, and so is one with no metric to read.
 - An action sent from a prompt's Improve tab reports on how many platforms its position improved. It is read again daily while the action is open and for 30 days after it is completed.
 
@@ -209,6 +209,7 @@ Most actions are generated from signals each night. You can also send work to th
 | **AI Traffic** | On the [AI Traffic Analytics](/guides/ai-traffic-analytics) pages list, select pages under *Cited, not clicked* or *No AI traffic* and click **Send to Action Center**. Traffic drops and strong or weak landing pages also arrive as signals. |
 | **Insights** | **Send action** on a topic in Insights' Opportunities opens a Growth action for it. |
 | **Prompts** | **Send Actions** on a prompt's Improve tab sends the selected suggestions as one action. |
+| **Product catalog** | After each catalog sync, a published page that links products that are sold out, refused by Merchant Center or gone from your catalog gets a Fix action with one task: swap them for products in stock. The next sync, or **Check now** on the task, closes it once the live page links none of them. See [Content Editor](/guides/content-editor). |
 
 Sending the same thing twice doesn't create a second action: the page says it is already in the Action Center, with its action number (for example `AC-42`).
 

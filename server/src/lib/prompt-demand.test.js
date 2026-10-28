@@ -602,6 +602,26 @@ describe('paaSignal', () => {
     expect(paaSignal({ items: [SERP_RESULT.items[0]] }, AT)).toEqual({ questions: [], at: AT });
     expect(paaSignal(null, AT)).toEqual({ questions: [], at: AT });
   });
+
+  it('keeps no link that is not an http(s) URL', () => {
+    const element = (url) => ({
+      type: 'people_also_ask_element',
+      title: `Question ${url}`,
+      expanded_element: [{ url, domain: 'example.org' }],
+    });
+    const result = {
+      items: [
+        {
+          type: 'people_also_ask',
+          items: [element('javascript:alert(1)'), element('https://example.org/a')],
+        },
+      ],
+    };
+    expect(paaSignal(result, AT).questions.map((q) => q.url)).toEqual([
+      null,
+      'https://example.org/a',
+    ]);
+  });
 });
 
 describe('youtubeSignal', () => {
@@ -619,6 +639,16 @@ describe('youtubeSignal', () => {
       },
       at: AT,
     });
+  });
+
+  it('keeps no link that is not an http(s) URL', () => {
+    const video = { type: 'youtube_video', title: 'A video', views_count: 10 };
+    for (const url of ['javascript:alert(1)', 'data:text/html,hi', '/watch?v=x', 42]) {
+      expect(youtubeSignal({ items: [{ ...video, url }] }, AT).top.url).toBeNull();
+    }
+    expect(youtubeSignal({ items: [{ ...video, url: 'http://youtu.be/x' }] }, AT).top.url).toBe(
+      'http://youtu.be/x',
+    );
   });
 });
 
