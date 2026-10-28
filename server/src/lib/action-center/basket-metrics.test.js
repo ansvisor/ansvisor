@@ -5,17 +5,40 @@ vi.mock('../../config/supabase.js', () => ({
   default: { from: (table) => tables[table]() },
 }));
 
-const { BASKET_KPIS, basketScope, basketValues, pageScope } = await import('./basket-metrics.js');
+const {
+  BASKET_KPIS,
+  CONTROL_MIN_COUNT,
+  basketScope,
+  basketValues,
+  controlScope,
+  netEffect,
+  pageScope,
+} = await import('./basket-metrics.js');
 
 /** A query builder that resolves to `result` however it is chained. */
 function chain(result) {
   const b = {
     select: () => b,
     eq: () => b,
-    in: () => Promise.resolve(result),
+    in: () => b,
+    lt: () => b,
+    order: () => b,
+    limit: () => Promise.resolve(result),
     maybeSingle: () => Promise.resolve(result),
     then: (resolve) => resolve(result),
   };
+  return b;
+}
+
+/** `chain`, recording each filter it is given as [method, ...args] in `calls`. */
+function recordingChain(result, calls) {
+  const b = chain(result);
+  for (const method of ['eq', 'in', 'lt']) {
+    b[method] = (...args) => {
+      calls.push([method, ...args]);
+      return b;
+    };
+  }
   return b;
 }
 
@@ -125,5 +148,128 @@ describe('basketScope', () => {
       (await basketScope({ brand_id: 'b1', payload: { topicId: 't1', promptIds: ['p1'] } }))
         .promptIds,
     ).toEqual(['p1']);
+  });
+});
+
+/**
+ * The control basket (learning B2): the brand's prompts the action didn't
+ * touch, and its change net of theirs.
+ */
+describe('netEffect', () => {
+  const metric = (name, unit, before, after) => ({ metric: name, unit, before, after });
+
+  it('takes a rate in points and a count in percent, net of the control', () => {
+    expect(
+      netEffect(
+        [
+          metric('ai_visibility', 'percent', 20, 30),
+          metric('mentions', 'count', 10, 15),
+          metric('citations', 'count', 4, 8),
+        ],
+        {
+          before: { ai_visibility: 40, mentions: 200, citations: null },
+          after: { ai_visibility: 44, mentions: 220, citations: null },
+        },
+      ),
+    ).toEqual([
+      { metric: 'ai_visibility', net: 6, unit: 'points', control: { before: 40, after: 44 } },
+      { metric: 'mentions', net: 40, unit: 'percent', control: { before: 200, after: 220 } },
+    ]);
+  });
+
+  it('leaves out a count with nothing before to scale by', () => {
+    expect(
+      netEffect([metric('mentions', 'count', 0, 3)], {
+        before: { mentions: 10 },
+        after: { mentions: 12 },
+      }),
+    ).toEqual([]);
+  });
+
+  it('never nets AI sessions: a control of prompts has no pages to read them on', () => {
+    expect(
+      netEffect([metric('ai_referral_traffic', 'sessions', 40, 80)], {
+        before: { ai_referral_traffic: 100 },
+        after: { ai_referral_traffic: 100 },
+      }),
+    ).toEqual([]);
+  });
+
+  it('leaves out a count read from fewer than five before: one more is a swing, not a result', () => {
+    const control = { before: { mentions: 100 }, after: { mentions: 100 } };
+    expect(CONTROL_MIN_COUNT).toBe(5);
+    // 4 → 6 would read +50% net.
+    expect(netEffect([metric('mentions', 'count', 4, 6)], control)).toEqual([]);
+    expect(netEffect([metric('mentions', 'count', 5, 6)], control)).toEqual([
+      { metric: 'mentions', net: 20, unit: 'percent', control: { before: 100, after: 100 } },
+    ]);
+  });
+});
+
+describe('controlScope', () => {
+  /** The first day of the week before the action was raised. */
+  const SINCE = '2026-09-01';
+  const others = (n, topic = 't1') =>
+    Array.from({ length: n }, (_, i) => ({ id: `c${i + 1}`, topic_id: topic }));
+
+  it("takes the brand's other prompts in the action's topics, never its own", async () => {
+    tables.prompts = () =>
+      chain({ data: [{ id: 'p1', topic_id: 't1' }, ...others(6)], error: null });
+    const scope = await controlScope('b1', ['p1'], SINCE);
+    expect(scope).toEqual({
+      basis: 'topics',
+      promptIds: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'],
+      pages: [],
+    });
+  });
+
+  it("falls back to the brand's other prompts, and reads none from too few", async () => {
+    let call = 0;
+    // Its topic has two others; the brand has six.
+    tables.prompts = () =>
+      chain({
+        data: call++ < 2 ? [{ id: 'p1', topic_id: 't1' }, ...others(2)] : others(6, 't9'),
+        error: null,
+      });
+    expect((await controlScope('b1', ['p1'], SINCE)).basis).toBe('brand');
+
+    tables.prompts = () => chain({ data: others(3), error: null });
+    expect(await controlScope('b1', ['p1'], SINCE)).toBeNull();
+    expect(await controlScope('b1', [], SINCE)).toBeNull();
+  });
+
+  it('leaves out prompts tracked after the week before began: they read in the week after alone', async () => {
+    const calls = [];
+    tables.prompts = () =>
+      recordingChain({ data: [{ id: 'p1', topic_id: 't1' }, ...others(6)], error: null }, calls);
+    await controlScope('b1', ['p1'], SINCE);
+    expect(calls).toContainEqual(['lt', 'created_at', '2026-09-01T00:00:00Z']);
+  });
+
+  it("reads only the brand's own active prompts, in its topics and when it falls back", async () => {
+    // Each query's filters; its topic has two others, so it falls back to the brand.
+    const queries = [];
+    tables.prompts = () => {
+      const calls = [];
+      queries.push(calls);
+      return recordingChain(
+        {
+          data: queries.length < 3 ? [{ id: 'p1', topic_id: 't1' }, ...others(2)] : others(6),
+          error: null,
+        },
+        calls,
+      );
+    };
+    expect((await controlScope('b1', ['p1'], SINCE)).basis).toBe('brand');
+
+    // The first query reads its own prompts' topics; the others, the control.
+    const [targets, inTopics, inBrand] = queries;
+    expect(targets).toEqual([['in', 'id', ['p1']]]);
+    for (const calls of [inTopics, inBrand]) {
+      expect(calls).toContainEqual(['eq', 'prompt_sets.brand_id', 'b1']);
+      expect(calls).toContainEqual(['eq', 'is_active', true]);
+    }
+    expect(inTopics).toContainEqual(['in', 'topic_id', ['t1']]);
+    expect(inBrand.some(([method]) => method === 'in')).toBe(false);
   });
 });

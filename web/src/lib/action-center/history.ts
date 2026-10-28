@@ -23,7 +23,13 @@
  * populating these, not reshaping them.
  */
 
-import type { ActionCategory, ActionOutcome, ActionStatus, TaskStatus } from './registry';
+import type {
+  ActionCategory,
+  ActionDismissReason,
+  ActionOutcome,
+  ActionStatus,
+  TaskStatus,
+} from './registry';
 import { highestPriorityLevel, type PriorityLevel } from './priority';
 import type { SignalSource } from '@/lib/signals/registry';
 import type { ImproveOutcome } from '@/lib/improve-outcome';
@@ -72,12 +78,44 @@ export interface ActionHistoryTask {
   completedAt?: string;
 }
 
+/**
+ * The day after closing an action's final reading is taken on (learning
+ * B1): the API's validation.finalReadingDay (server config/action-engine.js).
+ */
+export const FINAL_READING_DAY = 30;
+
+/** One reading of an action's effect: the day after closing, and its verdict. */
+export interface OutcomeReading {
+  day: number;
+  outcome: ActionOutcome;
+}
+
+/** An action's change net of a control basket's (learning B2). */
+export interface ControlNet {
+  basis: 'topics' | 'brand';
+  prompts: number;
+  net: { metric: string; net: number; unit: 'points' | 'percent' }[];
+}
+
 /** A signal that opened the action. Several signals consolidate into one
  *  action, so this is a list rather than a field. */
 export interface TriggerSignal {
   signalId: string;
   kind: string;
   detectedAt: string;
+}
+
+/**
+ * What became of the signals that raised an action, when it was measured
+ * (learning A3): ended (the condition gone), replaced (still there as
+ * another kind), dismissed by a person, or still open.
+ */
+export interface SignalOutcome {
+  total: number;
+  ended: number;
+  replaced: number;
+  dismissed: number;
+  open: number;
 }
 
 export interface ActionHistoryItem {
@@ -102,6 +140,37 @@ export interface ActionHistoryItem {
   affected: AffectedEntity[];
   /** Empty until something measures an action's effect. */
   results: ActionResultMetric[];
+  /**
+   * Its readings a week, two weeks and a month after it closed (learning
+   * B1), and whether the last, final one is in. Empty before the first.
+   */
+  readings?: OutcomeReading[];
+  outcomeFinal?: boolean;
+  /** Why it was dismissed, when someone said (learning A5). */
+  dismissReason?: ActionDismissReason | null;
+  /** Its signals when it was measured; absent before, or with no signal behind it. */
+  signalsAfter?: SignalOutcome | null;
+  /**
+   * The prompts or pages it named, when it was measured on them (learning
+   * A1), with the brand-wide figures kept as a second line.
+   */
+  measuredOn?: { entity: 'prompts' | 'pages'; count: number } | null;
+  /**
+   * Nights tracking missed in its before and after windows (learning A6);
+   * `tooMany` when past the limit, the result then not measurable.
+   */
+  dataGaps?: { before: number; after: number; tooMany: boolean } | null;
+  /** The metric its result is judged by (learning A4); absent before it was measured. */
+  primaryMetric?: string | null;
+  /** A Site Audit fix's pages audited again since it closed, and how many pass (learning A2). */
+  auditAfter?: { pages: number; audited: number; passed: number } | null;
+  brandWideResults?: ActionResultMetric[];
+  /**
+   * Its change net of the brand's prompts it didn't touch over the same
+   * days (learning B2): a rate in points, a count in percent. `basis` says
+   * whether they share its topics or are the brand's others.
+   */
+  controlNet?: ControlNet | null;
   /** Improve actions only: positions per platform against the baseline (PROMPT-008). */
   positionOutcome: ImproveOutcome | null;
   tasks: ActionHistoryTask[];
