@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { parseRecipients } from '@/lib/pulse-recipients';
 
 /**
@@ -46,6 +47,9 @@ export function NotificationsSection() {
   const [invalidRecipients, setInvalidRecipients] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [savingBrand, setSavingBrand] = useState<string | null>(null);
+  // A read-only workspace (plan not active): Save opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -199,7 +203,10 @@ export function NotificationsSection() {
               {canManage && (
                 <Button
                   size="sm"
-                  onClick={() => save(brand.brandId, brand.frequency, brand.trafficDigest)}
+                  onClick={guard(
+                    () => void save(brand.brandId, brand.frequency, brand.trafficDigest),
+                    { action: tActions('saveNotifications') },
+                  )}
                   disabled={savingBrand !== null}
                   className="gap-2"
                 >
