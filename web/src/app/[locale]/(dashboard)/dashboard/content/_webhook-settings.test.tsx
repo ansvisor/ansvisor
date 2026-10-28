@@ -88,7 +88,11 @@ describe('WebhookSettingsDialog – Test Webhook', () => {
       'https://hooks.example/abc',
     );
     expect((dialog().querySelector('#webhook-url') as HTMLInputElement).disabled).toBe(true);
-    expect(dialog().querySelector('[role="switch"]')!.hasAttribute('disabled')).toBe(true);
+    const toggle = dialog().querySelector('[role="switch"]')!;
+    expect(toggle.hasAttribute('disabled')).toBe(true);
+    // Dimmed, with the not-allowed cursor, as the disabled checkboxes beside it.
+    expect(toggle.className).toContain('disabled:cursor-not-allowed');
+    expect(toggle.className).toContain('disabled:opacity-50');
 
     await render('admin');
     expect(dialog().textContent).not.toContain('Only admins and managers can change');
