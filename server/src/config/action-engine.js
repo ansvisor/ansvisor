@@ -344,6 +344,15 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     demandTopTargets: 5,
     /** Demand and business value when nothing measures them: neither for nor against. */
     demandUnknown: 0.4,
+    /**
+     * The demand a prompt's measured demand level (PROMPT-014: Search
+     * Console, Google Trends, People Also Ask, YouTube) brings an action
+     * about it up to, at least: High as much as about 2,500 monthly AI
+     * searches (0.85), Medium about 160 (0.55). Low adds nothing: signals
+     * that found little are not proof that nobody asks.
+     */
+    realDemandHigh: 0.85,
+    realDemandMedium: 0.55,
     businessValueUnknown: 0.5,
     /** Days for a finding's recency to halve. */
     recencyHalfLifeDays: 10,

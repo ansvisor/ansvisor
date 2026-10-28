@@ -40,6 +40,7 @@ const reason = (over: Partial<PriorityReason> = {}): PriorityReason => ({
   heldBefore: true,
   days: 2,
   sources: 1,
+  realDemand: null,
   ...over,
 });
 
@@ -164,6 +165,20 @@ describe('priorityReasonText', () => {
         t,
       ),
     ).toBe('Its findings have resolved.');
+  });
+
+  it("says the prompts' measured demand level, and reads it from what was stored", () => {
+    expect(priorityReasonText(reason({ realDemand: 'high' }), t)).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — measured demand High, commercial intent, previously visible.',
+    );
+    expect(
+      priorityReasonText(
+        reason({ demand: 'medium', realDemand: 'low', commercial: false, heldBefore: false }),
+        t,
+      ),
+    ).toBe('Lost ground on 7 prompts 2 days ago — measured demand Low.');
+    expect(parsePriorityReason({ change: 'gap', realDemand: 'medium' })?.realDemand).toBe('medium');
+    expect(parsePriorityReason({ change: 'gap', realDemand: 'huge' })?.realDemand).toBeNull();
   });
 
   it('falls back to a plain subject when the count is unknown', () => {

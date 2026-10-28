@@ -1,7 +1,8 @@
 /**
  * What the priority score reads from the database (AC-006): the demand and
- * intent of the prompts an action's evidence names. Everything else it needs
- * — the action, its signals — the caller has in hand already.
+ * intent of the prompts an action's evidence names, and their measured
+ * demand level (PROMPT-014). Everything else it needs — the action, its
+ * signals — the caller has in hand already.
  */
 
 import supabaseAdmin from '../../config/supabase.js';
@@ -15,12 +16,39 @@ const CHUNK = 150;
 const PAGE = 1000;
 
 /**
- * Per prompt, its estimated monthly AI searches and its intent. A prompt can
- * have a row per location and per fetch: the largest volume counts, as in
- * the detectors' reads (`ae_prompt_stats`), and the newest intent.
+ * Each prompt's measured demand level (PROMPT-014, prompt_demand), where one
+ * was read. Best effort: without it the score still has the volumes.
+ *
+ * @param {string[]} ids
+ * @returns {Promise<Map<string, 'high'|'medium'|'low'>>}
+ */
+async function loadDemandLevels(ids) {
+  const levels = new Map();
+  try {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const { data, error } = await supabaseAdmin
+        .from('prompt_demand')
+        .select('prompt_id, level')
+        .in('prompt_id', ids.slice(i, i + CHUNK))
+        .not('level', 'is', null);
+      if (error) throw new Error(error.message);
+      for (const row of data ?? []) levels.set(row.prompt_id, row.level);
+    }
+  } catch (err) {
+    logger.warn({ err: err.message }, '[actions] demand levels unavailable');
+    return new Map();
+  }
+  return levels;
+}
+
+/**
+ * Per prompt, its estimated monthly AI searches, its intent and its measured
+ * demand level (null where none was read). A prompt can have a volume row
+ * per location and per fetch: the largest volume counts, as in the
+ * detectors' reads (`ae_prompt_stats`), and the newest intent.
  *
  * @param {string[]} promptIds
- * @returns {Promise<Map<string, { volume: number|null, intent: string|null }>>}
+ * @returns {Promise<Map<string, { volume: number|null, intent: string|null, level: 'high'|'medium'|'low'|null }>>}
  */
 export async function loadPromptDemand(promptIds) {
   const demand = new Map();
@@ -45,10 +73,16 @@ export async function loadPromptDemand(promptIds) {
     const volume = row.est_ai_volume === null ? null : Number(row.est_ai_volume);
     const known = demand.get(row.prompt_id);
     if (!known) {
-      demand.set(row.prompt_id, { volume, intent: row.intent ?? null });
+      demand.set(row.prompt_id, { volume, intent: row.intent ?? null, level: null });
     } else if (volume !== null && (known.volume === null || volume > known.volume)) {
       known.volume = volume;
     }
+  }
+  if (ids.length === 0) return demand;
+  for (const [id, level] of await loadDemandLevels(ids)) {
+    const known = demand.get(id);
+    if (known) known.level = level;
+    else demand.set(id, { volume: null, intent: null, level });
   }
   return demand;
 }
