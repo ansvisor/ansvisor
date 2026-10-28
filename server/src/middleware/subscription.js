@@ -61,6 +61,8 @@ export const COST_STOPPING = [
   // Disconnects a brand's WordPress site (cms-wordpress.js): its Application
   // Password is revoked where the site allows.
   { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/wordpress\/?$/ },
+  // Disconnects a brand's Framer project (cms-framer.js): its API key is deleted.
+  { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/framer\/?$/ },
   // Removes an AI-bot log connection (bots.js): its secret stops working.
   { method: 'DELETE', path: /^\/bots\/connections\/[^/]+\/[^/]+\/?$/ },
   // Removes a store from the catalog (catalog.js): its sign-in is revoked at
