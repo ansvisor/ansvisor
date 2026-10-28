@@ -1,4 +1,5 @@
 import type { AuthorsRead } from '@/lib/content/authors';
+import { htmlBlockElement } from '@/lib/content/html-allowlist';
 
 /**
  * One draft for get_content_draft_package's tests: the editor's own Send to
@@ -13,6 +14,10 @@ export const AUTHOR_ID = '44444444-0000-4000-8000-000000000001';
 const JSON_LD =
   '{"@context":"https://schema.org","@type":"Article","headline":"Cold brew at home"}';
 
+/** An HTML block's code (a call to action), with text past ASCII. */
+const HTML_BLOCK =
+  '<div class="acme-cta">\n  <a href="https://acme.example/shop">Kaffeebohnen kaufen – café</a>\n</div>';
+
 /** The draft's row as the MCP reads it. */
 export const DRAFT_ROW = {
   id: DRAFT_ID,
@@ -24,7 +29,14 @@ export const DRAFT_ROW = {
     '<h2>What you need</h2>',
     '<ul><li><p>Coarsely ground coffee</p></li><li><p>A large jar and a filter</p></li></ul>',
     '<p><span style="font-weight:700">Tip:</span> grind it coarse, or the brew turns muddy.</p>',
+    '<h4>Ratios in Zürich — çok güzel</h4>',
+    '<table><colgroup><col style="width: 120px"><col></colgroup><tbody>',
+    '<tr><th colspan="1" rowspan="1"><p>Coffee</p></th><th colspan="1" rowspan="1"><p>Water</p></th></tr>',
+    '<tr><td colspan="1" rowspan="1"><p>100 g</p></td><td colspan="1" rowspan="1"><p>1 l</p></td></tr>',
+    '</tbody></table>',
+    '<p>Read <a target="_blank" rel="noopener noreferrer nofollow" href="https://acme.example/guides/grind">our grind guide</a> before you buy a naïve café blend.</p>',
     '<img src="https://acme.example/cold-brew.jpg" alt="A jar of cold brew">',
+    htmlBlockElement(HTML_BLOCK),
     `<script type="application/ld+json">${JSON_LD}</script>`,
   ].join(''),
   source_url: null,
@@ -63,8 +75,10 @@ export const JSON_LD_PARSED = JSON.parse(JSON_LD);
 
 /**
  * The page's HTML as the editor's Send to CMS sends it (in the browser): the
- * byline line first, no H1, the styled bold kept as <strong>, the image and
- * the JSON-LD as they are.
+ * byline line first, no H1, the styled bold kept as <strong>, the H4 an H3,
+ * the table without its column widths, the link with its address only, the
+ * text past ASCII as written, and the image, the HTML block's code and the
+ * JSON-LD as they are.
  */
 export const EXPECTED_HTML = [
   '<p>By Ada Lovelace</p>',
@@ -79,6 +93,29 @@ export const EXPECTED_HTML = [
   '</li>',
   '</ul>',
   '<p><strong>Tip:</strong> grind it coarse, or the brew turns muddy.</p>',
-  '<img src="https://acme.example/cold-brew.jpg" alt="A jar of cold brew">',
+  '<h3>Ratios in Zürich — çok güzel</h3>',
+  '<table>',
+  '<tbody>',
+  '<tr>',
+  '<th colspan="1" rowspan="1">',
+  '<p>Coffee</p>',
+  '</th>',
+  '<th colspan="1" rowspan="1">',
+  '<p>Water</p>',
+  '</th>',
+  '</tr>',
+  '<tr>',
+  '<td colspan="1" rowspan="1">',
+  '<p>100 g</p>',
+  '</td>',
+  '<td colspan="1" rowspan="1">',
+  '<p>1 l</p>',
+  '</td>',
+  '</tr>',
+  '</tbody>',
+  '</table>',
+  '<p>Read <a href="https://acme.example/guides/grind">our grind guide</a> before you buy a naïve café blend.</p>',
+  // An image and an HTML block aren't blocks the HTML view puts on lines of their own.
+  `<img src="https://acme.example/cold-brew.jpg" alt="A jar of cold brew">${HTML_BLOCK}`,
   `<script type="application/ld+json">${JSON_LD}</script>`,
 ].join('\n');
