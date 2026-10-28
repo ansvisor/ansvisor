@@ -92,6 +92,11 @@ function groupOf(element: Element | null) {
 }
 const byText = (text: string) =>
   [...container.querySelectorAll('p')].find((p) => p.textContent === text) ?? null;
+/** Merchant Center's card: its row and the lines under it. */
+const merchantCenter = () => byText('Google Merchant Center')?.closest('.space-y-4') ?? null;
+/** The badges a card shows, by their words. */
+const badges = (card: Element) =>
+  [...card.querySelectorAll('[class*="group/badge"]')].map((b) => b.textContent);
 
 describe('IntegrationsSection', () => {
   it('names its groups with headings, each group labelled by its own', async () => {
@@ -130,16 +135,59 @@ describe('IntegrationsSection', () => {
     expect(container.querySelector('[data-card="catalog"]')).not.toBeNull();
   });
 
-  it('keeps it hidden on the cloud while it is not set up there; a self-hosted server shows it', async () => {
+  it('says Coming soon on the cloud while it is not set up there, with nothing to connect', async () => {
     statuses['google-merchant-center'] = 'not_configured';
     cloud.on = true;
     await render();
-    expect(byText('Google Merchant Center')).toBeNull();
-    act(() => root.unmount());
-    root = createRoot(container);
+    const card = merchantCenter()!;
+    expect(card).not.toBeNull();
+    expect(badges(card)).toEqual(['Coming soon']);
+    expect(card.textContent).toContain(
+      "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
+    );
+    expect(card.querySelector('button')).toBeNull();
+    // Not the self-hosted set-up line, nor its badge.
+    expect(card.textContent).not.toContain('Not configured');
+    expect(card.textContent).not.toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
+  });
+
+  it('keeps the set-up line on a self-hosted server that is not set up for it', async () => {
+    statuses['google-merchant-center'] = 'not_configured';
     cloud.on = false;
     await render();
-    expect(byText('Google Merchant Center')).not.toBeNull();
+    const card = merchantCenter()!;
+    expect(card).not.toBeNull();
+    expect(badges(card)).toEqual(['Not configured']);
+    expect(card.textContent).toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
+    expect(card.textContent).not.toContain('Coming soon');
+    expect(card.textContent).not.toContain('Until it');
+
+    // A provider without it keeps the set-up line.
+    statuses['google-search-console'] = 'not_configured';
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    const gsc = byText('Google Search Console')!.closest('.space-y-4')!;
+    expect(gsc.textContent).toContain('Not configured');
+    expect(gsc.textContent).toContain('COMPOSIO_GSC_AUTH_CONFIG_ID');
+    expect(gsc.textContent).not.toContain('Coming soon');
+  });
+
+  it('connects Merchant Center as before once the server is set up for it', async () => {
+    statuses['google-merchant-center'] = 'not_connected';
+    await render();
+    const card = merchantCenter()!;
+    expect(badges(card)).toEqual([]);
+    expect([...card.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Connect']);
+    expect(card.textContent).not.toContain('Coming soon');
+    expect(card.textContent).not.toContain('Until it');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    statuses['google-merchant-center'] = 'connected';
+    await render();
+    expect(badges(merchantCenter()!)).toEqual(['Connected']);
+    expect(merchantCenter()!.textContent).toContain('Disconnect');
   });
 
   it("reads the category pages again on each read of a brand's sources after its first", async () => {

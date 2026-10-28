@@ -1326,6 +1326,61 @@ export type Database = {
           },
         ]
       }
+      content_shopping_checks: {
+        Row: {
+          bad: Json
+          brand_id: string
+          categories: number
+          categories_linked: number
+          checked_at: string
+          draft_id: string
+          needs_attention: boolean
+          page_url: string | null
+          products: number
+          products_linked: number
+          read_from: string
+        }
+        Insert: {
+          bad?: Json
+          brand_id: string
+          categories?: number
+          categories_linked?: number
+          checked_at?: string
+          draft_id: string
+          page_url?: string | null
+          products?: number
+          products_linked?: number
+          read_from: string
+        }
+        Update: {
+          bad?: Json
+          brand_id?: string
+          categories?: number
+          categories_linked?: number
+          checked_at?: string
+          draft_id?: string
+          page_url?: string | null
+          products?: number
+          products_linked?: number
+          read_from?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_shopping_checks_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_shopping_checks_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: true
+            referencedRelation: "content_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_plan_marks: {
         Row: {
           brand_id: string

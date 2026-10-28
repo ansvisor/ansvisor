@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
-import { HEADING_LIMITS, passageKey } from './content-agent.js';
+import { HEADING_LIMITS, PLACEHOLDER_RULE, passageKey } from './content-agent.js';
 import { linkKey } from './content-links.js';
 import { sourcesField } from './content-sources.js';
 import { textLength } from './page-content.js';
@@ -61,6 +61,7 @@ export const REWRITE_SYSTEM_PROMPT = `You are the Content Agent for Answer Engin
 How to rewrite:
 - Meet every rule listed, and the writer's own rules. Aim at the Length given: the page's whole text, kept blocks included, within 20% of it. When the page is too long, cut repetition, filler and the least useful parts first, and keep its answers, facts and data.
 - Keep the page's facts and voice. Use only facts from the page, the brand, the brief and your data. Never invent numbers, prices, dates, names, customers, sources or quotes; when the page needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year]. A number that isn't in them becomes a placeholder.
+${PLACEHOLDER_RULE}
 - Put the numbers (S1, S2…) of the data the page uses in "sources".
 - Never give a claim to a source that neither the page nor Your input gives ("According to X…", "X says…"): you don't see what a cited page or a link says. Keep every name the page has (a product, a brand, a person) where it lists or claims it.
 - One H1, the page's title, first. Sections are H2s; questions and sub-sections are H3s.

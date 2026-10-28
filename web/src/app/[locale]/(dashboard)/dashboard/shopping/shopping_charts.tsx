@@ -38,9 +38,11 @@ type PlatformCardRateChartViewProps = {
     platform: string;
     rate: number;
   }>;
+  /** The series' name, as its tooltip shows it (the page's translation). */
+  label: string;
 };
 
-export function PlatformCardRateChartView({ width, data }: PlatformCardRateChartViewProps) {
+export function PlatformCardRateChartView({ width, data, label }: PlatformCardRateChartViewProps) {
   return (
     <BarChart
       width={width}
@@ -56,7 +58,7 @@ export function PlatformCardRateChartView({ width, data }: PlatformCardRateChart
 
       <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--muted)', opacity: 0.3 }} />
 
-      <Bar dataKey="rate" name="Card rate" fill={INK} radius={[4, 4, 0, 0]} />
+      <Bar dataKey="rate" name={label} fill={INK} radius={[4, 4, 0, 0]} />
     </BarChart>
   );
 }
@@ -68,9 +70,11 @@ type ShoppingTrendChartViewProps = {
     ownCards: number;
     totalCards: number;
   }>;
+  /** The two series' names, as the legend and tooltip show them (the page's translations). */
+  labels: { own: string; all: string };
 };
 
-export function ShoppingTrendChartView({ width, data }: ShoppingTrendChartViewProps) {
+export function ShoppingTrendChartView({ width, data, labels }: ShoppingTrendChartViewProps) {
   return (
     <ComposedChart
       width={width}
@@ -109,7 +113,7 @@ export function ShoppingTrendChartView({ width, data }: ShoppingTrendChartViewPr
       <Area
         type="monotone"
         dataKey="ownCards"
-        name="Your cards"
+        name={labels.own}
         legendType="plainline"
         stroke={INK}
         strokeWidth={2}
@@ -121,7 +125,7 @@ export function ShoppingTrendChartView({ width, data }: ShoppingTrendChartViewPr
       <Line
         type="monotone"
         dataKey="totalCards"
-        name="All cards"
+        name={labels.all}
         // The legend draws its icon with the series' dash (plainline), so the two read apart.
         legendType="plainline"
         stroke={SECOND}
