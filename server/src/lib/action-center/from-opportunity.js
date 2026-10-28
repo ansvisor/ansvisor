@@ -214,6 +214,7 @@ export async function sendToActionCenter(
       baseline: {},
       dedup_key: dedupKey,
       ...(await priorityOnCreate({
+        brand_id: opportunity.brand_id,
         kind: OPPORTUNITY_ACTION_KIND,
         category: 'growth',
         impact: opportunity.impact,

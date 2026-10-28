@@ -53,7 +53,7 @@ import { resolveBrandSources } from './sources.js';
 import { planTasks } from './tasks/plan.js';
 import { orderByPriority, scoreCandidate } from './candidates.js';
 import { priorityColumns, promptIdsOf, scorePriority } from './priority.js';
-import { loadPromptDemand } from './priority-data.js';
+import { kindTrackOrNone, loadPromptDemand } from './priority-data.js';
 
 const DAY_MS = 86_400_000;
 
@@ -272,6 +272,8 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   } catch (err) {
     logger.warn({ brandId, err: err.message }, '[actions] prompt demand unavailable');
   }
+  // How each kind did here before (learning B4), read once for the night.
+  const track = await kindTrackOrNone(brandId, now);
   const ready = [];
   const seen = new Set();
   let refreshed = 0;
@@ -336,6 +338,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
         action: { kind: definition.id, category: definition.category, impact, payload },
         signals: unclaimed,
         prompts: demand,
+        track,
       },
       now,
     );
@@ -444,7 +447,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   for (const row of activeRows ?? []) {
     // Including the signals linked to it tonight: the rows in hand say so.
     const evidence = (openSignals ?? []).filter((signal) => signal.action_id === row.id);
-    const priority = scorePriority({ action: row, signals: evidence, prompts: demand }, now);
+    const priority = scorePriority({ action: row, signals: evidence, prompts: demand, track }, now);
     const { error } = await supabaseAdmin
       .from('actions')
       .update(priorityColumns(priority, now))

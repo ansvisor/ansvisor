@@ -235,7 +235,13 @@ export async function sendTrafficPagesToActionCenter(brandId, { pages, reason, f
         sessions: payload.sessions,
       },
       dedup_key: dedupKey,
-      ...(await priorityOnCreate({ kind: TRAFFIC_PAGES_ACTION_KIND, category, impact, payload })),
+      ...(await priorityOnCreate({
+        brand_id: brandId,
+        kind: TRAFFIC_PAGES_ACTION_KIND,
+        category,
+        impact,
+        payload,
+      })),
     })
     .select('id, action_no')
     .single();
