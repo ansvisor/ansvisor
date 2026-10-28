@@ -80,6 +80,95 @@ describe('pendingRuns', () => {
 
 describe('pickRunPages', () => {
   const NOW = at('2026-10-17T06:00:00Z');
+  const fixedPage = (path, brandId = 'a') => ({
+    brandId,
+    key: `acme.com${path}`,
+    url: `https://acme.com${path}`,
+    path,
+  });
+
+  /** A page fixed since its last audit is audited again first (learning B7). */
+  it('takes pages fixed since their last audit first, up to half the run', () => {
+    const pages = pickRunPages(
+      [
+        {
+          brandId: 'a',
+          opportunities: [
+            // Audited last week, so the inbox would leave it; fixed since.
+            row('/fixed-1', { priority: 90, lastAudit: { at: '2026-10-10T00:00:00Z' } }),
+            row('/a-80', { priority: 80 }),
+            row('/a-70', { priority: 70 }),
+            row('/busy', { running: true }),
+          ],
+        },
+      ],
+      4,
+      NOW,
+      new Set(['acme.com/fixed-2']),
+      [fixedPage('/fixed-1'), fixedPage('/busy'), fixedPage('/fixed-2'), fixedPage('/fixed-3')],
+    );
+    expect(pages.map((p) => [p.path, p.fixed ?? false])).toEqual([
+      ['/fixed-1', true],
+      ['/fixed-2', true],
+      ['/a-80', false],
+      ['/a-70', false],
+    ]);
+  });
+
+  it("keeps brands sharing a domain apart: one's fixed page doesn't take or skip the other's", () => {
+    const pages = pickRunPages(
+      [
+        {
+          brandId: 'a',
+          opportunities: [row('/shared', { priority: 50 })],
+        },
+        {
+          brandId: 'b',
+          opportunities: [row('/shared', { priority: 90 }), row('/busy', { running: true })],
+        },
+      ],
+      4,
+      NOW,
+      new Set(),
+      [fixedPage('/shared', 'a'), fixedPage('/busy', 'a')],
+    );
+    expect(pages.map((p) => [p.brandId, p.path, p.fixed ?? false])).toEqual([
+      ['a', '/shared', true],
+      ['a', '/busy', true],
+      ['b', '/shared', false],
+    ]);
+  });
+
+  it("rounds the fixed pages' half up: three of a five-page run", () => {
+    const pages = pickRunPages(
+      [
+        {
+          brandId: 'a',
+          opportunities: [row('/a-80', { priority: 80 }), row('/a-70', { priority: 70 })],
+        },
+      ],
+      5,
+      NOW,
+      new Set(),
+      ['/fixed-1', '/fixed-2', '/fixed-3', '/fixed-4'].map((path) => fixedPage(path)),
+    );
+    expect(pages.map((p) => p.path)).toEqual([
+      '/fixed-1',
+      '/fixed-2',
+      '/fixed-3',
+      '/a-80',
+      '/a-70',
+    ]);
+  });
+
+  it('gives a one-page run to a fixed page, and none to a run with no slots', () => {
+    const inbox = [{ brandId: 'a', opportunities: [row('/a-80', { priority: 80 })] }];
+    expect(
+      pickRunPages(inbox, 1, NOW, new Set(), [fixedPage('/fixed')]).map((p) => p.path),
+    ).toEqual(['/fixed']);
+    expect(pickRunPages(inbox, 0, NOW, new Set(), [fixedPage('/fixed')])).toEqual([]);
+  });
+
   const row = (path, over = {}) => ({
     key: `acme.com${path}`,
     url: `https://acme.com${path}`,
