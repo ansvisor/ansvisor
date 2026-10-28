@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { API_BASE_URL } from '@/config/api';
+import { MERCHANT_CENTER_KIND } from '@/lib/catalog';
 import { createClient } from '@/lib/supabase/server';
 import { jsonbBytes } from '@/lib/content/draft-inputs';
 import { variantStock } from '@/lib/content/feed-match';
@@ -13,8 +14,11 @@ import type {
   ShoppingProductCheck,
 } from '@/lib/content/shopping-check';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
+import { assertWritable } from '@/lib/subscription-guard';
 import {
   NO_PATH_REASONS,
+  bestInStock,
+  priceText,
   shoppingChoicesSchema,
   shoppingPathSchema,
   type NoPathReason,
@@ -78,6 +82,7 @@ export async function saveDraftShoppingPath(
   read: { builtAt: string; savedAt?: string | null },
   choices: ShoppingChoices,
 ): Promise<{ path: ShoppingPath } | { error: 'changed' }> {
+  await assertWritable();
   const at = readAt.safeParse(read);
   const chosen = shoppingChoicesSchema.safeParse(choices);
   if (!guid.safeParse(draftId).success || !at.success || !chosen.success) {
@@ -218,28 +223,6 @@ export interface BlockProductRead {
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>;
-interface VariantRead {
-  url: string | null;
-  price: number | null;
-  sale_price: number | null;
-  currency: string | null;
-  availability: string | null;
-}
-
-/**
- * The variant a card shows, as the API's path picks it (shopping-path.js
- * offerOf): the cheapest in stock, its sale price first; null with none in
- * stock.
- */
-function blockVariant(variants: VariantRead[]): VariantRead | null {
-  const inStock = variants.filter((v) => variantStock(v.availability) === 'in');
-  const sellsAt = (v: VariantRead) => v.sale_price ?? v.price ?? 0;
-  return (
-    inStock.filter((v) => v.price != null).sort((a, b) => sellsAt(a) - sellsAt(b))[0] ??
-    inStock[0] ??
-    null
-  );
-}
 
 /**
  * A product's live variants and, with `image`, its picture, read for it
@@ -273,7 +256,8 @@ function blockProduct(
   product: { id: string; title: string; url: string | null },
   details: Awaited<ReturnType<typeof readBlockDetails>>,
 ): BlockProductRead {
-  const variant = blockVariant(details.variants);
+  // As the API's path and the agent's grid pick it: the best stock, then the lowest price.
+  const variant = bestInStock(details.variants);
   return {
     id: product.id,
     title: product.title,
@@ -381,10 +365,32 @@ async function pageSite(
 }
 
 /**
+ * Whether the brand reads a Google Merchant Center account into its catalog,
+ * its last sync read: only then does the check say a product is accepted by
+ * Merchant Center. None when it can't be read: the check then says less,
+ * never more.
+ */
+async function hasMerchantCenter(supabase: Client, brandId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('catalog_sources')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('kind', MERCHANT_CENTER_KIND)
+    .eq('last_status', 'ok')
+    .limit(1);
+  if (error) {
+    console.error('Failed to read the brand’s catalog sources:', error.message);
+    return false;
+  }
+  return (data ?? []).length > 0;
+}
+
+/**
  * The draft's shopping path read against the catalog now (shopping path,
  * part 6): each of its products sold out, refused by Merchant Center, gone,
  * or fine; the ones removed from it or left out that no longer sell, in
- * case the page still links them; and the category pages. Read for the
+ * case the page still links them; the category pages; and whether the
+ * brand has a Merchant Center account to say they're accepted. Read for the
  * draft's own brand, whatever brand the tab has open. Null without a path;
  * throws when the draft or the catalog can't be read.
  */
@@ -407,7 +413,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     (id) => !inPath.has(id),
   );
   const ids = [...inPath, ...others].filter((id) => guid.safeParse(id).success);
-  const [products, variants, site] = await Promise.all([
+  const [products, variants, site, merchantCenter] = await Promise.all([
     readByIds(ids, (chunk, from, to) =>
       supabase
         .from('catalog_products')
@@ -420,7 +426,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     readByIds(ids, (chunk, from, to) =>
       supabase
         .from('catalog_variants')
-        .select('id, product_id, external_id, url, availability')
+        .select('id, product_id, external_id, url, availability, price, sale_price, currency')
         .eq('brand_id', brandId)
         .in('product_id', chunk)
         .is('removed_at', null)
@@ -428,6 +434,8 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
         .range(from, to),
     ),
     pageSite(supabase, draft),
+    // Nothing to check, nothing to say about it: no catalog read.
+    ids.length ? hasMerchantCenter(supabase, brandId) : false,
   ]);
   // A refusal matters only for a variant in stock: the others are sold out anyway.
   const inStock = variants.filter((v) => variantStock(v.availability) === 'in');
@@ -462,6 +470,17 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     if (list) list.push(v);
     else selling.set(v.product_id, [v]);
   }
+  // The price a card shows of it now, as one goes in (getProductsForBlock).
+  const priceOf = (id: string) => {
+    const variant = bestInStock(selling.get(id) ?? []);
+    return variant
+      ? priceText({
+          price: variant.price,
+          salePrice: variant.sale_price,
+          currency: variant.currency,
+        })
+      : null;
+  };
   const stateOf = (id: string): ShoppingLinkState => {
     const product = byId.get(id);
     if (!product || product.removed_at) return 'gone';
@@ -473,7 +492,11 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
   const pathProducts = path.products.flatMap((p): ShoppingProductCheck[] => {
     // A link the path couldn't keep (not http(s)) is null: nothing to check.
     const key = p.url ? linkKey(p.url) : null;
-    return key ? [{ key, title: p.title, state: stateOf(p.id), inPath: true }] : [];
+    if (!key) return [];
+    const state = stateOf(p.id);
+    return [
+      { key, title: p.title, state, inPath: true, price: state === 'ok' ? priceOf(p.id) : null },
+    ];
   });
   // Removed or left out: listed only when it no longer sells, at the
   // catalog's page for it (the path doesn't keep one).
@@ -485,7 +508,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     const url = product.url ?? variants.find((v) => v.product_id === id && v.url)?.url ?? null;
     const key = url ? linkKey(url) : null;
     const title = leftOutTitles.get(id) ?? product.title;
-    return key ? [{ key, title, state, inPath: false }] : [];
+    return key ? [{ key, title, state, inPath: false, price: null }] : [];
   });
   return {
     categories: path.categories
@@ -493,6 +516,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
       .filter((k): k is string => !!k),
     products: [...pathProducts, ...otherProducts],
     site,
+    merchantCenter,
   };
 }
 

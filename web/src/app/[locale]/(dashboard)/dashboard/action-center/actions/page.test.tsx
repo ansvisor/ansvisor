@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
 import type { ActionItem } from '@/lib/actions/action-center';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import {
   buildGettingStarted,
   type GettingStartedFacts,
@@ -136,8 +137,17 @@ let root: Root;
 const exportButton = () =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === 'exportCsv')!;
 
-async function render() {
-  await act(async () => root.render(<ActionCenterActionsPage />));
+const openUpgrade = vi.fn();
+async function render(isLocked = false) {
+  await act(async () =>
+    root.render(
+      <UpgradeDialogContext.Provider
+        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+      >
+        <ActionCenterActionsPage />
+      </UpgradeDialogContext.Provider>,
+    ),
+  );
 }
 
 beforeEach(() => {
@@ -158,6 +168,68 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe('the From Products chip (ECOM-013)', () => {
+  const chip = () =>
+    [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('fromProducts'),
+    );
+  const product: ActionItem = { ...action, id: 'a2', category: 'growth', kind: 'shopping_product' };
+  const category: ActionItem = {
+    ...action,
+    id: 'a3',
+    category: 'compete',
+    kind: 'shopping_category',
+  };
+
+  it('lists only what Product Visibility sent, and lets it go on a second click', async () => {
+    getActions.mockResolvedValue([action, product, category]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(chip()!.textContent).toBe('fromProducts2');
+    expect(chip()!.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => chip()!.click());
+    expect(chip()!.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a2', 'a3']);
+
+    await act(async () => chip()!.click());
+    await act(async () => exportButton().click());
+    expect(getActionsAffected.mock.lastCall![1]).toHaveLength(3);
+  });
+
+  it('opens on it from the URL, and shows no chip without such an action', async () => {
+    window.history.replaceState(null, '', '/?from=products');
+    getActions.mockResolvedValue([action, product]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(chip()!.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a2']);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    window.history.replaceState(null, '', '/');
+    getActions.mockResolvedValue([action]);
+    await render();
+    expect(chip()).toBeUndefined();
+  });
+
+  it('shows the chip on from the URL with no such action left, to turn it off', async () => {
+    window.history.replaceState(null, '', '/?from=products');
+    getActions.mockResolvedValue([action]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(chip()!.textContent).toBe('fromProducts0');
+    expect(chip()!.getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => chip()!.click());
+    expect(chip()).toBeUndefined();
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a1']);
+  });
 });
 
 describe('the actions list Export CSV', () => {
@@ -374,6 +446,35 @@ describe('starting and skipping Getting started', () => {
     expect(pageText()).not.toContain('secondBrand.title');
     // Start takes the question's place, to run it later.
     expect(buttonNamed('start.button')).toBeDefined();
+  });
+
+  // next-intl is mocked: the upgrade dialog's label is its key.
+  it('starts and skips nothing on a read-only workspace: each opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    getGettingStarted.mockResolvedValue(started({ startedAt: null }));
+    await render(true);
+    await act(async () => buttonNamed('start.button')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('startGettingStarted');
+    expect(startGettingStarted).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    getGettingStarted.mockResolvedValue(started());
+    await render(true);
+    await act(async () => buttonNamed('skip.button')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('skipGettingStarted');
+    expect(pageText()).not.toContain('skip.body');
+    expect(skipGettingStarted).not.toHaveBeenCalled();
+  });
+
+  it("doesn't ask on a read-only workspace whether to run it for a new brand: Start waits", async () => {
+    openUpgrade.mockReset();
+    getGettingStarted.mockResolvedValue(started({ confirmedAt: null }));
+    await render(true);
+    expect(pageText()).not.toContain('secondBrand.title');
+    await act(async () => buttonNamed('start.button')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('startGettingStarted');
+    expect(startGettingStarted).not.toHaveBeenCalled();
   });
 
   it('asks a manager whether to run it for a brand added beside others', async () => {

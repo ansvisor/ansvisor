@@ -7,6 +7,9 @@
 /**
  * Parse every <script type="application/ld+json"> block and flatten @graph /
  * arrays into a single list of typed nodes. Returns `{ nodes, total, valid }`.
+ * A @graph's node takes the wrapper's @context when it has none of its own,
+ * as JSON-LD reads it: WordPress's SEO plugins write one @graph with the
+ * context on the wrapper alone.
  */
 export function jsonLd(ctx) {
   const nodes = [];
@@ -27,8 +30,14 @@ export function jsonLd(ctx) {
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
       if (Array.isArray(item['@graph'])) {
+        const context = item['@context'];
         for (const n of item['@graph']) {
-          if (n && typeof n === 'object') nodes.push(n);
+          if (!n || typeof n !== 'object') continue;
+          nodes.push(
+            context !== undefined && n['@context'] === undefined
+              ? { '@context': context, ...n }
+              : n,
+          );
         }
       } else {
         nodes.push(item);

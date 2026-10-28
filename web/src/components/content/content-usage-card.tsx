@@ -5,7 +5,10 @@ import { Gauge, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { isNoPlan } from '@/lib/billing/no-plan';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
+  counterTone,
   hasContentQuota,
   usagePercent,
   usageTone,
@@ -41,9 +44,15 @@ export function ContentUsageCard({
   className?: string;
 }) {
   const t = useTranslations('content.usage');
+  const tReadOnly = useTranslations('readOnly');
   const locale = useLocale();
+  const { isLocked } = useUpgradeGate();
 
   if (!hasContentQuota(usage)) return null;
+
+  // Without an active plan the limits read 0: what was used, and that there's
+  // no plan, rather than "limit reached" and the old plan's name.
+  const noPlan = isNoPlan(usage, isLocked);
 
   const resets = usage.periodEnd
     ? new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(
@@ -51,7 +60,12 @@ export function ContentUsageCard({
       )
     : null;
   const exhausted =
-    usageTone(usage.opportunities) === 'exhausted' || usageTone(usage.briefs) === 'exhausted';
+    !noPlan &&
+    (usageTone(usage.opportunities) === 'exhausted' || usageTone(usage.briefs) === 'exhausted');
+  // Without an active plan there's no renewal to reset them on.
+  const tooltip = noPlan
+    ? t('tooltip')
+    : `${t('tooltip')} ${t('tooltipResets', { date: resets ?? '' })}`;
 
   return (
     <Card className={className}>
@@ -60,26 +74,24 @@ export function ContentUsageCard({
           {t('title')}
         </CardTitle>
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-          <span
-            className="inline-flex cursor-help"
-            title={t('tooltip', { date: resets ?? '' })}
-            aria-label={t('tooltip', { date: resets ?? '' })}
-          >
+          <span className="inline-flex cursor-help" title={tooltip} aria-label={tooltip}>
             <Info className="h-3.5 w-3.5" />
           </span>
           <Gauge className="h-3.5 w-3.5" />
         </span>
       </CardHeader>
       <CardContent className="space-y-2">
-        <Counter label={t('opportunities')} counter={usage.opportunities} />
-        <Counter label={t('briefs')} counter={usage.briefs} />
+        <Counter label={t('opportunities')} counter={usage.opportunities} noPlan={noPlan} />
+        <Counter label={t('briefs')} counter={usage.briefs} noPlan={noPlan} />
         <p className="text-xs text-muted-foreground">
-          {[
-            usage.planName && t('plan', { plan: usage.planName }),
-            resets && t('resets', { date: resets }),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
+          {noPlan
+            ? tReadOnly('noPlan')
+            : [
+                usage.planName && t('plan', { plan: usage.planName }),
+                resets && t('resets', { date: resets }),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
           {exhausted && usage.plan === 'starter' && (
             <>
               {' · '}
@@ -97,15 +109,26 @@ export function ContentUsageCard({
   );
 }
 
-function Counter({ label, counter }: { label: string; counter: UsageCounter }) {
+function Counter({
+  label,
+  counter,
+  noPlan,
+}: {
+  label: string;
+  counter: UsageCounter;
+  noPlan: boolean;
+}) {
   const t = useTranslations('content.usage');
-  const tone = usageTone(counter);
+  const tone = counterTone(counter, noPlan);
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="font-medium">{label}</span>
         {tone === 'unlimited' ? (
           <span className="text-muted-foreground">{t('unlimited')}</span>
+        ) : tone === 'noPlan' ? (
+          // What was used; there's no limit to count it against.
+          <span className="text-sm font-semibold tabular-nums">{counter.used}</span>
         ) : (
           <span className="tabular-nums">
             <span className="text-sm font-semibold">{counter.used}</span>
@@ -113,7 +136,7 @@ function Counter({ label, counter }: { label: string; counter: UsageCounter }) {
           </span>
         )}
       </div>
-      {tone !== 'unlimited' && (
+      {tone !== 'unlimited' && tone !== 'noPlan' && (
         <>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
             <div

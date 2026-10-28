@@ -11,7 +11,7 @@ description: 'Step-by-step walkthrough of brand onboarding.'
 
 ## Onboarding flow
 
-The onboarding wizard has **5 steps for self-hosted** instances and **6 steps for the cloud** (the extra step is plan checkout). Each step auto-saves so you can resume later if you drop off.
+The onboarding wizard has **5 steps for self-hosted** instances and **7 steps for the cloud** (the extra steps are what you work on and plan checkout). Each step auto-saves so you can resume later if you drop off.
 
 <Steps>
   <Step title="1. Brand basics">
@@ -28,7 +28,7 @@ The onboarding wizard has **5 steps for self-hosted** instances and **6 steps fo
     Pick the primary market and language for tracking. This drives:
 
     - Which language AI engines respond in (English prompts return English answers, etc.)
-    - Region weighting on search engines that have it (Google AI Overview / Mode geo-localize)
+    - Region weighting on search engines that have it (Google AI Overviews / AI Mode geo-localize)
     - DataForSEO query routing for prompt volume estimation
 
     18 regions and 13 languages supported. You can change these later per-prompt if you have multi-region needs.
@@ -52,7 +52,7 @@ The onboarding wizard has **5 steps for self-hosted** instances and **6 steps fo
     - Add custom prompts at the bottom
 
     <Note>
-    These prompts will run on every AI platform allowed by your plan. Self-hosted unlocks all 8 (ChatGPT, Google AI Overview, Google AI Mode, Google Gemini, Perplexity, Microsoft Copilot, Grok, Claude). Starter plan runs ChatGPT + Microsoft Copilot by default; Growth and Enterprise unlock the rest.
+    These prompts will run on every AI platform allowed by your plan. Self-hosted unlocks all 8 (ChatGPT, Google AI Overviews, Google AI Mode, Google Gemini, Perplexity, Microsoft Copilot, Grok, Claude). Starter plan runs ChatGPT + Microsoft Copilot by default; Growth and Enterprise unlock the rest.
     </Note>
 
     <Tip>
@@ -70,7 +70,10 @@ The onboarding wizard has **5 steps for self-hosted** instances and **6 steps fo
     Competitor tracking is unlocked on Growth and Enterprise plans on the cloud, and always available on self-hosted.
 
   </Step>
-  <Step title="6. Plan & checkout (cloud only)">
+  <Step title="6. What do you work on? (cloud only)">
+    Pick what you work on or lead (Founders & leaders, Brand & PR, Content, Growth and more), and your left menu keeps only the sections you need. **Skip: show me everything** keeps every section, and you can change it later in **Settings → Account**. Self-hosted instances ask the same the first time you open the dashboard. See [Menu access](/guides/menu-access).
+  </Step>
+  <Step title="7. Plan & checkout (cloud only)">
     On the cloud, the final step picks your subscription plan (Starter, Growth, or Enterprise) and runs Stripe Checkout. All paid plans include a **14-day free trial** — you enter card details but no charge happens until day 15. Self-hosted instances skip this step entirely.
   </Step>
 </Steps>
@@ -123,8 +126,8 @@ Visits start logging immediately; the dashboard updates near-realtime.
     cited. Add the most-mentioned ones to your competitors list to track them
     properly.
   </Accordion>
-  <Accordion title="Why is Google AI Overview missing from my plan?">
-    Starter plan runs only ChatGPT and Microsoft Copilot. Google AI Overview,
+  <Accordion title="Why is Google AI Overviews missing from my plan?">
+    Starter plan runs only ChatGPT and Microsoft Copilot. Google AI Overviews,
     Google AI Mode, Gemini, Perplexity, Grok, and Claude unlock on Growth and
     Enterprise plans (cloud), or are all available immediately on self-hosted.
   </Accordion>

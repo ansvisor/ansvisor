@@ -8,6 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const BRAND = '33333333-3333-3333-3333-333333333333';
 
 let rows: Record<string, unknown>[];
+// The shopping checks' read (00352): its rows, or the error it answers.
+let checkRows: Record<string, unknown>[];
+let checkError: { message: string } | null;
+let checkReads: string[][];
 let counted: Record<string, number>;
 let countReads: string[];
 // The row menu's writes (00233): what each update or delete returns.
@@ -26,7 +30,22 @@ vi.mock('@/lib/content/action-drafts', async (importOriginal) => ({
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
-    from: () => {
+    from: (table: string) => {
+      if (table === 'content_shopping_checks') {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => {
+              checkReads.push(ids);
+              return checkError
+                ? { data: null, error: checkError }
+                : {
+                    data: checkRows.filter((r) => ids.includes(r.draft_id as string)),
+                    error: null,
+                  };
+            },
+          }),
+        };
+      }
       let head = false;
       let status = 'all';
       let archived = false;
@@ -79,6 +98,9 @@ const row = (i: number, status = 'draft') => ({
 });
 
 beforeEach(() => {
+  checkRows = [];
+  checkError = null;
+  checkReads = [];
   countReads = [];
   counted = { all: 812, draft: 300, in_review: 12, ready: 0, published: 500, archived: 7 };
   writes = [];
@@ -109,6 +131,62 @@ describe('getContentDrafts', () => {
       ['2026-10-19T08:00:00Z', '2026-10-21T09:00:00Z'],
     ]);
     expect(counts).toMatchObject({ all: 1, published: 0, archived: 1 });
+  });
+
+  it("reads each draft's shopping path as the last catalog sync's check left it (00352)", async () => {
+    const check = {
+      read_from: 'page',
+      checked_at: '2026-10-27T03:00:00Z',
+      categories: 1,
+      categories_linked: 1,
+      products: 5,
+      products_linked: 4,
+      bad: [{ id: 'p2', title: 'Storm Shell 2', state: 'sold_out' }],
+    };
+    rows = [
+      row(1),
+      { ...row(2), shopping_built: '2026-10-26T09:00:00Z' },
+      { ...row(3), shopping_built: '2026-10-26T09:00:00Z' },
+      { ...row(4), shopping_built: '2026-10-26T09:00:00Z' },
+    ];
+    checkRows = [
+      { draft_id: 'd3', ...check },
+      { draft_id: 'd4', ...check, bad: [] },
+    ];
+    const { drafts } = await getContentDrafts(BRAND);
+    expect(drafts.map((d) => d.shopping?.state)).toEqual(['none', 'unchecked', 'attention', 'ok']);
+    // Only the drafts with a path are asked for.
+    expect(checkReads).toEqual([['d2', 'd3', 'd4']]);
+    expect(drafts[2].shopping).toEqual({
+      state: 'attention',
+      readFrom: 'page',
+      checkedAt: '2026-10-27T03:00:00Z',
+      categories: 1,
+      categoriesLinked: 1,
+      products: 5,
+      productsLinked: 4,
+      bad: [{ id: 'p2', title: 'Storm Shell 2', state: 'sold_out' }],
+    });
+  });
+
+  it("still lists the drafts when the shopping checks can't be read (00352 not applied)", async () => {
+    rows = [row(1), { ...row(2), shopping_built: '2026-10-26T09:00:00Z' }];
+    checkRows = [{ draft_id: 'd2', read_from: 'draft' }];
+    checkError = { message: 'relation "public.content_shopping_checks" does not exist' };
+    const { drafts } = await getContentDrafts(BRAND);
+    expect(drafts.map((d) => [d.id, d.shopping?.state])).toEqual([
+      ['d1', 'none'],
+      ['d2', 'unchecked'],
+    ]);
+  });
+
+  it('reads the shopping checks 100 drafts a request', async () => {
+    rows = Array.from({ length: 250 }, (_, i) => ({
+      ...row(i),
+      shopping_built: '2026-10-26T09:00:00Z',
+    }));
+    await getContentDrafts(BRAND);
+    expect(checkReads.map((ids) => ids.length)).toEqual([100, 100, 50]);
   });
 
   it('counts each tab on its own at the cap', async () => {

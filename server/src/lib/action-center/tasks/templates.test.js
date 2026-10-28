@@ -1,8 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TASKS } from './registry.js';
 import { TEMPLATED_TASKS, onePage, templateDetails } from './templates.js';
 import { TASK_CHECKS } from '../task-writer/quality.js';
+import { CHECKS } from '../task-checks.js';
+
+// task-checks.js reaches the supabase admin client at import time, whose
+// config hard-exits when SUPABASE_* env is absent (as in CI).
+vi.mock('../../../config/supabase.js', () => ({ default: {} }));
 
 /** How a library task is checked, and the page it is done on (AC-010). */
 
@@ -57,6 +62,16 @@ describe('templateDetails', () => {
     // Its links go on other pages.
     expect(templateDetails('add_internal_links', one)).not.toHaveProperty('url');
     expect(templateDetails('prepare_outreach', one).check).toBe('manual');
+  });
+
+  it('leaves a call to action to the person, on its page: a re-fetch can’t tell it (#1565)', () => {
+    const one = { targetEntity: 'pages', targetCount: 1, targets: [{ id: '/pricing' }] };
+    expect(templateDetails('improve_cta_path', one)).toEqual({
+      check: 'manual',
+      url: '/pricing',
+      source: 'template',
+    });
+    expect(CHECKS).not.toHaveProperty('improve_cta_path');
   });
 });
 

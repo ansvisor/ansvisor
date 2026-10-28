@@ -38,7 +38,7 @@ export class PlanLimitError extends Error {
  * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
  *
  * The AI budget is the plan's $50 unless Ansvisor sets a customer's own in
- * `improveMonthlyBudgetUsd` (2026-10-27: $50 or more, a finite number, set per customer); the
+ * `improveMonthlyBudgetUsd` (2026-10-27: $50 or more, set per customer; anything else keeps $50); the
  * contract's value doesn't raise it. `contractMonthlyUsd` is the contract's
  * monthly value, entered when the deal is signed. It sets the relevance
  * budget (VIS-011) to 0.1% of the contract (never below the plan default),
@@ -54,12 +54,14 @@ export function applyPlanOverrides(plan, org) {
   ) {
     const overrides = org.plan_overrides;
     const limits = { ...plan.limits, ...overrides };
-    // A budget set by hand is used only as a number: null would read as
-    // unlimited, and "80$" would fail every AI call. Anything else keeps
-    // the plan's.
+    // A budget set by hand is used only as a number of at least the plan's
+    // ($50, Enterprise's floor): null or -1 would read as unlimited, 0 or
+    // another number below it (-5) would answer every AI call "used up",
+    // and "80$" would fail every one. Anything else keeps the plan's.
     const own = overrides.improveMonthlyBudgetUsd;
-    if (own !== undefined && !(typeof own === 'number' && Number.isFinite(own))) {
-      limits.improveMonthlyBudgetUsd = plan.limits.improveMonthlyBudgetUsd;
+    const floor = plan.limits.improveMonthlyBudgetUsd;
+    if (own !== undefined && !(typeof own === 'number' && Number.isFinite(own) && own >= floor)) {
+      limits.improveMonthlyBudgetUsd = floor;
     }
     const usd = Number(overrides.contractMonthlyUsd);
     if (overrides.relevanceMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
@@ -541,8 +543,18 @@ async function holdCostUsd(orgId, modelId, since) {
   return Math.max(typical, recent ?? 0);
 }
 
-/** What the workspace's AI budget is spent on, as prompt_improve_usage.feature says (00242). */
-export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center', 'quality'];
+/**
+ * The meter's rows, in order, and what the workspace's AI budget spent on
+ * each, as prompt_improve_usage.feature says (00242): the Content Editor's
+ * quality checks ('quality', 00264) are its AI too, so they count in its
+ * row. 'other' is spend whose feature isn't known.
+ */
+export const AI_USAGE_FEATURES = {
+  improve: ['improve'],
+  content: ['content', 'quality'],
+  action_center: ['action_center'],
+  other: ['other'],
+};
 
 const tenths = (n) => Math.round(n * 10) / 10;
 
@@ -554,8 +566,10 @@ const tenths = (n) => Math.round(n * 10) / 10;
  * percent to a tenth; dollars stay on the server, as the Improve tab's quota
  * does. Spend past the budget (calls already running when it ran out) reads
  * as 100%, its features scaled to fit. Rows whose feature isn't known (from
- * before 00242, their item deleted) count as 'other', listed only when there
- * are some. Unlimited plans (self-hosted) show no meter.
+ * before 00242, their item deleted) count as 'other'. Only what used some is
+ * listed (an Action Center whose task writer is off has no row), so a row
+ * can read 0 when its share is under a twentieth of a percent: the page
+ * reads that as "<0.1%". Unlimited plans (self-hosted) show no meter.
  */
 export async function getAiUsage(orgId) {
   const plan = await resolveOrgPlanByOrgId(orgId);
@@ -580,7 +594,10 @@ export async function getAiUsage(orgId) {
   const spent = [...spentOn.values()].reduce((a, b) => a + b, 0);
   const scale = budget > 0 && spent > budget ? budget / spent : 1;
   const percentOf = (usd) => (budget > 0 ? tenths((usd * scale * 100) / budget) : 0);
-  const other = spentOn.get('other') ?? 0;
+  const features = Object.entries(AI_USAGE_FEATURES)
+    .map(([feature, from]) => [feature, from.reduce((usd, f) => usd + (spentOn.get(f) ?? 0), 0)])
+    .filter(([, usd]) => usd > 0)
+    .map(([feature, usd]) => ({ feature, percent: percentOf(usd) }));
   return {
     ...base,
     unlimited: false,
@@ -588,13 +605,7 @@ export async function getAiUsage(orgId) {
     // 0 included); just under reads as 99.9, never rounded up to "used up".
     percentUsed:
       budget <= 0 || spent >= budget ? 100 : Math.min(99.9, tenths((spent * 100) / budget)),
-    features: [
-      ...AI_USAGE_FEATURES.map((feature) => ({
-        feature,
-        percent: percentOf(spentOn.get(feature) ?? 0),
-      })),
-      ...(other > 0 ? [{ feature: 'other', percent: percentOf(other) }] : []),
-    ],
+    features,
   };
 }
 
@@ -1017,6 +1028,16 @@ export async function getBotCaps(orgId, { readOnly = false } = {}) {
     rawCap: plan.limits.maxBotRawRecordsPerMonth ?? 0,
     ...noPlanMark(plan),
   };
+}
+
+/**
+ * Live catalog products an organization's brands may have across their
+ * sources (ECOM-019): -1 = no cap. Throws PlanLimitError (402) without an
+ * active subscription, like every billed feature.
+ */
+export async function getCatalogProductCap(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  return plan.limits.maxCatalogProducts ?? -1;
 }
 
 /**

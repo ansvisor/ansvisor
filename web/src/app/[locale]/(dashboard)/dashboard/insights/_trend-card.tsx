@@ -21,6 +21,7 @@ import { numberFormat } from '@/lib/number-format';
 import { LOW_SAMPLE_ANSWERS } from '@/lib/insights-summary';
 import { dayLabel } from './kpi-format';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { setPinnedCompetitors } from '@/lib/actions/brand';
 import type { VisibilityRateTrendData } from '@/lib/actions/tracking';
 import {
@@ -66,6 +67,9 @@ export function TrendCard({
   const locale = useLocale();
   const f = numberFormat(locale);
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): pinning opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -178,7 +182,9 @@ export function TrendCard({
                                 ? onChart.length === 1
                                 : onChart.length >= MAX_PINNED_COMPETITORS)
                             }
-                            onCheckedChange={() => togglePin(c.key)}
+                            onCheckedChange={guard(() => togglePin(c.key), {
+                              action: tActions('pinCompetitors'),
+                            })}
                           >
                             {c.name}
                           </DropdownMenuCheckboxItem>

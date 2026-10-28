@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { AuditQuota } from '@/lib/actions/audits';
 import { cn } from '@/lib/utils';
+import { isNoPlan } from '@/lib/billing/no-plan';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { EmptyPoolMessage } from './_quota-meter';
 
 export type ExportFormat = 'csv' | 'xlsx';
@@ -88,7 +90,10 @@ export function AuditBulkBar({
   children?: ReactNode;
 }) {
   const t = useTranslations('audit.bulk');
-  const limited = quota !== null && quota.limit !== -1;
+  const { isLocked } = useUpgradeGate();
+  // Without an active plan the quota reads 0 of 0: not "none left". The audit
+  // stays clickable, and opens the plan dialog.
+  const limited = quota !== null && quota.limit !== -1 && !isNoPlan(quota, isLocked);
   const remaining = quota?.remaining ?? 0;
   const uses = audits ?? count;
   const over = limited && uses > remaining;

@@ -1,11 +1,13 @@
 import supabaseAdmin from '../../config/supabase.js';
-import { isSubscriptionActive } from '../../config/plans.js';
+import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { connectorFor, isSignIn, isStore } from '../../connectors/index.js';
 import { ConnectorHttpError, requestJson } from '../../connectors/http.js';
 import { FeedFormatError, parseFeed } from '../feeds/index.js';
 import { isComposioConfigured } from '../composio.js';
 import { PageFetchError } from '../safe-fetch.js';
 import { logger } from '../logger.js';
+import { PlanLimitError, getCatalogProductCap } from '../plan-guard.js';
+import { queueShoppingCheck } from '../shopping-check.js';
 import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { saveItemIssues } from './issues.js';
 import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
@@ -19,6 +21,11 @@ import { syncCatalog } from './sync.js';
  * shows. A store is read with its saved sign-in (credentials.js); a
  * platform like Google Merchant Center with the workspace's own sign-in
  * (sign-in.js), and the issues it reports per item are kept (issues.js).
+ * On the managed cloud, the plan caps the workspace's live products
+ * (ECOM-019): a source keeps what's left of it, and records how many it
+ * couldn't. A capped workspace's sources write one at a time
+ * (writeWithinCap), so two read at once can't both count the room the other
+ * takes.
  */
 
 /** Feeds and stores read again after this long, by the daily run. */
@@ -31,9 +38,19 @@ export const SWEEP_DEADLINE_MS = 10 * 60 * 1000;
 const ERRORS_KEPT = 5;
 /** A store's read stops calling it after this: one slow store can't hold the daily run. */
 export const STORE_READ_MS = 10 * 60 * 1000;
+/**
+ * A capped write waits this long at most for the one before it in its
+ * workspace's line (inLine): a write stuck past it can't hold the line.
+ */
+export const LINE_WAIT_MS = 5 * 60 * 1000;
 
 /** The sources being read in this process: a source isn't read twice at once. */
 const reading = new Set();
+/**
+ * Each workspace's line of capped writes in this process (writeWithinCap):
+ * the last write's promise, settled either way, by organization id.
+ */
+const capLines = new Map();
 
 /** The catalog's `source` for a catalog source: `src_` and its id without dashes. */
 export function sourceKey(id) {
@@ -54,6 +71,7 @@ const STORE_WORDS = {
 /** Why a sync failed, in words a person can act on. No page, feed or store text. */
 export function failureOf(err, connector = null) {
   if (err instanceof FeedFormatError) return { status: 'format_error', error: err.message };
+  if (err instanceof PlanLimitError) return { status: 'failed', error: err.message };
   if (err instanceof ConnectorHttpError && isSignIn(connector)) {
     // The workspace's sign-in, not the source's: it's reconnected in Settings › Integrations.
     if (err.code === 'auth') {
@@ -128,6 +146,126 @@ export function redact(message, credentials) {
   return text;
 }
 
+/**
+ * The live products a source may keep (ECOM-019): its workspace's cap less
+ * the live products of the workspace's other sources, on any of its brands.
+ * `room` is Infinity (and `cap` -1) on a self-hosted server, or for a plan
+ * without a cap.
+ */
+export async function productRoom(
+  source,
+  { db = supabaseAdmin, capOf = getCatalogProductCap } = {},
+) {
+  const none = { room: Infinity, cap: -1 };
+  if (!isCloud()) return none;
+  const { data: brand, error } = await db
+    .from('brands')
+    .select('organization_id')
+    .eq('id', source.brand_id)
+    .maybeSingle();
+  if (error) throw new Error(`brands read: ${error.message}`);
+  const cap = await capOf(brand?.organization_id ?? null);
+  if (cap < 0) return none;
+  const { data: brands, error: brandsError } = await db
+    .from('brands')
+    .select('id')
+    .eq('organization_id', brand.organization_id);
+  if (brandsError) throw new Error(`brands read: ${brandsError.message}`);
+  const { count, error: countError } = await db
+    .from('catalog_products')
+    .select('id', { count: 'exact', head: true })
+    .in(
+      'brand_id',
+      (brands ?? []).map((b) => b.id),
+    )
+    .neq('source', sourceKey(source.id))
+    .is('removed_at', null);
+  if (countError) throw new Error(`catalog_products count: ${countError.message}`);
+  return { room: Math.max(0, cap - (count ?? 0)), cap };
+}
+
+/**
+ * `work` run after the work in `key`'s line before it, alone, and its result.
+ * The line is dropped once it's empty. Work waits `waitMs` at most: if the
+ * work before it is still running then, it runs anyway (and the work after
+ * it waits for it), so one stuck write doesn't hold its workspace's line.
+ */
+export function inLine(key, work, lines = capLines, waitMs = LINE_WAIT_MS) {
+  const before = lines.get(key);
+  const waited = before ? waitAtMost(before, waitMs, key) : Promise.resolve();
+  const run = waited.then(() => work());
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  lines.set(key, tail);
+  tail.then(() => {
+    if (lines.get(key) === tail) lines.delete(key);
+  });
+  return run;
+}
+
+/** `before` settled, or `ms` gone by first: said in the log, as the line goes on without it. */
+function waitAtMost(before, ms, key) {
+  let timer;
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn({ line: key, waitMs: ms }, '[catalog] capped write stopped waiting in line');
+      resolve();
+    }, ms);
+    timer.unref?.();
+  });
+  return Promise.race([before, late]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Writes a source's items into its brand's catalog within the workspace's
+ * cap (ECOM-019), and says what changed and the cap (-1 for none).
+ *
+ * On the managed cloud, a workspace's sources write one at a time: the room
+ * a source has is its workspace's cap less the live products of its other
+ * sources, and two sources counting that at once (a sync from Settings
+ * while the daily run reads another store) would each count the other's
+ * products as they were before either wrote, and keep more than the cap
+ * between them. Only the count and the writes wait in line; the read of a
+ * store or a feed, the long part, doesn't. A workspace whose plan has no cap
+ * doesn't wait at all; one that waits recounts its room when its turn comes,
+ * and waits LINE_WAIT_MS at most. The line is this process's (as `reading`
+ * is): the API and the daily run both sync here.
+ *
+ * Products past the cap are marked removed (removed_at), as if gone from
+ * the source, and come back live when there's room again. A product marked
+ * so stays marked from the day it went over: the daily purge of products
+ * removed for more than 90 days (#1632) deletes it then, with its variants,
+ * images and category links, and its cards' match is cleared (00360, on
+ * delete set null). If there's room again later, the next sync adds it back
+ * as a new row, and the daily card match finds its cards again (90 days).
+ * Telling these apart from products gone from the source would take a
+ * column of its own (a removed reason), not added here.
+ */
+async function writeWithinCap(source, items, { db, now, capOf = getCatalogProductCap }) {
+  const write = async (known) => {
+    const { room, cap } = known ?? (await productRoom(source, { db, capOf }));
+    const counts = await syncCatalog(source.brand_id, sourceKey(source.id), items, {
+      db,
+      now,
+      room,
+    });
+    return { counts, cap };
+  };
+  const uncapped = { room: Infinity, cap: -1 };
+  if (!isCloud()) return write(uncapped);
+  const { data: brand, error } = await db
+    .from('brands')
+    .select('organization_id')
+    .eq('id', source.brand_id)
+    .maybeSingle();
+  if (error) throw new Error(`brands read: ${error.message}`);
+  // Nothing to count for a plan without a cap: its sources write at once.
+  if ((await capOf(brand?.organization_id ?? null)) < 0) return write(uncapped);
+  return inLine(brand?.organization_id ?? `brand:${source.brand_id}`, () => write());
+}
+
 async function record(db, id, at, outcome) {
   const { error } = await db
     .from('catalog_sources')
@@ -150,13 +288,17 @@ async function record(db, id, at, outcome) {
  * A source being read already isn't read again at once: the answer says so,
  * and nothing is recorded. A store's calls stop after `readMs` (STORE_READ_MS).
  *
+ * After a sync that read the catalog, the brand's pages' shopping links are
+ * checked against it (shopping-check.js), behind the answer.
+ *
  * @param {{ id: string, brand_id: string, kind: string, format: string, url?: string|null, account?: string|null }} source
- * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number }} [options]
+ * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number, capOf?: Function, afterSync?: Function }} [options]
  *   `fetch` (a feed's), `request` (a store's HTTP client), `signInRequest`
- *   (the workspace sign-in's, sign-in.js), `connectors` and `readMs` are
- *   the tests' stand-ins
+ *   (the workspace sign-in's, sign-in.js), `connectors`, `readMs`, `capOf`
+ *   (the plan's product cap, by organization) and `afterSync` (the shopping
+ *   check's queue) are the tests' stand-ins
  */
-export async function syncSource(source, options = {}) {
+export async function syncSource(source, { afterSync = queueShoppingCheck, ...options } = {}) {
   if (reading.has(source.id)) {
     return {
       status: 'failed',
@@ -164,11 +306,14 @@ export async function syncSource(source, options = {}) {
     };
   }
   reading.add(source.id);
+  let outcome;
   try {
-    return await syncOnce(source, options);
+    outcome = await syncOnce(source, options);
   } finally {
     reading.delete(source.id);
   }
+  if (outcome.status === 'ok') afterSync(source.brand_id, options.db ? { db: options.db } : {});
+  return outcome;
 }
 
 async function syncOnce(
@@ -182,6 +327,7 @@ async function syncOnce(
     signInRequest = workspaceSignIn,
     connectors,
     readMs = STORE_READ_MS,
+    capOf,
   },
 ) {
   const at = now.toISOString();
@@ -225,10 +371,7 @@ async function syncOnce(
       }
     }
     if (!outcome) {
-      const counts = await syncCatalog(source.brand_id, sourceKey(source.id), parsed.items, {
-        db,
-        now,
-      });
+      const { counts, cap } = await writeWithinCap(source, parsed.items, { db, now, capOf });
       outcome = {
         status: 'ok',
         counts: {
@@ -238,6 +381,8 @@ async function syncOnce(
           errors: parsed.errors.slice(0, ERRORS_KEPT).map((e) => e.message),
           products: counts.products,
           variants: counts.variants,
+          // Products past the plan's cap, not kept (ECOM-019), and the cap.
+          ...(counts.overLimit ? { overLimit: counts.overLimit, limit: cap } : {}),
         },
       };
       // An item listed again (another language or feed label), kept once: not skipped.
