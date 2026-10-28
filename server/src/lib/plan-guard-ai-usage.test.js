@@ -150,11 +150,32 @@ describe('getAiUsage', () => {
   });
 
   it('reads a budget of nothing as used up, as the AI features are', async () => {
-    org = { ...org, plan: 'enterprise', plan_overrides: { improveMonthlyBudgetUsd: 0 } };
+    // No plan has one, and a budget set by hand below the plan's isn't
+    // taken (#1598): a plan read with 0 all the same still reads used up.
+    vi.resetModules();
+    vi.doMock('../config/plans.js', async (importOriginal) => {
+      const real = await importOriginal();
+      return {
+        ...real,
+        getPlan: (id) => {
+          const plan = real.getPlan(id);
+          return { ...plan, limits: { ...plan.limits, improveMonthlyBudgetUsd: 0 } };
+        },
+      };
+    });
+    guard = await import('./plan-guard.js');
     spend = [];
     const usage = await guard.getAiUsage('o1');
     expect(usage.percentUsed).toBe(100);
     expect(usage.features.every((f) => f.percent === 0)).toBe(true);
+    vi.doUnmock('../config/plans.js');
+  });
+
+  it('meters an Enterprise budget set below the plan’s on the plan’s $50 (#1598)', async () => {
+    org = { ...org, plan: 'enterprise', plan_overrides: { improveMonthlyBudgetUsd: 0 } };
+    spend = [{ feature: 'improve', cost_usd: 5 }];
+    const usage = await guard.getAiUsage('o1');
+    expect(usage.percentUsed).toBe(10);
   });
 
   it('has no meter without an active plan', async () => {
