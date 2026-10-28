@@ -11,9 +11,10 @@
  *  - robots.txt lets the AI crawlers in, and the page isn't noindex
  *    (fix_crawler_access raised by the audit's ai-bot-access);
  *  - it changed since the first look, by more than a date, a price or a
- *    rotating quote moving (optimize, refresh, strengthen, the call to
- *    action): the first look keeps a sketch of the page's words, and
- *    enough of them must have changed;
+ *    rotating quote moving (optimize, refresh, strengthen): the first look
+ *    keeps a sketch of the page's words, and enough of them must have
+ *    changed. A call to action is confirmed by hand: a re-fetch can't tell
+ *    (tasks/templates.js);
  *  - a written task's new text is on it, and the text it replaces gone.
  *
  * A task that passes is completed, with the check kept on it and a line in

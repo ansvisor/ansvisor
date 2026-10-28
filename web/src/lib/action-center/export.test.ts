@@ -412,6 +412,28 @@ describe('a library task’s Done when (AC-010)', () => {
     );
     expect(library(parseTaskDetails({ doneWhen: 'Our own check' }))).toBe('Our own check');
   });
+
+  it('gives a task planned while its template was Automatic its Manual check', () => {
+    const checkOf = (taskKey: string) =>
+      buildActionExport(
+        action,
+        {
+          ...detail,
+          tasks: [
+            {
+              ...detail.tasks[1],
+              taskKey,
+              title: null,
+              details: parseTaskDetails({ check: 'auto' }),
+            },
+          ],
+        },
+        texts,
+        { origin: 'https://app.example', timeZone: 'Europe/Istanbul' },
+      ).tasks[0].check;
+    expect(checkOf('improve_cta_path')).toBe('check.manual');
+    expect(checkOf('refresh_content')).toBe('check.auto');
+  });
 });
 
 describe('a task with AC-004 fields', () => {

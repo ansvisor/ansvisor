@@ -1,6 +1,7 @@
 import type { ActionDetail, ActionItem } from '@/lib/actions/action-center';
 import { toCsv } from '@/lib/csv';
 import { assigneeLabel } from '@/lib/action-center/display';
+import { withTemplateCheck } from '@/lib/action-center/task-details';
 import { locationName, platformName } from '@/lib/signals/names';
 import { dayIn } from '@/lib/time-zone';
 import type { Sheet } from 'write-excel-file/browser';
@@ -204,7 +205,8 @@ export function buildActionExport(
     link: `${origin}/dashboard/action-center/actions?action=${action.id}`,
     affected: texts.affected,
     tasks: detail.tasks.map((task, i) => {
-      const d = task.details;
+      // How we check as the task's template has it now (AC-010).
+      const d = withTemplateCheck(task.details, task.taskKey);
       const details: (string | null)[] = d
         ? [
             d.body,

@@ -310,3 +310,35 @@ export function pageCheckable(task: {
   if (d?.check !== 'auto' || !d.url?.trim()) return false;
   return task.taskKey ? PAGE_CHECKED_TASKS.includes(task.taskKey) : Boolean(d.change?.after);
 }
+
+/**
+ * The library tasks a person confirms (AC-010): their template's check is
+ * Manual (server/src/lib/action-center/tasks/templates.js). Change both
+ * together.
+ */
+export const MANUAL_TASKS: readonly string[] = [
+  'improve_cta_path',
+  'create_content_brief',
+  'create_content_draft',
+  'prepare_outreach',
+  'execute_outreach',
+  'prepare_contribution',
+  'track_third_party_status',
+  'validate_third_party_presence',
+];
+
+/**
+ * A library task's details with How we check as its template has it now: a
+ * task planned while its template was Automatic (improve_cta_path, made
+ * Manual 2026-10-28) keeps check 'auto', which no check reads any more, and
+ * reads as Manual, as its Done when says, with no Last check: what a
+ * re-fetch found isn't how it's done now. Check now goes too
+ * (pageCheckable).
+ */
+export function withTemplateCheck(
+  details: ActionTaskDetails | null,
+  taskKey: string | null,
+): ActionTaskDetails | null {
+  if (details?.check !== 'auto' || !taskKey || !MANUAL_TASKS.includes(taskKey)) return details;
+  return { ...details, check: 'manual', lastCheck: null };
+}
