@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BRAND_SETUP_LIMITS,
   boundedBrandSetup,
+  boundedTopicName,
   brandSetupSchema,
   promptsFromTopicsSchema,
 } from './brand-setup-input.js';
@@ -68,5 +69,48 @@ describe('boundedBrandSetup', () => {
     const emoji = boundedBrandSetup({ brandName: `${'n'.repeat(199)}😀` });
     expect(emoji.brandName).toBe('n'.repeat(199));
     expect(brandSetupSchema.safeParse(emoji).success).toBe(true);
+  });
+});
+
+describe('boundedTopicName', () => {
+  const fits = (name) => promptsFromTopicsSchema.safeParse({ ...brand, topics: [name] }).success;
+
+  it('leaves a name that fits as it is, trimmed', () => {
+    expect(boundedTopicName('  Specialty coffee subscriptions ')).toBe(
+      'Specialty coffee subscriptions',
+    );
+    const exact = 'x'.repeat(BRAND_SETUP_LIMITS.topic);
+    expect(boundedTopicName(exact)).toBe(exact);
+  });
+
+  it('cuts a longer name at a word, so its prompts can be asked', () => {
+    const words = 'Best specialty coffee subscription services for remote teams, offices, and ';
+    const long = `${words}coworking spaces across Europe and North America in 2026`;
+    const cut = boundedTopicName(long);
+    expect(long.length).toBeGreaterThan(BRAND_SETUP_LIMITS.topic);
+    expect(cut).toBe(
+      'Best specialty coffee subscription services for remote teams, offices, and coworking spaces across',
+    );
+    expect(cut.length).toBeLessThanOrEqual(BRAND_SETUP_LIMITS.topic);
+    expect(fits(long)).toBe(false);
+    expect(fits(cut)).toBe(true);
+  });
+
+  it('drops a dangling joiner and keeps a word that ends at the limit whole', () => {
+    // Back at the last space the name would end in "&": it goes too.
+    const joiner = `${'word '.repeat(19)}& more words`;
+    expect(boundedTopicName(joiner)).toBe('word '.repeat(19).trim());
+    // A word ending exactly at the limit is whole, followed by a space.
+    const atLimit = `${'w'.repeat(BRAND_SETUP_LIMITS.topic)} tail`;
+    expect(boundedTopicName(atLimit)).toBe('w'.repeat(BRAND_SETUP_LIMITS.topic));
+  });
+
+  it('cuts one long word where it must, never half an emoji, and has nothing for no name', () => {
+    expect(boundedTopicName('x'.repeat(150))).toHaveLength(BRAND_SETUP_LIMITS.topic);
+    const emoji = boundedTopicName(`${'x'.repeat(99)}😀${'x'.repeat(10)}`);
+    expect(emoji).toBe('x'.repeat(99));
+    expect(fits(emoji)).toBe(true);
+    expect(boundedTopicName('   ')).toBe('');
+    expect(boundedTopicName(undefined)).toBe('');
   });
 });

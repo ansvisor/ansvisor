@@ -4,7 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { requireFeature } from '../lib/plan-guard.js';
-import { boundedBrandSetup, brandSetupSchema } from '../lib/brand-setup-input.js';
+import { boundedBrandSetup, boundedTopicName, brandSetupSchema } from '../lib/brand-setup-input.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { withRetry } from '../lib/retry.js';
 import { webResearch } from '../lib/web-research.js';
@@ -202,7 +202,12 @@ IMPORTANT: Generate all topic names in ${langName}.`;
     { attempts: 3, baseDelayMs: 500, label: 'topic-suggest' },
   );
 
-  return object.topics;
+  // A name longer than a topic's prompts call takes is cut at a word, so
+  // choosing it (in setup, or from the Topics page's suggestions) never fails
+  // that call; a max in the schema would re-run the whole research instead.
+  return object.topics
+    .map((topic) => ({ ...topic, name: boundedTopicName(topic.name) }))
+    .filter((topic) => topic.name);
 }
 
 /**

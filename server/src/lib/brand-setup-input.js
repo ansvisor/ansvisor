@@ -60,3 +60,22 @@ export function boundedBrandSetup({ brandName, industry, description, website })
     website: cut(website, BRAND_SETUP_LIMITS.website),
   };
 }
+
+/**
+ * A topic name a model suggested, trimmed and at most
+ * BRAND_SETUP_LIMITS.topic characters, cut at a word: the topic's prompts
+ * are asked with it (/prompts/from-topics), which refuses a longer one.
+ * Empty when there is no name.
+ */
+export function boundedTopicName(name) {
+  const max = BRAND_SETUP_LIMITS.topic;
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  if (trimmed.length <= max) return trimmed;
+  let head = cut(trimmed, max);
+  // Ends mid-word: back to the last space, unless that drops most of it.
+  if (!/\s/.test(trimmed[head.length])) {
+    const space = head.lastIndexOf(' ');
+    if (space > max * 0.6) head = head.slice(0, space);
+  }
+  return head.replace(/[\s,;:&/–—-]+$/, '');
+}
