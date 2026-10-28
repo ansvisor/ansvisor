@@ -2,6 +2,7 @@
 
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
@@ -74,7 +75,9 @@ import {
  * query joins or filters on `brand_id`, and RLS on
  * `prompt_result_shopping_cards` already restricts to the caller's
  * organization. The action just adds the matching brand filter to keep
- * results scoped to a single brand at a time.
+ * results scoped to a single brand at a time. The reads the MCP server
+ * shares (lib/mcp/product-visibility.ts) query through dbClient(), so it can
+ * run them with the service role once it has checked the brand.
  */
 
 export type ShoppingDatePreset = '7d' | '30d' | '90d' | 'all';
@@ -265,7 +268,7 @@ export async function getShoppingOverview(
 export async function getShoppingAmazonShareDropAlert(
   brandId: string,
 ): Promise<AmazonShareDropAlert | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('shopping_amazon_share_weekly', {
     p_brand_id: brandId,
   });
@@ -294,7 +297,7 @@ export async function getShoppingMerchantSplit(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingMerchantSplit> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc(
     'shopping_merchant_split',
     windowArgs(brandId, filters),
@@ -324,7 +327,7 @@ export async function getResellerPriceAlerts(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ResellerPriceAlert[]> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc(
     'shopping_own_product_offers',
     windowArgs(brandId, filters),
@@ -354,7 +357,7 @@ export async function getShoppingFilterOptions(brandId: string): Promise<{
   platforms: string[];
   regions: string[];
 }> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('shopping_filter_options', { p_brand_id: brandId });
   if (error) return { platforms: [], regions: [] };
   const row = (data as { platforms: string[] | null; regions: string[] | null }[] | null)?.[0];
@@ -1171,7 +1174,7 @@ export async function getShoppingShelf(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingShelf> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const [rows, catalog] = await Promise.all([
     fetchAllCards<
       Omit<ShelfCardRow, 'prompt_id' | 'prompt_text'> & {
@@ -1308,7 +1311,7 @@ export async function getShoppingProducts(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingProducts | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { count: total, error: countErr } = await supabase
     .from('catalog_products')
     .select('id', { count: 'exact', head: true })
@@ -1736,7 +1739,7 @@ export async function getProductAiSays(
   if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(productId).success) {
     throw new Error('invalid');
   }
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const [cards, product] = await Promise.all([
     cardsInWindow(
       supabase,

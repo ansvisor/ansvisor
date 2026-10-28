@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import type { OpenAiIndexRead } from '@/lib/shopping/openai-index';
 import { getShoppingMerchantSplit, type ShoppingDatePreset } from './shopping';
 import { assertWritable } from '@/lib/subscription-guard';
@@ -18,7 +19,7 @@ export async function getOpenAiIndexRead(
   datePreset: ShoppingDatePreset,
 ): Promise<OpenAiIndexRead> {
   if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const [brand, split] = await Promise.all([
     supabase.from('brands').select('openai_product_feed').eq('id', brandId).maybeSingle(),
     getShoppingMerchantSplit(brandId, {

@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 
 const PROMPT_PAGE_SIZE = 1000;
 const PROMPT_MAX_ROWS = 20_000;
@@ -13,7 +13,7 @@ const PROMPT_MAX_ROWS = 20_000;
  * organization.
  */
 export async function getBrandMarketCountries(brandId: string): Promise<string[]> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const countries = new Set<string>();
   const add = (code: string | null | undefined) => {
     const trimmed = code?.trim();

@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **55 tools**. Descriptions below match
+The MCP server exposes **58 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -336,7 +336,13 @@ Drafts are read and written as a person would in the editor. Ansvisor never publ
 | `get_catalog_sources` | Where the product catalog is read from (feed URLs, uploads, connected stores such as Shopify or Google Merchant Center) and how each last sync went: status, error, what it read and its products in the catalog now. | |
 | `list_catalog_products` | The live catalog products, by title, as Product Visibility reads them: price, stock, GTIN, `readiness` for AI shopping (`score` 0–100, the checks `missing`, and the `unknown` ones that can't be made), Merchant Center issues by severity (each issue once per product), and the AI visits, orders and revenue (`revenue_30d`) their pages brought over 30 days. Optional `search`; paged with `limit` (max 200) and `offset`. | |
 
+| `get_shopping_shelf` | Product Visibility's Shelf: for each shopping question and AI channel, the products the latest answer showed, in order, the brand's best place on it (`own_rank`) and its last 7 days there; on a shelf the brand isn't on, `why_not_you` names its catalog product the question asks for most, with its readiness. Optional `period` (7d, 30d, 90d, all), `platform`, `market` (us, europe), `absent_only`; paged with `limit` (max 100) and `offset`. | |
+| `get_shopping_readiness` | Product Visibility's Readiness: the checklist scored 0–100, each check's state (pass, warn, fail, unknown), its text as the page writes it and where its fix starts, and each AI channel's state (showing, notShowing, notTracked). Optional `period` and `market`. | |
+| `get_product_ai_says` | What AI says about one catalog product: how many answers showed it, up to 5 quotes where they name it, and the pages they cited most. Optional `period`. | |
+
 The catalog is also available over REST: `GET /api/mcp/catalog/sources?brand_id=<brand_id>` and `GET /api/mcp/catalog/products?brand_id=<brand_id>&search=<text>&limit=50&offset=0` (`search` optional).
+
+The Shelf, Readiness and What AI says need a plan with Product Visibility (Growth or Enterprise), as on the page; on another plan they answer with that (REST: 403). Over REST: `GET /api/mcp/product-visibility/shelf?brand_id=<brand_id>&period=30d&platform=<id>&market=us&absent_only=true&limit=25&offset=0`, `GET /api/mcp/product-visibility/readiness?brand_id=<brand_id>&period=30d&market=us` and `GET /api/mcp/product-visibility/ai-says?brand_id=<brand_id>&product_id=<product_id>&period=30d` (all but the IDs optional).
 
 ### Action Center
 

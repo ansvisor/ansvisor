@@ -79,6 +79,13 @@ import { gateWriteTools } from './subscription-gate';
 import { getAiUsageFor, getMeFor } from './account';
 import { getActionScorecardFor } from './learning';
 import { getCatalogSourcesFor, listCatalogProductsFor } from './catalog';
+import {
+  getProductAiSaysFor,
+  getShoppingReadinessFor,
+  getShoppingShelfFor,
+  isPlanLocked,
+  type PlanLocked,
+} from './product-visibility';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -1874,6 +1881,111 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       });
       return page ? json(page) : notFound('Brand');
     },
+  );
+
+  // ─── Product Visibility: Shelf, Readiness, What AI says (B6b) ───
+
+  const periodInput = z
+    .enum(['7d', '30d', '90d', 'all'])
+    .optional()
+    .describe("The window, as the page's date filter: 7d, 30d (default), 90d or all.");
+  const marketInput = z
+    .enum(['us', 'europe'])
+    .optional()
+    .describe(
+      "ChatGPT Shopping's market: us or europe. Defaults to the brand's own (its domains' and prompts' countries), as the page opens on.",
+    );
+  /** A brand outside the key's organization, or a plan without Product Visibility. */
+  const pvAnswer = <T>(read: T | PlanLocked | null, missing = 'Brand') =>
+    read === null
+      ? notFound(missing)
+      : isPlanLocked(read)
+        ? { content: [{ type: 'text' as const, text: read.message }], isError: true }
+        : json(read);
+
+  server.registerTool(
+    'get_shopping_shelf',
+    {
+      title: 'Product Visibility shelf',
+      description:
+        "Product Visibility's Shelf: for each shopping question the brand tracks, on each AI channel, the products the latest answer put on its \"shelf\", in order (rank, title, price, rating, reviews, merchant; `own` for the brand's own, `via` the marketplace it was linked through, `product_id` its catalog product when matched), the brand's best place on it (`own_rank`, null when it isn't on it) and its last 7 days there (`week_own_shelves` of `week_shelves`). The shelves it isn't on come first, then where it ranks lowest. A shelf it isn't on has `why_not_you`: its catalog product the question asks for most, with its readiness for AI shopping (score 0–100 and the checks it misses: gtin, image, inStock, price, description, typeFirst, category, brand); null when none fits. `stats` counts the product slots in the period's answers, those holding the brand's products, its distinct products there, and its slots by channel; `catalog_products` the live catalog (null without one). `absent_only` keeps the shelves it isn't on. Paged: `limit` (default 25, max 100) and `offset`; `total` counts the matching shelves. Needs a plan with Product Visibility.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        period: periodInput,
+        platform: z
+          .string()
+          .max(64)
+          .optional()
+          .describe('One AI channel, e.g. "chatgpt-shopping", "google-aimode", "google-aio".'),
+        market: marketInput,
+        absent_only: z
+          .boolean()
+          .optional()
+          .describe("Only the shelves the brand's products aren't on."),
+        limit: z.number().int().min(1).max(100).optional().describe('Shelves a page (default 25).'),
+        offset: z.number().int().min(0).optional().describe('Where the page starts (default 0).'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) =>
+      pvAnswer(
+        await getShoppingShelfFor(auth, {
+          brandId: args.brand_id,
+          period: args.period,
+          platform: args.platform,
+          market: args.market,
+          absentOnly: args.absent_only,
+          limit: args.limit,
+          offset: args.offset,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'get_shopping_readiness',
+    {
+      title: 'Product Visibility readiness',
+      description:
+        "Product Visibility's Readiness: how ready the brand is for AI shopping, as the Readiness tab checks it, scored 0–100 over the checks that can be made (`score`; null when its catalog's sources or products couldn't be read, listed in `unread`). Each check has its `key` (catalog, merchantCenter, openAiIndex and verifiedSeller in the US, firstWords, feedFields, feedLinks, wrongPrice, resellerCheaper, amazonShare), its `state` (pass, warn, fail, or unknown when it can't be made), its `title` and `detail` as the page writes them, and `fix`: where it starts (products = the Products tab, settings = Settings › Integrations › Catalog). `channels` says for each AI channel (chatgpt-shopping, google-aio, google-aimode, gemini-web, copilot-web) whether the brand's products are on its shelves (showing), its shelves are read without them (notShowing), or it isn't tracked (notTracked). Needs a plan with Product Visibility.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        period: periodInput,
+        market: marketInput,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) =>
+      pvAnswer(
+        await getShoppingReadinessFor(auth, {
+          brandId: args.brand_id,
+          period: args.period,
+          market: args.market,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'get_product_ai_says',
+    {
+      title: 'What AI says about a product',
+      description:
+        "What AI says about one of the brand's catalog products, as its Product Visibility page shows it: how many AI answers showed it in the period, up to 5 quotes where they name it (their own words, the latest first, with the channel, when, and the question asked) and up to 5 pages they cited most (url, domain, title, and how many of those answers cited each). Answers are quoted, not summed up. The product_id comes from list_catalog_products or a shelf's product_id. Needs a plan with Product Visibility.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        product_id: relaxedUuid.describe('Catalog product UUID, from list_catalog_products.'),
+        period: periodInput,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) =>
+      pvAnswer(
+        await getProductAiSaysFor(auth, {
+          brandId: args.brand_id,
+          productId: args.product_id,
+          period: args.period,
+        }),
+        'Brand or product',
+      ),
   );
 
   return server;
