@@ -36,8 +36,8 @@ function PageLink({ page }: { page: CitedPageRead }) {
 
 /**
  * What the "Analyze competitor content" task found (learning C1): the checks
- * most of the competitor pages AI answers cite pass that the brand's page
- * doesn't, and the pages read.
+ * at least half of the competitor pages AI answers cite pass that the brand's
+ * page doesn't, and the pages read; or why nothing was compared.
  */
 export function CompetitorFindingsView({ findings }: { findings: CompetitorFindings }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task.competitor');
@@ -50,7 +50,9 @@ export function CompetitorFindingsView({ findings }: { findings: CompetitorFindi
         <p className="text-muted-foreground">{t(`reasons.${findings.reason ?? 'unreadable'}`)}</p>
       ) : (
         <>
-          {findings.gaps.length > 0 ? (
+          {!findings.compared ? (
+            <p className="text-muted-foreground">{t('tooFew')}</p>
+          ) : findings.gaps.length > 0 ? (
             <ul className="space-y-1">
               {findings.gaps.map((gap) => (
                 <li key={gap.key} className="flex gap-1.5">
@@ -85,14 +87,13 @@ export function CompetitorFindingsView({ findings }: { findings: CompetitorFindi
                 <PageLink page={findings.yourPage} />
               </ul>
             ) : (
-              <p>{t('noPage')}</p>
+              <p>{t(findings.yourPageStatus === 'unreadable' ? 'yourUnreadable' : 'noPage')}</p>
             )}
           </div>
         </>
       )}
       <p className="text-[11px] text-muted-foreground">
         {t('note')}
-        {findings.capped > 0 && ` ${t('capped', { count: findings.capped })}`}
         {findings.unreadable > 0 &&
           read > 0 &&
           ` ${t('unreadable', { count: findings.unreadable })}`}

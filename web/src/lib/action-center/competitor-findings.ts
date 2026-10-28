@@ -31,12 +31,14 @@ export interface CompetitorGap {
 export interface CompetitorFindings {
   competitorPages: CitedPageRead[];
   yourPage: CitedPageRead | null;
+  /** Whether the brand's page was read, wasn't cited, or couldn't be read. */
+  yourPageStatus: 'read' | 'not_cited' | 'unreadable';
   gaps: CompetitorGap[];
-  /** Pages left for another day: the brand's reads for the day were spent. */
-  capped: number;
+  /** False when too few of their pages were read to compare (at least two). */
+  compared: boolean;
   /** Pages that couldn't be read. */
   unreadable: number;
-  /** Why nothing was compared, when nothing was. */
+  /** Why nothing was compared, when nothing was: the task is left to a person. */
   reason: 'no_prompts' | 'none_cited' | 'unreadable' | null;
 }
 
@@ -65,9 +67,15 @@ export function parseCompetitorFindings(output: unknown): CompetitorFindings | n
   if (!output || typeof output !== 'object') return null;
   const o = output as Record<string, unknown>;
   if (!Array.isArray(o.competitorPages) || !Array.isArray(o.gaps)) return null;
+  const yourPage = pageOf(o.yourPage);
   return {
     competitorPages: o.competitorPages.map(pageOf).filter((p): p is CitedPageRead => p !== null),
-    yourPage: pageOf(o.yourPage),
+    yourPage,
+    yourPageStatus: yourPage
+      ? 'read'
+      : o.yourPageStatus === 'unreadable'
+        ? 'unreadable'
+        : 'not_cited',
     gaps: o.gaps.flatMap((value) => {
       const g = (value ?? {}) as Record<string, unknown>;
       return typeof g.key === 'string' && g.key && count(g.of) > 0
@@ -81,7 +89,7 @@ export function parseCompetitorFindings(output: unknown): CompetitorFindings | n
           ]
         : [];
     }),
-    capped: count(o.capped),
+    compared: o.compared !== false,
     unreadable: count(o.unreadable),
     reason: (REASONS as readonly unknown[]).includes(o.reason)
       ? (o.reason as CompetitorFindings['reason'])
