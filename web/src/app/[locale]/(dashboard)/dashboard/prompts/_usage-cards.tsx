@@ -151,9 +151,12 @@ export function usePromptUsage(
 
 /** The plan-limit numbers the Add Prompt dialog and bulk import bound themselves by. */
 export function locationQuotaFromUsage(usage: PromptUsageSummary): LocationQuota {
+  const used = usage.account.locationsUsed;
   return {
-    maxPrompts: usage.plan.locationLimit ?? -1,
-    used: usage.account.locationsUsed,
+    // An ended plan takes nothing new until a plan is chosen again: the quota
+    // reads as full, as the Slots left card's 0 does.
+    maxPrompts: usage.plan.ended ? used : (usage.plan.locationLimit ?? -1),
+    used,
     planId: usage.plan.key,
     planName: isKnownPlan(usage.plan.key) ? PLANS[usage.plan.key].name : usage.plan.name,
   };
@@ -203,8 +206,11 @@ export function PromptUsageCards({
   const usage = state.status === 'ready' ? state.usage : null;
   const plan = usage?.plan;
   const planShort = !plan ? '' : isKnownPlan(plan.key) ? t(`planLabel.${plan.key}`) : plan.name;
-  const planPill =
-    plan && isKnownPlan(plan.key) ? t('planPill', { plan: planShort }) : (plan?.name ?? '');
+  const planPill = plan?.ended
+    ? t('planPillEnded', { plan: planShort })
+    : plan && isKnownPlan(plan.key)
+      ? t('planPill', { plan: planShort })
+      : (plan?.name ?? '');
   // Self-hosted has no plan page to go to.
   const planHref = plan?.cta ? PLAN_PAGE : undefined;
 
@@ -448,12 +454,18 @@ export function PromptUsageCards({
               )}
             </UsageCard>
             <UsageCard label={t('slotsLeft')} href={planHref}>
-              {value(limit === null ? t('unlimited') : n(meter?.remaining ?? 0), TONE_TEXT[tone])}
+              {/* Nothing can be added until a plan is chosen again. */}
+              {value(
+                plan?.ended ? n(0) : limit === null ? t('unlimited') : n(meter?.remaining ?? 0),
+                TONE_TEXT[tone],
+              )}
               {sub(
                 <>
-                  {limit === null
-                    ? t('onPlan', { plan: planShort })
-                    : t('ofLimit', { limit: n(limit), plan: planShort })}
+                  {plan?.ended
+                    ? t('ended', { plan: planShort })
+                    : limit === null
+                      ? t('onPlan', { plan: planShort })
+                      : t('ofLimit', { limit: n(limit), plan: planShort })}
                   {cta && <> · {cta}</>}
                 </>,
               )}
