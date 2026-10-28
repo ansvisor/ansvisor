@@ -22,7 +22,7 @@ const AI_PROVIDER_META: Record<AIProviderKey, { label: string; shortLabel: strin
     openai: { label: 'ChatGPT', shortLabel: 'O', icon: '/platforms/chatgpt.svg' },
     anthropic: { label: 'Claude', shortLabel: 'A', icon: '/platforms/claude.svg' },
     google: { label: 'Gemini', shortLabel: 'G', icon: '/platforms/gemini.svg' },
-    googleAio: { label: 'Google AI Overview', shortLabel: 'G', icon: '/platforms/google.svg' },
+    googleAio: { label: 'Google AI Overviews', shortLabel: 'G', icon: '/platforms/google.svg' },
     // AI Mode runs on Gemini, so it shows the Gemini mark.
     googleAiMode: { label: 'Google AI Mode', shortLabel: 'G', icon: '/platforms/gemini.svg' },
     perplexity: { label: 'Perplexity', shortLabel: 'P', icon: '/platforms/perplexity.svg' },
@@ -59,7 +59,12 @@ export function resolveAIProvider(model: string, platform?: string): AIProviderK
   if (key === 'Grok' || key === 'grok' || key === 'grok-web' || key.startsWith('grok-')) {
     return 'xai';
   }
-  if (key === 'Google AI Overview' || key === 'google-aio' || key === 'google-ai-overviews') {
+  if (
+    key === 'Google AI Overviews' ||
+    key === 'Google AI Overview' ||
+    key === 'google-aio' ||
+    key === 'google-ai-overviews'
+  ) {
     return 'googleAio';
   }
   if (
