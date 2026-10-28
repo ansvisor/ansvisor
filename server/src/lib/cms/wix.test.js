@@ -14,6 +14,7 @@ const {
   siteIdOf,
   toRicos,
   updateDraftPost,
+  webAddress,
 } = await import('./wix.js');
 
 /**
@@ -36,6 +37,9 @@ const start = async (routes) => {
   return { base: api.origin, request: api.request };
 };
 
+const CONVERT = 'POST /ricos/v1/ricos-document/convert/to-ricos';
+const converts = () => ({ json: { document: { nodes: [{ type: 'PARAGRAPH' }] } } });
+
 describe('siteIdOf', () => {
   it("reads the site's id, or the dashboard address it is in", () => {
     expect(siteIdOf(SITE.toUpperCase())).toBe(SITE);
@@ -48,9 +52,10 @@ describe('siteIdOf', () => {
 });
 
 describe('checkSite', () => {
-  it("checks the Blog with the key, and takes its newest post's owner and the site's name", async () => {
+  it("checks the Blog and the converter with the key, and takes its newest post's owner and the site's name", async () => {
     const opts = await start({
       'GET /blog/v3/posts': () => ({ json: { posts: [{ id: POST, memberId: MEMBER }] } }),
+      [CONVERT]: converts,
       'GET /site-properties/v4/properties': () => ({
         json: { properties: { siteDisplayName: ' Acme Coffee ' } },
       }),
@@ -62,11 +67,18 @@ describe('checkSite', () => {
     expect(first.headers.authorization).toBe(KEY);
     expect(first.headers['wix-site-id']).toBe(SITE);
     expect(first.query).toEqual({ 'paging.limit': '1' });
+    // The converter is tried on a line of text: nothing is written to the site.
+    expect(api.calls[1]).toMatchObject({
+      method: 'POST',
+      path: '/ricos/v1/ricos-document/convert/to-ricos',
+      body: { html: '<p>x</p>' },
+    });
   });
 
   it('takes a member when the Blog has no post yet, and goes without a name it may not read', async () => {
     const opts = await start({
       'GET /blog/v3/posts': () => ({ json: { posts: [] } }),
+      [CONVERT]: converts,
       'POST /members/v1/members/query': () => ({ json: { members: [{ id: MEMBER }] } }),
       'GET /site-properties/v4/properties': () => ({ status: 403, json: {} }),
     });
@@ -84,26 +96,89 @@ describe('checkSite', () => {
 
     opts = await start({
       'GET /blog/v3/posts': () => ({ json: { posts: [] } }),
+      [CONVERT]: converts,
       'POST /members/v1/members/query': () => ({ json: { members: [] } }),
     });
     await expect(checkSite(SITE, KEY, opts)).rejects.toMatchObject({ code: 'no_member' });
   });
+
+  it('says the key needs the Ricos permission when the converter refuses it', async () => {
+    const opts = await start({
+      'GET /blog/v3/posts': () => ({ json: { posts: [{ id: POST, memberId: MEMBER }] } }),
+      [CONVERT]: () => ({ status: 403, json: { message: 'PERMISSION_DENIED' } }),
+    });
+    await expect(checkSite(SITE, KEY, opts)).rejects.toMatchObject({
+      code: 'no_ricos_permission',
+      message: expect.stringContaining('Manage Ricos Document'),
+    });
+    // Refused there, nothing else is asked.
+    expect(api.calls.map((call) => call.path)).toEqual([
+      '/blog/v3/posts',
+      '/ricos/v1/ricos-document/convert/to-ricos',
+    ]);
+  });
 });
 
 describe('ricosChunks', () => {
-  it('keeps the blocks in order, in pieces Wix converts at once', () => {
-    const block = `<p>${'a'.repeat(4000)}</p>`;
+  it('keeps the blocks in order, in pieces within Wix’s 30,000 characters', () => {
+    expect(RICOS_CHUNK).toBeLessThan(30_000);
+    const block = `<p>${'a'.repeat(12_000)}</p>`;
     const chunks = ricosChunks(`${block}${block}${block}<h2>End</h2>`);
     expect(chunks).toHaveLength(2);
     expect(chunks.every((chunk) => chunk.length <= RICOS_CHUNK)).toBe(true);
     expect(chunks[1].endsWith('<h2>End</h2>')).toBe(true);
   });
 
-  it('sends a block longer than that as its text, escaped, piece by piece', () => {
-    const chunks = ricosChunks(`<table><tr><td>${'x < y & '.repeat(3000)}</td></tr></table>`, 1000);
+  it('splits a block longer than that among its children, in copies of its tag', () => {
+    const items = Array.from({ length: 40 }, (_, i) => `<li>Item ${i}: smooth and sweet</li>`);
+    const chunks = ricosChunks(`<ul class="steps">${items.join('')}</ul>`, 500);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(500);
+      expect(chunk).toMatch(/^<ul class="steps">(<li>Item \d+: smooth and sweet<\/li>)+<\/ul>$/);
+    }
+    // Every item, once, in order.
+    expect(chunks.join('').match(/Item \d+/g)).toEqual(items.map((_, i) => `Item ${i}`));
+
+    const rows = `<tr><td>${'x < y & '.repeat(300)}</td></tr>`;
+    const tables = ricosChunks(`<table><tbody>${rows}</tbody></table>`, 1000);
+    expect(tables.every((chunk) => chunk.length <= 1000)).toBe(true);
+    expect(tables.every((chunk) => chunk.startsWith('<table><tbody><tr><td>'))).toBe(true);
+    expect(tables.join('')).toContain('x &lt; y &amp;');
+  });
+
+  it('cuts a long paragraph between words, keeping its links', () => {
+    const text = 'Cold brew steeps slowly overnight. '.repeat(60);
+    const chunks = ricosChunks(
+      `<p>See <a href="https://acme.example">the guide</a>. ${text}</p>`,
+      600,
+    );
+    expect(chunks.every((chunk) => chunk.length <= 600)).toBe(true);
+    expect(chunks.every((chunk) => chunk.startsWith('<p>') && chunk.endsWith('</p>'))).toBe(true);
+    expect(chunks.join('')).toContain('<a href="https://acme.example">the guide</a>');
+    // The words of the paragraph's text after the link, each whole.
+    const words = new Set(`. ${text}`.trim().split(/\s+/));
+    for (const chunk of chunks.slice(1)) {
+      for (const word of chunk
+        .replace(/<[^>]+>/g, '')
+        .trim()
+        .split(/\s+/)) {
+        expect(words.has(word)).toBe(true);
+      }
+    }
+  });
+
+  it('sends a block with nothing to split it by as its text, escaped, between words', () => {
+    const chunks = ricosChunks(
+      `<p title="${'t'.repeat(600)}">${'fish & chips '.repeat(200)}</p>`,
+      1000,
+    );
+    expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((chunk) => chunk.length <= 1000)).toBe(true);
-    expect(chunks.join('')).not.toContain('<table>');
-    expect(chunks.join('')).toContain('x &lt; y &amp;');
+    expect(chunks.join('')).not.toContain('title=');
+    for (const chunk of chunks) {
+      expect(chunk).toMatch(/^<p>((fish|&amp;|chips) ?)+<\/p>$/);
+    }
   });
 });
 
@@ -119,10 +194,21 @@ describe('toRicos', () => {
         },
       }),
     });
-    const block = `<p>${'a'.repeat(6000)}</p>`;
+    const block = `<p>${'a'.repeat(15_000)}</p>`;
     const doc = await toRicos(SITE, KEY, `${block}${block}`, opts);
     expect(doc.nodes.map((node) => node.id)).toEqual(['n1', 'n2']);
     expect(api.calls[0].body.options.plugins).toContain('HEADING');
+  });
+});
+
+describe('webAddress', () => {
+  it('keeps a web address, adds https:// to one without its scheme, and drops the rest', () => {
+    expect(webAddress('https://acme.example/post/x')).toBe('https://acme.example/post/x');
+    expect(webAddress(' acme.example/post/x ')).toBe('https://acme.example/post/x');
+    expect(webAddress('//acme.example/post/x')).toBe('https://acme.example/post/x');
+    expect(webAddress('/post/x')).toBeNull();
+    expect(webAddress('javascript:alert(1)')).toBeNull();
+    expect(webAddress(null)).toBeNull();
   });
 });
 
@@ -165,6 +251,32 @@ describe('draft posts', () => {
     });
     expect(await readDraftPost(SITE, KEY, 'f0000000-0000-4000-8000-000000000000', opts)).toBeNull();
     expect(await readDraftPost(SITE, KEY, 'not-an-id', opts)).toBeNull();
+  });
+
+  it('gives an address Wix sends without its scheme https://', async () => {
+    const OTHER = 'a1111111-2222-4333-8444-955555555555';
+    const opts = await start({
+      [`GET /blog/v3/draft-posts/${POST}`]: () => ({
+        json: {
+          draftPost: { id: POST, status: 'PUBLISHED', url: 'mysite.wixsite.com/mysite/post/x' },
+        },
+      }),
+      [`GET /blog/v3/draft-posts/${OTHER}`]: () => ({
+        json: {
+          draftPost: {
+            id: OTHER,
+            status: 'PUBLISHED',
+            url: { base: 'mysite.wixsite.com/mysite/', path: '/post/y' },
+          },
+        },
+      }),
+    });
+    expect((await readDraftPost(SITE, KEY, POST, opts)).url).toBe(
+      'https://mysite.wixsite.com/mysite/post/x',
+    );
+    expect((await readDraftPost(SITE, KEY, OTHER, opts)).url).toBe(
+      'https://mysite.wixsite.com/mysite/post/y',
+    );
   });
 
   it("writes a live post's draft version, never the post people read", async () => {

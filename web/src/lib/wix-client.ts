@@ -23,6 +23,7 @@ export type WixError =
   | 'forbidden'
   | 'auth_failed'
   | 'no_access'
+  | 'no_ricos_permission'
   | 'no_blog'
   | 'no_member'
   | 'unreachable'
@@ -37,6 +38,7 @@ const KNOWN: readonly WixError[] = [
   'forbidden',
   'auth_failed',
   'no_access',
+  'no_ricos_permission',
   'no_blog',
   'no_member',
   'unreachable',

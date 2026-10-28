@@ -44,7 +44,13 @@ describe('wix-client', () => {
   });
 
   it("names the API's reasons, and the general ones", async () => {
-    for (const code of ['no_blog', 'no_member', 'auth_failed', 'no_access']) {
+    for (const code of [
+      'no_blog',
+      'no_member',
+      'auth_failed',
+      'no_access',
+      'no_ricos_permission',
+    ]) {
       answer(409, { code, error: 'x' });
       expect(await connectWix('b1', input)).toEqual({ ok: false, code });
     }

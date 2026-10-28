@@ -136,6 +136,16 @@ describe('WixCard', () => {
     expect(field('API key').value).toBe(KEY);
   });
 
+  it('says the key needs the Ricos permission when Wix’s converter refuses it', async () => {
+    client.connectWix.mockResolvedValue({ ok: false, code: 'no_ricos_permission' });
+    await render();
+    await type('Site id', SITE);
+    await type('API key', KEY);
+    await submit();
+    expect(toast.error).toHaveBeenCalledWith(ERROR_TEXTS.no_ricos_permission);
+    expect(ERROR_TEXTS.no_ricos_permission).toContain('Manage Ricos Document');
+  });
+
   it('asks to connect again after a refused key, with the site filled in', async () => {
     client.readWix.mockResolvedValue({
       ok: true,
