@@ -243,6 +243,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           dedup_key: string
+          dismiss_reason: string | null
           due_date: string | null
           id: string
           impact: string
@@ -271,6 +272,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact: string
@@ -299,6 +301,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key?: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact?: string
@@ -4572,6 +4575,23 @@ export type Database = {
           removed_keys: string[]
           removed_labels: string[]
           total: number
+        }[]
+      }
+      action_scorecard: {
+        Args: { p_brand_id: string; p_since?: string | null }
+        Returns: {
+          completed: number
+          declined: number
+          dismiss_reasons: Json
+          dismissed: number
+          final: number
+          improved: number
+          kind: string
+          median_change: number | null
+          mixed: number
+          no_change: number
+          not_measurable: number
+          pending: number
         }[]
       }
       ai_traffic_merged: {

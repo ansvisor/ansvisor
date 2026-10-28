@@ -331,6 +331,7 @@ export async function sendImproveToActionCenter({
       },
       dedup_key: dedupKey,
       ...(await priorityOnCreate({
+        brand_id: brandId,
         kind: IMPROVE_ACTION_KIND,
         category: 'compete',
         impact,
