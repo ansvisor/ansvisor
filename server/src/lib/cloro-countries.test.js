@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 // The module reaches the supabase admin client at import time, whose config
@@ -6,7 +7,9 @@ vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 import { fakeDb } from './catalog/__fixtures__/fake-db.js';
 import { logger } from './logger.js';
+import { CITY_SCRAPERS } from './locations.js';
 import {
+  CLORO_COUNTRY_MODELS,
   countryCodesIn,
   fetchCloroCountries,
   loadSupportedCountries,
@@ -194,5 +197,35 @@ describe('supportsCountry and supportedLocations', () => {
       'TR~ISTANBUL',
     ]);
     expect(supportedLocations([], 'copilot-web', supported)).toEqual([null]);
+  });
+});
+
+/**
+ * The web names the provider's engines and knows which answer from a city
+ * (web/src/lib/tracking-countries.ts): the same models the API reads lists
+ * for, or the location picker would leave an engine unnamed or offer a city
+ * where no engine asks from one.
+ */
+describe('the provider models on both sides (PROMPT-015e)', () => {
+  const web = readFileSync(
+    new URL('../../../web/src/lib/tracking-countries.ts', import.meta.url),
+    'utf8',
+  );
+  const models = new Set(Object.values(CLORO_COUNTRY_MODELS));
+
+  it('names every model the API reads a list for, and no other', () => {
+    const labels = web.match(/ENGINE_LABELS[^=]*=\s*\{([^}]*)\}/);
+    expect(labels).not.toBeNull();
+    const named = [...labels[1].matchAll(/^\s*'?([a-z]+)'?:/gm)].map((m) => m[1]);
+    expect(named.sort()).toEqual([...models].sort());
+  });
+
+  it("takes a city on the models of the API's city engines", () => {
+    const cities = web.match(/CITY_MODELS[^=]*=\s*new Set\(\[([^\]]*)\]\)/);
+    expect(cities).not.toBeNull();
+    const webModels = [...cities[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(webModels.sort()).toEqual(
+      [...new Set([...CITY_SCRAPERS].map((id) => CLORO_COUNTRY_MODELS[id]))].sort(),
+    );
   });
 });
