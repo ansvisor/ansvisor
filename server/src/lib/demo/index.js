@@ -37,9 +37,11 @@ export const DEMO_WAIT_MS = 60 * 1000;
 const WAIT_POLL_MS = 1000;
 
 /**
- * The modules that build the demo, in order. Each is `{ name, tables,
- * build(ctx) }`: `tables` are the brand-scoped tables it owns (written, or
- * rebuilt by what it calls), cleared in reverse order before a rebuild.
+ * The modules that build the demo. Each is `{ name, tables, build(ctx),
+ * after? }`: `tables` are the brand-scoped tables it owns (written, or
+ * rebuilt by what it calls), cleared in reverse order before a rebuild. The
+ * first runs alone; the others run together, each after the one it names in
+ * `after`.
  * Action Center, Content, reports, Site Audit, traffic and Product
  * Visibility follow as modules of their own.
  */
@@ -153,9 +155,28 @@ async function build(brandId, now, modules) {
   const built = {};
   try {
     await clearDemoData(brandId, modules);
-    for (const module of modules) {
-      built[module.name] = await module.build({ brandId, now });
-    }
+    // The first module (core) lays down what every other one points at; the
+    // rest write their own tables side by side, each after the module it
+    // names in `after`, if any.
+    const [first, ...rest] = modules;
+    built[first.name] = await first.build({ brandId, now });
+    const running = new Map();
+    const run = (module) => {
+      if (!running.has(module.name)) {
+        const before = module.after && rest.find((m) => m.name === module.after);
+        running.set(
+          module.name,
+          (async () => {
+            if (before) await run(before);
+            built[module.name] = await module.build({ brandId, now });
+          })(),
+        );
+      }
+      return running.get(module.name);
+    };
+    const results = await Promise.allSettled(rest.map(run));
+    const failed = results.find((r) => r.status === 'rejected');
+    if (failed) throw failed.reason;
   } catch (err) {
     await releaseBuild(brandId);
     throw err;
