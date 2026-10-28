@@ -123,6 +123,17 @@ async function renderPage() {
   });
 }
 
+/** A draft's last send, as readCmsStatuses returns it. */
+const sendOf = (status: string) => ({
+  status,
+  target: 'webhook',
+  at: '2026-10-24T10:00:00Z',
+  httpStatus: status === 'failed' ? 500 : 200,
+  error: null,
+  publishedUrl: null,
+});
+const lastSendBox = () => container.querySelector('[aria-label="Last send"]');
+
 const tab = (name: string) =>
   [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) =>
     el.textContent?.startsWith(name),
@@ -813,6 +824,27 @@ describe('a Library row’s menu (00233)', () => {
     await act(async () => found.click());
   };
 
+  it('keeps a list filtered by Last send on show when it is read again in another order', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    const first = row({});
+    const second = row({ id: 'd2', title: 'Churn guide' });
+    getContentDrafts.mockResolvedValueOnce([first, second]).mockResolvedValue([second, first]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sendOf('failed')],
+        ['d2', sendOf('failed')],
+      ]),
+    );
+    await renderPage();
+    // The second read of the sends never answers: the drafts are the same.
+    readCmsStatuses.mockReturnValue(new Promise(() => {}));
+    await pick('Pipeline forecasting', 'In progress');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.textContent).toContain('Churn guide');
+    expect(container.textContent).toContain('Pipeline forecasting');
+  });
+
   it('sets a status, Ready as the editor’s Mark ready, and reads the list again', async () => {
     getContentDrafts.mockResolvedValue([row({})]);
     await renderPage();
@@ -1066,6 +1098,126 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     await act(async () => csvItem(items).click());
     await act(async () => {});
     expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['new']);
+  });
+
+  it('lists only the drafts whose last send is as the URL names, and exports those (#1331)', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1', title: 'Failed page' }),
+      row({ id: 'd2', title: 'Sent page' }),
+      row({ id: 'd3', title: 'Unsent page' }),
+    ]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sendOf('failed')],
+        ['d2', sendOf('sent')],
+      ]),
+    );
+    await renderPage();
+    expect(container.textContent).toContain('Failed page');
+    expect(container.textContent).not.toContain('Sent page');
+    expect(container.textContent).not.toContain('Unsent page');
+    expect(container.querySelector('[aria-label="Last send"]')!.textContent).toContain(
+      'Last send: Failed',
+    );
+
+    const items = await openExport();
+    await act(async () => csvItem(items).click());
+    await act(async () => {});
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d1']);
+  });
+
+  it('lists the drafts never sent', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=never');
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1', title: 'Sent page' }),
+      row({ id: 'd2', title: 'Unsent page' }),
+    ]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('published')]]));
+    await renderPage();
+    expect(container.textContent).toContain('Unsent page');
+    expect(container.textContent).not.toContain('Sent page');
+  });
+
+  it('leaves Last send out for a brand that sent no page', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(lastSendBox()).toBeNull();
+    expect(container.querySelector('[aria-label="Created"]')).not.toBeNull();
+  });
+
+  it('shows Last send once a page was sent', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('sent')]]));
+    await renderPage();
+    expect(container.querySelector('[aria-label="Last send"]')!.textContent).toContain(
+      'Last send: Any',
+    );
+  });
+
+  it('waits for the sends before it filters by them, rather than list every draft', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1', title: 'Failed page' }),
+      row({ id: 'd2', title: 'Unsent page' }),
+    ]);
+    let answer: (sends: Map<string, unknown>) => void = () => {};
+    readCmsStatuses.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await renderPage();
+    expect(container.textContent).not.toContain('Unsent page');
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+
+    await act(async () => answer(new Map([['d1', sendOf('failed')]])));
+    expect(container.textContent).toContain('Failed page');
+    expect(container.textContent).not.toContain('Unsent page');
+  });
+
+  it('lists nothing to export while the sends it filters by are read', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=never');
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockReturnValue(new Promise(() => {}));
+    await renderPage();
+    const exportButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Export',
+    )!;
+    expect(exportButton.disabled).toBe(true);
+  });
+
+  it('leaves Last send out on a brand that sent none, after one that did', async () => {
+    getContentDrafts.mockImplementation(async (brandId: string) =>
+      brandId === 'brand-1' ? [row({})] : [],
+    );
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('sent')]]));
+    await renderPage();
+    expect(lastSendBox()).not.toBeNull();
+    brandState.activeBrandId = 'brand-2';
+    await renderPage();
+    expect(lastSendBox()).toBeNull();
+  });
+
+  it('blames the Created filter when it is the one that leaves nothing', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?created=7d&sent=failed');
+    getContentDrafts.mockResolvedValue([row({ createdAt: '2026-01-05T09:00:00Z' })]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('failed')]]));
+    await renderPage();
+    expect(container.textContent).toContain('Nothing in this tab was created in this period.');
+  });
+
+  it('says nothing of the cap while Last send narrows the list', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('failed')]]));
+    await renderPage();
+    expect(container.textContent).not.toContain('Churn guide');
+    expect(container.textContent).not.toContain('changed most recently');
+  });
+
+  it('says when nothing in the tab matches the Last send filter', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=queued');
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('sent')]]));
+    await renderPage();
+    expect(container.textContent).toContain('No page in this tab matches the Last send filter.');
   });
 
   it('says when nothing in the tab was created in the range', async () => {

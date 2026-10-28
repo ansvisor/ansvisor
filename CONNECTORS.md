@@ -92,6 +92,22 @@ Anything else is logged, with every credential value taken out of its message, a
 - **What to ask for:** the least access the feature needs. Today that's read-only access to products (and, later, orders). Say which permission to tick in your field's `help`.
 - **Self-hosting:** set `CONNECTOR_CREDENTIALS_KEY` in `server/.env` (`openssl rand -base64 32`). Without it, Settings says store connections aren't set up. If the key changes, saved sign-ins can't be opened: those stores show "Sign-in refused" until they're updated.
 
+### A platform read with the workspace's Google sign-in
+
+Some platforms sign in with OAuth through a provider Composio already handles for the workspace, like Search Console and Analytics. Google Merchant Center ([#1270](https://github.com/ansvisor/ansvisor/issues/1270), `server/src/connectors/merchant-center/`) is one. Such a connector differs from a store:
+
+- **No `fields` and no `connect`.** It has `signIn`, the Composio provider (`server/src/lib/composio.js` `PROVIDERS`). The workspace connects that provider once in Settings › Integrations, and Composio keeps the token: it never reaches us, and the source has no row in `catalog_source_credentials`.
+- **Picking the account:**
+  - `listAccounts(ctx)` returns the accounts the sign-in opens, as `{ id, name }`.
+  - The person picks one. `POST /api/catalog/sources` with `input: { account }` then calls `checkAccount(value, ctx)`, which returns `{ account, label?, url? }` or throws a ConnectError.
+- **Calls:** `ctx.request(url, { query, signal })` goes through Composio's proxy (`server/src/lib/catalog/sign-in.js`), to the hosts your connector names in `hosts` only (Merchant Center's is `merchantapi.googleapis.com`). It answers like the HTTP client and throws the same `ConnectorHttpError` codes, and one more:
+  - `auth`: the sign-in is gone or refused. The source shows "Reconnect it in Settings › Integrations".
+  - `not_set_up`: the server's own setup is refused, not the sign-in: Composio's API key, or Google's 403 (the Google Cloud project not registered with Merchant Center, a scope missing). Reconnecting wouldn't help, so the source says the server isn't set up correctly. Both are logged as warnings, with Google's reason, for whoever runs the server.
+  - Listing accounts and checking one stop after 30 seconds in all; a sync's calls after 10 minutes.
+- **Issues:** `readCatalog` may also return `issues`, the platform's problems per item. The plumbing replaces the source's rows in `catalog_item_issues` with them (00296) and counts them on the source (`last_counts.issues`).
+- **The same item listed again:** Merchant Center lists an offer once per language and feed label. The catalog keeps one (a listing that isn't disapproved first, then by feed label and language), keeps the issues of all of them, and counts the others in `repeated` (`last_counts.repeated`), not as skipped.
+- **Testing:** pass `runSync` a `signInRequest` stand-in. `merchant-center.test.js` builds one from the real `signInRequest` with a fake proxy.
+
 ## Testing
 
 Connector tests run in `npm test` (in `server/`), against a fake of the platform's API, with no network and no account. The harness is `server/src/connectors/testing.js`:
@@ -155,5 +171,5 @@ Copy this into your pull request. Every connector is reviewed against it.
 ## Not here yet
 
 - **Orders and webhooks** (`syncOrders(since)`, `handleWebhook(event)`) come with the first store that needs them (Shopify, [#1265](https://github.com/ansvisor/ansvisor/issues/1265)).
-- **OAuth sign-in:** platforms that sign in through a redirect (Etsy, eBay, Amazon) need a callback the plumbing doesn't have yet. Open an issue before you start one.
+- **OAuth sign-in:** platforms that sign in through a redirect (Etsy, eBay, Amazon) need a callback the plumbing doesn't have yet, unless Composio handles their sign-in, as it does Google's (see above). Open an issue before you start one.
 - **API keys:** stores that sign in with keys (WooCommerce, Walmart, Trendyol, Hepsiburada) work today.
