@@ -74,39 +74,59 @@ const wordsOf = (text: string | null) =>
     .filter(Boolean);
 
 /**
- * A product's readiness, 0–100, and the checks it misses: a GTIN, a photo,
- * in stock, a price, a description that says enough and names what the
- * product is in its first 40 words, a category and a brand.
+ * A product's readiness, 0–100, the checks it misses, and those that can't
+ * be checked: a GTIN, a photo, in stock, a price, a description that says
+ * enough and names what the product is in its first 40 words, a category
+ * and a brand. The first 40 words are checked against the product's type
+ * (its feed's product type, else its category's last part): without one,
+ * as Shopify often leaves it, that check is unknown and left out of the
+ * score, which is then out of the other checks' points.
  */
 export function readiness(product: CatalogProductRow): {
   score: number;
   missing: ReadinessCheck[];
+  unknown: ReadinessCheck[];
 } {
   const description = wordsOf(product.description);
-  const type = wordsOf(product.productType ?? product.category?.split('>').at(-1) ?? null);
+  const type = wordsOf(
+    product.productType?.trim() || product.category?.split('>').at(-1)?.trim() || null,
+  );
   const firstWords = new Set(description.slice(0, FIRST_WORDS));
-  const passed: Record<ReadinessCheck, boolean> = {
+  const passed: Record<ReadinessCheck, boolean | null> = {
     gtin: product.hasGtin,
     image: !!product.image,
     inStock: product.inStock,
     price: product.price !== null,
     description: description.length >= DESCRIPTION_WORDS,
     // The type's last word, as a description says it: "Trail running shoe" → "shoe".
-    typeFirst:
-      type.length > 0 &&
-      [type.at(-1)!, type.at(-1)!.replace(/s$/, '')].some((word) =>
-        [...firstWords].some((w) => w === word || w.replace(/s$/, '') === word),
-      ),
+    typeFirst: type.length
+      ? [type.at(-1)!, type.at(-1)!.replace(/s$/, '')].some((word) =>
+          [...firstWords].some((w) => w === word || w.replace(/s$/, '') === word),
+        )
+      : null,
     category: !!product.category,
     brand: !!product.brand,
   };
-  const missing = (Object.keys(READINESS_CHECKS) as ReadinessCheck[]).filter(
-    (check) => !passed[check],
-  );
-  const score = (Object.keys(READINESS_CHECKS) as ReadinessCheck[])
+  const checks = Object.keys(READINESS_CHECKS) as ReadinessCheck[];
+  const missing = checks.filter((check) => passed[check] === false);
+  const unknown = checks.filter((check) => passed[check] === null);
+  const points = checks
     .filter((check) => passed[check])
     .reduce((sum, check) => sum + READINESS_CHECKS[check], 0);
-  return { score, missing };
+  return { score: Math.round((100 * points) / checkedPoints(unknown)), missing, unknown };
+}
+
+/** The points of the checks made: all 100, less those that couldn't be. */
+function checkedPoints(unknown: readonly ReadinessCheck[]): number {
+  return unknown.reduce((sum, check) => sum - READINESS_CHECKS[check], 100);
+}
+
+/** What a missing check costs a product's score, the checks it couldn't make aside. */
+export function readinessPoints(
+  check: ReadinessCheck,
+  unknown: readonly ReadinessCheck[] = [],
+): number {
+  return Math.round((100 * READINESS_CHECKS[check]) / checkedPoints(unknown));
 }
 
 /** A product's row in the table. */
@@ -123,6 +143,8 @@ export interface ProductRow {
   currency: string | null;
   readiness: number;
   missing: ReadinessCheck[];
+  /** The checks that couldn't be made (no product type), left out of `readiness`. */
+  unknown?: ReadinessCheck[];
   /**
    * A price a channel's latest AI answer shows for it that is none of its
    * variants' (more than PRICE_TOLERANCE off each, in the same currency);
@@ -209,6 +231,7 @@ export function productRows(
       currency: ai?.currency ?? null,
       readiness: ready.score,
       missing: ready.missing,
+      unknown: ready.unknown,
       wrongPrice: wrongPrice(product, shown?.cards ?? []),
     };
   });

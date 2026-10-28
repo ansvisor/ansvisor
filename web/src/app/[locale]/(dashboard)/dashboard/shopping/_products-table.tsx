@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import type { ShoppingProducts } from '@/lib/actions/shopping';
 import {
   PRODUCT_VIEWS,
-  READINESS_CHECKS,
+  readinessPoints,
   viewCounts,
   viewRows,
   type ProductRow,
@@ -64,12 +64,20 @@ function Readiness({ row }: { row: ProductRow }) {
         {row.missing.length ? (
           row.missing.map((check) => (
             <p key={check} className="opacity-90">
-              {t('missing', { check: t(`checks.${check}`), points: READINESS_CHECKS[check] })}
+              {t('missing', {
+                check: t(`checks.${check}`),
+                points: readinessPoints(check, row.unknown),
+              })}
             </p>
           ))
         ) : (
           <p className="opacity-90">{t('complete')}</p>
         )}
+        {row.unknown?.map((check) => (
+          <p key={check} className="opacity-90">
+            {t('unknown', { check: t(`checks.${check}`) })}
+          </p>
+        ))}
       </TooltipContent>
     </Tooltip>
   );

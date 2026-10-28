@@ -16,7 +16,7 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 
-const { ShelfKpis, ShelfRows } = await import('./_shelf');
+const { ShelfFailed, ShelfKpis, ShelfRows } = await import('./_shelf');
 const { priceText } = await import('@/lib/shopping/price');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -115,6 +115,17 @@ describe('ShelfKpis', () => {
     expect(text).toContain('$24.9k+31%');
     expect(text).toContain('152 orders from AI visits');
     expect(text).toContain('ChatGPT71% of AI orders');
+  });
+
+  it("waits for the brand's orders before its revenue and top channel, and shows a cut value whole on hover", () => {
+    const text = render(<ShelfKpis shelf={shelf} orders={undefined} salesConnected />);
+    expect(text).toContain('AI shelf share25%');
+    // Not "No orders" while they're read, nor another brand's revenue.
+    expect(text).not.toContain('No orders from AI visits yet');
+    expect(text).not.toContain('$24.9k');
+    expect(container.querySelectorAll('[aria-busy="true"]')).toHaveLength(2);
+    render(<ShelfKpis shelf={shelf} orders={orders} salesConnected />);
+    expect(container.querySelector('span[title="$24.9k"]')?.textContent).toBe('$24.9k');
   });
 
   it('asks to connect sales without orders or a source, and names the channel showing the products', () => {
@@ -217,6 +228,26 @@ describe('ShelfRows', () => {
     expect(onPlatform).toHaveBeenCalledWith('chatgpt-shopping');
   });
 
+  it("names the price bands in the shelves' own currency", async () => {
+    const euro = buildShelf(cards.map((c) => ({ ...c, price_currency: 'EUR' })));
+    render(
+      <ShelfRows
+        shelf={{ ...shelf, rows: euro }}
+        platforms={[]}
+        platform="all"
+        onPlatform={() => {}}
+      />,
+    );
+    const trigger = container.querySelector<HTMLElement>('[aria-label="Price"]')!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    expect(
+      [...document.querySelectorAll<HTMLElement>('[role="option"]')].map((o) => o.textContent),
+    ).toEqual(['All', 'Under €50', '€50–€100', '€100–€200', '€200 and up']);
+  });
+
   it('says when there is nothing to show', () => {
     expect(
       render(
@@ -228,6 +259,20 @@ describe('ShelfRows', () => {
         />,
       ),
     ).toContain('No shopping answers in this period');
+  });
+});
+
+describe('ShelfFailed', () => {
+  it("says the shelves couldn't be read, and reads them again on Try again", () => {
+    const onRetry = vi.fn();
+    const text = render(<ShelfFailed onRetry={onRetry} />);
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(text).toContain("Couldn't read the shelves right now.");
+    const retry = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Try again',
+    )!;
+    act(() => retry.click());
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });
 

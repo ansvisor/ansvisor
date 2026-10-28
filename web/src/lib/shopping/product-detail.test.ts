@@ -164,6 +164,19 @@ describe('comparison', () => {
     ]);
   });
 
+  it("doesn't count the first 40 words as missing without a product type to look for", () => {
+    const q1 = productShelves(product, cards).find((line) => line.promptId === 'q1')!;
+    const rows = comparison({ ...product, productType: null, category: null }, q1, {
+      own: null,
+      price: priceText,
+      storeDomain: null,
+    });
+    expect(rows.find((row) => row.key === 'firstWords')).toMatchObject({
+      state: 'info',
+      note: { key: 'noType' },
+    });
+  });
+
   it('says how much higher or lower the price is, and a rating the answers never showed', () => {
     const q1 = productShelves(product, cards).find((line) => line.promptId === 'q1')!;
     const pricier = comparison({ ...product, price: 150 }, q1, {

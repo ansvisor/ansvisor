@@ -103,10 +103,13 @@ export function readinessChecklist(input: ReadinessInput): {
   }
 
   if (products.length) {
-    const firstWords = products.filter((row) => row.missing.includes('typeFirst')).length;
+    // Only the products with a type can be checked (products.ts, readiness):
+    // without any, the check is unknown and left out of the score.
+    const typed = products.filter((row) => !row.unknown?.includes('typeFirst'));
+    const firstWords = typed.filter((row) => row.missing.includes('typeFirst')).length;
     items.push({
       key: 'firstWords',
-      state: shareState(firstWords, products.length),
+      state: typed.length ? shareState(firstWords, typed.length) : 'unknown',
       values: { count: firstWords },
       action: firstWords ? 'products' : undefined,
     });

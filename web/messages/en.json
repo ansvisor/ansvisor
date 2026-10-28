@@ -8001,16 +8001,15 @@
       "price": {
         "label": "Price",
         "all": "All",
-        "under50": "Under $50",
-        "50to100": "$50–100",
-        "100to200": "$100–200",
-        "over200": "$200 and up"
+        "under": "Under {price}",
+        "between": "{from}–{to}",
+        "over": "{price} and up"
       },
       "empty": "No shopping answers in this period. Track shopping questions on a channel that shows products.",
       "emptyBand": "No shelf in this price range.",
       "more": "Show {count} more",
       "trends": "Trends",
-      "failed": "Couldn't read the shelves right now. The other tabs still work; try again in a moment."
+      "failed": "Couldn't read the shelves right now. The other tabs still work."
     },
     "readiness": {
       "title": "AI shopping readiness",
@@ -8023,7 +8022,8 @@
       "channels": {
         "showing": "Showing your products",
         "notShowing": "Tracked, yours not shown",
-        "notTracked": "Not tracked"
+        "notTracked": "Not tracked",
+        "unread": "Couldn't read"
       },
       "sources": {
         "chatgpt_us": "OpenAI product index",
@@ -8067,7 +8067,8 @@
           "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
           "pass": "Every description says what the product is in its first 40 words.",
           "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
-          "fail": "ChatGPT reads about 40 words. These don't say what the product is in them."
+          "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
+          "unknown": "Your products have no product type to look for, so this isn't checked or scored. Add product types to your feed."
         },
         "feedFields": {
           "title": "Feed fields complete · {percent}%",
@@ -8192,7 +8193,8 @@
         "close": "Close",
         "higher": "{percent}% higher",
         "lower": "{percent}% lower",
-        "firstWords": "ChatGPT reads about 40 words"
+        "firstWords": "ChatGPT reads about 40 words",
+        "noType": "No product type to look for"
       },
       "says": {
         "title": "What AI says",
@@ -8261,6 +8263,7 @@
       "readiness": {
         "label": "Readiness {score} of 100",
         "missing": "Missing: {check} (−{points})",
+        "unknown": "Not checked: {check}. It needs a product type.",
         "complete": "Everything the catalog can tell is in place.",
         "checks": {
           "gtin": "a GTIN",

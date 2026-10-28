@@ -112,6 +112,30 @@ describe('readinessChecklist', () => {
     expect(score).toBe(Math.round((100 * 3) / 9));
   });
 
+  it('checks the first 40 words only on products with a type, and not at all without one', () => {
+    const untyped = { productType: null, category: null };
+    const firstWords = (products: CatalogProductRow[]) =>
+      readinessChecklist({
+        market: 'us',
+        catalog: [source('shopify')],
+        products: productRows(products, [], []),
+        openAi: null,
+        cheaperResellers: null,
+        amazonDrop: null,
+      }).items.find((item) => item.key === 'firstWords');
+    // One typed product, whose description names it: the untyped one doesn't fail it.
+    expect(firstWords([product('a'), product('b', untyped)])).toMatchObject({
+      state: 'pass',
+      values: { count: 0 },
+    });
+    // None typed: unknown, so the score leaves it out.
+    expect(firstWords([product('a', untyped), product('b', untyped)])).toMatchObject({
+      state: 'unknown',
+      values: { count: 0 },
+      action: undefined,
+    });
+  });
+
   it('asks for the catalog when there is none, and lists no product checks without products', () => {
     const { items } = readinessChecklist({
       market: 'europe',

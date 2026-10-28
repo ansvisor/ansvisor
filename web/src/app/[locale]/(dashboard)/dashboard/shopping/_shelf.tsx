@@ -25,8 +25,10 @@ import { priceText } from '@/lib/shopping/price';
 import type { ShoppingAiOrders, ShoppingShelf } from '@/lib/actions/shopping';
 import type { ProductRow } from '@/lib/shopping/products';
 import {
+  BAND_RANGE,
   PRICE_BANDS,
   inPriceBand,
+  shelfCurrency,
   whyNotYou,
   type PriceBand,
   type ShelfCard,
@@ -65,18 +67,35 @@ function Kpi({
   value,
   delta,
   sub,
+  loading = false,
 }: {
   title: string;
   value: string;
   delta?: string | null;
   sub: React.ReactNode;
+  /** Its value still being read. */
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <Card aria-busy="true">
+        <CardContent className="space-y-1.5 p-4">
+          <p className="text-xs font-medium text-muted-foreground">{title}</p>
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-4 w-32" />
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardContent className="space-y-1.5 p-4">
         <p className="text-xs font-medium text-muted-foreground">{title}</p>
         <p className="flex items-baseline gap-2">
-          <span className="truncate text-2xl font-bold tabular-nums">{value}</span>
+          {/* A long value is cut: the whole of it on hover. */}
+          <span className="truncate text-2xl font-bold tabular-nums" title={value}>
+            {value}
+          </span>
           {delta && (
             <span
               className={cn(
@@ -100,7 +119,8 @@ function Kpi({
  * The Shelf's four numbers (ECOM-006): the brand's share of the product
  * slots in AI answers, its products on the shelf (of the catalog's), its
  * orders from AI visits in the last 30 days, and the AI channel most of them
- * came from (else the one showing its products most).
+ * came from (else the one showing its products most). The two read from
+ * the orders wait for them (`orders` undefined).
  */
 export function ShelfKpis({
   shelf,
@@ -108,7 +128,8 @@ export function ShelfKpis({
   salesConnected,
 }: {
   shelf: ShoppingShelf | null;
-  orders: ShoppingAiOrders | null;
+  /** The brand's orders from AI visits: undefined while read, null when they couldn't be. */
+  orders: ShoppingAiOrders | null | undefined;
   /** Whether a source of sales is in: the tracking snippet, the Shopify pixel or GA. */
   salesConnected: boolean;
 }) {
@@ -147,6 +168,7 @@ export function ShelfKpis({
       />
       <Kpi
         title={t('revenue')}
+        loading={orders === undefined}
         value={
           orders?.revenue && orders.orders
             ? revenueText(orders.revenue.value, orders.revenue.currency)
@@ -173,6 +195,7 @@ export function ShelfKpis({
       />
       <Kpi
         title={t('channel')}
+        loading={orders === undefined}
         value={
           topOrders
             ? getPlatformName(topOrders.source)
@@ -190,6 +213,26 @@ export function ShelfKpis({
               : t('channelNone')
         }
       />
+    </div>
+  );
+}
+
+/**
+ * The shelves that couldn't be read: said, with a way to read them again,
+ * in place of their numbers and rows (which would wait on them for good).
+ */
+export function ShelfFailed({ onRetry }: { onRetry: () => void }) {
+  const t = useTranslations('shopping.shelf');
+  const tCommon = useTranslations('common');
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+    >
+      <p>{t('failed')}</p>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        {tCommon('retry')}
+      </Button>
     </div>
   );
 }
@@ -393,6 +436,15 @@ export function ShelfRows({
     );
   }
   const rows = shelf.rows.filter((row) => inPriceBand(row, band));
+  // The bands in the shelves' own currency: "Under €50".
+  const currency = shelfCurrency(shelf.rows);
+  const bandLabel = (id: PriceBand) => {
+    if (id === 'all') return t('price.all');
+    const [min, max] = BAND_RANGE[id];
+    if (min === 0) return t('price.under', { price: priceText(max, currency) });
+    if (max === Infinity) return t('price.over', { price: priceText(min, currency) });
+    return t('price.between', { from: priceText(min, currency), to: priceText(max, currency) });
+  };
   const chip = (id: string, label: string) => (
     <button
       key={id}
@@ -423,7 +475,7 @@ export function ShelfRows({
           }}
           items={PRICE_BANDS.map((id) => ({
             value: id,
-            label: `${t('price.label')}: ${t(`price.${id}`)}`,
+            label: `${t('price.label')}: ${bandLabel(id)}`,
           }))}
         >
           <SelectTrigger size="sm" className="ml-auto h-7" aria-label={t('price.label')}>
@@ -432,7 +484,7 @@ export function ShelfRows({
           <SelectContent align="end">
             {PRICE_BANDS.map((id) => (
               <SelectItem key={id} value={id}>
-                {t(`price.${id}`)}
+                {bandLabel(id)}
               </SelectItem>
             ))}
           </SelectContent>
