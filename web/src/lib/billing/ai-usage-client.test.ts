@@ -36,6 +36,26 @@ describe('readAiUsage', () => {
     });
   });
 
+  it('reads an older API’s answer the new way: quality in the Content Editor, no unused rows', async () => {
+    fetchMock.mockResolvedValue(
+      answer(200, {
+        unlimited: false,
+        percentUsed: 1.3,
+        features: [
+          { feature: 'improve', percent: 0 },
+          { feature: 'content', percent: 1.2 },
+          { feature: 'action_center', percent: 0 },
+          { feature: 'quality', percent: 0.1 },
+        ],
+      }),
+    );
+    expect(await readAiUsage()).toEqual({
+      unlimited: false,
+      percentUsed: 1.3,
+      features: [{ feature: 'content', percent: 1.3 }],
+    });
+  });
+
   it('is null without an active plan', async () => {
     fetchMock.mockResolvedValue(answer(402, { error: 'plan_limit' }));
     expect(await readAiUsage()).toBeNull();
