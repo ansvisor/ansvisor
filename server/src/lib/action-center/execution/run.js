@@ -226,6 +226,24 @@ export async function runTask(taskId, { now = new Date(), sources } = {}) {
     logger.info({ taskId, tool: tool.id }, '[task-run] completed');
     return { status: 'succeeded', output };
   } catch (err) {
+    // A tool that can't go on today (its reads for the day spent, learning
+    // C1) leaves the task as it was, for the next night.
+    if (err?.retryLater) {
+      await record({
+        task_id: task.id,
+        action_id: action.id,
+        brand_id: action.brand_id,
+        tool_id: tool.id,
+        tool_version: tool.version,
+        status: 'blocked',
+        input,
+        error: err.message,
+        started_at: startedAt.toISOString(),
+        finished_at: new Date().toISOString(),
+      });
+      logger.info({ taskId, tool: tool.id, reason: err.message }, '[task-run] later');
+      return { status: 'blocked', reason: err.message };
+    }
     // The action is deliberately untouched. One step failing is one step to
     // do by hand, not a recovery plan cancelled.
     await record({

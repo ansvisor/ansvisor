@@ -162,6 +162,22 @@ describe('runTask', () => {
     expect(run.row.error).toContain('timeout');
   });
 
+  /** A tool whose reads for the day are spent (learning C1) tries again the next night. */
+  it('leaves the task as it was when its tool can only go on tomorrow', async () => {
+    rpc.mockRejectedValue(Object.assign(new Error('reads for today spent'), { retryLater: true }));
+    const writes = mockDb({ task: task(), action });
+
+    const result = await runTask(TASK, { now: NOW, sources: ALL });
+
+    expect(result).toEqual({ status: 'blocked', reason: 'reads for today spent' });
+    expect(writes.updated.some((w) => w.table === 'action_tasks')).toBe(false);
+    expect(writes.inserted.find((w) => w.table === 'action_task_runs').row).toMatchObject({
+      status: 'blocked',
+      error: 'reads for today spent',
+    });
+    expect(writes.inserted.some((w) => w.table === 'action_events')).toBe(false);
+  });
+
   it('records a blocked attempt rather than passing over it in silence', async () => {
     const writes = mockDb({ task: task({ task_key: 'update_content' }), action });
 
