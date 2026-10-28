@@ -7577,7 +7577,8 @@
           "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
           "pass": "Every description says what the product is in its first 40 words.",
           "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
-          "fail": "ChatGPT reads about 40 words. These don't say what the product is in them."
+          "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
+          "unknown": "Your products have no product type to look for, so this isn't checked or scored. Add product types to your feed."
         },
         "feedFields": {
           "title": "Feed fields complete · {percent}%",
@@ -7702,7 +7703,8 @@
         "close": "Close",
         "higher": "{percent}% higher",
         "lower": "{percent}% lower",
-        "firstWords": "ChatGPT reads about 40 words"
+        "firstWords": "ChatGPT reads about 40 words",
+        "noType": "No product type to look for"
       },
       "says": {
         "title": "What AI says",
@@ -7771,6 +7773,7 @@
       "readiness": {
         "label": "Readiness {score} of 100",
         "missing": "Missing: {check} (−{points})",
+        "unknown": "Not checked: {check}. It needs a product type.",
         "complete": "Everything the catalog can tell is in place.",
         "checks": {
           "gtin": "a GTIN",

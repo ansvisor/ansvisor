@@ -254,12 +254,14 @@ export function comparison(
   });
   const ready = readiness(product);
   const has = (check: ReadinessCheck) => !ready.missing.includes(check);
+  // Without a product type there's nothing to look for: not a miss (products.ts).
+  const untyped = ready.unknown.includes('typeFirst');
   rows.push({
     key: 'firstWords',
     you: null,
     winner: null,
-    state: has('typeFirst') ? 'match' : 'missing',
-    note: { key: 'firstWords' },
+    state: untyped ? 'info' : has('typeFirst') ? 'match' : 'missing',
+    note: { key: untyped ? 'noType' : 'firstWords' },
   });
   rows.push({ key: 'gtin', you: null, winner: null, state: has('gtin') ? 'match' : 'missing' });
   rows.push({ key: 'photo', you: null, winner: null, state: has('image') ? 'match' : 'missing' });

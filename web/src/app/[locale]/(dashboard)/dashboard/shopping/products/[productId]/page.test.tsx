@@ -111,7 +111,7 @@ const detail: ShoppingProductDetail = {
     inStock: true,
     hasGtin: false,
   },
-  readiness: { score: 48, missing: ['gtin', 'description'] },
+  readiness: { score: 48, missing: ['gtin', 'description'], unknown: [] },
   shelves: [
     line,
     {

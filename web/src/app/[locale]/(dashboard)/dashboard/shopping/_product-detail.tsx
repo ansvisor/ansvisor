@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { ArrowDown, Check, ExternalLink, Minus, ShoppingBag, X } from 'lucide-react';
+import { ArrowDown, Check, ExternalLink, HelpCircle, Minus, ShoppingBag, X } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -18,7 +18,7 @@ import type { ShoppingProductDetail } from '@/lib/actions/shopping';
 import type { ProductAiSays } from '@/lib/shopping/ai-says';
 import { formatNumber } from '@/lib/format';
 import { priceText } from '@/lib/shopping/price';
-import { READINESS_CHECKS } from '@/lib/shopping/products';
+import { readinessPoints } from '@/lib/shopping/products';
 import type { ComparisonState } from '@/lib/shopping/product-detail';
 import { productPlan } from '@/lib/shopping/action-plan';
 import { cn } from '@/lib/utils';
@@ -261,7 +261,7 @@ export function ProductDetailView({
                 <X className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden />
                 {tReady('missing', {
                   check: tReady(`checks.${check}`),
-                  points: READINESS_CHECKS[check],
+                  points: readinessPoints(check, detail.readiness.unknown),
                 })}
               </p>
             ))
@@ -271,6 +271,12 @@ export function ProductDetailView({
               {tReady('complete')}
             </p>
           )}
+          {detail.readiness.unknown.map((check) => (
+            <p key={check} className="flex items-center gap-2 text-muted-foreground">
+              <HelpCircle className="h-4 w-4 shrink-0" aria-hidden />
+              {tReady('unknown', { check: tReady(`checks.${check}`) })}
+            </p>
+          ))}
         </CardContent>
       </Card>
     </div>

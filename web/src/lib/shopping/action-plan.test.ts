@@ -20,7 +20,7 @@ const detail = (over: Partial<ShoppingProductDetail> = {}): ShoppingProductDetai
     inStock: true,
     hasGtin: false,
   },
-  readiness: { score: 48, missing: ['gtin', 'description'] },
+  readiness: { score: 48, missing: ['gtin', 'description'], unknown: [] },
   shelves: [],
   focus: {
     promptId: 'q1',
@@ -70,7 +70,9 @@ describe('productPlan', () => {
   });
 
   it('falls back to the question, a buying guide and a schema check', () => {
-    const plan = productPlan(detail({ focus: null, readiness: { score: 100, missing: [] } }));
+    const plan = productPlan(
+      detail({ focus: null, readiness: { score: 100, missing: [], unknown: [] } }),
+    );
     expect(plan.map((w) => w.line.key)).toEqual(['optimizeQuestion', 'guide', 'listed', 'schema']);
   });
 });

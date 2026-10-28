@@ -3,6 +3,7 @@ import {
   inView,
   productRows,
   readiness,
+  readinessPoints,
   viewCounts,
   viewRows,
   type CatalogProductRow,
@@ -30,7 +31,7 @@ const product = (over: Partial<CatalogProductRow>): CatalogProductRow => ({
 
 describe('readiness', () => {
   it('scores a complete product 100', () => {
-    expect(readiness(product({}))).toEqual({ score: 100, missing: [] });
+    expect(readiness(product({}))).toEqual({ score: 100, missing: [], unknown: [] });
   });
 
   it('says what a product misses, and what each costs', () => {
@@ -58,6 +59,27 @@ describe('readiness', () => {
         'category',
         'brand',
       ],
+      unknown: [],
+    });
+  });
+
+  it("leaves the first 40 words out of the score without a product type, as Shopify's often is", () => {
+    // No type and no category: what the product is can't be looked for.
+    const untyped = product({ productType: '  ', category: null });
+    expect(readiness(untyped)).toEqual({
+      // 80 of the other checks' 90 points (no category).
+      score: 89,
+      missing: ['category'],
+      unknown: ['typeFirst'],
+    });
+    expect(readiness({ ...untyped, category: 'Shoes' }).unknown).toEqual([]);
+    // A missing check costs its share of the points checked.
+    expect(readinessPoints('gtin')).toBe(20);
+    expect(readinessPoints('gtin', ['typeFirst'])).toBe(22);
+    expect(productRows([untyped], [], [])[0]).toMatchObject({
+      readiness: 89,
+      missing: ['category'],
+      unknown: ['typeFirst'],
     });
   });
 
