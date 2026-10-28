@@ -14,6 +14,9 @@ vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }
 // The brand's Webflow connection (#1331, phase 2): none unless a test gives one.
 const readWebflow = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/webflow-client', () => ({ readWebflow }));
+// And its WordPress site (00294): none unless a test gives one.
+const readWordPress = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/wordpress-client', () => ({ readWordPress }));
 
 const { SendDialog } = await import('./send-to-cms-dialog');
 
@@ -75,6 +78,7 @@ beforeEach(() => {
   toast.success.mockReset();
   readDraftCms.mockReset().mockResolvedValue(neverSent);
   readWebflow.mockReset().mockResolvedValue({ ok: true, configured: false, connection: null });
+  readWordPress.mockReset().mockResolvedValue({ ok: true, configured: true, connection: null });
   // The send target remembered per brand, in this browser.
   const kept = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -99,7 +103,8 @@ afterEach(() => {
 
 describe('SendDialog', () => {
   it('fills the fields from the page and sends it without its H1', async () => {
-    await render({ byline: 'By Ada Lovelace' });
+    const onSent = vi.fn();
+    await render({ byline: 'By Ada Lovelace', onSent });
     expect(readDraftCms).toHaveBeenCalledWith('d1');
     expect(field('cms-slug').value).toBe('pour-over');
     expect(field('cms-meta-title').value).toBe('Pour-over');
@@ -126,6 +131,10 @@ describe('SendDialog', () => {
     );
     expect(toast.success).toHaveBeenCalledWith('Sent to your CMS');
     expect(onClose).toHaveBeenCalled();
+    // The editor's header says where it went.
+    expect(onSent).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'sent', target: 'webhook', error: null }),
+    );
   });
 
   it('starts from what the draft kept and says where the page went live', async () => {
@@ -294,6 +303,38 @@ describe('SendDialog', () => {
     expect(alert()).toBeUndefined();
     expect(onClose).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('tells the editor a send failed too, with why, so its header says so', async () => {
+    const onSent = vi.fn();
+    await render({ onSent });
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [{ id: 'x1', draftId: 'd1', status: 'failed', http_status: 500, error: null }],
+    });
+    await act(async () => button('Send').click());
+    expect(onSent).toHaveBeenCalledWith({
+      status: 'failed',
+      target: 'webhook',
+      at: expect.any(String),
+      error:
+        "The webhook answered 500 and didn't take the page. Check your workflow, then send again.",
+    });
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [
+        { id: 'x2', draftId: 'd1', status: 'failed', http_status: null, error: 'Not reached' },
+      ],
+    });
+    await act(async () => button('Send').click());
+    expect(onSent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'failed', target: 'webhook', error: 'Not reached' }),
+    );
+    // Nothing went for a request refused before a send: no word in the header.
+    sendPagesToCms.mockResolvedValueOnce({ ok: false, code: 'workspace', field: null });
+    await act(async () => button('Send').click());
+    expect(onSent).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   describe('to Webflow (#1331, phase 2)', () => {
@@ -497,6 +538,290 @@ describe('SendDialog', () => {
       expect(alert()).toBe(
         'This page is already on its way to Webflow. Wait for it, then send again.',
       );
+    });
+  });
+
+  describe('to WordPress (#1331, phase 2)', () => {
+    const connection = {
+      status: 'connected',
+      siteUrl: 'https://blog.acme.example',
+      siteName: 'Acme Blog',
+      account: 'ansvisor',
+      connectedAt: '2026-10-26T10:00:00Z',
+      updatedAt: '2026-10-26T10:00:00Z',
+    };
+    const ready = { ok: true, configured: true, connection };
+    const refused = {
+      ok: true,
+      configured: true,
+      connection: { ...connection, status: 'auth_failed' },
+    };
+    const webflowReady = {
+      ok: true,
+      configured: true,
+      connection: {
+        status: 'connected',
+        siteId: 's1',
+        siteName: 'Acme',
+        collectionId: 'c1',
+        collectionName: 'Blog Posts',
+        fieldMap: { body: 'post-body' },
+        connectedAt: '2026-10-25T10:00:00Z',
+        updatedAt: '2026-10-25T10:00:00Z',
+      },
+    };
+    const radios = () => [...dialog().querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+    const radio = (name: string) => radios().find((r) => r.textContent?.startsWith(name));
+    const sentWith = (over: object) =>
+      sendPagesToCms.mockResolvedValueOnce({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'sent', ...over }],
+      });
+
+    it('sends to WordPress first when it’s the brand’s only CMS', async () => {
+      readWordPress.mockResolvedValue(ready);
+      await render();
+      expect(readWordPress).toHaveBeenCalledWith('brand-1');
+      expect(radios().map((r) => r.textContent)).toEqual([
+        'WordPressA draft post on Acme Blog',
+        "Your workflowThe brand's webhook (Zapier, Make, n8n)",
+      ]);
+      expect(dialog().querySelector('[role="radiogroup"]')!.className).toContain('grid-cols-2');
+      expect(radio('WordPress')!.getAttribute('aria-checked')).toBe('true');
+      expect(dialog().textContent).toContain(
+        "The page goes to Acme Blog in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin.",
+      );
+      sentWith({ updated: false, live: false, changed: { jsonLd: 0 } });
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', expect.any(Array), 'wordpress');
+      expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('wordpress');
+      expect(toast.success).toHaveBeenCalledWith('Sent to WordPress as a draft post', {
+        description: undefined,
+      });
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('names the site by its address when it has no name', async () => {
+      readWordPress.mockResolvedValue({ ...ready, connection: { ...connection, siteName: null } });
+      await render();
+      expect(radio('WordPress')!.textContent).toContain(
+        'A draft post on https://blog.acme.example',
+      );
+    });
+
+    it('shows all three with Webflow and WordPress, starting from the remembered WordPress', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'wordpress');
+      readWebflow.mockResolvedValue(webflowReady);
+      readWordPress.mockResolvedValue(ready);
+      await render();
+      expect(radios().map((r) => r.querySelector('span')?.textContent)).toEqual([
+        'Webflow',
+        'WordPress',
+        'Your workflow',
+      ]);
+      expect(dialog().querySelector('[role="radiogroup"]')!.className).toContain(
+        'grid-cols-1 sm:grid-cols-3',
+      );
+      expect(radio('WordPress')!.getAttribute('aria-checked')).toBe('true');
+      expect(radio('WordPress')!.tabIndex).toBe(0);
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenLastCalledWith('brand-1', expect.any(Array), 'wordpress');
+    });
+
+    it('starts from Webflow when both are ready and nothing is remembered', async () => {
+      readWebflow.mockResolvedValue(webflowReady);
+      readWordPress.mockResolvedValue(ready);
+      await render();
+      expect(radio('Webflow')!.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('keeps a remembered Webflow that isn’t ready to the webhook, never WordPress in its place', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'webflow');
+      readWebflow.mockResolvedValue({
+        ...webflowReady,
+        connection: { ...webflowReady.connection, status: 'auth_failed' },
+      });
+      readWordPress.mockResolvedValue(ready);
+      await render();
+      expect(radio('Webflow')!.disabled).toBe(true);
+      expect(radio('WordPress')!.getAttribute('aria-checked')).toBe('false');
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenLastCalledWith('brand-1', expect.any(Array), 'webhook');
+    });
+
+    it('starts from the first ready when the remembered one is no longer connected', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'webflow');
+      readWordPress.mockResolvedValue(ready);
+      await render();
+      expect(radio('Webflow')).toBeUndefined();
+      expect(radio('WordPress')!.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('says only that the webhook is missing when a CMS is ready to pick instead', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'webhook');
+      readWebflow.mockResolvedValue(webflowReady);
+      readWordPress.mockResolvedValue(refused);
+      sendPagesToCms.mockResolvedValueOnce({ ok: false, code: 'no_webhook', field: null });
+      await render();
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenLastCalledWith('brand-1', expect.any(Array), 'webhook');
+      expect(alert()).toBe(
+        'This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.',
+      );
+    });
+
+    it('moves through the three with the arrow keys, past one that’s off', async () => {
+      readWebflow.mockResolvedValue(webflowReady);
+      readWordPress.mockResolvedValue(ready);
+      await render();
+      await vi.waitFor(() => expect(dialog().contains(document.activeElement)).toBe(true));
+      const key = async (from: string, key: string) =>
+        act(async () => {
+          radio(from)!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+        });
+      await key('Webflow', 'ArrowRight');
+      expect(radio('WordPress')!.getAttribute('aria-checked')).toBe('true');
+      expect(document.activeElement).toBe(radio('WordPress'));
+      await key('WordPress', 'ArrowDown');
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+      // Round from the last to the first.
+      await key('Your workflow', 'ArrowRight');
+      expect(radio('Webflow')!.getAttribute('aria-checked')).toBe('true');
+      expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('webflow');
+
+      act(() => root.unmount());
+      root = createRoot(container);
+      readWordPress.mockResolvedValue(refused);
+      await render();
+      expect(radio('WordPress')!.disabled).toBe(true);
+      await key('Webflow', 'ArrowRight');
+      // WordPress, off, is passed over.
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+      await key('Your workflow', 'ArrowLeft');
+      expect(radio('Webflow')!.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('shows WordPress with its sign-in refused, off, and sends to the webhook', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'wordpress');
+      readWordPress.mockResolvedValue(refused);
+      await render();
+      expect(radio('WordPress')!.disabled).toBe(true);
+      expect(radio('WordPress')!.textContent).toContain(
+        'Sign-in refused: connect WordPress again in Settings › Integrations',
+      );
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+      sendPagesToCms.mockResolvedValueOnce({ ok: false, code: 'no_webhook', field: null });
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenLastCalledWith('brand-1', expect.any(Array), 'webhook');
+      expect(alert()).toBe(
+        "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations.",
+      );
+    });
+
+    it('says WordPress couldn’t be checked to a person who picked it, and reads again', async () => {
+      localStorage.setItem('aeo:cms-target:brand-1', 'wordpress');
+      readWebflow.mockResolvedValue(webflowReady);
+      readWordPress.mockResolvedValueOnce({ ok: false, code: 'failed' }).mockResolvedValue(ready);
+      await render();
+      expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
+        "Couldn't check WordPress just now, so this send goes to your workflow.",
+      );
+      // Not Webflow in its place: the webhook, as the note says.
+      expect(radio('WordPress')).toBeUndefined();
+      expect(radio('Your workflow')!.getAttribute('aria-checked')).toBe('true');
+      await act(async () => button('Try again').click());
+      expect(readWordPress).toHaveBeenCalledTimes(2);
+      expect(radio('WordPress')!.getAttribute('aria-checked')).toBe('true');
+      expect(dialog().querySelector('[role="status"]')).toBeNull();
+    });
+
+    it('says nothing of a WordPress it can’t read to a person who didn’t pick it', async () => {
+      readWebflow.mockResolvedValue(webflowReady);
+      readWordPress.mockResolvedValue({ ok: false, code: 'failed' });
+      await render();
+      expect(dialog().querySelector('[role="status"]')).toBeNull();
+      expect(radio('Webflow')!.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('says the draft post was updated, its post was live, and its JSON-LD left out', async () => {
+      readWordPress.mockResolvedValue(ready);
+      sentWith({ updated: true, live: false, changed: { jsonLd: 0 } });
+      await render();
+      await act(async () => button('Send').click());
+      expect(toast.success).toHaveBeenLastCalledWith('Draft post updated in WordPress', {
+        description: undefined,
+      });
+
+      // The dialog stays open here (onClose is the test's): sent again.
+      sentWith({ updated: false, live: true, changed: { jsonLd: 2 } });
+      await act(async () => button('Send').click());
+      expect(toast.success).toHaveBeenLastCalledWith('Sent to WordPress as a draft post', {
+        description:
+          'Its post was already published or scheduled, so the page went as a new draft. Move the text over in WordPress; published as it is, its slug gets "-2". JSON-LD left out: add schema with your SEO plugin.',
+      });
+
+      sentWith({ updated: false, live: false, changed: { jsonLd: 1 } });
+      await act(async () => button('Send').click());
+      expect(toast.success).toHaveBeenLastCalledWith('Sent to WordPress as a draft post', {
+        description: 'JSON-LD left out: add schema with your SEO plugin.',
+      });
+    });
+
+    it('says why WordPress didn’t take the page', async () => {
+      readWordPress.mockResolvedValue(ready);
+      await render();
+      const said = async (result: object) => {
+        sendPagesToCms.mockResolvedValueOnce(result);
+        await act(async () => button('Send').click());
+        return alert();
+      };
+      expect(await said({ ok: false, code: 'no_wordpress', field: null })).toBe(
+        'Connect WordPress in Settings › Integrations first.',
+      );
+      expect(await said({ ok: false, code: 'wordpress_refused', field: null })).toBe(
+        'WordPress refused the sign-in. Connect it again in Settings › Integrations.',
+      );
+      expect(await said({ ok: false, code: 'wordpress_not_configured', field: null })).toBe(
+        "WordPress isn't set up on this server. Send to your workflow instead.",
+      );
+      expect(await said({ ok: false, code: 'in_progress', field: null })).toBe(
+        'This page is already on its way to WordPress. Wait for it, then send again.',
+      );
+      expect(
+        await said({
+          ok: true,
+          deliveries: [
+            {
+              id: 'x2',
+              draftId: 'd1',
+              status: 'failed',
+              error: 'WordPress refused the post: rest_cannot_create',
+            },
+          ],
+        }),
+      ).toBe("WordPress didn't take the page: WordPress refused the post: rest_cannot_create");
+      expect(sendPagesToCms).toHaveBeenLastCalledWith('brand-1', expect.any(Array), 'wordpress');
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('says the last send went to WordPress', async () => {
+      readWordPress.mockResolvedValue(ready);
+      readDraftCms.mockResolvedValue({
+        ...neverSent,
+        last: { status: 'sent', target: 'wordpress', at: '2026-10-24T10:00:00Z', error: null },
+      });
+      await render();
+      expect(dialog().textContent).toContain('In WordPress as a draft post since Oct 24, 2026');
+      readDraftCms.mockResolvedValue({
+        ...neverSent,
+        last: { status: 'failed', target: 'wordpress', at: '2026-10-24T10:00:00Z', error: 'No' },
+      });
+      act(() => root.unmount());
+      root = createRoot(container);
+      await render();
+      expect(dialog().textContent).toContain('The last send to WordPress failed, Oct 24, 2026');
     });
   });
 });

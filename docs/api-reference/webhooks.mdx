@@ -20,7 +20,7 @@ Choose the events a webhook should receive in **Content → Configure Webhook**.
 | `opportunity.sent` | A user sends a content opportunity to the workflow — from the opportunity page, or several at once from the opportunities list |
 | `daily_pulse.created` | A brand's Daily Pulse is generated (on cloud and self-host alike) |
 | `action_task.sent` | A user sends an Action Center task to the configured webhook |
-| `content_draft.sent` | An admin or manager sends a Content Editor page to the CMS through the webhook: from the editor, a Library row, or up to 25 selected Library pages ([Send to CMS](/guides/send-to-cms)). Pages sent to Webflow don't fire it |
+| `content_draft.sent` | An admin or manager sends a Content Editor page to the CMS through the webhook: from the editor, a Library row, or up to 25 selected Library pages ([Send to CMS](/guides/send-to-cms)). Pages sent to Webflow or WordPress don't fire it |
 | `webhook.test` | **Test Webhook** is pressed in the webhook settings (always sent, independent of subscriptions) |
 
 ## Verifying requests
@@ -293,15 +293,39 @@ The test uses the URL and secret currently in the form, so you can check an endp
 - Each event is sent **once**. There are no automatic retries.
 - Every request carries `User-Agent: Ansvisor-Webhook/1.0 (+https://ansvisor.com)`, so a firewall or WAF in front of your endpoint can let it through.
 - Ansvisor waits up to 15 seconds for a response (10 seconds for `webhook.test`).
-- Respond with a 2xx status quickly and do slow work after responding. Once the status has arrived, it counts even if the connection drops before the rest of the answer.
+- Respond with a 2xx status quickly and do slow work after responding. Once the status has arrived, it counts, even if the rest of the answer is cut off or doesn't arrive in time.
 - Redirects aren't followed: a 3xx is the answer, and nothing reaches the address it points to. Use that address; the **Test** button reports a 3xx as a failure and names where it redirects to.
 - When the **Test** button can't reach the webhook, it adds the network error, such as `ENOTFOUND` (the host name doesn't resolve), `ECONNREFUSED` (nothing listens on that port) or a TLS certificate error.
-- Only admins and managers can test a brand's webhook, up to 10 tests a minute each.
+- Only admins and managers can change or test a brand's webhook, up to 10 tests a minute each. Other members see its settings read-only.
 - The address must be `http://` or `https://`, with no user name or password in it. On Ansvisor Cloud it must also be a public address. A self-hosted install may also use addresses on its own network.
 - `content_draft.sent`:
   - A 2xx answer marks the send **sent**. Anything else, or no answer, marks it **failed**, and the Library shows why. The first 2,000 characters of the answer are kept.
   - A single page is sent while the person waits. A bulk send (up to 25 pages) goes on in the background, one page after another, with a 2-second pause between pages.
   - A workspace can send 200 pages in 24 hours.
+
+## When the plan has ended
+
+On Ansvisor Cloud, a workspace without an active plan is read-only: a cancelled plan or free trial reached its end, or a payment failed. See [What happens when my plan ends?](/faq).
+
+- **Nothing is sent.** Sending an opportunity, a task or a page, and **Test Webhook**, are writes, so the API refuses them with the 402 below. No Daily Pulse is generated.
+- **Callbacks store nothing.** Both callbacks (`/webhooks/content/{id}/status` and `/webhooks/content-drafts/{deliveryId}/status`) check the secret first, so a wrong one still answers 401. With the right secret, they answer `202` with this body and change nothing, whatever you sent:
+
+  ```json
+  { "success": false, "ignored": true, "code": "subscription_inactive" }
+  ```
+
+  It's a 2xx, so your workflow doesn't fail. Don't retry it.
+
+A write to the API (`/api/…`, any method but `GET`, `HEAD` and `OPTIONS`) from a person in a read-only workspace answers `402`:
+
+| Field | Value |
+|---|---|
+| `success` | `false` |
+| `error` | `plan_limit` |
+| `code` | `subscription_inactive` |
+| `message` | `Your plan has ended. Choose a plan to use Ansvisor again.` |
+
+A few writes stay open, such as disconnecting an outside account; the FAQ lists them. A self-hosted install is never read-only.
 
 <Card title="Help center" icon="circle-question" href="/faq">
   Common questions and troubleshooting.

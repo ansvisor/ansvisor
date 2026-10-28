@@ -27,6 +27,7 @@ import { NewContentDialog } from '@/components/content/new-content-dialog';
 import { PublishDialog } from '@/components/content/publish-dialog';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useRouter } from '@/i18n/navigation';
 import {
   archiveContentDraft,
@@ -39,6 +40,7 @@ import { CMS_PAGES_PER_SEND, type CmsSource } from '@/lib/content/cms-send';
 import {
   readCmsStatuses,
   refreshWebflowPublished,
+  refreshWordPressPublished,
   type CmsStatus,
 } from '@/lib/content/cms-send-client';
 import {
@@ -57,6 +59,11 @@ import {
   type SendFilter,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
+import {
+  SHOPPING_FILTERS,
+  draftsByShopping,
+  type ShoppingFilter,
+} from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -82,6 +89,8 @@ interface LibraryRead {
  * send it to the CMS (#1331), archive, restore and delete. The tab lives in
  * the URL (?tab=in_review), so a link can open "Library › In review";
  * ?new=1 opens New content (Content › Editor with no draft to go back to).
+ * An online shop's pages show their shopping path's links, and a filter
+ * lists the ones that need attention (?shopping=attention, 00352).
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
@@ -93,10 +102,18 @@ export default function ContentLibraryPage() {
   const [created, setCreated] = useState<CreatedRange>('all');
   // How the listed drafts' last send to the CMS stands (#1331): ?sent=failed.
   const [sent, setSent] = useState<SendFilter>('all');
+  // Which shopping paths are listed, on an online shop: ?shopping=attention.
+  const [shoppingFilter, setShoppingFilter] = useState<ShoppingFilter>('all');
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): the reads the Library asks for
+  // by itself are left out, and it lists what is stored. New content, Send
+  // and the row menu's changes open the upgrade dialog instead; tabs, the
+  // date filter and Export stay open.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The draft whose Delete waits for a confirmation.
   const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
   const [deletePending, setDeletePending] = useState(false);
@@ -127,12 +144,13 @@ export default function ContentLibraryPage() {
     setTab(readUrlChoice('tab', LIBRARY_TABS, 'all'));
     setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
     setSent(readUrlChoice('sent', SEND_FILTERS, 'all'));
-    // Once: closed, it doesn't open again on a reload.
+    setShoppingFilter(readUrlChoice('shopping', SHOPPING_FILTERS, 'all'));
+    // Once: closed, it doesn't open again on a reload. Read-only, it doesn't open.
     if (readUrlParam('new') === '1') {
-      setStarting(true);
+      if (!isLocked) setStarting(true);
       writeUrlParams({ new: null });
     }
-  }, []);
+  }, [isLocked]);
   const { exporting, exportList, exportDraft } = useLibraryExport(activeBrandId);
 
   useEffect(() => {
@@ -192,22 +210,35 @@ export default function ContentLibraryPage() {
     return () => clearTimeout(timer);
   }, [cmsGoing, cms]);
 
-  // Pages in Webflow as draft items: Webflow says when one goes live, so the
-  // API reads them once as the Library opens for the brand (and daily); the
-  // list is read again when it marked any published.
-  const inWebflow = [...cms.values()].some(
-    (status) => status.target === 'webflow' && status.status === 'sent',
-  );
+  // Pages in Webflow as draft items, or in WordPress as draft posts: the CMS
+  // says when one goes live, so the API reads them once as the Library opens
+  // for the brand (and daily); the list is read again when it marked any
+  // published.
+  const sentTo = (target: CmsStatus['target']) =>
+    [...cms.values()].some((status) => status.target === target && status.status === 'sent');
+  const inWebflow = sentTo('webflow');
+  const inWordPress = sentTo('wordpress');
   const webflowRead = useRef(new Set<string>());
+  const wordpressRead = useRef(new Set<string>());
   useEffect(() => {
-    if (!inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
+    if (isLocked || !inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
     webflowRead.current.add(activeBrandId);
     // Not cancelled with the effect: a filter or search changing meanwhile
     // still reads the list again, the brand's pages marked.
     void refreshWebflowPublished(activeBrandId).then((published) => {
       if (published.length) setAttempt((n) => n + 1);
     });
-  }, [inWebflow, activeBrandId]);
+  }, [isLocked, inWebflow, activeBrandId]);
+  useEffect(() => {
+    if (isLocked || !inWordPress || !activeBrandId || wordpressRead.current.has(activeBrandId)) {
+      return;
+    }
+    wordpressRead.current.add(activeBrandId);
+    // As Webflow's: not cancelled with the effect.
+    void refreshWordPressPublished(activeBrandId).then((published) => {
+      if (published.length) setAttempt((n) => n + 1);
+    });
+  }, [isLocked, inWordPress, activeBrandId]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
@@ -260,25 +291,40 @@ export default function ContentLibraryPage() {
     else toast.error(t('rowMenu.sendFailed'));
   };
 
+  const changeStatus = (draft: ContentDraftListItem, status: DraftStatus) => {
+    // Published asks where the page is live (CE-013): tracking starts there.
+    if (status === 'published') {
+      setPublishing(draft.id);
+      return;
+    }
+    // Ready keeps a History version and completes the draft's task, as the editor's Mark ready.
+    const change =
+      status === 'ready'
+        ? markContentDraftReady(draft.id)
+        : setContentDraftStatus(draft.id, status);
+    change.then(reload, failed);
+  };
   const rowActions: LibraryRowActions = {
     canManage,
-    onStatus: (draft: ContentDraftListItem, status: DraftStatus) => {
-      // Published asks where the page is live (CE-013): tracking starts there.
-      if (status === 'published') {
-        setPublishing(draft.id);
-        return;
-      }
-      // Ready keeps a History version and completes the draft's task, as the editor's Mark ready.
-      const change =
-        status === 'ready'
-          ? markContentDraftReady(draft.id)
-          : setContentDraftStatus(draft.id, status);
-      change.then(reload, failed);
-    },
-    onArchive: (draft, archived) => void archive(draft, archived),
-    onDelete: setDeleting,
+    onStatus: (draft, status) =>
+      guard(changeStatus, {
+        action: tActions(
+          status === 'published'
+            ? 'markPublished'
+            : status === 'ready'
+              ? 'markReady'
+              : 'changeContentStatus',
+        ),
+      })(draft, status),
+    onArchive: (draft, archived) =>
+      guard(() => void archive(draft, archived), {
+        action: tActions(archived ? 'archiveContent' : 'restoreContent'),
+      })(),
+    onDelete: guard(setDeleting, { action: tActions('deleteContent') }),
     onExport: (draft, format) => void exportDraft(draft, format),
-    onSend: (draft) => void openSend(draft),
+    onSend: guard((draft: ContentDraftListItem) => void openSend(draft), {
+      action: tActions('sendToCms'),
+    }),
   };
 
   const confirmDelete = async () => {
@@ -311,6 +357,11 @@ export default function ContentLibraryPage() {
     clearPicked();
     writeUrlParams({ sent: next }, { sent: 'all' });
   };
+  const changeShopping = (next: ShoppingFilter) => {
+    setShoppingFilter(next);
+    clearPicked();
+    writeUrlParams({ shopping: next }, { shopping: 'all' });
+  };
 
   if (!activeBrandId) {
     return (
@@ -326,11 +377,14 @@ export default function ContentLibraryPage() {
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
   const createdIn = draftsCreatedIn(inTab, created);
+  // Shopping paths are an online shop's (shopping path, 00351).
+  const isShop = siteTypeOf(activeBrand ?? {}) === 'ecommerce';
+  const shopped = isShop ? draftsByShopping(createdIn, shoppingFilter) : createdIn;
   // Filtered by their last send only once these drafts' sends are read (a
   // list read again in another order needn't wait); till then, none listed
   // to export or pick.
   const sendsRead = sent === 'all' || !drafts || drafts.every((draft) => cmsReadFor.has(draft.id));
-  const listed = sendsRead ? draftsLastSent(createdIn, cms, sent) : [];
+  const listed = sendsRead ? draftsLastSent(shopped, cms, sent) : [];
   // Any of this brand's drafts sent: the sends of the last brand don't count.
   const anySent = !!drafts?.some((draft) => cms.has(draft.id));
   // Picked rows still listed (a read may have moved some), never archived ones.
@@ -366,7 +420,10 @@ export default function ContentLibraryPage() {
               exporting={exporting}
               onExport={(format) => void exportList(listed, tab, format)}
             />
-            <Button className="gap-2" onClick={() => setStarting(true)}>
+            <Button
+              className="gap-2"
+              onClick={guard(() => setStarting(true), { action: tActions('createContent') })}
+            >
               <Plus className="h-4 w-4" />
               {t('newContent')}
             </Button>
@@ -435,6 +492,27 @@ export default function ContentLibraryPage() {
               ))}
             </SelectContent>
           </Select>
+          {isShop && (
+            <Select
+              value={shoppingFilter}
+              onValueChange={(value) => changeShopping(value as ShoppingFilter)}
+              items={SHOPPING_FILTERS.map((filter) => ({
+                value: filter,
+                label: `${t('shopping.label')}: ${t(`shopping.filters.${filter}`)}`,
+              }))}
+            >
+              <SelectTrigger size="sm" aria-label={t('shopping.label')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {SHOPPING_FILTERS.map((filter) => (
+                  <SelectItem key={filter} value={filter}>
+                    {t(`shopping.filters.${filter}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
@@ -455,14 +533,16 @@ export default function ContentLibraryPage() {
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
                 disabled={tooMany}
-                onClick={() =>
-                  setBulk({
-                    brandId: activeBrandId,
-                    brandName: activeBrand?.name ?? '',
-                    brandLanguage: activeBrand?.language,
-                    drafts: pickedDrafts,
-                  })
-                }
+                onClick={guard(
+                  () =>
+                    setBulk({
+                      brandId: activeBrandId,
+                      brandName: activeBrand?.name ?? '',
+                      brandLanguage: activeBrand?.language,
+                      drafts: pickedDrafts,
+                    }),
+                  { action: tActions('sendToCms') },
+                )}
               >
                 <Send className="h-3 w-3" />
                 {t('bulk.sendSelected')}
@@ -494,7 +574,13 @@ export default function ContentLibraryPage() {
             </div>
           ) : listed.length === 0 && inTab.length > 0 ? (
             <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-              {t(createdIn.length === 0 ? 'created.empty' : 'lastSend.empty')}
+              {t(
+                createdIn.length === 0
+                  ? 'created.empty'
+                  : shopped.length === 0
+                    ? 'shopping.empty'
+                    : 'lastSend.empty',
+              )}
             </p>
           ) : (
             <LibraryTable
@@ -503,6 +589,7 @@ export default function ContentLibraryPage() {
               actions={rowActions}
               cms={cms}
               selection={selection}
+              shopping={isShop}
             />
           )}
         </CardContent>
@@ -573,14 +660,18 @@ export default function ContentLibraryPage() {
         </DialogContent>
       </Dialog>
       {/* The cap's note: a filter that narrows the list isn't the cap. */}
-      {counts && created === 'all' && sent === 'all' && listed.length < counts[tab] && (
-        <p className="text-xs text-muted-foreground">
-          {t('latestOnly', {
-            shown: formatNumber(listed.length),
-            count: formatNumber(counts[tab]),
-          })}
-        </p>
-      )}
+      {counts &&
+        created === 'all' &&
+        sent === 'all' &&
+        (!isShop || shoppingFilter === 'all') &&
+        listed.length < counts[tab] && (
+          <p className="text-xs text-muted-foreground">
+            {t('latestOnly', {
+              shown: formatNumber(listed.length),
+              count: formatNumber(counts[tab]),
+            })}
+          </p>
+        )}
     </div>
   );
 }

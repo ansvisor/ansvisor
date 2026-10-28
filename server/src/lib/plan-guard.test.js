@@ -75,6 +75,14 @@ describe('applyPlanOverrides — the Enterprise AI budget', () => {
     }
   });
 
+  it('keeps the plan’s budget, its floor, for one set below it (#1598)', () => {
+    // 0 or -5 would answer every AI call "used up", -1 would read as unlimited.
+    for (const own of [0, -5, -1, 4.98]) {
+      expect(budget({ improveMonthlyBudgetUsd: own })).toBe(4.99);
+    }
+    expect(budget({ improveMonthlyBudgetUsd: 4.99 })).toBe(4.99);
+  });
+
   it('keeps the default without a usable contract value', () => {
     expect(budget({ maxPrompts: 900 })).toBe(4.99);
     expect(budget({ contractMonthlyUsd: 'n/a' })).toBe(4.99);
@@ -115,5 +123,21 @@ describe('relevance allowance per plan', () => {
     expect(PLANS.growth.limits.relevanceMonthlyBudgetUsd).toBe(0.249);
     expect(PLANS.enterprise.limits.relevanceMonthlyBudgetUsd).toBe(0.499);
     expect(PLANS.self_hosted.limits.relevanceMonthlyBudgetUsd).toBe(-1);
+  });
+});
+
+describe('catalog products per plan (ECOM-019)', () => {
+  it('is 5,000 / 50,000, set per Enterprise customer, uncapped on self-hosted', async () => {
+    const { PLANS } = await import('../config/plans.js');
+    expect(PLANS.starter.limits.maxCatalogProducts).toBe(5_000);
+    expect(PLANS.growth.limits.maxCatalogProducts).toBe(50_000);
+    expect(PLANS.enterprise.limits.maxCatalogProducts).toBe(-1);
+    expect(PLANS.self_hosted.limits.maxCatalogProducts).toBe(-1);
+    expect(
+      applyPlanOverrides(PLANS.enterprise, {
+        plan: 'enterprise',
+        plan_overrides: { maxCatalogProducts: 250_000 },
+      }).limits.maxCatalogProducts,
+    ).toBe(250_000);
   });
 });

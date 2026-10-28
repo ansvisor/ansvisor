@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { PlanProvider } from '@/components/providers/plan-provider';
+import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -192,12 +195,17 @@ vi.mock('mammoth', () => ({
 vi.mock('sonner', () => ({ toast }));
 const saveBlob = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/download', () => ({ saveBlob }));
-const readDraftCms = vi.hoisted(() => vi.fn());
+// The header reads the page's last send as it opens: none, unless a test says.
+const readDraftCms = vi.hoisted(() => vi.fn(async () => null as unknown));
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
 // The brand's Webflow connection (#1331, phase 2): none here.
 vi.mock('@/lib/webflow-client', () => ({
   readWebflow: async () => ({ ok: true, configured: false, connection: null }),
+}));
+// Nor its WordPress site (00294).
+vi.mock('@/lib/wordpress-client', () => ({
+  readWordPress: async () => ({ ok: true, configured: false, connection: null }),
 }));
 
 (
@@ -3430,6 +3438,46 @@ describe('the side panel', () => {
       vi.useRealTimers();
     });
 
+    it('asks the API nothing by itself while the workspace is read-only (plan not active)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            bodyHtml:
+              readable.bodyHtml + '<p>See <a href="https://example.com/guide">the guide</a>.</p>',
+          }),
+        );
+        await act(async () => {
+          root.render(
+            <NextIntlClientProvider locale="en" messages={messages}>
+              <PlanProvider
+                planId="starter"
+                subscriptionActive={false}
+                subscriptionStatus="canceled"
+              >
+                <RoleProvider role="admin">
+                  <UpgradeDialogProvider>
+                    <ContentEditorPage />
+                  </UpgradeDialogProvider>
+                </RoleProvider>
+              </PlanProvider>
+            </NextIntlClientProvider>,
+          );
+        });
+        await act(async () => {});
+        await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS + 3_000)));
+        // The page opens with what is stored; no link, claim or proof read is asked for.
+        expect(container.querySelector('.ProseMirror')).not.toBeNull();
+        expect(readDraftPage).not.toHaveBeenCalled();
+        expect(checkDraftClaims).not.toHaveBeenCalled();
+        expect(checkDraftLinks).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
     it('weighs the checks by the page type in phase 3, and follows a type changed from Quality (CE-052)', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -5828,7 +5876,7 @@ describe('the side panel', () => {
         expect(dialogText()).not.toContain('Reading your catalog');
         expect(dialogText()).toContain('1 product link to remove or replace');
         expect(dialogText()).toContain(
-          'Trail (sold out). Remove or replace these links on the page',
+          'Trail (not in stock). Remove or replace these links on the page',
         );
         expect(dialogText()).not.toContain('No link to the category page');
       } finally {
@@ -5923,9 +5971,22 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(
         draft({ pageType: 'blog_post', authorConfirmed: { real: true, profile: false } }),
       );
+      // Trust reads once the brand's domains are in: until then Before you publish asks.
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
       await renderPage();
       await act(async () => button('Send to CMS')!.click());
-      await act(async () => inDialog('Continue to send').click());
+      // Nothing for Before you publish to ask about: straight to the Send dialog.
+      expect(dialog()!.textContent).toContain('Meta description');
       await act(async () => inDialog('Send').click());
       // The CMS keeps its own author.
       expect(sendPagesToCms).toHaveBeenCalledWith(
@@ -5935,10 +5996,52 @@ describe('the side panel', () => {
       );
     });
 
+    it('says in the header where the page went, once sent', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(container.textContent).not.toContain('Sent to your CMS');
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Send').click());
+      expect(container.textContent).toContain('Sent to your CMS');
+    });
+
+    it('says in the header that a send failed, while the dialog says why', async () => {
+      sendPagesToCms.mockResolvedValueOnce({
+        ok: true,
+        deliveries: [{ id: 'x1', draftId: 'd1', status: 'failed', http_status: 500, error: null }],
+      });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Send').click());
+      expect(dialog()!.querySelector('[role="alert"]')!.textContent).toContain(
+        "The webhook answered 500 and didn't take the page.",
+      );
+      expect(container.textContent).toContain('Send failed');
+      await act(async () => inDialog('Cancel').click());
+      expect(dialog()).toBeNull();
+      expect(container.textContent).toContain('Send failed');
+    });
+
+    it('says in the header, as the page opens, that it is in Webflow as a draft', async () => {
+      readDraftCms.mockResolvedValue({
+        fields: {},
+        publishedUrl: null,
+        last: { status: 'sent', target: 'webflow', at: '2026-10-27T09:00:00Z', error: null },
+      });
+      getContentDraft.mockResolvedValue(draft());
+      await renderPage();
+      expect(container.textContent).toContain('In Webflow · draft');
+    });
+
     it('opens Before you publish first while Quality is on', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
       getContentDraft.mockResolvedValue(draft({ pageType: 'blog_post' }));
       await renderPage();
+      // The header's read, as the page opened: the dialog's own comes after.
+      readDraftCms.mockClear();
       await act(async () => button('Send to CMS')!.click());
       expect(dialog()!.textContent).toContain('Before you publish');
       expect(readDraftCms).not.toHaveBeenCalled();
@@ -5966,6 +6069,7 @@ describe('the side panel', () => {
     it('saves what is waiting before it sends, as Mark ready does', async () => {
       getContentDraft.mockResolvedValue(draft());
       await renderPage();
+      readDraftCms.mockClear();
       await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
       expect(saveContentDraft).not.toHaveBeenCalled();
       await act(async () => button('Send to CMS')!.click());
@@ -5989,6 +6093,7 @@ describe('the side panel', () => {
       saveContentDraft.mockResolvedValue({ ok: false, reason: 'conflict' });
       getContentDraft.mockResolvedValue(draft());
       await renderPage();
+      readDraftCms.mockClear();
       await editAsHtml('<h1>Pipeline forecasting</h1><p>Edited.</p>');
       await act(async () => button('Send to CMS')!.click());
       await act(async () => {});
@@ -6033,6 +6138,30 @@ describe('the side panel', () => {
       await act(async () => {});
       expect(dialog()!.textContent).toContain('Send to CMS');
       await act(async () => inDialog('Cancel').click());
+    });
+
+    it('keeps the focus on the placeholder Fill now selects in the HTML view, not on the header’s button', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Send to CMS')!.focus();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
     });
 
     it('is for admins and managers only', async () => {
@@ -6259,7 +6388,7 @@ describe('the side panel', () => {
       expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
     });
 
-    it('says where a placeholder only an HTML block holds is', async () => {
+    it('keeps the focus on the placeholder Export’s Fill now selects in the HTML view, not on the header’s button', async () => {
       const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
       getContentDraft.mockResolvedValue(
         draft({
@@ -6269,6 +6398,32 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Export')!.focus();
+      await act(async () => button('Export')!.click());
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
+    });
+
+    it('selects a placeholder only an HTML block holds in the HTML view, and says where it is', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // The toolbar counts it, though the page doesn't show it.
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeTruthy();
       await act(async () => button('Export')!.click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Review').click());
@@ -6277,8 +6432,48 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Fill now').click());
       expect(toast).toHaveBeenCalledWith(
-        'The placeholders are in an HTML block: open it with </> to fill them.',
+        "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view (</>): type over it, then apply.",
       );
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+    });
+
+    it('opens the HTML view at the placeholder the page hides from Show in HTML, past the five it shows', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1>' +
+            '<p>Ask [competitor] and [name of a real person].</p>' +
+            '<p><img src="https://cdn.example.com/a.jpg" alt="[photo of the founder]"></p>' +
+            '<p>Costs [price], since [year], at [city].</p>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('6 placeholders to fill');
+      await act(async () => button('Show in HTML')!.click());
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[photo of the founder]'),
+      )!;
+      expect(area).toBeTruthy();
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe(
+        '[photo of the founder]',
+      );
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      expect(editor.state.selection.empty).toBe(true);
+    });
+
+    it("counts a code block's placeholder once in the toolbar", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><pre><code>token = "[api key]"</code></pre>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeFalsy();
     });
 
     it('puts the byline under the H1 for a brand that adds it to content, and says so', async () => {
@@ -8429,5 +8624,152 @@ describe('the side panel', () => {
     root = createRoot(container);
     await renderPage();
     expect(panel()).toBeNull();
+  });
+});
+
+describe('the editor on a read-only workspace (plan not active)', () => {
+  const openUpgrade = vi.fn();
+  async function renderLocked(isLocked = true) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <RoleProvider role="admin">
+            <UpgradeDialogContext.Provider
+              value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+            >
+              <ContentEditorPage />
+            </UpgradeDialogContext.Provider>
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    await act(async () => {});
+  }
+  const editorOf = () =>
+    (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor;
+
+  beforeEach(() => openUpgrade.mockReset());
+
+  it('opens the page read-only and saves nothing; the toolbar opens the upgrade dialog', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      getContentDraft.mockResolvedValue(draft());
+      await renderLocked();
+      expect(container.querySelector('.ProseMirror')!.getAttribute('contenteditable')).toBe(
+        'false',
+      );
+      expect(editorOf().isEditable).toBe(false);
+      // A change that reaches the page all the same (a command) waits for no save.
+      await act(async () => void editorOf().commands.insertContentAt(2, 'x'));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      expect(container.querySelector('header')!.textContent).toContain('Saved');
+
+      const html = editorOf().getHTML();
+      await act(async () => button('Bold')!.click());
+      expect(openUpgrade).toHaveBeenLastCalledWith('Editing the page needs a plan');
+      expect(editorOf().getHTML()).toBe(html);
+      // The HTML view still shows the source, which can't be edited.
+      await act(async () => button('Edit as HTML')!.click());
+      expect(container.querySelector('textarea')!.readOnly).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens the upgrade dialog from Mark ready, Send to CMS, History and the title', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    getDraftVersions.mockResolvedValue([
+      { id: 'v1', origin: 'import', title: 'Old title', createdAt: '2026-10-12T09:42:00Z' },
+    ]);
+    await renderLocked();
+    await act(async () => button('Mark ready')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Marking a page ready needs a plan');
+    await act(async () => button('Send to CMS')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Sending to your CMS needs a plan');
+    await act(async () => container.querySelector<HTMLButtonElement>('header h1 button')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Editing the page needs a plan');
+
+    const trigger = button('History')!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    await act(async () => {});
+    const versions = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    await act(async () => versions[0].click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Restoring a version needs a plan');
+
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
+    expect(markContentDraftReady).not.toHaveBeenCalled();
+    expect(restoreDraftVersion).not.toHaveBeenCalled();
+    expect(saveContentDraft).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('runs no agent and decides no suggestion', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        status: 'draft',
+        agentState: 'failed',
+        bodyHtml: '<h1>Pipeline forecasting</h1><p>Our forecasting is very accurate.</p>',
+      }),
+    );
+    getDraftSuggestions.mockResolvedValue([
+      {
+        id: 's1',
+        batchId: 'b1',
+        actionId: 'a1',
+        actionNo: 214,
+        kind: 'replace',
+        blockText: 'Our forecasting is very accurate.',
+        beforeText: 'Our forecasting is very accurate.',
+        afterText: 'Accuracy is shown per team, each week.',
+        reason: 'answer fan-out',
+        ruleKeys: [],
+        status: 'open',
+      },
+    ]);
+    await renderLocked();
+    await act(async () => button('Try again')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Running the Content Agent needs a plan');
+    const bar = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+    await act(async () =>
+      [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Accept all')!.click(),
+    );
+    expect(openUpgrade).toHaveBeenLastCalledWith('Reviewing suggestions needs a plan');
+    expect(startAgentWriting).not.toHaveBeenCalled();
+    expect(decideDraftSuggestions).not.toHaveBeenCalled();
+    expect(keepAgentBeforeVersion).not.toHaveBeenCalled();
+  });
+
+  it('changes no rule', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderLocked();
+    // The header's rules chip opens the panel on Rules: reading them stays open.
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!.click(),
+    );
+    const sentence = container.querySelector<HTMLElement>(
+      'aside [role="switch"][aria-label="Max sentence length: on or off"]',
+    )!;
+    await act(async () => sentence.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Changing rules needs a plan');
+    expect(saveDraftRules).not.toHaveBeenCalled();
+  });
+
+  it('is written and saved as before on an active plan', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      getContentDraft.mockResolvedValue(draft());
+      await renderLocked(false);
+      expect(editorOf().isEditable).toBe(true);
+      await act(async () => void editorOf().commands.insertContentAt(2, 'x'));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+      expect(saveContentDraft).toHaveBeenCalledTimes(1);
+      expect(openUpgrade).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

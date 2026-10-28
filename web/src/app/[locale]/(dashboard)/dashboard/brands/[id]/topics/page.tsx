@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   createTopic,
   deleteTopic,
@@ -8,6 +9,7 @@ import {
   getTopics,
   updateTopic,
 } from '@/lib/actions/topic';
+import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 import type { Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Check, Loader2, Lock, Pencil, Plus, Tag, Trash2, X } from 'lucide-react';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   Dialog,
   DialogClose,
@@ -43,6 +46,10 @@ export default function BrandTopicsPage({ params }: PageProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): adding, renaming and deleting
+  // open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(
     async (isCancelled?: () => boolean) => {
@@ -155,6 +162,7 @@ export default function BrandTopicsPage({ params }: PageProps) {
                     {editingId === topic.id ? (
                       <div className="flex flex-1 items-center gap-2">
                         <Input
+                          maxLength={TOPIC_NAME_CHARS}
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
                           onKeyDown={(e) => {
@@ -192,10 +200,13 @@ export default function BrandTopicsPage({ params }: PageProps) {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 shrink-0"
-                              onClick={() => {
-                                setEditingId(topic.id);
-                                setEditName(topic.name);
-                              }}
+                              onClick={guard(
+                                () => {
+                                  setEditingId(topic.id);
+                                  setEditName(topic.name);
+                                },
+                                { action: tActions('editTopics') },
+                              )}
                               aria-label="Edit topic"
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -231,7 +242,9 @@ export default function BrandTopicsPage({ params }: PageProps) {
                                     render={
                                       <Button
                                         variant="destructive"
-                                        onClick={() => handleDelete(topic.id)}
+                                        onClick={guard(() => handleDelete(topic.id), {
+                                          action: tActions('deleteTopics'),
+                                        })}
                                       />
                                     }
                                   >
@@ -266,14 +279,19 @@ export default function BrandTopicsPage({ params }: PageProps) {
                   <div className="flex gap-2">
                     <Input
                       placeholder="e.g. Industry, Comparison, How-to..."
+                      maxLength={TOPIC_NAME_CHARS}
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' &&
+                        newName.trim() &&
+                        guard(handleAdd, { action: tActions('addTopics') })()
+                      }
                       className="flex-1"
                     />
                     <Button
                       variant="outline"
-                      onClick={handleAdd}
+                      onClick={guard(handleAdd, { action: tActions('addTopics') })}
                       disabled={isAdding || !newName.trim()}
                       className="gap-1.5 shrink-0"
                     >

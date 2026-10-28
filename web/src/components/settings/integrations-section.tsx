@@ -44,7 +44,9 @@ import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-c
 import { CatalogCategoryPages } from './catalog-category-pages';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
+import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Settings → Integrations (#577, Google Analytics added in #658).
@@ -112,6 +114,7 @@ export function IntegrationsSection() {
             icon={<ShoppingBag className="h-5 w-5 text-muted-foreground" />}
             authConfigEnv="COMPOSIO_GMC_AUTH_CONFIG_ID"
             hideUnavailable
+            comingSoon={t('merchantCenter.comingSoon')}
           >
             <MerchantCenterAccounts
               sources={catalogSources}
@@ -127,6 +130,8 @@ export function IntegrationsSection() {
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}
         <IntegrationGroup title={t('integrations_cms')}>
           <WebflowCard />
+
+          <WordPressCard />
         </IntegrationGroup>
       </CardContent>
     </Card>
@@ -156,6 +161,12 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
  * `hideUnavailable`: a newer integration's card isn't shown while its status
  * can't be read (an API older than the web), nor on the cloud while it isn't
  * set up there; a self-hosted server keeps the set-up line.
+ *
+ * `comingSoon`: while the cloud isn't set up for it, the card says Coming
+ * soon and this line instead, with nothing to connect (Google Merchant
+ * Center, until Google approves the connection); a self-hosted server keeps
+ * the set-up line. Sources a brand added before stay in Product catalog,
+ * where they're removed.
  */
 function IntegrationCard({
   provider,
@@ -164,6 +175,7 @@ function IntegrationCard({
   icon,
   authConfigEnv,
   hideUnavailable = false,
+  comingSoon,
   children,
 }: {
   provider: IntegrationProvider;
@@ -172,6 +184,7 @@ function IntegrationCard({
   icon: ReactNode;
   authConfigEnv: string;
   hideUnavailable?: boolean;
+  comingSoon?: string;
   children?: ReactNode;
 }) {
   const t = useTranslations('settings');
@@ -216,7 +229,10 @@ function IntegrationCard({
     }
   };
 
-  if (hideUnavailable && (unreadable || (status === 'not_configured' && isCloud()))) return null;
+  const soon = comingSoon !== undefined && status === 'not_configured' && isCloud();
+  if (hideUnavailable && (unreadable || (status === 'not_configured' && isCloud() && !soon))) {
+    return null;
+  }
 
   return (
     <div className="space-y-4">
@@ -236,12 +252,17 @@ function IntegrationCard({
                   {t('integrations_connected')}
                 </Badge>
               )}
+              {soon && (
+                <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                  {t('integrations_comingSoon')}
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground truncate">{description}</p>
           </div>
         </div>
 
-        {status === null ? (
+        {soon ? null : status === null ? (
           <Skeleton className="h-8 w-24" />
         ) : status === 'not_configured' ? (
           <Badge variant="outline" className="text-muted-foreground shrink-0">
@@ -293,7 +314,9 @@ function IntegrationCard({
         )}
       </div>
 
-      {status === 'not_configured' && (
+      {soon && <p className="text-xs text-muted-foreground">{comingSoon}</p>}
+
+      {status === 'not_configured' && !soon && (
         <p className="text-xs text-muted-foreground">
           This server has no Composio credentials for {label}. Set{' '}
           <code className="rounded bg-muted px-1">COMPOSIO_API_KEY</code> and{' '}
@@ -356,6 +379,10 @@ function PropertyMapping({
   const [loadFailed, setLoadFailed] = useState<string | null>(null);
   const [savingBrandId, setSavingBrandId] = useState<string | null>(null);
   const autoMatched = useRef(false);
+  // A read-only workspace (plan not active): picking a property opens the
+  // upgrade dialog instead, and nothing is matched by itself.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(async () => {
     setLoadFailed(null);
@@ -376,7 +403,7 @@ function PropertyMapping({
   // property. Runs once per mount; a failed save (e.g. member role) just
   // leaves the brand unmapped for a manual pick by an admin.
   useEffect(() => {
-    if (!options || !rows || autoMatched.current) return;
+    if (!options || !rows || autoMatched.current || isLocked) return;
     autoMatched.current = true;
     (async () => {
       for (const row of rows) {
@@ -394,7 +421,7 @@ function PropertyMapping({
         }
       }
     })();
-  }, [options, rows, save, sourceName]);
+  }, [options, rows, save, sourceName, isLocked]);
 
   const handlePick = async (brandId: string, picked: string) => {
     const value = picked === NONE_VALUE ? null : picked;
@@ -456,7 +483,10 @@ function PropertyMapping({
               <Select
                 items={selectItems}
                 value={row.value ?? null}
-                onValueChange={(v) => handlePick(row.brandId, v ?? NONE_VALUE)}
+                onValueChange={guard(
+                  (v: string | null) => void handlePick(row.brandId, v ?? NONE_VALUE),
+                  { action: tActions('mapProperties') },
+                )}
               >
                 <SelectTrigger className="h-8 w-64 text-xs">
                   <SelectValue placeholder={t('integrations_selectProperty')} />

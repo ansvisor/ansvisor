@@ -1,3 +1,5 @@
+import { cityFor } from './cities.js';
+
 /**
  * Tracking locations (#691).
  *
@@ -74,20 +76,36 @@ export const US_STATE_NAMES = {
  * Scrapers with no sub-country targeting mechanism. Google AIO / AI Mode
  * locate through location/uule parameters Cloro's AI endpoints don't accept,
  * so a state code means nothing to them: they can only be run country-wide
- * (#691, carried over from #554).
+ * (#691, carried over from #554). The web's location picker lists the same
+ * engines (cities.test.js keeps them together).
  */
-const COUNTRY_ONLY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
+export const COUNTRY_ONLY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
+
+/**
+ * Scrapers that can ask from a city (PROMPT-015d): Google's, through the
+ * provider's `location`. The others answer per country (or US state), so a
+ * city code is skipped for them rather than run again country-wide. The
+ * web's CITY_PLATFORMS is the same list (cities.test.js).
+ */
+export const CITY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
 
 /**
  * Split a location code into what the providers actually take.
  * `US-CA` → `{ country: 'US', state: 'CA' }`; `DE` → `{ country: 'DE',
- * state: null }`. Unparsable or empty input yields a null country, which the
- * callers treat as "no targeting" — the same as a prompt with no regions.
+ * state: null }`; `TR~ISTANBUL` → `{ country: 'TR', state: null, city }`
+ * (cities.js; an unknown city reads as its country). Unparsable or empty
+ * input yields a null country, which the callers treat as "no targeting" —
+ * the same as a prompt with no regions.
  */
 export function parseLocation(code) {
   if (typeof code !== 'string') return { country: null, state: null };
   const trimmed = code.trim().toUpperCase();
   if (!trimmed) return { country: null, state: null };
+  if (trimmed.includes('~')) {
+    const country = trimmed.split('~')[0];
+    if (!/^[A-Z]{2}$/.test(country)) return { country: null, state: null };
+    return { country, state: null, city: cityFor(trimmed) };
+  }
 
   const [country, state] = trimmed.split('-');
   if (!/^[A-Z]{2}$/.test(country || '')) return { country: null, state: null };
@@ -98,8 +116,26 @@ export function parseLocation(code) {
   return { country, state: null };
 }
 
+/** True for a city code (`TR~ISTANBUL`). */
+export function isCityCode(code) {
+  return typeof code === 'string' && code.includes('~');
+}
+
+/**
+ * True for a city code no city in cities.js names (PROMPT-015d): there is
+ * nothing to ask from, and asking country-wide instead would record the
+ * country's answers as the city's, so no engine runs it.
+ */
+export function isUnknownCity(code) {
+  return isCityCode(code) && !cityFor(code);
+}
+
 /**
  * The locations one scraper should actually be run for.
+ *
+ * A city code (PROMPT-015d) is kept only for the engines that can ask from
+ * a city (CITY_SCRAPERS) and dropped for the rest: they answer per country,
+ * and the prompt's country, when tracked, already runs them.
  *
  * Every code a state-capable engine can use survives as-is. For the
  * country-only engines the list collapses to its distinct countries, so a
@@ -110,12 +146,20 @@ export function parseLocation(code) {
  * Order is preserved so task submission stays deterministic.
  */
 export function locationsForScraper(locations, scraperId) {
-  const list = Array.isArray(locations) && locations.length > 0 ? locations : [null];
+  const given = locationsForModels(locations);
+  // A city is run only by the engines that can ask from one (PROMPT-015d).
+  const list = CITY_SCRAPERS.has(scraperId) ? given : given.filter((code) => !isCityCode(code));
   if (!COUNTRY_ONLY_SCRAPERS.has(scraperId)) return list;
 
   const seen = new Set();
   const collapsed = [];
   for (const code of list) {
+    // A city is asked from the city itself; only states collapse to their country.
+    if (isCityCode(code)) {
+      if (!seen.has(code)) collapsed.push(code);
+      seen.add(code);
+      continue;
+    }
     const { country } = parseLocation(code);
     const key = country ?? '';
     if (seen.has(key)) continue;
@@ -126,6 +170,16 @@ export function locationsForScraper(locations, scraperId) {
 }
 
 /**
+ * The locations the API models are run for: every code, each read by
+ * userLocationFor, but a city no list names (isUnknownCity). No locations
+ * means one untargeted run; only unknown cities means none.
+ */
+export function locationsForModels(locations) {
+  const given = Array.isArray(locations) && locations.length > 0 ? locations : [null];
+  return given.filter((code) => !isUnknownCity(code));
+}
+
+/**
  * `user_location` for the API models' web-search tool, or null when the
  * prompt is untargeted. `region` carries the full state name because that is
  * what both providers document for the field — a USPS code is not a region
@@ -133,9 +187,14 @@ export function locationsForScraper(locations, scraperId) {
  * states existed, so untargeted and country-targeted runs are unchanged.
  */
 export function userLocationFor(code) {
-  const { country, state } = parseLocation(code);
+  const { country, state, city } = parseLocation(code);
   if (!country) return null;
   const location = { type: 'approximate', country };
   if (state) location.region = US_STATE_NAMES[state];
+  // A city (PROMPT-015d): both providers take `city`, beside its region.
+  if (city) {
+    location.region = city.region;
+    location.city = city.name;
+  }
   return location;
 }

@@ -16,18 +16,27 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { ActionCategory } from '@/lib/action-center/registry';
-import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-center/registry';
+import {
+  ACTION_OUTCOMES,
+  dismissReasonOf,
+  type ActionOutcome,
+  type ActionStatus,
+  type TaskStatus,
+} from '@/lib/action-center/registry';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
 import { parseImproveOutcome } from '@/lib/improve-outcome';
 import { storedPriorityLevel } from '@/lib/action-center/priority';
 import { readEntityCounts, withEntityCounts } from '@/lib/action-center/entity-counts';
 import {
   HISTORY_STATUSES,
+  controlNetOf,
   daysBetween,
   type ActionHistoryItem,
   type ActionHistoryTask,
   type ActionResultMetric,
   type AffectedEntity,
+  type OutcomeReading,
+  type SignalOutcome,
   type TriggerSignal,
 } from '@/lib/action-center/history';
 
@@ -49,22 +58,104 @@ interface HistoryRow {
   updated_at: string;
   priority_score: number | null;
   priority_level: string | null;
+  dismiss_reason: string | null;
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level';
+  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level, dismiss_reason';
 
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
   measuredAt: string;
-  beforeWindow: { from: string; to: string };
-  afterWindow: { from: string; to: string };
-  metrics: {
+  // Absent for an action with no metric to measure, kept for its signals.
+  beforeWindow?: { from: string; to: string };
+  afterWindow?: { from: string; to: string };
+  metrics?: {
     metric: string;
     unit: string;
     before: number | null;
     after: number | null;
   }[];
+  /** What became of the signals that raised it (learning A3). */
+  signals?: SignalOutcome;
+  /** The basket it was measured on; 'targets' for the prompts or pages it named (learning A1). */
+  scope?: { kind?: string; entity?: string; prompts?: number; pages?: number };
+  /** The brand-wide figures, beside a measure on its targets. */
+  brandWide?: ValidationSnapshot['metrics'];
+  /** A Site Audit fix's pages audited again (learning A2). */
+  audit?: { pages?: number; audited?: number; passed?: number };
+  /** The metric its result is judged by (learning A4). */
+  primary?: string;
+  /** Nights tracking missed in each window (learning A6). */
+  gaps?: { before?: number; after?: number; tooMany?: boolean };
+  /** Its readings, and whether the final one is in (learning B1). */
+  readings?: { day?: number; outcome?: string }[];
+  final?: boolean;
+  /** Its change net of the brand's prompts it didn't touch (learning B2). */
+  control?: {
+    basis?: string;
+    prompts?: number;
+    net?: { metric?: string; net?: number; unit?: string }[];
+  };
+}
+
+/** Its readings, the days known and verdicts it can name, in order. */
+function readingsFrom(validation: ValidationSnapshot | null): OutcomeReading[] {
+  if (!Array.isArray(validation?.readings)) return [];
+  return validation.readings
+    .filter(
+      (r) =>
+        Number.isInteger(r?.day) &&
+        (ACTION_OUTCOMES as readonly string[]).includes(r?.outcome ?? ''),
+    )
+    .map((r) => ({ day: r.day as number, outcome: r.outcome as ActionOutcome }))
+    .sort((a, b) => a.day - b.day);
+}
+
+/** Nights tracking missed in its windows, when there were any. */
+function gapsFrom(
+  validation: ValidationSnapshot | null,
+): { before: number; after: number; tooMany: boolean } | null {
+  const g = validation?.gaps;
+  const before = Number(g?.before) || 0;
+  const after = Number(g?.after) || 0;
+  return before || after ? { before, after, tooMany: g?.tooMany === true } : null;
+}
+
+/** A Site Audit fix's pages audited again, when the sweep read them. */
+function auditFrom(
+  validation: ValidationSnapshot | null,
+): { pages: number; audited: number; passed: number } | null {
+  const a = validation?.audit;
+  const pages = Number(a?.pages) || 0;
+  if (!pages) return null;
+  return { pages, audited: Number(a?.audited) || 0, passed: Number(a?.passed) || 0 };
+}
+
+/** The prompts or pages it was measured on, when it was measured on its own targets. */
+function measuredOnFrom(
+  validation: ValidationSnapshot | null,
+): { entity: 'prompts' | 'pages'; count: number } | null {
+  const scope = validation?.scope;
+  if (scope?.kind !== 'targets') return null;
+  const entity = scope.entity === 'pages' ? 'pages' : 'prompts';
+  const count = Number(entity === 'pages' ? scope.pages : scope.prompts) || 0;
+  return count > 0 ? { entity, count } : null;
+}
+
+/** The signals' counts, when the sweep kept them and they add up. */
+function signalsFrom(validation: ValidationSnapshot | null): SignalOutcome | null {
+  const s = validation?.signals;
+  if (!s || typeof s !== 'object') return null;
+  const n = (value: unknown) => (typeof value === 'number' && value >= 0 ? value : 0);
+  const counts = {
+    total: n(s.total),
+    ended: n(s.ended),
+    replaced: n(s.replaced),
+    dismissed: n(s.dismissed),
+    open: n(s.open),
+  };
+  return counts.total > 0 ? counts : null;
 }
 
 /**
@@ -262,6 +353,21 @@ export async function getActionHistory(
       triggerSignals,
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
+      dismissReason: dismissReasonOf(row.dismiss_reason),
+      signalsAfter: signalsFrom(row.validation),
+      measuredOn: measuredOnFrom(row.validation),
+      auditAfter: auditFrom(row.validation),
+      dataGaps: gapsFrom(row.validation),
+      readings: readingsFrom(row.validation),
+      outcomeFinal: row.validation?.final === true,
+      // Shown only when it was measured: a main metric with no pair says nothing.
+      primaryMetric: resultsFrom(row.validation).some((m) => m.metric === row.validation?.primary)
+        ? (row.validation?.primary ?? null)
+        : null,
+      brandWideResults: resultsFrom(
+        row.validation?.brandWide ? { ...row.validation, metrics: row.validation.brandWide } : null,
+      ),
+      controlNet: controlNetOf(row.validation),
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
       dueDate: row.due_date ?? null,

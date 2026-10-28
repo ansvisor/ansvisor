@@ -20,18 +20,12 @@ const DynamicShoppingTrendChart = dynamic(
 );
 import {
   ShoppingBag,
-  Store,
-  ArrowUpRight,
   Crown,
-  Lock,
   Download,
   ExternalLink,
   Layers,
-  Target,
-  Search,
-  Calendar,
-  Globe,
   AlertTriangle,
+  HelpCircle,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -43,15 +37,20 @@ import {
   getOwnProducts,
   getCompetitorProducts,
   getCompetitorSummary,
-  getCardEligiblePrompts,
+  getShoppingAiOrders,
+  getShoppingActionResults,
+  getShoppingCategories,
+  getShoppingProducts,
+  getShoppingShelf,
   type ShoppingChartData,
   type ShoppingDatePreset,
   type ShoppingFilters,
   type ShoppingKpis,
   type ShoppingProduct,
   type CompetitorShoppingSummary,
-  type CardEligiblePromptRow,
-  type CardEligiblePromptsResponse,
+  type ShoppingAiOrders,
+  type ShoppingProducts,
+  type ShoppingShelf,
 } from '@/lib/actions/shopping';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -65,7 +64,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -92,34 +90,44 @@ import { toCsv } from '@/lib/csv';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
+import type { CategoryRow } from '@/lib/shopping/categories';
+import { RECHECK_TARGETS, type ActionResult } from '@/lib/shopping/recheck';
+import { readinessChecklist } from '@/lib/shopping/readiness';
 import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { googleSourceStatus } from '@/lib/traffic-sources';
+import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { CatalogNote } from './_catalog-note';
+import { ProductDataStrip, useProductSources } from './_data-strip';
+import { CategoriesTable } from './_categories-table';
+import { ProductsTable } from './_products-table';
+import { ReadinessTab } from './_readiness';
+import { ShelfFailed, ShelfKpis, ShelfRows } from './_shelf';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
+import { WhyDialog } from './_why-dialog';
 import { MerchantSplitCard } from './merchant_split_card';
 import { OpenAiIndexCard } from './openai_index_card';
 import { ProductMatchScores } from './product_match_scores';
 import { ResellerPriceAlerts } from './reseller_price_alerts';
+import { useKeyedRead } from './use_keyed_read';
 import { useMerchantDestinations } from './use_merchant_destinations';
 import { useOpenAiIndex } from './use_openai_index';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
+/** The page's tabs, the one open in the URL (?tab=products). */
+const SHOPPING_TABS = ['shelf', 'categories', 'products', 'readiness', 'competitors'] as const;
+type ShoppingTab = (typeof SHOPPING_TABS)[number];
+
 // Theme tokens in globals.css ship as full oklch values; reference them
 // directly with var(--…). Wrapping in hsl() yields invalid CSS, so chart
 // text turns black on dark mode (lesson learned from #138).
 
-function getDomainName(url: string): string {
-  try {
-    return new URL(url).hostname.replace('www.', '');
-  } catch {
-    return url;
-  }
-}
 export default function ShoppingPage() {
   const t = useTranslations('shopping');
   const tCommon = useTranslations('common');
   const { activeBrandId } = useBrandStore();
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const { canUse, requiredPlanFor } = useFeatureGate();
   const { canManage } = useUserRole();
   const hasFullAccess = canUse('shopping_analytics');
@@ -145,10 +153,35 @@ export default function ShoppingPage() {
   const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
   const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
   const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
-  const [promptsData, setPromptsData] = useState<CardEligiblePromptsResponse | null>(null);
+  // The catalog's categories (ECOM-008), read when their tab opens, for the filters they were read with.
+  const [categories, setCategories] = useState<{
+    key: string;
+    rows: CategoryRow[] | null | 'failed';
+    /** Each category's last done action, 7 days on (ECOM-018). */
+    results?: Record<string, ActionResult>;
+  } | null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<ShoppingTab>('shelf');
+  const [whyOpen, setWhyOpen] = useState(false);
+  const sources = useProductSources(activeBrandId);
+  const primaryDomain =
+    activeBrand?.domains?.find((d) => d.isPrimary)?.domain ?? activeBrand?.domains?.[0]?.domain;
+  // Sales come from the tracking snippet (with the Shopify pixel) or GA.
+  const salesConnected =
+    !!sources.google &&
+    (!!sources.google.snippetLastVisitAt || googleSourceStatus(sources.google.ga) === 'connected');
+  // Connect Google Analytics in the Why popup: while GA isn't connected.
+  const offerGa =
+    canManage && !!sources.google && googleSourceStatus(sources.google.ga) === 'not_connected';
+
+  useEffect(() => {
+    setActiveTab(readUrlChoice('tab', SHOPPING_TABS, 'shelf'));
+  }, []);
+  const changeTab = (next: ShoppingTab) => {
+    setActiveTab(next);
+    writeUrlParams({ tab: next }, { tab: 'shelf' });
+  };
 
   const filters = useMemo<ShoppingFilters>(
     () => ({
@@ -208,7 +241,6 @@ export default function ShoppingPage() {
           getOwnProducts(activeBrandId, filters),
           getCompetitorProducts(activeBrandId, filters),
           getCompetitorSummary(activeBrandId, filters),
-          getCardEligiblePrompts(activeBrandId, filters),
         );
       }
 
@@ -218,11 +250,10 @@ export default function ShoppingPage() {
         const overview = results[0] as { kpis: ShoppingKpis; charts: ShoppingChartData };
         setKpis(overview.kpis);
         setCharts(overview.charts);
-        if (hasFullAccess && results.length >= 5) {
+        if (hasFullAccess && results.length >= 4) {
           setOwnProducts(results[1] as ShoppingProduct[]);
           setCompetitorProducts(results[2] as ShoppingProduct[]);
           setCompetitorSummary(results[3] as CompetitorShoppingSummary[]);
-          setPromptsData(results[4] as CardEligiblePromptsResponse);
         }
       }
     } finally {
@@ -237,6 +268,106 @@ export default function ShoppingPage() {
     if (!shoppingMarket.ready) return;
     void loadData();
   }, [loadData, shoppingMarket.ready]);
+
+  // The Shelf (ECOM-006) and the Products table (ECOM-007) read once per
+  // brand and filters, apart from the rest: neither waits for the other, nor
+  // for the older tables. The Products table reads when its tab, or
+  // Readiness, is open.
+  const readKey = `${activeBrandId}:${JSON.stringify(filters)}`;
+  const canRead = !!activeBrandId && hasFullAccess && shoppingMarket.ready;
+  // Each "Try again" on a shelf that couldn't be read is a new read.
+  const [shelfTry, setShelfTry] = useState(0);
+  // Null while it reads.
+  const shelf: ShoppingShelf | 'failed' | null =
+    useKeyedRead(
+      canRead,
+      `${readKey}#${shelfTry}`,
+      () => getShoppingShelf(activeBrandId!, filters),
+      'the shelves',
+    ) ?? null;
+  // Readiness's channel cards look at every channel whatever the one chosen
+  // (the Shelf's chips): with one chosen, the shelf read for it has only its
+  // cards, and would show the others as not showing the brand's products.
+  const channelFilters = useMemo<ShoppingFilters>(
+    () => ({ ...filters, platforms: undefined }),
+    [filters],
+  );
+  const channelShelfRead = useKeyedRead(
+    canRead && activeTab === 'readiness' && platform !== 'all',
+    `${activeBrandId}:${JSON.stringify(channelFilters)}`,
+    () => getShoppingShelf(activeBrandId!, channelFilters),
+    'the shelves of every channel',
+  );
+  // Null while it reads.
+  const channelShelf = platform === 'all' ? shelf : (channelShelfRead ?? null);
+  const productsRead = useKeyedRead(
+    canRead && (activeTab === 'products' || activeTab === 'readiness'),
+    readKey,
+    () => getShoppingProducts(activeBrandId!, filters),
+    'the products',
+  );
+  const productsLoading = productsRead === undefined;
+  // "Why not you?" on the Shelf needs the catalog's products, not the
+  // window's numbers: read once per brand there, apart from the table.
+  const shelfProducts = useKeyedRead(
+    canRead && activeTab === 'shelf' && !productsRead,
+    activeBrandId ?? '',
+    () => getShoppingProducts(activeBrandId!, filters),
+    'the products for the shelf',
+  );
+  // Null for a brand without a catalog, and while it reads.
+  const catalogTable: ShoppingProducts | null | 'failed' = productsRead ?? null;
+
+  // The Categories tab reads when it's open, once per brand and filters.
+  const categoriesKey = `${activeBrandId}:${JSON.stringify(filters)}`;
+  useEffect(() => {
+    if (activeTab !== 'categories' || !activeBrandId || !hasFullAccess) return;
+    if (!shoppingMarket.ready || categories?.key === categoriesKey) return;
+    let cancelled = false;
+    getShoppingCategories(activeBrandId, filters)
+      .then((rows) => {
+        if (cancelled) return;
+        setCategories({ key: categoriesKey, rows });
+        if (!rows?.length) return;
+        // Then their last done actions, 7 days on: a table without them is still the table.
+        // Kept by key, not `cancelled`: setting the rows re-runs this effect.
+        getShoppingActionResults(
+          activeBrandId,
+          rows.slice(0, RECHECK_TARGETS).map((row) => ({ type: 'category' as const, id: row.id })),
+        )
+          .then((results) =>
+            setCategories((read) => (read?.key === categoriesKey ? { ...read, results } : read)),
+          )
+          .catch((err) => console.error('Failed to re-check the categories’ actions:', err));
+      })
+      .catch((err) => {
+        console.error('Failed to read the categories:', err);
+        if (!cancelled) setCategories({ key: categoriesKey, rows: 'failed' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeTab,
+    activeBrandId,
+    hasFullAccess,
+    shoppingMarket.ready,
+    categoriesKey,
+    categories?.key,
+    filters,
+  ]);
+  const categoriesRead = categories?.key === categoriesKey ? categories.rows : undefined;
+
+  // Orders from AI visits, the last 30 days whatever the filters (ECOM-006),
+  // kept by brand: another brand's never show while this one's are read.
+  const ordersRead = useKeyedRead(
+    !!activeBrandId && hasFullAccess,
+    activeBrandId ?? '',
+    () => getShoppingAiOrders(activeBrandId!),
+    'the orders from AI visits',
+  );
+  // Undefined while they're read, null when they couldn't be.
+  const orders: ShoppingAiOrders | null | undefined = ordersRead === 'failed' ? null : ordersRead;
 
   // This alert always evaluates five consecutive rolling seven-day windows
   // ending at query time, independently of display/platform/region filters.
@@ -262,7 +393,7 @@ export default function ShoppingPage() {
   if (!activeBrandId) {
     return (
       <div className="space-y-6">
-        <PageHeader t={t} />
+        <PageHeader t={t} onWhy={() => setWhyOpen(true)} />
         <EmptyState title={t('noBrandTitle')} description={t('noBrandDescription')} />
       </div>
     );
@@ -277,7 +408,19 @@ export default function ShoppingPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader t={t} />
+      <PageHeader t={t} onWhy={() => setWhyOpen(true)} />
+      <WhyDialog
+        open={whyOpen}
+        onOpenChange={setWhyOpen}
+        offerGa={offerGa}
+        onConnected={sources.reload}
+      />
+      <ProductDataStrip
+        sources={sources}
+        domain={primaryDomain}
+        canConnect={canManage}
+        onConnected={sources.reload}
+      />
 
       {amazonShareDropAlert && (
         <div
@@ -321,24 +464,57 @@ export default function ShoppingPage() {
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
         <>
-          <KpiGrid
-            t={t}
-            kpis={kpis}
-            loading={loading}
-            hasFullAccess={hasFullAccess}
-            triggerRate={promptsData?.triggerRate}
-          />
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => changeTab(value as ShoppingTab)}
+            className="space-y-6"
+          >
             <TabsList>
-              <TabsTrigger value="overview">{t('tabOverview')}</TabsTrigger>
-              <TabsTrigger value="prompts">{t('tabPrompts')}</TabsTrigger>
-              <TabsTrigger value="own_products">{t('tabMyProducts')}</TabsTrigger>
+              <TabsTrigger value="shelf">{t('tabShelf')}</TabsTrigger>
+              <TabsTrigger value="categories">
+                {t('tabCategories')}
+                {Array.isArray(categoriesRead) && (
+                  <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
+                    {categoriesRead.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="products">{t('tabProducts')}</TabsTrigger>
+              <TabsTrigger value="readiness">{t('tabReadiness')}</TabsTrigger>
               <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="space-y-6">
+            <TabsContent value="shelf" className="space-y-6">
               {hasFullAccess ? (
                 <>
+                  {shelf === 'failed' ? (
+                    <ShelfFailed onRetry={() => setShelfTry((n) => n + 1)} />
+                  ) : (
+                    <ShelfKpis shelf={shelf} orders={orders} salesConnected={salesConnected} />
+                  )}
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <MerchantSplitCard split={destinations.split} loading={destinationsLoading} />
+                    <ResellerPriceAlerts
+                      alerts={destinations.priceAlerts}
+                      loading={destinationsLoading}
+                    />
+                  </div>
+                  {shelf !== 'failed' && (
+                    <ShelfRows
+                      shelf={shelf}
+                      platforms={filterOpts.platforms}
+                      platform={platform}
+                      onPlatform={setPlatform}
+                      products={
+                        catalogTable && catalogTable !== 'failed'
+                          ? catalogTable.rows
+                          : shelfProducts && shelfProducts !== 'failed'
+                            ? shelfProducts.rows
+                            : undefined
+                      }
+                    />
+                  )}
+                  <h2 className="pt-2 text-sm font-semibold">{t('shelf.trends')}</h2>
                   <div className="grid gap-4 lg:grid-cols-2">
                     <PlatformCardRateChart
                       t={t}
@@ -351,43 +527,42 @@ export default function ShoppingPage() {
                       loading={loading}
                     />
                   </div>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <MerchantSplitCard split={destinations.split} loading={destinationsLoading} />
-                    <ResellerPriceAlerts
-                      alerts={destinations.priceAlerts}
-                      loading={destinationsLoading}
-                    />
-                  </div>
-                  {showOpenAiIndex && (
-                    <OpenAiIndexCard
-                      read={openAiIndex.read}
-                      loading={openAiIndex.loading}
-                      canManage={canManage}
-                      onDirectFeedChange={openAiIndex.setDirectFeed}
-                    />
-                  )}
                 </>
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}
             </TabsContent>
 
-            <TabsContent value="prompts" className="space-y-6">
+            <TabsContent value="categories" className="space-y-6">
               {hasFullAccess ? (
-                <PromptsTabContent
-                  t={t}
+                <CategoriesTable
                   brandId={activeBrandId}
-                  promptsData={promptsData}
-                  loading={tableLoading}
+                  categories={categoriesRead === 'failed' ? null : (categoriesRead ?? null)}
+                  loading={categoriesRead === undefined}
+                  failed={categoriesRead === 'failed'}
+                  results={categories?.key === categoriesKey ? categories.results : undefined}
                 />
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}
             </TabsContent>
 
-            <TabsContent value="own_products" className="space-y-6">
-              {hasFullAccess ? (
+            <TabsContent value="products" className="space-y-6">
+              {hasFullAccess && (productsLoading || (catalogTable && catalogTable !== 'failed')) ? (
+                <ProductsTable
+                  products={catalogTable === 'failed' ? null : catalogTable}
+                  loading={productsLoading}
+                />
+              ) : hasFullAccess ? (
                 <>
+                  {/* No catalog yet: the products AI showed, by title, until one is connected. */}
+                  {catalogTable === 'failed' ? (
+                    <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                      {t('products.failed')}
+                    </p>
+                  ) : (
+                    <CatalogNote brandId={activeBrandId} />
+                  )}
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{t('tabMyProducts')}</h2>
                     <Button
@@ -432,7 +607,6 @@ export default function ShoppingPage() {
                       {tCommon('exportCsv')}
                     </Button>
                   </div>
-                  <CatalogNote brandId={activeBrandId} />
                   <ProductTable
                     t={t}
                     products={ownProducts}
@@ -440,6 +614,57 @@ export default function ShoppingPage() {
                     onRowClick={setSelectedProduct}
                   />
                 </>
+              ) : (
+                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+              )}
+            </TabsContent>
+
+            <TabsContent value="readiness" className="space-y-6">
+              {hasFullAccess ? (
+                <ReadinessTab
+                  market={shoppingMarket.shown ?? 'us'}
+                  tracked={filterOpts.platforms}
+                  ownSlots={
+                    new Map(
+                      (channelShelf && channelShelf !== 'failed'
+                        ? channelShelf.stats.channels
+                        : []
+                      ).map((c) => [c.platform, c.ownSlots]),
+                    )
+                  }
+                  channelsRead={
+                    channelShelf === null
+                      ? 'loading'
+                      : channelShelf === 'failed'
+                        ? 'failed'
+                        : undefined
+                  }
+                  {...readinessChecklist({
+                    market: shoppingMarket.shown ?? 'us',
+                    catalog: sources.catalog,
+                    products: catalogTable && catalogTable !== 'failed' ? catalogTable.rows : null,
+                    openAi: showOpenAiIndex ? openAiIndex.read : null,
+                    cheaperResellers: destinationsLoading ? null : destinations.priceAlerts.length,
+                    amazonDrop: amazonShareDropAlert
+                      ? { from: amazonShareDropAlert.fromShare, to: amazonShareDropAlert.toShare }
+                      : null,
+                  })}
+                  loading={!sources.loaded || productsLoading}
+                  unread={[
+                    ...(sources.loaded && sources.catalog === null ? (['sources'] as const) : []),
+                    ...(catalogTable === 'failed' ? (['products'] as const) : []),
+                  ]}
+                  onProducts={() => changeTab('products')}
+                >
+                  {showOpenAiIndex && (
+                    <OpenAiIndexCard
+                      read={openAiIndex.read}
+                      loading={openAiIndex.loading}
+                      canManage={canManage}
+                      onDirectFeedChange={openAiIndex.setDirectFeed}
+                    />
+                  )}
+                </ReadinessTab>
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}
@@ -531,321 +756,33 @@ export default function ShoppingPage() {
   );
 }
 
-function PromptsTabContent({
-  t,
-  brandId,
-  promptsData,
-  loading,
-}: {
-  t: ReturnType<typeof useTranslations<'shopping'>>;
-  brandId: string;
-  promptsData: CardEligiblePromptsResponse | null;
-  loading: boolean;
-}) {
-  const tCommon = useTranslations('common');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPrompt, setSelectedPrompt] = useState<CardEligiblePromptRow | null>(null);
-
-  const brand = useBrandStore((s) => s.brands.find((b) => b.id === brandId) ?? null);
-  const brandSlug = brand?.slug || brandId;
-
-  const filteredPrompts = useMemo(() => {
-    if (!promptsData?.prompts) return [];
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return promptsData.prompts;
-    return promptsData.prompts.filter(
-      (p) => p.promptText.toLowerCase().includes(q) || p.topic.toLowerCase().includes(q),
-    );
-  }, [promptsData, searchQuery]);
-
-  const handleExportCsv = useCallback(() => {
-    if (!promptsData?.prompts.length) return;
-    const exportRows = promptsData.prompts.map((p) => ({
-      prompt: p.promptText,
-      topic: p.topic,
-      platforms: p.platforms.join('; '),
-      total_cards: p.totalCards,
-      own_cards: p.ownCardsCount,
-      competitor_cards: p.competitorCardsCount,
-      other_cards: p.otherCardsCount,
-      last_seen: p.lastTriggered ? p.lastTriggered.slice(0, 10) : '—',
-    }));
-    const headers = [
-      'prompt',
-      'topic',
-      'platforms',
-      'total_cards',
-      'own_cards',
-      'competitor_cards',
-      'other_cards',
-      'last_seen',
-    ];
-    const csv = toCsv(exportRows, headers);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    const date = new Date().toISOString().slice(0, 10);
-    link.setAttribute('download', `ansvisor_${brandSlug}_shopping_prompts_${date}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [promptsData, brandSlug]);
-
-  if (loading && !promptsData) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <Skeleton className="h-9 w-64" />
-          <Skeleton className="h-9 w-32" />
-        </div>
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={t('searchPrompts')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExportCsv}
-          disabled={!promptsData?.prompts.length}
-          className="gap-1.5"
-        >
-          <Download className="h-3.5 w-3.5" />
-          {tCommon('exportCsv')}
-        </Button>
-      </div>
-
-      <div className="rounded-md border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('tablePrompt')}</TableHead>
-              <TableHead>{t('tableTopic')}</TableHead>
-              <TableHead>{t('tablePlatforms')}</TableHead>
-              <TableHead className="text-right">{t('tableTotalCards')}</TableHead>
-              <TableHead className="w-[120px]">{t('tableSplitBar')}</TableHead>
-              <TableHead className="text-right">{t('tableLastSeen')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  {t('common.loading')}
-                </TableCell>
-              </TableRow>
-            ) : filteredPrompts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
-                  <div className="flex flex-col items-center justify-center text-muted-foreground">
-                    <ShoppingBag className="h-8 w-8 opacity-40 mb-2" />
-                    <p className="font-medium text-sm">{t('noPromptsFound')}</p>
-                    <p className="text-xs mt-1">{t('noPromptsFoundSub')}</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredPrompts.map((row) => {
-                const ownPct = row.totalCards > 0 ? (row.ownCardsCount / row.totalCards) * 100 : 0;
-                const compPct =
-                  row.totalCards > 0 ? (row.competitorCardsCount / row.totalCards) * 100 : 0;
-                const otherPct =
-                  row.totalCards > 0 ? (row.otherCardsCount / row.totalCards) * 100 : 0;
-
-                return (
-                  <TableRow
-                    key={row.promptId}
-                    className="cursor-pointer transition-colors hover:bg-muted/50"
-                    onClick={() => setSelectedPrompt(row)}
-                  >
-                    <TableCell className="max-w-[320px]">
-                      <Link
-                        href={`/dashboard/prompts/${row.promptId}`}
-                        className="font-medium text-primary hover:underline block truncate"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {row.promptText}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {row.topic}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {row.platforms.map((p) => (
-                          <AIProviderAvatar
-                            key={p}
-                            provider={resolveAIProvider(p)}
-                            className="h-5 w-5 border"
-                          />
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {formatNumber(row.totalCards)}
-                    </TableCell>
-                    <TableCell>
-                      <div
-                        className="flex h-2 w-24 overflow-hidden rounded-full bg-muted-foreground/10"
-                        title={`Own: ${row.ownCardsCount}, Competitors: ${row.competitorCardsCount}, Other: ${row.otherCardsCount}`}
-                      >
-                        {ownPct > 0 && (
-                          <div className="h-full bg-primary" style={{ width: `${ownPct}%` }} />
-                        )}
-                        {compPct > 0 && (
-                          <div className="h-full bg-orange-500" style={{ width: `${compPct}%` }} />
-                        )}
-                        {otherPct > 0 && (
-                          <div
-                            className="h-full bg-muted-foreground/40"
-                            style={{ width: `${otherPct}%` }}
-                          />
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
-                      {row.lastTriggered ? row.lastTriggered.slice(0, 10) : '—'}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <Sheet open={!!selectedPrompt} onOpenChange={(open) => !open && setSelectedPrompt(null)}>
-        <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-md overflow-y-auto px-4">
-          <SheetHeader className="pb-4 border-b">
-            <SheetTitle>{t('drawerTitle')}</SheetTitle>
-            <SheetDescription>{t('drawerSubtitle')}</SheetDescription>
-          </SheetHeader>
-          {selectedPrompt && (
-            <div className="space-y-6 py-4">
-              <div>
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                  {t('tablePrompt')}
-                </h4>
-                <p className="text-sm font-medium text-foreground bg-muted/30 rounded-lg p-3 border">
-                  {selectedPrompt.promptText}
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {selectedPrompt.appearances.map((app) => (
-                  <div key={app.promptResultId} className="rounded-lg border bg-card p-4 space-y-3">
-                    <div className="flex items-center justify-between border-b pb-2 text-xs">
-                      <div className="flex items-center gap-1.5 font-medium text-foreground">
-                        <AIProviderAvatar
-                          provider={resolveAIProvider(app.platform)}
-                          className="h-4.5 w-4.5"
-                        />
-                        <span>{getAIProviderDisplayName(resolveAIProvider(app.platform))}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-muted-foreground">
-                        {app.region && (
-                          <span className="flex items-center gap-1">
-                            <Globe className="h-3 w-3" />
-                            {app.region}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(app.timestamp).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                        {t('drawerCardsTitle')} ({app.cards.length})
-                      </h5>
-                      <div className="grid gap-2">
-                        {app.cards.map((card) => (
-                          <div
-                            key={card.id}
-                            className="flex gap-3 rounded-md border bg-muted/10 p-2 text-xs"
-                          >
-                            {card.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element -- product images come from arbitrary merchant domains; next/image remotePatterns would need an open-ended wildcard
-                              <img
-                                src={card.imageUrl}
-                                alt=""
-                                className="h-12 w-12 rounded border object-contain bg-white shrink-0"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                            ) : null}
-                            <div className="flex flex-1 flex-col justify-between min-w-0">
-                              <span className="font-medium text-foreground line-clamp-1">
-                                {card.title}
-                              </span>
-                              <div className="flex items-center justify-between mt-1 text-muted-foreground">
-                                <span className="font-semibold text-foreground">{card.price}</span>
-                                {card.merchantUrl && (
-                                  <a
-                                    href={card.merchantUrl}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    className="inline-flex items-center gap-0.5 hover:text-primary transition-colors"
-                                  >
-                                    <span>{getDomainName(card.merchantUrl)}</span>
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-    </div>
-  );
-}
-
 // ── Header ────────────────────────────────────────────────────────────────────
 
-function PageHeader({ t }: { t: ReturnType<typeof useTranslations<'shopping'>> }) {
+/** The title, with "Why Ansvisor Product Visibility?" beside it (ECOM-010). */
+function PageHeader({
+  t,
+  onWhy,
+}: {
+  t: ReturnType<typeof useTranslations<'shopping'>>;
+  onWhy: () => void;
+}) {
   return (
     <HeaderWithAiUsage>
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <ShoppingBag className="h-6 w-6 text-primary" />
-          {t('title')}
-        </h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <ShoppingBag className="h-6 w-6 text-primary" />
+            {t('title')}
+          </h1>
+          <button
+            type="button"
+            onClick={onWhy}
+            className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <HelpCircle className="h-3.5 w-3.5" aria-hidden />
+            {t('why.button')}
+          </button>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
       </div>
     </HeaderWithAiUsage>
@@ -946,111 +883,6 @@ function FilterField({ label, children }: { label: string; children: React.React
   );
 }
 
-// ── KPI grid ──────────────────────────────────────────────────────────────────
-
-function KpiGrid({
-  t,
-  kpis,
-  loading,
-  hasFullAccess,
-  triggerRate,
-}: {
-  t: ReturnType<typeof useTranslations<'shopping'>>;
-  kpis: ShoppingKpis | null;
-  loading: boolean;
-  hasFullAccess: boolean;
-  triggerRate?: number;
-}) {
-  if (loading && !kpis) {
-    return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-[104px]" />
-        ))}
-      </div>
-    );
-  }
-
-  const cardRate = kpis?.shoppingCardRate ?? 0;
-  const productsSurfaced = kpis?.productsSurfaced ?? 0;
-  const sov = kpis?.shoppingSov ?? 0;
-  const merchant = kpis?.topMerchant;
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      <KpiCard
-        title={t('kpiCardRate')}
-        value={formatPercent(cardRate)}
-        subtitle={t('kpiCardRateSub')}
-        icon={ShoppingBag}
-      />
-      <KpiCard
-        title={t('kpiTriggerRate')}
-        value={triggerRate !== undefined ? formatPercent(triggerRate) : '—'}
-        subtitle={t('kpiTriggerRateSub')}
-        icon={Target}
-        locked={!hasFullAccess}
-      />
-      <KpiCard
-        title={t('kpiOwnProducts')}
-        value={formatNumber(productsSurfaced)}
-        subtitle={t('kpiOwnProductsSub')}
-        icon={ArrowUpRight}
-        locked={!hasFullAccess}
-      />
-      <KpiCard
-        title={t('kpiSov')}
-        value={formatPercent(sov)}
-        subtitle={t('kpiSovSub')}
-        icon={Crown}
-        locked={!hasFullAccess}
-      />
-      <KpiCard
-        title={t('kpiTopMerchant')}
-        value={merchant?.domain ?? '—'}
-        subtitle={
-          merchant
-            ? `${merchant.cardCount} card${merchant.cardCount === 1 ? '' : 's'}`
-            : t('kpiTopMerchantSub')
-        }
-        icon={Store}
-        locked={!hasFullAccess}
-      />
-    </div>
-  );
-}
-
-function KpiCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  locked = false,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: React.ComponentType<{ className?: string }>;
-  locked?: boolean;
-}) {
-  return (
-    <Card className={locked ? 'opacity-70' : ''}>
-      <CardContent className="space-y-2 p-4">
-        <div className="flex items-start justify-between">
-          <span className="text-xs font-medium text-muted-foreground">{title}</span>
-          {locked ? (
-            <Lock className="h-4 w-4 text-muted-foreground/60" />
-          ) : (
-            <Icon className="h-4 w-4 text-muted-foreground" />
-          )}
-        </div>
-        <p className="truncate text-2xl font-bold">{locked ? '—' : value}</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ── Charts ────────────────────────────────────────────────────────────────────
 
 function PlatformCardRateChart({
@@ -1072,14 +904,20 @@ function PlatformCardRateChart({
         {loading ? (
           <Skeleton className="h-[220px] w-full" />
         ) : (
-          <ResponsiveBarChart data={chartData} />
+          <ResponsiveBarChart data={chartData} label={t('seriesCardRate')} />
         )}
       </CardContent>
     </Card>
   );
 }
 
-function ResponsiveBarChart({ data }: { data: Array<{ platform: string; rate: number }> }) {
+function ResponsiveBarChart({
+  data,
+  label,
+}: {
+  data: Array<{ platform: string; rate: number }>;
+  label: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -1093,7 +931,7 @@ function ResponsiveBarChart({ data }: { data: Array<{ platform: string; rate: nu
   }, []);
   return (
     <div ref={ref} style={{ width: '100%', height: 220 }}>
-      {width > 0 && <DynamicPlatformCardRateChart width={width} data={data} />}
+      {width > 0 && <DynamicPlatformCardRateChart width={width} data={data} label={label} />}
     </div>
   );
 }
@@ -1113,7 +951,14 @@ function OwnPresenceTrendChart({
         <CardTitle className="text-sm font-medium">{t('trendTitle')}</CardTitle>
       </CardHeader>
       <CardContent>
-        {loading ? <Skeleton className="h-[220px] w-full" /> : <ResponsiveLineChart data={data} />}
+        {loading ? (
+          <Skeleton className="h-[220px] w-full" />
+        ) : (
+          <ResponsiveLineChart
+            data={data}
+            labels={{ own: t('seriesOwnCards'), all: t('seriesAllCards') }}
+          />
+        )}
       </CardContent>
     </Card>
   );
@@ -1121,8 +966,10 @@ function OwnPresenceTrendChart({
 
 function ResponsiveLineChart({
   data,
+  labels,
 }: {
   data: Array<{ date: string; ownCards: number; totalCards: number }>;
+  labels: { own: string; all: string };
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -1137,7 +984,7 @@ function ResponsiveLineChart({
   }, []);
   return (
     <div ref={ref} style={{ width: '100%', height: 220 }}>
-      {width > 0 && <DynamicShoppingTrendChart width={width} data={data} />}
+      {width > 0 && <DynamicShoppingTrendChart width={width} data={data} labels={labels} />}
     </div>
   );
 }

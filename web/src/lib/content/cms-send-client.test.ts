@@ -45,6 +45,7 @@ const {
   readDraftCms,
   readKeptFields,
   refreshWebflowPublished,
+  refreshWordPressPublished,
   sendPagesToCms,
 } = await import('./cms-send-client');
 
@@ -101,6 +102,26 @@ describe('sendPagesToCms', () => {
       deliveries: [{ updated: true }],
     });
     expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toMatchObject({ target: 'webflow' });
+    // To the brand's WordPress site (00294): its post live, its JSON-LD left out.
+    answer(200, {
+      deliveries: [
+        {
+          id: 'x4',
+          draftId: 'd1',
+          status: 'sent',
+          updated: false,
+          live: true,
+          changed: { jsonLd: 2 },
+        },
+      ],
+    });
+    expect(await sendPagesToCms('brand-1', [page], 'wordpress')).toMatchObject({
+      ok: true,
+      deliveries: [{ updated: false, live: true, changed: { jsonLd: 2 } }],
+    });
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toMatchObject({
+      target: 'wordpress',
+    });
   });
 
   it('gives the server’s reason, and the field a 400 names', async () => {
@@ -126,6 +147,18 @@ describe('sendPagesToCms', () => {
       answer(409, { code });
       expect(await sendPagesToCms('brand-1', [page], 'webflow')).toMatchObject({ ok: false, code });
     }
+    for (const code of [
+      'wordpress_not_configured',
+      'no_wordpress',
+      'wordpress_refused',
+      'in_progress',
+    ]) {
+      answer(409, { code });
+      expect(await sendPagesToCms('brand-1', [page], 'wordpress')).toMatchObject({
+        ok: false,
+        code,
+      });
+    }
   });
 
   it('says when a request was more than the API’s proxy takes', async () => {
@@ -150,6 +183,10 @@ describe('sendPagesToCms', () => {
     session = null;
     expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ code: 'session' });
     expect(fetchMock).toHaveBeenCalledTimes(4);
+    // A read-only workspace (plan not active): the upgrade dialog's.
+    session = { access_token: 'tok' };
+    answer(402, { error: 'plan_limit', code: 'subscription_inactive' });
+    expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ code: 'subscription' });
   });
 
   it('reads an unknown code, a body that isn’t JSON or no answer as failed', async () => {
@@ -180,6 +217,35 @@ describe('refreshWebflowPublished', () => {
     });
     answer(502, { code: 'failed' });
     expect(await refreshWebflowPublished('brand-1')).toEqual([]);
+  });
+});
+
+describe('refreshWordPressPublished', () => {
+  it('asks the API to read the brand’s WordPress posts, and gives the drafts it marked published', async () => {
+    answer(200, {
+      checked: 2,
+      published: [
+        { draftId: 'd1', url: 'https://a.example/cold-brew/' },
+        // A page deleted since: no draft to mark.
+        { draftId: null, url: 'https://a.example/espresso/' },
+      ],
+    });
+    expect(await refreshWordPressPublished('brand-1')).toEqual(['d1']);
+    expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/content-drafts/wordpress-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
+      body: JSON.stringify({ brandId: 'brand-1' }),
+    });
+    // Read a moment ago, or not there (an API before 00294): none.
+    answer(200, { checked: 0, published: [], recent: true });
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    answer(404, {});
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    session = null;
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
 
@@ -340,6 +406,21 @@ describe('readCmsStatuses', () => {
       status: 'sent',
       target: 'webflow',
     });
+  });
+
+  it('says which sends went to WordPress, and reads an unknown target as the webhook', async () => {
+    statusReads = [
+      {
+        data: [
+          delivery('d1', 'sent', '2026-10-24T10:00:00Z', { target: 'wordpress' }),
+          delivery('d2', 'sent', '2026-10-24T10:00:00Z', { target: 'shopify' }),
+        ],
+        error: null,
+      },
+    ];
+    const statuses = await readCmsStatuses(['d1', 'd2']);
+    expect(statuses.get('d1')).toMatchObject({ status: 'sent', target: 'wordpress' });
+    expect(statuses.get('d2')).toMatchObject({ target: 'webhook' });
   });
 
   it('leaves a read that fails with no sends, as before its table is there', async () => {

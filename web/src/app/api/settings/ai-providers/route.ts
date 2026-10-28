@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { writeRefusal } from '@/lib/subscription-guard';
 import { encryptApiKey, last4 } from '@/lib/agent/key-encryption';
 import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agent/providers';
 
@@ -18,6 +19,9 @@ import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agen
  * - PATCH { provider }: makes a saved provider the one Chat uses.
  * - DELETE ?provider=: removes a key; when it was Chat's, the most recently
  *   saved other one takes over.
+ *
+ * While the workspace is read-only (cloud, plan not active), PUT and PATCH
+ * answer 402 subscription_inactive; DELETE stays open.
  *
  * Auth model:
  * - GET: any signed-in org member can see which keys are configured.
@@ -139,6 +143,8 @@ export async function GET() {
 export async function PUT(req: Request) {
   const ctx = await getAdmin();
   if (ctx instanceof NextResponse) return ctx;
+  const refused = await writeRefusal();
+  if (refused) return refused;
 
   const body = (await req.json().catch(() => ({}))) as {
     provider?: unknown;
@@ -213,6 +219,8 @@ export async function PUT(req: Request) {
 export async function PATCH(req: Request) {
   const ctx = await getAdmin();
   if (ctx instanceof NextResponse) return ctx;
+  const refused = await writeRefusal();
+  if (refused) return refused;
 
   const body = (await req.json().catch(() => ({}))) as { provider?: unknown };
   if (!isAiProvider(body.provider)) {
@@ -228,6 +236,10 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
+/**
+ * Open while the workspace is read-only: removing a key takes back what the
+ * org gave us, as disconnecting an integration does (lib/subscription-guard.ts).
+ */
 export async function DELETE(req: Request) {
   const ctx = await getAdmin();
   if (ctx instanceof NextResponse) return ctx;
