@@ -41,12 +41,13 @@ describe('priceText', () => {
     expect(priceText({ price: null, salePrice: null, currency: 'USD' })).toBeNull();
   });
 
-  it('reads a price of 0 as none, and a sale price not under the price as no sale', () => {
+  it('reads a price of 0 as none, a sale price not under the price as no sale, and a sale price alone as the price', () => {
     expect(priceText({ price: 0, salePrice: null, currency: 'USD' })).toBeNull();
     expect(priceText({ price: 149, salePrice: 0, currency: 'USD' })).toBe('$149.00');
     expect(priceText({ price: 149, salePrice: 149, currency: 'USD' })).toBe('$149.00');
     expect(priceText({ price: 149, salePrice: 159, currency: 'USD' })).toBe('$149.00');
-    expect(priceText({ price: null, salePrice: 129, currency: 'USD' })).toBeNull();
+    expect(priceText({ price: null, salePrice: 129, currency: 'USD' })).toBe('$129.00');
+    expect(priceText({ price: null, salePrice: null, currency: 'USD' })).toBeNull();
   });
 });
 
@@ -101,6 +102,25 @@ describe('insertProductGrid', () => {
     expect(out.indexOf('data-html-block')).toBeGreaterThan(out.indexOf('</ul>'));
     expect(out.indexOf('data-html-block')).toBeLessThan(out.indexOf('<h2>FAQ</h2>'));
     expect(decoded(out)[0]).toContain('https://shop.example/products/p2');
+  });
+
+  it('picks the section that links them most wherever it is, not the first or the last that links one', () => {
+    // One link before it, one after, and the FAQ last: only the count decides.
+    const html =
+      `<h1>T</h1><h2>Brands</h2><p>${link('p1')}</p>` +
+      `<h2>Picks</h2><p>${link('p1')} ${link('p2')}</p><p>Why.</p>` +
+      `<h2>Compare</h2><p>${link('p2')}</p>` +
+      '<h2>Care</h2><p>c</p><h2>FAQ</h2><p>q</p>';
+    expect(insertProductGrid(html, path)).toMatch(
+      /<p>Why\.<\/p><div data-html-block="[^"]+"><\/div><h2>Compare<\/h2>/,
+    );
+    // Two sections link them as often: the first of them.
+    const tie =
+      `<h1>T</h1><h2>Intro</h2><p>i</p><h2>Picks</h2><p>${link('p1')} ${link('p2')}</p>` +
+      `<h2>More</h2><p>${link('p2')} ${link('p1')}</p><h2>FAQ</h2><p>q</p>`;
+    expect(insertProductGrid(tie, path)).toMatch(
+      /p2">x<\/a><\/p><div data-html-block="[^"]+"><\/div><h2>More<\/h2>/,
+    );
   });
 
   it("counts only links to the grid's products, not to other pages", () => {
