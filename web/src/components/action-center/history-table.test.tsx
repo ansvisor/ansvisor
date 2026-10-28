@@ -109,6 +109,25 @@ describe('HistoryTable', () => {
     expect(cells[headers.indexOf('Affected')]?.textContent).toBe(text);
     await act(async () => root.unmount());
   });
+
+  // Only a completed action is measured; one dismissed before 00084 reads
+  // not measurable, one since pending: neither is what happened.
+  it.each(['not_measurable', 'pending_measurement'] as const)(
+    'says a dismissed action (%s) was not measured because it was dismissed',
+    async (outcome) => {
+      const root = await render(
+        <HistoryTable
+          items={[item({ status: 'dismissed', outcome })]}
+          selectedId={null}
+          onSelect={() => {}}
+        />,
+      );
+      const headers = Array.from(document.body.querySelectorAll('th')).map((th) => th.textContent);
+      const cells = document.body.querySelectorAll('tbody td');
+      expect(cells[headers.indexOf('Result')]?.textContent).toBe('Not measureddismissed');
+      await act(async () => root.unmount());
+    },
+  );
 });
 
 describe('HistoryDrawer', () => {

@@ -243,7 +243,9 @@ export function HistoryDrawer({
               // line is recorded; the effect is not, because nothing re-reads
               // these metrics after an action closes.
               <p className="mt-1 text-xs text-muted-foreground">
-                {t(`outcomeExplain.${item.outcome}`)}
+                {item.status === 'dismissed'
+                  ? t('dismissedResult.explain')
+                  : t(`outcomeExplain.${item.outcome}`)}
               </p>
             )}
             <div className="mt-2 grid grid-cols-2 gap-2">
