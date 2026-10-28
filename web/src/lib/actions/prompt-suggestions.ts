@@ -313,7 +313,7 @@ export async function trackPagePrompts(
   pageUrl: string | null,
   prompts: { text: string; topic: string }[],
 ): Promise<TrackPagePromptsResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const wanted = (Array.isArray(prompts) ? prompts : [])
     .filter((p) => typeof p?.text === 'string' && p.text.trim())
     .slice(0, MAX_PAGE_PROMPTS);

@@ -29,7 +29,7 @@ function assertTopicNames(names: string[]) {
 
 export async function createTopics(brandId: string, names: string[]): Promise<Topic[]> {
   assertTopicNames(names);
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
 
   // Remove existing topics for this brand to avoid duplicates
@@ -85,7 +85,7 @@ export async function getTopicById(brandId: string, topicId: string): Promise<To
 
 export async function createTopic(brandId: string, name: string): Promise<Topic> {
   assertTopicNames([name]);
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   const { data, error } = await supabase

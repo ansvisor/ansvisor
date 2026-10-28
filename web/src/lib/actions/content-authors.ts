@@ -178,7 +178,7 @@ export async function deleteContentAuthor(id: string): Promise<void> {
  * is refused.
  */
 export async function setBrandByline(brandId: string, on: boolean): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!z.guid().safeParse(brandId).success || typeof on !== 'boolean') throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -192,7 +192,7 @@ export async function setBrandByline(brandId: string, on: boolean): Promise<void
 
 /** A brand's default author, or none (the organization byline): admins and managers. */
 export async function setDefaultAuthor(brandId: string, authorId: string | null): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!z.guid().safeParse(brandId).success || (authorId && !z.guid().safeParse(authorId).success)) {
     throw new Error('invalid');
   }

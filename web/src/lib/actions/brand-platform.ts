@@ -42,7 +42,7 @@ export async function syncBrandPlatforms(
     apiModel?: string;
   }[],
 ): Promise<BrandPlatform[]> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   const { data: brand } = await supabase

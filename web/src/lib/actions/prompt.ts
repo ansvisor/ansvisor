@@ -199,7 +199,7 @@ export async function getPromptCapacity(
  * message (#427).
  */
 export async function savePromptSet(input: SavePromptSetInput): Promise<SavePromptSetResult> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId: input.brandId });
   const supabase = await createClient();
 
   const { organizationId: orgId, region: brandRegion } = await getBrandContext(
@@ -695,7 +695,7 @@ export async function addPromptToBrand(
   brandId: string,
   input: { text: string; category?: string; platforms: string[]; models?: string[] },
 ): Promise<AddPromptToBrandResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const trimmed = input.text.trim();
   if (!trimmed) return { error: 'Prompt text is required.' };
@@ -848,7 +848,7 @@ export async function importPrompts(
   brandId: string,
   rows: ImportPromptRow[],
 ): Promise<ImportPromptsResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (rows.length === 0) return { importedIdx: [], promptIds: [], analysisStarted: false };
   if (rows.length > 1000) return { error: 'Import at most 1,000 prompts at a time.' };
   const supabase = await createClient();

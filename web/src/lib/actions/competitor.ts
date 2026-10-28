@@ -31,7 +31,7 @@ export async function addCompetitor(
   brandId: string,
   input: { name: string; domain: string },
 ): Promise<Competitor> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
 
   const { data, error } = await supabase

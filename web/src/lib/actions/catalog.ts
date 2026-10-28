@@ -68,7 +68,7 @@ export async function addFeedSource(
   url: string,
   format: CatalogFormat = 'auto',
 ): Promise<AddFeedResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const address = typeof url === 'string' ? url.trim() : '';
   if (
     !z.guid().safeParse(brandId).success ||

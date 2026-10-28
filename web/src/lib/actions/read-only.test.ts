@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 let org: { subscription_status: string | null; stripe_subscription_id: string | null };
+/** The brand the actions name is the organization's demo brand (00380). */
+let demo: boolean;
 let writes: string[];
 /** What each update set, by table. */
 let updates: { table: string; values: unknown }[];
@@ -22,7 +24,7 @@ function query(table: string): unknown {
     table === 'profiles'
       ? { organization_id: 'org-1', organizations: org }
       : table === 'brands'
-        ? { id: 'brand-1', industry: null, shopping_mode_enabled: false }
+        ? { id: 'brand-1', industry: null, shopping_mode_enabled: false, is_demo: demo }
         : table === 'prompts'
           ? { id: 'prompt-1', platforms: ['chatgpt'] }
           : { id: 'row-1', brand_id: 'brand-1', prompt_id: 'prompt-1', name: 'Acme', domain: '' };
@@ -68,7 +70,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
-const { SubscriptionInactiveError } = await import('@/lib/subscription-guard');
+const { DemoBrandError, SubscriptionInactiveError } = await import('@/lib/subscription-guard');
 const { addCompetitor, deleteCompetitor } = await import('./competitor');
 const { markBrandAsEcommerce, setBrandShoppingMode } = await import('./brand');
 const { addPromptNote } = await import('./prompt-workflow');
@@ -78,6 +80,7 @@ const { updateAccountName } = await import('./organization');
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   org = { subscription_status: 'canceled', stripe_subscription_id: 'sub_1' };
+  demo = false;
   writes = [];
   updates = [];
 });
@@ -151,5 +154,28 @@ describe('server actions on a read-only workspace', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     await addPromptNote('prompt-1', 'Check the answer');
     expect(writes).toEqual(['prompt_notes.insert']);
+  });
+});
+
+describe('server actions on the demo brand', () => {
+  beforeEach(() => {
+    demo = true;
+    org = { subscription_status: 'active', stripe_subscription_id: 'sub_1' };
+  });
+
+  it('refuse a write for the demo brand before writing anything, whatever the plan', async () => {
+    await expect(addCompetitor('brand-1', { name: 'Acme', domain: 'acme.com' })).rejects.toThrow(
+      DemoBrandError,
+    );
+    await expect(setBrandShoppingMode('brand-1', true)).rejects.toThrow(DemoBrandError);
+    // Setup's own write on it, too.
+    await expect(markBrandAsEcommerce('brand-1')).rejects.toThrow(DemoBrandError);
+    expect(writes).toEqual([]);
+  });
+
+  it("leave the writes that name no brand alone: the person's profile, a note by its prompt", async () => {
+    await updateAccountName('Ada');
+    await addPromptNote('prompt-1', 'Check the answer');
+    expect(writes).toEqual(['profiles.update', 'auth.updateUser', 'prompt_notes.insert']);
   });
 });

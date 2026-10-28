@@ -408,6 +408,15 @@ describe('a server action refused as read-only', () => {
     expect(dialog()?.textContent).toContain('Choose a plan to keep going');
   });
 
+  it('opens it for a write the server refused on the demo brand, by its digest', async () => {
+    await render({ active: true, status: 'active' });
+    const event = await reject(
+      Object.assign(new Error('masked in production'), { digest: 'demo_brand' }),
+    );
+    expect(event.defaultPrevented).toBe(true);
+    expect(dialog()).not.toBeNull();
+  });
+
   it('leaves any other rejection alone', async () => {
     await render({ active: false });
     const event = await reject(new Error('Failed to fetch'));

@@ -181,7 +181,7 @@ interface UpdateBrandInput {
 }
 
 export async function updateBrand(id: string, updates: UpdateBrandInput): Promise<Brand> {
-  await assertWritable();
+  await assertWritable({ brandId: id });
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -279,7 +279,7 @@ export async function setBrandShoppingMode(
   brandId: string,
   enabled: boolean,
 ): Promise<{ promptsUpdated: number }> {
-  await assertWritable();
+  await assertWritable({ brandId });
   return applyShoppingMode(await createClient(), brandId, enabled);
 }
 
@@ -366,7 +366,7 @@ async function applyShoppingMode(
 export async function markBrandAsEcommerce(
   brandId: string,
 ): Promise<{ industry: string | null; promptsUpdated: number }> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
   const { data: brand, error } = await supabase
     .from('brands')
@@ -408,7 +408,7 @@ export async function markBrandAsEcommerce(
  * brand via their org membership.
  */
 export async function setBrandActive(brandId: string, isActive: boolean): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   // Return the updated row so a no-op (invalid id, or RLS silently denying the
@@ -439,7 +439,7 @@ export async function setPinnedCompetitors(
   brandId: string,
   competitorIds: string[],
 ): Promise<string[]> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!Array.isArray(competitorIds) || competitorIds.some((id) => typeof id !== 'string')) {
     throw new Error('Pinned competitors must be a list of competitor ids.');
   }
