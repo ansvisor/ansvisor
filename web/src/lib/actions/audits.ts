@@ -649,3 +649,43 @@ export async function getAuditHubExtras(brandId: string): Promise<AuditHubExtras
   ]);
   return { opportunities, latestRun };
 }
+
+/**
+ * "Send to Action Center" on a Site Audit report (learning D2): the page and
+ * the checks it fails as one Fix action. The server reads the audit again;
+ * the same page sent again returns the action open for it, and an older
+ * report of a page audited since is refused with its latest audit's id.
+ * Returned, not thrown: a thrown error's message is masked in production.
+ */
+export async function sendAuditToActionCenter(
+  brandId: string,
+  auditId: string,
+): Promise<
+  | { actionId: string; actionNo: number; created: boolean }
+  // newer_audit names the page's latest audit, to send from instead.
+  | { error: string; code?: string; latestAuditId?: string }
+> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+
+  const res = await fetch(`${AEO_SERVER_URL}/api/action-center/audits`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ brandId, auditId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return {
+      error: body.details || body.error || `Server error: ${res.status}`,
+      ...(typeof body.code === 'string' ? { code: body.code } : {}),
+      ...(typeof body.latestAuditId === 'string' ? { latestAuditId: body.latestAuditId } : {}),
+    };
+  }
+  return res.json();
+}
