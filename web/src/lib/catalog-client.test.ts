@@ -301,6 +301,16 @@ describe('category pages (shopping path)', () => {
     expect(await listCategoryPages('b1')).toEqual({ ok: false, code: 'failed' });
   });
 
+  it("names a read-only workspace's refusal, for the upgrade dialog", async () => {
+    answer(402, { code: 'subscription_inactive', error: 'Choose a plan to make changes.' });
+    expect(await setCategoryPage('b1', 'Socks', null)).toEqual({
+      ok: false,
+      code: 'subscription',
+    });
+    answer(402, { code: 'subscription_inactive', error: 'Choose a plan to make changes.' });
+    expect(await resetCategoryPage('b1', 'Socks')).toEqual({ ok: false, code: 'subscription' });
+  });
+
   it('reads an API without the route as no categories, but still fails a save there', async () => {
     fetchMock.mockResolvedValue(
       new Response('Cannot GET /api/catalog/categories', { status: 404 }),

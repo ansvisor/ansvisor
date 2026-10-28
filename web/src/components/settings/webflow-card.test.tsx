@@ -26,8 +26,16 @@ const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 // The read-only workspace's upgrade dialog.
 const openUpgrade = vi.hoisted(() => vi.fn());
+const gate = vi.hoisted(() => ({ isLocked: false }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
-  useUpgradeGate: () => ({ isLocked: false, openUpgrade, guard: (fn: () => unknown) => fn }),
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade,
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options: { action?: string } = {}) =>
+      (...args: Args) =>
+        gate.isLocked ? openUpgrade(options.action) : fn(...args),
+  }),
 }));
 
 const { WebflowCard } = await import('./webflow-card');
@@ -105,6 +113,8 @@ async function typeToken(value: string) {
 
 beforeEach(() => {
   role.canManage = true;
+  gate.isLocked = false;
+  openUpgrade.mockClear();
   client.readWebflow
     .mockReset()
     .mockResolvedValue({ ok: true, configured: true, connection: null });
@@ -442,6 +452,37 @@ describe('WebflowCard', () => {
     });
     expect(openUpgrade).toHaveBeenCalledTimes(1);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('on a read-only workspace, connects and saves nothing, and still disconnects', async () => {
+    gate.isLocked = true;
+    await render();
+    await typeToken('wf-token-123');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(client.connectWebflow).not.toHaveBeenCalled();
+
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Save'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Saving the CMS settings needs a plan');
+    expect(client.saveWebflowSettings).not.toHaveBeenCalled();
+    await click(button('Replace token'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+
+    await act(async () => {
+      button('Disconnect')!.click();
+    });
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await act(async () => {
+      confirm[confirm.length - 1].click();
+    });
+    expect(client.disconnectWebflow).toHaveBeenCalledWith('b1');
+    expect(openUpgrade).toHaveBeenCalledTimes(3);
   });
 
   it('gives another collection its own suggested map, not the saved one', async () => {

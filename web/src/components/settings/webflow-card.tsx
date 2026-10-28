@@ -76,8 +76,11 @@ export function WebflowCard() {
   const t = useTranslations('settings.webflow');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
-  // A read-only workspace's refusal opens the upgrade dialog, not a toast.
-  const { openUpgrade } = useUpgradeGate();
+  // A read-only workspace's refusal opens the upgrade dialog, not a toast;
+  // while it is read-only, Replace token opens it at once. Disconnect stays
+  // open: it ends an access, it starts nothing.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
 
   // The connection as read for a brand: another brand's never shows.
@@ -182,7 +185,13 @@ export function WebflowCard() {
           {canManage && connection && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {!replacing && current?.configured && connection.status === 'connected' && (
-                <Button variant="outline" size="sm" onClick={() => setReplacingFor(activeBrandId)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={guard(() => setReplacingFor(activeBrandId), {
+                    action: tActions('connectCms'),
+                  })}
+                >
                   {t('replaceToken')}
                 </Button>
               )}
@@ -287,7 +296,9 @@ function TokenForm({
   onCancel?: () => void;
 }) {
   const t = useTranslations('settings.webflow');
-  const { openUpgrade } = useUpgradeGate();
+  // Read-only (plan not active): Connect opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [token, setToken] = useState('');
   const [connecting, setConnecting] = useState(false);
 
@@ -316,12 +327,14 @@ function TokenForm({
     onConnected(result.connection);
   };
 
+  const connectToken = guard(() => void connect(), { action: tActions('connectCms') });
+
   return (
     <form
       className="space-y-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (token.trim() && !connecting) void connect();
+        if (token.trim() && !connecting) connectToken();
       }}
     >
       <Label htmlFor={`webflow-token-${brandId}`}>{t('tokenLabel')}</Label>
@@ -386,7 +399,9 @@ function WebflowMapping({
   onStale: () => void;
 }) {
   const t = useTranslations('settings.webflow');
-  const { openUpgrade } = useUpgradeGate();
+  // Read-only (plan not active): Save opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The saved settings, for the fields read: a save doesn't read them again.
   const saved = useRef(connection);
   useEffect(() => {
@@ -637,7 +652,7 @@ function WebflowMapping({
           <Button
             size="sm"
             className="gap-2"
-            onClick={save}
+            onClick={guard(save, { action: tActions('saveCmsSettings') })}
             disabled={saving || !fields || fieldsNow?.failed || !fields.length || !map.body}
           >
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

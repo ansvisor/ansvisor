@@ -343,6 +343,8 @@ export type CategoryPageError =
   | 'session'
   | 'workspace'
   | 'busy'
+  /** A read-only workspace (plan not active): the upgrade dialog, not a message. */
+  | 'subscription'
   | 'failed';
 
 const CATEGORY_KNOWN: readonly CategoryPageError[] = [
@@ -386,7 +388,12 @@ async function categoryCall<T>(
     return {
       ok: false,
       code:
-        general === 'session' || general === 'workspace' || general === 'busy' ? general : 'failed',
+        general === 'session' ||
+        general === 'workspace' ||
+        general === 'busy' ||
+        general === 'subscription'
+          ? general
+          : 'failed',
     };
   } catch (err) {
     console.error('Failed to reach the catalog API:', err);

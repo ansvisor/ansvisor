@@ -36,6 +36,7 @@ vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/actions/getting-started', () => ({ skipGettingStartedStep }));
 
 const { GettingStartedStepCard } = await import('./step-card');
+const { UpgradeDialogContext } = await import('@/components/providers/upgrade-gate');
 
 const step = (over: Partial<GettingStartedStep> = {}): GettingStartedStep => ({
   key: 'mentions',
@@ -52,19 +53,24 @@ let root: Root;
 const onClose = vi.fn();
 const onChanged = vi.fn();
 const onReady = vi.fn();
+const openUpgrade = vi.fn();
 
-async function render(s: GettingStartedStep, { canManage = true } = {}) {
+async function render(s: GettingStartedStep, { canManage = true, isLocked = false } = {}) {
   await act(async () =>
     root.render(
-      <GettingStartedStepCard
-        brandId="b1"
-        step={s}
-        members={[]}
-        canManage={canManage}
-        onClose={onClose}
-        onChanged={onChanged}
-        onReady={onReady}
-      />,
+      <UpgradeDialogContext.Provider
+        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+      >
+        <GettingStartedStepCard
+          brandId="b1"
+          step={s}
+          members={[]}
+          canManage={canManage}
+          onClose={onClose}
+          onChanged={onChanged}
+          onReady={onReady}
+        />
+      </UpgradeDialogContext.Provider>,
     ),
   );
 }
@@ -130,6 +136,16 @@ describe('GettingStartedStepCard', () => {
     expect(skipGettingStartedStep).toHaveBeenCalledWith('b1', 'gsc');
     expect(toast.success).toHaveBeenCalledWith('skipDialog.skipped');
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('skips nothing on a read-only workspace: Skip opens the upgrade dialog, not the question', async () => {
+    openUpgrade.mockReset();
+    await render(step({ key: 'gsc', stage: 'setup', optional: true }), { isLocked: true });
+    await act(async () => button('panel.skip')!.click());
+    // next-intl is mocked: the label is its key.
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('skipSteps');
+    expect(text()).not.toContain('skipDialog.lessAccurate');
+    expect(skipGettingStartedStep).not.toHaveBeenCalled();
   });
 
   it('offers no Skip on a required step or one already skipped', async () => {

@@ -42,6 +42,7 @@ import { PAGE_ACTION_MAX, auditBlock, usePageActions } from './_use-page-actions
 import { PagePromptsDialog } from './_page-prompts-dialog';
 import { getTrafficPages } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Pages: which answers send visitors (AT-006, spec §3.5, "the
@@ -201,6 +202,10 @@ export function PagesCard({
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [auditing, setAuditing] = useState<string | null>(null);
   const pageActions = usePageActions(brandId, dateWindow);
+  // A read-only workspace (plan not active): Audit page, and Add prompts (its
+  // dialog asks the AI as it opens), open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The page whose suggested prompts are open (part B2); each opening starts
   // afresh, and tracking some reads the list again for its prompt counts.
   const [promptsFor, setPromptsFor] = useState<string | null>(null);
@@ -268,17 +273,20 @@ export function PagesCard({
       variant="outline"
       className="h-7 gap-1.5 text-xs"
       disabled={!domain || auditing !== null}
-      onClick={() => void auditPage(page)}
+      onClick={guard(() => void auditPage(page), { action: tActions('runAudit') })}
     >
       {auditing === page && <Loader2 className="h-3 w-3 animate-spin" />}
       {t('auditPage')}
     </Button>
   );
 
-  const openPrompts = (page: string) => {
-    setPromptsFor(page);
-    setPromptsOpened((n) => n + 1);
-  };
+  const openPrompts = guard(
+    (page: string) => {
+      setPromptsFor(page);
+      setPromptsOpened((n) => n + 1);
+    },
+    { action: tActions('suggestPrompts') },
+  );
 
   const addPromptsButton = (page: string) => (
     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openPrompts(page)}>

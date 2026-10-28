@@ -154,6 +154,7 @@ function AgentChat(props: {
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
   // A chat turn is an action: a read-only workspace gets the upgrade dialog.
   const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   // Ref mirrors activeId for prepareSendMessagesRequest. Reading the
   // state directly from the transport closure gives us a stale snapshot —
@@ -269,7 +270,7 @@ function AgentChat(props: {
 
   async function newChat() {
     if (isLocked) {
-      openUpgrade();
+      openUpgrade(tActions('startChat'));
       return;
     }
     const res = await fetch('/api/agent/conversations', {
@@ -315,7 +316,7 @@ function AgentChat(props: {
     const text = input.trim();
     if (!text || status !== 'ready') return;
     if (isLocked) {
-      openUpgrade();
+      openUpgrade(tActions('sendChat'));
       return;
     }
 
@@ -397,6 +398,8 @@ function AgentChat(props: {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  // Open in read-only too: deleting a conversation costs nothing
+                  // and the API (#1613) and the FAQ keep it open.
                   setPendingConfirm(c.id);
                 }}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
