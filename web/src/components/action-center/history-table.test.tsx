@@ -109,6 +109,31 @@ describe('HistoryTable', () => {
     expect(cells[headers.indexOf('Affected')]?.textContent).toBe(text);
     await act(async () => root.unmount());
   });
+
+  it('says a result is so far until its final reading, a month on (learning B1)', async () => {
+    const result = async (over: Partial<ActionHistoryItem>) => {
+      const root = await render(
+        <HistoryTable items={[item(over)]} selectedId={null} onSelect={() => {}} />,
+      );
+      const text = document.body.querySelector('tbody')!.textContent;
+      await act(async () => root.unmount());
+      return text;
+    };
+    const readings = [
+      { day: 7, outcome: 'improved' as const },
+      { day: 14, outcome: 'mixed' as const },
+    ];
+    expect(await result({ outcome: 'mixed', readings, outcomeFinal: false })).toContain(
+      'so far: day 14 of 30',
+    );
+    expect(
+      await result({
+        outcome: 'improved',
+        readings: [...readings, { day: 30, outcome: 'improved' }],
+        outcomeFinal: true,
+      }),
+    ).not.toContain('so far');
+  });
 });
 
 describe('HistoryDrawer', () => {

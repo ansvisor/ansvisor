@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { ActionCategory } from '@/lib/action-center/registry';
 import {
   ACTION_DISMISS_REASONS,
+  ACTION_OUTCOMES,
   type ActionDismissReason,
   type ActionOutcome,
   type ActionStatus,
@@ -34,6 +35,7 @@ import {
   type ActionHistoryTask,
   type ActionResultMetric,
   type AffectedEntity,
+  type OutcomeReading,
   type SignalOutcome,
   type TriggerSignal,
 } from '@/lib/action-center/history';
@@ -86,6 +88,22 @@ interface ValidationSnapshot {
   primary?: string;
   /** Nights tracking missed in each window (learning A6). */
   gaps?: { before?: number; after?: number; tooMany?: boolean };
+  /** Its readings, and whether the final one is in (learning B1). */
+  readings?: { day?: number; outcome?: string }[];
+  final?: boolean;
+}
+
+/** Its readings, the days known and verdicts it can name, in order. */
+function readingsFrom(validation: ValidationSnapshot | null): OutcomeReading[] {
+  if (!Array.isArray(validation?.readings)) return [];
+  return validation.readings
+    .filter(
+      (r) =>
+        Number.isInteger(r?.day) &&
+        (ACTION_OUTCOMES as readonly string[]).includes(r?.outcome ?? ''),
+    )
+    .map((r) => ({ day: r.day as number, outcome: r.outcome as ActionOutcome }))
+    .sort((a, b) => a.day - b.day);
 }
 
 /** Nights tracking missed in its windows, when there were any. */
@@ -338,6 +356,8 @@ export async function getActionHistory(
       measuredOn: measuredOnFrom(row.validation),
       auditAfter: auditFrom(row.validation),
       dataGaps: gapsFrom(row.validation),
+      readings: readingsFrom(row.validation),
+      outcomeFinal: row.validation?.final === true,
       // Shown only when it was measured: a main metric with no pair says nothing.
       primaryMetric: resultsFrom(row.validation).some((m) => m.metric === row.validation?.primary)
         ? (row.validation?.primary ?? null)

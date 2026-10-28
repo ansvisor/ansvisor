@@ -376,6 +376,17 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      * read and flagged; more reads not measurable.
      */
     maxGapDays: 2,
+
+    /**
+     * The day after an action closed its last, final reading is taken on
+     * (learning B1). Its effect is read a week and two weeks on too, each
+     * over the window's length ending that day, against the same week
+     * before it was raised: a week is short for AI answers to take in a
+     * change to a page, so the final read is a month on, as an Improve
+     * action's is (improve-outcome.js); the earlier ones show where it was
+     * heading.
+     */
+    finalReadingDay: 30,
   }),
 });
 

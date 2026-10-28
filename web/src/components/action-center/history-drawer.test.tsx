@@ -265,6 +265,29 @@ describe('HistoryDrawer', () => {
     expect(under('Result')).toContain('Dismissed: The data behind it is wrong.');
   });
 
+  it('lists the readings after it closed, and when the final one comes (learning B1)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          outcome: 'mixed',
+          readings: [
+            { day: 7, outcome: 'improved' },
+            { day: 14, outcome: 'mixed' },
+          ],
+          outcomeFinal: false,
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Read after it closed: day 7, Improved · day 14, Mixed. The final reading is on day 30.',
+    );
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);
