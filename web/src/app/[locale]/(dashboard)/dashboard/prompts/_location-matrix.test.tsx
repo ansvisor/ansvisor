@@ -115,7 +115,7 @@ describe('LocationMatrix', () => {
       regions: ['US', 'TR'],
     });
     expect(text).toContain('United States');
-    expect(text).toContain('Turkey');
+    expect(text).toContain('Türkiye');
     expect(bodyRows()).toEqual([
       ['All prompts · average', '—', '41', '35', '—'],
       ['best specialty coffee subscription', 'Coffee', '62', '35', '27'],
@@ -157,13 +157,13 @@ describe('LocationMatrix', () => {
     await render();
     (
       container.querySelector(
-        'button[aria-label="best specialty coffee subscription in Turkey: open its positions"]',
+        'button[aria-label="best specialty coffee subscription in Türkiye: open its positions"]',
       ) as HTMLButtonElement
     ).click();
     expect(onOpenCell).toHaveBeenCalledWith('p1', 'TR');
     (
       container.querySelector(
-        'button[aria-label="Track “same day coffee delivery near me” in Turkey"]',
+        'button[aria-label="Track “same day coffee delivery near me” in Türkiye"]',
       ) as HTMLButtonElement
     ).click();
     expect(onTrack).toHaveBeenCalledWith(rows[1], 'TR');
@@ -218,13 +218,13 @@ describe('a location with no answers yet', () => {
     expect(bodyRows()[1]).toEqual([
       'best specialty coffee subscription',
       'Coffee',
-      // Locations sort by name: Turkey (TR) before the US.
+      // Locations sort by name: Türkiye (TR) before the US.
       'Within 24h',
       '62',
       '—',
     ]);
     expect(
-      container.querySelector('span[title^="Tracked in Turkey from the next daily run"]'),
+      container.querySelector('span[title^="Tracked in Türkiye from the next daily run"]'),
     ).not.toBeNull();
   });
 
@@ -264,7 +264,7 @@ describe('a location with no answers yet', () => {
     await render();
     expect(container.textContent).not.toContain('+ Track');
     const limit = container.querySelector(
-      'button[aria-label="Track “same day coffee delivery near me” in Turkey"]',
+      'button[aria-label="Track “same day coffee delivery near me” in Türkiye"]',
     ) as HTMLButtonElement;
     expect(limit.textContent).toBe('Limit reached');
     expect(limit.title).toBe(
@@ -276,16 +276,49 @@ describe('a location with no answers yet', () => {
 });
 
 describe('loadLocationMatrix', () => {
-  it('reads a matrix once a minute, and again after the cache is cleared', async () => {
+  it('reads a location once a minute, and again after the cache is cleared', async () => {
     const window = { from: '2026-10-21T00:00:00Z' };
     await loadLocationMatrix(BRAND, window, ['US', 'TR']);
-    await loadLocationMatrix(BRAND, window, ['US', 'TR']);
+    expect(await loadLocationMatrix(BRAND, window, ['US'])).toEqual({
+      p1: { US: cell(62) },
+      p2: { US: cell(20, 6.4) },
+    });
     expect(getPromptLocationMatrix).toHaveBeenCalledTimes(1);
-    await loadLocationMatrix(BRAND, window, ['US']);
-    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
     clearLocationMatrixCache();
     await loadLocationMatrix(BRAND, window, ['US', 'TR']);
-    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(3);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads only a location not read yet, as a new location column needs', async () => {
+    const window = { from: '2026-10-21T00:00:00Z' };
+    await loadLocationMatrix(BRAND, window, ['US']);
+    getPromptLocationMatrix.mockResolvedValueOnce({ p1: { DE: cell(50) } });
+    expect(await loadLocationMatrix(BRAND, window, ['US', 'DE'])).toEqual({
+      p1: { US: cell(62), DE: cell(50) },
+      p2: { US: cell(20, 6.4) },
+    });
+    expect(getPromptLocationMatrix).toHaveBeenLastCalledWith(BRAND, {
+      from: '2026-10-21T00:00:00Z',
+      to: undefined,
+      regions: ['DE'],
+    });
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs one read at a time, so a read-ahead never adds to one running', async () => {
+    const window = { from: '2026-10-21T00:00:00Z' };
+    let finish = () => {};
+    getPromptLocationMatrix.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = () => resolve({ p1: { US: cell(62) } }))),
+    );
+    const first = loadLocationMatrix(BRAND, window, ['US']);
+    const second = loadLocationMatrix(BRAND, window, ['US', 'TR']);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(1);
+    finish();
+    await Promise.all([first, second]);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
+    expect(getPromptLocationMatrix.mock.calls[1][1].regions).toEqual(['TR']);
   });
 
   it('reads again after a failed read', async () => {

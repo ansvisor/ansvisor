@@ -95,9 +95,12 @@ export function AddLocationsDialog({
   }, [open, brandId]);
 
   const chosenTopic = topic || topics[0] || '';
+  // A cell's prompt the rows no longer show is no prompt, never every prompt.
   const targets =
-    scope === 'one' && one
-      ? [one]
+    scope === 'one'
+      ? one
+        ? [one]
+        : []
       : scope === 'selected'
         ? selected
         : scope === 'topic'
@@ -268,8 +271,13 @@ export function AddLocationsDialog({
               {cityBlocked ? t('cityBlocked') : t('cityPartly', { count: noCityEngine })}
             </p>
           )}
-          {locations.length > 0 && change.changes.length === 0 && (
-            <p className="text-xs text-muted-foreground">{t('nothing')}</p>
+          {targets.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{t('noPrompts')}</p>
+          ) : (
+            locations.length > 0 &&
+            change.changes.length === 0 && (
+              <p className="text-xs text-muted-foreground">{t('nothing')}</p>
+            )
           )}
           {error && (
             <p role="alert" className="text-sm text-destructive">
@@ -283,7 +291,9 @@ export function AddLocationsDialog({
           </Button>
           <Button
             onClick={() => void save()}
-            disabled={saving || over || cityBlocked || change.changes.length === 0}
+            disabled={
+              saving || over || cityBlocked || targets.length === 0 || change.changes.length === 0
+            }
           >
             {saving && <Loader2 className="animate-spin" />}
             {t('submit', { count: locations.length })}

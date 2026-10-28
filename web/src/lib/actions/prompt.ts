@@ -15,7 +15,12 @@ import {
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
 import { PROMPT_DELETE_BATCH } from '@/lib/prompt-bulk-actions';
 import { isValidLocation, locationCode } from '@/lib/region';
-import { MATRIX_REGIONS, type PromptLocationCell } from '@/lib/prompt-location-matrix';
+import { createLimiter } from '@/lib/limiter';
+import {
+  MATRIX_READS_AT_ONCE,
+  MATRIX_REGIONS,
+  type PromptLocationCell,
+} from '@/lib/prompt-location-matrix';
 import type { Plan, PlanId } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import {
@@ -1180,14 +1185,19 @@ export async function getPromptLocationMatrix(
     from: opts.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
     to: opts.to,
   };
-  // Every read at once: the plan's engines and each location's figures.
+  // One round of reads, but at most MATRIX_READS_AT_ONCE of the heavy ones
+  // (two per location) at a time: twelve locations at once squeezed the
+  // database.
+  const limit = createLimiter(MATRIX_READS_AT_ONCE);
   const [platforms, reads] = await Promise.all([
     includedPositionPlatforms(brandId),
     Promise.all(
       regions.map((region) =>
         Promise.all([
-          getPromptVisibilitySummaries(brandId, { days, from: opts.from, to: opts.to, region }),
-          positionSums(brandId, window, region).catch((err) => {
+          limit(() =>
+            getPromptVisibilitySummaries(brandId, { days, from: opts.from, to: opts.to, region }),
+          ),
+          limit(() => positionSums(brandId, window, region)).catch((err) => {
             console.error('[prompts] location position sums failed:', err);
             return new Map<string, PlatformPositionRow[]>();
           }),

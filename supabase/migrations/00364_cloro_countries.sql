@@ -31,3 +31,5 @@ create policy "cloro_countries: read" on public.cloro_countries
 
 comment on table public.cloro_countries is
   'Countries each tracking engine answers from (PROMPT-015e, 00364), read daily from the provider''s GET /v1/countries?model=. Empty restricts nothing.';
+
+notify pgrst, 'reload schema';

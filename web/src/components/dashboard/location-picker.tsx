@@ -9,6 +9,7 @@ import {
   cityCode,
   formatRegionDisplay,
   locationCode,
+  locationSearchText,
   parseLocation,
   regionLabel,
 } from '@/lib/region';
@@ -57,11 +58,6 @@ export interface LocationPickerProps {
   allowEmpty?: boolean;
 }
 
-/** A name without its accents and dots: İstanbul → Istanbul. */
-function withoutMarks(name: string): string {
-  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
 /** The brand regions first, as people look for them, then every other country by name. */
 const POPULAR = TRACKING_COUNTRIES.slice(0, 18).map((c) => c.code);
 
@@ -108,13 +104,14 @@ export function LocationPicker({
             const missing = missingEngines(country, read).map((m) => ENGINE_LABELS[m] ?? m);
             return {
               value: country.code,
-              label: regionLabel(country.code),
+              // Found by its other names too: "Turkey" or "Turkiye" finds Türkiye.
+              label: locationSearchText(country.code),
               sublabel: missing.length ? `Country · not on ${missing.join(', ')}` : 'Country',
             };
           })
       : TRACKING_COUNTRIES.map((region) => ({
           value: region.code,
-          label: region.label,
+          label: locationSearchText(region.code),
           sublabel: 'Country',
         }));
     // A city only where Google's engines answer from its country.
@@ -131,11 +128,9 @@ export function LocationPicker({
       // Cities (PROMPT-015d): asked by Google's engines and the API models.
       ...CITIES.filter((city) => !cityCountries || cityCountries.has(city.country)).map((city) => ({
         value: cityCode(city.country, city.id),
-        // Found typed with or without its marks: "Ist" finds İstanbul, "Sao" São Paulo.
-        label:
-          withoutMarks(city.label) === city.label
-            ? city.label
-            : `${city.label} ${withoutMarks(city.label)}`,
+        // Found typed with or without its marks, or by its country: "Ist" finds
+        // İstanbul, "Sao" São Paulo, "Turkey" every city in Türkiye.
+        label: locationSearchText(cityCode(city.country, city.id)),
         sublabel: `City · ${regionLabel(city.country)}`,
       })),
     ];

@@ -41857,6 +41857,8 @@ create policy "prompt_table_views: write" on public.prompt_table_views
 comment on table public.prompt_table_views is
   'Tracked Prompts columns (PROMPT-015a, 00363): a person''s shown and ordered columns per brand, and the brand''s shared view (user_id null) set by an admin or manager.';
 
+notify pgrst, 'reload schema';
+
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00364_cloro_countries.sql
 -- ─────────────────────────────────────────────────────────────────────────
@@ -41893,4 +41895,6 @@ create policy "cloro_countries: read" on public.cloro_countries
 
 comment on table public.cloro_countries is
   'Countries each tracking engine answers from (PROMPT-015e, 00364), read daily from the provider''s GET /v1/countries?model=. Empty restricts nothing.';
+
+notify pgrst, 'reload schema';
 

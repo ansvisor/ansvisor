@@ -14,7 +14,12 @@ import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
-import { parseLocation, locationsForScraper } from '../lib/locations.js';
+import {
+  isUnknownCity,
+  locationsForModels,
+  locationsForScraper,
+  parseLocation,
+} from '../lib/locations.js';
 import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
 import logger from '../lib/logger.js';
@@ -309,9 +314,16 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // (`US-CA`) and city codes (`TR~ISTANBUL`, PROMPT-015d) alike. No locations
   // means one untargeted run, which is what an empty list has always meant
   // here. locationsForScraper keeps a city only for Google's engines; the API
-  // models take every code (userLocationFor).
+  // models take every code (userLocationFor). A city no list names is run by
+  // neither: its answers would be the country's, recorded as the city's.
   const locationsFor = (prompt) =>
     prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
+  const unknownCities = [
+    ...new Set(prompts.flatMap((prompt) => locationsFor(prompt).filter(isUnknownCity))),
+  ];
+  if (unknownCities.length > 0) {
+    logger.warn({ brandId, codes: unknownCities }, 'skipping city codes no city list names');
+  }
 
   // The countries each engine answers from (PROMPT-015e, read daily): an
   // engine isn't asked in a country it doesn't support, which would fail and
@@ -331,7 +343,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   let unsupported = 0;
   for (const prompt of prompts) {
     const locations = locationsFor(prompt);
-    totalTasks += allowedModelsFor(prompt).length * locations.length;
+    totalTasks += allowedModelsFor(prompt).length * locationsForModels(locations).length;
     for (const scraperId of allowedPlatformsFor(prompt)) {
       const runnable = scraperLocations(prompt, scraperId).length;
       totalTasks += runnable;
@@ -797,7 +809,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     const locations = locationsFor(prompt);
 
     for (const modelName of modelsToRun) {
-      for (const region of locations) {
+      for (const region of locationsForModels(locations)) {
         modelTasks.push({ prompt, modelName, region });
       }
     }

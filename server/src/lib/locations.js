@@ -76,14 +76,16 @@ export const US_STATE_NAMES = {
  * Scrapers with no sub-country targeting mechanism. Google AIO / AI Mode
  * locate through location/uule parameters Cloro's AI endpoints don't accept,
  * so a state code means nothing to them: they can only be run country-wide
- * (#691, carried over from #554).
+ * (#691, carried over from #554). The web's location picker lists the same
+ * engines (cities.test.js keeps them together).
  */
-const COUNTRY_ONLY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
+export const COUNTRY_ONLY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
 
 /**
  * Scrapers that can ask from a city (PROMPT-015d): Google's, through the
  * provider's `location`. The others answer per country (or US state), so a
- * city code is skipped for them rather than run again country-wide.
+ * city code is skipped for them rather than run again country-wide. The
+ * web's CITY_PLATFORMS is the same list (cities.test.js).
  */
 export const CITY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
 
@@ -120,6 +122,15 @@ export function isCityCode(code) {
 }
 
 /**
+ * True for a city code no city in cities.js names (PROMPT-015d): there is
+ * nothing to ask from, and asking country-wide instead would record the
+ * country's answers as the city's, so no engine runs it.
+ */
+export function isUnknownCity(code) {
+  return isCityCode(code) && !cityFor(code);
+}
+
+/**
  * The locations one scraper should actually be run for.
  *
  * A city code (PROMPT-015d) is kept only for the engines that can ask from
@@ -135,7 +146,7 @@ export function isCityCode(code) {
  * Order is preserved so task submission stays deterministic.
  */
 export function locationsForScraper(locations, scraperId) {
-  const given = Array.isArray(locations) && locations.length > 0 ? locations : [null];
+  const given = locationsForModels(locations);
   // A city is run only by the engines that can ask from one (PROMPT-015d).
   const list = CITY_SCRAPERS.has(scraperId) ? given : given.filter((code) => !isCityCode(code));
   if (!COUNTRY_ONLY_SCRAPERS.has(scraperId)) return list;
@@ -156,6 +167,16 @@ export function locationsForScraper(locations, scraperId) {
     collapsed.push(country);
   }
   return collapsed;
+}
+
+/**
+ * The locations the API models are run for: every code, each read by
+ * userLocationFor, but a city no list names (isUnknownCity). No locations
+ * means one untargeted run; only unknown cities means none.
+ */
+export function locationsForModels(locations) {
+  const given = Array.isArray(locations) && locations.length > 0 ? locations : [null];
+  return given.filter((code) => !isUnknownCity(code));
 }
 
 /**

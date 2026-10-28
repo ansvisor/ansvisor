@@ -92,7 +92,7 @@ describe('AddLocationsDialog', () => {
   it("opens on a cell's prompt and location, prices it, and tracks it there", async () => {
     const text = await render({ promptId: 'p2', locations: ['TR'] });
     expect(text).toContain('Track in more locations');
-    expect(text).toContain('Turkey');
+    expect(text).toContain('Türkiye');
     expect(text).toContain('152 → 153 of 200 tracked locations');
     expect(scope('prompt p2').checked).toBe(true);
     await act(async () => submit().click());
@@ -101,6 +101,17 @@ describe('AddLocationsDialog', () => {
       '1 prompt is now tracked in the new locations. The first results come with the next daily run, within 24 hours.',
     );
     expect(onDone).toHaveBeenCalled();
+  });
+
+  it("adds to no prompt when the cell's prompt is no longer shown, rather than to all", async () => {
+    const text = await render({ promptId: 'gone', locations: ['TR'] });
+    expect(scope('All 3 prompts shown').checked).toBe(false);
+    expect(text).toContain('152 → 152 of 200 tracked locations');
+    expect(text).toContain('Choose the prompts to add these locations to.');
+    expect(submit().disabled).toBe(true);
+    await act(async () => scope('All 3 prompts shown').click());
+    expect(document.body.textContent).toContain('152 → 155 of 200 tracked locations');
+    expect(submit().disabled).toBe(false);
   });
 
   it('prices a topic and every prompt shown', async () => {

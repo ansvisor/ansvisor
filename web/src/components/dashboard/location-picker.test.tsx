@@ -46,7 +46,7 @@ describe('LocationPicker', () => {
     const text = await open();
     expect(text).toContain('Bolivia');
     expect(text).toContain('Country · not on Copilot');
-    // No Google engine in Germany: its cities aren't offered; Turkey's are.
+    // No Google engine in Germany: its cities aren't offered; Türkiye's are.
     expect(text).toContain('İstanbul');
     expect(text).not.toContain('Berlin');
     // A brand region no engine answers from isn't offered.
