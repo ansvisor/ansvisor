@@ -1,17 +1,25 @@
 import express, { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { storeConnectors } from '../connectors/index.js';
+import { connectorFor, isSignIn, signInConnectors, storeConnectors } from '../connectors/index.js';
 import { assertBrandAccess } from '../lib/access.js';
+import { isComposioConfigured } from '../lib/composio.js';
+import {
+  CategoryPageError,
+  categoryPages,
+  setCategoryPage,
+} from '../lib/catalog/category-pages.js';
 import { credentialsConfigured } from '../lib/catalog/credentials.js';
 import { syncSource } from '../lib/catalog/sources.js';
 import {
   StoreError,
+  connectSignInSource,
   connectStore,
   disconnectStore,
+  listSignInAccounts,
   reconnectStore,
 } from '../lib/catalog/stores.js';
-import { catalogLimiter } from '../middleware/rate-limiter.js';
+import { catalogCategoryLimiter, catalogLimiter } from '../middleware/rate-limiter.js';
 
 /**
  * A brand's catalog sources (#1263, 00279, 00282). Members see them through
@@ -21,11 +29,22 @@ import { catalogLimiter } from '../middleware/rate-limiter.js';
  *   - POST /api/catalog/upload?brandId=…&format=…: a CSV (or XML) file as
  *     the request's body, kept as the brand's upload source;
  *   - GET /api/catalog/connectors: the stores a person can connect, and
- *     their fields;
+ *     their fields; and the platforms read with the workspace's own
+ *     sign-in (Google Merchant Center, #1270), and whether this server has
+ *     that sign-in set up;
+ *   - GET /api/catalog/accounts?brandId=…&kind=…: the accounts the
+ *     workspace's sign-in opens on such a platform, to pick one;
  *   - POST /api/catalog/sources { brandId, kind, input }: a store connected,
- *     its sign-in checked with it and kept encrypted, then read;
+ *     its sign-in checked with it and kept encrypted, then read; or a
+ *     sign-in platform's account (`input.account`), checked, then read;
  *   - PUT /api/catalog/sources/:id/credentials { input }: its sign-in
  *     replaced;
+ *   - GET /api/catalog/categories?brandId=…: the brand's categories, each
+ *     with its products, how many are in stock, and its page on the site
+ *     (shopping path): members read it;
+ *   - PUT /api/catalog/categories { brandId, category, url }: a category's
+ *     page set by hand (url), or set to none (null); DELETE with
+ *     ?brandId=…&category=… puts it back to the automatic match;
  *   - DELETE /api/catalog/sources/:id: a store removed, with its sign-in and
  *     its products.
  */
@@ -39,7 +58,8 @@ export const UPLOAD_MAX = '4mb';
 const RESYNC_AFTER_MS = 2 * 60 * 1000;
 const FORMATS = ['auto', 'google_xml', 'csv', 'meta_csv'];
 
-async function assertWriter(brandId, userId) {
+/** Throws a 403 unless the person is an admin or a manager of the brand's workspace; `may` says what for. */
+async function assertWriter(brandId, userId, may = 'sync the catalog') {
   await assertBrandAccess(brandId, userId);
   const { data: profile } = await supabaseAdmin
     .from('profiles')
@@ -47,13 +67,17 @@ async function assertWriter(brandId, userId) {
     .eq('id', userId)
     .single();
   if (!WRITE_ROLES.includes(profile?.role)) {
-    const err = new Error('Only admins and managers can sync the catalog.');
+    const err = new Error(`Only admins and managers can ${may}.`);
     err.status = 403;
     throw err;
   }
 }
 
-function fail(req, res, err, what) {
+/** The response to a route's error; `failed` is what a 500 says. */
+function fail(req, res, err, what, failed = 'Failed to sync the catalog') {
+  if (err instanceof CategoryPageError) {
+    return res.status(err.status).json({ error: err.message, code: err.code });
+  }
   if (err instanceof StoreError) {
     return res.status(err.status).json({ error: err.message, code: err.code });
   }
@@ -69,7 +93,7 @@ function fail(req, res, err, what) {
     });
   }
   req.log.error({ err: { name: err?.name, message: err?.message } }, what);
-  return res.status(500).json({ error: 'Failed to sync the catalog', code: 'failed' });
+  return res.status(500).json({ error: failed, code: 'failed' });
 }
 
 const outcomeBody = (outcome) => ({
@@ -100,25 +124,47 @@ function syncLater(req, source) {
   );
 }
 
-// GET /api/catalog/connectors — the stores a person can connect.
+// GET /api/catalog/connectors — the stores a person can connect, and the sign-in platforms.
 router.get('/connectors', (req, res) => {
-  res.json({ connectors: storeConnectors(), ready: credentialsConfigured() });
+  res.json({
+    connectors: storeConnectors(),
+    ready: credentialsConfigured(),
+    signIns: signInConnectors().map((c) => ({
+      ...c,
+      configured: isComposioConfigured(c.provider),
+    })),
+  });
+});
+
+const KIND = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/);
+
+// GET /api/catalog/accounts?brandId=…&kind=… — the accounts the workspace's sign-in opens.
+router.get('/accounts', catalogLimiter, async (req, res) => {
+  const parsed = z.object({ brandId: z.guid(), kind: KIND }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id);
+    return res.json({ accounts: await listSignInAccounts(parsed.data) });
+  } catch (err) {
+    return fail(req, res, err, 'catalog accounts error');
+  }
 });
 
 const connectBody = z.object({
   brandId: z.guid(),
-  kind: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+  kind: KIND,
   input: z.record(z.string(), z.string()),
 });
 
-// POST /api/catalog/sources — connect a store.
+// POST /api/catalog/sources — connect a store, or a sign-in platform's account.
 router.post('/sources', catalogLimiter, async (req, res) => {
   const parsed = connectBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   const { brandId, kind, input } = parsed.data;
   try {
     await assertWriter(brandId, req.user.id);
-    const source = await connectStore({ brandId, kind, input, userId: req.user.id });
+    const connect = isSignIn(connectorFor(kind)) ? connectSignInSource : connectStore;
+    const source = await connect({ brandId, kind, input, userId: req.user.id });
     syncLater(req, source);
     return res.status(201).json({ id: source.id, account: source.account });
   } catch (err) {
@@ -175,6 +221,62 @@ router.post('/sources/:id/sync', catalogLimiter, async (req, res) => {
     return res.json(outcomeBody(await syncSource(source)));
   } catch (err) {
     return fail(req, res, err, 'catalog sync error');
+  }
+});
+
+const CHANGE_CATEGORY_PAGES = "change the catalog's category pages";
+const CATEGORY_PAGES_FAILED = "Failed to change the catalog's category pages";
+
+// GET /api/catalog/categories?brandId=… — the brand's categories and their pages.
+// A read like the API's others: the general limiter only.
+router.get('/categories', async (req, res) => {
+  const parsed = z.object({ brandId: z.guid() }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertBrandAccess(parsed.data.brandId, req.user.id);
+    return res.json({ categories: await categoryPages(parsed.data.brandId) });
+  } catch (err) {
+    return fail(
+      req,
+      res,
+      err,
+      'catalog categories error',
+      "Failed to read the catalog's category pages",
+    );
+  }
+});
+
+const categoryBody = z.object({
+  brandId: z.guid(),
+  category: z.string().min(1).max(750),
+  url: z.string().max(2048).nullable(),
+});
+
+// PUT /api/catalog/categories — a category's page set by hand, or none (a
+// category the catalog has: 404 otherwise). Writes, here and in DELETE, take
+// a bucket of their own, apart from the syncs'.
+router.put('/categories', catalogCategoryLimiter, async (req, res) => {
+  const parsed = categoryBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id, CHANGE_CATEGORY_PAGES);
+    await setCategoryPage({ ...parsed.data, userId: req.user.id });
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog category page error', CATEGORY_PAGES_FAILED);
+  }
+});
+
+// DELETE /api/catalog/categories?brandId=…&category=… — back to the automatic match.
+router.delete('/categories', catalogCategoryLimiter, async (req, res) => {
+  const parsed = categoryBody.omit({ url: true }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id, CHANGE_CATEGORY_PAGES);
+    await setCategoryPage({ ...parsed.data, url: undefined, userId: req.user.id });
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog category page error', CATEGORY_PAGES_FAILED);
   }
 });
 

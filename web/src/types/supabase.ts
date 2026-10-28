@@ -935,6 +935,121 @@ export type Database = {
           },
         ]
       }
+      catalog_images: {
+        Row: {
+          brand_id: string
+          id: string
+          position: number
+          product_id: string
+          url: string
+          variant_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          id?: string
+          position?: number
+          product_id: string
+          url: string
+          variant_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          id?: string
+          position?: number
+          product_id?: string
+          url?: string
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_images_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_images_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_item_issues: {
+        Row: {
+          attribute: string | null
+          brand_id: string
+          code: string
+          countries: string[]
+          created_at: string
+          description: string | null
+          detail: string | null
+          documentation: string | null
+          external_id: string
+          id: string
+          reporting_context: string | null
+          resolution: string | null
+          severity: string
+          source_id: string
+        }
+        Insert: {
+          attribute?: string | null
+          brand_id: string
+          code: string
+          countries?: string[]
+          created_at?: string
+          description?: string | null
+          detail?: string | null
+          documentation?: string | null
+          external_id: string
+          id?: string
+          reporting_context?: string | null
+          resolution?: string | null
+          severity: string
+          source_id: string
+        }
+        Update: {
+          attribute?: string | null
+          brand_id?: string
+          code?: string
+          countries?: string[]
+          created_at?: string
+          description?: string | null
+          detail?: string | null
+          documentation?: string | null
+          external_id?: string
+          id?: string
+          reporting_context?: string | null
+          resolution?: string | null
+          severity?: string
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_item_issues_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_item_issues_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_products: {
         Row: {
           brand_id: string
@@ -1372,6 +1487,7 @@ export type Database = {
           source_url: string | null
           score_after: number | null
           score_before: number | null
+          shopping_path: Json | null
           slug: string | null
           status: string
           title: string
@@ -1413,6 +1529,7 @@ export type Database = {
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          shopping_path?: Json | null
           slug?: string | null
           status?: string
           title?: string
@@ -1454,6 +1571,7 @@ export type Database = {
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          shopping_path?: Json | null
           slug?: string | null
           status?: string
           title?: string

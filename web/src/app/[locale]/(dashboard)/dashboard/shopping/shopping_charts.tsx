@@ -110,6 +110,7 @@ export function ShoppingTrendChartView({ width, data }: ShoppingTrendChartViewPr
         type="monotone"
         dataKey="ownCards"
         name="Your cards"
+        legendType="plainline"
         stroke={INK}
         strokeWidth={2}
         fill="url(#shoppingTrendFill)"
@@ -121,6 +122,8 @@ export function ShoppingTrendChartView({ width, data }: ShoppingTrendChartViewPr
         type="monotone"
         dataKey="totalCards"
         name="All cards"
+        // The legend draws its icon with the series' dash (plainline), so the two read apart.
+        legendType="plainline"
         stroke={SECOND}
         strokeWidth={2}
         strokeDasharray="4 3"

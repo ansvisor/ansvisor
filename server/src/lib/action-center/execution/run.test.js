@@ -425,4 +425,110 @@ describe('sweepTaskExecution', () => {
 
     expect(summary.succeeded + summary.failed).toBe(2);
   });
+
+  /**
+   * The sweep reads the 1,000 oldest candidates. On the cloud the query
+   * itself keeps to organizations on a plan, so an organization's old tasks
+   * can't fill the read and push out the tasks of one that pays.
+   */
+  function mockPlanSweep(rows) {
+    const asked = { filters: [] };
+    from.mockImplementation((table) => {
+      const sweep = table === 'action_tasks' && asked.select === undefined;
+      const builder = {
+        select: (columns) => {
+          if (sweep) asked.select = columns;
+          return builder;
+        },
+        eq: () => builder,
+        in: (column, values) => {
+          if (sweep) asked.filters.push([column, values]);
+          return builder;
+        },
+        not: () => builder,
+        order: () => builder,
+        limit: (max) => {
+          if (sweep) asked.limit = max;
+          return builder;
+        },
+        single: () =>
+          Promise.resolve({
+            data:
+              table === 'actions'
+                ? { id: ACTION, brand_id: BRAND, payload: {} }
+                : { ...task({ id: 'paying' }), task_key: 'validate' },
+            error: null,
+          }),
+        insert: () => Promise.resolve({ error: null }),
+        update: () => builder,
+        then: (resolve, reject) => {
+          let data = [];
+          if (sweep) {
+            const plan = asked.filters.find(
+              ([column]) => column === 'actions.brands.organizations.subscription_status',
+            );
+            data = rows
+              .filter(
+                (row) =>
+                  !plan || plan[1].includes(row.actions.brands.organizations.subscription_status),
+              )
+              .slice(0, asked.limit);
+          }
+          return Promise.resolve({ data, error: null }).then(resolve, reject);
+        },
+      };
+      return builder;
+    });
+    return asked;
+  }
+
+  const onPlan = (status) => ({
+    status: 'open',
+    brands: { organizations: { subscription_status: status } },
+  });
+  const lapsedThenPaying = () => [
+    ...Array.from({ length: 1000 }, (_, i) => ({
+      id: `lapsed-${i}`,
+      task_key: 'validate',
+      action_id: ACTION,
+      actions: onPlan('canceled'),
+    })),
+    { id: 'paying', task_key: 'validate', action_id: ACTION, actions: onPlan('active') },
+  ];
+
+  it("reads past an organization's 1,000 old tasks once its plan has ended (cloud)", async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    try {
+      const asked = mockPlanSweep(lapsedThenPaying());
+
+      const summary = await sweepTaskExecution({ now: NOW });
+
+      expect(asked.select).toContain(
+        'actions!inner(status, brands!inner(organizations!inner(subscription_status)))',
+      );
+      expect(asked.filters).toContainEqual([
+        'actions.brands.organizations.subscription_status',
+        ['active', 'trialing'],
+      ]);
+      // The paying organization's task, and only it, is carried out.
+      expect(summary.succeeded + summary.failed + summary.blocked).toBe(1);
+      expect(summary.skippedForCeiling).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('filters nothing by plan self-hosted', async () => {
+    vi.stubEnv('IS_CLOUD', 'false');
+    try {
+      const asked = mockPlanSweep(lapsedThenPaying());
+      await sweepTaskExecution({ now: NOW });
+      expect(asked.select).toBe('id, task_key, action_id, actions!inner(status)');
+      expect(asked.filters.map(([column]) => column)).not.toContain(
+        'actions.brands.organizations.subscription_status',
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

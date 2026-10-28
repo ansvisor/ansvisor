@@ -9,6 +9,9 @@ import express from 'express';
 
 let role;
 let cap;
+// What getBotCaps answers a read once the plan has ended (readOnly).
+let noPlan;
+const capReads = [];
 const inserted = [];
 const updates = [];
 
@@ -86,7 +89,10 @@ vi.mock('../lib/plan-guard.js', async () => {
     PlanLimitError,
     getOrgIdForUser: async () => 'o1',
     getBotEventCap: async () => cap,
-    getBotRawCap: async () => 20_000_000,
+    getBotCaps: async (orgId, options) => {
+      capReads.push([orgId, options]);
+      return noPlan ? { cap: 0, rawCap: 0, noPlan: true } : { cap, rawCap: 20_000_000 };
+    },
   };
 });
 
@@ -99,6 +105,8 @@ beforeEach(async () => {
   vi.stubEnv('PUBLIC_SERVER_URL', 'https://api.example.com');
   role = 'admin';
   cap = 2_000_000;
+  noPlan = false;
+  capReads.length = 0;
   inserted.length = 0;
   updates.length = 0;
   const app = express();
@@ -193,6 +201,19 @@ describe('AI bot connections', () => {
       rawCap: 20_000_000,
     });
     expect(body.usage.month).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(body.usage).not.toHaveProperty('noPlan');
+    // A read: a plan that ended doesn't refuse it.
+    expect(capReads).toEqual([['o1', { readOnly: true }]]);
+  });
+
+  it('still lists the connections and their use once the plan has ended', async () => {
+    noPlan = true;
+    const res = await fetch(`${baseUrl}/connections/b1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.connections).toHaveLength(1);
+    expect(body.usage).toMatchObject({ stored: 12, counted: 15, raw: 20_000_400 });
+    expect(body.usage).toMatchObject({ cap: 0, rawCap: 0, noPlan: true });
   });
 
   it('revokes a connection, and says when there is none', async () => {
