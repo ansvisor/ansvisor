@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **50 tools**. Descriptions below match
+The MCP server exposes **52 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -290,6 +290,7 @@ curl "https://app.ansvisor.com/api/mcp/mentions/summary?brand_id=<brand_id>&plat
 | Tool | What it does | Writes |
 | --- | --- | --- |
 | `list_content_opportunities` | Content gaps ranked by opportunity score — where the brand is losing visibility. | |
+| `get_content_plan` | The Content plan, as **Content → Plan** ranks it by the Priority Score: what to create, optimize or protect next, why, the score's parts, the draft already being written and the rows marked a priority. Over 7, 30 or 90 days; optional `card`. | |
 | `get_content_opportunity` | Full details for one opportunity, including metrics, intent, competitors, and any existing brief. | |
 | `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** |
 | `update_opportunity_status` | Move an opportunity through workflow states (`new`, `reviewed`, `sent`, `in_progress`, `done`, `dismissed`). | **yes** |
@@ -298,15 +299,18 @@ curl "https://app.ansvisor.com/api/mcp/mentions/summary?brand_id=<brand_id>&plat
 
 Drafts are read and written as a person would in the editor. Ansvisor never publishes, and a suggestion isn't applied until a person accepts it. None of these tools calls an LLM: the assistant writes the drafts and suggestions itself.
 
+The MCP never sends a page to a CMS: Ansvisor's own **Send to CMS** stays in the product. To publish from your assistant, put the page on your CMS with the assistant's own CMS connector, then call `mark_content_draft_published` with the address it went live at, so Ansvisor measures it. Over REST: `GET /api/mcp/content-plan?brand_id=<brand_id>&days=30` and `POST /api/mcp/content-drafts/<id>/published` with `{ "url": "…" }`.
+
 | Tool | What it does | Writes |
 | --- | --- | --- |
-| `list_content_drafts` | The brand's drafts, latest changed first (up to 100), with status, method (`create` or `optimize`), author, open suggestions and the editor path; filter by `status`. | |
-| `get_content_draft` | One draft: its HTML, its numbered passages (`locked` ones AI answers quote today), where and since when the page is live, its Action Center action, the open suggestions and the only pages a suggestion may link to. | |
+| `list_content_drafts` | The brand's drafts, latest changed first (up to 100), with status, method (`create` or `optimize`), author, open suggestions and the editor path; filter by `status`. Each says where it was last sent (`last_send`: status, target, when, the error, where it went live) and whether its shopping links still sell (`shopping_links`). | |
+| `get_content_draft` | One draft: its HTML, its numbered passages (`locked` ones AI answers quote today), where and since when the page is live, its Action Center action, the open suggestions and the only pages a suggestion may link to; with `last_send`, `shopping_links` and, on an online shop's page, its `shopping_path` (the category pages and products it should link). | |
 | `get_content_sources` | What the draft draws on over 30 days, as the Sources tab shows it: prompts, AI searches (fan-outs), cited pages, Search Console queries and the person's choices. | |
 | `get_content_impact` | What the draft's live page earns (citations, AI visits, Google clicks, the prompts citing it) against the period before, as the Live page tab reads it. Only for a draft of a live page. | |
 | `create_content_draft` | Write a new draft as the agent (`create`, or `optimize` a page on the brand's domains); it goes to the Library's In review. | **yes** |
 | `add_content_source` | Add a prompt, a cited page or a Search Console query to the draft's sources. | **yes** |
 | `suggest_content_changes` | Leave up to 20 suggestions (replace or insert, each with a reason) for a person to accept or reject. Refused on a published draft, while open suggestions wait, or while the Content Agent writes it. | **yes** |
+| `mark_content_draft_published` | Mark a draft Published at the address it went live at, as the editor's **Mark published** does, once your own CMS connector has put it there. Ansvisor then measures that address, and a linked action's Publish task completes. | **yes** |
 | `set_content_draft_ready` | Set a draft ready, as the editor's Mark ready does, without its Before you publish check; a linked action's writing task completes once every page it names has a ready draft. A draft in review waits for a person. | **yes** |
 
 ### Site audit
