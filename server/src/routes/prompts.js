@@ -5,6 +5,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents } from '../lib/intent-extraction.js';
+import { promptsFromTopicsSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
   PlanLimitError,
@@ -801,12 +802,12 @@ const topicPromptSchema = z.object({
  */
 router.post('/from-topics', async (req, res) => {
   try {
-    const { brandName, industry, description, topics, language } = req.body;
-    const langName = getLanguageName(language);
-
-    if (!brandName || !topics?.length) {
-      return res.status(400).json({ error: 'brandName and topics are required' });
+    const parsed = promptsFromTopicsSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
     }
+    const { brandName, industry, description, topics, language } = parsed.data;
+    const langName = getLanguageName(language);
 
     const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
     const aiModel = resolveModel(promptModel);

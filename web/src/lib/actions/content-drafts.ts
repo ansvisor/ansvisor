@@ -48,6 +48,7 @@ import {
   type PageRead,
 } from '@/lib/content/page-read';
 import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class';
+import { draftShopping } from '@/lib/content/shopping-check';
 import {
   NO_DRAFT_RULES,
   draftRulesFit,
@@ -154,6 +155,42 @@ async function countLibraryTabs(
   return Object.fromEntries(counted) as Record<LibraryTab, number>;
 }
 
+/** Ids one `in` filter takes: 100 UUIDs keep a request's address well under the edge's limit. */
+const IN_CHUNK = 100;
+
+/**
+ * The last shopping check of each of these drafts (00352), by draft id: one
+ * row a draft, so a chunk of ids is one request. Read apart from the drafts,
+ * so the Library still lists them when the checks can't be read (00352 not
+ * applied yet, or a read that fails): none is then kept, and a draft with a
+ * shopping path shows as not checked yet.
+ */
+async function readShoppingChecks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  draftIds: string[],
+): Promise<Map<string, unknown>> {
+  const checks = new Map<string, unknown>();
+  const chunks: string[][] = [];
+  for (let i = 0; i < draftIds.length; i += IN_CHUNK) chunks.push(draftIds.slice(i, i + IN_CHUNK));
+  try {
+    const reads = await Promise.all(
+      chunks.map((chunk) =>
+        supabase
+          .from('content_shopping_checks')
+          .select(
+            'draft_id, read_from, checked_at, categories, categories_linked, products, products_linked, bad',
+          )
+          .in('draft_id', chunk),
+      ),
+    );
+    if (reads.some((read) => read.error)) return new Map();
+    for (const read of reads) for (const row of read.data ?? []) checks.set(row.draft_id, row);
+  } catch {
+    return new Map();
+  }
+  return checks;
+}
+
 /**
  * The brand's drafts for the Library, the latest LIBRARY_LIMIT, with who
  * started each, and each tab's count of all its drafts.
@@ -165,7 +202,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        'id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at',
+        'id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt',
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -175,13 +212,19 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
   const rows = draftsRes.data ?? [];
   const me = userRes.data.user?.id ?? null;
 
-  // A profile is readable only by its owner, so other members are named
-  // through the same reader as Action Center's assignees.
-  const people = await readAssignees(
-    supabase,
-    brandId,
-    rows.flatMap((row) => (row.created_by ? [row.created_by] : [])),
-  );
+  const [people, checks] = await Promise.all([
+    // A profile is readable only by its owner, so other members are named
+    // through the same reader as Action Center's assignees.
+    readAssignees(
+      supabase,
+      brandId,
+      rows.flatMap((row) => (row.created_by ? [row.created_by] : [])),
+    ),
+    readShoppingChecks(
+      supabase,
+      rows.flatMap((row) => (row.shopping_built ? [row.id] : [])),
+    ),
+  ]);
 
   const drafts = rows.map(
     (row): ContentDraftListItem => ({
@@ -197,6 +240,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       archivedAt: row.archived_at,
+      shopping: draftShopping(row.shopping_built, checks.get(row.id) ?? null),
     }),
   );
   // Under the cap the rows are every draft; at it, each tab is counted on its own.

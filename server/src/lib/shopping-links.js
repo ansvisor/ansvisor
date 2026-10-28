@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
 import { onBrandDomain } from './audit/host.js';
 import { brandSite, leafName, singular } from './catalog/category-pages.js';
+import { priceAmount } from './catalog/offer.js';
 import { isInStock, stockKey } from './catalog/stock.js';
 import { linkHref, linkKey } from './content-links.js';
 import { foldLetters } from './letters.js';
@@ -69,20 +70,9 @@ const CURRENCY_SIGNS = {
   TRY: '₺',
 };
 
-/** A product's price, the sale price first; null with none. */
-function amountOf(product) {
-  // As the card reads it (shopping-blocks.js priceText): an amount of 0 is
-  // none, and the sale price counts only under the price.
-  const positive = (value) =>
-    value != null && Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
-  const regular = positive(product.price);
-  const sale = positive(product.salePrice);
-  return sale != null && regular != null && sale < regular ? sale : regular;
-}
-
 /** A product's price and stock as the agent is told them: "189.00 USD, in stock". */
 function offerLine(product) {
-  const amount = amountOf(product);
+  const amount = priceAmount(product);
   const price =
     amount == null ? null : `${amount.toFixed(2)}${product.currency ? ` ${product.currency}` : ''}`;
   return [price, stockWords(product.availability)].filter(Boolean).join(', ');
@@ -90,7 +80,7 @@ function offerLine(product) {
 
 /** The ways a product's price may be written: 189, 189.00, $189, $189.00 ("$1,299" reads as 1299). */
 function priceSpellings(product) {
-  const amount = amountOf(product);
+  const amount = priceAmount(product);
   if (amount == null) return [];
   const values = [...new Set([amount.toFixed(2), String(amount)])];
   const signs = [
@@ -221,7 +211,7 @@ async function withOffer(db, brandId, products, draftId) {
     const rank = STOCK_ORDER.indexOf(stockWords(v.availability));
     return rank === -1 ? STOCK_ORDER.length : rank;
   };
-  const amount = (v) => amountOf({ price: v.price, salePrice: v.sale_price }) ?? Infinity;
+  const amount = (v) => priceAmount({ price: v.price, salePrice: v.sale_price }) ?? Infinity;
   const best = new Map();
   for (const variant of data) {
     const held = best.get(variant.product_id);
