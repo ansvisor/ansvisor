@@ -1,10 +1,11 @@
 /**
- * Site Audit auto-audit (SA-006): 25% of the monthly quota audits the
- * Opportunities inbox's top pages by itself, in five runs of 5% on days 1,
- * 7, 14, 21 and 28 of the billing month. Pure: the schedule, the share kept
- * for the runs to come, and which pages a run takes. auto-audit-sweep.js
- * reads and writes; plan-guard.js keeps the reserved share out of the
- * user's pool.
+ * Site Audit auto-audit (SA-006): 25% of the monthly quota audits pages by
+ * itself, in five runs of 5% on days 1, 7, 14, 21 and 28 of the billing
+ * month: first the pages a Site Audit fix was completed on and not audited
+ * or tried since (learning B7), then the Opportunities inbox's top pages.
+ * Pure: the schedule, the share kept for the runs to come, and which pages a
+ * run takes. auto-audit-sweep.js reads and writes; plan-guard.js keeps the
+ * reserved share out of the user's pool.
  */
 
 export const AUTO_AUDIT = Object.freeze({
@@ -87,26 +88,68 @@ export function pendingRuns(schedule, recordedDays, now) {
 }
 
 /**
- * The pages a run audits: from every brand's inbox (ordered by priority.js),
- * the pages not being audited and not audited in the last 30 days, nor tried
- * by a run in that time (an audit that failed, say on a page that blocks
- * bots, would otherwise take a slot every run); pinned pages first, then the
- * highest priority across the brands, at most `slots`. A tie keeps the
- * inboxes' own order.
+ * A page within a run: brands may share a domain, and each audits, pins and
+ * fixes its own pages, so a page is the brand's page (`brandId|key`).
+ */
+export const runPageKey = (brandId, key) => `${brandId}|${key}`;
+
+/**
+ * Pages fixed since their last audit (learning B7) take at most this share
+ * of a run, rounded up: the rest is the inbox's, so new pages keep coming.
+ */
+export const FIXED_SHARE = 0.5;
+
+/**
+ * The pages a run audits. First the pages a Site Audit fix was completed on
+ * and not audited or tried since (learning B7), the most recently fixed first,
+ * up to FIXED_SHARE of the run: auditing them again says whether the fix
+ * took, which the Action Center reads as the fix's result, a month sooner
+ * than the 30-day rest below would. Then, from every brand's inbox (ordered
+ * by priority.js), the pages not being audited and not audited in the last
+ * 30 days, nor tried by a run in that time (an audit that failed, say on a
+ * page that blocks bots, would otherwise take a slot every run); pinned
+ * pages first, then the highest priority across the brands, at most `slots`
+ * in all. A tie keeps the inboxes' own order.
  *
  * @param {Array<{ brandId: string, opportunities: Array<{ key: string, url: string, path: string, pinned: boolean, running: boolean, priority: number, lastAudit: { at: string }|null }> }>} inboxes
  * @param {number} slots
  * @param {Date} now
  * @param {Set<string>} [triedKeys]  page keys a run audited in the last 30 days
- * @returns {Array<{ brandId: string, url: string, path: string, pinned: boolean, priority: number }>}
+ * @param {Array<{ brandId: string, key: string, url: string, path: string }>} [fixed]
+ *   pages fixed since their last audit, the most recently fixed first, already
+ *   kept to the brand's own domains and its auto-audit exclusions (fixedPages)
+ * @returns {Array<{ brandId: string, url: string, path: string, pinned: boolean, priority: number, fixed?: true }>}
  */
-export function pickRunPages(inboxes, slots, now, triedKeys = new Set()) {
+export function pickRunPages(inboxes, slots, now, triedKeys = new Set(), fixed = []) {
   const freshSince = new Date(now).getTime() - AUTO_AUDIT.freshDays * DAY_MS;
+  const running = new Set(
+    inboxes.flatMap(({ brandId, opportunities }) =>
+      opportunities.filter((r) => r.running).map((r) => runPageKey(brandId, r.key)),
+    ),
+  );
+  const first = [];
+  const taken = new Set();
+  const fixedSlots = Math.min(Math.max(0, slots), Math.ceil(Math.max(0, slots) * FIXED_SHARE));
+  for (const page of fixed) {
+    if (first.length >= fixedSlots) break;
+    const id = page.key ? runPageKey(page.brandId, page.key) : null;
+    if (!id || running.has(id) || taken.has(id)) continue;
+    taken.add(id);
+    first.push({
+      brandId: page.brandId,
+      url: page.url,
+      path: page.path,
+      pinned: false,
+      priority: 0,
+      fixed: true,
+    });
+  }
   const candidates = [];
   for (const { brandId, opportunities } of inboxes) {
     for (const row of opportunities) {
       // A template's row (SA-007) stands for pages the inbox lists one by one.
       if (row.template || row.running || triedKeys.has(row.key)) continue;
+      if (taken.has(runPageKey(brandId, row.key))) continue;
       if (row.lastAudit && Date.parse(row.lastAudit.at) >= freshSince) continue;
       candidates.push({
         brandId,
@@ -117,7 +160,10 @@ export function pickRunPages(inboxes, slots, now, triedKeys = new Set()) {
       });
     }
   }
-  return candidates
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.priority - a.priority)
-    .slice(0, Math.max(0, slots));
+  return [
+    ...first,
+    ...candidates
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.priority - a.priority)
+      .slice(0, Math.max(0, slots - first.length)),
+  ];
 }
