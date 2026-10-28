@@ -7,6 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
 import { getTopicsOverview, type TopicOverviewRow } from '@/lib/actions/topic';
+import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 import { customUtcWindow } from '@/lib/topic-trend';
 import type { PromptRange, PromptRangePreset } from '@/config/prompt-options';
 import { TopicSuggestionsCard } from './_topic-suggestions-card';
@@ -472,6 +473,7 @@ export function TopicsTab({
             <div className="flex gap-2">
               <Input
                 placeholder="e.g. Industry, Comparison..."
+                maxLength={TOPIC_NAME_CHARS}
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAddTopic()}

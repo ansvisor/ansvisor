@@ -139,3 +139,17 @@ describe('getTopicsOverview', () => {
     expect(summary.trendDays).toHaveLength(14);
   });
 });
+
+describe('topic names', () => {
+  it('refuses a name past 100 characters before anything is written, trimmed first', async () => {
+    const { createTopic, createTopics, updateTopic } = await import('./topic');
+    const long = 'x'.repeat(101);
+    await expect(createTopic('b1', long)).rejects.toThrow(
+      'Topic names are 100 characters at most.',
+    );
+    await expect(updateTopic('t1', long)).rejects.toThrow('100 characters at most');
+    await expect(createTopics('b1', ['Espresso', long])).rejects.toThrow('100 characters');
+    // Spaces around it don't count.
+    await expect(createTopic('b1', ` ${'x'.repeat(100)} `)).resolves.toBeDefined();
+  });
+});
