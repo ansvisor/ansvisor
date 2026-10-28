@@ -109,6 +109,50 @@ describe('HistoryTable', () => {
     expect(cells[headers.indexOf('Affected')]?.textContent).toBe(text);
     await act(async () => root.unmount());
   });
+
+  it('says a result is so far until its final reading, a month on (learning B1)', async () => {
+    const result = async (over: Partial<ActionHistoryItem>) => {
+      const root = await render(
+        <HistoryTable items={[item(over)]} selectedId={null} onSelect={() => {}} />,
+      );
+      const text = document.body.querySelector('tbody')!.textContent;
+      await act(async () => root.unmount());
+      return text;
+    };
+    const readings = [
+      { day: 7, outcome: 'improved' as const },
+      { day: 14, outcome: 'mixed' as const },
+    ];
+    expect(await result({ outcome: 'mixed', readings, outcomeFinal: false })).toContain(
+      'so far: day 14 of 30',
+    );
+    expect(
+      await result({
+        outcome: 'improved',
+        readings: [...readings, { day: 30, outcome: 'improved' }],
+        outcomeFinal: true,
+      }),
+    ).not.toContain('so far');
+  });
+
+  // Only a completed action is measured; one dismissed before 00084 reads
+  // not measurable, one since pending: neither is what happened.
+  it.each(['not_measurable', 'pending_measurement'] as const)(
+    'says a dismissed action (%s) was not measured because it was dismissed',
+    async (outcome) => {
+      const root = await render(
+        <HistoryTable
+          items={[item({ status: 'dismissed', outcome })]}
+          selectedId={null}
+          onSelect={() => {}}
+        />,
+      );
+      const headers = Array.from(document.body.querySelectorAll('th')).map((th) => th.textContent);
+      const cells = document.body.querySelectorAll('tbody td');
+      expect(cells[headers.indexOf('Result')]?.textContent).toBe('Not measureddismissed');
+      await act(async () => root.unmount());
+    },
+  );
 });
 
 describe('HistoryDrawer', () => {

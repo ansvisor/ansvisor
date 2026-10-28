@@ -133,6 +133,27 @@
     "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
+    "dismissReason": {
+      "title": "Why dismiss it?",
+      "description": "This helps Ansvisor suggest the work that fits you.",
+      "not_relevant": {
+        "label": "It doesn't matter to us",
+        "hint": "What it's about isn't something the brand works on."
+      },
+      "already_done": {
+        "label": "It's already done",
+        "hint": "The work was done before, or somewhere Ansvisor doesn't see."
+      },
+      "wrong_data": {
+        "label": "The data behind it is wrong",
+        "hint": "The signals, prompts or pages it's built on don't hold."
+      },
+      "not_now": {
+        "label": "Not now",
+        "hint": "It's right, but other work comes first."
+      },
+      "skip": "Dismiss without saying why"
+    },
     "tabs": {
       "label": "Action Center sections",
       "review": "Needs review",
@@ -1028,6 +1049,10 @@
           },
           "commercial": "commercial intent",
           "heldBefore": "previously visible",
+          "pastSuccess": {
+            "worked": "{improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here",
+            "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here"
+          },
           "sources": "confirmed by {count} sources",
           "sentence": {
             "withWhen": "{what} {when}",
@@ -1290,7 +1315,7 @@
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
-          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+          "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -2598,8 +2623,18 @@
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
+        "dismissedBecause": "Dismissed: {reason}.",
+        "readings": "Read after it closed: {list}.",
+        "reading": "day {day}, {outcome}",
+        "finalOn": "The final reading is on day {day}.",
         "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
         "brandWide": "Brand-wide over the same days: {list}",
+        "controlNet": "Net of {basis, select, topics {the {prompts} other prompts in its topics} other {the brand's {prompts} other prompts}} over the same days: {list}",
+        "netPoints": "{metric} {value} pts",
+        "netPercent": "{metric} {value}%",
+        "primary": "Judged by {metric}, its main metric.",
+        "gaps": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week of the latest reading} other {# nights of the week of the latest reading}}: mentions and citations are counted as for a full week.",
+        "gapsTooMany": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week of the latest reading} other {# nights of the week of the latest reading}}: too many to compare mentions and citations fairly, so they are left out of the result.",
         "auditAfter": "Audited again since it closed: {passed} of {audited} {audited, plural, one {page passes} other {pages pass}}.",
         "auditNotYet": "None of its {pages, plural, one {page} other {# pages}} was audited again since it closed: the result is from the metrics.",
         "signalsAfter": "Of the {total, plural, one {signal} other {# signals}} that raised it, when measured: {ended} ended{replaced, plural, =0 {} other {, # turned into another}}{dismissed, plural, =0 {} other {, # dismissed}}{open, plural, =0 {} other {, # still open}}.",
@@ -2636,24 +2671,56 @@
         "description": "Select a brand to view its action history."
       },
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
+      "view": {
+        "actions": "Actions",
+        "scorecard": "Scorecard"
+      },
+      "scorecard": {
+        "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",
+        "columns": {
+          "kind": "Kind of action",
+          "completed": "Completed",
+          "results": "Results",
+          "successRate": "Success rate",
+          "medianChange": "Median change",
+          "dismissed": "Dismissed"
+        },
+        "tooFew": "Too few results",
+        "mostly": "Mostly: {reason}",
+        "empty": {
+          "title": "Nothing to score in this range",
+          "description": "A kind of action shows here once one of its actions is completed or dismissed."
+        },
+        "error": "The scorecard couldn't be loaded.",
+        "retry": "Try again"
+      },
+      "outcomeSoFar": "so far: day {day} of {final}",
       "outcomeHint": {
         "pending_measurement": "no result recorded",
         "improved": "vs before",
+        "mixed": "vs before",
         "no_meaningful_change": "vs before",
         "declined": "vs before",
-        "not_measurable": "action was dismissed"
+        "not_measurable": "nothing to read"
       },
       "outcomeExplain": {
         "pending_measurement": "This action's effect has not been measured. The metrics below fill in once validation runs.",
         "improved": "Measured after this action closed.",
+        "mixed": "Measured after this action closed; some metrics moved up and others down, or only some of its pages pass.",
         "no_meaningful_change": "Measured after this action closed; the metrics did not move.",
         "declined": "Measured after this action closed; the metrics moved the wrong way.",
-        "not_measurable": "This action was dismissed, so nothing was measured."
+        "not_measurable": "Measured after this action closed; nothing it aims at could be read."
+      },
+      "dismissedResult": {
+        "label": "Not measured",
+        "hint": "dismissed",
+        "explain": "Not measured: it was dismissed, and only a completed action is measured."
       }
     },
     "actionOutcome": {
       "pending_measurement": "Not measured",
       "improved": "Improved",
+      "mixed": "Mixed",
       "no_meaningful_change": "No meaningful change",
       "declined": "Declined",
       "not_measurable": "Not measurable"

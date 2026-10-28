@@ -60,9 +60,10 @@ Rules:
  *   action: { name: string, category: string, title?: string },
  *   brand: { name: string, description?: string | null, domains: string[] },
  *   evidence: object,
- * }} input evidence as `evidenceForPrompt` gives it
+ *   history?: object[],
+ * }} input evidence as `evidenceForPrompt` gives it; history as `loadPastRounds` does
  */
-export function buildTaskWriterPrompt({ action, brand, evidence }) {
+export function buildTaskWriterPrompt({ action, brand, evidence, history = [] }) {
   const prompt = [
     `Brand: ${brand.name}${brand.domains.length ? ` (${brand.domains.join(', ')})` : ''}`,
     brand.description ? `About the brand: ${brand.description}` : null,
@@ -70,6 +71,16 @@ export function buildTaskWriterPrompt({ action, brand, evidence }) {
     '',
     'Evidence (JSON):',
     JSON.stringify(evidence),
+    // Earlier rounds of this action here (learning B5): what was done, and
+    // what the result read.
+    ...(history.length
+      ? [
+          '',
+          'Earlier rounds of this action at this brand, newest first (JSON). result is improved, mixed, no_meaningful_change, declined, not_measurable or pending_measurement; final is false while it is a reading so far:',
+          JSON.stringify(history),
+          'Build on what the rounds that improved results did. Do not give again a task a round did without improvement, unless the evidence shows something new. A dismissed round says why it was turned down.',
+        ]
+      : []),
     '',
     `Write up to ${MAX_TASKS} tasks.`,
   ]
