@@ -26,6 +26,8 @@ import {
   PRODUCT_WORK_TYPES,
   sendProductActions,
 } from '../lib/action-center/from-products.js';
+import { runTaskCheck } from '../lib/action-center/task-checks.js';
+import { pageReadLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
 
@@ -97,8 +99,13 @@ export async function regenerateTasks(actionId, userId) {
   try {
     result = await writeTasksForAction(actionId, { trigger: 'regenerate', userId });
   } catch (err) {
-    // The month's AI budget, shared with the Improve tab, is spent.
-    if (err instanceof PlanLimitError) throw new TaskWriterError('budget', err.message, 429);
+    if (err instanceof PlanLimitError) {
+      // No plan (the trial ended, or it was cancelled): one to choose, not a
+      // budget to wait for.
+      if (err.statusCode === 402) throw new TaskWriterError('plan_limit', err.message, 402);
+      // The month's AI budget, shared with the Improve tab, is spent.
+      throw new TaskWriterError('budget', err.message, 429);
+    }
     throw err;
   }
   if (result.status !== 'written') {
@@ -223,6 +230,38 @@ router.post('/tasks/:id/send', async (req, res) => {
     if (!status) req.log.error({ err: error }, 'send action task error');
     return res.status(status || 500).json({
       error: status ? error.message : 'Failed to send the task.',
+      code: error instanceof TaskSendError ? error.code : null,
+    });
+  }
+});
+
+/**
+ * Checks a task now (AC-010), as the nightly sweep does: its page fetched
+ * again by what the task changes. Returns the check kept on the task, or
+ * `checked: null` with why nothing was checked (runTaskCheck's reasons, and
+ * 'closed' for a closed or deleted action).
+ */
+export async function checkTaskNow(taskId, userId) {
+  const { task, action } = await loadTask(taskId);
+  await assertBrandAccess(action.brand_id, userId);
+  if (action.deleted_at || ['completed', 'dismissed'].includes(action.status)) {
+    return { checked: null, reason: 'closed' };
+  }
+  const result = await runTaskCheck(task, action);
+  return { checked: result.autoCheck ?? null, reason: result.reason ?? null };
+}
+
+/** POST /api/action-center/tasks/:id/check */
+router.post('/tasks/:id/check', pageReadLimiter, async (req, res) => {
+  const id = signalIdSchema.safeParse(req.params.id);
+  if (!id.success) return res.status(400).json({ error: 'Invalid task id' });
+  try {
+    return res.json(await checkTaskNow(id.data, req.user.id));
+  } catch (error) {
+    const status = error.status;
+    if (!status) req.log.error({ err: error }, 'check action task error');
+    return res.status(status || 500).json({
+      error: status ? error.message : 'Failed to check the task.',
       code: error instanceof TaskSendError ? error.code : null,
     });
   }

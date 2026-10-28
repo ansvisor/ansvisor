@@ -170,6 +170,25 @@ export function inView(row: ProductRow, view: ProductView): boolean {
   }
 }
 
+/**
+ * How many products each view holds. The rows may be part of the catalog
+ * (the table's first PRODUCTS_TABLE_MAX, those on a shelf or visited first):
+ * All is then the catalog's `total`, and Never shown the products beyond
+ * those shown.
+ */
+export function viewCounts(
+  rows: readonly ProductRow[],
+  total: number,
+): Record<ProductView, number> {
+  const counts = Object.fromEntries(
+    PRODUCT_VIEWS.map((id) => [id, rows.filter((row) => inView(row, id)).length]),
+  ) as Record<ProductView, number>;
+  const shown = rows.length - counts.never;
+  counts.all = Math.max(total, rows.length);
+  counts.never = counts.all - shown;
+  return counts;
+}
+
 /** A view's rows, in its order: top sellers by revenue, the rest by shelves, then visits. */
 export function viewRows(rows: readonly ProductRow[], view: ProductView): ProductRow[] {
   const listed = rows.filter((row) => inView(row, view));

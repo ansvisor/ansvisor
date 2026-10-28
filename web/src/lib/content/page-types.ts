@@ -122,14 +122,24 @@ const COLLECTION: BySite = { ecommerce: 'collection_page' };
 const NOT_DEFINED =
   'best|differences?|costs?|prices?|benefits?|advantages?|disadvantages?|pros|cons|new|latest';
 
+/** The words a shop names its category pages with: /collections/, /c/, /product-category/, /kategori/… */
+const CATEGORY_WORDS =
+  'collections?|categor(y|ies)|product-categor(y|ies)|urun-kategori(si)?|produkt-kategorie|categorie-produit|categoria-(producto|prodotto|produto)|kategori(ler)?|kategorie(n)?|categorie(s)?|categorias?|koleksiyon(lar)?|kollektion(en)?|c|shop|catalog|departments?';
+/** A blog's own section at the start of a path: /blog/…, /en/news/…, Shopify's /blogs/…. */
+const BLOG_SECTION =
+  '(\\/[a-z]{2}(-[a-z]{2})?)?\\/(blogs?|news|articles?|posts?|insights|stories|magazine|journal)\\/';
+
 /**
  * URL paths, the most specific first: /blog/hubspot-vs-salesforce is a
  * comparison before it is a blog post. Matched on the lowercased path with
- * no trailing slash or file extension.
+ * no trailing slash or file extension. A shop's category pages are the
+ * shopping path's too (server/src/lib/catalog/category-pages.js): both
+ * test __fixtures__/category-paths.json.
  */
 const PATH_SIGNS: [RegExp, BySite][] = [
   [/\/(pricing|plans|plans-and-pricing)(\/|$)/, { b2b: 'pricing' }],
-  [/\/(size-?(guides?|charts?)|sizing(-guides?)?|fit-guides?)([/-]|$)/, SIZING],
+  // A size guide, also at the end of a slug: /collections/hiking-boots-size-guide.
+  [/(^|[/-])(size-?(guides?|charts?)|sizing-guides?|fit-guides?)([/-]|$)|\/sizing([/-]|$)/, SIZING],
   [/(^|[/-])alternatives?([/-]|$)/, ALTERNATIVES],
   [/(^|[/-])(vs|versus)([/-]|$)|\/(compare|comparisons?)(\/|$)/, COMPARISON],
   [
@@ -152,15 +162,18 @@ const PATH_SIGNS: [RegExp, BySite][] = [
     { b2b: 'solution_page' },
   ],
   [/\/(products?|p|dp|items?)\/[^/]+/, { b2b: 'feature_page', ecommerce: 'product_page' }],
-  // A themed collection (gifts, bundles, "for …") before a shop's categories,
-  // on whole words of the slug: /collections/kitchen and /collections/limited-edition
-  // are categories.
+  // A themed collection (gifts, bundles, a sale, "for …") before a shop's
+  // categories, on whole words of the slug: /collections/kitchen,
+  // /collections/limited-edition and /collections/wholesale-boxes are categories.
   [
-    /\/collections?\/(?:[^/]*-)?(gifts?|bundles?|kits?|sets?|best-?sellers?|new-arrivals?|picks|edit)(?:-|\/|$)|\/collections?\/(?:[^/]*-)?for-[a-z]/,
+    /\/collections?\/(?:[^/]*-)?(gifts?|bundles?|kits?|sets?|best-?sellers?|new-arrivals?|picks|edit|sale|clearance|outlet|deals?|offers?)(?:-|\/|$)|\/collections?\/(?:[^/]*-)?for-[a-z]/,
     COLLECTION,
   ],
+  // A shop's categories, WooCommerce's /product-category/ and the same words
+  // in Turkish, German, French and Spanish among them; never in a blog's own
+  // section (/blog/category/… is WordPress's archive of the blog's posts).
   [
-    /\/(collections?|categor(y|ies)|c|shop|catalog|departments?)(\/|$)/,
+    new RegExp(`^(?!${BLOG_SECTION}).*\\/(${CATEGORY_WORDS})(\\/|$)`),
     { ecommerce: 'category_page' },
   ],
   [/\/(itinerar(y|ies)|trips?|tours?)(\/|$)|\/\d+-days?-/, { b2c: 'itinerary' }],
