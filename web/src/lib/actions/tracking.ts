@@ -2589,7 +2589,7 @@ const MODEL_TO_PROVIDER: Record<string, string> = {
 const SCRAPER_PROVIDER: Record<string, string> = {
   chatgpt: 'ChatGPT',
   'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
+  'google-aio': 'Google AI Overviews',
   'google-aimode': 'Google AI Mode',
   'copilot-web': 'Microsoft Copilot',
   'grok-web': 'Grok',

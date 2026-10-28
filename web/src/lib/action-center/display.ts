@@ -1,5 +1,6 @@
 import type { ActionEvent, ActionItem } from '@/lib/actions/action-center';
 import { isActionKind } from '@/lib/action-center/registry';
+import { pagePath } from '@/lib/content/overlap';
 import { formatEstimateRange, guessedVolumeEstimate } from '@/lib/volume-estimate';
 
 /**
@@ -89,6 +90,21 @@ export function actionTexts(
         },
       ),
       description: t('content_draft.description'),
+    };
+  }
+  // A live page linking products that no longer sell (shopping path, part 7)
+  // is named after the page and how many.
+  if (action.kind === 'shopping_links' && Array.isArray(p.products) && p.products.length) {
+    const count = p.products.length;
+    const page = str(p, 'title') || pagePath(str(p, 'pageUrl'));
+    return {
+      title: page
+        ? t(p.soldOut === true ? 'shopping_links.soldOutTitle' : 'shopping_links.namedTitle', {
+            page,
+            count,
+          })
+        : t('shopping_links.titleGeneric'),
+      description: t('shopping_links.description', { count }),
     };
   }
   // An Improve action carries its own title and "why", written from the
@@ -217,7 +233,12 @@ export function actionEventText(
     // Work the product did itself names the task in the reader's language
     // and the tool as it is recorded — the tool id is the audit fact, so it
     // is not translated.
-    task: eventTaskText(event.data.task, tTasks),
+    // A checked task is named once (`{task}{title}`): by its own title when it
+    // has one; lines written before the API sent only one carry both.
+    task:
+      event.event === 'task_checked' && event.data.title
+        ? ''
+        : eventTaskText(event.data.task, tTasks),
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
@@ -253,7 +274,10 @@ export function actionGoal(
   return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
 }
 
-/** Kinds a person sends rather than a definition raises. */
+/**
+ * Kinds a person sends rather than a definition raises, and the catalog
+ * check's (shopping_links): none rests on detection signals.
+ */
 const PERSON_SENT_KINDS: string[] = [
   'content_opportunity',
   'prompt_improve',
@@ -262,6 +286,7 @@ const PERSON_SENT_KINDS: string[] = [
   'mention_review',
   'traffic_pages',
   'content_draft',
+  'shopping_links',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own
