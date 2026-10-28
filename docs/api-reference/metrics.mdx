@@ -21,10 +21,18 @@ curl "https://app.ansvisor.com/api/v1/brands" \
 
 Keys are scoped to the user who created them and resolve to that user's organization: every endpoint only returns data for brands the organization owns. Revoking a key (Settings → API Keys) takes effect immediately.
 
-`GET /api/v1/whoami` echoes the resolved identity — useful as a connection test:
+`GET /api/v1/whoami` echoes the resolved identity — useful as a connection test. It also says the key's user's role, their work areas and whether they may choose who sees which menu sections:
 
 ```json
-{ "userId": "…", "email": "you@agency.com", "organizationId": "…" }
+{
+  "userId": "…",
+  "email": "you@agency.com",
+  "organizationId": "…",
+  "organizationName": "Acme",
+  "role": "manager",
+  "workAreas": [{ "id": "content", "name": "Content" }],
+  "canManageMenus": false
+}
 ```
 
 ## Conventions

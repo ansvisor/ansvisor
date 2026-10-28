@@ -9,8 +9,11 @@ import type { CmsFields, CmsPage } from '@/lib/content/cms-send';
  * which Next runs one at a time, behind the editor's own.
  */
 
-/** Where pages go: the brand's webhook (phase 1) or its Webflow collection (phase 2). */
-export type CmsTarget = 'webhook' | 'webflow';
+/**
+ * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
+ * WordPress site or its Framer collection (phase 2).
+ */
+export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer';
 
 /** Why a send didn't go, as the server names it. */
 export type CmsSendError =
@@ -22,6 +25,16 @@ export type CmsSendError =
   | 'no_webflow'
   | 'webflow_refused'
   | 'webflow_not_ready'
+  // WordPress (00294): not on this server, not connected, or its sign-in refused.
+  | 'wordpress_not_configured'
+  | 'no_wordpress'
+  | 'wordpress_refused'
+  // Framer (00295): not on this server, not connected, its API key refused,
+  // or no collection and fields picked.
+  | 'framer_not_configured'
+  | 'no_framer'
+  | 'framer_refused'
+  | 'framer_not_ready'
   | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
@@ -45,9 +58,19 @@ export interface CmsDelivery {
   http_status?: number | null;
   /** Why it failed, as the server wrote it ("The webhook could not be reached"). */
   error?: string | null;
-  /** Webflow, one page: its item updated (not made), and what of the page changed on the way. */
+  /**
+   * Webflow, WordPress or Framer, one page: its item (or draft post)
+   * updated, not made, and what of the page changed on the way: Webflow's
+   * tables and images, WordPress's JSON-LD blocks left out, Framer's images.
+   */
   updated?: boolean;
-  changed?: { tables: number; images: number };
+  changed?: { tables?: number; images?: number; jsonLd?: number };
+  /**
+   * WordPress: the page's post was live, so the page went as a new draft
+   * post. Framer: the item updated isn't a draft, so the page goes live with
+   * the site's next publish.
+   */
+  live?: boolean;
 }
 
 export type CmsSendResult =
@@ -63,6 +86,13 @@ const KNOWN: readonly CmsSendError[] = [
   'no_webflow',
   'webflow_refused',
   'webflow_not_ready',
+  'wordpress_not_configured',
+  'no_wordpress',
+  'wordpress_refused',
+  'framer_not_configured',
+  'no_framer',
+  'framer_refused',
+  'framer_not_ready',
   'in_progress',
   'daily_limit',
   'forbidden',
@@ -74,8 +104,9 @@ const KNOWN: readonly CmsSendError[] = [
 const GENERAL: readonly CmsSendError[] = ['session', 'workspace', 'busy', 'subscription'];
 
 /**
- * Sends pages of one brand to its webhook, or its Webflow collection: one is
- * sent before this answers, more go on.
+ * Sends pages of one brand to its webhook, its Webflow collection, its
+ * WordPress site or its Framer collection: one is sent before this answers,
+ * more go on.
  */
 export async function sendPagesToCms(
   brandId: string,
@@ -116,17 +147,21 @@ export async function sendPagesToCms(
 }
 
 /**
- * Asks the API to read the brand's pages sent to Webflow, and mark the ones
- * published there since (#1331, phase 2). The pages it marked, by draft;
- * none when it couldn't read or read a moment ago.
+ * Asks the API to read the brand's pages sent to a CMS that says when a page
+ * goes live there, and mark the ones published since. The pages it marked,
+ * by draft; none when it couldn't read or read a moment ago.
  */
-export async function refreshWebflowPublished(brandId: string): Promise<string[]> {
+async function refreshPublished(
+  brandId: string,
+  route: 'webflow-status' | 'wordpress-status' | 'framer-status',
+  label: string,
+): Promise<string[]> {
   try {
     const {
       data: { session },
     } = await createClient().auth.getSession();
     if (!session) return [];
-    const res = await fetch(`${BROWSER_API_BASE_URL}/api/content-drafts/webflow-status`, {
+    const res = await fetch(`${BROWSER_API_BASE_URL}/api/content-drafts/${route}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -140,15 +175,33 @@ export async function refreshWebflowPublished(brandId: string): Promise<string[]
     };
     return (body.published ?? []).flatMap((p) => (p.draftId ? [p.draftId] : []));
   } catch (err) {
-    console.error('Failed to read the pages sent to Webflow:', err);
+    console.error(`Failed to read the pages sent to ${label}:`, err);
     return [];
   }
+}
+
+/** The brand's pages sent to Webflow, published there since (#1331, phase 2). */
+export function refreshWebflowPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'webflow-status', 'Webflow');
+}
+
+/** The brand's pages sent to WordPress as draft posts, published there since (00294). */
+export function refreshWordPressPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'wordpress-status', 'WordPress');
+}
+
+/** The brand's pages sent to Framer as draft items, published there since (00295). */
+export function refreshFramerPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'framer-status', 'Framer');
 }
 
 /** A draft's last send, as the Library shows it beside its status. */
 export interface CmsStatus {
   status: CmsDelivery['status'];
-  /** Where it went: the webhook, or Webflow (a draft item there once sent). */
+  /**
+   * Where it went: the webhook, Webflow or Framer (a draft item there once
+   * sent) or WordPress (a draft post).
+   */
   target: CmsTarget;
   /** When it was published, sent or queued. */
   at: string;
@@ -182,7 +235,10 @@ function lastSend(row: {
     row.status === 'queued' && Date.parse(row.created_at) < Date.now() - INTERRUPTED_AFTER_MS;
   return {
     status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
-    target: row.target === 'webflow' ? 'webflow' : 'webhook',
+    target:
+      row.target === 'webflow' || row.target === 'wordpress' || row.target === 'framer'
+        ? row.target
+        : 'webhook',
     at: row.published_at ?? row.sent_at ?? row.created_at,
     error: interrupted ? 'Not sent: interrupted' : row.error,
   };
