@@ -1,9 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  MANUAL_TASKS,
+  PAGE_CHECKED_TASKS,
+  pageCheckable,
+  type ActionTaskDetails,
   TASK_DETAIL_LIMITS,
   cleanTaskDetailsEdit,
   isTaskDetailsEdit,
   parseTaskDetails,
+  withTemplateCheck,
   withTemplateDoneWhen,
   withoutTemplateDoneWhen,
 } from './task-details';
@@ -296,5 +303,78 @@ describe('where a task was sent', () => {
     expect(
       parseTaskDetails({ where: '/pricing', sent: { content: {}, webhook: 'x' } })?.sent,
     ).toEqual({ content: null, webhook: null });
+  });
+});
+
+describe('pageCheckable', () => {
+  const auto = (over: Partial<ActionTaskDetails> = {}) =>
+    ({ check: 'auto', url: '/pricing', change: null, ...over }) as ActionTaskDetails;
+
+  it('checks a library task the API reads on its page, or a written one with its new text', () => {
+    expect(pageCheckable({ taskKey: 'refresh_content', details: auto() })).toBe(true);
+    expect(
+      pageCheckable({ taskKey: null, details: auto({ change: { before: null, after: 'New' } }) }),
+    ).toBe(true);
+  });
+
+  it('leaves out a Site Audit fix, a written task without new text, and a task with no page', () => {
+    expect(pageCheckable({ taskKey: 'fix_meta_description', details: auto() })).toBe(false);
+    expect(pageCheckable({ taskKey: null, details: auto() })).toBe(false);
+    expect(pageCheckable({ taskKey: 'refresh_content', details: auto({ url: ' ' }) })).toBe(false);
+    expect(pageCheckable({ taskKey: 'refresh_content', details: auto({ check: 'manual' }) })).toBe(
+      false,
+    );
+  });
+
+  it('keeps Check now on a shopping links task, which has no new text (#1616)', () => {
+    expect(pageCheckable({ taskKey: null, details: auto() }, 'shopping_links')).toBe(true);
+    expect(pageCheckable({ taskKey: null, details: auto() }, 'content_draft')).toBe(false);
+    expect(
+      pageCheckable({ taskKey: null, details: auto({ check: 'manual' }) }, 'shopping_links'),
+    ).toBe(false);
+  });
+
+  it("lists the API's checked tasks, no more and no fewer", () => {
+    const server = readFileSync(
+      join(__dirname, '../../../../server/src/lib/action-center/task-checks.js'),
+      'utf8',
+    );
+    const block = server.match(/export const CHECKS = Object\.freeze\(\{([^}]*)\}\)/)![1];
+    const keys = [...block.matchAll(/^\s*([a-z_]+):/gm)].map((m) => m[1]);
+    expect([...PAGE_CHECKED_TASKS].sort()).toEqual(keys.sort());
+  });
+});
+
+describe('withTemplateCheck', () => {
+  const auto = parseTaskDetails({
+    url: '/pricing',
+    check: 'auto',
+    autoCheck: { at: '2026-10-20T00:00:00Z', passed: false, missing: ['not_changed'] },
+  });
+
+  it('reads a task planned while its template was Automatic as Manual', () => {
+    expect(withTemplateCheck(auto, 'improve_cta_path')).toMatchObject({
+      check: 'manual',
+      url: '/pricing',
+      lastCheck: null,
+    });
+  });
+
+  it("keeps a page-checked task's, a Site Audit fix's and a written task's check", () => {
+    expect(withTemplateCheck(auto, 'refresh_content')).toBe(auto);
+    expect(withTemplateCheck(auto, 'fix_technical_issue')).toBe(auto);
+    expect(withTemplateCheck(auto, null)).toBe(auto);
+    expect(withTemplateCheck(null, 'improve_cta_path')).toBeNull();
+  });
+
+  it("lists the templates' Manual tasks, no more and no fewer", () => {
+    const server = readFileSync(
+      join(__dirname, '../../../../server/src/lib/action-center/tasks/templates.js'),
+      'utf8',
+    );
+    const block = server.match(/const TEMPLATES = Object\.freeze\(\{([\s\S]*?)\n\}\);/)![1];
+    const keys = [...block.matchAll(/^\s*([a-z_]+): \{ check: 'manual'/gm)].map((m) => m[1]);
+    expect(keys).toContain('improve_cta_path');
+    expect([...MANUAL_TASKS].sort()).toEqual(keys.sort());
   });
 });
