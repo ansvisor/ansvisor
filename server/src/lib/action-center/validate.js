@@ -59,6 +59,18 @@ export const VALIDATION_WAIT_DAYS = MEASUREMENT_WINDOW_DAYS + 1;
  */
 export const MEANINGFUL_CHANGE_RATIO = validation.meaningfulChangeRatio;
 
+/** Days a window may lack a tracking run and still be compared (learning A6). */
+export const MAX_GAP_DAYS = validation.maxGapDays;
+
+/** Metrics read from tracking's answers: a day without a run reads low in them. */
+const TRACKED_METRICS = new Set([
+  'ai_visibility',
+  'share_of_voice',
+  'competitor_lead',
+  'mentions',
+  'citations',
+]);
+
 /** Every metric here reads higher-is-better; a drop is a decline. */
 const MEASURABLE_KPIS = {
   ai_visibility: 'percent',
@@ -232,6 +244,30 @@ export function deriveOutcome(metrics, primary = null) {
   return 'no_meaningful_change';
 }
 
+/**
+ * The days of a window (inclusive, UTC) with no stamped tracking run for the
+ * brand (learning A6): a night whose collection failed, or fell short and
+ * was discarded, leaves no stamped row.
+ */
+export async function missingDays(brandId, window) {
+  const end = new Date(Date.parse(`${window.to}T00:00:00Z`) + DAY_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('tracking_runs')
+    .select('completed_at')
+    .eq('brand_id', brandId)
+    .not('completed_at', 'is', null)
+    .gte('completed_at', `${window.from}T00:00:00Z`)
+    .lt('completed_at', end)
+    .limit(1000);
+  if (error) throw new Error(`tracking_runs: ${error.message}`);
+  const ran = new Set((data ?? []).map((r) => new Date(r.completed_at).toISOString().slice(0, 10)));
+  let missing = 0;
+  for (let t = Date.parse(`${window.from}T00:00:00Z`); t < Date.parse(end); t += DAY_MS) {
+    if (!ran.has(new Date(t).toISOString().slice(0, 10))) missing += 1;
+  }
+  return missing;
+}
+
 /** A target the night engine names that a basket can be measured on (learning A1). */
 const TARGET_BASKETS = new Set(['prompts', 'pages']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -329,12 +365,28 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // check passing is its aim.
   const [signals, audit] = await Promise.all([signalOutcome(action.id), auditRecheck(action)]);
   const finish = async (validation, outcome) => {
-    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}) };
+    // A window tracking missed days of (A6): flagged, and past MAX_GAP_DAYS
+    // not compared, when the metrics read come from tracking's answers.
+    const tracked = (validation?.metrics ?? []).some(
+      (m) => TRACKED_METRICS.has(m.metric) && m.before != null && m.after != null,
+    );
+    const [gapBefore, gapAfter] = tracked
+      ? await Promise.all([
+          missingDays(action.brand_id, beforeWindow),
+          missingDays(action.brand_id, afterWindow),
+        ])
+      : [0, 0];
+    const tooMany = Math.max(gapBefore, gapAfter) > MAX_GAP_DAYS;
+    const gaps =
+      gapBefore || gapAfter
+        ? { gaps: { before: gapBefore, after: gapAfter, ...(tooMany ? { tooMany: true } : {}) } }
+        : {};
+    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}), ...gaps };
     const kept =
       validation || Object.keys(beside).length
         ? { measuredAt: now.toISOString(), ...(validation ?? {}), ...beside }
         : null;
-    const verdict = (audit && auditOutcome(audit)) ?? outcome;
+    const verdict = (audit && auditOutcome(audit)) ?? (tooMany ? 'not_measurable' : outcome);
     await write(action.id, kept, verdict, now);
     return verdict;
   };

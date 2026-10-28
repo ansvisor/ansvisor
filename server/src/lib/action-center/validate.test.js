@@ -10,6 +10,7 @@ vi.mock('../logger.js', () => ({
 }));
 
 import {
+  MAX_GAP_DAYS,
   MEANINGFUL_CHANGE_RATIO,
   VALIDATION_WAIT_DAYS,
   deriveOutcome,
@@ -20,8 +21,12 @@ import {
 const NOW = new Date('2026-09-20T04:00:00Z');
 const daysAgo = (n) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
 
+/** A stamped tracking run every night of the last 60 days: no window misses one. */
+const EVERY_NIGHT = Array.from({ length: 60 }, (_, i) => ({ completed_at: daysAgo(i) }));
+
 /** Records every write so a test can assert what was stored; `rows` answers a table's reads. */
 function mockWrites(rows = {}) {
+  rows = { tracking_runs: EVERY_NIGHT, ...rows };
   const writes = { updated: [], inserted: [] };
   from.mockImplementation((table) => {
     const builder = {
@@ -34,6 +39,7 @@ function mockWrites(rows = {}) {
       limit: () => builder,
       order: () => builder,
       gt: () => builder,
+      lt: () => builder,
       in: () => builder,
       maybeSingle: async () => ({ data: (rows[table] ?? [])[0] ?? null, error: null }),
       update: (patch) => {
@@ -505,6 +511,44 @@ describe('validateAction', () => {
     expect(patch.validation.metrics.find((m) => m.metric === 'citations')).toMatchObject({
       before: 3,
       after: 3,
+    });
+  });
+
+  describe('with nights tracking missed (learning A6)', () => {
+    const missing = (nights) => EVERY_NIGHT.filter((_, i) => !nights.includes(i));
+    // The after window is the 7 days from 9 days ago; the before, from 37 days ago.
+
+    it('flags a window with a missed night or two, and still reads it', async () => {
+      const writes = mockWrites({ tracking_runs: missing([5, 6]) });
+      rpc
+        .mockResolvedValueOnce({ data: { total_citations: 100 }, error: null })
+        .mockResolvedValueOnce({ data: { total_citations: 140 }, error: null });
+
+      expect(await validateAction(action(), { now: NOW })).toBe('improved');
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.gaps).toEqual({ before: 0, after: 2 });
+    });
+
+    it('reads it not measurable past MAX_GAP_DAYS: a missed night reads as a decline', async () => {
+      const writes = mockWrites({ tracking_runs: missing([3, 4, 5, 6]) });
+      rpc
+        .mockResolvedValueOnce({ data: { total_citations: 100 }, error: null })
+        .mockResolvedValueOnce({ data: { total_citations: 60 }, error: null });
+
+      expect(await validateAction(action(), { now: NOW })).toBe('not_measurable');
+      const patch = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(patch.validation.gaps).toEqual({ before: 0, after: 4, tooMany: true });
+      // The figures stay, to see.
+      expect(patch.validation.metrics[0]).toMatchObject({ before: 100, after: 60 });
+      expect(MAX_GAP_DAYS).toBe(2);
+    });
+
+    it('doesn’t count nights for metrics tracking doesn’t read (AI sessions)', async () => {
+      const writes = mockWrites({ tracking_runs: [] });
+      rpc.mockResolvedValue({ data: {}, error: null });
+      await validateAction(action({ kpi_keys: ['ai_referral_traffic'] }), { now: NOW });
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation?.gaps).toBeUndefined();
     });
   });
 

@@ -225,6 +225,33 @@ describe('HistoryDrawer', () => {
     );
   });
 
+  it('says which nights tracking missed, and when too many to compare (learning A6)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, dataGaps: { before: 1, after: 2, tooMany: false } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Tracking missed 1 night of the week before it and 2 nights of the week after it: mentions and citations read a little low there.',
+    );
+
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, dataGaps: { before: 0, after: 4, tooMany: true } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Tracking missed 4 nights of the week after it: too many to compare the weeks fairly, so the result reads not measurable.',
+    );
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);

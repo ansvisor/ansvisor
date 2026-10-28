@@ -218,6 +218,14 @@ export function HistoryDrawer({
                 {t('drawer.measuredOn', { ...item.measuredOn })}
               </p>
             )}
+            {item.dataGaps && (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                {t(item.dataGaps.tooMany ? 'drawer.gapsTooMany' : 'drawer.gaps', {
+                  before: item.dataGaps.before,
+                  after: item.dataGaps.after,
+                })}
+              </p>
+            )}
             {item.auditAfter && (
               // A fix's own aim: does the page pass when audited again?
               <p className="mt-1 text-xs">
