@@ -15,6 +15,7 @@ import type {
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import {
   NO_PATH_REASONS,
+  bestInStock,
   shoppingChoicesSchema,
   shoppingPathSchema,
   type NoPathReason,
@@ -218,28 +219,6 @@ export interface BlockProductRead {
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>;
-interface VariantRead {
-  url: string | null;
-  price: number | null;
-  sale_price: number | null;
-  currency: string | null;
-  availability: string | null;
-}
-
-/**
- * The variant a card shows, as the API's path picks it (shopping-path.js
- * offerOf): the cheapest in stock, its sale price first; null with none in
- * stock.
- */
-function blockVariant(variants: VariantRead[]): VariantRead | null {
-  const inStock = variants.filter((v) => variantStock(v.availability) === 'in');
-  const sellsAt = (v: VariantRead) => v.sale_price ?? v.price ?? 0;
-  return (
-    inStock.filter((v) => v.price != null).sort((a, b) => sellsAt(a) - sellsAt(b))[0] ??
-    inStock[0] ??
-    null
-  );
-}
 
 /**
  * A product's live variants and, with `image`, its picture, read for it
@@ -273,7 +252,8 @@ function blockProduct(
   product: { id: string; title: string; url: string | null },
   details: Awaited<ReturnType<typeof readBlockDetails>>,
 ): BlockProductRead {
-  const variant = blockVariant(details.variants);
+  // As the API's path and the agent's grid pick it: the best stock, then the lowest price.
+  const variant = bestInStock(details.variants);
   return {
     id: product.id,
     title: product.title,
