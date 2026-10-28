@@ -23,7 +23,7 @@ import {
 import { sendContentDraftToActionCenter } from '../lib/action-center/from-content-draft.js';
 import { sendAuditToActionCenter } from '../lib/action-center/from-audit.js';
 import { runTaskCheck } from '../lib/action-center/task-checks.js';
-import { pageReadLimiter } from '../middleware/rate-limiter.js';
+import { taskCheckLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
 
@@ -248,7 +248,7 @@ export async function checkTaskNow(taskId, userId) {
 }
 
 /** POST /api/action-center/tasks/:id/check */
-router.post('/tasks/:id/check', pageReadLimiter, async (req, res) => {
+router.post('/tasks/:id/check', taskCheckLimiter, async (req, res) => {
   const id = signalIdSchema.safeParse(req.params.id);
   if (!id.success) return res.status(400).json({ error: 'Invalid task id' });
   try {

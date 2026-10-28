@@ -38,6 +38,14 @@ export function humanizeKind(kind: string): string {
 }
 
 /**
+ * A kind's name, as a group of actions (the History scorecard, learning
+ * B3): its title without targets, else its id read as words.
+ */
+export function actionKindName(kind: string, t: Translator): string {
+  return isActionKind(kind) ? t(`${kind}.titleGeneric`) : humanizeKind(kind);
+}
+
+/**
  * "11 prompts", "6 sources" — how many of what an action is about.
  *
  * Every payload carries `targetEntity` and `targetCount` (server
@@ -236,7 +244,12 @@ export function actionEventText(
     // Work the product did itself names the task in the reader's language
     // and the tool as it is recorded — the tool id is the audit fact, so it
     // is not translated.
-    task: eventTaskText(event.data.task, tTasks),
+    // A checked task is named once (`{task}{title}`): by its own title when it
+    // has one; lines written before the API sent only one carry both.
+    task:
+      event.event === 'task_checked' && event.data.title
+        ? ''
+        : eventTaskText(event.data.task, tTasks),
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),
@@ -246,6 +259,10 @@ export function actionEventText(
     // The validation sweep's verdict once the action closed: improved,
     // declined, and so on.
     outcome: String(event.data.outcome ?? ''),
+    // Which reading it was, counted from the close, and whether the last
+    // (learning B1); none for one measured once before.
+    day: Number(event.data.day ?? 0),
+    final: event.data.final === true ? 'yes' : 'no',
   });
 }
 
