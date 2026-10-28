@@ -97,6 +97,37 @@ export interface ControlNet {
   net: { metric: string; net: number; unit: 'points' | 'percent' }[];
 }
 
+/**
+ * Its change net of the control basket, as the validation sweep keeps it
+ * (`validation.control`), the metrics it can name; null when it has none.
+ */
+export function controlNetOf(
+  validation: {
+    control?: {
+      basis?: string;
+      prompts?: number;
+      net?: { metric?: string; net?: number; unit?: string }[];
+    };
+  } | null,
+): ControlNet | null {
+  const control = validation?.control;
+  if (!control || !Array.isArray(control.net)) return null;
+  const net = control.net.flatMap((m) =>
+    typeof m?.metric === 'string' &&
+    typeof m.net === 'number' &&
+    Number.isFinite(m.net) &&
+    (m.unit === 'points' || m.unit === 'percent')
+      ? [{ metric: m.metric, net: m.net, unit: m.unit as 'points' | 'percent' }]
+      : [],
+  );
+  if (!net.length || !Number.isInteger(control.prompts)) return null;
+  return {
+    basis: control.basis === 'topics' ? 'topics' : 'brand',
+    prompts: control.prompts as number,
+    net,
+  };
+}
+
 /** A signal that opened the action. Several signals consolidate into one
  *  action, so this is a list rather than a field. */
 export interface TriggerSignal {

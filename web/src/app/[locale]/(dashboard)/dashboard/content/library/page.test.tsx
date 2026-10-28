@@ -590,28 +590,28 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
   });
 
-  it('doesn’t ask Webflow by itself while the workspace is read-only', async () => {
+  it('doesn’t ask Webflow or WordPress by itself while the workspace is read-only', async () => {
     gate.isLocked = true;
-    getContentDrafts.mockResolvedValue([row({})]);
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
     readCmsStatuses.mockResolvedValue(
       new Map([
-        [
-          'd1',
-          {
-            status: 'sent',
-            target: 'webflow',
-            at: '2026-10-24T10:00:00Z',
-            httpStatus: null,
-            error: null,
-            publishedUrl: null,
-          },
-        ],
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
       ]),
     );
     await renderPage();
     // What is stored is listed; nothing is asked of the API.
     expect(container.textContent).toContain('Pipeline forecasting');
     expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
   });
 
   it('doesn’t ask Webflow for a brand with no page there', async () => {
