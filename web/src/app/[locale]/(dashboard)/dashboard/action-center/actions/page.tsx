@@ -808,8 +808,9 @@ function ActionsContent({ brand }: { brand: Brand }) {
               onClick={() => setCategory(key)}
             />
           ))}
-          {/* A chip of its own beside the categories: on or off, whatever the category. */}
-          {fromProductsCount > 0 && (
+          {/* A chip of its own beside the categories: on or off, whatever the category.
+              On from the URL, it shows with none too, to be turned off. */}
+          {(fromProducts || fromProductsCount > 0) && (
             <CategoryPill
               label={t('fromProducts')}
               count={fromProductsCount}

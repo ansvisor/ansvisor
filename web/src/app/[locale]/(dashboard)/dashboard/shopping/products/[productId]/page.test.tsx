@@ -154,11 +154,17 @@ describe('ShoppingProductPage', () => {
     const rows = [...container.querySelectorAll('table')[0].querySelectorAll('tbody tr')].map(
       (tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent),
     );
+    // Each row's state in words too, beside its icon.
     expect(rows).toEqual([
-      ['Match with the question', '41', '88', 'Missing: women, lightweight'],
-      ['Price', '$119', '$110', 'Close'],
-      ['GTIN in the feed', '✕', '—', ''],
+      ['Match with the question, missing', '41', '88', 'Missing: women, lightweight'],
+      ['Price, in place', '$119', '$110', 'Close'],
+      ['GTIN in the feed, missing', '✕', '—', ''],
     ]);
+    expect(
+      [...container.querySelectorAll('table')[0].querySelectorAll('.sr-only')].map(
+        (span) => span.textContent,
+      ),
+    ).toEqual([', missing', ', in place', ', missing']);
     expect(text).toContain('Not on the shelf');
     expect(text).toContain('Missing: a GTIN (−20)');
     expect(container.querySelector('a[href="/dashboard/shopping?tab=products"]')).not.toBeNull();

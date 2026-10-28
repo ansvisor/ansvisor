@@ -46,6 +46,7 @@ import {
   type RuleStatus,
   type TextRule,
 } from '@/lib/content/rules';
+import { listed } from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -462,7 +463,9 @@ export function RulesTab({
                       ? t('lengthConflict', state.lengthConflict)
                       : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
                         ? t('heldSentence')
-                        : undefined
+                        : rule.key === 'shopLinksLive'
+                          ? shoppingNote(t, status)
+                          : undefined
                   }
                 />
               ))}
@@ -557,6 +560,22 @@ function TextRuleRow({
       </span>
     </li>
   );
+}
+
+/**
+ * The linked products that no longer sell, by name and why, the first few
+ * (No sold-out or refused product linked, shopping path); none while it's met.
+ */
+function shoppingNote(
+  t: (key: string, values?: Record<string, string | number>) => string,
+  status: RuleStatus,
+): string | undefined {
+  if (status.state !== 'bad' || status.code !== 'found' || !status.items?.length) return undefined;
+  const { shown, more } = listed(status.items);
+  return t('shopLinksLiveNote', {
+    list: shown.map((item) => t('shopItem', { title: item.title, state: item.state })).join(', '),
+    more,
+  });
 }
 
 /** Write a rule, or paste many: each line becomes a rule (bullets and numbering taken off). */

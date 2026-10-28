@@ -97,6 +97,7 @@ import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { CatalogNote } from './_catalog-note';
 import { ProductDataStrip, useProductSources } from './_data-strip';
 import { CategoriesTable } from './_categories-table';
 import { ProductsTable } from './_products-table';
@@ -108,6 +109,7 @@ import { MerchantSplitCard } from './merchant_split_card';
 import { OpenAiIndexCard } from './openai_index_card';
 import { ProductMatchScores } from './product_match_scores';
 import { ResellerPriceAlerts } from './reseller_price_alerts';
+import { useKeyedRead } from './use_keyed_read';
 import { useMerchantDestinations } from './use_merchant_destinations';
 import { useOpenAiIndex } from './use_openai_index';
 
@@ -151,7 +153,6 @@ export default function ShoppingPage() {
   const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
   const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
   const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
-  const [shelf, setShelf] = useState<ShoppingShelf | 'failed' | null>(null);
   const [orders, setOrders] = useState<ShoppingAiOrders | null>(null);
   // The catalog's categories (ECOM-008), read when their tab opens, for the filters they were read with.
   const [categories, setCategories] = useState<{
@@ -160,8 +161,6 @@ export default function ShoppingPage() {
     /** Each category's last done action, 7 days on (ECOM-018). */
     results?: Record<string, ActionResult>;
   } | null>(null);
-  // The catalog's products (ECOM-007): null for a brand without a catalog.
-  const [catalogTable, setCatalogTable] = useState<ShoppingProducts | null | 'failed'>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
   const [activeTab, setActiveTab] = useState<ShoppingTab>('shelf');
@@ -243,15 +242,6 @@ export default function ShoppingPage() {
           getOwnProducts(activeBrandId, filters),
           getCompetitorProducts(activeBrandId, filters),
           getCompetitorSummary(activeBrandId, filters),
-          // The Shelf reads on its own: a failure there leaves the rest.
-          getShoppingShelf(activeBrandId, filters).catch((err) => {
-            console.error('Failed to read the shelves:', err);
-            return 'failed' as const;
-          }),
-          getShoppingProducts(activeBrandId, filters).catch((err) => {
-            console.error('Failed to read the products:', err);
-            return 'failed' as const;
-          }),
         );
       }
 
@@ -261,12 +251,10 @@ export default function ShoppingPage() {
         const overview = results[0] as { kpis: ShoppingKpis; charts: ShoppingChartData };
         setKpis(overview.kpis);
         setCharts(overview.charts);
-        if (hasFullAccess && results.length >= 6) {
+        if (hasFullAccess && results.length >= 4) {
           setOwnProducts(results[1] as ShoppingProduct[]);
           setCompetitorProducts(results[2] as ShoppingProduct[]);
           setCompetitorSummary(results[3] as CompetitorShoppingSummary[]);
-          setShelf(results[4] as ShoppingShelf | 'failed');
-          setCatalogTable(results[5] as ShoppingProducts | null | 'failed');
         }
       }
     } finally {
@@ -281,6 +269,38 @@ export default function ShoppingPage() {
     if (!shoppingMarket.ready) return;
     void loadData();
   }, [loadData, shoppingMarket.ready]);
+
+  // The Shelf (ECOM-006) and the Products table (ECOM-007) read once per
+  // brand and filters, apart from the rest: neither waits for the other, nor
+  // for the older tables. The Products table reads when its tab, or
+  // Readiness, is open.
+  const readKey = `${activeBrandId}:${JSON.stringify(filters)}`;
+  const canRead = !!activeBrandId && hasFullAccess && shoppingMarket.ready;
+  // Null while it reads.
+  const shelf: ShoppingShelf | 'failed' | null =
+    useKeyedRead(
+      canRead,
+      readKey,
+      () => getShoppingShelf(activeBrandId!, filters),
+      'the shelves',
+    ) ?? null;
+  const productsRead = useKeyedRead(
+    canRead && (activeTab === 'products' || activeTab === 'readiness'),
+    readKey,
+    () => getShoppingProducts(activeBrandId!, filters),
+    'the products',
+  );
+  const productsLoading = productsRead === undefined;
+  // "Why not you?" on the Shelf needs the catalog's products, not the
+  // window's numbers: read once per brand there, apart from the table.
+  const shelfProducts = useKeyedRead(
+    canRead && activeTab === 'shelf' && !productsRead,
+    activeBrandId ?? '',
+    () => getShoppingProducts(activeBrandId!, filters),
+    'the products for the shelf',
+  );
+  // Null for a brand without a catalog, and while it reads.
+  const catalogTable: ShoppingProducts | null | 'failed' = productsRead ?? null;
 
   // The Categories tab reads when it's open, once per brand and filters.
   const categoriesKey = `${activeBrandId}:${JSON.stringify(filters)}`;
@@ -477,12 +497,16 @@ export default function ShoppingPage() {
                     />
                   </div>
                   <ShelfRows
-                    shelf={tableLoading || shelf === 'failed' ? null : shelf}
+                    shelf={shelf === 'failed' ? null : shelf}
                     platforms={filterOpts.platforms}
                     platform={platform}
                     onPlatform={setPlatform}
                     products={
-                      catalogTable && catalogTable !== 'failed' ? catalogTable.rows : undefined
+                      catalogTable && catalogTable !== 'failed'
+                        ? catalogTable.rows
+                        : shelfProducts && shelfProducts !== 'failed'
+                          ? shelfProducts.rows
+                          : undefined
                     }
                   />
                   <h2 className="pt-2 text-sm font-semibold">{t('shelf.trends')}</h2>
@@ -519,17 +543,21 @@ export default function ShoppingPage() {
             </TabsContent>
 
             <TabsContent value="products" className="space-y-6">
-              {hasFullAccess && (tableLoading || (catalogTable && catalogTable !== 'failed')) ? (
+              {hasFullAccess && (productsLoading || (catalogTable && catalogTable !== 'failed')) ? (
                 <ProductsTable
                   products={catalogTable === 'failed' ? null : catalogTable}
-                  loading={tableLoading}
+                  loading={productsLoading}
                 />
               ) : hasFullAccess ? (
                 <>
                   {/* No catalog yet: the products AI showed, by title, until one is connected. */}
-                  <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                    {catalogTable === 'failed' ? t('products.failed') : t('products.noCatalog')}
-                  </p>
+                  {catalogTable === 'failed' ? (
+                    <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                      {t('products.failed')}
+                    </p>
+                  ) : (
+                    <CatalogNote brandId={activeBrandId} />
+                  )}
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{t('tabMyProducts')}</h2>
                     <Button
@@ -609,6 +637,11 @@ export default function ShoppingPage() {
                       ? { from: amazonShareDropAlert.fromShare, to: amazonShareDropAlert.toShare }
                       : null,
                   })}
+                  loading={!sources.loaded || productsLoading}
+                  unread={[
+                    ...(sources.loaded && sources.catalog === null ? (['sources'] as const) : []),
+                    ...(catalogTable === 'failed' ? (['products'] as const) : []),
+                  ]}
                   onProducts={() => changeTab('products')}
                 >
                   {showOpenAiIndex && (
