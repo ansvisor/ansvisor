@@ -1,9 +1,11 @@
 /**
  * The daily auto-audit sweep (SA-006). For each organization whose run is
  * due, it claims the run (one site_audit_auto_runs row per org, period and
- * run day, so a second sweep the same day does nothing), audits the top
- * pages of its brands' Opportunities inboxes, and once every audit has
- * finished, records the run and, when the team asked for it, e-mails them.
+ * run day, so a second sweep the same day does nothing), audits the pages
+ * its brands' Site Audit fixes were completed on and not audited or tried
+ * since (learning B7), then the top pages of their Opportunities inboxes,
+ * and once every audit has finished, records the run and, when the team
+ * asked for it, e-mails them.
  *
  * The inbox read and the audit start live in routes/audits.js; they're
  * passed in, so this module doesn't import a route (and tests stand them in).
@@ -185,9 +187,10 @@ const FIXED_PER_ACTION = 20;
 
 /**
  * Pages a Site Audit fix (an Action Center action of the fix category) was
- * completed on in the last 30 days and that no audit has read since, the
- * most recently fixed first (learning B7). Its targets name the pages, by
- * their addresses, on the action's brand's own domains and not left out of
+ * completed on in the last 30 days and that no audit has read or tried
+ * since (any audit of the brand's, finished or not), the most recently
+ * fixed first (learning B7). Its targets name the pages, by their
+ * addresses, on the action's brand's own domains and not left out of
  * auto-audits (excluded, or under an exclude pattern and not pinned); one
  * fixed twice counts from its last fix.
  *

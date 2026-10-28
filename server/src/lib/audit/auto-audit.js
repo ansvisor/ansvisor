@@ -1,10 +1,11 @@
 /**
- * Site Audit auto-audit (SA-006): 25% of the monthly quota audits the
- * Opportunities inbox's top pages by itself, in five runs of 5% on days 1,
- * 7, 14, 21 and 28 of the billing month. Pure: the schedule, the share kept
- * for the runs to come, and which pages a run takes. auto-audit-sweep.js
- * reads and writes; plan-guard.js keeps the reserved share out of the
- * user's pool.
+ * Site Audit auto-audit (SA-006): 25% of the monthly quota audits pages by
+ * itself, in five runs of 5% on days 1, 7, 14, 21 and 28 of the billing
+ * month: first the pages a Site Audit fix was completed on and not audited
+ * or tried since (learning B7), then the Opportunities inbox's top pages.
+ * Pure: the schedule, the share kept for the runs to come, and which pages a
+ * run takes. auto-audit-sweep.js reads and writes; plan-guard.js keeps the
+ * reserved share out of the user's pool.
  */
 
 export const AUTO_AUDIT = Object.freeze({
@@ -100,7 +101,7 @@ export const FIXED_SHARE = 0.5;
 
 /**
  * The pages a run audits. First the pages a Site Audit fix was completed on
- * since they were last audited (learning B7), the most recently fixed first,
+ * and not audited or tried since (learning B7), the most recently fixed first,
  * up to FIXED_SHARE of the run: auditing them again says whether the fix
  * took, which the Action Center reads as the fix's result, a month sooner
  * than the 30-day rest below would. Then, from every brand's inbox (ordered
