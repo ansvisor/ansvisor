@@ -134,6 +134,61 @@ describe('ColumnsPanel', () => {
     expect(views).toEqual({ mine: null, brand });
   });
 
+  it("keeps a member's change off the brand's view when they have none of their own", async () => {
+    canManage = false;
+    const brand = toggleColumn(DEFAULT_COLUMNS_VIEW, 'work', false);
+    views = { mine: null, brand };
+    await open();
+    expect(document.body.textContent).toContain('Showing the view shared on Northwind Coffee.');
+    await act(async () =>
+      (item('Competition').querySelector('[role="checkbox"]') as HTMLElement).click(),
+    );
+    expect(views).toEqual({ mine: toggleColumn(brand, 'competition', false), brand });
+    await act(async () => vi.advanceTimersByTime(700));
+    expect(actions.savePromptTableView).toHaveBeenCalledExactlyOnceWith(
+      BRAND,
+      toggleColumn(brand, 'competition', false),
+      'mine',
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("keeps a manager's change for them alone until they share it", async () => {
+    const brand = toggleColumn(DEFAULT_COLUMNS_VIEW, 'work', false);
+    views = { mine: null, brand };
+    await open();
+    const share = document.getElementById('prompt-columns-share') as HTMLElement;
+    expect(share.getAttribute('aria-checked')).toBe('false');
+    await act(async () =>
+      (item('Competition').querySelector('[role="checkbox"]') as HTMLElement).click(),
+    );
+    expect(views.brand).toEqual(brand);
+    await act(async () => vi.advanceTimersByTime(700));
+    expect(actions.savePromptTableView).toHaveBeenCalledExactlyOnceWith(
+      BRAND,
+      toggleColumn(brand, 'competition', false),
+      'mine',
+    );
+  });
+
+  it("keeps a shared view linked: the manager's later changes update the brand's too", async () => {
+    await open();
+    await act(async () => (document.getElementById('prompt-columns-share') as HTMLElement).click());
+    // Saved as theirs too, so the link holds after a reload.
+    expect(actions.savePromptTableView).toHaveBeenCalledWith(BRAND, DEFAULT_COLUMNS_VIEW, 'brand');
+    expect(actions.savePromptTableView).toHaveBeenCalledWith(BRAND, DEFAULT_COLUMNS_VIEW, 'mine');
+    expect(document.body.textContent).toContain('your changes also update the brand');
+    actions.savePromptTableView.mockClear();
+    await act(async () =>
+      (item('Competition').querySelector('[role="checkbox"]') as HTMLElement).click(),
+    );
+    const next = toggleColumn(DEFAULT_COLUMNS_VIEW, 'competition', false);
+    expect(views).toEqual({ mine: next, brand: next });
+    await act(async () => vi.advanceTimersByTime(700));
+    expect(actions.savePromptTableView).toHaveBeenCalledWith(BRAND, next, 'mine');
+    expect(actions.savePromptTableView).toHaveBeenCalledWith(BRAND, next, 'brand');
+  });
+
   it('says so when a view could not be saved', async () => {
     actions.savePromptTableView.mockResolvedValue({ ok: false, error: 'forbidden' });
     await open();
