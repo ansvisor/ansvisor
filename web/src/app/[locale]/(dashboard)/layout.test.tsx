@@ -51,6 +51,7 @@ vi.mock('@/i18n/navigation', () => ({
 vi.mock('@/lib/demo/demo-client', () => ({
   ensureDemoBrand: vi.fn(),
   prepareDemoBrand: vi.fn(async () => ({ ok: false, status: 0 })),
+  demoPreparation: () => null,
   setDemoHidden: vi.fn(),
 }));
 

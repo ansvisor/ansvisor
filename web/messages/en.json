@@ -312,6 +312,26 @@
     },
     "seeTheDemo": "See the demo",
     "settingUp": "Setting up the demo…",
+    "setup": {
+      "title": "Preparing your demo",
+      "body": "{brand} is a made-up coffee brand with a month of sample data. Nothing here runs or costs anything.",
+      "steps": {
+        "brand": "Setting up {brand}",
+        "answers": "Preparing sample AI answers from {platforms} platforms",
+        "citations": "Adding the sources they cite",
+        "mentions": "Scoring mentions and sentiment",
+        "audit": "Auditing the site's pages",
+        "actions": "Building the Action Center",
+        "content": "Finding content opportunities",
+        "reports": "Preparing reports"
+      },
+      "usual": "This takes a few seconds the first time.",
+      "slow": "This is taking longer than usual.",
+      "ready": "Ready. Opening the Action Center…",
+      "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "retry": "Try again",
+      "close": "Close"
+    },
     "chat": {
       "soon": "Soon (next week)",
       "note": "Chat arrives next week. This is a preview of it.",

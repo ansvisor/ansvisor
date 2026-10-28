@@ -93,6 +93,8 @@ import {
 } from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
 import { ExploreDemoCard } from '@/components/onboarding/explore-demo-card';
+import { usePreloadDemo } from '@/hooks/use-explore-demo';
+import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { DASHBOARD_HOME } from '@/config/home';
 
@@ -414,6 +416,29 @@ export default function OnboardingPage() {
     };
   }, [step, organizationId]);
 
+  // A new workspace's demo brand is built as soon as the organization exists,
+  // while its admin sets up their own brand: the first build takes a few
+  // seconds, and "Explore the demo" on the plan step then opens at once.
+  const [demoAhead, setDemoAhead] = useState(false);
+  useEffect(() => {
+    if (!isCloud() || !organizationId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    void supabase.auth
+      .getUser()
+      .then(({ data: { user } }) =>
+        user ? wantsDemoAhead(supabase, { organizationId, userId: user.id }) : false,
+      )
+      .catch(() => false)
+      .then((wanted) => {
+        if (!cancelled) setDemoAhead(wanted);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId]);
+  usePreloadDemo(demoAhead);
+
   // What the dashboard preview shows when the plan step is reached by resuming
   // (a cancelled checkout, a lapsed trial) rather than by walking the steps, so
   // the wizard state it normally reads is empty. Kept apart from that state:
@@ -521,10 +546,12 @@ export default function OnboardingPage() {
 
         if (profile?.organization_id) {
           setOrganizationId(profile.organization_id);
+          // The person's own brand: the demo brand may be built already (demo ahead).
           const { data: brands } = await supabase
             .from('brands')
             .select('*, brand_domains(*)')
             .eq('organization_id', profile.organization_id)
+            .eq('is_demo', false)
             .limit(1);
 
           if (brands?.length) {
