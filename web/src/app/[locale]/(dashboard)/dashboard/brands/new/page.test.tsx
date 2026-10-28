@@ -25,7 +25,8 @@ vi.mock('@/lib/actions/competitor', () => ({ addCompetitor: vi.fn() }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
 const suggestTopics = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/ai-brand-setup', () => ({
+vi.mock('@/lib/ai-brand-setup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai-brand-setup')>()),
   suggestTopics,
   generatePromptsFromTopics: vi.fn(),
   suggestCompetitors: vi.fn(),
