@@ -4,6 +4,12 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Check, ArrowUp, ArrowDown, Mail, ExternalLink, Repeat, ShoppingCart } from 'lucide-react';
+import {
+  PlanPrice,
+  PlanStartButtons,
+  useFirstMonthOffer,
+  useStartCheckout,
+} from '@/components/billing/plan-start';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +27,7 @@ import {
   PLANS,
   PRICING_URL,
   SUBSCRIBABLE_PLANS,
+  firstMonthOfferOn,
   type PlanId,
 } from '@/config/plans';
 import {
@@ -28,8 +35,11 @@ import {
   annualSaving,
   periodPrice,
   subscriptionEnded,
+  takesPromoCode,
   type BillingInterval,
 } from '@/lib/billing/plan-purchase';
+import type { PromoOffer } from '@/lib/billing/promo-code';
+import { TRIAL_DAYS } from '@/lib/billing/trial';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
@@ -51,11 +61,22 @@ interface PlanSwitcherProps {
   onUpdate: (data: SubscriptionData) => void;
   /** The organization a new subscription is for, once the old one has ended. */
   organizationId?: string | null;
+  /**
+   * The workspace never had a plan: with no plan active, its cards offer the
+   * free trial beside Buy now, as the plan dialog does.
+   */
+  trialOffered?: boolean;
 }
 
-export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: PlanSwitcherProps) {
+export function PlanSwitcher({
+  subscription,
+  onUpdate,
+  organizationId = null,
+  trialOffered = false,
+}: PlanSwitcherProps) {
   const t = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
+  const tPlans = useTranslations('readOnly.plans');
   const planFeatures = usePlanFeatures();
   // Buying or changing the plan charges the organization's card: admins only,
   // as the subscription route checks.
@@ -68,8 +89,6 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
   // The plan a card's button asked for: bought now during a trial, or changed to.
   const [pending, setPending] = useState<{ planId: PlanId; buy: boolean } | null>(null);
   const [promoCode, setPromoCode] = useState(FIRST_MONTH_CODE);
-  // The plan whose Checkout is opening, once the subscription has ended.
-  const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
 
   const currentPlanId = subscription.planId as PlanId;
   const currentInterval: BillingInterval = subscription.interval === 'year' ? 'year' : 'month';
@@ -81,6 +100,21 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
   // until then).
   const ended = subscriptionEnded(subscription.status);
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
+  // With no plan active, a card starts one as the plan dialog does: Buy now,
+  // with the first-month offer on a monthly plan, and the free trial for a
+  // workspace that never had a plan.
+  const [offer, setOffer] = useState<PromoOffer | null>(null);
+  useFirstMonthOffer(ended && canAdmin && firstMonthOfferOn(), setOffer);
+  const discounted = offer && takesPromoCode(period) ? offer : null;
+  const { checkout, start } = useStartCheckout({
+    organizationId,
+    period,
+    // Stripe turned the code down since it was checked: the plain prices.
+    onCodeRefused: (code) => {
+      setOffer(null);
+      toast.error(tPlans('promo.invalid', { code: code.toUpperCase() }));
+    },
+  });
 
   async function handleConfirm() {
     if (!pending) return;
@@ -121,32 +155,6 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
       toast.error(err instanceof Error ? err.message : 'Failed to change plan');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleCheckout(planId: PlanId) {
-    if (!organizationId) return;
-    setCheckoutPlan(planId);
-    try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // A plan that ended starts again now: the trial was the first subscription's.
-        body: JSON.stringify({
-          planId,
-          organizationId,
-          interval: period,
-          returnTo: 'billing',
-          mode: 'buy',
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) throw new Error(data.error || t('checkoutFailed'));
-      window.location.href = data.url;
-      // No loading reset — we're navigating away to Stripe.
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('checkoutFailed'));
-      setCheckoutPlan(null);
     }
   }
 
@@ -238,7 +246,11 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
   return (
     <div className="space-y-4">
       {!canAdmin && <p className="text-sm text-muted-foreground">{t('planAdminOnly')}</p>}
-      {ended && canAdmin && <p className="text-sm text-muted-foreground">{t('planEnded')}</p>}
+      {ended && canAdmin && (
+        <p className="text-sm text-muted-foreground">
+          {trialOffered ? t('planNotStarted', { days: TRIAL_DAYS }) : t('planEnded')}
+        </p>
+      )}
       {/* Billing period: a year up front saves 20% */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
@@ -285,11 +297,11 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
           const price = periodPrice(planId, period);
           const fullYear = plan.pricing ? plan.pricing.monthly * 12 : null;
           const planSaving = annualSaving(planId);
-          // What its button does: start a new subscription once the old one
-          // has ended; buy it now during a trial; otherwise switch the period
-          // of the current plan, or change to this one.
+          // What its button does: none once the plan has ended (the card's
+          // ways to start, below); buy it now during a trial; otherwise switch
+          // the period of the current plan, or change to this one.
           const action = ended
-            ? 'subscribe'
+            ? null
             : trialing
               ? 'buy'
               : isCurrent
@@ -316,29 +328,36 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
                 <p className="text-sm text-muted-foreground">{tCards(`${planId}.tagline`)}</p>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  {period === 'year' && fullYear != null && price != null && (
-                    <span className="text-base text-muted-foreground line-through">
-                      <span className="sr-only">{t('regularPrice')} </span>${formatNumber(fullYear)}
+                {ended ? (
+                  <div className="mb-4">
+                    <PlanPrice planId={planId} period={period} discounted={discounted} />
+                  </div>
+                ) : (
+                  <div className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    {period === 'year' && fullYear != null && price != null && (
+                      <span className="text-base text-muted-foreground line-through">
+                        <span className="sr-only">{t('regularPrice')} </span>$
+                        {formatNumber(fullYear)}
+                      </span>
+                    )}
+                    <span>
+                      <span className="text-2xl font-bold">
+                        {price != null ? `$${formatNumber(price)}` : '—'}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        /{period === 'year' ? t('year') : t('month')}
+                      </span>
                     </span>
-                  )}
-                  <span>
-                    <span className="text-2xl font-bold">
-                      {price != null ? `$${formatNumber(price)}` : '—'}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      /{period === 'year' ? t('year') : t('month')}
-                    </span>
-                  </span>
-                  {period === 'year' && planSaving != null && (
-                    <Badge
-                      variant="outline"
-                      className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400"
-                    >
-                      {t('savePercent', { percent: planSaving })}
-                    </Badge>
-                  )}
-                </div>
+                    {period === 'year' && planSaving != null && (
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400"
+                      >
+                        {t('savePercent', { percent: planSaving })}
+                      </Badge>
+                    )}
+                  </div>
+                )}
 
                 <ul className="mb-4 space-y-1.5 text-sm">
                   {planFeatures(planId).map((feature) => (
@@ -358,45 +377,39 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
                   ))}
                 </ul>
 
+                {ended && canAdmin && (
+                  <PlanStartButtons
+                    planId={planId}
+                    period={period}
+                    discounted={discounted}
+                    trialOffered={trialOffered}
+                    opening={checkout?.planId === planId ? checkout.mode : null}
+                    disabled={price == null || !organizationId || checkout != null}
+                    // A code goes with buying now only: the trial comes without an offer.
+                    onStart={(mode) =>
+                      void start(planId, mode, mode === 'buy' ? discounted?.code : undefined)
+                    }
+                  />
+                )}
                 {action && canAdmin && (
                   <Button
                     className="w-full"
                     variant={
-                      action === 'subscribe'
-                        ? plan.highlighted
+                      action === 'buy'
+                        ? isCurrent
                           ? 'default'
                           : 'outline'
-                        : action === 'buy'
-                          ? isCurrent
-                            ? 'default'
-                            : 'outline'
-                          : upgrade
-                            ? 'default'
-                            : 'outline'
+                        : upgrade
+                          ? 'default'
+                          : 'outline'
                     }
-                    disabled={
-                      price == null ||
-                      (action === 'subscribe' && (!organizationId || checkoutPlan != null))
-                    }
+                    disabled={price == null}
                     onClick={() => {
-                      if (action === 'subscribe') {
-                        void handleCheckout(planId);
-                        return;
-                      }
                       setPromoCode(FIRST_MONTH_CODE);
                       setPending({ planId, buy: action === 'buy' });
                     }}
                   >
-                    {action === 'subscribe' ? (
-                      checkoutPlan === planId ? (
-                        t('processing')
-                      ) : (
-                        <>
-                          <ShoppingCart className="mr-1 h-4 w-4" />
-                          {t('choosePlanFor', { plan: plan.name })}
-                        </>
-                      )
-                    ) : action === 'buy' ? (
+                    {action === 'buy' ? (
                       <>
                         <ShoppingCart className="mr-1 h-4 w-4" />
                         {t('buyPlanNow', { plan: plan.name })}

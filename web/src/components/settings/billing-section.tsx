@@ -10,6 +10,7 @@ import { PlanSwitcher } from '@/components/settings/plan-switcher';
 import { InvoiceList } from '@/components/settings/invoice-list';
 import { AiUsageCard } from '@/components/settings/ai-usage-card';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { createClient } from '@/lib/supabase/client';
 import { PLANS, type PlanId } from '@/config/plans';
 import { subscriptionEnded } from '@/lib/billing/plan-purchase';
@@ -55,7 +56,11 @@ function statusLabel(status: string) {
 
 export function BillingSection() {
   const t = useTranslations('settings');
-  const { planId: contextPlanId } = usePlanContext();
+  const tOffer = useTranslations('planOffer');
+  // Whether the workspace ever had a Stripe subscription, from the layout.
+  const { neverSubscribed } = useDemoBrand();
+  // The organization's own plan: the demo brand's Growth is only how it is shown.
+  const { ownPlanId: contextPlanId } = usePlanContext();
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   // For a new subscription's Checkout, once the old one has ended.
   const [organizationId, setOrganizationId] = useState<string | null>(null);
@@ -159,6 +164,9 @@ export function BillingSection() {
 
   const plan = PLANS[subscription.planId as PlanId] ?? PLANS.starter;
   const ended = subscriptionEnded(subscription.status);
+  // No plan was ever started: no plan to name, and the cards offer the free
+  // trial beside Buy now. (An Enterprise plan set up without Stripe is active.)
+  const noPlanYet = ended && neverSubscribed;
 
   return (
     <div className="space-y-6">
@@ -169,14 +177,21 @@ export function BillingSection() {
           <CardDescription>{t('billingDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold">{plan.name}</span>
-            <Badge variant={statusVariant(subscription.status)}>
-              {statusLabel(subscription.status)}
-            </Badge>
-          </div>
+          {noPlanYet ? (
+            <div className="space-y-1">
+              <p className="text-lg font-semibold">{t('noPlanYet')}</p>
+              <p className="text-sm text-muted-foreground">{t('noPlanYetHint')}</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-semibold">{plan.name}</span>
+              <Badge variant={statusVariant(subscription.status)}>
+                {statusLabel(subscription.status)}
+              </Badge>
+            </div>
+          )}
 
-          {subscription.priceAmount != null && (
+          {subscription.priceAmount != null && !noPlanYet && (
             <p className="text-sm text-muted-foreground">
               ${subscription.priceAmount}/
               {subscription.interval === 'year' ? t('year') : t('month')}
@@ -202,13 +217,20 @@ export function BillingSection() {
       {/* Plan Switcher */}
       <Card>
         <CardHeader>
-          <CardTitle>{ended ? t('choosePlanTitle') : t('changePlan')}</CardTitle>
+          <CardTitle>
+            {noPlanYet
+              ? tOffer('chooseHowToStart')
+              : ended
+                ? t('choosePlanTitle')
+                : t('changePlan')}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <PlanSwitcher
             subscription={subscription}
             onUpdate={(data) => setSubscription({ ...subscription, ...data })}
             organizationId={organizationId}
+            trialOffered={noPlanYet}
           />
         </CardContent>
       </Card>

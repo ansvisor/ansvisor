@@ -209,7 +209,8 @@ describe('ChoosePlanDialog', () => {
     expect(price('growth')).toContain('$124.50first month');
     expect(buy('growth').textContent).toBe('Buy now');
     expect(buy('starter').textContent).toBe('Buy now');
-    expect(terms('starter', 'buy-terms')).toBe('$24.50 first month, then $49/month');
+    // The first month's price shows once, on the card: not again under Buy now.
+    expect(terms('starter', 'buy-terms')).toBeNull();
     expect(note()).toContain('Code applied. You pay 50% less for the first month');
   });
 
@@ -352,7 +353,8 @@ describe('ChoosePlanDialog with the first-month offer on', () => {
     );
     expect(sent('/api/stripe/promo-code')).toEqual({ code: 'SAVE50' });
     expect(buy('starter').textContent).toBe('Buy now');
-    expect(terms('starter', 'buy-terms')).toBe('$24.50 first month, then $49/month');
+    // The first month's price shows once, on the card: not again under Buy now.
+    expect(terms('starter', 'buy-terms')).toBeNull();
     expect(card('starter').querySelector('[data-slot="limited-offer"]')?.textContent).toBe(
       'Limited offer',
     );
@@ -414,9 +416,8 @@ describe('ChoosePlanDialog from the demo brand', () => {
     );
     // Buy now: the first month at half price, the full plan today.
     expect(buy('starter').textContent).toBe('Buy now');
-    expect(terms('starter', 'buy-terms')).toBe(
-      '$24.50 first month, then $49/monthFull plan from day one',
-    );
+    expect(terms('starter', 'buy-terms')).toBe('Full plan from day one');
+    expect(price('starter')).toContain('$24.50first monththen $49/mo');
     // The trial: no offer, limited AI usage.
     expect(trial('starter')?.textContent).toBe('Start 14-day free trial');
     expect(terms('starter', 'trial-terms')).toBe(
