@@ -21,6 +21,7 @@ import {
   sendPagesToCms,
   type CmsDelivery,
   type CmsSendError,
+  type CmsTarget,
 } from '@/lib/content/cms-send-client';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
 import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from '@/components/content/cms-target';
@@ -66,6 +67,8 @@ interface Refusal {
   code: CmsSendError;
   field: string | null;
   title: string | null;
+  /** Where the pages were going. */
+  target: CmsTarget;
 }
 
 type Phase =
@@ -114,6 +117,7 @@ export function BulkSendDialog({
   const [attempt, setAttempt] = useState(0);
   const {
     webflow,
+    wordpress,
     target,
     pick,
     sent: keepTarget,
@@ -124,6 +128,7 @@ export function BulkSendDialog({
   const collection = webflow?.ready
     ? webflow.collection || tEditor('send.target.webflow.collection')
     : '';
+  const site = wordpress?.ready ? wordpress.site : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +238,7 @@ export function BulkSendDialog({
           code: result.code,
           field: result.field,
           title: Number.isInteger(index) ? (group[index]?.title ?? null) : null,
+          target,
         };
         notSent += group.length;
         continue;
@@ -293,7 +299,7 @@ export function BulkSendDialog({
     );
   };
 
-  const failureText = ({ code, field, title }: Refusal) => {
+  const failureText = ({ code, field, title, target: to }: Refusal) => {
     if (code === 'session' || code === 'workspace' || code === 'busy' || code === 'subscription') {
       return tFailure(code);
     }
@@ -306,10 +312,11 @@ export function BulkSendDialog({
         : tEditor('send.errors.invalidField', { field: named });
     }
     // No page named: any of them may be the one on its way.
-    if (code === 'in_progress') return t('inProgress');
-    // Webflow not ready sent the pages to the webhook: what to fix is Webflow.
-    if (code === 'no_webhook' && webflow && !webflow.ready) {
-      return tEditor('send.errors.no_webhookWebflow');
+    if (code === 'in_progress') return t(to === 'wordpress' ? 'inProgressWordPress' : 'inProgress');
+    // No CMS ready sent the pages to the webhook: what to fix is the one connected.
+    if (code === 'no_webhook' && !webflow?.ready && !wordpress?.ready) {
+      if (webflow) return tEditor('send.errors.no_webhookWebflow');
+      if (wordpress) return tEditor('send.errors.no_webhookWordPress');
     }
     return tEditor(`send.errors.${code}`);
   };
@@ -335,15 +342,18 @@ export function BulkSendDialog({
               ? tEditor('send.descriptionReading')
               : target === 'webflow'
                 ? t('descriptionWebflow', { collection })
-                : t('description')}
+                : target === 'wordpress'
+                  ? t('descriptionWordPress', { site })
+                  : t('description')}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Where the pages go, before they go: Webflow once Settings has it ready. */}
-        {webflow && target && !after && (
+        {/* Where the pages go, before they go: Webflow or WordPress once Settings has it ready. */}
+        {(webflow || wordpress) && target && !after && (
           <CmsTargetPicker
             value={target}
             webflow={webflow}
+            wordpress={wordpress}
             disabled={phase.kind === 'sending'}
             onChange={(next) => {
               pick(next);
@@ -353,6 +363,7 @@ export function BulkSendDialog({
         )}
         {targetUnchecked && !after && (
           <CmsTargetUnchecked
+            target={targetUnchecked}
             reading={targetReading}
             onRetry={retryTarget}
             disabled={phase.kind === 'sending'}
