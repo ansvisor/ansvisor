@@ -2395,7 +2395,10 @@ export async function getPromptVolumesFor(
       prompts: { text: string } | Array<{ text: string }> | null;
     }> | null) ?? [];
 
-  const demand = await readPromptDemand(rows.map((r) => r.prompt_id));
+  const demand = await readPromptDemand(
+    params.brandId,
+    rows.map((r) => r.prompt_id),
+  );
   const now = new Date();
   return rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
