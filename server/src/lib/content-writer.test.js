@@ -1172,12 +1172,13 @@ describe('the write prompt', () => {
   });
 
   it('tells an existing page’s suggestions how long it is now, beside its Length', () => {
-    const prompt = (bodyHtml, passages = [{ tag: 'p', text: 'Brew it slowly.' }]) =>
+    const LENGTH = [{ key: 'length', name: 'Length' }];
+    const prompt = (bodyHtml, passages = [{ tag: 'p', text: 'Brew it slowly.' }], rules = LENGTH) =>
       buildWritePrompt({
         brand,
         draft: draftRow({ body_html: bodyHtml }),
         brief: 'No brief.',
-        input: { sources: { length: 3000 }, rules: [], textRules: [] },
+        input: { sources: { length: 3000 }, rules, textRules: [] },
         passages,
         lockedKeys: new Set(),
       });
@@ -1190,6 +1191,11 @@ describe('the write prompt', () => {
     );
     // A new page has no length yet.
     expect(prompt('', null)).toContain('Length: about 3000 characters.\n');
+    // Length off keeps the page's length: no cuts asked for it.
+    const off = prompt(`<p>${'x'.repeat(5353)}</p>`, undefined, []);
+    expect(off).toContain('Length: about 3000 characters.\n');
+    expect(off).not.toContain('suggest cuts');
+    expect(off).not.toContain('characters now');
   });
 });
 

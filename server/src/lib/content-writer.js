@@ -334,8 +334,13 @@ export function buildWritePrompt({
   current = null,
 }) {
   const { sources } = input;
-  // An existing page's length now: a rewrite's page says it in its own lines.
-  const now = passages && !current ? textLength(draft.body_html ?? '') : null;
+  // An existing page's length now, when its Length is among the rules (as
+  // overLengthLine): Length off keeps the page's length. A rewrite's page
+  // says it in its own lines.
+  const now =
+    passages && !current && input.rules.some((r) => r.key === 'length')
+      ? textLength(draft.body_html ?? '')
+      : null;
   // The data, numbered (S1, S2…) as the agent cites it (CE-033).
   const of = (kind) => numbered.filter((s) => s.kind === kind);
   const rules = input.rules.map((r) => `${r.key}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
