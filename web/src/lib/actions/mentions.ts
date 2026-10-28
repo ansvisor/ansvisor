@@ -17,6 +17,7 @@ import {
 import { parseMentionsOverview, type MentionsOverview } from '@/lib/mentions-overview';
 import { parseMentionsPerception, type MentionsPerception } from '@/lib/mentions-perception';
 import type { Citation } from '@/types';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * The Mentions & Sentiment Overview's figures (MS-06) for a window and the
@@ -215,6 +216,7 @@ export async function overrideMentionSentiment(
   | { changed: boolean; sentiment: MentionSentiment; override: SentimentOverride | null }
   | { error: 'forbidden' | 'invalid' | 'missing' | 'unknown'; message: string }
 > {
+  await assertWritable();
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('override_mention_sentiment', {
     p_result_id: resultId,
