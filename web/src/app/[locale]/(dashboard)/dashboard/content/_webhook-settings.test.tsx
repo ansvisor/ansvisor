@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { WebhookTestResult } from '@/lib/actions/content';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 
 const getWebhookConfig = vi.hoisted(() => vi.fn());
 const testWebhook = vi.hoisted(() => vi.fn());
@@ -28,11 +29,13 @@ const { WebhookSettingsDialog } = await import('./_webhook-settings');
 let container: HTMLDivElement;
 let root: Root;
 
-async function render() {
+async function render(role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <WebhookSettingsDialog open onOpenChange={vi.fn()} brandId="brand-1" />
+        <RoleProvider role={role}>
+          <WebhookSettingsDialog open onOpenChange={vi.fn()} brandId="brand-1" />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -72,6 +75,28 @@ describe('WebhookSettingsDialog – Test Webhook', () => {
       'Webhook responded successfully!',
     );
     expect(testWebhook).toHaveBeenCalledWith('brand-1', 'https://hooks.example/abc', 'shh');
+  });
+
+  it('shows a member the webhook, and why it can’t be changed or tested, before anything is pressed (#1605)', async () => {
+    await render('analyst');
+    expect(dialog().textContent).toContain(
+      'Only admins and managers can change or test this webhook.',
+    );
+    expect(button('Test Webhook').disabled).toBe(true);
+    expect(button('Save Webhook').disabled).toBe(true);
+    expect((dialog().querySelector('#webhook-url') as HTMLInputElement).value).toBe(
+      'https://hooks.example/abc',
+    );
+    expect((dialog().querySelector('#webhook-url') as HTMLInputElement).disabled).toBe(true);
+    const toggle = dialog().querySelector('[role="switch"]')!;
+    expect(toggle.hasAttribute('disabled')).toBe(true);
+    // Dimmed, with the not-allowed cursor, as the disabled checkboxes beside it.
+    expect(toggle.className).toContain('disabled:cursor-not-allowed');
+    expect(toggle.className).toContain('disabled:opacity-50');
+
+    await render('admin');
+    expect(dialog().textContent).not.toContain('Only admins and managers can change');
+    expect(button('Test Webhook').disabled).toBe(false);
   });
 
   it('says only admins and managers can test', async () => {
