@@ -3,14 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Ansvisor demo: follow the app's light/dark theme. Inside the app's frame, read the parent page's <html class="dark">
+   (same origin) and keep watching it; opened on its own, follow the system setting. Dark sets <html data-theme="dark">. */
+(function(){var d=document.documentElement,p=null,mq=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
+try{if(window.parent!==window)p=window.parent.document.documentElement}catch(e){p=null}
+function apply(){var dark=p?p.classList.contains('dark'):!!(mq&&mq.matches);if(dark)d.setAttribute('data-theme','dark');else d.removeAttribute('data-theme')}
+apply();
+if(p&&window.MutationObserver)new MutationObserver(apply).observe(p,{attributes:true,attributeFilter:['class']});
+else if(mq)(mq.addEventListener?mq.addEventListener('change',apply):mq.addListener(apply))})();
+</script>
 <title>Chat · Editor in Chat (mockup)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{color-scheme:light}
 body{margin:0;font-family:Inter,system-ui,sans-serif;background:#efeeec;color:#1c1a17}
-body.t-light{--bg:#fafaf9;--card:#ffffff;--ink:#1c1a17;--muted:#5f5d59;--line:#e7e5e2;--soft:#f4f3f1;--rail:#f7f7f6;--primary:#1c1a17;--onprimary:#ffffff;--green:#15803d;--greenbg:#ecfdf3;--amber:#a14a07;--amberbg:#fff7ed;--red:#b91c1c;--redbg:#fef2f2;--blue:#1d4ed8;--bluebg:#eff6ff;--scrim:rgba(28,26,23,0.35);--tileA:#e9e4dc;--tileB:#d9d3c9;--tileC:#cfd8dc;--focus:#2563eb;--page:#efeeec}
-body.t-dark{color-scheme:dark;--bg:#161514;--card:#1f1e1c;--ink:#f5f4f2;--muted:#b3b0ab;--line:#3a3835;--soft:#292826;--rail:#1b1a19;--primary:#f5f4f2;--onprimary:#161514;--green:#4ade80;--greenbg:#12261a;--amber:#fbbf24;--amberbg:#2a2010;--red:#f87171;--redbg:#2a1414;--blue:#93c5fd;--bluebg:#16213a;--scrim:rgba(0,0,0,0.55);--tileA:#3a3631;--tileB:#4a453e;--tileC:#34404a;--focus:#60a5fa;--page:#0f0e0d}
+/* Ansvisor demo: the light palette is the default; dark follows <html data-theme="dark"> (set from the app's theme) */
+body{--bg:#fafaf9;--card:#ffffff;--ink:#1c1a17;--muted:#5f5d59;--line:#e7e5e2;--soft:#f4f3f1;--rail:#f7f7f6;--primary:#1c1a17;--onprimary:#ffffff;--green:#15803d;--greenbg:#ecfdf3;--amber:#a14a07;--amberbg:#fff7ed;--red:#b91c1c;--redbg:#fef2f2;--blue:#1d4ed8;--bluebg:#eff6ff;--scrim:rgba(28,26,23,0.35);--tileA:#e9e4dc;--tileB:#d9d3c9;--tileC:#cfd8dc;--focus:#2563eb;--page:#efeeec}
+/* Ansvisor demo: dark palette moved to the neutral greys of the app's dark theme */
+html[data-theme="dark"] body{color-scheme:dark;--bg:#121212;--card:#1a1a1a;--ink:#ececec;--muted:#a3a3a3;--line:#2e2e2e;--soft:#242424;--rail:#161616;--primary:#ececec;--onprimary:#141414;--green:#5fd38d;--greenbg:#173322;--amber:#f0b45a;--amberbg:#352a10;--red:#f38b8b;--redbg:#311818;--blue:#93c5fd;--bluebg:#16213a;--scrim:rgba(0,0,0,0.55);--tileA:#3a3631;--tileB:#4a453e;--tileC:#34404a;--focus:#60a5fa;--page:#0e0e0e}
 body{background:var(--page);color:var(--ink)}
 button{font-family:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
@@ -53,7 +65,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 
         <div style="display: flex; flex-direction: column; gap: 10px">
           <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted)">
-            <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 7px; background: var(--primary); display: inline-flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"></rect><path d="M12 4v4M9 13h.01M15 13h.01"></path></svg></span>
+            <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 7px; background: var(--primary); display: inline-flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="stroke:var(--onprimary)" stroke-width="2" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"></rect><path d="M12 4v4M9 13h.01M15 13h.01"></path></svg></span>
             Worked for 38s · 4 steps · 12 sources
           </div>
           <p style="margin: 0; line-height: 1.6">Drafted a FAQ block for /subscriptions: 6 questions, 820 characters, built from 9 buyer prompts and 3 cited pages.</p>
@@ -627,5 +639,6 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
     </div>
   </section>
 </div></div></section>
-<script>document.getElementById("theme").addEventListener("click",function(){var b=document.body;var d=b.classList.toggle("t-dark");b.classList.toggle("t-light",!d);this.textContent=d?"Light":"Dark";});</script>
+<script>/* Ansvisor demo: the Dark/Light button switches <html data-theme>; its label follows the theme the app sets too */
+(function(){var d=document.documentElement,b=document.getElementById("theme");function lab(){b.textContent=d.getAttribute("data-theme")==="dark"?"Light":"Dark"}lab();if(window.MutationObserver)new MutationObserver(lab).observe(d,{attributes:true,attributeFilter:["data-theme"]});b.addEventListener("click",function(){if(d.getAttribute("data-theme")==="dark")d.removeAttribute("data-theme");else d.setAttribute("data-theme","dark")})})();</script>
 </body></html>
