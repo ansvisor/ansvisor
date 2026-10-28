@@ -87,7 +87,7 @@ Click a row to open its latest report. The arrow beside a page lists its earlier
 
 ## The audit report
 
-Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top re-run the audit on the same URL or delete it (**Delete audit** can't be undone). On a page that fails checks, **Send to Action Center** sends the page and the checks it fails as one Fix action, without waiting for the nightly pass (see below); sent again, it opens the action already there for the page.
+Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top re-run the audit on the same URL or delete it (**Delete audit** can't be undone). On a page that fails checks, **Send to Action Center** sends the page and the checks it fails as one Fix action, without waiting for the nightly pass (see below). Sent again while that action is open, it doesn't add another: a notice names the open action (AC-…) with **Open**. Only a page's latest report can be sent; an older one's notice offers **Open the latest report**.
 
 ### Total score
 
@@ -172,10 +172,10 @@ Each night the Action Center reads the latest audit of each page from the last 9
 
 An action lists the pages it covers and the failed checks on each, with a link to **Open Site Audit**. Re-audit the pages after you fix them: only each page's latest audit counts, so once the new audit no longer fails the check, the Action Center stops reporting that page. An audit older than 90 days no longer counts either.
 
+You can also send one page yourself from its report with **Send to Action Center** (see [The audit report](#the-audit-report)). The action names the page and the checks it fails, takes the Fix low-scoring pages plan, and is measured on the page's citations and AI visits. Like a nightly Site Audit fix, once you complete it, it is judged by the page audited again since it closed: the checks it failed passing. Until the page is audited again, the metrics judge it.
+
 The **Audit Score** section of [Reports](/guides/reports) brings your audit scores into a report.
 
 <Card title="Continue: Reports" icon="arrow-right" href="/guides/reports">
   Turn your AI visibility and audit scores into shareable snapshot reports.
 </Card>
-
-You can also send one page yourself from its report with **Send to Action Center**: the action names the page and the checks it fails, takes the Fix low-scoring pages plan, and is judged once the page is audited again, by the checks it fails passing, and measured on the page's citations and AI visits.
