@@ -1577,7 +1577,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_content_drafts',
     {
       description:
-        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path.",
+        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook or webflow, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
       inputSchema: listDraftsShape,
     },
     async (args) => {
@@ -1590,7 +1590,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_content_draft',
     {
       description:
-        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
+        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations). With them, `last_send` and `shopping_links` as list_content_drafts gives them, and `shopping_path`: on a page of an online shop, the category pages and catalog products it should link (with price and stock) and those left out and why, as its Brief tab shows them; null for none.',
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
       },
