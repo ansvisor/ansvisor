@@ -61,13 +61,13 @@ describe('SignalWhereLine', () => {
     expect(icons.map((icon) => icon.getAttribute('title'))).toEqual([
       'ChatGPT',
       'Gemini',
-      'Google AI Overview',
+      'Google AI Overviews',
       'Perplexity',
     ]);
     expect(container.textContent).toContain('+1');
     expect(container.textContent).toContain('US · GB +1');
     expect(container.querySelector('.sr-only')?.textContent).toBe(
-      'Tracked on ChatGPT, ChatGPT API, Gemini, Google AI Overview, Perplexity, Grok · Tracked in United States, United Kingdom, Germany',
+      'Tracked on ChatGPT, ChatGPT API, Gemini, Google AI Overviews, Perplexity, Grok · Tracked in United States, United Kingdom, Germany',
     );
   });
 
