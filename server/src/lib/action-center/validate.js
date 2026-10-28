@@ -400,7 +400,11 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // them (learning A1): "recover 6 prompts" moves those 6, which the whole
   // brand's numbers can bury. The brand-wide figures stay as a second line.
   // A basket that measured nothing (no answers, citations of prompts) leaves
-  // the action to the brand-wide measure below.
+  // the action to the brand-wide measure below, and so does one that can't
+  // read its main metric (citations of prompts): judged by another, a basket
+  // could read "improved" while its aim fell brand-wide.
+  let brand = null;
+  let fallback = null;
   const targets = await targetScope(action);
   if (targets) {
     const asked = (action.kpi_keys ?? []).filter((key) => key in BASKET_KPIS);
@@ -421,7 +425,13 @@ export async function validateAction(action, { now = new Date() } = {}) {
       before: before[metric] ?? null,
       after: after[metric] ?? null,
     }));
-    if (metrics.some((m) => m.before != null && m.after != null)) {
+    const read = (m) => m.before != null && m.after != null;
+    const named = {
+      entity: targets.entity,
+      prompts: targets.promptIds.length,
+      pages: targets.pages.length,
+    };
+    if (metrics.some((m) => m.metric === primary && read(m))) {
       const brandWide = kpiKeys.map((metric) => ({
         metric,
         unit: MEASURABLE_KPIS[metric],
@@ -435,16 +445,16 @@ export async function validateAction(action, { now = new Date() } = {}) {
           afterWindow,
           metrics,
           primary,
-          scope: {
-            kind: 'targets',
-            entity: targets.entity,
-            prompts: targets.promptIds.length,
-            pages: targets.pages.length,
-          },
+          scope: { kind: 'targets', ...named },
           ...(brandWide.length ? { brandWide } : {}),
         },
         asked,
       );
+    }
+    // Read already, for the brand-wide measure below.
+    if (kpiKeys.length) brand = { before: brandBefore, after: brandAfter };
+    if (metrics.some(read)) {
+      fallback = { kind: 'brand', reason: 'primary_not_in_basket', ...named };
     }
   }
 
@@ -453,10 +463,12 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // than inventing a metric it never claimed.
   if (kpiKeys.length === 0) return finish(null);
 
-  const [before, after] = await Promise.all([
-    measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
-    measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to),
-  ]);
+  const [before, after] = brand
+    ? [brand.before, brand.after]
+    : await Promise.all([
+        measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
+        measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to),
+      ]);
 
   const metrics = kpiKeys.map((metric) => ({
     metric,
@@ -465,9 +477,17 @@ export async function validateAction(action, { now = new Date() } = {}) {
     after: after[metric] ?? null,
   }));
 
-  // Its aim: the first success metric its signals name.
+  // Its aim: the first success metric its signals name. Measured here for a
+  // basket that couldn't read it, the scope says so.
   const primary = kpiKeys[0];
-  return finish({ measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics, primary });
+  return finish({
+    measuredAt: now.toISOString(),
+    beforeWindow,
+    afterWindow,
+    metrics,
+    primary,
+    ...(fallback ? { scope: fallback } : {}),
+  });
 }
 
 async function write(actionId, validation, outcome, now) {

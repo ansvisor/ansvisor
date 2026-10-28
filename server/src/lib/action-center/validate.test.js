@@ -478,6 +478,51 @@ describe('validateAction', () => {
       expect(validation.brandWide.map((m) => m.metric)).toEqual(['ai_visibility', 'citations']);
     });
 
+    it('measures brand-wide when the basket can’t read its main metric', async () => {
+      // Citations first, on prompts: a prompt basket has no pages to count them on.
+      const writes = mockWrites();
+      rpc.mockImplementation(async (name, args) => {
+        if (name === 'opportunity_basket_metrics') {
+          const before = args.p_from < daysAgo(20).slice(0, 10);
+          return { data: { cells: 10, visible: 4, mention_answers: before ? 2 : 6 }, error: null };
+        }
+        const before = args.p_day_from < daysAgo(20).slice(0, 10);
+        return {
+          data: { total_citations: before ? 100 : 80, total_mentions: 50 },
+          error: null,
+        };
+      });
+
+      const outcome = await validateAction(
+        action({
+          kind: 'recover_lost_visibility',
+          kpi_keys: ['citations', 'mentions'],
+          payload: { targetEntity: 'prompts', targetCount: 1, targets: [{ id: P1 }] },
+        }),
+        { now: NOW },
+      );
+
+      // The prompts' mentions tripled; the citations it aims at fell brand-wide.
+      expect(outcome).toBe('declined');
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.primary).toBe('citations');
+      expect(validation.metrics).toEqual([
+        { metric: 'citations', unit: 'count', before: 100, after: 80 },
+        { metric: 'mentions', unit: 'count', before: 50, after: 50 },
+      ]);
+      expect(validation.scope).toEqual({
+        kind: 'brand',
+        reason: 'primary_not_in_basket',
+        entity: 'prompts',
+        prompts: 1,
+        pages: 0,
+      });
+      expect(validation.brandWide).toBeUndefined();
+      // The brand-wide figures were read once, not again.
+      const brandCalls = rpc.mock.calls.filter(([name]) => name === 'insights_aggregates_daily');
+      expect(brandCalls).toHaveLength(2);
+    });
+
     it('reads a page written as a path on the brand’s primary domain', async () => {
       mockWrites({ brand_domains: [{ domain: 'https://www.acme.example/' }] });
       answers({}, {});
