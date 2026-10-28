@@ -17,6 +17,11 @@ export interface CatalogProductRow {
   category: string | null;
   price: number | null;
   currency: string | null;
+  /**
+   * Every variant's price and sale price: an AI answer's price that is one
+   * of them is right. Absent, `price` alone.
+   */
+  prices?: { price: number; currency: string | null }[];
   inStock: boolean;
   hasGtin: boolean;
 }
@@ -28,6 +33,11 @@ export interface ProductCardRow {
   shelf: string;
   /** Its place on the shelf, from 1. */
   rank: number;
+  /** The price the answer showed for it, on which channel, and when (ISO). */
+  price?: number | null;
+  currency?: string | null;
+  platform?: string;
+  at?: string;
 }
 
 /** AI visits and orders per product (00361). */
@@ -113,6 +123,50 @@ export interface ProductRow {
   currency: string | null;
   readiness: number;
   missing: ReadinessCheck[];
+  /**
+   * A price a channel's latest AI answer shows for it that is none of its
+   * variants' (more than PRICE_TOLERANCE off each, in the same currency);
+   * null for none.
+   */
+  wrongPrice: { seen: number; currency: string | null; platform: string | null } | null;
+}
+
+/** An answer's price this far from the catalog's is wrong (ECOM-016). */
+export const PRICE_TOLERANCE = 0.02;
+
+function wrongPrice(
+  product: CatalogProductRow,
+  cards: readonly ProductCardRow[],
+): ProductRow['wrongPrice'] {
+  const known = (
+    product.prices?.length
+      ? product.prices
+      : product.price === null
+        ? []
+        : [{ price: product.price, currency: product.currency }]
+  ).filter((known) => known.price > 0);
+  if (!known.length) return null;
+  // Each channel's latest answer: an older one's price may have been right then.
+  const latest = new Map<string, ProductCardRow>();
+  for (const card of cards) {
+    const channel = card.platform ?? '';
+    const kept = latest.get(channel);
+    if (!kept || (card.at ?? '') > (kept.at ?? '')) latest.set(channel, card);
+  }
+  for (const card of latest.values()) {
+    if (typeof card.price !== 'number') continue;
+    const seen = card.price;
+    const same = known.filter(
+      (known) => !card.currency || !known.currency || known.currency === card.currency,
+    );
+    if (
+      same.length &&
+      same.every((known) => Math.abs(seen - known.price) / known.price > PRICE_TOLERANCE)
+    ) {
+      return { seen, currency: card.currency ?? product.currency, platform: card.platform ?? null };
+    }
+  }
+  return null;
 }
 
 /** The table's ready-made views (ECOM-007), the AI Traffic "Cited, not clicked" pattern. */
@@ -124,15 +178,19 @@ export function productRows(
   cards: readonly ProductCardRow[],
   stats: readonly ProductAiStats[],
 ): ProductRow[] {
-  const byProduct = new Map<string, { shelves: Set<string>; ranks: number[] }>();
+  const byProduct = new Map<
+    string,
+    { shelves: Set<string>; ranks: number[]; cards: ProductCardRow[] }
+  >();
   for (const card of cards) {
     let entry = byProduct.get(card.productId);
     if (!entry) {
-      entry = { shelves: new Set(), ranks: [] };
+      entry = { shelves: new Set(), ranks: [], cards: [] };
       byProduct.set(card.productId, entry);
     }
     entry.shelves.add(card.shelf);
     entry.ranks.push(card.rank);
+    entry.cards.push(card);
   }
   const statsOf = new Map(stats.map((s) => [s.productId, s]));
   return products.map((product) => {
@@ -151,6 +209,7 @@ export function productRows(
       currency: ai?.currency ?? null,
       readiness: ready.score,
       missing: ready.missing,
+      wrongPrice: wrongPrice(product, shown?.cards ?? []),
     };
   });
 }

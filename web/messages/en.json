@@ -8000,6 +8000,91 @@
       "trends": "Trends",
       "failed": "Couldn't read the shelves right now. The other tabs still work; try again in a moment."
     },
+    "readiness": {
+      "title": "AI shopping readiness",
+      "lead": "What Ansvisor can read of your catalog, your feed and the answers. Each check says where its fix starts.",
+      "channelsLabel": "AI shopping channels",
+      "market": {
+        "us": "Market: United States. In the US, ChatGPT picks products from OpenAI's own product index, built from feeds.",
+        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so your Merchant Center feed decides ChatGPT too."
+      },
+      "channels": {
+        "showing": "Showing your products",
+        "notShowing": "Tracked, yours not shown",
+        "notTracked": "Not tracked"
+      },
+      "sources": {
+        "chatgpt_us": "OpenAI product index",
+        "chatgpt_europe": "Google Shopping · via Merchant Center",
+        "google-aio": "Via Merchant Center",
+        "google-aimode": "Google Shopping Graph",
+        "gemini-web": "Google Shopping Graph",
+        "copilot-web": "Microsoft Merchant Center"
+      },
+      "view": "View products",
+      "connect": "Connect",
+      "unread": {
+        "sources": "Couldn't read your catalog sources right now, so the score waits until they can be. Try again in a moment.",
+        "products": "Couldn't read your catalog's products right now, so their checks and the score wait until they can be. Try again in a moment."
+      },
+      "checks": {
+        "catalog": {
+          "title": "Catalog connected",
+          "pass": "{count, plural, one {# product} other {# products}} from your feed, file or store.",
+          "fail": "Connect your catalog: Product Visibility counts your products against it.",
+          "unknown": "Couldn't read your catalog sources right now."
+        },
+        "merchantCenter": {
+          "title": "Google Merchant Center feed connected",
+          "pass": "Feeds Google AI Overviews and AI Mode shopping results.",
+          "warn": "Connect it to feed Google AI Overviews and AI Mode shopping results.",
+          "fail": "In Europe it decides ChatGPT too: connect it.",
+          "unknown": "Couldn't read your catalog sources right now."
+        },
+        "openAiIndex": {
+          "title": "Catalog in OpenAI's product index",
+          "pass": "You send OpenAI a direct product feed.",
+          "warn": "Found in ChatGPT's answers, source unknown. A direct feed or Shopify is the safer way in.",
+          "fail": "Not found in tracked answers. Send OpenAI a direct product feed, or connect a Shopify store."
+        },
+        "verifiedSeller": {
+          "title": "Verified seller in ChatGPT · unknown",
+          "unknown": "Shops without it can be left out of results. How OpenAI grants it isn't public yet; a direct feed is the best bet."
+        },
+        "firstWords": {
+          "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
+          "pass": "Every description says what the product is in its first 40 words.",
+          "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
+          "fail": "ChatGPT reads about 40 words. These don't say what the product is in them."
+        },
+        "feedFields": {
+          "title": "Feed fields complete · {percent}%",
+          "pass": "GTIN, photo, price, brand and category on almost every product.",
+          "warn": "GTIN missing on {gtin}, photo on {image} products.",
+          "fail": "GTIN missing on {gtin}, photo on {image} products."
+        },
+        "feedLinks": {
+          "title": "Feed links tagged utm_medium=feed",
+          "pass": "ChatGPT Shopping visits and sales are counted apart.",
+          "warn": "{count, plural, one {# product link isn't} other {# product links aren't}} tagged. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links.",
+          "fail": "Without it, ChatGPT Shopping sales can't be told apart from other AI visits. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links."
+        },
+        "wrongPrice": {
+          "title": "{count, plural, =0 {Prices in AI answers match yours} other {Wrong price in AI answers · # products}}",
+          "pass": "Every price AI showed for your products matches your catalog.",
+          "fail": "AI shows {seen} for {product}, your price is {yours}."
+        },
+        "resellerCheaper": {
+          "title": "{count, plural, =0 {No reseller cheaper than you} other {Reseller cheaper than you · # products}}",
+          "pass": "AI links to no reseller selling your products for less.",
+          "fail": "AI links to a reseller selling your product for less. See Shelf › Where AI sends shoppers."
+        },
+        "amazonShare": {
+          "title": "Amazon's share in AI answers fell {from}% → {to}% this week",
+          "warn": "Possibly OpenAI's “No Amazon” test. Your own store link matters more."
+        }
+      }
+    },
     "plan": {
       "types": {
         "optimize_page": "Optimize page",
@@ -8207,6 +8292,7 @@
     "lockedDescription": "Growth unlocks your AI shelf, your products and categories on it, where AI sends shoppers, and what it sells.",
     "tabShelf": "Shelf",
     "tabCategories": "Categories",
+    "tabReadiness": "Readiness",
     "tabProducts": "Products",
     "tabMyProducts": "My Products",
     "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",

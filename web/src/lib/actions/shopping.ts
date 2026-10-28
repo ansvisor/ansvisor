@@ -1336,13 +1336,16 @@ export async function getShoppingProducts(
       catalog_product_id: string;
       position: number;
       platform: string;
+      price_amount: number | null;
+      price_currency: string | null;
+      created_at: string;
       prompt_results: { prompt_id: string } | null;
     }>(() =>
       cardsInWindow(
         supabase,
         brandId,
         filters,
-        'catalog_product_id, position, platform, prompt_results:prompt_result_id ( prompt_id )',
+        'catalog_product_id, position, platform, price_amount, price_currency, created_at, prompt_results:prompt_result_id ( prompt_id )',
       )
         .eq('matched_brand_role', 'own')
         .not('catalog_product_id', 'is', null),
@@ -1355,6 +1358,10 @@ export async function getShoppingProducts(
     productId: card.catalog_product_id,
     shelf: `${card.prompt_results?.prompt_id ?? '?'}:${card.platform}`,
     rank: card.position + 1,
+    price: card.price_amount === null ? null : Number(card.price_amount),
+    currency: card.price_currency,
+    platform: card.platform,
+    at: card.created_at,
   }));
   const aiStats: ProductAiStats[] = stats.map((row) => ({
     productId: row.product_id,
@@ -1535,6 +1542,12 @@ async function readCatalogProducts(
       category: categoryOf.get(p.id) ?? null,
       price: priced[0] ? Number(priced[0].price) : null,
       currency: priced[0]?.currency ?? null,
+      // Each variant's price and sale price, in or out of stock.
+      prices: own.flatMap((v) =>
+        [v.price, v.sale_price]
+          .filter((price): price is number => price !== null)
+          .map((price) => ({ price: Number(price), currency: v.currency })),
+      ),
       inStock: stocked.length > 0,
       hasGtin: own.some((v) => !!v.gtin),
     };
