@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { createBrand, markBrandAsEcommerce } from '@/lib/actions/brand';
 import { EcommerceNote } from '@/components/onboarding/ecommerce-note';
 import { createTopics, getTopics } from '@/lib/actions/topic';
-import { getPromptCapacity, savePromptSet } from '@/lib/actions/prompt';
+import { getPromptCapacity, getTrackedPromptCount, savePromptSet } from '@/lib/actions/prompt';
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { addCompetitor, getCompetitors } from '@/lib/actions/competitor';
@@ -27,18 +27,21 @@ import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import {
   firstMonthOfferOn,
   isCloud,
-  PLANS,
   SUBSCRIBABLE_PLANS,
   getPlan,
   toPlanId,
   type PlanId,
 } from '@/config/plans';
+import { choicePeriod, type CheckoutMode } from '@/lib/billing/plan-purchase';
 import {
-  FIRST_MONTH_CODE,
-  firstMonthPrice,
-  offerChoice,
-  type CheckoutMode,
-} from '@/lib/billing/plan-purchase';
+  PlanDetailsToggle,
+  PlanStart,
+  PlanStartCard,
+  StartChoicePicker,
+  useFirstMonthOffer,
+  useStartChoice,
+  useStartCheckout,
+} from '@/components/billing/plan-start';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
@@ -50,11 +53,9 @@ const ONBOARDING_STEP_NAMES: Record<number, string> = {
   6: 'plan',
 };
 import type { Brand } from '@/types';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -243,29 +244,6 @@ function TopicAccordion({
 // The state picker's own "no state" choice, ahead of the states themselves.
 const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ...US_STATE_ITEMS];
 
-// Plan-step copy, onboarding only — the plan switcher in Settings keeps the
-// taglines from config/plans. Engines are listed as offered at sign-up.
-const PLAN_STEP_COPY: Partial<
-  Record<PlanId, { tagline: string; platformFeatures: string; engines: string }>
-> = {
-  starter: {
-    tagline: 'Essential AI visibility tracking.',
-    platformFeatures: 'Core Platform Features',
-    engines: 'ChatGPT & Microsoft Copilot',
-  },
-  growth: {
-    tagline: 'Advanced AI insights to accelerate growth.',
-    platformFeatures: 'All Platform Features',
-    engines:
-      'ChatGPT, Google AI Overviews, Google AI Mode, Gemini, Microsoft Copilot, & Perplexity.',
-  },
-};
-
-/** Dollars as the plan cards show them: whole dollars bare, else to the cent. */
-function usd(value: number): string {
-  return Number.isInteger(value) ? `$${value}` : `$${value.toFixed(2)}`;
-}
-
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
 
@@ -292,6 +270,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const tWizard = useTranslations('brands.wizard');
   const tOffer = useTranslations('planOffer');
+  const tPlans = useTranslations('readOnly.plans');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -369,15 +348,30 @@ export default function OnboardingPage() {
   const competitorMsgIdx = useRef(0);
 
   // Step 6 (cloud only)
-  // The plan whose Checkout is opening, and how it starts.
-  const [checkoutLoading, setCheckoutLoading] = useState<{
-    planId: PlanId;
-    mode: CheckoutMode;
-  } | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   // Trial length when the plan step is reached; null once the organization has
   // had a subscription, which then only buys now (Checkout refuses its trial).
   const [trialDays, setTrialDays] = useState<number | null>(14);
+  // How the plan starts, as on the plan dialog: one choice above the cards,
+  // the first-month offer shown from the first frame (the person setting up
+  // the workspace is its admin), its code checked once the step is reached.
+  const [offer, setOffer] = useFirstMonthOffer(firstMonthOfferOn(), step === 6);
+  const [choice, setChoice] = useStartChoice(trialDays != null);
+  // The plans' details (what each is for and includes), in the cards.
+  const [planDetails, setPlanDetails] = useState(false);
+  const { checkout, failed, start } = useStartCheckout({
+    organizationId,
+    period: choicePeriod(choice),
+    // A canceled Checkout comes back to this step.
+    returnTo: null,
+    // Stripe turned the code down since it was checked: the plain prices.
+    onCodeRefused: (code) => {
+      setOffer(null);
+      toast.error(tPlans('promo.invalid', { code: code.toUpperCase() }));
+    },
+    // Its trial is used after all: buying now is the way.
+    onTrialUsed: () => setTrialDays(null),
+  });
 
   useEffect(() => {
     if (step !== 6) return;
@@ -449,6 +443,36 @@ export default function OnboardingPage() {
     topics: string[];
     competitors: { name: string; domain: string }[];
   } | null>(null);
+  // The own brand the plan step was resumed on (no wizard state then).
+  const [resumedBrandId, setResumedBrandId] = useState<string | null>(null);
+
+  // What the plan step's "Ready to track" says: the own brand's real setup,
+  // read when the step is reached. Nothing is said until it is read.
+  const planBrandId = createdBrand?.id ?? resumedBrandId;
+  const [readyCounts, setReadyCounts] = useState<{
+    prompts: number;
+    topics: number;
+    competitors: number;
+  } | null>(null);
+  useEffect(() => {
+    if (step !== 6 || !planBrandId) return;
+    let cancelled = false;
+    Promise.all([
+      getTrackedPromptCount(planBrandId),
+      getTopics(planBrandId),
+      getCompetitors(planBrandId),
+    ])
+      .then(([prompts, topics, competitors]) => {
+        if (!cancelled) {
+          setReadyCounts({ prompts, topics: topics.length, competitors: competitors.length });
+        }
+      })
+      // No line rather than a guessed one.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [step, planBrandId]);
 
   const totalSteps = isCloud() ? 6 : 5;
 
@@ -1061,10 +1085,10 @@ export default function OnboardingPage() {
 
   // ── Step 6: Stripe checkout ──
 
-  // Buy now (the first-month offer while it's on) or the free trial; a card either way.
-  const handleCheckout = async (planId: PlanId, mode: CheckoutMode) => {
-    if (!organizationId) return;
-    setCheckoutLoading({ planId, mode });
+  // The choice made above the cards: the free trial, or bought now (monthly
+  // with the first-month offer while it's on, or a year); a card either way.
+  const handleCheckout = (planId: PlanId, mode: CheckoutMode) => {
+    if (!organizationId || checkout) return;
     track('onboarding_step_completed', {
       step: 6,
       step_name: 'plan',
@@ -1074,31 +1098,7 @@ export default function OnboardingPage() {
     setPersonProperties({
       intended_plan: planId,
     });
-    try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId,
-          organizationId,
-          mode,
-          ...(mode === 'buy' && firstMonthOfferOn() ? { promotionCode: FIRST_MONTH_CODE } : {}),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok && data.code === 'trial_unavailable') {
-        // Its trial is used after all: buying now is the way.
-        setTrialDays(null);
-        throw new Error(tOffer('trialUsed'));
-      }
-      if (!res.ok) throw new Error(data.error || 'Failed to create checkout session');
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Checkout failed');
-      setCheckoutLoading(null);
-    }
+    void start(planId, mode, mode === 'buy' && choice === 'month' ? offer?.code : undefined);
   };
 
   // ── Topic prompt editing helpers ──
@@ -1144,6 +1144,7 @@ export default function OnboardingPage() {
         .limit(1);
       const b = brands?.[0];
       if (!b) return;
+      setResumedBrandId(b.id);
       const domains = (b.brand_domains ?? []) as { domain: string; is_primary: boolean }[];
       const [topics, competitors] = await Promise.all([getTopics(b.id), getCompetitors(b.id)]);
       setResumedPreview({
@@ -1830,179 +1831,92 @@ export default function OnboardingPage() {
 
     if (step !== 6) return null;
 
+    const trialOffered = trialDays != null;
+    const planBrandName = createdBrand?.name ?? resumedPreview?.brandName ?? (brandName || null);
+
+    // Laid out to fit a laptop screen whole (1024×768 and up): the plans'
+    // details open inside their cards.
     return (
-      <div className="flex flex-col p-6 md:p-10">
+      <div className="flex flex-col p-6 md:px-8">
         <div className="mx-auto w-full max-w-2xl flex-1">
-          <div className="mb-8 text-center">
-            <p className="text-2xl tracking-tight">One last step</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
-              {trialDays ? tOffer('chooseHowToStart') : 'Choose Your Plan'}
+          <div className="mb-4 text-center">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              {trialOffered ? tOffer('chooseHowToStart') : tOffer('choosePlan')}
             </h1>
-            {offerChoice(trialDays != null) !== 'none' && (
-              <p data-slot="offer-line" className="mt-3 text-base text-muted-foreground">
-                {tOffer('choiceLine', {
-                  offer: offerChoice(trialDays != null),
-                  days: trialDays ?? 0,
-                })}
-              </p>
-            )}
+            {/* Its line's room is kept while the counts are read: nothing moves. */}
+            <div className="mt-2 min-h-5">
+              {readyCounts && planBrandName && (
+                <p
+                  data-slot="ready-to-track"
+                  className="inline-flex items-start gap-1.5 text-sm text-muted-foreground"
+                >
+                  <Check
+                    className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                    aria-hidden
+                  />
+                  <span>
+                    {tOffer.rich('readyToTrack', {
+                      brand: planBrandName,
+                      ...readyCounts,
+                      b: (chunks) => (
+                        <strong className="font-medium text-foreground">{chunks}</strong>
+                      ),
+                    })}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* How the plan starts: the trial, monthly with the offer, or a year */}
+          <div className="mb-5 flex">
+            <StartChoicePicker
+              choice={choice}
+              onChange={setChoice}
+              trialOffered={trialOffered}
+              offer={offer}
+              centered
+            />
           </div>
 
           {/* Plan cards */}
-          <div className="grid gap-6 sm:grid-cols-2">
-            {SUBSCRIBABLE_PLANS.map((planId) => {
-              const plan = PLANS[planId];
-              const price = plan.pricing;
-              if (!price) return null;
-
-              const loading = checkoutLoading?.planId === planId ? checkoutLoading.mode : null;
-              const offerOn = firstMonthOfferOn();
-              const copy = PLAN_STEP_COPY[planId];
-              const { maxBrands, maxPrompts, maxTeamMembers } = plan.limits;
-
-              return (
-                <div
-                  key={planId}
-                  className={cn(
-                    'relative flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition-shadow hover:shadow-md',
-                    plan.highlighted && 'border-primary shadow-md ring-1 ring-primary/20',
-                  )}
-                >
-                  {plan.highlighted && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      Most Popular
-                    </Badge>
-                  )}
-
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold">{plan.name}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {copy?.tagline ?? plan.tagline}
-                    </p>
-                  </div>
-
-                  <div className="flex items-end gap-1 mb-4">
-                    <span className="text-4xl font-bold tracking-tight">${price.monthly}</span>
-                    <span className="mb-1 text-sm text-muted-foreground">/month</span>
-                  </div>
-
-                  {/* Buy now: the full plan from day one, the first month at half price. */}
-                  <Button
-                    data-mode="buy"
-                    className="w-full"
-                    onClick={() => handleCheckout(planId, 'buy')}
-                    disabled={checkoutLoading !== null}
-                  >
-                    {loading === 'buy' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Redirecting...
-                      </>
-                    ) : offerOn ? (
-                      tOffer('buyNow')
-                    ) : (
-                      `Choose ${plan.name}`
-                    )}
-                  </Button>
-                  <p
-                    data-slot="buy-terms"
-                    className="mt-2 text-center text-xs text-muted-foreground"
-                  >
-                    {offerOn && (
-                      <span className="flex flex-wrap items-center justify-center gap-1.5">
-                        <Badge
-                          variant="outline"
-                          className="h-5 border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-400"
-                        >
-                          {tOffer('limitedOffer')}
-                        </Badge>
-                        {tOffer('buyPrice', {
-                          first: usd(firstMonthPrice(price.monthly)),
-                          price: usd(price.monthly),
-                        })}
-                      </span>
-                    )}
-                    <span className="block">{tOffer('fullPlan')}</span>
-                  </p>
-
-                  {/* The free trial: no offer with it, and limited AI usage. */}
-                  {trialDays != null && (
-                    <>
-                      <Button
-                        data-mode="trial"
-                        className="mt-3 w-full"
-                        variant="outline"
-                        onClick={() => handleCheckout(planId, 'trial')}
-                        disabled={checkoutLoading !== null}
-                      >
-                        {loading === 'trial' ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Redirecting...
-                          </>
-                        ) : (
-                          tOffer('startTrial', { days: trialDays })
-                        )}
-                      </Button>
-                      <p
-                        data-slot="trial-terms"
-                        className="mt-2 text-center text-xs text-muted-foreground"
-                      >
-                        {tOffer('trialPrice', {
-                          days: trialDays,
-                          price: usd(price.monthly),
-                          period: 'month',
-                        })}
-                        <span className="block">{tOffer('limitedAi', { days: trialDays })}</span>
-                      </p>
-                    </>
-                  )}
-
-                  <Separator className="my-5" />
-
-                  <div className="space-y-2.5 text-sm">
-                    {copy && <PlanFeatureItem>{copy.platformFeatures}</PlanFeatureItem>}
-                    <PlanFeatureItem>
-                      {maxTeamMembers === -1 ? 'Unlimited Users' : `Up to ${maxTeamMembers} Users`}
-                    </PlanFeatureItem>
-                    <PlanFeatureItem>
-                      {maxBrands === -1
-                        ? 'Unlimited Brands'
-                        : maxBrands === 1
-                          ? '1 Brand'
-                          : `Up to ${maxBrands} Brands`}
-                    </PlanFeatureItem>
-                    <PlanFeatureItem>
-                      {maxPrompts === -1
-                        ? 'Unlimited Prompt Tracking'
-                        : `${maxPrompts} Prompt Tracking/mo`}
-                    </PlanFeatureItem>
-                    <PlanFeatureItem>Real-time Data → Signals → Actions → Tasks</PlanFeatureItem>
-                  </div>
-
-                  {copy && (
-                    <p className="mt-auto pt-6 text-xs font-semibold leading-relaxed">
-                      For {copy.engines}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {SUBSCRIBABLE_PLANS.map((planId) => (
+              <PlanStartCard
+                key={planId}
+                planId={planId}
+                choice={choice}
+                offer={offer}
+                details={planDetails}
+              >
+                <PlanStart
+                  planId={planId}
+                  choice={choice}
+                  offer={offer}
+                  trialOffered={trialOffered}
+                  opening={checkout?.planId === planId ? checkout.mode : null}
+                  disabled={!organizationId || checkout != null}
+                  error={failed?.planId === planId ? failed.message : null}
+                  onStart={(mode) => handleCheckout(planId, mode)}
+                />
+              </PlanStartCard>
+            ))}
           </div>
 
-          <p className="mt-8 text-center text-lg">Secure payments powered by Stripe.</p>
-          <p data-slot="card-note" className="mt-1 text-center text-sm">
-            {tOffer('cardNote', { both: trialDays != null ? 'yes' : 'no' })}
-          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span data-slot="card-note">
+              {tOffer('cardNote', { both: trialOffered ? 'yes' : 'no' })}
+            </span>
+            <PlanDetailsToggle
+              open={planDetails}
+              onToggle={() => setPlanDetails((open) => !open)}
+            />
+          </div>
 
-          {/* No card yet: the demo brand, with sample data. */}
-          <ExploreDemoCard
-            brandName={createdBrand?.name ?? resumedPreview?.brandName ?? (brandName || null)}
-            preload={demoMissing}
-          />
+          <ExploreDemoCard brandName={planBrandName} preload={demoMissing} />
         </div>
 
-        <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-8">
+        <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-5">
           <button
             onClick={() => setStep(5)}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -2040,14 +1954,5 @@ export default function OnboardingPage() {
     >
       {renderStep()}
     </OnboardingFrame>
-  );
-}
-
-function PlanFeatureItem({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-2">
-      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-      <span>{children}</span>
-    </div>
   );
 }

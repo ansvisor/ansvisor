@@ -6,6 +6,7 @@ import {
   firstMonthOfferOn,
   type PlanId,
 } from '@/config/plans';
+import { discountedPrice, type PromoOffer } from './promo-code';
 
 /** How often a subscription bills, as Stripe's `recurring.interval` names it. */
 export type BillingInterval = 'month' | 'year';
@@ -32,6 +33,39 @@ export type CheckoutMode = (typeof CHECKOUT_MODES)[number];
  * it's on), both, or neither.
  */
 export type OfferChoice = 'both' | 'trial' | 'discount' | 'none';
+
+/**
+ * How a new plan starts, as the start selector above the plan cards picks
+ * it: the free trial (billed monthly once it ends), or bought now, monthly
+ * (where a code such as the first-month offer applies) or a year up front.
+ */
+export type StartChoice = 'trial' | 'month' | 'year';
+
+/** The billing period a start choice subscribes to. */
+export function choicePeriod(choice: StartChoice): BillingInterval {
+  return choice === 'year' ? 'year' : 'month';
+}
+
+/** How Checkout starts for a start choice. */
+export function choiceMode(choice: StartChoice): CheckoutMode {
+  return choice === 'trial' ? 'trial' : 'buy';
+}
+
+/**
+ * What a plan costs on the day it starts: nothing for the free trial, the
+ * first month with the code's discount (`discounted`, monthly only), or the
+ * period's price. Null for a plan with no price.
+ */
+export function dueToday(
+  planId: PlanId,
+  choice: StartChoice,
+  discounted: PromoOffer | null,
+): number | null {
+  if (choice === 'trial') return 0;
+  const price = periodPrice(planId, choicePeriod(choice));
+  if (price == null) return null;
+  return choice === 'month' && discounted ? discountedPrice(price, discounted) : price;
+}
 
 /** A monthly price's first month with the first-month offer, to the cent. */
 export function firstMonthPrice(monthly: number): number {

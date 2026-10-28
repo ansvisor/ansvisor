@@ -3,6 +3,9 @@ import { FIRST_MONTH_OFFER, firstMonthOfferOn } from '@/config/plans';
 import {
   FIRST_MONTH_CODE,
   annualSaving,
+  choiceMode,
+  choicePeriod,
+  dueToday,
   firstMonthPrice,
   offerChoice,
   periodPrice,
@@ -11,6 +14,7 @@ import {
   subscriptionEnded,
   takesPromoCode,
 } from './plan-purchase';
+import type { PromoOffer } from './promo-code';
 
 describe('plan prices', () => {
   it('reads a month or a year up front from the config', () => {
@@ -136,5 +140,34 @@ describe('the first-month offer', () => {
     expect(offerChoice(false, false)).toBe('none');
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     expect(offerChoice(true)).toBe('trial');
+  });
+});
+
+describe('how a plan starts', () => {
+  const save50: PromoOffer = {
+    code: 'SAVE50',
+    percentOff: 50,
+    amountOff: null,
+    duration: 'once',
+    durationInMonths: null,
+  };
+
+  it('starts the trial and Monthly on a month, a year on a year', () => {
+    expect(choicePeriod('trial')).toBe('month');
+    expect(choicePeriod('month')).toBe('month');
+    expect(choicePeriod('year')).toBe('year');
+    expect(choiceMode('trial')).toBe('trial');
+    expect(choiceMode('month')).toBe('buy');
+    expect(choiceMode('year')).toBe('buy');
+  });
+
+  it('has nothing due today for the trial, the first month with the code, a year at its price', () => {
+    expect(dueToday('starter', 'trial', save50)).toBe(0);
+    expect(dueToday('starter', 'month', save50)).toBe(24.5);
+    expect(dueToday('growth', 'month', save50)).toBe(124.5);
+    expect(dueToday('starter', 'month', null)).toBe(49);
+    // A code is for buying monthly: a year has its own discount.
+    expect(dueToday('starter', 'year', save50)).toBe(470);
+    expect(dueToday('growth', 'year', null)).toBe(2390);
   });
 });

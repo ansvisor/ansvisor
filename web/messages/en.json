@@ -92,7 +92,9 @@
     "demo": {
       "dialog": {
         "title": "Use Ansvisor for your own brand",
+        "titleFor": "Use Ansvisor for {brand}",
         "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
+        "bodyFor": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for {brand}.",
         "action": "{action} works on your own brand",
         "label": "This is a demo brand with sample data"
       },
@@ -105,6 +107,7 @@
     "trialOffer": {
       "title": "Choose how to start",
       "body": "Everything you set up is here. Pick a plan and Ansvisor starts tracking, writing and fixing for your brand.",
+      "bodyFor": "Everything you set up for {brand} is here. Pick a plan and Ansvisor starts tracking, writing and fixing for it.",
       "label": "Your brand isn't tracked yet"
     },
     "actions": {
@@ -267,7 +270,7 @@
         "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
         "then": "then {price}/mo",
         "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
-        "monthlyOnly": "{code} is for monthly plans: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
+        "monthlyOnly": "{code} is for buying monthly: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
         "switchToMonthly": "Switch to Monthly",
         "invalid": "“{code}” isn’t a valid code.",
         "failed": "Couldn't check the code. Try again."
@@ -279,19 +282,33 @@
     "startTrial": "Start {days}-day free trial",
     "fullPlan": "Full plan from day one",
     "limitedAi": "Limited AI usage for {days} days",
-    "buyPrice": "{first} first month, then {price}/month",
-    "trialPrice": "Free for {days} days, then {price}/{period, select, year {year} other {month}}",
-    "cardNote": "{both, select, yes {Card required for both. Cancel any time.} other {Card required. Cancel any time.}}",
+    "cardNote": "{both, select, yes {Card required for both.} other {Card required.}}",
     "limitedOffer": "Limited offer",
     "trialUsed": "This workspace's free trial has been used. Buy now to start the plan.",
     "chooseHowToStart": "Choose how to start",
-    "choiceLine": "{offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {}}"
+    "choosePlan": "Choose Your Plan",
+    "choice": {
+      "label": "How to start",
+      "trial": "{days}-day trial",
+      "month": "Monthly",
+      "monthOffer": "{discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}",
+      "year": "Yearly"
+    },
+    "dueToday": "Due today",
+    "freeUntil": "Free until {date}, then {price}/month",
+    "trustLine": "<part>Secure checkout with Stripe</part> · <part>Cancel any time</part>",
+    "haveCode": "Have a code?",
+    "showDetails": "Show plan details",
+    "hideDetails": "Hide plan details",
+    "readyToTrack": "Ready to track for <b>{brand}</b>: {prompts, plural, one {# prompt} other {# prompts}} · {topics, plural, one {# topic} other {# topics}} · {competitors, plural, one {# competitor} other {# competitors}}"
   },
   "demo": {
     "band": {
       "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {Pick a plan to use it for your own brand.}}",
+      "textFor": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start tracking <b>{ownBrand}</b> with a {days}-day free trial, or get 50% off your first month.} trial {Start tracking <b>{ownBrand}</b> with a {days}-day free trial.} discount {Get 50% off your first month of tracking <b>{ownBrand}</b>.} other {Pick a plan to track <b>{ownBrand}</b>.}}",
       "textPlanActive": "You're exploring <b>{brand}</b>, a demo brand with sample data. Nothing here runs or uses AI.",
-      "switchToOwnBrand": "Switch to your brand"
+      "switchToOwnBrand": "Switch to your brand",
+      "switchToBrand": "Switch to {brand}"
     },
     "switcher": {
       "sampleData": "Demo · sample data",
@@ -304,7 +321,6 @@
       "failed": "Couldn't open the demo brand. Try again."
     },
     "onboarding": {
-      "or": "or",
       "title": "Not ready to add a card? Explore a demo brand",
       "body": "See Ansvisor with sample data: prompts, AI answers, content and reports. No card needed. {brand} stays saved, and tracking starts when you pick a plan.",
       "yourBrand": "Your brand",

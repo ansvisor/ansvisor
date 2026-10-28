@@ -203,7 +203,7 @@ describe('useUpgradeGate', () => {
       await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
       expect(button('Choose Starter')).toBeDefined();
       expect(button('Choose Growth')).toBeDefined();
-      expect(dialog()?.textContent).toContain('Card required. Cancel any time.');
+      expect(dialog()?.textContent).toContain('Card required.');
       expect(button('Update payment method')).toBeUndefined();
     } finally {
       vi.unstubAllGlobals();
@@ -292,10 +292,14 @@ describe('useUpgradeGate on the demo brand', () => {
     expect(probe().dataset.locked).toBe('true');
     await runAll();
     expect(action).not.toHaveBeenCalled();
-    expect(dialog()?.textContent).toContain('Use Ansvisor for your own brand');
+    // The workspace's own brand, by name.
+    expect(dialog()?.textContent).toContain('Use Ansvisor for Acme');
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       'Adding prompts works on your own brand',
     );
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-choice="trial"]')!.click();
+    });
     expect(button('Start 14-day free trial')).toBeDefined();
   });
 
@@ -303,7 +307,7 @@ describe('useUpgradeGate on the demo brand', () => {
     selectBrand('demo');
     await render({ active: false, status: 'canceled' });
     await runAll();
-    expect(dialog()?.textContent).toContain('Use Ansvisor for your own brand');
+    expect(dialog()?.textContent).toContain('Use Ansvisor for Acme');
     // Opened without a label: what the demo is.
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       'This is a demo brand with sample data',
@@ -372,8 +376,11 @@ describe("useUpgradeGate on a brand that isn't tracked yet", () => {
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       "Your brand isn't tracked yet",
     );
-    expect(button('Start 14-day free trial')).toBeDefined();
     expect(button('Choose Starter')).toBeDefined();
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-choice="trial"]')!.click();
+    });
+    expect(button('Start 14-day free trial')).toBeDefined();
   });
 
   it('keeps what was clicked as the label', async () => {
