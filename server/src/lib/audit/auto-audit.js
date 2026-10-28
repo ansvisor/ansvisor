@@ -87,26 +87,59 @@ export function pendingRuns(schedule, recordedDays, now) {
 }
 
 /**
- * The pages a run audits: from every brand's inbox (ordered by priority.js),
- * the pages not being audited and not audited in the last 30 days, nor tried
- * by a run in that time (an audit that failed, say on a page that blocks
- * bots, would otherwise take a slot every run); pinned pages first, then the
- * highest priority across the brands, at most `slots`. A tie keeps the
- * inboxes' own order.
+ * Pages fixed since their last audit (learning B7) take at most this share
+ * of a run, rounded up: the rest is the inbox's, so new pages keep coming.
+ */
+export const FIXED_SHARE = 0.5;
+
+/**
+ * The pages a run audits. First the pages a Site Audit fix was completed on
+ * since they were last audited (learning B7), the most recently fixed first,
+ * up to FIXED_SHARE of the run: auditing them again says whether the fix
+ * took, which the Action Center reads as the fix's result, a month sooner
+ * than the 30-day rest below would. Then, from every brand's inbox (ordered
+ * by priority.js), the pages not being audited and not audited in the last
+ * 30 days, nor tried by a run in that time (an audit that failed, say on a
+ * page that blocks bots, would otherwise take a slot every run); pinned
+ * pages first, then the highest priority across the brands, at most `slots`
+ * in all. A tie keeps the inboxes' own order.
  *
  * @param {Array<{ brandId: string, opportunities: Array<{ key: string, url: string, path: string, pinned: boolean, running: boolean, priority: number, lastAudit: { at: string }|null }> }>} inboxes
  * @param {number} slots
  * @param {Date} now
  * @param {Set<string>} [triedKeys]  page keys a run audited in the last 30 days
- * @returns {Array<{ brandId: string, url: string, path: string, pinned: boolean, priority: number }>}
+ * @param {Array<{ brandId: string, key: string, url: string, path: string }>} [fixed]
+ *   pages fixed since their last audit, the most recently fixed first
+ * @returns {Array<{ brandId: string, url: string, path: string, pinned: boolean, priority: number, fixed?: true }>}
  */
-export function pickRunPages(inboxes, slots, now, triedKeys = new Set()) {
+export function pickRunPages(inboxes, slots, now, triedKeys = new Set(), fixed = []) {
   const freshSince = new Date(now).getTime() - AUTO_AUDIT.freshDays * DAY_MS;
+  const running = new Set(
+    inboxes.flatMap(({ opportunities }) =>
+      opportunities.filter((r) => r.running).map((r) => r.key),
+    ),
+  );
+  const first = [];
+  const taken = new Set();
+  const fixedSlots = Math.min(Math.max(0, slots), Math.ceil(Math.max(0, slots) * FIXED_SHARE));
+  for (const page of fixed) {
+    if (first.length >= fixedSlots) break;
+    if (!page.key || running.has(page.key) || taken.has(page.key)) continue;
+    taken.add(page.key);
+    first.push({
+      brandId: page.brandId,
+      url: page.url,
+      path: page.path,
+      pinned: false,
+      priority: 0,
+      fixed: true,
+    });
+  }
   const candidates = [];
   for (const { brandId, opportunities } of inboxes) {
     for (const row of opportunities) {
       // A template's row (SA-007) stands for pages the inbox lists one by one.
-      if (row.template || row.running || triedKeys.has(row.key)) continue;
+      if (row.template || row.running || triedKeys.has(row.key) || taken.has(row.key)) continue;
       if (row.lastAudit && Date.parse(row.lastAudit.at) >= freshSince) continue;
       candidates.push({
         brandId,
@@ -117,7 +150,10 @@ export function pickRunPages(inboxes, slots, now, triedKeys = new Set()) {
       });
     }
   }
-  return candidates
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.priority - a.priority)
-    .slice(0, Math.max(0, slots));
+  return [
+    ...first,
+    ...candidates
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.priority - a.priority)
+      .slice(0, Math.max(0, slots - first.length)),
+  ];
 }

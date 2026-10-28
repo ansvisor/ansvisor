@@ -16,6 +16,7 @@ import { logger } from '../logger.js';
 import { AUTO_AUDIT, pickRunPages } from './auto-audit.js';
 import { sendAutoAuditEmail } from './auto-audit-email.js';
 import { opportunityKey } from './opportunities.js';
+import { pageKey } from './history.js';
 
 /**
  * @typedef {object} SweepDeps
@@ -108,8 +109,15 @@ async function startRun(orgId, brands, { readInbox, startAudits, now }) {
 
   const inboxes = [];
   let triedKeys = new Set();
+  let fixed = [];
   if (slots > 0) {
     triedKeys = await recentlyTriedPages(brands, now);
+    // Pages fixed since their last audit come first (learning B7). A read
+    // that fails leaves the run to the inboxes, as before.
+    fixed = await fixedPages(brands, now).catch((err) => {
+      logger.warn({ err, orgId }, '[auto-audit] fixed pages not read');
+      return [];
+    });
     for (const brand of brands) {
       try {
         const { opportunities } = await readInbox(brand.id);
@@ -119,7 +127,7 @@ async function startRun(orgId, brands, { readInbox, startAudits, now }) {
       }
     }
   }
-  const pages = pickRunPages(inboxes, slots, now, triedKeys);
+  const pages = pickRunPages(inboxes, slots, now, triedKeys, fixed);
 
   const auditIds = [];
   const audits = [];
@@ -166,6 +174,77 @@ async function recentlyTriedPages(brands, now) {
     .gte('created_at', since.toISOString());
   if (error) throw new Error(error.message);
   return new Set((data ?? []).map((row) => opportunityKey(row.url)).filter(Boolean));
+}
+
+/** Pages one fix action offers at most: a run takes few anyway. */
+const FIXED_PER_ACTION = 20;
+
+/**
+ * Pages a Site Audit fix (an Action Center action of the fix category) was
+ * completed on in the last 30 days and that no audit has read since, the
+ * most recently fixed first (learning B7). Its targets name the pages, by
+ * their addresses; one fixed twice counts from its last fix.
+ *
+ * @returns {Promise<Array<{ brandId: string, key: string, url: string, path: string }>>}
+ */
+export async function fixedPages(brands, now) {
+  const since = new Date(now.getTime() - AUTO_AUDIT.freshDays * 24 * 60 * 60 * 1000);
+  const brandIds = brands.map((b) => b.id);
+  const { data: actions, error } = await supabaseAdmin
+    .from('actions')
+    .select('brand_id, payload, completed_at')
+    .in('brand_id', brandIds)
+    .eq('status', 'completed')
+    .eq('category', 'fix')
+    .is('deleted_at', null)
+    .gte('completed_at', since.toISOString())
+    .order('completed_at', { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+
+  const pages = new Map();
+  for (const action of actions ?? []) {
+    const p = action.payload ?? {};
+    const urls = [
+      ...(Array.isArray(p.targets) ? p.targets.map((t) => t?.id) : []),
+      ...(Array.isArray(p.targetIds) ? p.targetIds : []),
+    ].filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
+    for (const url of [...new Set(urls)].slice(0, FIXED_PER_ACTION)) {
+      const key = opportunityKey(url);
+      // Newest fix first: the first one read for a page is its last.
+      if (!key || pages.has(key)) continue;
+      pages.set(key, {
+        brandId: action.brand_id,
+        key,
+        url,
+        path: pageKey(url)?.path ?? '/',
+        fixedAt: Date.parse(action.completed_at),
+      });
+    }
+  }
+  if (pages.size === 0) return [];
+
+  // The audits since the oldest of those fixes, by the address asked for or ended at.
+  const oldest = [...pages.values()].reduce((min, page) =>
+    page.fixedAt < min.fixedAt ? page : min,
+  ).fixedAt;
+  const { data: audits, error: auditsErr } = await supabaseAdmin
+    .from('site_audits')
+    .select('url, final_url, created_at')
+    .in('brand_id', brandIds)
+    .gte('created_at', new Date(oldest).toISOString());
+  if (auditsErr) throw new Error(auditsErr.message);
+  const lastAudit = new Map();
+  for (const audit of audits ?? []) {
+    for (const url of [audit.url, audit.final_url]) {
+      const key = url ? opportunityKey(url) : null;
+      const at = Date.parse(audit.created_at);
+      if (key && !(lastAudit.get(key) >= at)) lastAudit.set(key, at);
+    }
+  }
+  return [...pages.values()]
+    .filter((page) => !(lastAudit.get(page.key) >= page.fixedAt))
+    .map(({ brandId, key, url, path }) => ({ brandId, key, url, path }));
 }
 
 /** Record the finished run and, when the org asked for it, e-mail what it found. */

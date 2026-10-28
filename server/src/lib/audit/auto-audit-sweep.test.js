@@ -14,6 +14,8 @@ let ops;
 let auditRows;
 let triedRows;
 let failCounts;
+let fixedActions;
+let recentAudits;
 
 class PlanLimitError extends Error {}
 
@@ -46,8 +48,19 @@ function query(table) {
       op.filters.push(['gte', col, val]);
       return builder;
     },
+    is: (col, val) => {
+      op.filters.push(['is', col, val]);
+      return builder;
+    },
+    order: () => builder,
+    limit: () => builder,
     then: (resolve) => {
       ops.push(op);
+      // Fix actions completed lately (learning B7), and the audits since.
+      if (table === 'actions') return resolve({ data: fixedActions, error: null });
+      if (table === 'site_audits' && op.select === 'url, final_url, created_at') {
+        return resolve({ data: recentAudits, error: null });
+      }
       if (table === 'site_audit_auto_runs' && op.upsert) {
         return resolve({ data: claimed ? [{ id: 'run-1' }] : [], error: null });
       }
@@ -115,6 +128,8 @@ beforeEach(async () => {
   auditRows = [];
   triedRows = [];
   failCounts = {};
+  fixedActions = [];
+  recentAudits = [];
   sendAutoAuditEmail = vi.fn().mockResolvedValue(true);
   readInbox = vi.fn(async (brandId) => ({ opportunities: inboxes[brandId] ?? [] }));
   startAudits = vi.fn(async (brandId, urls) => ({
@@ -273,5 +288,66 @@ describe('sweepAutoAudits', () => {
     quotas['org-1'] = new PlanLimitError('An active subscription or free trial is required.');
     expect(await run()).toEqual({ runs: 0 });
     expect(runOps()).toEqual([]);
+  });
+});
+
+/**
+ * Pages a Site Audit fix was completed on lately and no audit has read
+ * since (learning B7): the run takes them first.
+ */
+describe('fixedPages', () => {
+  it("reads the fixes' pages not audited since, the newest fix first, and the run takes them first", async () => {
+    fixedActions = [
+      {
+        brand_id: 'brand-b',
+        completed_at: '2026-10-09T10:00:00Z',
+        payload: { targets: [{ id: 'https://acme.com/b-fixed' }, { id: 'acme.com' }] },
+      },
+      {
+        brand_id: 'brand-a',
+        completed_at: '2026-10-05T10:00:00Z',
+        payload: {
+          targets: [{ id: 'https://acme.com/a-fixed' }],
+          targetIds: ['https://acme.com/a-checked', 'https://acme.com/a-fixed'],
+        },
+      },
+    ];
+    // Audited after its fix: done. Audited before it: still due.
+    recentAudits = [
+      { url: 'https://acme.com/a-checked', final_url: null, created_at: '2026-10-06T00:00:00Z' },
+      { url: 'https://acme.com/a-fixed', final_url: null, created_at: '2026-10-04T00:00:00Z' },
+    ];
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+
+    expect(await fixedPages(brandRows, NOW)).toEqual([
+      {
+        brandId: 'brand-b',
+        key: 'acme.com/b-fixed',
+        url: 'https://acme.com/b-fixed',
+        path: '/b-fixed',
+      },
+      {
+        brandId: 'brand-a',
+        key: 'acme.com/a-fixed',
+        url: 'https://acme.com/a-fixed',
+        path: '/a-fixed',
+      },
+    ]);
+    const read = ops.find((op) => op.table === 'actions');
+    expect(read.filters).toEqual(
+      expect.arrayContaining([
+        ['eq', 'status', 'completed'],
+        ['eq', 'category', 'fix'],
+        ['is', 'deleted_at', null],
+      ]),
+    );
+
+    ops = [];
+    await sweep({ readInbox, startAudits, now: NOW });
+    // Five slots: the two fixed pages first, then the inboxes' best three, by brand.
+    expect(startAudits.mock.calls.map(([brandId, urls]) => [brandId, urls])).toEqual([
+      ['brand-a', ['https://acme.com/a-fixed', 'https://acme.com/pinned', 'https://acme.com/a-90']],
+      ['brand-b', ['https://acme.com/b-fixed', 'https://acme.com/b-80']],
+    ]);
   });
 });
