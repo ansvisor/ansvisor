@@ -1005,6 +1005,40 @@ describe('validateAction', () => {
       });
     });
 
+    it("reads the control's prompts and week before once for every reading due (learning B2)", async () => {
+      const writes = mockWrites({
+        prompts: [
+          { id: 'p1', topic_id: 't1' },
+          ...Array.from({ length: 6 }, (_, i) => ({ id: `c${i + 1}`, topic_id: 't1' })),
+        ],
+      });
+      rpc.mockResolvedValue({ data: { cells: 100, visible: 40 }, error: null });
+
+      await validateAction(
+        action({
+          kind: 'mention_review',
+          kpi_keys: ['ai_visibility'],
+          payload: { promptIds: ['p1'] },
+          created_at: daysAgo(50),
+          completed_at: daysAgo(40),
+        }),
+        { now: NOW },
+      );
+
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.readings.map((r) => r.day)).toEqual([7, 14, 30]);
+      expect(validation.control).toMatchObject({ basis: 'topics', prompts: 6 });
+      // Its topics, then the control's prompts: once, not for each reading.
+      expect(from.mock.calls.filter(([table]) => table === 'prompts')).toHaveLength(2);
+      // The control's week before once, and each reading's week after.
+      const controlReads = rpc.mock.calls
+        .filter(([name]) => name === 'opportunity_basket_metrics')
+        .filter(([, args]) => !args.p_prompt_ids.includes('p1'))
+        .map(([, args]) => args.p_from);
+      expect(controlReads).toHaveLength(4);
+      expect(controlReads.filter((day) => day === daysAgo(57).slice(0, 10))).toHaveLength(1);
+    });
+
     it('adds the readings due to those it has, and reads nothing once final', async () => {
       let writes = mockWrites();
       byDay({ [daysAgo(20).slice(0, 10)]: 140 });

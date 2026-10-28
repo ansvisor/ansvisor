@@ -422,7 +422,10 @@ export async function validateAction(action, { now = new Date() } = {}) {
 
   // Each reading due, in order; the action keeps the last one's figures and
   // verdict, every reading's verdict and metrics, and whether it's final.
+  // The control's prompts and its week before (B2) are the same for each:
+  // read for the first, kept for the rest.
   const readings = [...previous];
+  const controlReads = {};
   let last = null;
   for (const day of due) {
     last = await measureReading(action, {
@@ -431,6 +434,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
       signals,
       audit,
       now,
+      controlReads,
     });
     readings.push({
       day,
@@ -461,15 +465,18 @@ export async function validateAction(action, { now = new Date() } = {}) {
  * of theirs is taken when the reading finishes, its counts on the same
  * scale as the result's (A6). Kept beside the result, not in its verdict.
  * Null with too few prompts to read, or a read that fails: the result
- * stands as it was.
+ * stands as it was. Its prompts and week before, the same for every
+ * reading of the action, are read once into `shared`.
  */
-async function controlOf(action, promptIds, { beforeWindow, afterWindow }) {
+async function controlOf(action, promptIds, { beforeWindow, afterWindow }, shared = {}) {
   const brandId = action.brand_id;
   try {
-    const scope = await controlScope(brandId, promptIds, beforeWindow.from);
+    shared.scope ??= controlScope(brandId, promptIds, beforeWindow.from);
+    const scope = await shared.scope;
     if (!scope) return null;
+    shared.before ??= measureBasket(brandId, scope, beforeWindow.from, beforeWindow.to);
     const [before, after] = await Promise.all([
-      measureBasket(brandId, scope, beforeWindow.from, beforeWindow.to),
+      shared.before,
       measureBasket(brandId, scope, afterWindow.from, afterWindow.to),
     ]);
     return { basis: scope.basis, prompts: scope.promptIds.length, before, after };
@@ -498,7 +505,10 @@ function fullWindowControl({ before, after }, nights) {
  * One reading of a closed action (learning B1): what it keeps and its
  * verdict, over the week `afterWindow` against the week before it was raised.
  */
-async function measureReading(action, { beforeWindow, afterWindow, signals, audit, now }) {
+async function measureReading(
+  action,
+  { beforeWindow, afterWindow, signals, audit, now, controlReads },
+) {
   // The verdict from the metrics kept, by its main metric; given `aims`,
   // only the metrics the action names count (see deriveOutcome). Given its
   // `control` (B2), its change net of the control's kept beside.
@@ -585,10 +595,12 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
     }));
     // Its aim: the first of its success metrics a basket reads, else its visibility.
     const primary = (action.kpi_keys ?? []).find((key) => key in BASKET_KPIS) ?? 'ai_visibility';
-    const control = await controlOf(action, scope.promptIds, {
-      beforeWindow,
-      afterWindow,
-    });
+    const control = await controlOf(
+      action,
+      scope.promptIds,
+      { beforeWindow, afterWindow },
+      controlReads,
+    );
     return finish(
       {
         measuredAt: now.toISOString(),
@@ -647,10 +659,12 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
         before: brandBefore[metric] ?? null,
         after: brandAfter[metric] ?? null,
       }));
-      const control = await controlOf(action, targets.promptIds, {
-        beforeWindow,
-        afterWindow,
-      });
+      const control = await controlOf(
+        action,
+        targets.promptIds,
+        { beforeWindow, afterWindow },
+        controlReads,
+      );
       return finish(
         {
           measuredAt: now.toISOString(),
