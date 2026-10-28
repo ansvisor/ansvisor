@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { toast } from 'sonner';
-import { ArrowUpRight, Check, CreditCard, Loader2, Lock, Mail, Play, Tag, X } from 'lucide-react';
+import { ArrowUpRight, Check, CreditCard, Lock, Mail, Play, Tag, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -22,9 +21,7 @@ import {
   PLANS,
   PRICING_URL,
   SUBSCRIBABLE_PLANS,
-  FIRST_MONTH_OFFER,
   firstMonthOfferOn,
-  type PlanId,
 } from '@/config/plans';
 import { useUserRole } from '@/hooks/use-user-role';
 import {
@@ -33,37 +30,19 @@ import {
   periodPrice,
   takesPromoCode,
   type BillingInterval,
-  type CheckoutMode,
 } from '@/lib/billing/plan-purchase';
-import { discountedPrice, type PromoOffer } from '@/lib/billing/promo-code';
-import { TRIAL_DAYS } from '@/lib/billing/trial';
+import type { PromoOffer } from '@/lib/billing/promo-code';
 import type { DemoOffer } from '@/lib/demo/demo-brand';
-import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
-
-/** Dollars as the cards show them: whole dollars bare, anything else to the cent. */
-function money(value: number): string {
-  return `$${
-    Number.isInteger(value)
-      ? formatNumber(value)
-      : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  }`;
-}
-
-/** What a code takes off, for its texts: "50%" or "$10". */
-function discountOf(offer: PromoOffer): string {
-  return offer.percentOff != null ? `${offer.percentOff}%` : money(offer.amountOff ?? 0);
-}
-
-/** The values every promo text reads. */
-function offerValues(offer: PromoOffer) {
-  return {
-    code: offer.code,
-    discount: discountOf(offer),
-    duration: offer.duration,
-    months: offer.durationInMonths ?? 1,
-  };
-}
+import {
+  PlanPrice,
+  PlanStartButtons,
+  checkPromoCode,
+  money,
+  offerValues,
+  useFirstMonthOffer,
+  useStartCheckout,
+} from './plan-start';
 
 type CodeError = { kind: 'invalid'; code: string } | { kind: 'failed' };
 
@@ -74,33 +53,6 @@ type CodeError = { kind: 'invalid'; code: string } | { kind: 'failed' };
  * tracked yet. Each comes with the first-month code.
  */
 export type PlanPitch = { from: 'demo'; offer: DemoOffer } | { from: 'own_brand'; offer: 'trial' };
-
-/**
- * A promotion code as Stripe has it now (POST /api/stripe/promo-code): what
- * it takes off, 'invalid' when it can't be redeemed, 'failed' when it
- * couldn't be checked.
- */
-async function checkPromoCode(code: string): Promise<PromoOffer | 'invalid' | 'failed'> {
-  try {
-    const res = await fetch('/api/stripe/promo-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data) return 'failed';
-    if (!data.valid) return 'invalid';
-    return {
-      code: data.code,
-      percentOff: data.percentOff ?? null,
-      amountOff: data.amountOff ?? null,
-      duration: data.duration,
-      durationInMonths: data.durationInMonths ?? null,
-    };
-  } catch {
-    return 'failed';
-  }
-}
 
 const PROMO_INPUT_ID = 'upgrade-promo-code';
 const PROMO_NOTE_ID = 'upgrade-promo-note';
@@ -154,41 +106,28 @@ export function ChoosePlanDialog({
   const [codeError, setCodeError] = useState<CodeError | null>(null);
   // The code Stripe took, with what it takes off. Only an admin enters one.
   const [offer, setOffer] = useState<PromoOffer | null>(null);
-  // The plan whose Checkout is opening, and how it starts.
-  const [checkout, setCheckout] = useState<{ planId: PlanId; mode: CheckoutMode } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // The first-month offer's code is tried once, the first time the dialog opens.
-  const offerCodeTried = useRef(false);
   const demo = pitch?.from === 'demo';
   // The free trial: for a workspace that never had a subscription.
   const trialOffered = pitch?.offer === 'trial';
   const offerOn = firstMonthOfferOn();
 
-  useEffect(() => {
-    if (!open || !offerOn || !canAdmin || offerCodeTried.current) return;
-    offerCodeTried.current = true;
-    void checkPromoCode(FIRST_MONTH_CODE).then((found) => {
-      // Quietly: a code that doesn't apply leaves the field as it was. One
-      // that couldn't be checked (Stripe unreachable, or not set up on a
-      // local server) still shows the offer as configured; checkout applies
-      // the code and says so by the field if Stripe turns it down.
-      const shown =
-        found === 'failed'
-          ? {
-              code: FIRST_MONTH_CODE,
-              percentOff: FIRST_MONTH_OFFER.percentOff,
-              amountOff: null,
-              duration: 'once' as const,
-              durationInMonths: null,
-            }
-          : found;
-      if (typeof shown === 'object') setOffer((current) => current ?? shown);
-    });
-  }, [open, offerOn, canAdmin]);
+  // The first-month offer's code is tried once, the first time the dialog opens.
+  useFirstMonthOffer(open && offerOn && canAdmin, setOffer);
 
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
   // The code lowers this period's prices: a monthly plan, for an admin.
   const discounted = canAdmin && offer != null && takesPromoCode(period) ? offer : null;
+  const { checkout, start } = useStartCheckout({
+    organizationId,
+    period,
+    // The code stopped working since it was applied: say so by the field.
+    onCodeRefused: (code) => {
+      setOffer(null);
+      setCodeInput(code);
+      setCodeError({ kind: 'invalid', code: code.toUpperCase() });
+    },
+  });
 
   async function applyCode(event: FormEvent) {
     event.preventDefault();
@@ -211,45 +150,6 @@ export function ChoosePlanDialog({
     setCodeInput('');
     // The field is back once the chip is gone.
     setTimeout(() => inputRef.current?.focus(), 0);
-  }
-
-  async function choose(planId: PlanId, mode: CheckoutMode) {
-    if (!organizationId || checkout) return;
-    setCheckout({ planId, mode });
-    // A code goes with buying now only: the trial comes without an offer.
-    const promotionCode = mode === 'buy' ? discounted?.code : undefined;
-    try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId,
-          organizationId,
-          interval: period,
-          returnTo: 'billing',
-          mode,
-          ...(promotionCode ? { promotionCode } : {}),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) {
-        // The code stopped working since it was applied: say so by the field.
-        if (data.code === 'invalid_promo_code' && promotionCode) {
-          setOffer(null);
-          setCodeInput(promotionCode);
-          setCodeError({ kind: 'invalid', code: promotionCode.toUpperCase() });
-          setCheckout(null);
-          return;
-        }
-        if (data.code === 'trial_unavailable') throw new Error(tOffer('trialUsed'));
-        throw new Error(data.error || tSettings('checkoutFailed'));
-      }
-      window.location.href = data.url;
-      // No reset: the page is leaving for Stripe.
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : tSettings('checkoutFailed'));
-      setCheckout(null);
-    }
   }
 
   // The line under the controls: the code's word for this period, or why
@@ -414,18 +314,7 @@ export function ChoosePlanDialog({
         <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
           {SUBSCRIBABLE_PLANS.map((planId) => {
             const plan = PLANS[planId];
-            const monthly = periodPrice(planId, 'month');
-            const price = periodPrice(planId, period);
-            const firstPrice =
-              discounted && monthly != null ? discountedPrice(monthly, discounted) : null;
-            const opening = checkout?.planId === planId ? checkout.mode : null;
-            const busy = price == null || !organizationId || checkout != null;
-            const openingCheckout = (
-              <>
-                <Loader2 className="animate-spin" aria-hidden />
-                {tPlans('openingCheckout')}
-              </>
-            );
+            const busy = periodPrice(planId, period) == null || !organizationId || checkout != null;
 
             return (
               <section
@@ -449,116 +338,21 @@ export function ChoosePlanDialog({
                   </p>
                 </div>
 
-                <div
-                  data-slot="plan-price"
-                  className="flex flex-wrap content-end items-baseline gap-x-1.5 lg:min-h-20"
-                >
-                  {period === 'year' && price != null && monthly != null ? (
-                    <>
-                      <span className="text-sm text-muted-foreground line-through">
-                        <span className="sr-only">{tSettings('regularPrice')} </span>
-                        {money(monthly * 12)}
-                      </span>
-                      <span className="text-3xl font-bold tracking-tight">{money(price)}</span>
-                      <span className="text-sm text-muted-foreground">/{tSettings('year')}</span>
-                      <span className="w-full text-xs text-muted-foreground">
-                        {tPlans('perMonthBilledYearly', {
-                          price: money(Math.round((price / 12) * 100) / 100),
-                        })}
-                      </span>
-                    </>
-                  ) : discounted && firstPrice != null && monthly != null ? (
-                    <>
-                      <span className="inline-flex w-full flex-wrap items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                        {offerOn && discounted.code.toUpperCase() === FIRST_MONTH_CODE ? (
-                          <Badge
-                            data-slot="limited-offer"
-                            variant="outline"
-                            className="h-5 border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-400"
-                          >
-                            {tOffer('limitedOffer')}
-                          </Badge>
-                        ) : (
-                          <Check className="size-3" aria-hidden />
-                        )}
-                        {tPlans('promo.deal', offerValues(discounted))}
-                      </span>
-                      <span className="text-sm text-muted-foreground line-through">
-                        <span className="sr-only">{tSettings('regularPrice')} </span>
-                        {money(monthly)}
-                      </span>
-                      <span className="text-3xl font-bold tracking-tight">{money(firstPrice)}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {tPlans('promo.per', offerValues(discounted))}
-                      </span>
-                      {discounted.duration !== 'forever' && (
-                        <span className="w-full text-xs text-muted-foreground">
-                          {tPlans('promo.then', { price: money(monthly) })}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-3xl font-bold tracking-tight">
-                        {price != null ? money(price) : '—'}
-                      </span>
-                      <span className="text-sm text-muted-foreground">/{tSettings('month')}</span>
-                    </>
-                  )}
-                </div>
+                <PlanPrice planId={planId} period={period} discounted={discounted} />
 
                 {canAdmin ? (
-                  <div className="space-y-2">
-                    {/* Buy now: the full plan today, the first-month offer on a monthly plan. */}
-                    <Button
-                      data-mode="buy"
-                      className="h-9 w-full"
-                      variant={plan.highlighted ? 'default' : 'outline'}
-                      disabled={busy}
-                      onClick={() => void choose(planId, 'buy')}
-                    >
-                      {opening === 'buy'
-                        ? openingCheckout
-                        : firstPrice != null
-                          ? tOffer('buyNow')
-                          : tSettings('choosePlanFor', { plan: plan.name })}
-                    </Button>
-                    {/* The first month's price is the card's own, above: not again here. */}
-                    {trialOffered && (
-                      <p
-                        data-slot="buy-terms"
-                        className="text-center text-xs text-muted-foreground"
-                      >
-                        {tOffer('fullPlan')}
-                      </p>
-                    )}
-                    {trialOffered && (
-                      <>
-                        <Button
-                          data-mode="trial"
-                          className="h-9 w-full"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => void choose(planId, 'trial')}
-                        >
-                          {opening === 'trial'
-                            ? openingCheckout
-                            : tOffer('startTrial', { days: TRIAL_DAYS })}
-                        </Button>
-                        <p
-                          data-slot="trial-terms"
-                          className="text-center text-xs text-muted-foreground"
-                        >
-                          {tOffer('trialPrice', {
-                            days: TRIAL_DAYS,
-                            price: price != null ? money(price) : '—',
-                            period,
-                          })}
-                          <span className="block">{tOffer('limitedAi', { days: TRIAL_DAYS })}</span>
-                        </p>
-                      </>
-                    )}
-                  </div>
+                  <PlanStartButtons
+                    planId={planId}
+                    period={period}
+                    discounted={discounted}
+                    trialOffered={trialOffered}
+                    opening={checkout?.planId === planId ? checkout.mode : null}
+                    disabled={busy}
+                    // A code goes with buying now only: the trial comes without an offer.
+                    onStart={(mode) =>
+                      void start(planId, mode, mode === 'buy' ? discounted?.code : undefined)
+                    }
+                  />
                 ) : (
                   <p
                     data-slot="ask-admin"

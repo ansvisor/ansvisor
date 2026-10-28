@@ -33,7 +33,14 @@ async function render(
     interval = 'month',
     role = 'admin',
     cancelAtPeriodEnd = false,
-  }: { status?: string; interval?: string; role?: TeamRole; cancelAtPeriodEnd?: boolean } = {},
+    trialOffered = false,
+  }: {
+    status?: string;
+    interval?: string;
+    role?: TeamRole;
+    cancelAtPeriodEnd?: boolean;
+    trialOffered?: boolean;
+  } = {},
 ) {
   await act(async () => {
     root.render(
@@ -50,6 +57,7 @@ async function render(
             }}
             onUpdate={onUpdate}
             organizationId="org1"
+            trialOffered={trialOffered}
           />
         </RoleProvider>
       </NextIntlClientProvider>,
@@ -74,6 +82,12 @@ const cardText = () =>
       card.textContent,
     ]),
   );
+
+/** A plan card's way to start ('buy' or 'trial'), by plan name. */
+const startButton = (plan: string, mode: 'buy' | 'trial') =>
+  [...container.querySelectorAll('[data-slot="card"]')]
+    .find((card) => card.querySelector('[data-slot="card-title"]')?.textContent === plan)
+    ?.querySelector<HTMLButtonElement>(`button[data-mode="${mode}"]`) ?? null;
 
 /** Each plan card's name and its list, in order. */
 const cards = () =>
@@ -306,13 +320,43 @@ describe('buying during the free trial', () => {
 });
 
 describe('choosing a plan once the old one has ended', () => {
+  /** What Stripe says of the first-month code; it doesn't apply unless a test says. */
+  let promo: Record<string, unknown>;
+  /** Checkout's answer: its address, a hash jsdom can navigate to. */
+  let checkout: Response;
+
+  /** The JSON body sent to an address, the last time. */
+  const sent = (url: string) => {
+    const call = vi
+      .mocked(fetch)
+      .mock.calls.filter(([to]) => to === url)
+      .at(-1);
+    return call ? JSON.parse((call[1] as RequestInit).body as string) : undefined;
+  };
+
   beforeEach(() => {
-    // Checkout's address; a hash, which jsdom can navigate to.
+    promo = { valid: false };
+    checkout = Response.json({ url: '#checkout' });
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json({ url: '#checkout' })),
+      vi.fn(async (url: string) =>
+        url === '/api/stripe/promo-code' ? Response.json(promo) : checkout,
+      ),
     );
   });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const SAVE50 = {
+    valid: true,
+    code: 'SAVE50',
+    percentOff: 50,
+    amountOff: null,
+    duration: 'once',
+    durationInMonths: null,
+  };
 
   it('starts a new subscription through Checkout, in the period chosen', async () => {
     await render('starter', { status: 'canceled', cancelAtPeriodEnd: true });
@@ -327,33 +371,87 @@ describe('choosing a plan once the old one has ended', () => {
     await click('AnnualSave 20%');
     await click('Choose Growth');
 
-    expect(fetch).toHaveBeenCalledWith('/api/stripe/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        planId: 'growth',
-        organizationId: 'org1',
-        interval: 'year',
-        returnTo: 'billing',
-        mode: 'buy',
-      }),
+    expect(sent('/api/stripe/checkout')).toEqual({
+      planId: 'growth',
+      organizationId: 'org1',
+      interval: 'year',
+      returnTo: 'billing',
+      mode: 'buy',
     });
     expect(window.location.hash).toBe('#checkout');
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
   it('says so when Checkout does not open, and lets the admin try again', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(Response.json({}, { status: 500 }));
+    checkout = Response.json({}, { status: 500 });
     await render('starter', { status: 'canceled' });
     await click('Choose Starter');
     expect(toast.error).toHaveBeenCalledWith("Couldn't open the checkout. Try again.");
     expect(button('Choose Starter')?.disabled).toBe(false);
   });
 
+  it('offers a plan that ended only Buy now, at 50% off the first month', async () => {
+    promo = SAVE50;
+    await render('growth', { status: 'canceled' });
+    await vi.waitFor(() => expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now'));
+    expect(cardText().Starter).toContain('Limited offer');
+    expect(cardText().Starter).toContain('$24.50first monththen $49/mo');
+    expect(startButton('Starter', 'trial')).toBeNull();
+    expect(container.textContent).not.toContain('free trial');
+
+    await act(async () => startButton('Growth', 'buy')!.click());
+    expect(sent('/api/stripe/checkout')).toEqual({
+      planId: 'growth',
+      organizationId: 'org1',
+      interval: 'month',
+      returnTo: 'billing',
+      mode: 'buy',
+      promotionCode: 'SAVE50',
+    });
+  });
+
+  it('offers a workspace that never had a plan both ways to start, as the plan dialog does', async () => {
+    promo = SAVE50;
+    await render('starter', { status: 'incomplete', trialOffered: true });
+    expect(container.textContent).toContain(
+      "Buy a plan now, or try one free for 14 days first. Either way you add a card on Stripe's secure checkout.",
+    );
+    await vi.waitFor(() => expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now'));
+    expect(startButton('Growth', 'trial')?.textContent).toBe('Start 14-day free trial');
+    expect(cardText().Growth).toContain('Free for 14 days, then $249/month');
+    expect(cardText().Growth).toContain('Limited AI usage for 14 days');
+
+    // The trial comes without the offer's code.
+    await act(async () => startButton('Growth', 'trial')!.click());
+    expect(sent('/api/stripe/checkout')).toEqual({
+      planId: 'growth',
+      organizationId: 'org1',
+      interval: 'month',
+      returnTo: 'billing',
+      mode: 'trial',
+    });
+  });
+
+  it('says so when Stripe turns the code down at Checkout, and shows the plain prices', async () => {
+    promo = SAVE50;
+    checkout = Response.json(
+      { error: 'Invalid promotion code', code: 'invalid_promo_code' },
+      { status: 400 },
+    );
+    await render('starter', { status: 'canceled' });
+    await vi.waitFor(() => expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now'));
+    await act(async () => startButton('Starter', 'buy')!.click());
+    expect(toast.error).toHaveBeenCalledWith('“SAVE50” isn’t a valid code.');
+    expect(startButton('Starter', 'buy')?.textContent).toBe('Choose Starter');
+    expect(startButton('Starter', 'buy')?.disabled).toBe(false);
+  });
+
   it('leaves choosing a plan to admins', async () => {
     await render('starter', { status: 'canceled', role: 'analyst' });
     expect(button('Choose Starter')).toBeUndefined();
     expect(button('Choose Growth')).toBeUndefined();
+    // A member's page never asks Stripe about the code.
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 
