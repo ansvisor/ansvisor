@@ -41,12 +41,13 @@ describe('priceText', () => {
     expect(priceText({ price: null, salePrice: null, currency: 'USD' })).toBeNull();
   });
 
-  it('reads a price of 0 as none, and a sale price not under the price as no sale', () => {
+  it('reads a price of 0 as none, a sale price not under the price as no sale, and a sale price alone as the price', () => {
     expect(priceText({ price: 0, salePrice: null, currency: 'USD' })).toBeNull();
     expect(priceText({ price: 149, salePrice: 0, currency: 'USD' })).toBe('$149.00');
     expect(priceText({ price: 149, salePrice: 149, currency: 'USD' })).toBe('$149.00');
     expect(priceText({ price: 149, salePrice: 159, currency: 'USD' })).toBe('$149.00');
-    expect(priceText({ price: null, salePrice: 129, currency: 'USD' })).toBeNull();
+    expect(priceText({ price: null, salePrice: 129, currency: 'USD' })).toBe('$129.00');
+    expect(priceText({ price: null, salePrice: null, currency: 'USD' })).toBeNull();
   });
 });
 

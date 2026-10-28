@@ -291,16 +291,18 @@ describe('getProductsForBlock', () => {
     };
   };
 
-  it("shows each one's cheapest variant in stock, however the feed spells it, its sale price first", async () => {
+  it("shows each one's best stock, then its cheapest variant there, however the feed spells it, a sale price counted", async () => {
     catalog({
       products: [row(1), row(2), row(4)],
       variants: {
         // The cheapest sold out; "In Stock" is in stock.
         [P1]: [variant(99, 'Out of Stock'), variant(189, 'in_stock'), variant(149, 'In Stock')],
-        // On sale, the cheapest it sells at.
+        // In stock before low stock, though the low-stock one sells for less
+        // (as the agent's grid picks it, #1607); on sale, the cheapest it sells at.
         [P4]: [
-          variant(120, 'in_stock'),
           variant(130, 'LIMITED AVAILABILITY', { sale_price: 110, currency: 'EUR' }),
+          variant(125, 'in_stock'),
+          variant(140, 'in_stock', { sale_price: 115, currency: 'EUR' }),
         ],
         // All sold out: no price, not in stock.
         [P2]: [variant(50, 'sold out'), variant(40, 'preorder')],
@@ -316,7 +318,7 @@ describe('getProductsForBlock', () => {
         currency: 'USD',
         inStock: true,
       },
-      { ...row(4), image: null, price: 130, salePrice: 110, currency: 'EUR', inStock: true },
+      { ...row(4), image: null, price: 140, salePrice: 115, currency: 'EUR', inStock: true },
       { ...row(2), image: null, price: null, salePrice: null, currency: null, inStock: false },
     ]);
   });
