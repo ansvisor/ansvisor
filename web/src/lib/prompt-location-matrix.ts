@@ -1,4 +1,5 @@
 import { heatShade } from '@/lib/insights-topics';
+import { dayIn, startOfDayIn, viewerTimeZone } from '@/lib/time-zone';
 
 /**
  * The Tracked Prompts Locations view (PROMPT-015b): each tracked prompt in
@@ -36,12 +37,17 @@ export const MATRIX_REGIONS = 12;
 export const MATRIX_READS_AT_ONCE = 3;
 
 /**
- * Whether a window runs up to today, so a location with no answers in it can
- * still get them from the next daily run. A custom range that ended earlier
- * can't.
+ * Whether a window runs up to today on the viewer's clock, so a location
+ * with no answers in it can still get them from the next daily run. A
+ * custom range that ended earlier, yesterday included, can't.
  */
-export function reachesToday(window: { to?: string }, now = Date.now()): boolean {
-  return !window.to || Date.parse(window.to) > now - 86_400_000;
+export function reachesToday(
+  window: { to?: string },
+  now = Date.now(),
+  timeZone = viewerTimeZone(),
+): boolean {
+  if (!window.to) return true;
+  return Date.parse(window.to) >= Date.parse(startOfDayIn(dayIn(now, timeZone), timeZone));
 }
 
 /** A cell's value for the metric; null without answers there (or, for position, never named). */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { endOfDayIn } from '@/lib/time-zone';
 import {
   reachesToday,
   cellShade,
@@ -98,10 +99,26 @@ describe('matrixInsights', () => {
 describe('reachesToday', () => {
   const now = Date.parse('2026-10-28T12:00:00Z');
   it('holds for a preset, and a custom range that ends today', () => {
-    expect(reachesToday({}, now)).toBe(true);
-    expect(reachesToday({ to: '2026-10-28T11:59:00Z' }, now)).toBe(true);
+    expect(reachesToday({}, now, 'UTC')).toBe(true);
+    expect(reachesToday({ to: '2026-10-28T23:59:59.999Z' }, now, 'UTC')).toBe(true);
   });
   it("doesn't for a range that ended before", () => {
-    expect(reachesToday({ to: '2026-10-20T23:59:59Z' }, now)).toBe(false);
+    expect(reachesToday({ to: '2026-10-20T23:59:59Z' }, now, 'UTC')).toBe(false);
+  });
+  it("doesn't for a range that ended yesterday, on the viewer's clock", () => {
+    // Yesterday's last moment in Istanbul is less than a day ago.
+    const yesterday = endOfDayIn('2026-10-27', 'Europe/Istanbul');
+    expect(reachesToday({ to: yesterday }, now, 'Europe/Istanbul')).toBe(false);
+    expect(
+      reachesToday({ to: endOfDayIn('2026-10-28', 'Europe/Istanbul') }, now, 'Europe/Istanbul'),
+    ).toBe(true);
+    // Past 21:00 UTC it is already the 29th in Istanbul, still the 28th in New York.
+    const late = Date.parse('2026-10-28T22:30:00Z');
+    expect(
+      reachesToday({ to: endOfDayIn('2026-10-28', 'Europe/Istanbul') }, late, 'Europe/Istanbul'),
+    ).toBe(false);
+    expect(
+      reachesToday({ to: endOfDayIn('2026-10-28', 'America/New_York') }, late, 'America/New_York'),
+    ).toBe(true);
   });
 });
