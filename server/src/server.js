@@ -33,6 +33,7 @@ import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
+import { sweepWixPublished } from './lib/cms/wix-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -310,6 +311,10 @@ async function runDailyTracking() {
   // And to WordPress (00294), once a day too.
   sweepWordPressPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[wordpress-status] daily sweep failed');
+  });
+  // And to Wix (00372), once a day too.
+  sweepWixPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wix-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync

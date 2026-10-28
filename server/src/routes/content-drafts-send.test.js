@@ -33,6 +33,10 @@ const checkWordPressPublished = vi.fn();
 vi.mock('../lib/cms/wordpress-status.js', () => ({
   checkWordPressPublished: (...args) => checkWordPressPublished(...args),
 }));
+const checkWixPublished = vi.fn();
+vi.mock('../lib/cms/wix-status.js', () => ({
+  checkWixPublished: (...args) => checkWixPublished(...args),
+}));
 vi.mock('../lib/content-delivery.js', async (importOriginal) => ({
   ...(await importOriginal()),
   sendContentPages: (...args) => sendContentPages(...args),
@@ -227,5 +231,40 @@ describe('POST /api/content-drafts/wordpress-status (00294)', () => {
     const failed = await check({ brandId: '88888888-8888-8888-8888-888888888888' });
     expect(failed.status).toBe(502);
     expect(await failed.json()).toEqual({ error: 'WordPress could not be read', code: 'failed' });
+  });
+});
+
+describe('POST /api/content-drafts/wix-status (00372)', () => {
+  const check = (body) =>
+    fetch(`${baseUrl}/wix-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('reads the brand’s Wix posts for any member, a brand at most every two minutes', async () => {
+    role = 'member';
+    const brand = '66666666-6666-6666-6666-666666666666';
+    checkWixPublished.mockReset().mockResolvedValue({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://acme.example/post/cold-brew' }],
+    });
+    expect(await (await check({ brandId: brand })).json()).toEqual({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://acme.example/post/cold-brew' }],
+    });
+    expect(await (await check({ brandId: brand })).json()).toEqual({
+      checked: 0,
+      published: [],
+      recent: true,
+    });
+    expect(checkWixPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('names a failure in our words', async () => {
+    checkWixPublished.mockReset().mockRejectedValue(new Error('down'));
+    const failed = await check({ brandId: '55555555-5555-5555-5555-555555555555' });
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toEqual({ error: 'Wix could not be read', code: 'failed' });
   });
 });

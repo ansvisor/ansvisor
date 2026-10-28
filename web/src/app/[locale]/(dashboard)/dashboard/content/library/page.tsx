@@ -40,6 +40,7 @@ import {
   readCmsStatuses,
   refreshFramerPublished,
   refreshWebflowPublished,
+  refreshWixPublished,
   refreshWordPressPublished,
   type CmsStatus,
 } from '@/lib/content/cms-send-client';
@@ -194,8 +195,8 @@ export default function ContentLibraryPage() {
     return () => clearTimeout(timer);
   }, [cmsGoing, cms]);
 
-  // Pages in Webflow or Framer as draft items, or in WordPress as draft
-  // posts: the CMS says when one goes live, so the API reads them once as
+  // Pages in Webflow or Framer as draft items, or in WordPress or Wix as
+  // draft posts: the CMS says when one goes live, so the API reads them once as
   // the Library opens for the brand (and daily); the list is read again when
   // it marked any published.
   const sentTo = (target: CmsStatus['target']) =>
@@ -203,9 +204,11 @@ export default function ContentLibraryPage() {
   const inWebflow = sentTo('webflow');
   const inWordPress = sentTo('wordpress');
   const inFramer = sentTo('framer');
+  const inWix = sentTo('wix');
   const webflowRead = useRef(new Set<string>());
   const wordpressRead = useRef(new Set<string>());
   const framerRead = useRef(new Set<string>());
+  const wixRead = useRef(new Set<string>());
   useEffect(() => {
     if (!inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
     webflowRead.current.add(activeBrandId);
@@ -231,6 +234,14 @@ export default function ContentLibraryPage() {
       if (published.length) setAttempt((n) => n + 1);
     });
   }, [inFramer, activeBrandId]);
+  useEffect(() => {
+    if (!inWix || !activeBrandId || wixRead.current.has(activeBrandId)) return;
+    wixRead.current.add(activeBrandId);
+    // As Webflow's: not cancelled with the effect.
+    void refreshWixPublished(activeBrandId).then((published) => {
+      if (published.length) setAttempt((n) => n + 1);
+    });
+  }, [inWix, activeBrandId]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');
