@@ -41889,14 +41889,18 @@ notify pgrst, 'reload schema';
 --   * orders, revenue: order conversions whose AI visit started on it, the
 --     revenue in its main currency;
 --   * a product's page is its link, else its first variant's, matched as
---     page paths are everywhere (normalize_page_path, lowercased).
+--     page paths are everywhere (normalize_page_path, lowercased);
+--   * only the products with an AI visit or an order: a big catalog's other
+--     products would only add zero rows, past PostgREST's 1000-row page;
+--   * p_product_id: that one product's row (its page), none for all.
 --
 -- Members of the brand's organization only, as the Shopping reads.
 
 create or replace function public.catalog_product_ai_stats(
   p_brand_id uuid,
   p_from timestamptz,
-  p_to timestamptz default null
+  p_to timestamptz default null,
+  p_product_id uuid default null
 )
 returns table (
   product_id uuid,
@@ -41935,6 +41939,7 @@ begin
     from public.catalog_products p
     where p.brand_id = p_brand_id
       and p.removed_at is null
+      and (p_product_id is null or p.id = p_product_id)
   ),
   keyed as (
     select pages.product_id, pages.page
@@ -41981,16 +41986,17 @@ begin
   from keyed k
   left join visits v on v.page = k.page
   left join all_sales a on a.page = k.page
-  left join main_sales m on m.page = k.page;
+  left join main_sales m on m.page = k.page
+  where v.n is not null or a.n is not null;
 end;
 $$;
 
-revoke all on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz) from public, anon;
-grant execute on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz)
+revoke all on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz, uuid) from public, anon;
+grant execute on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz, uuid)
   to authenticated, service_role;
 
-comment on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz) is
-  'Product visibility, part 4 (00361): per live catalog product of a brand, the AI-referred visits to its page and the orders whose AI visit started there (first_url), with their revenue in the main currency. A product''s page is its link, else its first variant''s. Security definer with an organization check.';
+comment on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz, uuid) is
+  'Product visibility, part 4 (00361): per live catalog product of a brand with an AI visit or an order (or the one p_product_id names), the AI-referred visits to its page and the orders whose AI visit started there (first_url), with their revenue in the main currency. A product''s page is its link, else its first variant''s. Security definer with an organization check.';
 
 notify pgrst, 'reload schema';
 

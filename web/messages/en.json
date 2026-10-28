@@ -7538,7 +7538,7 @@
         "notBought": "No product had AI visits without an order.",
         "topSellers": "No orders from AI visits started on a product page in this period."
       },
-      "capped": "Showing the first {shown} of {total} products.",
+      "capped": "Showing {shown} of {total} products: every one AI showed or sent visits to, then the rest.",
       "more": "Show {count} more",
       "noCatalog": "Connect your product catalog in Settings › Integrations to see every product, how often AI shows it and what it sells. Until then, these are the products AI showed, by title.",
       "failed": "Couldn't read your catalog's products right now. These are the products AI showed, by title."

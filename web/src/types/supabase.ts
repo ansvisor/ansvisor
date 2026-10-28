@@ -5677,6 +5677,7 @@ export type Database = {
         Args: {
           p_brand_id: string
           p_from: string
+          p_product_id?: string
           p_to?: string
         }
         Returns: {

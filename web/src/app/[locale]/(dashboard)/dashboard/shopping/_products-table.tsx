@@ -21,7 +21,7 @@ import type { ShoppingProducts } from '@/lib/actions/shopping';
 import {
   PRODUCT_VIEWS,
   READINESS_CHECKS,
-  inView,
+  viewCounts,
   viewRows,
   type ProductRow,
   type ProductView,
@@ -131,9 +131,7 @@ export function ProductsTable({
     return <Skeleton className="h-[320px] w-full" />;
   }
   const rows = viewRows(products.rows, view);
-  const counts = Object.fromEntries(
-    PRODUCT_VIEWS.map((id) => [id, products.rows.filter((row) => inView(row, id)).length]),
-  ) as Record<ProductView, number>;
+  const counts = viewCounts(products.rows, products.total);
 
   return (
     <section className="space-y-3" aria-label={t('label')}>
