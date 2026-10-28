@@ -136,6 +136,22 @@ describe('checkWixPublished', () => {
     ]);
   });
 
+  it('marks a page published at https:// when Wix gives the post’s address without its scheme', async () => {
+    db.sends = [send('d1', 'dr1'), send('d2', 'dr2')];
+    readPost
+      .mockResolvedValueOnce({
+        ...post('PUBLISHED'),
+        url: 'mysite.wixsite.com/mysite/post/cold-brew',
+      })
+      .mockResolvedValueOnce({ ...post('PUBLISHED'), url: '/post/no-host' });
+    expect(await checkWixPublished('b1')).toEqual({
+      checked: 2,
+      published: [{ draftId: 'dr1', url: 'https://mysite.wixsite.com/mysite/post/cold-brew' }],
+    });
+    // An address with no host isn't one: that page waits.
+    expect(markDeliveryPublished).toHaveBeenCalledTimes(1);
+  });
+
   it('stops at a refused key and marks the connection, and reads nothing without one', async () => {
     db.sends = [send('d1', 'dr1'), send('d2', 'dr2')];
     readPost.mockRejectedValue(new WixError('auth_failed', 'Wix refused the API key.'));

@@ -4,7 +4,7 @@ import { logger } from '../logger.js';
 import { credentialsConfigured } from '../catalog/credentials.js';
 import { markDeliveryPublished } from '../content-published.js';
 import { readCmsCredentials } from './credentials.js';
-import { WixError, readDraftPost } from './wix.js';
+import { WixError, readDraftPost, webAddress } from './wix.js';
 
 /**
  * Pages sent to Wix, published there since (Send to CMS #1331, phase 2;
@@ -57,8 +57,8 @@ async function closeRemoved(send) {
 
 const logged = (err) => ({ name: err?.name, code: err?.code });
 
-/** A post's address, when it's a web address. */
-const linkOf = (post) => (/^https?:\/\//i.test(post?.url ?? '') ? post.url : null);
+/** A post's address, when it's a web address; one Wix gives without its scheme gets https://. */
+const linkOf = (post) => webAddress(post?.url);
 
 /**
  * Reads the brand's pages sent to Wix and not yet seen live (each page's
