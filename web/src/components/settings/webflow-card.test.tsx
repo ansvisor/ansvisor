@@ -24,6 +24,19 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// The read-only workspace's upgrade dialog.
+const openUpgrade = vi.hoisted(() => vi.fn());
+const gate = vi.hoisted(() => ({ isLocked: false }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade,
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options: { action?: string } = {}) =>
+      (...args: Args) =>
+        gate.isLocked ? openUpgrade(options.action) : fn(...args),
+  }),
+}));
 
 const { WebflowCard } = await import('./webflow-card');
 
@@ -78,6 +91,8 @@ const badges = () =>
   [...container.querySelectorAll('[data-slot="badge"]')].map((b) => b.textContent);
 const SETUP_STEP =
   "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.";
+const SETUP_STEP_SITE =
+  "Last step: pick the site and the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.";
 const option = (text: string) =>
   [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
     (o) => o.textContent === text,
@@ -98,6 +113,8 @@ async function typeToken(value: string) {
 
 beforeEach(() => {
   role.canManage = true;
+  gate.isLocked = false;
+  openUpgrade.mockClear();
   client.readWebflow
     .mockReset()
     .mockResolvedValue({ ok: true, configured: true, connection: null });
@@ -156,6 +173,80 @@ describe('WebflowCard', () => {
     expect(client.listWebflowCollections).toHaveBeenCalledWith('b1', 's1');
     // The setup's last step: the collection picker, focused.
     expect(document.activeElement).toBe(picker('Collection'));
+  });
+
+  it('asks for the site first when the token reaches several, and focuses its picker (#1601)', async () => {
+    client.connectWebflow.mockResolvedValue({
+      ok: true,
+      connection: {
+        ...CONNECTED,
+        siteId: null,
+        collectionId: null,
+        collectionName: null,
+        fieldMap: {},
+      },
+      sites: [],
+    });
+    client.listWebflowCollections.mockImplementation(async (_brand: string, siteId?: string) => ({
+      ok: true,
+      sites: [
+        { id: 's1', name: 'Acme' },
+        { id: 's2', name: 'Acme Shop' },
+      ],
+      siteId: siteId ?? null,
+      collections: siteId ? [{ id: 'c1', name: 'Blog Posts', slug: 'post' }] : [],
+    }));
+    await render();
+    await typeToken('wf-token-123');
+    expect(toast.success).toHaveBeenCalledWith(
+      'Webflow connected. Now pick the site and the collection, and save.',
+    );
+    expect(container.textContent).toContain(SETUP_STEP_SITE);
+    expect(document.activeElement).toBe(picker('Site'));
+
+    await click(picker('Site'));
+    const shop = option('Acme Shop')!;
+    await act(async () => {
+      shop.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await click(shop);
+    expect(client.listWebflowCollections).toHaveBeenLastCalledWith('b1', 's2');
+    // The site picked, the line asks for the collection alone.
+    expect(container.textContent).toContain(SETUP_STEP);
+  });
+
+  it('asks for the site while the sites are read, not for the collection alone first (#1601)', async () => {
+    client.readWebflow.mockResolvedValue({
+      ok: true,
+      configured: true,
+      connection: {
+        ...CONNECTED,
+        siteId: null,
+        collectionId: null,
+        collectionName: null,
+        fieldMap: {},
+      },
+    });
+    let answer!: (value: unknown) => void;
+    client.listWebflowCollections.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await render();
+    expect(container.textContent).toContain("Reading the site's collections…");
+    expect(container.textContent).toContain(SETUP_STEP_SITE);
+    expect(container.textContent).not.toContain(SETUP_STEP);
+
+    await act(async () => {
+      answer({
+        ok: true,
+        sites: [
+          { id: 's1', name: 'Acme' },
+          { id: 's2', name: 'Acme Shop' },
+        ],
+        siteId: null,
+        collections: [],
+      });
+    });
+    expect(container.textContent).toContain(SETUP_STEP_SITE);
+    expect(container.textContent).not.toContain(SETUP_STEP);
   });
 
   it('says the setup isn’t finished until a collection is saved', async () => {
@@ -223,7 +314,7 @@ describe('WebflowCard', () => {
     await render();
     await typeToken('wf-token');
     expect(toast.error).toHaveBeenCalledWith(
-      'The token needs Sites: Read and CMS: Read and write. Generate one with them.',
+      'The token needs CMS: Read and write and Sites: Read-only. Generate a new one with them.',
     );
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
   });
@@ -343,6 +434,55 @@ describe('WebflowCard', () => {
     expect(client.disconnectWebflow).toHaveBeenCalledWith('b1');
     expect(toast.success).toHaveBeenCalledWith('Webflow disconnected');
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
+  });
+
+  it('opens the upgrade dialog, not an error, for a read-only workspace', async () => {
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.disconnectWebflow.mockResolvedValue({ ok: false, code: 'subscription' });
+    openUpgrade.mockClear();
+    await render();
+    await act(async () => {
+      button('Disconnect')!.click();
+    });
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await act(async () => {
+      confirm[confirm.length - 1].click();
+    });
+    expect(openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('on a read-only workspace, connects and saves nothing, and still disconnects', async () => {
+    gate.isLocked = true;
+    await render();
+    await typeToken('wf-token-123');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(client.connectWebflow).not.toHaveBeenCalled();
+
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Save'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Saving the CMS settings needs a plan');
+    expect(client.saveWebflowSettings).not.toHaveBeenCalled();
+    await click(button('Replace token'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+
+    await act(async () => {
+      button('Disconnect')!.click();
+    });
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await act(async () => {
+      confirm[confirm.length - 1].click();
+    });
+    expect(client.disconnectWebflow).toHaveBeenCalledWith('b1');
+    expect(openUpgrade).toHaveBeenCalledTimes(3);
   });
 
   it('gives another collection its own suggested map, not the saved one', async () => {

@@ -5,21 +5,24 @@ import { usePathname } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { markGettingStartedPageOpened } from '@/lib/actions/getting-started';
 import { pageOpenedStep } from '@/lib/getting-started/steps';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Getting started's explore steps ("See where you stand in Brand Visibility" and
  * the like) are done when their page is opened. Mounted once in the
  * dashboard layout, so it counts the page however it was reached: the step's
  * button, the sidebar or a link. Each brand and step is sent until the
- * server records it, then remembered in this browser.
+ * server records it, then remembered in this browser. Not sent while the
+ * workspace is read-only (plan not active): it writes.
  */
 export function GettingStartedPageOpened() {
   const pathname = usePathname();
   const brandId = useBrandStore((s) => s.activeBrandId);
+  const { isLocked } = useUpgradeGate();
 
   useEffect(() => {
     const step = pageOpenedStep(pathname);
-    if (!step || !brandId) return;
+    if (!step || !brandId || isLocked) return;
     const key = `aeo:getting-started:${brandId}:${step}`;
     try {
       if (localStorage.getItem(key)) return;
@@ -38,7 +41,7 @@ export function GettingStartedPageOpened() {
       .catch(() => {
         // A database without 00196, or offline: the step stays open.
       });
-  }, [pathname, brandId]);
+  }, [pathname, brandId, isLocked]);
 
   return null;
 }

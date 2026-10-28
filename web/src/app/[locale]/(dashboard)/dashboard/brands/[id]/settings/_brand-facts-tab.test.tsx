@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { BrandFact, BrandFactsRead } from '@/lib/content/brand-facts';
 import { BrandFactsTab } from './_brand-facts-tab';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const getBrandFacts = vi.fn();
 const readBrandFactsAgain = vi.fn();
@@ -97,11 +98,16 @@ const READ: BrandFactsRead = {
 
 let container: HTMLDivElement;
 let root: Root;
-const render = async () => {
+const openUpgrade = vi.fn();
+const render = async (isLocked = false) => {
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <BrandFactsTab brandId="b1" />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <BrandFactsTab brandId="b1" />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     ),
   );
@@ -174,6 +180,15 @@ describe('BrandFactsTab', () => {
     const approved = section('Approved');
     expect(approved.textContent).toContain('Pro · $49 / month');
     expect(approved.textContent).not.toContain('$59 per month');
+  });
+
+  it('reviews nothing on a read-only workspace: Approve opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    await render(true);
+    await act(async () => button('Approve', section('To approve (1)'))!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Reviewing brand facts needs a plan');
+    expect(setBrandFactStatus).not.toHaveBeenCalled();
+    expect(section('To approve (1)')).toBeDefined();
   });
 
   it('reads the list again when a review fails (a read removed the fact meanwhile)', async () => {

@@ -53,6 +53,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { formatDate } from '@/lib/format';
 import {
   DropdownMenu,
@@ -222,6 +223,10 @@ function MemberRow({
   const [pendingRole, setPendingRole] = useState<TeamRole | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  // A read-only workspace (plan not active): a role opens the upgrade dialog
+  // instead. Remove stays open: it ends a member's access.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const canEdit = isAdmin && !member.isCurrentUser;
 
@@ -277,7 +282,9 @@ function MemberRow({
         <Select
           items={roleOptions(t)}
           value={member.role}
-          onValueChange={(v) => handleRoleChange(v as TeamRole)}
+          onValueChange={guard((v: string | null) => void handleRoleChange(v as TeamRole), {
+            action: tActions('changeRoles'),
+          })}
           disabled={pendingRole !== null}
         >
           <SelectTrigger size="sm" className="w-36">
@@ -342,6 +349,10 @@ function InvitationRow({
 }) {
   const t = useTranslations('settings');
   const [busy, setBusy] = useState<'revoke' | 'resend' | null>(null);
+  // A read-only workspace (plan not active): Resend opens the upgrade dialog
+  // instead. Revoke stays open: it ends an invitation's access.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   async function handleRevoke() {
     setBusy('revoke');
@@ -405,7 +416,9 @@ function InvitationRow({
             }
           />
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleResend}>
+            <DropdownMenuItem
+              onClick={guard(handleResend, { action: tActions('resendInvitations') })}
+            >
               <RefreshCw className="mr-2 h-4 w-4" />
               {t('team_resendInvite')}
             </DropdownMenuItem>
@@ -431,6 +444,9 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(true);
+  // A read-only workspace (plan not active): the upgrade dialog instead of this one.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   function reset() {
     setEmail('');
@@ -471,7 +487,12 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
   return (
     <Dialog
       open={open}
-      onOpenChange={(o) => {
+      onOpenChange={(o, details) => {
+        if (o && isLocked) {
+          details.cancel();
+          openUpgrade(tActions('inviteMembers'));
+          return;
+        }
         setOpen(o);
         if (!o) reset();
       }}

@@ -4,8 +4,18 @@ import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 import type { TaskLastCheck } from '@/lib/action-center/task-details';
 
-/** Why nothing was checked: no check here, done, the page didn't answer, changed meanwhile, a closed action. */
-export type CheckSkippedReason = 'not_checkable' | 'not_open' | 'no_answer' | 'changed' | 'closed';
+/**
+ * Why nothing was checked: no check here, done, the page didn't answer,
+ * changed meanwhile, a closed action, or a shopping links task whose draft
+ * has no shopping path left.
+ */
+export type CheckSkippedReason =
+  | 'not_checkable'
+  | 'not_open'
+  | 'no_answer'
+  | 'changed'
+  | 'closed'
+  | 'no_shopping_path';
 
 /**
  * What checking a task now came to (AC-010): the check kept on it, or why
@@ -59,6 +69,7 @@ export async function checkActionTask(taskId: string): Promise<CheckTaskResult> 
       'no_answer',
       'changed',
       'closed',
+      'no_shopping_path',
     ];
     return {
       checked: null,

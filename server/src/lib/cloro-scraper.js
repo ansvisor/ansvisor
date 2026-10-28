@@ -10,7 +10,7 @@
 import logger from './logger.js';
 import { stripEntityMarkup } from './entity-markup.js';
 
-const CLORO_API = 'https://api.cloro.dev';
+export const CLORO_API = 'https://api.cloro.dev';
 
 export const SCRAPER_TASK_TYPES = {
   'chatgpt-web': 'CHATGPT',
@@ -32,8 +32,11 @@ function getApiKey() {
   return key;
 }
 
-export function buildRequestBody(promptText, scraperId, region, state) {
+export function buildRequestBody(promptText, scraperId, region, state, location) {
   const country = region || 'US';
+  // A city (PROMPT-015d): Google's canonical name, which the Google
+  // endpoints take as `location` beside the country. Only they get it.
+  const locationField = location ? { location } : {};
 
   // State-level geo-targeting (#554): the AI endpoints accept a USPS state
   // code alongside country US and route through an in-state proxy. Google
@@ -62,6 +65,7 @@ export function buildRequestBody(promptText, scraperId, region, state) {
     return {
       query: promptText,
       country,
+      ...locationField,
       include: {
         html: false,
         aioverview: { markdown: true },
@@ -73,6 +77,7 @@ export function buildRequestBody(promptText, scraperId, region, state) {
     return {
       prompt: promptText,
       country,
+      ...locationField,
       include: {
         html: false,
         markdown: true,
@@ -117,6 +122,13 @@ function toCitations(sources) {
 }
 
 /**
+ * Where an entry an engine joined splits into its searches: at a semicolon,
+ * not one that ends an HTML entity ("what&#39;s", "&amp;"). The same rule as
+ * the editor's (web/src/lib/content/sources.ts, fanoutQueries).
+ */
+const SEARCH_SEPARATOR = /(?<!&#?\w+);/u;
+
+/**
  * Normalize the observed query fan-out from a raw Cloro response into a rich,
  * engine-labelled array: `[{ query, engine?, source_platform }]` (#332).
  *
@@ -132,26 +144,31 @@ function toCitations(sources) {
  * ChatGPT's fan-out went silent on 2026-09-30, nothing told an emptied field
  * from one that changed shape, and the strings-only read would have dropped
  * the second without a trace. Anything else (or missing) → `[]`. This is
- * OBSERVED data only — we never synthesize sub-queries.
+ * OBSERVED data only — we never synthesize sub-queries. An entry an engine
+ * sent as several searches joined by semicolons ("chatgpt subscription;
+ * gemini subscription") is each of them: a page's heading or FAQ question
+ * written from the fan-out needs one search, not the list.
  */
 function normalizeSearchQueries(result, scraperId) {
   // Trim on write so the same sub-query never fragments into whitespace
   // variants — the #333 aggregation groups by query string. `engine` is only
   // kept when it's a non-empty string (never a stray non-string value).
-  const toItem = (entry, fallbackEngine) => {
+  const toItems = (entry, fallbackEngine) => {
     const query =
       typeof entry === 'string' ? entry : typeof entry?.query === 'string' ? entry.query : null;
-    if (query === null || query.trim() === '') return null;
+    if (query === null || query.trim() === '') return [];
     const engine =
       typeof entry?.engine === 'string' && entry.engine.trim() !== ''
         ? entry.engine.trim()
         : fallbackEngine;
-    return { query: query.trim(), ...(engine ? { engine } : {}), source_platform: scraperId };
+    return query
+      .split(SEARCH_SEPARATOR)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => ({ query: part, ...(engine ? { engine } : {}), source_platform: scraperId }));
   };
   const read = (list, fallbackEngine) =>
-    Array.isArray(list)
-      ? list.map((entry) => toItem(entry, fallbackEngine)).filter((item) => item !== null)
-      : [];
+    Array.isArray(list) ? list.flatMap((entry) => toItems(entry, fallbackEngine)) : [];
 
   // Perplexity's field first. An empty one falls through, so it can't hide a
   // populated `searchQueries` beside it.
@@ -247,19 +264,26 @@ export function parseScraperResponse(result, scraperId) {
  * @param {string} promptText
  * @param {string} scraperId
  * @param {string} [region]
- * @param {{ webhookUrl?: string, state?: string }} [opts] - `state` is the
+ * @param {{ webhookUrl?: string, state?: string, location?: string }} [opts] - `state` is the
  *   USPS code of the location this task targets (#554, per-prompt since
- *   #691); only forwarded on US AI-endpoint tasks.
+ *   #691); only forwarded on US AI-endpoint tasks. `location` is a city's
+ *   Google canonical name (PROMPT-015d), forwarded on Google tasks only.
  * @returns {Promise<{ taskId: string, scraperId: string }>}
  */
 export async function submitScraperTask(promptText, scraperId, region, opts = {}) {
   const taskType = SCRAPER_TASK_TYPES[scraperId];
   if (!taskType) throw new Error(`Unknown scraper: ${scraperId}`);
 
-  const payload = buildRequestBody(promptText, scraperId, region, opts.state);
+  const payload = buildRequestBody(promptText, scraperId, region, opts.state, opts.location);
 
   logger.info(
-    { taskType, scraperId, region: region || 'US', state: payload.state },
+    {
+      taskType,
+      scraperId,
+      region: region || 'US',
+      state: payload.state,
+      location: payload.location,
+    },
     'submitting cloro scraper task',
   );
 

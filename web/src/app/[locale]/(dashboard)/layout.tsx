@@ -7,13 +7,16 @@ import { AuthProvider } from '@/components/providers/auth-provider';
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
 import { getBrands } from '@/lib/actions/brand';
+import { menuOfProfile, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, type PlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
-import { SubscriptionExpiredNotice } from '@/components/billing/subscription-expired-notice';
+import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -28,7 +31,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('organization_id, onboarding_completed, role')
+    .select(
+      'organization_id, onboarding_completed, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
+    )
     .eq('id', user.id)
     .single();
 
@@ -38,33 +43,49 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const role = (profile.role ?? 'analyst') as TeamRole;
 
-  const [{ data: org }, brands] = await Promise.all([
+  const [{ data: org, error: orgError }, brands, roleHidden] = await Promise.all([
     supabase
       .from('organizations')
-      .select('plan, subscription_status, plan_overrides')
+      .select('plan, subscription_status, plan_overrides, stripe_subscription_id')
       .eq('id', profile.organization_id)
       .single(),
     getBrands(profile.organization_id),
+    // The sections the viewer's role leaves out (menu access); no read for admins.
+    readRoleHidden(supabase, profile.organization_id, role),
   ]);
+  const menu = menuOfProfile({ ...profile, role }, roleHidden);
 
-  // Cloud mode: gate access when the subscription isn't active/trialing.
-  // Admins (incl. the owner) are routed to the renew/payment flow; everyone
-  // else is blocked with a contact-your-owner notice — so an invited member
-  // can neither reach the payment screen nor walk back into onboarding to
-  // re-create the brand / competitors.
-  if (isCloud()) {
+  // Cloud mode: when the subscription isn't active/trialing, the dashboard is
+  // read-only — every page opens (Billing included, to choose a plan), and an
+  // action opens the upgrade dialog instead of running. Only an admin of a
+  // new account that never had a subscription goes back to onboarding's plan
+  // step, where its trial starts. An org row that couldn't be read decides
+  // nothing: no redirect and no lock (the API still refuses a lapsed plan's
+  // changes with 402).
+  const subscriptionStatus = (org?.subscription_status as string | null) ?? null;
+  let subscriptionActive = true;
+  let adminName: string | null = null;
+  if (isCloud() && !orgError) {
     const access = await evaluateSubscriptionAccess(
       supabase,
       profile.organization_id,
       role,
-      (org?.subscription_status as string | null) ?? null,
+      subscriptionStatus,
+      Boolean(org?.stripe_subscription_id),
     );
-    if (access.state === 'needs_payment') {
+    if (access.state === 'choose_plan') {
       redirect('/dashboard/onboarding');
     }
-    if (access.state === 'blocked') {
-      return <SubscriptionExpiredNotice ownerName={access.ownerName} />;
+    if (access.state === 'read_only') {
+      subscriptionActive = false;
+      adminName = access.adminName;
     }
+  }
+
+  // "What do you work on?", asked once (menu access): an invited person on
+  // their first visit, a self-hosted admin after onboarding.
+  if (!menu.workAreasAsked) {
+    redirect('/dashboard/welcome');
   }
 
   const planId = (org?.plan ?? 'starter') as PlanId;
@@ -86,30 +107,41 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <>
       <AuthProvider user={user} />
       <BrandLoader brands={brands} />
-      <GettingStartedPageOpened />
-      <PlanProvider planId={planId} allowedModelIds={allowedModelIds}>
+      <PlanProvider
+        planId={planId}
+        allowedModelIds={allowedModelIds}
+        subscriptionActive={subscriptionActive}
+        subscriptionStatus={subscriptionStatus}
+      >
         <RoleProvider role={role}>
-          <AiUsageProvider>
-            <div className="flex h-screen overflow-hidden">
-              {/* Desktop sidebar */}
-              <div className="relative hidden md:flex md:flex-shrink-0">
-                <SidebarErrorBoundary>
-                  <Sidebar />
-                </SidebarErrorBoundary>
-              </div>
+          <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
+            {/* Inside the provider: it records nothing while the workspace is read-only. */}
+            <GettingStartedPageOpened />
+            <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
+              <AiUsageProvider>
+                <div className="flex h-screen overflow-hidden">
+                  {/* Desktop sidebar */}
+                  <div className="relative hidden md:flex md:flex-shrink-0">
+                    <SidebarErrorBoundary>
+                      <Sidebar />
+                    </SidebarErrorBoundary>
+                  </div>
 
-              {/* Main area */}
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                  <MobileNav />
+                  {/* Main area */}
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                      <MobileNav />
+                    </div>
+                    <ReadOnlyBanner />
+                    <main className="flex-1 overflow-y-auto bg-background p-6">
+                      <BrandGuard>{children}</BrandGuard>
+                    </main>
+                    <TrackingJobHandoff />
+                  </div>
                 </div>
-                <main className="flex-1 overflow-y-auto bg-background p-6">
-                  <BrandGuard>{children}</BrandGuard>
-                </main>
-                <TrackingJobHandoff />
-              </div>
-            </div>
-          </AiUsageProvider>
+              </AiUsageProvider>
+            </MenuAccessProvider>
+          </UpgradeDialogProvider>
         </RoleProvider>
       </PlanProvider>
     </>
