@@ -1833,6 +1833,8 @@ const RECHECK_SINCE_DAYS = 60;
 const RECHECK_ACTIONS = 500;
 /** The questions read at most across the actions re-checked. */
 const RECHECK_PROMPTS = 400;
+/** Question ids one card read filters by: each request's address stays short. */
+const RECHECK_PROMPTS_PER_READ = 100;
 
 const recheckTargets = z
   .array(z.object({ type: z.enum(['product', 'category']), id: z.guid() }))
@@ -1896,8 +1898,11 @@ async function readActionResults(
   const week = RECHECK_DAYS * 86_400_000;
   const from = new Date(Math.min(...dones) - week).toISOString();
   const to = new Date(Math.min(now, Math.max(...dones) + week)).toISOString();
-  const rows = promptIds.length
-    ? await fetchAllCards<{
+  const reads = [];
+  for (let i = 0; i < promptIds.length; i += RECHECK_PROMPTS_PER_READ) {
+    const some = promptIds.slice(i, i + RECHECK_PROMPTS_PER_READ);
+    reads.push(
+      fetchAllCards<{
         created_at: string;
         platform: string;
         matched_brand_role: string;
@@ -1912,9 +1917,11 @@ async function readActionResults(
           .eq('brand_id', brandId)
           .gte('created_at', from)
           .lt('created_at', to)
-          .in('prompt_results.prompt_id', promptIds),
-      )
-    : [];
+          .in('prompt_results.prompt_id', some),
+      ),
+    );
+  }
+  const rows = (await Promise.all(reads)).flat();
   const cards: RecheckCard[] = rows.flatMap((row) =>
     row.prompt_results
       ? [
