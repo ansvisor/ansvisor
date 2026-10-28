@@ -104,7 +104,7 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
   await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
-  // The demo brand (sample data) takes none of the plan's brands.
+  // The demo brand (00380) never counts against the plan.
   const { count } = await supabase
     .from('brands')
     .select('id', { count: 'exact', head: true })

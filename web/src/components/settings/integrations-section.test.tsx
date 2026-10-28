@@ -373,18 +373,19 @@ describe('IntegrationsSection on the demo brand', () => {
     await render(false, true);
     expect(badges(merchantCenter()!)).toEqual(['Coming soon']);
     expect(groupOf(row('shopify'))).toBe('Stores and marketplaces');
-    for (const id of ['wordpress', 'framer', 'wix']) {
-      expect(groupOf(row(id))).toBe('Content management systems');
-    }
+    expect(groupOf(row('wix'))).toBe('Content management systems');
     expect(row('shopify')!.textContent).toContain('Shopify');
-    expect(row('wordpress')!.textContent).toContain('WordPress');
+    expect(row('wix')!.textContent).toContain('Wix');
     expect(badges(row('wix')!)).toEqual(['Coming soon']);
+    // Live now, with cards of their own: no Coming soon row.
+    expect(row('wordpress')).toBeNull();
+    expect(row('framer')).toBeNull();
   });
 
   it('shows none of those rows on another brand', async () => {
     await render();
     expect(row('shopify')).toBeNull();
-    expect(row('wordpress')).toBeNull();
+    expect(row('wix')).toBeNull();
     expect(integrations.getIntegrationStatus).toHaveBeenCalled();
   });
 });

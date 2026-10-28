@@ -42,9 +42,11 @@ import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
 import { isCloud } from '@/config/plans';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { CatalogCategoryPages } from './catalog-category-pages';
+import { FramerCard } from './framer-card';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { SampleDataBadge } from './sample-data-badge';
+import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
@@ -149,6 +151,10 @@ export function IntegrationsSection() {
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}
         <IntegrationGroup title={t('integrations_cms')}>
           <WebflowCard />
+
+          <WordPressCard />
+
+          <FramerCard />
           {isDemo &&
             upcomingDemoIntegrations('cms').map((id) => (
               <UpcomingIntegrationCard key={id} id={id} />

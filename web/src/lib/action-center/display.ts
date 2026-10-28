@@ -38,6 +38,14 @@ export function humanizeKind(kind: string): string {
 }
 
 /**
+ * A kind's name, as a group of actions (the History scorecard, learning
+ * B3): its title without targets, else its id read as words.
+ */
+export function actionKindName(kind: string, t: Translator): string {
+  return isActionKind(kind) ? t(`${kind}.titleGeneric`) : humanizeKind(kind);
+}
+
+/**
  * "11 prompts", "6 sources" — how many of what an action is about.
  *
  * Every payload carries `targetEntity` and `targetCount` (server
@@ -82,6 +90,17 @@ export function actionTexts(
         },
       ),
       description: t('content_draft.description'),
+    };
+  }
+  // A product or category sent from Product Visibility (ECOM-013) is named after it.
+  if (
+    (action.kind === 'shopping_product' || action.kind === 'shopping_category') &&
+    typeof p.title === 'string' &&
+    p.title
+  ) {
+    return {
+      title: t(`${action.kind}.namedTitle`, { name: p.title }),
+      description: t(`${action.kind}.description`),
     };
   }
   // A live page linking products that no longer sell (shopping path, part 7)
@@ -187,6 +206,17 @@ export function actionTexts(
       }),
     };
   }
+  // A page sent from a Site Audit report (learning D2) names the page and how many checks it fails.
+  if (action.kind === 'audit_page' && Array.isArray(p.targets) && Array.isArray(p.checks)) {
+    const page = (p.targets[0] as { label?: unknown } | undefined)?.label;
+    return {
+      title:
+        typeof page === 'string' && page
+          ? t(`${action.kind}.pageTitle`, { page })
+          : t(`${action.kind}.titleGeneric`),
+      description: t(`${action.kind}.checksDescription`, { count: p.checks.length }),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -240,6 +270,10 @@ export function actionEventText(
     // The validation sweep's verdict once the action closed: improved,
     // declined, and so on.
     outcome: String(event.data.outcome ?? ''),
+    // Which reading it was, counted from the close, and whether the last
+    // (learning B1); none for one measured once before.
+    day: Number(event.data.day ?? 0),
+    final: event.data.final === true ? 'yes' : 'no',
   });
 }
 
@@ -273,7 +307,10 @@ const PERSON_SENT_KINDS: string[] = [
   'topic_opportunity',
   'mention_review',
   'traffic_pages',
+  'audit_page',
   'content_draft',
+  'shopping_product',
+  'shopping_category',
   'shopping_links',
 ];
 

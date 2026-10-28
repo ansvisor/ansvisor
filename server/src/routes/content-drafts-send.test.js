@@ -29,6 +29,14 @@ const checkWebflowPublished = vi.fn();
 vi.mock('../lib/cms/webflow-status.js', () => ({
   checkWebflowPublished: (...args) => checkWebflowPublished(...args),
 }));
+const checkWordPressPublished = vi.fn();
+vi.mock('../lib/cms/wordpress-status.js', () => ({
+  checkWordPressPublished: (...args) => checkWordPressPublished(...args),
+}));
+const checkFramerPublished = vi.fn();
+vi.mock('../lib/cms/framer-status.js', () => ({
+  checkFramerPublished: (...args) => checkFramerPublished(...args),
+}));
 vi.mock('../lib/content-delivery.js', async (importOriginal) => ({
   ...(await importOriginal()),
   sendContentPages: (...args) => sendContentPages(...args),
@@ -179,5 +187,96 @@ describe('POST /api/content-drafts/webflow-status', () => {
     const failed = await check({ brandId: '66666666-6666-6666-6666-666666666666' });
     expect(failed.status).toBe(502);
     expect(await failed.json()).toMatchObject({ code: 'failed' });
+  });
+});
+
+describe('POST /api/content-drafts/wordpress-status (00294)', () => {
+  const check = (body) =>
+    fetch(`${baseUrl}/wordpress-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('reads the brand’s WordPress posts for any member, a brand at most every two minutes', async () => {
+    role = 'member';
+    const brand = '77777777-7777-7777-7777-777777777777';
+    checkWordPressPublished.mockReset().mockResolvedValue({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://blog.acme.example/cold-brew/' }],
+    });
+    expect(await (await check({ brandId: brand })).json()).toEqual({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://blog.acme.example/cold-brew/' }],
+    });
+    expect(assertBrandAccess).toHaveBeenCalledWith(brand, 'u1');
+    expect(await (await check({ brandId: brand })).json()).toEqual({
+      checked: 0,
+      published: [],
+      recent: true,
+    });
+    expect(checkWordPressPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses another workspace’s brand and a malformed one, and names a failure', async () => {
+    checkWordPressPublished.mockReset();
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('nope'), { status: 403, code: 'not_in_workspace' }),
+    );
+    const other = await check({ brandId: '99999999-9999-9999-9999-999999999999' });
+    expect(other.status).toBe(403);
+    expect(checkWordPressPublished).not.toHaveBeenCalled();
+    expect((await check({ brandId: 'x' })).status).toBe(400);
+    checkWordPressPublished.mockReset().mockRejectedValue(new Error('down'));
+    const failed = await check({ brandId: '88888888-8888-8888-8888-888888888888' });
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toEqual({ error: 'WordPress could not be read', code: 'failed' });
+  });
+});
+
+describe('POST /api/content-drafts/framer-status (00295)', () => {
+  const check = (body) =>
+    fetch(`${baseUrl}/framer-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('reads the brand’s Framer items for any member, a brand at most every two minutes', async () => {
+    role = 'member';
+    const brand = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    checkFramerPublished.mockReset().mockResolvedValue({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://www.acme.example/blog/cold-brew' }],
+    });
+    expect(await (await check({ brandId: brand })).json()).toEqual({
+      checked: 1,
+      published: [{ draftId: DRAFT, url: 'https://www.acme.example/blog/cold-brew' }],
+    });
+    expect(assertBrandAccess).toHaveBeenCalledWith(brand, 'u1');
+    expect(checkFramerPublished).toHaveBeenCalledWith(brand);
+    expect(await (await check({ brandId: brand })).json()).toEqual({
+      checked: 0,
+      published: [],
+      recent: true,
+    });
+    expect(checkFramerPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses another workspace’s brand and a malformed one, and names a failure', async () => {
+    checkFramerPublished.mockReset();
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('nope'), { status: 403, code: 'not_in_workspace' }),
+    );
+    const other = await check({ brandId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' });
+    expect(other.status).toBe(403);
+    expect(await other.json()).toMatchObject({ code: 'not_in_workspace' });
+    expect(checkFramerPublished).not.toHaveBeenCalled();
+    expect((await check({ brandId: 'x' })).status).toBe(400);
+    expect((await check({})).status).toBe(400);
+    checkFramerPublished.mockReset().mockRejectedValue(new Error('down'));
+    const failed = await check({ brandId: 'cccccccc-cccc-cccc-cccc-cccccccccccc' });
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toEqual({ error: 'Framer could not be read', code: 'failed' });
   });
 });

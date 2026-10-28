@@ -7,7 +7,22 @@ import { PlanProvider } from '@/components/providers/plan-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { DemoBrandContext } from '@/components/providers/demo-brand-provider';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { ReadOnlyBanner } from './read-only-banner';
+
+// An in-memory localStorage for the brand store: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
 
 let pathname = '/dashboard/insights';
 vi.mock('@/i18n/navigation', () => ({
@@ -74,6 +89,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   pathname = '/dashboard/insights';
+  useBrandStore.setState({ loaded: true });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -88,6 +104,13 @@ afterEach(() => {
 describe('ReadOnlyBanner', () => {
   const seePlans = () =>
     [...container.querySelectorAll('button')].find((b) => b.textContent === 'See plans');
+
+  // A new browser: the brand on screen may be the demo brand, which has its own band.
+  it('shows nothing until the brands are loaded', async () => {
+    useBrandStore.setState({ loaded: false });
+    await render({ status: 'canceled' });
+    expect(container.textContent).toBe('');
+  });
 
   it('says the workspace is read-only, and See plans opens the dialog', async () => {
     await render({ status: 'canceled' });

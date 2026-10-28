@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * Server actions on a read-only workspace (Ansvisor Cloud, plan not active):
  * one that writes refuses before it writes anything, and writes once the
  * plan is active; setup's writes stay open to an organization that never
- * subscribed; the person's own profile and a page-opened trace stay open.
+ * subscribed; the person's own profile (their work areas too) and a
+ * page-opened trace stay open.
  */
 
 let org: { subscription_status: string | null; stripe_subscription_id: string | null };
@@ -76,6 +77,8 @@ const { markBrandAsEcommerce, setBrandShoppingMode } = await import('./brand');
 const { addPromptNote } = await import('./prompt-workflow');
 const { markGettingStartedPageOpened } = await import('./getting-started');
 const { updateAccountName } = await import('./organization');
+const { setMemberMenu, setMenuManager, setMyWorkAreas, setRoleMenu } =
+  await import('./menu-access');
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
@@ -148,6 +151,20 @@ describe('server actions on a read-only workspace', () => {
       'auth.updateUser',
       'rpc.getting_started_page_opened',
     ]);
+  });
+
+  it('refuse a menu change, and keep answering "What do you work on?" open', async () => {
+    await expect(setRoleMenu('analyst', ['content'])).rejects.toThrow(SubscriptionInactiveError);
+    await expect(
+      setMemberMenu('00000000-0000-4000-8000-000000000001', { shown: [], hidden: [] }),
+    ).rejects.toThrow(SubscriptionInactiveError);
+    await expect(setMenuManager('00000000-0000-4000-8000-000000000001', true)).rejects.toThrow(
+      SubscriptionInactiveError,
+    );
+    expect(writes).toEqual([]);
+
+    await setMyWorkAreas([]);
+    expect(writes).toEqual(['profiles.update']);
   });
 
   it('never gate self-hosted', async () => {

@@ -33,9 +33,16 @@ import {
   withEntityCounts,
   withoutTargetIds,
 } from '@/lib/action-center/entity-counts';
-import { parseTaskDetails, withTemplateDoneWhen } from '@/lib/action-center/task-details';
+import {
+  parseTaskDetails,
+  withTemplateCheck,
+  withTemplateDoneWhen,
+} from '@/lib/action-center/task-details';
+import { controlNetOf } from '@/lib/action-center/history';
+import { dismissReasonOf, type ActionDismissReason } from '@/lib/action-center/registry';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
+import { readPromptDemand, type PromptDemand } from './prompt-demand';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
 import {
   filterPromptSuggestionEngines,
@@ -2332,6 +2339,12 @@ export interface PromptVolumeRow {
   /** Bucketed competition label ("LOW" | "MEDIUM" | "HIGH"), or null. */
   competition: string | null;
   fetched_at: string | null;
+  /**
+   * The prompt's real demand (PROMPT-014): Search Console, Google Trends,
+   * People Also Ask and YouTube, with the level they come to. Null until the
+   * nightly sweep read any.
+   */
+  measured_demand: PromptDemand | null;
 }
 
 const PROMPT_VOLUMES_DEFAULT_LIMIT = 100;
@@ -2398,6 +2411,10 @@ export async function getPromptVolumesFor(
       prompts: { text: string } | Array<{ text: string }> | null;
     }> | null) ?? [];
 
+  const demand = await readPromptDemand(
+    params.brandId,
+    rows.map((r) => r.prompt_id),
+  );
   const now = new Date();
   return rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
@@ -2427,6 +2444,7 @@ export async function getPromptVolumesFor(
       competition_index: r.competition_index,
       competition: r.competition,
       fetched_at: r.fetched_at,
+      measured_demand: demand.get(r.prompt_id) ?? null,
     };
   });
 }
@@ -2984,6 +3002,10 @@ export interface ActionDetailForMcp {
   impact: string;
   status: string;
   outcome: string | null;
+  /** Its change net of the brand's prompts it didn't touch (learning B2); null when not netted. */
+  net_of_control: McpNetOfControl | null;
+  /** Why it was dismissed, as the person said (learning A5); null otherwise. */
+  dismiss_reason: ActionDismissReason | null;
   payload: Record<string, unknown>;
   kpi_keys: string[];
   assignee: { id: string; full_name: string | null } | null;
@@ -3020,7 +3042,10 @@ const templateDoneWhen = (taskKey: string) =>
 
 /** A task's details in the snake_case the rest of the MCP output uses. */
 function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
-  const d = withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen);
+  const d = withTemplateCheck(
+    withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen),
+    taskKey,
+  );
   if (!d) return null;
   return {
     // The exact page, the change to make there and how we check it (AC-010).
@@ -3055,7 +3080,7 @@ export async function getActionFor(
   const { data: action, error } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
+      'id, action_no, brand_id, category, kind, impact, status, outcome, validation, dismiss_reason, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
     )
     .eq('id', actionId)
     .eq('brands.organization_id', auth.organizationId)
@@ -3106,6 +3131,8 @@ export async function getActionFor(
     impact: action.impact,
     status: action.status,
     outcome: action.outcome ?? null,
+    net_of_control: netOfControl(action.validation),
+    dismiss_reason: dismissReasonOf(action.dismiss_reason),
     payload,
     kpi_keys: action.kpi_keys ?? [],
     assignee: action.assignee_id
@@ -3269,6 +3296,34 @@ export interface ActionHistoryRow {
   completed_at: string | null;
   /** Before/after pairs the validation sweep measured; empty until it runs. */
   results: Array<{ metric: string; unit: string; before: number; after: number }>;
+  /**
+   * Whether `outcome` is the result rather than a reading so far (learning
+   * B1): the day-30 reading is in, or it was measured once, before readings.
+   */
+  final: boolean;
+  /** The day after closing its latest reading was taken on; null before one. */
+  reading_day: number | null;
+  /** Its change net of the brand's prompts it didn't touch (learning B2); null when not netted. */
+  net_of_control: McpNetOfControl | null;
+  /** Why it was dismissed, as the person said (learning A5); null otherwise. */
+  dismiss_reason: ActionDismissReason | null;
+}
+
+/** An action's change net of a control basket's (learning B2). */
+export interface McpNetOfControl {
+  /** The control: the prompts of the same topics, or the brand's others. */
+  basis: 'topics' | 'brand';
+  control_prompts: number;
+  /** Per metric: a rate's move in points, a count's in percent, minus the control's. */
+  metrics: { metric: string; net: number; unit: 'points' | 'percent' }[];
+}
+
+/** The net result the validation sweep kept, if it could net one. */
+function netOfControl(validation: unknown): McpNetOfControl | null {
+  const control = controlNetOf(validation as Parameters<typeof controlNetOf>[0]);
+  return control
+    ? { basis: control.basis, control_prompts: control.prompts, metrics: control.net }
+    : null;
 }
 
 interface ValidationMetric {
@@ -3276,6 +3331,13 @@ interface ValidationMetric {
   unit: string;
   before: number | null;
   after: number | null;
+}
+
+interface ValidationSnapshot {
+  metrics?: ValidationMetric[];
+  /** Its readings a week, two weeks and a month after it closed (learning B1). */
+  readings?: { day?: unknown }[];
+  final?: boolean;
 }
 
 export async function listActionHistoryFor(
@@ -3288,7 +3350,7 @@ export async function listActionHistoryFor(
   const { data, error } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, validation, created_at, completed_at',
+      'id, action_no, category, kind, impact, status, outcome, validation, dismiss_reason, created_at, completed_at',
     )
     .eq('brand_id', params.brandId)
     .in('status', ['completed', 'dismissed'])
@@ -3298,7 +3360,12 @@ export async function listActionHistoryFor(
   if (error) throw new Error(error.message);
 
   return (data ?? []).map((r) => {
-    const metrics = (r.validation as { metrics?: ValidationMetric[] } | null)?.metrics ?? [];
+    const validation = r.validation as ValidationSnapshot | null;
+    const metrics = validation?.metrics ?? [];
+    const days = (Array.isArray(validation?.readings) ? validation.readings : [])
+      .map((reading) => reading?.day)
+      .filter((day): day is number => Number.isInteger(day));
+    const outcome = r.outcome ?? null;
     return {
       id: r.id,
       action_no: Number(r.action_no),
@@ -3306,7 +3373,7 @@ export async function listActionHistoryFor(
       kind: r.kind,
       impact: r.impact,
       status: r.status,
-      outcome: r.outcome ?? null,
+      outcome,
       created_at: r.created_at,
       completed_at: r.completed_at ?? null,
       // A metric missing either half was not measured; dropped, as on the dashboard.
@@ -3318,6 +3385,14 @@ export async function listActionHistoryFor(
           before: m.before as number,
           after: m.after as number,
         })),
+      // A reading so far until the day-30 one; one measured once before the
+      // readings came keeps its result, as History reads it.
+      final:
+        validation?.final === true ||
+        (days.length === 0 && outcome != null && outcome !== 'pending_measurement'),
+      reading_day: days.length ? Math.max(...days) : null,
+      net_of_control: netOfControl(validation),
+      dismiss_reason: dismissReasonOf(r.dismiss_reason),
     };
   });
 }

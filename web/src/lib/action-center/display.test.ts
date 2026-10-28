@@ -54,8 +54,20 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions, the seven person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(70);
+  it("holds copy for all sixty-two definitions, the ten person-sent kinds and the catalog check's", () => {
+    expect(ACTION_KINDS).toHaveLength(73);
+  });
+
+  it('names a product or category sent from Product Visibility after it (ECOM-013)', () => {
+    expect(
+      actionTexts(action({ kind: 'shopping_product', payload: { title: 'Ridge 30L Backpack' } }), t)
+        .title,
+    ).toBe('Get Ridge 30L Backpack on the shelf');
+    expect(
+      actionTexts(action({ kind: 'shopping_category', payload: { title: 'Hiking backpacks' } }), t)
+        .title,
+    ).toBe('Win “Hiking backpacks” in AI answers');
+    expect(actionContextTags(action({ kind: 'shopping_product', payload: {} }), t)).toEqual([]);
   });
 
   it('names pages sent from AI Traffic after their list and page, or how many (AT-006)', () => {
@@ -277,6 +289,33 @@ describe('actionTexts', () => {
   });
 });
 
+/** A page sent from a Site Audit report (learning D2). */
+describe('actionTexts for a page sent from Site Audit', () => {
+  const tTexts = createTranslator({
+    locale: 'en',
+    messages,
+    namespace: 'actionCenter.actionTexts',
+  });
+  it('names the page and how many checks it fails', () => {
+    expect(
+      actionTexts(
+        {
+          kind: 'audit_page',
+          payload: {
+            targets: [{ id: 'https://acme.example/blog/espresso', label: '/blog/espresso' }],
+            checks: [{ key: 'faq-schema' }, { key: 'json-ld-validity' }],
+          },
+        },
+        tTexts as unknown as (key: string, values?: Record<string, string | number>) => string,
+      ),
+    ).toEqual({
+      title: 'Fix the issues Site Audit found on /blog/espresso',
+      description:
+        'Sent from Site Audit: the page fails 2 checks. Audit it again once fixed to see them pass.',
+    });
+  });
+});
+
 describe('humanizeKind', () => {
   it('reads a definition id as the phrase it was written to be', () => {
     expect(humanizeKind('expand_platform_visibility')).toBe('Expand platform visibility');
@@ -422,6 +461,20 @@ describe('actionEventText', () => {
       'Result: metrics improved after this action closed',
     );
   });
+
+  /** Read three times after the close, each result names its day (learning B1). */
+  it('names the reading a result came from, and the final one', () => {
+    expect(
+      actionEventText(event('outcome_measured', { outcome: 'improved', day: 14 }), tPage, t),
+    ).toBe('Day 14 · Result: metrics improved after this action closed');
+    expect(
+      actionEventText(
+        event('outcome_measured', { outcome: 'mixed', day: 30, final: true }),
+        tPage,
+        t,
+      ),
+    ).toBe('Day 30, final · Result: mixed after this action closed');
+  });
 });
 
 /**
@@ -468,6 +521,8 @@ describe('History events', () => {
     title: 'Ask the agency',
     outcome: 'improved',
     reviews: 0,
+    day: 0,
+    final: 'no',
   };
   const eventText = (event: string, data: Partial<typeof values> = {}) =>
     tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });

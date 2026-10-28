@@ -7,9 +7,9 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import { DemoBrandContext } from '@/components/providers/demo-brand-provider';
 
 /**
- * Chat on a read-only workspace (plan not active): New chat, sending and
- * deleting a conversation open the upgrade dialog, named, and send nothing.
- * The conversations still list and open.
+ * Chat on a read-only workspace (plan not active): New chat and sending open
+ * the upgrade dialog, named, and send nothing. The conversations still list
+ * and open, and deleting one stays open, as its route does.
  */
 
 const chat = vi.hoisted(() => ({
@@ -126,7 +126,7 @@ async function send(text: string) {
 }
 
 describe('Chat on a read-only workspace', () => {
-  it('starts, sends and deletes nothing: each opens the upgrade dialog', async () => {
+  it('starts and sends nothing: each opens the upgrade dialog', async () => {
     await render(true);
     expect(container.textContent).toContain('Pricing questions');
 
@@ -134,19 +134,35 @@ describe('Chat on a read-only workspace', () => {
     expect(openUpgrade).toHaveBeenLastCalledWith('Starting a chat needs a plan');
     await send('How do we rank?');
     expect(openUpgrade).toHaveBeenLastCalledWith('Chatting with the agent needs a plan');
-    await act(async () => remove().click());
-    expect(openUpgrade).toHaveBeenLastCalledWith('Deleting chats needs a plan');
 
-    expect(openUpgrade).toHaveBeenCalledTimes(3);
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(chat.sendMessage).not.toHaveBeenCalled();
     expect(writes()).toEqual([]);
   });
 
-  it('asks before deleting a conversation on an active plan', async () => {
-    await render(false);
+  it.each([true, false])(
+    'asks before deleting a conversation, read-only or not (locked: %s)',
+    async (isLocked) => {
+      await render(isLocked);
+      await act(async () => remove().click());
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+        'Delete conversation',
+      );
+      expect(openUpgrade).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still deletes a conversation on a read-only workspace, after its confirm', async () => {
+    await render(true);
     await act(async () => remove().click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Delete conversation');
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const confirm = [...dialog.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Delete',
+    )!;
+    await act(async () => confirm.click());
+    expect(writes()).toEqual([['/api/agent/conversations/c1', { method: 'DELETE' }]]);
+    expect(container.textContent).not.toContain('Pricing questions');
     expect(openUpgrade).not.toHaveBeenCalled();
   });
 });

@@ -170,6 +170,68 @@ afterEach(() => {
   container.remove();
 });
 
+describe('the From Products chip (ECOM-013)', () => {
+  const chip = () =>
+    [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('fromProducts'),
+    );
+  const product: ActionItem = { ...action, id: 'a2', category: 'growth', kind: 'shopping_product' };
+  const category: ActionItem = {
+    ...action,
+    id: 'a3',
+    category: 'compete',
+    kind: 'shopping_category',
+  };
+
+  it('lists only what Product Visibility sent, and lets it go on a second click', async () => {
+    getActions.mockResolvedValue([action, product, category]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(chip()!.textContent).toBe('fromProducts2');
+    expect(chip()!.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => chip()!.click());
+    expect(chip()!.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a2', 'a3']);
+
+    await act(async () => chip()!.click());
+    await act(async () => exportButton().click());
+    expect(getActionsAffected.mock.lastCall![1]).toHaveLength(3);
+  });
+
+  it('opens on it from the URL, and shows no chip without such an action', async () => {
+    window.history.replaceState(null, '', '/?from=products');
+    getActions.mockResolvedValue([action, product]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(chip()!.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a2']);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    window.history.replaceState(null, '', '/');
+    getActions.mockResolvedValue([action]);
+    await render();
+    expect(chip()).toBeUndefined();
+  });
+
+  it('shows the chip on from the URL with no such action left, to turn it off', async () => {
+    window.history.replaceState(null, '', '/?from=products');
+    getActions.mockResolvedValue([action]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(chip()!.textContent).toBe('fromProducts0');
+    expect(chip()!.getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => chip()!.click());
+    expect(chip()).toBeUndefined();
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a1']);
+  });
+});
+
 describe('the actions list Export CSV', () => {
   it("adds each action's affected count and names, in a file Excel reads as UTF-8", async () => {
     getActionsAffected.mockResolvedValue({

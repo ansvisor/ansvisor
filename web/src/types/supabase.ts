@@ -243,6 +243,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           dedup_key: string
+          dismiss_reason: string | null
           due_date: string | null
           id: string
           impact: string
@@ -271,6 +272,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact: string
@@ -299,6 +301,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key?: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact?: string
@@ -467,6 +470,73 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_traffic_events: {
+        Row: {
+          brand_id: string
+          currency: string | null
+          first_at: string
+          first_key: string | null
+          first_source: string
+          first_url: string
+          goal: string | null
+          id: string
+          kind: string
+          label: string | null
+          occurred_at: string
+          order_ref: string | null
+          origin: string | null
+          page_key: string | null
+          units: number | null
+          url: string
+          value: number | null
+          visitor_id: string
+        }
+        Insert: {
+          brand_id: string
+          currency?: string | null
+          first_at: string
+          first_source: string
+          first_url: string
+          goal?: string | null
+          id?: string
+          kind: string
+          label?: string | null
+          occurred_at?: string
+          order_ref?: string | null
+          origin?: string | null
+          units?: number | null
+          url: string
+          value?: number | null
+          visitor_id: string
+        }
+        Update: {
+          brand_id?: string
+          currency?: string | null
+          first_at?: string
+          first_source?: string
+          first_url?: string
+          goal?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          occurred_at?: string
+          order_ref?: string | null
+          origin?: string | null
+          units?: number | null
+          url?: string
+          value?: number | null
+          visitor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_traffic_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
             referencedColumns: ["id"]
           },
         ]
@@ -1150,6 +1220,75 @@ export type Database = {
           },
         ]
       }
+      catalog_categories: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_categories_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_product_categories: {
+        Row: {
+          brand_id: string
+          category_id: string
+          product_id: string
+        }
+        Insert: {
+          brand_id: string
+          category_id: string
+          product_id: string
+        }
+        Update: {
+          brand_id?: string
+          category_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_product_categories_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_product_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_product_categories_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_variants: {
         Row: {
           attributes: Json
@@ -1258,6 +1397,24 @@ export type Database = {
           id?: never
           title?: string | null
           url?: string
+        }
+        Relationships: []
+      }
+      cloro_countries: {
+        Row: {
+          country: string
+          model: string
+          refreshed_at: string
+        }
+        Insert: {
+          country: string
+          model: string
+          refreshed_at?: string
+        }
+        Update: {
+          country?: string
+          model?: string
+          refreshed_at?: string
         }
         Relationships: []
       }
@@ -3086,6 +3243,38 @@ export type Database = {
           },
         ]
       }
+      organization_menu_roles: {
+        Row: {
+          hidden_sections: string[]
+          organization_id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          hidden_sections?: string[]
+          organization_id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          hidden_sections?: string[]
+          organization_id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_menu_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           anthropic_api_key_encrypted: string | null
@@ -3237,33 +3426,48 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          can_manage_menus: boolean
           created_at: string
           full_name: string | null
           id: string
+          menu_hidden: string[]
+          menu_shown: string[]
           onboarding_completed: boolean | null
           organization_id: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
+          work_areas: string[]
+          work_areas_asked_at: string | null
         }
         Insert: {
           avatar_url?: string | null
+          can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
           id: string
+          menu_hidden?: string[]
+          menu_shown?: string[]
           onboarding_completed?: boolean | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
+          work_areas?: string[]
+          work_areas_asked_at?: string | null
         }
         Update: {
           avatar_url?: string | null
+          can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
           id?: string
+          menu_hidden?: string[]
+          menu_shown?: string[]
           onboarding_completed?: boolean | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
+          work_areas?: string[]
+          work_areas_asked_at?: string | null
         }
         Relationships: [
           {
@@ -3386,6 +3590,8 @@ export type Database = {
       prompt_result_shopping_cards: {
         Row: {
           brand_id: string
+          catalog_match: string | null
+          catalog_product_id: string | null
           created_at: string
           id: string
           image_url: string | null
@@ -3410,6 +3616,8 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          catalog_match?: string | null
+          catalog_product_id?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -3434,6 +3642,8 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          catalog_match?: string | null
+          catalog_product_id?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -3457,6 +3667,13 @@ export type Database = {
           review_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "prompt_result_shopping_cards_catalog_product_id_fkey"
+            columns: ["catalog_product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "prompt_result_shopping_cards_brand_id_fkey"
             columns: ["brand_id"]
@@ -3658,6 +3875,41 @@ export type Database = {
             columns: ["topic_id"]
             isOneToOne: false
             referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_table_views: {
+        Row: {
+          brand_id: string
+          columns: Json
+          id: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          columns: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          columns?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_table_views_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
             referencedColumns: ["id"]
           },
         ]
@@ -4537,6 +4789,23 @@ export type Database = {
           removed_keys: string[]
           removed_labels: string[]
           total: number
+        }[]
+      }
+      action_scorecard: {
+        Args: { p_brand_id: string; p_since?: string | null }
+        Returns: {
+          completed: number
+          declined: number
+          dismiss_reasons: Json
+          dismissed: number
+          final: number
+          improved: number
+          kind: string
+          median_change: number | null
+          mixed: number
+          no_change: number
+          not_measurable: number
+          pending: number
         }[]
       }
       ai_traffic_merged: {
@@ -5589,6 +5858,21 @@ export type Database = {
         Returns: {
           platforms: string[]
           regions: string[]
+        }[]
+      }
+      catalog_product_ai_stats: {
+        Args: {
+          p_brand_id: string
+          p_from: string
+          p_product_id?: string
+          p_to?: string
+        }
+        Returns: {
+          ai_visits: number
+          currency: string | null
+          orders: number
+          product_id: string
+          revenue: number | null
         }[]
       }
       shopping_merchant_split: {

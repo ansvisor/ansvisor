@@ -1,4 +1,5 @@
 import type { BrandPrefKey, NavChild, NavItem } from '@/config/dashboard';
+import { menuSectionOf } from '@/lib/menu-access';
 
 type Translator = (key: string) => string;
 
@@ -75,11 +76,16 @@ export function childLinkHref(child: NavChild, pathname: string): string {
 }
 
 /** Brand preferences hide a navigation item entirely; they are intentionally
- * separate from plan gates, which render a visible but disabled item. */
+ * separate from plan gates, which render a visible but disabled item. So do
+ * the sections the viewer's menu leaves out (menu access): off the menu, the
+ * page still opens from a link. */
 export function shouldShowDashboardNavItem(
   item: NavItem,
   brandPrefs: Record<BrandPrefKey, boolean>,
+  hiddenSections: ReadonlySet<string> = new Set(),
 ): boolean {
+  const section = menuSectionOf(item.href);
+  if (section && hiddenSections.has(section)) return false;
   return !item.requiresBrandPref || brandPrefs[item.requiresBrandPref];
 }
 

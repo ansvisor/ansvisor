@@ -42,7 +42,12 @@ vi.mock('@/lib/supabase/client', () => {
         : []
       : null;
   const rows: Record<string, () => unknown> = {
-    profiles: () => ({ organization_id: 'org-1', onboarding_completed: db.onboarded }),
+    // "What do you work on?" (menu access) answered: the resume goes on to the plan step.
+    profiles: () => ({
+      organization_id: 'org-1',
+      onboarding_completed: db.onboarded,
+      work_areas_asked_at: db.onboarded ? '2026-10-01T00:00:00Z' : null,
+    }),
     brands: () => [
       {
         id: 'b1',
@@ -92,6 +97,7 @@ vi.mock('@/lib/actions/prompt', () => ({
 }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
+vi.mock('@/lib/actions/menu-access', () => ({ setMyWorkAreas: vi.fn() }));
 const setup = vi.hoisted(() => ({
   suggestTopics: vi.fn(),
   generatePromptsFromTopics: vi.fn(),
