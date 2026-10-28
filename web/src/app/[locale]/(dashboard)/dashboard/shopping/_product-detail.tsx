@@ -151,6 +151,8 @@ export function ProductDetailView({
                       <span className="flex items-center gap-2">
                         {STATE_ICON[row.state]}
                         {t(`why.rows.${row.key}`)}
+                        {/* The icon's state, for a screen reader. */}
+                        <span className="sr-only">, {t(`why.states.${row.state}`)}</span>
                       </span>
                     </TableCell>
                     <TableCell className="tabular-nums">

@@ -9,6 +9,9 @@ import express from 'express';
 
 const assertBrandAccess = vi.fn();
 const sendProductActions = vi.fn();
+// The features the routes ask for, and whether the caller's plan has them.
+const featuresAsked = [];
+let planHasFeature = true;
 
 let server;
 let baseUrl;
@@ -18,7 +21,14 @@ async function startApp() {
   vi.doMock('../config/supabase.js', () => ({ default: {} }));
   vi.doMock('../lib/access.js', () => ({ assertBrandAccess }));
   vi.doMock('../lib/action-center/priority-data.js', () => ({ rescoreActionsForSignal: vi.fn() }));
-  vi.doMock('../lib/plan-guard.js', () => ({ PlanLimitError: class extends Error {} }));
+  vi.doMock('../lib/plan-guard.js', () => ({
+    PlanLimitError: class extends Error {},
+    requireFeature: (feature) => (_req, res, next) => {
+      featuresAsked.push(feature);
+      if (planHasFeature) return next();
+      return res.status(403).json({ success: false, error: 'plan_limit' });
+    },
+  }));
   vi.doMock('../lib/action-center/task-writer/index.js', () => ({
     TaskWriterError: class extends Error {},
     isTaskWriterEnabled: () => false,
@@ -66,6 +76,8 @@ const post = (body) =>
 beforeEach(async () => {
   assertBrandAccess.mockReset().mockResolvedValue({});
   sendProductActions.mockReset();
+  featuresAsked.length = 0;
+  planHasFeature = true;
   await startApp();
 });
 
@@ -115,5 +127,24 @@ describe('POST /api/action-center/products', () => {
     assertBrandAccess.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }));
     expect((await post(body)).status).toBe(403);
     expect(sendProductActions).not.toHaveBeenCalled();
+  });
+
+  it('refuses a plan without Product Visibility (shopping_analytics), and passes on a 422 for work with no task', async () => {
+    planHasFeature = false;
+    expect((await post(body)).status).toBe(403);
+    expect(featuresAsked).toEqual(['shopping_analytics']);
+    expect(sendProductActions).not.toHaveBeenCalled();
+
+    planHasFeature = true;
+    sendProductActions.mockRejectedValue(
+      Object.assign(new Error('None of the work picked has a task to plan for this brand.'), {
+        status: 422,
+      }),
+    );
+    const res = await post(body);
+    expect(res.status).toBe(422);
+    expect((await res.json()).details).toBe(
+      'None of the work picked has a task to plan for this brand.',
+    );
   });
 });

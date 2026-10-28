@@ -19,7 +19,10 @@ async function startApp() {
   vi.doMock('../config/supabase.js', () => ({ default: {} }));
   vi.doMock('../lib/access.js', () => ({ assertBrandAccess }));
   vi.doMock('../lib/action-center/priority-data.js', () => ({ rescoreActionsForSignal: vi.fn() }));
-  vi.doMock('../lib/plan-guard.js', () => ({ PlanLimitError: class extends Error {} }));
+  vi.doMock('../lib/plan-guard.js', () => ({
+    PlanLimitError: class extends Error {},
+    requireFeature: () => (_req, _res, next) => next(),
+  }));
   vi.doMock('../lib/action-center/task-writer/index.js', () => ({
     TaskWriterError: class extends Error {},
     isTaskWriterEnabled: () => false,

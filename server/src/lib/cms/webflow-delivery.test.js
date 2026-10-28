@@ -123,6 +123,38 @@ describe('sendToWebflow', () => {
     expect(webflow.createItem).not.toHaveBeenCalled();
   });
 
+  it('dates a new item the day it’s sent, and leaves an item sent again its own date', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-27T09:30:00Z') });
+    try {
+      const dated = { ...connection, field_map: { ...connection.field_map, date: 'date' } };
+      const sendDated = () =>
+        sendToWebflow({
+          delivery: { id: 'd2345678-0000-0000-0000-000000000000' },
+          page: { draftId: 'dr1', title: 'Cold brew at home', slug: 'cold-brew-at-home' },
+          html: '<p>Smooth.</p>',
+          jsonLd: [],
+          connection: dated,
+        });
+      await sendDated();
+      expect(webflow.createItem.mock.calls[0][2]).toMatchObject({
+        date: '2026-10-27T09:30:00.000Z',
+      });
+
+      previous = 'item-old';
+      await sendDated();
+      expect(webflow.updateItem.mock.calls[0][3]).not.toHaveProperty('date');
+      // Deleted in Webflow: the new item is dated again.
+      webflow.updateItem.mockRejectedValueOnce(new WebflowError('not_found', 'gone'));
+      await sendDated();
+      expect(webflow.createItem.mock.calls[1][2]).toHaveProperty(
+        'date',
+        '2026-10-27T09:30:00.000Z',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('gives Webflow a slug it takes, from the title when the page’s has nothing left', async () => {
     await send({ slug: 'soğuk.demleme' });
     expect(webflow.createItem.mock.calls[0][2].slug).toBe('soguk-demleme');
