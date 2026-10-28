@@ -5828,7 +5828,7 @@ describe('the side panel', () => {
         expect(dialogText()).not.toContain('Reading your catalog');
         expect(dialogText()).toContain('1 product link to remove or replace');
         expect(dialogText()).toContain(
-          'Trail (sold out). Remove or replace these links on the page',
+          'Trail (not in stock). Remove or replace these links on the page',
         );
         expect(dialogText()).not.toContain('No link to the category page');
       } finally {

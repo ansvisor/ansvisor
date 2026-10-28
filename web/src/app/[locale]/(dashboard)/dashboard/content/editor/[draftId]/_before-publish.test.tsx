@@ -209,7 +209,7 @@ describe('BeforePublish', () => {
       });
       const bad = rows().find((r) => r?.startsWith('2 product links to remove or replace'));
       expect(bad).toContain(
-        'Canyon (sold out), Ridge (Merchant Center refuses it). Remove or replace these links on the page',
+        'Canyon (not in stock), Ridge (Merchant Center refuses it). Remove or replace these links on the page',
       );
 
       const five = ['A', 'B', 'C', 'D', 'E'].map((t) => product(t, 'gone'));

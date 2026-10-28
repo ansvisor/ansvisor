@@ -153,7 +153,7 @@ describe('ShoppingPathSection', () => {
     expect(text).toContain('1 Merchant Center issue: gtin');
     expect(text).toContain('Top picks #1');
     expect(text).toContain('Top picks #2');
-    expect(text).toContain('Canyon Low WP · sold out');
+    expect(text).toContain('Canyon Low WP · not in stock');
   });
 
   it('picks from the catalog the first time, and says when a draft takes none', async () => {
