@@ -88,7 +88,7 @@ describe('LocationMatrix', () => {
       regions: ['US', 'TR'],
     });
     expect(text).toContain('United States');
-    expect(text).toContain('Turkey');
+    expect(text).toContain('Türkiye');
     expect(bodyRows()).toEqual([
       ['All prompts · average', '—', '41', '35', '—'],
       ['best specialty coffee subscription', 'Coffee', '62', '35', '27'],
@@ -130,13 +130,13 @@ describe('LocationMatrix', () => {
     await render();
     (
       container.querySelector(
-        'button[aria-label="best specialty coffee subscription in Turkey: open its positions"]',
+        'button[aria-label="best specialty coffee subscription in Türkiye: open its positions"]',
       ) as HTMLButtonElement
     ).click();
     expect(onOpenCell).toHaveBeenCalledWith('p1', 'TR');
     (
       container.querySelector(
-        'button[aria-label="Track “same day coffee delivery near me” in Turkey"]',
+        'button[aria-label="Track “same day coffee delivery near me” in Türkiye"]',
       ) as HTMLButtonElement
     ).click();
     expect(onTrack).toHaveBeenCalledWith(rows[1], 'TR');

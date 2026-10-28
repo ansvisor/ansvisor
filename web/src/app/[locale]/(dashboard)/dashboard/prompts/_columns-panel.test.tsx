@@ -147,9 +147,9 @@ describe('ColumnsPanel', () => {
     const add = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Add')!;
     await act(async () => add.click());
     expect(views.mine?.order.at(-1)).toBe('loc:position:TR');
-    expect(item('Position · Turkey')).toBeDefined();
+    expect(item('Position · Türkiye')).toBeDefined();
     const remove = document.querySelector(
-      'button[aria-label="Remove Position · Turkey"]',
+      'button[aria-label="Remove Position · Türkiye"]',
     ) as HTMLButtonElement;
     await act(async () => remove.click());
     expect(views.mine?.order).not.toContain('loc:position:TR');

@@ -102,3 +102,26 @@ export function formatRegionDisplay(code: string): string {
   const flag = regionFlag(code);
   return flag ? `${flag} ${label}` : label;
 }
+
+/** A name without its accents and dots: İstanbul → Istanbul, Türkiye → Turkiye. */
+function withoutMarks(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Other names a country is searched by: Türkiye by its former English one. */
+const COUNTRY_ALIASES: ReadonlyMap<string, readonly string[]> = new Map([['TR', ['Turkey']]]);
+
+/**
+ * What the location picker's search finds a code by: its name, the name
+ * without its marks ("Ist" finds İstanbul, "Turkiye" Türkiye), a country's
+ * other names, and for a city its country's too ("Turkey" finds İzmir).
+ */
+export function locationSearchText(code: string): string {
+  const parsed = parseLocation(code);
+  if (!parsed) return code.trim();
+  const name = regionLabel(code);
+  const names = [name, withoutMarks(name)];
+  if (parsed.city) names.push(locationSearchText(parsed.country));
+  else if (!parsed.state) names.push(...(COUNTRY_ALIASES.get(parsed.country) ?? []));
+  return [...new Set(names)].join(' ');
+}

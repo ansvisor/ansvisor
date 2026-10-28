@@ -90,7 +90,7 @@ describe('AddLocationsDialog', () => {
   it("opens on a cell's prompt and location, prices it, and tracks it there", async () => {
     const text = await render({ promptId: 'p2', locations: ['TR'] });
     expect(text).toContain('Track in more locations');
-    expect(text).toContain('Turkey');
+    expect(text).toContain('Türkiye');
     expect(text).toContain('152 → 153 of 200 tracked locations');
     expect(scope('prompt p2').checked).toBe(true);
     await act(async () => submit().click());

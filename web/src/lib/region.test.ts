@@ -5,6 +5,7 @@ import {
   formatRegionDisplay,
   isValidLocation,
   locationCode,
+  locationSearchText,
   parseLocation,
   regionFlag,
   regionLabel,
@@ -75,6 +76,15 @@ describe('location codes', () => {
     expect(regionLabel('TR~ISTANBUL')).toBe('İstanbul');
     expect(regionFlag('TR~ISTANBUL')).toBe(regionFlag('TR'));
     expect(cityCode('tr', 'izmir')).toBe('TR~IZMIR');
+  });
+
+  it('names Türkiye as Türkiye, and finds it and its cities by its other names too', () => {
+    expect(regionLabel('TR')).toBe('Türkiye');
+    expect(locationSearchText('TR')).toBe('Türkiye Turkiye Turkey');
+    expect(locationSearchText('TR~IZMIR')).toBe('İzmir Izmir Türkiye Turkiye Turkey');
+    expect(locationSearchText('BR~SAO_PAULO')).toBe('São Paulo Sao Paulo Brazil');
+    expect(locationSearchText('DE')).toBe('Germany');
+    expect(locationSearchText('US-CA')).toBe('California');
   });
 
   it('takes the tracking countries beyond the brand regions (PROMPT-015c)', () => {

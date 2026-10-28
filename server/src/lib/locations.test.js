@@ -84,7 +84,7 @@ describe('cities (PROMPT-015d)', () => {
     expect(parseLocation('tr~istanbul')).toMatchObject({
       country: 'TR',
       state: null,
-      city: { name: 'Istanbul', google: 'Istanbul,Istanbul,Turkey' },
+      city: { name: 'Istanbul', google: 'Istanbul,Istanbul,Turkiye' },
     });
     expect(parseLocation('TR~NOWHERE')).toEqual({ country: 'TR', state: null, city: null });
     expect(parseLocation('T1~ISTANBUL')).toEqual({ country: null, state: null });
