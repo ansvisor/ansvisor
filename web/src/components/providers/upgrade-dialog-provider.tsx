@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUserRole } from '@/hooks/use-user-role';
+import { isSubscriptionInactive } from '@/lib/api-failure';
 import { readOnlyReason, type ReadOnlyReason } from '@/lib/billing/subscription-access';
 import { openBillingPortal } from '@/lib/billing/portal-client';
 import { ChoosePlanDialog } from '@/components/billing/choose-plan-dialog';
@@ -36,6 +37,10 @@ export { CHOOSE_PLAN_HREF, useUpgradeDialog, useUpgradeGate } from './upgrade-ga
  * Stripe's Checkout; other members are asked to turn to an admin. A payment
  * being retried asks for the payment method instead. Self-hosted is never
  * locked.
+ *
+ * A server action the server refused as read-only (assertWritable) that no
+ * caller caught opens the dialog too: the plan can end while a page is open,
+ * before its buttons know.
  */
 export function UpgradeDialogProvider({
   adminName = null,
@@ -56,6 +61,15 @@ export function UpgradeDialogProvider({
     setAction(typeof label === 'string' && label ? label : null);
     setOpen(true);
   }, []);
+  useEffect(() => {
+    const onRejection = (event: PromiseRejectionEvent) => {
+      if (!isSubscriptionInactive(event.reason)) return;
+      event.preventDefault();
+      openUpgrade();
+    };
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => window.removeEventListener('unhandledrejection', onRejection);
+  }, [openUpgrade]);
   const value = useMemo(
     () => ({
       isLocked: !subscriptionActive,
