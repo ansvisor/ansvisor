@@ -165,7 +165,7 @@ describe('assertWritable and the demo brand', () => {
   it('reads the brand beside the plan, and lets another brand write', async () => {
     await expect(assertWritable({ brandId: 'brand-1' })).resolves.toBeUndefined();
     expect(reads).toEqual([
-      'profiles: organization_id, organizations(subscription_status, stripe_subscription_id)',
+      'profiles: organization_id, organizations!profiles_organization_id_fkey(subscription_status, stripe_subscription_id)',
       'brands: is_demo',
       'brands: id = brand-1',
     ]);
