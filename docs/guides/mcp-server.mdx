@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **52 tools**. Descriptions below match
+The MCP server exposes **55 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries.
@@ -231,6 +231,15 @@ intent, not during exploratory queries.
 | --- | --- | --- |
 | `list_brands` | List the brands the authenticated user can access (id, name, slug, industry, region). Call first to resolve a `brand_id`. | |
 | `list_competitors` | Configured competitors for a brand (id, name, domain); this is not a performance ranking. | |
+
+### Your account
+
+| Tool | What it does | Writes |
+| --- | --- | --- |
+| `get_me` | Who the key acts as: user, organization, role, work areas (from **Settings → Account**) and whether they may choose who sees which menu sections (`can_manage_menus`). | |
+| `get_ai_usage` | How much of the workspace's monthly AI allowance is used this period, as **Settings → Billing** shows it: `percent_used`, each feature's share (`improve`, `content`, `action_center`, `other`), the plan, the trial and the period's dates. `unlimited` self-hosted; `active_plan: false` without an active plan. | |
+
+The same reads are available over REST with the same `ans_` key: `GET /api/mcp/whoami` and `GET /api/mcp/ai-usage`.
 
 ### Visibility & analytics
 
@@ -282,7 +291,7 @@ curl "https://app.ansvisor.com/api/mcp/mentions/summary?brand_id=<brand_id>&plat
 | `list_prompt_suggestions` | Pending AI-generated prompt suggestions with source details, expiry and a stale flag. Does not generate new suggestions. | |
 | `accept_prompt_suggestion` | Create a tracked prompt from one pending suggestion using the brand's default engines and plan/location checks. | **yes** |
 | `dismiss_prompt_suggestion` | Dismiss one pending prompt suggestion so it no longer appears in future lists. | **yes** |
-| `get_prompt_volumes` | Per-prompt Google and estimated AI search demand and competition for prompts that already have analysis. | |
+| `get_prompt_volumes` | Per-prompt Google and estimated AI search demand and competition for prompts that already have analysis, with `measured_demand`: the real signs people ask it (Search Console, Google Trends, People Also Ask, YouTube) and their level, or `null` until any was read. | |
 | `get_prompt_usage` | Tracked-prompt usage against the plan: the brand's active and paused prompts, and the account's active prompts, brands, prompt locations used and location limit. | |
 
 ### Content opportunities
@@ -334,11 +343,14 @@ The catalog is also available over REST: `GET /api/mcp/catalog/sources?brand_id=
 | Tool | What it does | Writes |
 | --- | --- | --- |
 | `list_actions` | Recommended actions for a brand with priority (0–100 score, level and reasons), status, impact, assignee, due date, and task progress. Highest priority first; `sort: "updated"` lists the most recently updated first. | |
-| `get_action` | One action in full: priority, payload, triggering signals, tasks (`mode`, `permission`), and event trail. `format: "markdown"` or `"csv"` returns it as the dashboard's **Copy Data** and **Export CSV** write it instead. | |
+| `get_action` | One action in full: priority, payload, triggering signals, tasks (`mode`, `permission`), event trail, and once closed `net_of_control` and `dismiss_reason`. `format: "markdown"` or `"csv"` returns it as the dashboard's **Copy Data** and **Export CSV** write it instead. | |
 | `list_signals` | Detected changes (visibility, citations, traffic), each with `where` (prompt, topic, platforms, locations, domain, competitor), `change` (labelled figures with unit and period), `evidence` (detection dates, app links) and `used_by_actions`. | |
-| `list_action_history` | Closed actions with measured outcomes and before/after validation results. | |
+| `list_action_history` | Closed actions with measured outcomes and before/after validation results, each with `net_of_control` (its change net of the brand's prompts it didn't touch, so a market-wide swing doesn't read as its effect) and `dismiss_reason` (`not_relevant`, `already_done`, `wrong_data` or `not_now`). | |
+| `get_action_scorecard` | What each kind of action did at the brand, as the History tab's scorecard shows it: completed and their results, `success_rate` (from three verdicts), `median_change_percent`, and dismissals by reason. Optional `date_from`. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
 | `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
+
+The scorecard is also available over REST: `GET /api/mcp/action-scorecard?brand_id=<brand_id>&date_from=2026-09-01`.
 
 #### Export an action
 
