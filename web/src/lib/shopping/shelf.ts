@@ -236,20 +236,87 @@ export function inPriceBand(row: ShelfRow, band: PriceBand): boolean {
 }
 
 /**
+ * Words a shopping question asks with, not for: what's wanted of a product
+ * ("best", "under", "cheap") rather than which one, as categoryWords reads
+ * them (singular). "Why not you?" matches on neither these nor numbers.
+ */
+const ASKING_WORDS = new Set([
+  'best',
+  'top',
+  'good',
+  'great',
+  'cheap',
+  'cheapest',
+  'affordable',
+  'budget',
+  'under',
+  'over',
+  'below',
+  'above',
+  'less',
+  'more',
+  'than',
+  'most',
+  'popular',
+  'rated',
+  'review',
+  'recommend',
+  'recommended',
+  'buy',
+  'price',
+  'deal',
+  'sale',
+  'new',
+  'vs',
+  'versu',
+  'what',
+  'which',
+  'where',
+  'how',
+  'is',
+  'are',
+  'in',
+  'on',
+  'to',
+  'my',
+  'me',
+  'should',
+  'need',
+  'want',
+  'seller',
+]);
+
+/** A text's words that name a product: no asking words, numbers or single letters. */
+function productWords(text: string): string[] {
+  return categoryWords(text).filter(
+    (word) => word.length > 1 && !/^\d+$/.test(word) && !ASKING_WORDS.has(word),
+  );
+}
+
+/** "Why not you?" needs this many of the question's words in a product, short of its category. */
+export const WHY_NOT_WORDS = 2;
+
+/**
  * "Why not you?" (the mockup's Shelf): for a shelf the brand isn't on, the
  * product of its catalog the question asks for most, by the question's
  * words in the product's title, category and type; the readier one on a
- * tie. Null when none shares a word with the question, or the brand is on
- * the shelf.
+ * tie. A product is a candidate when it has WHY_NOT_WORDS of the question's
+ * words, or when its category or type is what the question names (all its
+ * words in it): "best running shoes for men under $100" isn't "Men's Best
+ * Seller Tee". Null when none is, or the brand is on the shelf.
  */
 export function whyNotYou(row: ShelfRow, products: readonly ProductRow[]): ProductRow | null {
   if (row.ownRank !== null) return null;
-  const asked = new Set(categoryWords(row.promptText));
+  const asked = new Set(productWords(row.promptText));
+  const names = (text: string | null) => {
+    const words = productWords(text ?? '');
+    return words.length > 0 && words.every((word) => asked.has(word));
+  };
   let best: { row: ProductRow; score: number } | null = null;
   for (const candidate of products) {
     const { product } = candidate;
     const words = new Set(
-      categoryWords(
+      productWords(
         [
           product.title,
           product.category ? categoryLeaf(product.category) : '',
@@ -261,7 +328,9 @@ export function whyNotYou(row: ShelfRow, products: readonly ProductRow[]): Produ
     );
     let score = 0;
     for (const word of asked) if (words.has(word)) score += 1;
-    if (score === 0) continue;
+    const ofCategory =
+      names(product.category ? categoryLeaf(product.category) : null) || names(product.productType);
+    if (score < WHY_NOT_WORDS && !ofCategory) continue;
     if (
       !best ||
       score > best.score ||
