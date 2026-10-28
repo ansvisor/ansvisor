@@ -263,7 +263,9 @@ describe('requireActiveSubscription', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-27T18:00:00Z'));
     org = neverSubscribed;
-    for (let i = 0; i < MAX_ENTRIES; i++) {
+    // Each call counts for its person and its organization: half as many
+    // calls fill the map exactly, the first organization's counts first.
+    for (let i = 0; i < MAX_ENTRIES / 2; i++) {
       profile = { organization_id: `org-${i}` };
       await run({ path: '/topics/suggest', user: { id: `u-${i}` } });
     }
