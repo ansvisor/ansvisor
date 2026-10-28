@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { inView, productRows, readiness, viewRows, type CatalogProductRow } from './products';
+import {
+  inView,
+  productRows,
+  readiness,
+  viewCounts,
+  viewRows,
+  type CatalogProductRow,
+  type ProductCardRow,
+} from './products';
 
 /** Product Visibility's Products table (ECOM-007). */
 
@@ -121,46 +129,71 @@ describe('productRows and the views', () => {
     expect(ids('all')).toEqual(['clicked', 'seller', 'shown', 'never']);
     expect(rows.every((row) => inView(row, 'all'))).toBe(true);
   });
+
+  it('counts each view, All and Never shown out of the whole catalog when the rows are part of it', () => {
+    const counts = { all: 4, never: 1, notClicked: 1, notBought: 1, topSellers: 1 };
+    expect(viewCounts(rows, 4)).toEqual(counts);
+    // The rows of a 5,000-product catalog: the 3 shown are among them, the other 4,997 never were.
+    expect(viewCounts(rows, 5000)).toEqual({ ...counts, all: 5000, never: 4997 });
+  });
 });
 
 describe('wrongPrice', () => {
-  it("flags an AI answer's price more than 2% off the catalog's, in the same currency", () => {
+  const card = (over: Partial<ProductCardRow>): ProductCardRow => ({
+    productId: 'p',
+    shelf: 'q1',
+    rank: 1,
+    currency: 'USD',
+    ...over,
+  });
+  // On sale at $129; its other variant $159; $149 before the sale.
+  const onSale = product({
+    id: 'p',
+    price: 129,
+    currency: 'USD',
+    prices: [
+      { price: 149, currency: 'USD' },
+      { price: 129, currency: 'USD' },
+      { price: 159, currency: 'USD' },
+    ],
+  });
+
+  it("flags a channel's latest answer whose price is more than 2% off each variant's, in the same currency", () => {
     const [row] = productRows(
-      [product({ id: 'p', price: 129, currency: 'USD' })],
+      [onSale],
       [
-        {
-          productId: 'p',
-          shelf: 'a',
-          rank: 1,
-          price: 130,
-          currency: 'USD',
-          platform: 'copilot-web',
-        },
-        {
-          productId: 'p',
-          shelf: 'b',
-          rank: 1,
-          price: 99,
-          currency: 'EUR',
-          platform: 'copilot-web',
-        },
-        {
-          productId: 'p',
-          shelf: 'c',
-          rank: 2,
-          price: 139,
-          currency: 'USD',
-          platform: 'chatgpt-shopping',
-        },
+        // Copilot's older answer was off; its latest shows the price before the sale.
+        card({ platform: 'copilot-web', price: 99, at: '2026-10-20T08:00:00Z' }),
+        card({ platform: 'copilot-web', price: 149, at: '2026-10-26T08:00:00Z' }),
+        // Another currency can't be told.
+        card({ platform: 'gemini', price: 99, currency: 'EUR', at: '2026-10-26T08:00:00Z' }),
+        card({ platform: 'chatgpt-shopping', price: 139, at: '2026-10-25T08:00:00Z' }),
       ],
       [],
     );
     expect(row.wrongPrice).toEqual({ seen: 139, currency: 'USD', platform: 'chatgpt-shopping' });
-    const [right] = productRows(
-      [product({ id: 'p', price: 129 })],
-      [{ productId: 'p', shelf: 'a', rank: 1, price: 129.5, currency: 'USD' }],
+  });
+
+  it("doesn't flag an older answer's price, nor one a variant has", () => {
+    const [row] = productRows(
+      [onSale],
+      [
+        card({ platform: 'chatgpt-shopping', price: 139, at: '2026-10-20T08:00:00Z' }),
+        card({ platform: 'chatgpt-shopping', price: 129.5, at: '2026-10-26T08:00:00Z' }),
+        card({ platform: 'copilot-web', price: 159, at: '2026-10-26T08:00:00Z' }),
+        // A channel whose latest answer shows no price says nothing.
+        card({ platform: 'gemini', price: 99, at: '2026-10-20T08:00:00Z' }),
+        card({ platform: 'gemini', price: null, at: '2026-10-26T08:00:00Z' }),
+      ],
       [],
     );
-    expect(right.wrongPrice).toBeNull();
+    expect(row.wrongPrice).toBeNull();
+    // Without its variants' prices, the product's own price.
+    const [own] = productRows(
+      [product({ id: 'p', price: 129 })],
+      [card({ price: 149, platform: 'copilot-web' })],
+      [],
+    );
+    expect(own.wrongPrice).toEqual({ seen: 149, currency: 'USD', platform: 'copilot-web' });
   });
 });

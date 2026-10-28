@@ -922,11 +922,20 @@ export function refreshOnce(brandId, options) {
  * kept: { facts, pages, checkedAt, recheckAt, paused, noDomain }. A page
  * that didn't answer last time is read again behind the answer (after
  * RECHECK_MS): the ask doesn't wait on the site. Each pending fact with what
- * it would replace: the approved fact in its slot ("Was $49").
+ * it would replace: the approved fact in its slot ("Was $49"). `keptOnly`
+ * (an organization whose plan has ended) never reads the site: as kept, if
+ * anything is.
  */
 export async function readBrandFacts(
   brandId,
-  { orgId, refresh = false, now = Date.now(), db = supabaseAdmin, fetcher = fetchPage } = {},
+  {
+    orgId,
+    refresh = false,
+    keptOnly = false,
+    now = Date.now(),
+    db = supabaseAdmin,
+    fetcher = fetchPage,
+  } = {},
 ) {
   const { data: kept, error } = await db
     .from('brand_fact_pages')
@@ -936,7 +945,9 @@ export async function readBrandFacts(
   const last = Math.max(0, ...(kept ?? []).map((p) => Date.parse(p.checked_at)));
   const due = now - last >= RECHECK_MS;
   let result = { noDomain: false, paused: false };
-  if (!kept?.length || (refresh && due)) {
+  if (keptOnly) {
+    // As kept: the site isn't read.
+  } else if (!kept?.length || (refresh && due)) {
     result = await refreshOnce(brandId, { orgId, now, db, fetcher });
   } else if (due && kept.some((p) => p.status === 'failed')) {
     refreshOnce(brandId, { orgId, now, db, fetcher }).catch((err) =>

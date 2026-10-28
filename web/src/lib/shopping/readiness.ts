@@ -78,9 +78,17 @@ export function readinessChecklist(input: ReadinessInput): {
   const merchantCenter = catalog.some((source) => source.kind === 'merchant_center');
   items.push({
     key: 'merchantCenter',
-    // In Europe the Merchant Center feed decides ChatGPT too (§3.4b).
-    state: merchantCenter ? 'pass' : input.market === 'europe' ? 'fail' : 'warn',
-    action: merchantCenter ? undefined : 'settings',
+    // In Europe the Merchant Center feed decides ChatGPT too (§3.4b). Sources
+    // that couldn't be read say nothing either way.
+    state:
+      input.catalog === null
+        ? 'unknown'
+        : merchantCenter
+          ? 'pass'
+          : input.market === 'europe'
+            ? 'fail'
+            : 'warn',
+    action: merchantCenter || input.catalog === null ? undefined : 'settings',
   });
   if (input.market === 'us') {
     if (input.openAi) {

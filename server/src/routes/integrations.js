@@ -3,6 +3,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import {
   PROVIDERS,
+  entityIdFor,
   isKnownProvider,
   isComposioConfigured,
   initiateConnection,
@@ -20,12 +21,8 @@ const router = Router();
 
 const GSC = 'google-search-console';
 const GA = 'google-analytics';
+const GMC = 'google-merchant-center';
 const WRITE_ROLES = ['admin', 'manager'];
-
-/** Entity id: one connection per organization per provider (#577). */
-function entityIdFor(organizationId) {
-  return `org_${organizationId}`;
-}
 
 async function getProfile(userId) {
   const { data: profile, error } = await supabaseAdmin
@@ -92,6 +89,7 @@ router.get('/config', async (_req, res) => {
   return res.json({
     googleSearchConsole: isComposioConfigured(GSC),
     googleAnalytics: isComposioConfigured(GA),
+    googleMerchantCenter: isComposioConfigured(GMC),
     dataForSeo: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
   });
 });

@@ -1,3 +1,4 @@
+import { setImmediate as nextTurn } from 'timers/promises';
 import supabaseAdmin from '../../config/supabase.js';
 import { linkKey } from '../content-links.js';
 import { logger } from '../logger.js';
@@ -17,12 +18,15 @@ import { readAllRpcRows } from '../rpc-pages.js';
  *      query);
  *   4. its title, when most of its words are one product's (TITLE_MATCH)
  *      and clearly not another's (TITLE_MARGIN). The brand's own name and
- *      filler words don't count.
+ *      filler words don't count. The products compared are those sharing a
+ *      word with the card that few of the catalog's titles have
+ *      (COMMON_WORD_SHARE), so a big catalog's "women" or "backpack" doesn't
+ *      make each card weigh most of it.
  *
  * A key two products share names neither. Cards are matched as they're
  * written (cloro-result-handler.js), against a catalog read at most every
  * INDEX_TTL_MS, and all of a brand's recent cards again after its catalog
- * syncs (sweepShoppingCardMatches).
+ * syncs (sweepShoppingCardMatches), a slice at a time.
  */
 
 /** The share of two titles' words in common (Dice) a title match needs… */
@@ -35,8 +39,21 @@ export const REMATCH_DAYS = 90;
 const WRITE_BATCH = 500;
 /** How long a brand's catalog is kept for matching new cards. */
 const INDEX_TTL_MS = 10 * 60 * 1000;
-/** Brands' catalogs kept at most; the oldest goes first. */
-const MAX_INDEXES = 50;
+/**
+ * Products kept across the brands' catalogs at most; the brand read least
+ * recently goes first. One brand bigger than this is still kept, alone.
+ */
+export const MAX_INDEXED_PRODUCTS = 200_000;
+/**
+ * A word in more of a catalog's titles than this share (and than
+ * COMMON_WORD_MIN) still counts in a title's score, but finds no products to
+ * compare: it would make each card weigh most of a big catalog.
+ */
+export const COMMON_WORD_SHARE = 0.05;
+/** …so a small catalog compares every product sharing a word, as before. */
+export const COMMON_WORD_MIN = 500;
+/** Cards matched between two breaths for the event loop. */
+export const MATCH_SLICE = 500;
 
 const AMBIGUOUS = Symbol('ambiguous');
 
@@ -85,14 +102,32 @@ export function pathKey(url) {
   }
 }
 
-/** The GTIN a card's provider gave, if any. */
+/** The keys a card's provider gives its GTIN under, in the card's raw payload. */
+const GTIN_KEYS = ['gtin', 'gtin13', 'gtin12', 'gtin14', 'ean', 'upc'];
+
+/**
+ * The GTIN a card's provider gave, if any: in its raw payload as it's
+ * written, or read out of it by the sweep (CARD_GTIN_COLUMNS).
+ */
 function cardGtin(card) {
-  if (card.gtin) return card.gtin;
   const raw = card.raw && typeof card.raw === 'object' ? card.raw : {};
-  for (const key of ['gtin', 'gtin13', 'gtin12', 'gtin14', 'ean', 'upc']) {
-    if (typeof raw[key] === 'string' || typeof raw[key] === 'number') return String(raw[key]);
+  for (const from of [card, raw]) {
+    for (const key of GTIN_KEYS) {
+      const value = from[key];
+      if ((typeof value === 'string' && value.trim()) || typeof value === 'number') {
+        return String(value);
+      }
+    }
   }
   return null;
+}
+
+/** The sweep's select of a card's GTIN keys, each read out of its raw payload. */
+const CARD_GTIN_COLUMNS = GTIN_KEYS.map((key) => `${key}:raw->>${key}`).join(', ');
+
+function post(postings, word, at) {
+  if (!postings.has(word)) postings.set(word, []);
+  postings.get(word).push(at);
 }
 
 function setOnce(map, key, productId) {
@@ -119,30 +154,47 @@ export function catalogIndex({ products, variants }, { brandName } = {}) {
   const skip = new Set([...FILLER, ...titleWords(brandName)]);
   const index = {
     skip,
+    size: products.length,
     byListing: new Map(),
     byGtin: new Map(),
     byUrl: new Map(),
     byPath: new Map(),
     titles: [],
     postings: new Map(),
+    common: new Set(),
   };
   const addPage = (url, productId) => {
     setOnce(index.byUrl, linkKey(url), productId);
     setOnce(index.byPath, pathKey(url), productId);
   };
   const live = new Set();
+  // How many titles each word is in.
+  const titlesWith = new Map();
   for (const product of products) {
     live.add(product.id);
     if (product.url) addPage(product.url, product.id);
     const words = titleWords(product.title, skip);
     if (!words.size) continue;
-    const at = index.titles.length;
     index.titles.push({ id: product.id, words });
-    for (const word of words) {
-      if (!index.postings.has(word)) index.postings.set(word, []);
-      index.postings.get(word).push(at);
-    }
+    for (const word of words) titlesWith.set(word, (titlesWith.get(word) ?? 0) + 1);
   }
+  // A title is found by its words few titles have, or else by its rarest one.
+  const common = Math.max(COMMON_WORD_MIN, index.titles.length * COMMON_WORD_SHARE);
+  index.titles.forEach(({ words }, at) => {
+    let rarest = null;
+    let found = false;
+    for (const word of words) {
+      const count = titlesWith.get(word);
+      if (count <= common) {
+        found = true;
+        post(index.postings, word, at);
+      } else {
+        index.common.add(word);
+        if (rarest === null || count < titlesWith.get(rarest)) rarest = word;
+      }
+    }
+    if (!found) post(index.postings, rarest, at);
+  });
   for (const variant of variants) {
     if (!live.has(variant.product_id)) continue;
     setOnce(
@@ -175,15 +227,18 @@ export function matchCard(card, index) {
   }
   const words = titleWords(card.product_title, index.skip);
   if (!words.size) return null;
-  const shared = new Map();
+  const compared = new Set();
   for (const word of words) {
-    for (const at of index.postings.get(word) ?? []) shared.set(at, (shared.get(at) ?? 0) + 1);
+    for (const at of index.postings.get(word) ?? []) compared.add(at);
   }
   let best = null;
   let bestScore = 0;
   let second = 0;
-  for (const [at, common] of shared) {
-    const score = (2 * common) / (words.size + index.titles[at].words.size);
+  for (const at of compared) {
+    const title = index.titles[at].words;
+    let common = 0;
+    for (const word of words) if (title.has(word)) common += 1;
+    const score = (2 * common) / (words.size + title.size);
     if (score > bestScore) {
       second = bestScore;
       bestScore = score;
@@ -192,7 +247,13 @@ export function matchCard(card, index) {
       second = score;
     }
   }
-  return best && bestScore >= TITLE_MATCH && bestScore - second >= TITLE_MARGIN
+  // A product not compared shares only the card's common words, and has a
+  // word the card hasn't: it scores at most `unseen`. One that close to the
+  // best could be the lookalike that matches neither, so neither matches.
+  let commonInCard = 0;
+  for (const word of words) if (index.common.has(word)) commonInCard += 1;
+  const unseen = commonInCard ? (2 * commonInCard) / (words.size + commonInCard + 1) : 0;
+  return best && bestScore >= TITLE_MATCH && bestScore - Math.max(second, unseen) >= TITLE_MARGIN
     ? { productId: best, match: 'title' }
     : null;
 }
@@ -228,24 +289,87 @@ export async function loadCatalogIndex(brandId, { db = supabaseAdmin, brandName 
   return catalogIndex({ products, variants }, { brandName });
 }
 
-const indexes = new Map();
+/**
+ * Brands' catalogs kept for matching the cards being written: each read
+ * again after ttlMs, and, once they hold more than maxProducts products
+ * between them, the brand read least recently dropped first.
+ *
+ * @param {{ maxProducts?: number, ttlMs?: number, load?: typeof loadCatalogIndex, now?: () => number }} [opts]
+ */
+export function catalogIndexCache({
+  maxProducts = MAX_INDEXED_PRODUCTS,
+  ttlMs = INDEX_TTL_MS,
+  load = loadCatalogIndex,
+  now = Date.now,
+} = {}) {
+  // brandId → { at, index (a promise), size }; a Map keeps the order its
+  // keys went in, the least recently read first.
+  const kept = new Map();
+  const shrink = (keepId) => {
+    let total = 0;
+    for (const entry of kept.values()) total += entry.size;
+    for (const [brandId, entry] of kept) {
+      if (total <= maxProducts) break;
+      if (brandId === keepId) continue;
+      kept.delete(brandId);
+      total -= entry.size;
+    }
+  };
+  return {
+    get(brandId, opts = {}) {
+      const had = kept.get(brandId);
+      kept.delete(brandId);
+      if (had && now() - had.at < ttlMs) {
+        kept.set(brandId, had);
+        return had.index;
+      }
+      const entry = { at: now(), index: null, size: 0 };
+      entry.index = load(brandId, opts).then(
+        (index) => {
+          if (kept.get(brandId) === entry) {
+            entry.size = index.size ?? 0;
+            shrink(brandId);
+          }
+          return index;
+        },
+        (err) => {
+          if (kept.get(brandId) === entry) kept.delete(brandId);
+          throw err;
+        },
+      );
+      kept.set(brandId, entry);
+      return entry.index;
+    },
+    drop(brandId) {
+      kept.delete(brandId);
+    },
+    /** The brands kept, the least recently read first. */
+    brands: () => [...kept.keys()],
+  };
+}
+
+const indexes = catalogIndexCache();
 
 /**
  * A brand's catalog for matching the cards being written, read again after
  * INDEX_TTL_MS, or when a sweep has matched the brand's cards since.
  */
 export function catalogIndexFor(brandId, opts = {}) {
-  const kept = indexes.get(brandId);
-  if (kept && Date.now() - kept.at < INDEX_TTL_MS) return kept.index;
-  const index = loadCatalogIndex(brandId, opts).catch((err) => {
-    indexes.delete(brandId);
-    throw err;
-  });
-  indexes.delete(brandId);
-  indexes.set(brandId, { at: Date.now(), index });
-  // The oldest read goes first: a Map keeps its keys in insertion order.
-  while (indexes.size > MAX_INDEXES) indexes.delete(indexes.keys().next().value);
-  return index;
+  return indexes.get(brandId, opts);
+}
+
+/**
+ * Cards matched to a catalog, MATCH_SLICE at a time with a breath between,
+ * so a big brand's sweep doesn't hold the event loop (tracking callbacks,
+ * API requests) for its whole length.
+ */
+export async function matchCards(cards, index) {
+  const found = [];
+  for (let at = 0; at < cards.length; at += 1) {
+    if (at > 0 && at % MATCH_SLICE === 0) await nextTurn();
+    found.push(matchCard(cards[at], index));
+  }
+  return found;
 }
 
 /**
@@ -265,13 +389,13 @@ export async function matchBrandShoppingCards(
     .maybeSingle();
   if (brandErr) throw new Error(`brands read: ${brandErr.message}`);
   const index = await loadCatalogIndex(brandId, { db, brandName: brand?.name ?? null });
-  indexes.delete(brandId);
+  indexes.drop(brandId);
   const since = new Date(now.getTime() - REMATCH_DAYS * 86_400_000).toISOString();
   const cards = await readAll('prompt_result_shopping_cards', (from, to) =>
     db
       .from('prompt_result_shopping_cards')
       .select(
-        'id, product_title, merchant_url, listing_id, gtin:raw->>gtin, catalog_product_id, catalog_match',
+        `id, product_title, merchant_url, listing_id, ${CARD_GTIN_COLUMNS}, catalog_product_id, catalog_match`,
       )
       .eq('brand_id', brandId)
       .eq('matched_brand_role', 'own')
@@ -279,10 +403,11 @@ export async function matchBrandShoppingCards(
       .order('id')
       .range(from, to),
   );
+  const matches = await matchCards(cards, index);
   let matched = 0;
   const changes = [];
-  for (const card of cards) {
-    const found = matchCard(card, index);
+  for (const [at, card] of cards.entries()) {
+    const found = matches[at];
     if (found) matched += 1;
     const productId = found?.productId ?? null;
     const match = found?.match ?? null;

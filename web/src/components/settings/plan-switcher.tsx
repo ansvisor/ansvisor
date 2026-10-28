@@ -217,7 +217,7 @@ export function PlanSwitcher({ subscription, onUpdate }: PlanSwitcherProps) {
     const aiUsage = aiMultiple(PLANS.enterprise.limits.improveMonthlyBudgetUsd);
     return [
       ...(aiUsage
-        ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards('aiUsageHint') }]
+        ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards('aiUsageCustomHint') }]
         : []),
       ...(t.raw('customPlanPoints') as string[]).map((text) => ({ text })),
     ];

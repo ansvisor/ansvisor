@@ -14,7 +14,8 @@
  *
  * The action is measured afterwards on the shopping questions sent with it
  * and the product's page (basket-metrics.js). One stays open per product or
- * category: sending it again returns it.
+ * category: sending it again returns it. Work none of whose tasks can be
+ * planned for the brand opens nothing (422): an action without tasks.
  */
 
 import supabaseAdmin from '../../config/supabase.js';
@@ -98,6 +99,8 @@ export function productTasks(work, { sources, payload }) {
  *   userId: string,
  * }} opts
  * @returns {Promise<{ actionId: string, actionNo: number, created: boolean }>}
+ * @throws a 404 for a product or category not the brand's, a 422 for work
+ *   with no task to plan
  */
 export async function sendProductActions(brandId, { target, work, promptIds, userId }) {
   const isCategory = target.type === 'category';
@@ -158,6 +161,13 @@ export async function sendProductActions(brandId, { target, work, promptIds, use
     targets: (prompts ?? []).map((p) => ({ id: p.id, label: p.text })),
   };
 
+  // Planned before the action opens: one without a task isn't opened.
+  const sources = await resolveBrandSources(brandId);
+  const plan = productTasks(work, { sources, payload });
+  if (!plan.length) {
+    throw httpError('None of the work picked has a task to plan for this brand.', 422);
+  }
+
   // A product gets onto the shelf (Growth); a category is won from rivals (Compete).
   const category = isCategory ? 'compete' : 'growth';
   const impact = 'medium';
@@ -188,8 +198,6 @@ export async function sendProductActions(brandId, { target, work, promptIds, use
     throw new Error(error.message);
   }
 
-  const sources = await resolveBrandSources(brandId);
-  const plan = productTasks(work, { sources, payload });
   const { error: tasksErr } = await supabaseAdmin.from('action_tasks').insert(
     plan.map((item) => ({
       action_id: action.id,
