@@ -30,6 +30,7 @@ import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/cita
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
+import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
@@ -298,9 +299,16 @@ async function runDailyTracking() {
   });
 
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
-  sweepCatalogSources().catch((err) => {
-    logger.error({ err }, '[catalog] daily sweep failed');
-  });
+  // Then the products removed from their source over 90 days ago are
+  // deleted: after the sweep, so it isn't deleting while a sync brings one back.
+  sweepCatalogSources()
+    .catch((err) => {
+      logger.error({ err }, '[catalog] daily sweep failed');
+    })
+    .then(() => purgeRemovedCatalogProducts())
+    .catch((err) => {
+      logger.error({ err }, '[catalog] daily purge failed');
+    });
 
   // Pages sent to Webflow, published there since (#1331): read once a day.
   sweepWebflowPublished().catch((err) => {

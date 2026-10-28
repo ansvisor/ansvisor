@@ -157,7 +157,7 @@ describe('the Live page tab', () => {
     const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toEqual([
       'best crm for realtorsChatGPT, PerplexityCited 3×',
-      'crm pricingWas cited on Google AI OverviewLost',
+      'crm pricingWas cited on Google AI OverviewsLost',
     ]);
     expect(
       container.querySelector('a[href^="/dashboard/citations/url"]')!.getAttribute('href'),
