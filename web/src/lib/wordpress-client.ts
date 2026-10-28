@@ -36,6 +36,8 @@ export type WordPressError =
   | 'session'
   | 'workspace'
   | 'busy'
+  /** A read-only workspace (plan not active): the upgrade dialog, not a message. */
+  | 'subscription'
   | 'failed';
 
 const KNOWN: readonly WordPressError[] = [
@@ -80,7 +82,10 @@ async function call<T>(brandId: string, init: RequestInit = {}): Promise<WordPre
       return {
         ok: false,
         code:
-          general === 'session' || general === 'workspace' || general === 'busy'
+          general === 'session' ||
+          general === 'workspace' ||
+          general === 'busy' ||
+          general === 'subscription'
             ? general
             : 'failed',
       };

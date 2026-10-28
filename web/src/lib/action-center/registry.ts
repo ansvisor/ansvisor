@@ -115,6 +115,8 @@ export type ActionKind =
   | 'mention_review'
   // Sent by a person from AI Traffic's Pages section (AT-006).
   | 'traffic_pages'
+  // Sent by a person from a Site Audit report (learning D2).
+  | 'audit_page'
   // Sent by a person from the Content Editor's Start, as Team (CE-015).
   | 'content_draft'
   // Sent by a person from Product Visibility: a product, or a catalog category (ECOM-013).
@@ -172,6 +174,13 @@ export const ACTION_DISMISS_REASONS = [
   'not_now',
 ] as const;
 export type ActionDismissReason = (typeof ACTION_DISMISS_REASONS)[number];
+
+/** A stored dismiss reason, if it is one of ACTION_DISMISS_REASONS; null otherwise. */
+export function dismissReasonOf(value: unknown): ActionDismissReason | null {
+  return (ACTION_DISMISS_REASONS as readonly unknown[]).includes(value)
+    ? (value as ActionDismissReason)
+    : null;
+}
 
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
@@ -272,6 +281,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'topic_opportunity',
   'mention_review',
   'traffic_pages',
+  'audit_page',
   'content_draft',
   'shopping_product',
   'shopping_category',

@@ -206,6 +206,17 @@ export function actionTexts(
       }),
     };
   }
+  // A page sent from a Site Audit report (learning D2) names the page and how many checks it fails.
+  if (action.kind === 'audit_page' && Array.isArray(p.targets) && Array.isArray(p.checks)) {
+    const page = (p.targets[0] as { label?: unknown } | undefined)?.label;
+    return {
+      title:
+        typeof page === 'string' && page
+          ? t(`${action.kind}.pageTitle`, { page })
+          : t(`${action.kind}.titleGeneric`),
+      description: t(`${action.kind}.checksDescription`, { count: p.checks.length }),
+    };
+  }
   const targets = targetLabel(p, t);
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
@@ -296,6 +307,7 @@ const PERSON_SENT_KINDS: string[] = [
   'topic_opportunity',
   'mention_review',
   'traffic_pages',
+  'audit_page',
   'content_draft',
   'shopping_product',
   'shopping_category',
