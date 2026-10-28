@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { getAuditQuota, runAuditsBulk, type AuditQuota } from '@/lib/actions/audits';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
 import { suggestForPage } from '@/lib/content-job';
 import {
@@ -25,12 +27,15 @@ const SUGGEST_CALLS = { start: generateOpportunitiesOnDemand, getStatus: getGene
  * footer: send pages to the Action Center as one action, audit several
  * pages at once within the month's audits, and suggest content for a page
  * (part B3, one of the month's content suggestions). Each reports how it went
- * in a toast that opens what it made.
+ * in a toast that opens what it made. On a read-only workspace (plan not
+ * active) each opens the upgrade dialog instead.
  */
 export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
   const t = useTranslations('traffic.pageList.actions');
   const failureToast = useFailureToast();
   const router = useRouter();
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [sending, setSending] = useState(false);
   const [auditing, setAuditing] = useState(false);
   // The page whose content suggestion is being written.
@@ -187,19 +192,30 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
     [brandId, failureToast, router, t],
   );
 
-  return { send, sending, auditMany, auditing, quota, suggestContent, suggesting };
+  return {
+    send: guard(send, { action: tActions('sendAction') }),
+    sending,
+    auditMany: guard(auditMany, { action: tActions('auditPages') }),
+    auditing,
+    quota,
+    suggestContent: guard(suggestContent, { action: tActions('suggestContent') }),
+    suggesting,
+  };
 }
 
 /**
  * Why a bulk audit of `count` pages can't start, or null when it can: the
  * month's audits are spent, or fewer are left than pages (the server starts
- * all of them or none). An unknown or unlimited quota never blocks.
+ * all of them or none). An unknown or unlimited quota never blocks, nor one
+ * read without an active plan (0 of 0, or a read-only workspace: `isLocked`):
+ * Audit opens the plan dialog.
  */
 export function auditBlock(
   quota: AuditQuota | null,
   count: number,
+  isLocked = false,
 ): { reason: 'noneLeft' } | { reason: 'overQuota'; remaining: number } | null {
-  if (!quota || quota.limit === -1) return null;
+  if (!quota || quota.limit === -1 || isNoPlan(quota, isLocked)) return null;
   const remaining = Math.max(0, quota.remaining);
   if (remaining === 0) return { reason: 'noneLeft' };
   if (count > remaining) return { reason: 'overQuota', remaining };

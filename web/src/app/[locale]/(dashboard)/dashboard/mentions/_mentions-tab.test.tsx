@@ -7,6 +7,7 @@ import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
 import { DEFAULT_MENTIONS_TABLE, type MentionRow, type MentionsList } from '@/lib/mentions-list';
 import type { Competitor } from '@/types';
 import { MentionsListTab } from './_mentions-tab';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const listMentions = vi.fn();
 const getMentionResponse = vi.fn();
@@ -85,12 +86,17 @@ const competitors: Competitor[] = [
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
-function render(node: React.ReactNode) {
+function render(node: React.ReactNode, isLocked = false) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        {node}
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          {node}
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -274,6 +280,26 @@ describe('MentionsListTab', () => {
     expect(push).toHaveBeenCalledWith('/dashboard/action-center/actions?action=a1');
     // Sent: the selection is cleared.
     expect(container.textContent).not.toContain('selected');
+  });
+
+  it('sends nothing on a read-only workspace: Send to Action Center opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    listMentions.mockResolvedValue(list());
+    render(tab(), true);
+    await settle();
+    const boxes = [...container.querySelectorAll('button[role="checkbox"]')] as HTMLElement[];
+    act(() => boxes[1].click());
+    const send = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Send to Action Center',
+    ) as HTMLElement;
+    await act(async () => {
+      send.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Sending actions needs a plan');
+    expect(sendMentionsToActionCenter).not.toHaveBeenCalled();
+    // Nothing went: the selection stays.
+    expect(container.textContent).toContain('1 answer selected');
   });
 
   it("exports the ticked answers under the table's controls", async () => {
