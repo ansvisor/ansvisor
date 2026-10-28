@@ -78,6 +78,26 @@ vi.mock('@/lib/framer-client', () => ({
   readFramer: async () => ({ ok: true, configured: false, connection: null }),
 }));
 vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
+// The workspace's plan: active unless a test says it's read-only.
+const gate = vi.hoisted(() => ({ isLocked: false, openUpgrade: vi.fn() }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade: gate.openUpgrade,
+    // As the real one: read-only, the dialog with the action's label instead.
+    guard:
+      <Args extends unknown[], Result>(
+        fn: (...args: Args) => Result,
+        options: { action?: string } = {},
+      ) =>
+      (...args: Args) => {
+        if (!gate.isLocked) return fn(...args);
+        gate.openUpgrade(options.action);
+        return undefined;
+      },
+  }),
+  useUpgradeDialog: () => null,
+}));
 
 /** jsdom's Blob has no text(): read it as a browser's FileReader would. */
 const readText = (blob: Blob) =>
@@ -147,6 +167,8 @@ const tab = (name: string) =>
 
 beforeEach(() => {
   brandState.activeBrandId = 'brand-1';
+  gate.isLocked = false;
+  gate.openUpgrade.mockReset();
   window.history.replaceState(null, '', '/dashboard/content/library');
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -566,6 +588,30 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(getContentDrafts).toHaveBeenCalledTimes(2);
     // Once a brand per visit, however often the list is read.
     expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('doesn’t ask Webflow by itself while the workspace is read-only', async () => {
+    gate.isLocked = true;
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'webflow',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    // What is stored is listed; nothing is asked of the API.
+    expect(container.textContent).toContain('Pipeline forecasting');
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
   });
 
   it('doesn’t ask Webflow for a brand with no page there', async () => {
@@ -1380,6 +1426,81 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
       (b) => b.textContent === 'Export',
     )!;
     expect(exportButton.disabled).toBe(true);
+  });
+});
+
+describe('the Library on a read-only workspace (plan not active)', () => {
+  const pick = async (title: string, item: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    const found = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === item,
+    )!;
+    await act(async () => found.click());
+  };
+  const buttonNamed = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    )!;
+
+  beforeEach(() => {
+    gate.isLocked = true;
+  });
+
+  it('opens the upgrade dialog from New content, Send and the row menu, and changes nothing', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    await renderPage();
+
+    await act(async () => buttonNamed('New content').click());
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Creating content needs a plan');
+    expect(getContentStartOptions).not.toHaveBeenCalled();
+
+    await pick('Pipeline forecasting', 'Ready');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Marking a page ready needs a plan');
+    await pick('Pipeline forecasting', 'Published');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Marking a page published needs a plan');
+    await pick('Pipeline forecasting', 'In progress');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith("Changing a page's status needs a plan");
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Sending to your CMS needs a plan');
+    await pick('Pipeline forecasting', 'Send to Archive');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Archiving content needs a plan');
+    await pick('Pipeline forecasting', 'Delete');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Deleting content needs a plan');
+
+    // Picking rows is no action; sending them is.
+    const box = container.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-label="Select Churn guide"]',
+    )!;
+    await act(async () => box.click());
+    await act(async () => buttonNamed('Send to CMS').click());
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Sending to your CMS needs a plan');
+
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(8);
+    expect(markContentDraftReady).not.toHaveBeenCalled();
+    expect(setContentDraftStatus).not.toHaveBeenCalled();
+    expect(readPublishAddress).not.toHaveBeenCalled();
+    expect(archiveContentDraft).not.toHaveBeenCalled();
+    expect(getContentDraftPages).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('still exports a page', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    await pick('Pipeline forecasting', 'Export Markdown');
+    await act(async () => {});
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    expect(gate.openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('doesn’t open New content by itself when the URL asks', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?new=1');
+    getContentDrafts.mockResolvedValue([]);
+    await renderPage();
+    expect(document.body.textContent).not.toContain('Pick how you want to start.');
+    expect(window.location.search).toBe('');
+    expect(gate.openUpgrade).not.toHaveBeenCalled();
   });
 });
 

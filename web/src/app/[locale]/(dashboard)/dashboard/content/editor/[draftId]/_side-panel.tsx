@@ -26,6 +26,7 @@ import type { DraftInputsRead } from './_use-draft-inputs';
 import type { DraftReads } from './_use-draft-reads';
 import type { DraftRulesState } from './_use-draft-rules';
 import { YourInput, type InputPrompt } from './_your-input';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /** Remembers whether the panel is open, across drafts and visits. */
 const PANEL_OPEN_KEY = 'aeo:content-editor-panel';
@@ -245,6 +246,10 @@ export function EditorSidePanel({
   const [segment, setSegment] = useState<InstructionSegment>('rules');
   const [opened, setOpened] = useState<Set<PanelTarget>>(() => new Set(['instructions', 'rules']));
   const describeRule = useRuleDescriber();
+  // A read-only workspace (plan not active): Your input's changes open the
+  // upgrade dialog instead (the tabs gate their own actions).
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The rules as checked; described only when a rebuild asks for them, not on every keystroke.
   const page = useRef({ title, html: bodyHtml, length: rules.length, checks: rules.rules });
   const sourcesNow = useRef(reads.sources);
@@ -451,7 +456,7 @@ export function EditorSidePanel({
                 <YourInput
                   inputs={yourInput.inputs}
                   prompts={inputPrompts}
-                  onChange={yourInput.change}
+                  onChange={guard(yourInput.change, { action: tActions('saveInput') })}
                   // Once Brief shows: a hidden block can't be scrolled to.
                   scrollRequest={tabRequest?.input && segment === 'brief' ? tabRequest.n : null}
                 />
