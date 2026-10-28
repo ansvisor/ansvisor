@@ -157,8 +157,13 @@ describe('traffic.build', () => {
     const writes = [];
     const db = {
       from: (table) => ({
+        upsert: async (list, { onConflict }) => {
+          writes.push({ table, list, onConflict });
+          return { error: null };
+        },
+        // ai_bot_events: an identity id, no key to write over.
         insert: async (list) => {
-          writes.push({ table, list });
+          writes.push({ table, list, inserted: true });
           return { error: null };
         },
         update: (values) => ({
@@ -176,5 +181,12 @@ describe('traffic.build', () => {
     const logs = writes.filter((w) => w.table === 'ai_traffic_logs').flatMap((w) => w.list);
     const firstPageview = logs.findIndex((l) => l.visit_of !== null);
     expect(logs.slice(firstPageview).every((l) => l.visit_of !== null)).toBe(true);
+    // Written over by what each row counts, as the syncs write them.
+    const keyOf = (table) => writes.find((w) => w.table === table).onConflict;
+    expect(keyOf('ga_page_stats')).toBe('brand_id,date,landing_page');
+    expect(keyOf('gsc_query_stats')).toBe('brand_id,date,query');
+    expect(keyOf('ai_bot_daily')).toBe('brand_id,day,bot,page');
+    expect(keyOf('ai_traffic_logs')).toBe('id');
+    expect(writes.filter((w) => w.inserted).map((w) => w.table)).toEqual(['ai_bot_events']);
   });
 });

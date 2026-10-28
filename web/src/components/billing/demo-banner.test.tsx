@@ -36,6 +36,7 @@ const ensureDemoBrand = vi.fn();
 vi.mock('@/lib/demo/demo-client', () => ({
   ensureDemoBrand: () => ensureDemoBrand(),
   prepareDemoBrand: vi.fn(async () => ({ ok: false, status: 0 })),
+  demoPreparation: () => null,
 }));
 
 const { PlanProvider } = await import('@/components/providers/plan-provider');

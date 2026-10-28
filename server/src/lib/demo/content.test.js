@@ -118,15 +118,24 @@ describe('contentRows', () => {
 describe('content.build', () => {
   it('writes clusters before what points at them, the drafts after their opportunities', async () => {
     const written = [];
+    const keys = {};
     const db = {
       from: (table) => ({
-        insert: async (list) => {
+        upsert: async (list, { onConflict }) => {
           written.push([table, list]);
+          keys[table] = onConflict;
           return { error: null };
         },
       }),
     };
     const built = await content.build({ brandId: BRAND_ID, now: NOW, db });
+    expect(keys).toMatchObject({
+      prompt_clusters: 'id',
+      prompt_cluster_members: 'prompt_id',
+      prompt_cluster_queries: 'cluster_id,query',
+      prompt_cluster_scopes: 'brand_id,topic_id',
+      content_plan_marks: 'brand_id,row_key',
+    });
     const order = written.map(([table]) => table);
     expect(order.indexOf('prompt_clusters')).toBeLessThan(order.indexOf('prompt_cluster_members'));
     expect(order.indexOf('content_opportunities')).toBeLessThan(order.indexOf('content_drafts'));

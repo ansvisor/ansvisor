@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { effectivePlanForBrand } from '@/lib/demo/demo-brand';
 import {
   activationDelta,
   getOrgLocationUsage,
@@ -1139,7 +1140,8 @@ function noPositionRows(): PositionRows {
 /**
  * Per-prompt, per-engine position sums for the Positions column: the window
  * on screen and the period of the same length just before it, for the trend.
- * Only engines the org's plan includes count, as in the Positions panel.
+ * Only engines the brand's plan includes count (the org's, Growth's on the
+ * demo brand), as in the Positions panel.
  */
 async function getPositionRows(
   brandId: string,
@@ -1149,17 +1151,18 @@ async function getPositionRows(
   const supabase = await createClient();
   const { data: brand } = await supabase
     .from('brands')
-    .select('organization_id')
+    .select('organization_id, is_demo')
     .eq('id', brandId)
     .maybeSingle();
   if (!brand?.organization_id) return noPositionRows();
 
   const before = previousWindow(window);
-  const [plan, current, previous] = await Promise.all([
+  const [orgPlan, current, previous] = await Promise.all([
     getOrgPlan(brand.organization_id as string),
     positionSums(brandId, window, region),
     positionSums(brandId, before, region),
   ]);
+  const plan = effectivePlanForBrand(orgPlan, brand.is_demo === true);
   const included = POSITION_PLATFORMS.filter(
     (p) => platformAccess(plan, p.id).state === 'included',
   ).map((p) => ({ id: p.id as string, label: p.label as string }));

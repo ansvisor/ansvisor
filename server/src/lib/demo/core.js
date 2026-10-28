@@ -36,6 +36,7 @@ import {
   TOPICS,
 } from './brewline.js';
 import { demoId, seededRandom } from './random.js';
+import { allSettledOrThrow, demoWriter } from './write.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -88,6 +89,13 @@ export function latestRunStart(now) {
   day.setUTCHours(RUN_HOUR_UTC, 0, 0, 0);
   if (day.getTime() + 60 * 60 * 1000 > now.getTime()) day.setUTCDate(day.getUTCDate() - 1);
   return day;
+}
+
+/** When the demo's first answer was given: the first run's first answer. */
+export function firstAnswerAt(now) {
+  return new Date(
+    latestRunStart(now).getTime() - (RUNS - 1) * RUN_EVERY_DAYS * DAY_MS + ANSWER_GAP_MS,
+  );
 }
 
 function priceText(amount) {
@@ -437,28 +445,27 @@ export function coreRows({ brandId, now }) {
   };
 }
 
-/** Rows inserted per statement. */
-const CHUNK = 250;
+/** Citation rows per statement: they are small. */
+const CITATION_CHUNK = 1000;
+/** The demo's month of answer terms is refreshed in one call: it is small. */
+const TERM_DAYS = 31;
 
-async function insertRows(db, table, rows) {
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await db.from(table).insert(rows.slice(i, i + CHUNK));
-    if (error) throw new Error(`demo ${table} insert: ${error.message}`);
-  }
-}
-
-/** The citation rows (#732), their URLs resolved in the shared dictionary in one call. */
-async function citationRows(db, brandId, entries) {
+/** The cited URLs' ids in the shared dictionary (#732), resolved in one call. */
+async function citationUrlIds(db, entries) {
   const byUrl = new Map();
   for (const entry of entries) {
     if (!byUrl.has(entry.url)) byUrl.set(entry.url, entry);
   }
-  if (byUrl.size === 0) return [];
+  if (byUrl.size === 0) return new Map();
   const { data, error } = await db.rpc('citation_url_ids', {
     p_urls: [...byUrl.values()].map(({ url: u, domain, title }) => ({ url: u, domain, title })),
   });
   if (error) throw new Error(`demo citation url resolve: ${error.message}`);
-  const ids = new Map((data ?? []).map((row) => [row.url, row.id]));
+  return new Map((data ?? []).map((row) => [row.url, row.id]));
+}
+
+/** The citation rows, each pointing at its URL's id. */
+function citationRows(brandId, entries, ids) {
   return entries.map((entry) => ({
     prompt_result_id: entry.prompt_result_id,
     position: entry.position,
@@ -468,32 +475,77 @@ async function citationRows(db, brandId, entries) {
   }));
 }
 
-/**
- * Rebuild the rollups the pages read, over the demo's whole month, with the
- * nightly run's own functions. Throws when one fails: a demo with empty
- * charts is rebuilt on the next visit instead of shown.
- */
-async function refreshRollups(brandId, dayFrom, dayTo) {
-  if (!(await refreshInsightsDaily(brandId, dayFrom, dayTo))) {
-    throw new Error('demo insights rollups failed');
-  }
-  for (const [from, to] of dayChunks(dayFrom, dayTo, HISTORY_CHUNK_DAYS)) {
-    if (!(await refreshCitationsDaily(brandId, from, to))) {
-      throw new Error('demo citation rollups failed');
-    }
-  }
-  if (!(await refreshMentionsDaily(brandId, dayFrom, dayTo))) {
-    throw new Error('demo mention rollups failed');
-  }
-  await refreshPerceptionSnapshots(brandId);
+/** The first UTC day of the brand's rollups, or null without any. */
+async function firstRollupDay(db, brandId) {
+  const { data, error } = await db
+    .from('insights_brand_daily')
+    .select('day')
+    .eq('brand_id', brandId)
+    .order('day')
+    .limit(1);
+  if (error) throw new Error(`demo rollup days read: ${error.message}`);
+  return data?.[0]?.day ?? null;
 }
 
 /**
+ * Rebuild the rollups the pages read, over the demo's whole month, with the
+ * nightly run's own functions; Insights, Citations and Mentions side by side
+ * (each takes its own lock), the Perception views once the Mentions rollups
+ * are in. Each refresh call rewrites its days in one statement, so a page
+ * read meanwhile sees the old days or the new ones, never none. Throws when
+ * one fails: a demo with empty charts is rebuilt on the next visit instead
+ * of shown.
+ */
+async function refreshRollups(brandId, dayFrom, dayTo) {
+  const citations = async () => {
+    for (const [from, to] of dayChunks(dayFrom, dayTo, HISTORY_CHUNK_DAYS)) {
+      if (!(await refreshCitationsDaily(brandId, from, to))) return false;
+    }
+    return true;
+  };
+  const mentions = async () => {
+    const options = { termDays: TERM_DAYS, together: true };
+    if (!(await refreshMentionsDaily(brandId, dayFrom, dayTo, options))) {
+      return false;
+    }
+    await refreshPerceptionSnapshots(brandId);
+    return true;
+  };
+  const [insightsOk, citationsOk, mentionsOk] = await Promise.all([
+    refreshInsightsDaily(brandId, dayFrom, dayTo),
+    citations(),
+    mentions(),
+  ]);
+  if (!insightsOk) throw new Error('demo insights rollups failed');
+  if (!citationsOk) throw new Error('demo citation rollups failed');
+  if (!mentionsOk) throw new Error('demo mention rollups failed');
+}
+
+/** The core module's key columns where a row has no `id` of its own. */
+const KEYS = {
+  prompt_volumes: 'prompt_id',
+  prompt_result_citations: 'prompt_result_id,position',
+  prompt_result_shopping_cards: 'prompt_result_id,position',
+};
+/** Its tables without a brand_id, found through the table they point at. */
+const SCOPES = {
+  prompts: ['prompt_set_id', 'prompt_sets'],
+  prompt_volumes: ['prompt_id', 'prompts'],
+};
+
+/**
  * The core module: its brand-scoped tables, in the order they are written
- * (a rebuild clears them in reverse), and its build.
+ * (a rebuild of a module that isn't rebuilt in place clears them in
+ * reverse), its build, which writes its rows, and its refresh, which
+ * rebuilds the rollups from them.
  */
 export const core = {
   name: 'core',
+  // Rebuilt in place: rows are written over, the ones not written again
+  // deleted after (write.js).
+  inPlace: true,
+  keys: KEYS,
+  scopes: SCOPES,
   tables: [
     // Written here.
     'brand_domains',
@@ -507,7 +559,7 @@ export const core = {
     'prompt_result_shopping_cards',
     // Kept by triggers on prompts.
     'prompt_usage_counters',
-    // Rebuilt by the rollup functions called at the end.
+    // Rebuilt by the rollup functions (refresh).
     'insights_brand_daily',
     'insights_prompt_daily',
     'insights_competitor_daily',
@@ -529,36 +581,48 @@ export const core = {
     'citation_rollup_rebuilds',
   ],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Writes the brand, its setup and its month of answers, each step's
+   * independent tables side by side. `write` is the build's writer
+   * (write.js); without one (a test), a writer over `db` for a first build.
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild, keys: KEYS, scopes: SCOPES }).write,
+  }) {
     const rows = coreRows({ brandId, now });
 
     const { error: brandError } = await db.from('brands').update(rows.brand).eq('id', brandId);
     if (brandError) throw new Error(`demo brand update: ${brandError.message}`);
 
-    await insertRows(db, 'brand_domains', rows.domains);
-    await insertRows(db, 'brand_platforms', rows.platforms);
-    await insertRows(db, 'competitors', rows.competitors);
-    await insertRows(db, 'topics', rows.topics);
-    await insertRows(db, 'prompt_sets', rows.promptSets);
-    await insertRows(db, 'prompts', rows.prompts);
-    await insertRows(db, 'prompt_volumes', rows.volumes);
-    await insertRows(db, 'tracking_runs', rows.runs);
-    await insertRows(db, 'prompt_results', rows.results);
-    await insertRows(
-      db,
-      'prompt_result_citations',
-      await citationRows(db, brandId, rows.citations),
-    );
-    await insertRows(db, 'prompt_result_shopping_cards', rows.shoppingCards);
-
-    await refreshRollups(brandId, utcDay(rows.results[0].created_at), utcDay(now.toISOString()));
-
-    // The rebuilds the triggers queued are done: the rollups were rebuilt whole.
-    for (const table of ['insights_rollup_rebuilds', 'citation_rollup_rebuilds']) {
-      const { error } = await db.from(table).delete().eq('brand_id', brandId);
-      if (error) throw new Error(`demo ${table} clear: ${error.message}`);
-    }
+    // What nothing else points into, and the cited URLs' ids.
+    const [urlIds] = await allSettledOrThrow([
+      citationUrlIds(db, rows.citations),
+      write('brand_domains', rows.domains),
+      write('brand_platforms', rows.platforms),
+      write('competitors', rows.competitors),
+      write('topics', rows.topics),
+      write('prompt_sets', rows.promptSets),
+      write('tracking_runs', rows.runs),
+    ]);
+    // The prompts point at their topic and set; their volumes and answers at them.
+    await write('prompts', rows.prompts);
+    await allSettledOrThrow([
+      write('prompt_volumes', rows.volumes),
+      write('prompt_results', rows.results),
+    ]);
+    // What the answers cite and show.
+    await allSettledOrThrow([
+      write('prompt_result_citations', citationRows(brandId, rows.citations, urlIds), {
+        chunk: CITATION_CHUNK,
+      }),
+      write('prompt_result_shopping_cards', rows.shoppingCards),
+    ]);
 
     return {
       prompts: rows.prompts.length,
@@ -566,5 +630,29 @@ export const core = {
       citations: rows.citations.length,
       shoppingCards: rows.shoppingCards.length,
     };
+  },
+
+  /**
+   * Rebuilds the rollups over the demo's month; on a rebuild, from the old
+   * month's first day on, so the days it no longer covers are emptied.
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean }} ctx
+   */
+  async refresh({ brandId, now, db = supabaseAdmin, rebuild = false }) {
+    const dayTo = utcDay(now.toISOString());
+    let dayFrom = utcDay(firstAnswerAt(now).toISOString());
+    if (rebuild) {
+      const previous = await firstRollupDay(db, brandId);
+      if (previous && previous < dayFrom) dayFrom = previous;
+    }
+    await refreshRollups(brandId, dayFrom, dayTo);
+
+    // The rebuilds the triggers queued are done: the rollups were rebuilt whole.
+    await allSettledOrThrow(
+      ['insights_rollup_rebuilds', 'citation_rollup_rebuilds'].map(async (table) => {
+        const { error } = await db.from(table).delete().eq('brand_id', brandId);
+        if (error) throw new Error(`demo ${table} clear: ${error.message}`);
+      }),
+    );
   },
 };

@@ -312,6 +312,26 @@
     },
     "seeTheDemo": "See the demo",
     "settingUp": "Setting up the demo…",
+    "setup": {
+      "title": "Preparing your demo",
+      "body": "{brand} is a made-up coffee brand with a month of sample data. Nothing here runs or costs anything.",
+      "steps": {
+        "brand": "Setting up {brand}",
+        "answers": "Preparing sample AI answers from {platforms} platforms",
+        "citations": "Adding the sources they cite",
+        "mentions": "Scoring mentions and sentiment",
+        "audit": "Auditing the site's pages",
+        "actions": "Building the Action Center",
+        "content": "Finding content opportunities",
+        "reports": "Preparing reports"
+      },
+      "usual": "This takes a few seconds the first time.",
+      "slow": "This is taking longer than usual.",
+      "ready": "Ready. Opening the Action Center…",
+      "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "retry": "Try again",
+      "close": "Close"
+    },
     "chat": {
       "soon": "Soon (next week)",
       "note": "Chat arrives next week. This is a preview of it.",
@@ -8191,6 +8211,8 @@
     "signOut": "Sign out",
     "billingDescription": "Manage your subscription and billing details.",
     "currentPlan": "Current Plan",
+    "noPlanYet": "No plan yet",
+    "noPlanYetHint": "Your brands are saved. Tracking starts once you choose a plan below.",
     "month": "mo",
     "year": "yr",
     "renewsOn": "Renews on {date}",
@@ -8233,6 +8255,7 @@
     "choosePlanTitle": "Choose a plan",
     "choosePlanFor": "Choose {plan}",
     "planEnded": "Your plan isn't active. Choose one to start it again; you'll pay on Stripe's secure checkout.",
+    "planNotStarted": "Buy a plan now, or try one free for {days} days first. Either way you add a card on Stripe's secure checkout.",
     "checkoutFailed": "Couldn't open the checkout. Try again.",
     "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
     "seeAllPlanFeatures": "See everything each plan includes",

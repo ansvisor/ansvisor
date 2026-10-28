@@ -30,7 +30,8 @@ import { detectPageOpportunities } from '../page-opportunities.js';
 import { eventRow } from '../traffic-events.js';
 import { BRAND } from './brewline.js';
 import { demoId, seededRandom } from './random.js';
-import { DAY_MS, brandCitations, dayBefore, dayStart, insertRows } from './site-common.js';
+import { DAY_MS, brandCitations, dayBefore, dayStart } from './site-common.js';
+import { allSettledOrThrow, demoWriter } from './write.js';
 import { BROKEN_PAGE, CATALOG, SEARCH_QUERIES, SITE_URL } from './site-world.js';
 
 /** Days of Google Analytics history, and of Search Console page history. */
@@ -759,8 +760,27 @@ export function trafficRows({ brandId, now }) {
 }
 
 /** The AI Referral Traffic module: its brand-scoped tables, in the order written, and its build. */
+/**
+ * Its tables' key columns where a row has no `id` of its own: the Google
+ * Analytics and Search Console rows by their day and what they count, as
+ * their sync writes them. ai_bot_events has neither (an identity id): it is
+ * replaced (write's `generated`).
+ */
+const KEYS = {
+  ga_ai_traffic_stats: 'brand_id,date,landing_page_query,medium,source',
+  ga_page_stats: 'brand_id,date,landing_page',
+  ga_channel_stats: 'brand_id,channel,date',
+  ga_item_stats: 'brand_id,date,item_id,item_name',
+  gsc_query_stats: 'brand_id,date,query',
+  gsc_page_stats: 'brand_id,date,page',
+  ai_bot_daily: 'brand_id,day,bot,page',
+};
+
 export const traffic = {
   name: 'traffic',
+  // Rebuilt in place (write.js): written over, what isn't written again deleted after.
+  inPlace: true,
+  keys: KEYS,
   tables: [
     'ga_ai_traffic_stats',
     'ga_page_stats',
@@ -776,26 +796,43 @@ export const traffic = {
     'page_opportunities',
   ],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Its independent tables side by side, through the build's writer (a
+   * writer over `db` for a first build without one).
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild, keys: KEYS }).write,
+  }) {
     const rows = trafficRows({ brandId, now });
-    const { error } = await db.from('brands').update(rows.brand).eq('id', brandId);
-    if (error) throw new Error(`demo brand traffic settings: ${error.message}`);
-
-    await insertRows(db, 'ga_ai_traffic_stats', rows.analytics.ai);
-    await insertRows(db, 'ga_page_stats', rows.analytics.pages);
-    await insertRows(db, 'ga_channel_stats', rows.analytics.channels);
-    await insertRows(db, 'ga_item_stats', rows.analytics.items);
-    await insertRows(db, 'gsc_query_stats', rows.search.queries);
-    await insertRows(db, 'gsc_page_stats', rows.search.pages);
-    // A visit before the pageviews that continue it (visit_of).
-    await insertRows(db, 'ai_traffic_logs', rows.snippet.visits);
-    await insertRows(db, 'ai_traffic_logs', rows.snippet.pageviews);
-    await insertRows(db, 'ai_traffic_events', rows.snippet.events);
-    await insertRows(db, 'ai_bot_connections', [rows.bots.connection]);
-    await insertRows(db, 'ai_bot_daily', rows.bots.daily);
-    await insertRows(db, 'ai_bot_events', rows.bots.events);
-    await insertRows(db, 'page_opportunities', rows.opportunities);
+    const settings = async () => {
+      const { error } = await db.from('brands').update(rows.brand).eq('id', brandId);
+      if (error) throw new Error(`demo brand traffic settings: ${error.message}`);
+    };
+    await allSettledOrThrow([
+      settings(),
+      write('ga_ai_traffic_stats', rows.analytics.ai),
+      write('ga_page_stats', rows.analytics.pages),
+      write('ga_channel_stats', rows.analytics.channels),
+      write('ga_item_stats', rows.analytics.items),
+      write('gsc_query_stats', rows.search.queries),
+      write('gsc_page_stats', rows.search.pages),
+      (async () => {
+        // A visit before the pageviews that continue it (visit_of).
+        await write('ai_traffic_logs', rows.snippet.visits);
+        await write('ai_traffic_logs', rows.snippet.pageviews);
+      })(),
+      write('ai_traffic_events', rows.snippet.events),
+      write('ai_bot_connections', [rows.bots.connection]),
+      write('ai_bot_daily', rows.bots.daily),
+      write('ai_bot_events', rows.bots.events, { generated: true }),
+      write('page_opportunities', rows.opportunities),
+    ]);
     return {
       gaRows: rows.analytics.ai.length + rows.analytics.pages.length,
       visits: rows.snippet.visits.length,

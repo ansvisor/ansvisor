@@ -3,6 +3,7 @@
 import { AlertTriangle, Loader2, PlayCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { usePathname } from '@/i18n/navigation';
+import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
 import { Button } from '@/components/ui/button';
 import {
   CHOOSE_PLAN_HREF,
@@ -50,7 +51,7 @@ function Band({
   const ask = useAskAdmin(reason, adminName);
   const payment = reason === 'payment_failed';
   const { demoBrand } = useDemoBrand();
-  const { explore, opening } = useExploreDemo();
+  const { explore, opening, setupDialog } = useExploreDemo();
   const seeTheDemo = !payment && (canManage || (demoBrand !== null && !demoBrand.hidden));
   // No demo brand yet: its setup starts as the band shows, for an admin or a manager.
   usePreloadDemo(seeTheDemo && canManage && demoBrand === null);
@@ -78,6 +79,7 @@ function Band({
           {opening ? tDemo('settingUp') : tDemo('seeTheDemo')}
         </Button>
       )}
+      <DemoSetupDialog {...setupDialog} />
     </div>
   );
 }
