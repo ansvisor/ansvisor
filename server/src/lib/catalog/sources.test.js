@@ -1,10 +1,17 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { setImmediate } from 'node:timers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The module reaches the supabase admin client at import time, whose config
 // hard-exits when SUPABASE_* env is absent (as in CI).
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
+// The plan's product cap (ECOM-019): none unless a test sets one.
+const getCatalogProductCap = vi.hoisted(() => vi.fn(async () => -1));
+vi.mock('../plan-guard.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getCatalogProductCap,
+}));
 
 import { ConnectorHttpError } from '../../connectors/http.js';
 import { logger } from '../logger.js';
@@ -12,7 +19,16 @@ import { PageFetchError } from '../safe-fetch.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
 import { saveCredentials } from './credentials.js';
 import feedUrl, { FEED_MAX_BYTES, FEED_TYPES } from '../../connectors/feed-url/index.js';
-import { failureOf, redact, sourceKey, sweepCatalogSources, syncSource } from './sources.js';
+import { PlanLimitError } from '../plan-guard.js';
+import {
+  failureOf,
+  inLine,
+  productRoom,
+  redact,
+  sourceKey,
+  sweepCatalogSources,
+  syncSource,
+} from './sources.js';
 
 const fixture = (name) =>
   readFileSync(new URL(`../feeds/__fixtures__/${name}`, import.meta.url), 'utf8');
@@ -539,5 +555,231 @@ describe('sweepCatalogSources', () => {
       ['acme_store', 'failed'],
       ['feed_url', 'ok'],
     ]);
+  });
+});
+
+describe("the plan's product cap (ECOM-019)", () => {
+  const OTHER = sourceKey('9b8d6a1e-2a3c-4d5e-8f90-123456789abc');
+  beforeEach(() => {
+    getCatalogProductCap.mockReset().mockResolvedValue(3);
+    fake
+      .rows('brands')
+      .push(
+        { id: 'brand-1', organization_id: 'org-1' },
+        { id: 'brand-2', organization_id: 'org-1' },
+        { id: 'brand-x', organization_id: 'org-2' },
+      );
+    fake.rows('catalog_products').push(
+      // The workspace's other brand: one live, one removed.
+      { id: 'p1', brand_id: 'brand-2', source: OTHER, external_id: 'X1', removed_at: null },
+      { id: 'p2', brand_id: 'brand-2', source: OTHER, external_id: 'X2', removed_at: NOW },
+      // Another workspace's, and this source's own: neither counts.
+      { id: 'p3', brand_id: 'brand-x', source: OTHER, external_id: 'X3', removed_at: null },
+      {
+        id: 'p4',
+        brand_id: 'brand-1',
+        source: sourceKey(SOURCE_ID),
+        external_id: 'OLD',
+        removed_at: null,
+      },
+    );
+  });
+
+  it("leaves a source the workspace's cap less its other live products, on the cloud only", async () => {
+    expect(await productRoom(source, { db: fake.db })).toEqual({ room: Infinity, cap: -1 });
+    process.env.IS_CLOUD = 'true';
+    expect(await productRoom(source, { db: fake.db })).toEqual({ room: 2, cap: 3 });
+    expect(getCatalogProductCap).toHaveBeenCalledWith('org-1');
+    getCatalogProductCap.mockResolvedValue(-1);
+    expect(await productRoom(source, { db: fake.db })).toEqual({ room: Infinity, cap: -1 });
+  });
+
+  it('keeps what there is room for, and records how many it could not, with the cap', async () => {
+    process.env.IS_CLOUD = 'true';
+    getCatalogProductCap.mockResolvedValue(2);
+    const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
+    const outcome = await syncSource(source, { db: fake.db, now: NOW, fetch });
+    expect(outcome).toMatchObject({
+      status: 'ok',
+      counts: { products: { added: 1 }, overLimit: 1, limit: 2 },
+    });
+    expect(kept().last_counts).toMatchObject({ overLimit: 1, limit: 2 });
+  });
+
+  it("caps a Google Merchant Center account's products too, read with the workspace sign-in", async () => {
+    process.env.IS_CLOUD = 'true';
+    vi.stubEnv('COMPOSIO_API_KEY', 'test-composio-key');
+    vi.stubEnv('COMPOSIO_GMC_AUTH_CONFIG_ID', 'ac_gmc');
+    try {
+      const gmcSource = {
+        id: '3c8d6a1e-2a3c-4d5e-8f90-123456789abc',
+        brand_id: 'brand-1',
+        kind: 'merchant_center',
+        format: 'auto',
+        url: null,
+        account: '123',
+      };
+      fake.rows('catalog_sources').push({ ...gmcSource, last_synced_at: null });
+      // The feed fixture's two products, as the account's.
+      const gmc = {
+        kind: 'merchant_center',
+        label: 'Google Merchant Center',
+        signIn: 'google-merchant-center',
+        hosts: ['merchantapi.googleapis.com'],
+        readCatalog: vi.fn(async (_source, { request }) => {
+          await request('https://merchantapi.googleapis.com/products/v1/accounts/123/products');
+          return feedUrl.readCatalog(source, {
+            fetch: vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') }),
+          });
+        }),
+      };
+      const outcome = await syncSource(gmcSource, {
+        db: fake.db,
+        now: NOW,
+        signInRequest: () => vi.fn(async () => ({ status: 200, headers: {}, data: null })),
+        connectors: { merchant_center: gmc },
+      });
+      // A cap of 3, less the workspace's two other live products (p1, p4).
+      expect(outcome).toMatchObject({
+        status: 'ok',
+        counts: { products: { added: 1 }, overLimit: 1, limit: 3 },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("keeps a workspace's cap when two of its sources sync at once", async () => {
+    process.env.IS_CLOUD = 'true';
+    // A cap of 4, less brand-2's live product (p1): room for 3 between the two.
+    getCatalogProductCap.mockResolvedValue(4);
+    const second = { ...source, id: '7c8d6a1e-2a3c-4d5e-8f90-123456789abc', brand_id: 'brand-2' };
+    fake.rows('catalog_sources').push({ ...second, last_synced_at: null });
+    const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
+    const [one, two] = await Promise.all([
+      syncSource(source, { db: fake.db, now: NOW, fetch }),
+      syncSource(second, { db: fake.db, now: NOW, fetch }),
+    ]);
+    // The first keeps the feed's two products (OLD left it); the second, what's left.
+    expect(one.counts).toMatchObject({ products: { added: 2, removed: 1 } });
+    expect(one.counts.overLimit).toBeUndefined();
+    expect(two.counts).toMatchObject({ products: { added: 1 }, overLimit: 1, limit: 4 });
+    const live = fake
+      .rows('catalog_products')
+      .filter((p) => ['brand-1', 'brand-2'].includes(p.brand_id) && !p.removed_at);
+    expect(live).toHaveLength(4);
+  });
+
+  it('makes only a capped workspace wait in its line, and recounts its room on its turn', async () => {
+    process.env.IS_CLOUD = 'true';
+    const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
+    // Another write of the workspace holds its line.
+    let release;
+    const holding = inLine(
+      'org-1',
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    try {
+      // A plan without a cap writes at once.
+      getCatalogProductCap.mockResolvedValue(-1);
+      const uncapped = await syncSource(source, { db: fake.db, now: NOW, fetch });
+      expect(uncapped).toMatchObject({ status: 'ok', counts: { products: { added: 2 } } });
+      expect(uncapped.counts.limit).toBeUndefined();
+
+      // A capped one waits for its turn.
+      getCatalogProductCap.mockResolvedValue(4);
+      let done = false;
+      const capped = syncSource(source, { db: fake.db, now: NOW, fetch }).then((outcome) => {
+        done = true;
+        return outcome;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(done).toBe(false);
+      // The room is counted when its turn comes: a cap of 2 by then.
+      getCatalogProductCap.mockResolvedValue(2);
+      release();
+      expect(await capped).toMatchObject({ status: 'ok', counts: { limit: 2 } });
+    } finally {
+      release();
+      await holding;
+    }
+  });
+
+  it("records a workspace without an active subscription in the plan's words", () => {
+    expect(failureOf(new PlanLimitError('An active subscription is required.', 402))).toEqual({
+      status: 'failed',
+      error: 'An active subscription is required.',
+    });
+  });
+});
+
+describe('inLine', () => {
+  it("runs a key's work one at a time, in order, past a failure, and forgets an empty line", async () => {
+    const lines = new Map();
+    const ran = [];
+    let release;
+    const first = inLine(
+      'org-1',
+      () =>
+        new Promise((resolve) => {
+          ran.push('first');
+          release = resolve;
+        }),
+      lines,
+    );
+    const failing = inLine(
+      'org-1',
+      async () => {
+        ran.push('failing');
+        throw new Error('write failed');
+      },
+      lines,
+    );
+    const third = inLine('org-1', async () => ran.push('third') && 'done', lines);
+    // Another workspace doesn't wait.
+    await inLine('org-2', async () => ran.push('other'), lines);
+    expect(ran).toEqual(['first', 'other']);
+    release('kept');
+    await expect(first).resolves.toBe('kept');
+    await expect(failing).rejects.toThrow('write failed');
+    await expect(third).resolves.toBe('done');
+    expect(ran).toEqual(['first', 'other', 'failing', 'third']);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(lines.size).toBe(0);
+  });
+
+  it('stops waiting for work stuck past the wait, and keeps the line in order after it', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const lines = new Map();
+    const ran = [];
+    let release;
+    const stuck = inLine(
+      'org-1',
+      () =>
+        new Promise((resolve) => {
+          ran.push('stuck');
+          release = resolve;
+        }),
+      lines,
+      20,
+    );
+    const next = inLine('org-1', async () => ran.push('next') && 'written', lines, 20);
+    // Waits its whole time (LINE_WAIT_MS) for the work before it, which ends.
+    const after = inLine('org-1', async () => ran.push('after'), lines);
+    await expect(next).resolves.toBe('written');
+    await after;
+    // The stuck work is still running: the line went on without it, in order.
+    expect(ran).toEqual(['stuck', 'next', 'after']);
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      { line: 'org-1', waitMs: 20 },
+      '[catalog] capped write stopped waiting in line',
+    );
+    release('late');
+    await expect(stuck).resolves.toBe('late');
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(lines.size).toBe(0);
   });
 });

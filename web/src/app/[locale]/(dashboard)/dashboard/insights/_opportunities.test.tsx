@@ -3,6 +3,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { trackSuggestions } from '@/lib/actions/prompt-suggestions';
+import { sendTopicOpportunityToActionCenter } from '@/lib/actions/topic';
 import { Opportunities } from './_opportunities';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -72,5 +75,67 @@ describe('Opportunities — estimated volume (PROMPT-013)', () => {
     expect(ranges.every((r) => r.className.includes('text-muted-foreground'))).toBe(true);
     expect(container.textContent).toContain('2 prompts\u00a0·\u00a0600–2.4k/mo');
     expect(container.textContent).not.toContain('~');
+  });
+});
+
+describe('Opportunities on a read-only workspace (plan not active)', () => {
+  const openUpgrade = vi.fn();
+  const render = (isLocked: boolean) =>
+    act(() =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <Opportunities
+              brandId="b1"
+              suggestions={[suggestion('s1', 'Espresso', 800), suggestion('s2', 'Espresso', 400)]}
+              trackedTopicIds={[]}
+              topics={null}
+              entities={null}
+              slotsLeft={null}
+              contentUsage={null}
+              onTracked={() => {}}
+            />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      ),
+    );
+  const button = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    )!;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => null),
+    );
+    vi.mocked(trackSuggestions).mockResolvedValue({ trackedIds: ['s1', 's2'], skippedIds: [] });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens the upgrade dialog from a topic’s Track and Send action, and runs neither', async () => {
+    render(true);
+    await act(async () => button('Track 2').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Tracking prompts needs a plan');
+    await act(async () => button('Send action').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Sending actions needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(trackSuggestions).not.toHaveBeenCalled();
+    expect(sendTopicOpportunityToActionCenter).not.toHaveBeenCalled();
+    // No tab is opened for a Track that doesn't run.
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
+  it('tracks on an active plan', async () => {
+    render(false);
+    await act(async () => button('Track 2').click());
+    expect(trackSuggestions).toHaveBeenCalledWith(['s1', 's2']);
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 });

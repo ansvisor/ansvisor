@@ -8,6 +8,7 @@ import {
   type DraftInputs,
 } from '@/lib/content/draft-inputs';
 import { createClient } from '@/lib/supabase/server';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * Brief › Your input (Content Editor Quality spec §6, CE-048): the person's
@@ -39,6 +40,7 @@ export async function getDraftInputs(id: string): Promise<DraftInputs> {
 
 /** Keeps the draft's input as given (all of it, as the editor holds it). */
 export async function saveDraftInputs(id: string, inputs: DraftInputs): Promise<DraftInputs> {
+  await assertWritable();
   const parsed = draftInputsSchema.safeParse(inputs);
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
   const supabase = await createClient();

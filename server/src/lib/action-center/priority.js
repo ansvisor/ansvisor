@@ -390,6 +390,17 @@ function sentByHand(action) {
       subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
     };
   }
+  // A product or category sent from Product Visibility (ECOM-013): getting
+  // onto AI shopping shelves its rivals hold.
+  if (action.kind === 'shopping_product' || action.kind === 'shopping_category') {
+    return {
+      change: 'gap',
+      severity: 0.5,
+      confidence: 0.55,
+      recoverability: 0.6,
+      subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
+    };
+  }
   // A live page linking products that no longer sell (shopping path, part 7):
   // the catalog says so, and swapping the links is quick work.
   if (action.kind === 'shopping_links') {
