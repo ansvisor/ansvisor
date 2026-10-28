@@ -122,7 +122,7 @@ describe('Sidebar', () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-          <MenuAccessProvider hidden={['content']}>
+          <MenuAccessProvider hidden={['content']} canManageMenus={false}>
             <Sidebar />
           </MenuAccessProvider>
         </NextIntlClientProvider>,
@@ -136,7 +136,7 @@ describe('Sidebar', () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-          <MenuAccessProvider hidden={['prompts', 'mentions']}>
+          <MenuAccessProvider hidden={['prompts', 'mentions']} canManageMenus={false}>
             <Sidebar />
           </MenuAccessProvider>
         </NextIntlClientProvider>,
@@ -164,7 +164,7 @@ describe('Sidebar', () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-          <MenuAccessProvider hidden={['prompts']}>
+          <MenuAccessProvider hidden={['prompts']} canManageMenus={false}>
             <Sidebar />
           </MenuAccessProvider>
         </NextIntlClientProvider>,

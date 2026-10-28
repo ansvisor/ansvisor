@@ -2,24 +2,42 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
+interface MenuAccessValue {
+  /** The left-menu sections the viewer's menu leaves out. */
+  hidden: ReadonlySet<string>;
+  /** Admin, or a manager an admin let change menus: Settings › Menu access. */
+  canManageMenus: boolean;
+}
+
 /**
- * The left-menu sections the viewer's menu leaves out (menu access, 00374),
- * read once by the dashboard layout. Empty by default, so a tree without the
- * provider shows the whole menu.
+ * The viewer's menu access (00374), read once by the dashboard layout. The
+ * whole menu by default, so a tree without the provider shows every section.
  */
-const MenuAccessContext = createContext<ReadonlySet<string>>(new Set());
+const MenuAccessContext = createContext<MenuAccessValue>({
+  hidden: new Set(),
+  canManageMenus: false,
+});
 
 export function MenuAccessProvider({
   hidden,
+  canManageMenus,
   children,
 }: {
   hidden: string[];
+  canManageMenus: boolean;
   children: ReactNode;
 }) {
-  const value = useMemo(() => new Set(hidden), [hidden]);
+  const value = useMemo(
+    () => ({ hidden: new Set(hidden), canManageMenus }),
+    [hidden, canManageMenus],
+  );
   return <MenuAccessContext.Provider value={value}>{children}</MenuAccessContext.Provider>;
 }
 
 export function useHiddenMenuSections(): ReadonlySet<string> {
-  return useContext(MenuAccessContext);
+  return useContext(MenuAccessContext).hidden;
+}
+
+export function useCanManageMenus(): boolean {
+  return useContext(MenuAccessContext).canManageMenus;
 }

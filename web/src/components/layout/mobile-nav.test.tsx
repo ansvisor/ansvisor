@@ -78,7 +78,7 @@ async function open(hidden: string[]) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <MenuAccessProvider hidden={hidden}>
+        <MenuAccessProvider hidden={hidden} canManageMenus={false}>
           <MobileNav />
         </MenuAccessProvider>
       </NextIntlClientProvider>,

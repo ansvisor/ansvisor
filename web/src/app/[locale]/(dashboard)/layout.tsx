@@ -96,7 +96,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <GettingStartedPageOpened />
       <PlanProvider planId={planId} allowedModelIds={allowedModelIds}>
         <RoleProvider role={role}>
-          <MenuAccessProvider hidden={menu.hidden}>
+          <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
             <AiUsageProvider>
               <div className="flex h-screen overflow-hidden">
                 {/* Desktop sidebar */}
