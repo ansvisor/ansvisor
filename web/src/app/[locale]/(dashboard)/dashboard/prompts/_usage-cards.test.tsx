@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { PromptUsageSummary } from '@/lib/prompt-usage-summary';
+import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import {
   PromptUsageCards,
   countByStatus,
@@ -313,6 +314,29 @@ describe('locationQuotaFromUsage', () => {
         }),
       ).maxPrompts,
     ).toBe(-1);
+  });
+
+  it('leaves no slot to the Add Prompt dialog and bulk import once the plan has ended', () => {
+    const ended = (locationLimit: number | null) =>
+      locationQuotaFromUsage(
+        summary({
+          plan: {
+            key: 'growth',
+            name: 'Growth plan',
+            locationLimit,
+            cta: 'choose_plan',
+            ended: true,
+          },
+        }),
+      );
+
+    // Limited or not, nothing can be added until a plan is chosen again.
+    for (const quota of [ended(200), ended(null)]) {
+      expect(quota).toMatchObject({ used: 46, planId: 'growth', planName: 'Growth' });
+      const usage = getPromptUsage(quota.used, quota.maxPrompts);
+      expect(usage.remaining).toBe(0);
+      expect(isPromptLimitReached(usage)).toBe(true);
+    }
   });
 });
 

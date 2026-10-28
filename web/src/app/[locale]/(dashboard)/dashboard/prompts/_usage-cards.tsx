@@ -151,9 +151,12 @@ export function usePromptUsage(
 
 /** The plan-limit numbers the Add Prompt dialog and bulk import bound themselves by. */
 export function locationQuotaFromUsage(usage: PromptUsageSummary): LocationQuota {
+  const used = usage.account.locationsUsed;
   return {
-    maxPrompts: usage.plan.locationLimit ?? -1,
-    used: usage.account.locationsUsed,
+    // An ended plan takes nothing new until a plan is chosen again: the quota
+    // reads as full, as the Slots left card's 0 does.
+    maxPrompts: usage.plan.ended ? used : (usage.plan.locationLimit ?? -1),
+    used,
     planId: usage.plan.key,
     planName: isKnownPlan(usage.plan.key) ? PLANS[usage.plan.key].name : usage.plan.name,
   };
