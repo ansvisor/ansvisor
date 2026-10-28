@@ -7,6 +7,7 @@
  */
 
 import { useId, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { addCompetitor } from '@/lib/actions/competitor';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /** Turn a domain into a first-guess competitor name, e.g. caranddriver.com → "Caranddriver". */
 export function deriveCompetitorName(domain: string): string {
@@ -48,11 +50,17 @@ export function AddCompetitorButton({
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const nameId = useId();
+  // A read-only workspace (plan not active): the upgrade dialog instead of this one.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
-  function openDialog() {
-    setName(deriveCompetitorName(domain));
-    setOpen(true);
-  }
+  const openDialog = guard(
+    () => {
+      setName(deriveCompetitorName(domain));
+      setOpen(true);
+    },
+    { action: tActions('addCompetitors') },
+  );
 
   async function handleAdd() {
     const trimmed = name.trim();

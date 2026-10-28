@@ -40,6 +40,11 @@ export interface BotUsage {
   rawCappedAt: string | null;
   /** Log records a month: -1 no cap, 0 the report is locked. */
   rawCap: number;
+  /**
+   * No active plan (read-only): both caps read 0, yet the report isn't
+   * locked; its connections and stored data still show. Never sent on a plan.
+   */
+  noPlan?: boolean;
 }
 
 export interface BotConnections {
@@ -114,6 +119,7 @@ export async function getBotConnections(brandId: string): Promise<BotConnections
       raw: n(usage.raw),
       rawCappedAt: typeof usage.rawCappedAt === 'string' ? usage.rawCappedAt : null,
       rawCap: Number(usage.rawCap ?? 0),
+      ...(usage.noPlan === true ? { noPlan: true } : {}),
     },
   };
 }
