@@ -111,7 +111,8 @@ afterEach(() => {
 
 describe('SendDialog', () => {
   it('fills the fields from the page and sends it without its H1', async () => {
-    await render({ byline: 'By Ada Lovelace' });
+    const onSent = vi.fn();
+    await render({ byline: 'By Ada Lovelace', onSent });
     expect(readDraftCms).toHaveBeenCalledWith('d1');
     expect(field('cms-slug').value).toBe('pour-over');
     expect(field('cms-meta-title').value).toBe('Pour-over');
@@ -138,6 +139,10 @@ describe('SendDialog', () => {
     );
     expect(toast.success).toHaveBeenCalledWith('Sent to your CMS');
     expect(onClose).toHaveBeenCalled();
+    // The editor's header says where it went.
+    expect(onSent).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'sent', target: 'webhook', error: null }),
+    );
   });
 
   it('starts from what the draft kept and says where the page went live', async () => {
@@ -306,6 +311,38 @@ describe('SendDialog', () => {
     expect(alert()).toBeUndefined();
     expect(onClose).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('tells the editor a send failed too, with why, so its header says so', async () => {
+    const onSent = vi.fn();
+    await render({ onSent });
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [{ id: 'x1', draftId: 'd1', status: 'failed', http_status: 500, error: null }],
+    });
+    await act(async () => button('Send').click());
+    expect(onSent).toHaveBeenCalledWith({
+      status: 'failed',
+      target: 'webhook',
+      at: expect.any(String),
+      error:
+        "The webhook answered 500 and didn't take the page. Check your workflow, then send again.",
+    });
+    sendPagesToCms.mockResolvedValueOnce({
+      ok: true,
+      deliveries: [
+        { id: 'x2', draftId: 'd1', status: 'failed', http_status: null, error: 'Not reached' },
+      ],
+    });
+    await act(async () => button('Send').click());
+    expect(onSent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'failed', target: 'webhook', error: 'Not reached' }),
+    );
+    // Nothing went for a request refused before a send: no word in the header.
+    sendPagesToCms.mockResolvedValueOnce({ ok: false, code: 'workspace', field: null });
+    await act(async () => button('Send').click());
+    expect(onSent).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   describe('to Webflow (#1331, phase 2)', () => {

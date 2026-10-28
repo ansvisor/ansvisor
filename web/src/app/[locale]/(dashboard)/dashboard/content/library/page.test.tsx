@@ -1413,3 +1413,75 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     expect(exportButton.disabled).toBe(true);
   });
 });
+
+describe('the Library’s Shopping path column (00352)', () => {
+  const checked = (bad: { id: string; title: string; state: 'sold_out' | 'refused' | 'gone' }[]) =>
+    ({
+      state: bad.length ? 'attention' : 'ok',
+      readFrom: 'page',
+      checkedAt: '2026-10-27T03:00:00Z',
+      categories: 1,
+      categoriesLinked: 1,
+      products: 4,
+      productsLinked: 4,
+      bad,
+    }) as const;
+  const drafts = [
+    row({
+      id: 'a',
+      title: 'Best rain jackets',
+      shopping: checked([
+        { id: 'p1', title: 'Storm Shell 2', state: 'sold_out' },
+        { id: 'p2', title: 'Pack-Lite Jacket', state: 'sold_out' },
+      ]),
+    }),
+    row({ id: 'b', title: 'How to choose boots', shopping: checked([]) }),
+    row({ id: 'c', title: 'How we test', shopping: { state: 'none' } }),
+    row({ id: 'd', title: 'Trail shoes', shopping: { state: 'unchecked' } }),
+  ];
+  const shop = () => {
+    brandState.brands = [{ id: 'brand-1', industry: 'Retail', shoppingModeEnabled: true }];
+  };
+  afterEach(() => {
+    brandState.brands = [
+      { id: 'brand-1', industry: 'Travel & Hospitality', shoppingModeEnabled: false },
+    ];
+  });
+
+  it('shows on an online shop what each page’s links do with its shopping path', async () => {
+    shop();
+    getContentDrafts.mockResolvedValue(drafts);
+    await renderPage();
+    const headers = [...container.querySelectorAll('th')].map((th) => th.textContent);
+    expect(headers).toContain('Shopping path');
+    const cells = [...container.querySelectorAll('tbody tr')].map(
+      (tr) => tr.querySelectorAll('td')[6]?.textContent,
+    );
+    expect(cells).toEqual(['2 sold out', 'OK', 'None', 'Not checked yet']);
+  });
+
+  it('lists the pages that need attention when the URL asks, and says so when there are none', async () => {
+    shop();
+    window.history.replaceState(null, '', '/dashboard/content/library?shopping=attention');
+    getContentDrafts.mockResolvedValue(drafts);
+    await renderPage();
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(container.textContent).toContain('Best rain jackets');
+
+    getContentDrafts.mockResolvedValue(drafts.slice(1));
+    root.unmount();
+    root = createRoot(container);
+    await renderPage();
+    expect(container.textContent).toContain('No page listed here has a shopping path like this.');
+  });
+
+  it('isn’t there for a brand that doesn’t sell online', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?shopping=attention');
+    getContentDrafts.mockResolvedValue(drafts);
+    await renderPage();
+    expect([...container.querySelectorAll('th')].map((th) => th.textContent)).not.toContain(
+      'Shopping path',
+    );
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(4);
+  });
+});

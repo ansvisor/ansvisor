@@ -58,6 +58,7 @@ export function SendDialog({
   byline,
   onFillNow,
   onClose,
+  onSent,
 }: {
   draftId: string;
   brandId: string;
@@ -73,6 +74,8 @@ export function SendDialog({
   /** Goes to the first placeholder, to fill it. */
   onFillNow: () => void;
   onClose: () => void;
+  /** The page went: where, and how it stands (the editor's header says so). */
+  onSent?: (last: NonNullable<DraftCms['last']>) => void;
 }) {
   const t = useTranslations('contentEditor.editor.send');
   const tFailure = useTranslations('apiFailure');
@@ -96,6 +99,8 @@ export function SendDialog({
   // or the CMS could get the page twice).
   const touched = useRef(new Set<keyof CmsFields>());
   const [sending, setSending] = useState(false);
+  // Fill now: the editor selects the placeholder, so focus stays there.
+  const filling = useRef(false);
   // With the target it went to: picking another clears it, a read again may not.
   const [problem, setProblem] = useState<
     | { code: CmsSendError; field: string | null; target: CmsTarget }
@@ -186,9 +191,26 @@ export function SendDialog({
           ? { status: delivery.http_status! }
           : { failed: delivery.error ?? t('errors.failed'), target },
       );
+      // The header says it failed too, with why, as the page's last send.
+      onSent?.({
+        status: 'failed',
+        target,
+        at: new Date().toISOString(),
+        error:
+          delivery.error ??
+          (refused
+            ? t('errors.webhookStatus', { status: delivery.http_status! })
+            : t('errors.failed')),
+      });
       return;
     }
     keepTarget(target);
+    onSent?.({
+      status: delivery?.status ?? 'sent',
+      target,
+      at: new Date().toISOString(),
+      error: null,
+    });
     if (target === 'webflow') {
       // What of the page Webflow's rich text couldn't keep: tables went as lists, images not yet.
       const changed = delivery?.changed;
@@ -280,7 +302,10 @@ export function SendDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && !sending && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+        finalFocus={() => !filling.current}
+      >
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
           <DialogDescription>
@@ -332,7 +357,14 @@ export function SendDialog({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
             <span className="min-w-0 flex-1">{t('placeholders', { count: placeholders })}</span>
-            <Button size="sm" variant="outline" onClick={onFillNow}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                filling.current = true;
+                onFillNow();
+              }}
+            >
               {t('fillNow')}
             </Button>
           </div>
