@@ -250,11 +250,12 @@ describe('CatalogSourcesCard', () => {
   });
 
   it("says how many products the plan's cap left out, with Upgrade for managers (ECOM-019)", async () => {
-    const capped = { ...FEED, lastCounts: { ...FEED.lastCounts!, overLimit: 740, limit: 500 } };
+    // Starter's cap (5,000).
+    const capped = { ...FEED, lastCounts: { ...FEED.lastCounts!, overLimit: 1240, limit: 5000 } };
     listCatalogSources.mockResolvedValue([capped]);
     await render();
     expect(container.textContent).toContain(
-      "740 products aren't in the catalog: your plan tracks up to 500 products across your brands. Upgrade",
+      "1,240 products aren't in the catalog: your plan tracks up to 5,000 products across your brands. Upgrade",
     );
     expect(container.querySelector('a[href="/dashboard/settings/billing"]')?.textContent).toBe(
       'Upgrade',
@@ -263,7 +264,7 @@ describe('CatalogSourcesCard', () => {
     root = createRoot(container);
     role.canManage = false;
     await render();
-    expect(container.textContent).toContain("740 products aren't in the catalog");
+    expect(container.textContent).toContain("1,240 products aren't in the catalog");
     expect(container.querySelector('a[href="/dashboard/settings/billing"]')).toBeNull();
   });
 

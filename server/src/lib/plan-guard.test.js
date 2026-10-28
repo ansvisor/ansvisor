@@ -119,17 +119,17 @@ describe('relevance allowance per plan', () => {
 });
 
 describe('catalog products per plan (ECOM-019)', () => {
-  it('is 50 / 500, set per Enterprise customer, uncapped on self-hosted', async () => {
+  it('is 5,000 / 50,000, set per Enterprise customer, uncapped on self-hosted', async () => {
     const { PLANS } = await import('../config/plans.js');
-    expect(PLANS.starter.limits.maxCatalogProducts).toBe(50);
-    expect(PLANS.growth.limits.maxCatalogProducts).toBe(500);
+    expect(PLANS.starter.limits.maxCatalogProducts).toBe(5_000);
+    expect(PLANS.growth.limits.maxCatalogProducts).toBe(50_000);
     expect(PLANS.enterprise.limits.maxCatalogProducts).toBe(-1);
     expect(PLANS.self_hosted.limits.maxCatalogProducts).toBe(-1);
     expect(
       applyPlanOverrides(PLANS.enterprise, {
         plan: 'enterprise',
-        plan_overrides: { maxCatalogProducts: 5000 },
+        plan_overrides: { maxCatalogProducts: 250_000 },
       }).limits.maxCatalogProducts,
-    ).toBe(5000);
+    ).toBe(250_000);
   });
 });
