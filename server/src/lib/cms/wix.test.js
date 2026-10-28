@@ -14,6 +14,7 @@ const {
   siteIdOf,
   toRicos,
   updateDraftPost,
+  webAddress,
 } = await import('./wix.js');
 
 /**
@@ -154,6 +155,17 @@ describe('toRicos', () => {
   });
 });
 
+describe('webAddress', () => {
+  it('keeps a web address, adds https:// to one without its scheme, and drops the rest', () => {
+    expect(webAddress('https://acme.example/post/x')).toBe('https://acme.example/post/x');
+    expect(webAddress(' acme.example/post/x ')).toBe('https://acme.example/post/x');
+    expect(webAddress('//acme.example/post/x')).toBe('https://acme.example/post/x');
+    expect(webAddress('/post/x')).toBeNull();
+    expect(webAddress('javascript:alert(1)')).toBeNull();
+    expect(webAddress(null)).toBeNull();
+  });
+});
+
 describe('draft posts', () => {
   it('writes a new draft, never published', async () => {
     const opts = await start({
@@ -191,6 +203,32 @@ describe('draft posts', () => {
     });
     expect(await readDraftPost(SITE, KEY, 'f0000000-0000-4000-8000-000000000000', opts)).toBeNull();
     expect(await readDraftPost(SITE, KEY, 'not-an-id', opts)).toBeNull();
+  });
+
+  it('gives an address Wix sends without its scheme https://', async () => {
+    const OTHER = 'a1111111-2222-4333-8444-955555555555';
+    const opts = await start({
+      [`GET /blog/v3/draft-posts/${POST}`]: () => ({
+        json: {
+          draftPost: { id: POST, status: 'PUBLISHED', url: 'mysite.wixsite.com/mysite/post/x' },
+        },
+      }),
+      [`GET /blog/v3/draft-posts/${OTHER}`]: () => ({
+        json: {
+          draftPost: {
+            id: OTHER,
+            status: 'PUBLISHED',
+            url: { base: 'mysite.wixsite.com/mysite/', path: '/post/y' },
+          },
+        },
+      }),
+    });
+    expect((await readDraftPost(SITE, KEY, POST, opts)).url).toBe(
+      'https://mysite.wixsite.com/mysite/post/x',
+    );
+    expect((await readDraftPost(SITE, KEY, OTHER, opts)).url).toBe(
+      'https://mysite.wixsite.com/mysite/post/y',
+    );
   });
 
   it("writes a live post's draft version, never the post people read", async () => {

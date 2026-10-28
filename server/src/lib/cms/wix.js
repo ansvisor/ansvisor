@@ -226,15 +226,30 @@ export async function toRicos(siteId, apiKey, html, { request, base } = {}) {
   return { nodes };
 }
 
+/**
+ * A post's address, whole: Wix may give it without its scheme
+ * (mysite.wixsite.com/mysite/post/x), so it gets https://. Null when it
+ * isn't a web address.
+ */
+export function webAddress(url) {
+  const value = typeof url === 'string' ? url.trim() : '';
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith('//')) return `https:${value}`;
+  // A host first: example.com/…, mysite.wixsite.com/…
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?([/?#]|$)/i.test(value)) return `https://${value}`;
+  return null;
+}
+
 /** A draft post as Send to CMS keeps it. */
 function draftOf(data) {
   const post = data?.draftPost ?? {};
-  const url =
+  const url = webAddress(
     typeof post.url === 'string'
       ? post.url
       : post.url?.base && post.url?.path
         ? `${post.url.base.replace(/\/$/, '')}${post.url.path}`
-        : null;
+        : null,
+  );
   return {
     id: typeof post.id === 'string' ? post.id : null,
     status: typeof post.status === 'string' ? post.status : null,
