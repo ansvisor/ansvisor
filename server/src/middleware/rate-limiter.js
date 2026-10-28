@@ -101,6 +101,20 @@ export const claimsLimiter = rateLimit({
   },
 });
 
+// Check now (AC-010): a task's page fetched again on a click, from a bucket
+// of its own, so it doesn't use up the editor's page reads (an AI-cost route).
+export const taskCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // Quality's page read (CE-049): the editor asks after saves, a minute apart
 // at most, from a bucket of its own.
 export const pageReadLimiter = rateLimit({

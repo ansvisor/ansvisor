@@ -110,7 +110,13 @@ export async function sendContentDraftToActionCenter(brandId, { draftId, userId 
       kpi_keys: KPI_KEYS,
       baseline: {},
       dedup_key: dedupKey,
-      ...(await priorityOnCreate({ kind: CONTENT_DRAFT_ACTION_KIND, category, impact, payload })),
+      ...(await priorityOnCreate({
+        brand_id: brandId,
+        kind: CONTENT_DRAFT_ACTION_KIND,
+        category,
+        impact,
+        payload,
+      })),
     })
     .select('id, action_no')
     .single();

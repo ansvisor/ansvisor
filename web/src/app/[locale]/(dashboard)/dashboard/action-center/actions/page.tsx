@@ -40,6 +40,7 @@ import {
   ACTION_STATUSES,
   OPEN_ACTION_STATUSES,
   type ActionCategory,
+  type ActionDismissReason,
   type ActionSort,
   type ActionStatus,
 } from '@/lib/action-center/registry';
@@ -364,10 +365,14 @@ function ActionsContent({ brand }: { brand: Brand }) {
       });
     }
   };
-  const changeStatus = (action: ActionItem, next: ActionStatus) =>
+  const changeStatus = (
+    action: ActionItem,
+    next: ActionStatus,
+    reason: ActionDismissReason | null = null,
+  ) =>
     void runRowChange(
       action,
-      () => updateActionStatus(brand.id, action.id, next),
+      () => updateActionStatus(brand.id, action.id, next, reason),
       t('rowMenu.statusChanged', { status: t(`status.${next}`) }),
     );
   const removeAction = (action: ActionItem) => {
