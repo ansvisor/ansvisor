@@ -243,6 +243,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           dedup_key: string
+          dismiss_reason: string | null
           due_date: string | null
           id: string
           impact: string
@@ -271,6 +272,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact: string
@@ -299,6 +301,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key?: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact?: string
@@ -3074,6 +3077,38 @@ export type Database = {
           },
         ]
       }
+      organization_menu_roles: {
+        Row: {
+          hidden_sections: string[]
+          organization_id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          hidden_sections?: string[]
+          organization_id: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          hidden_sections?: string[]
+          organization_id?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_menu_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           anthropic_api_key_encrypted: string | null
@@ -3225,33 +3260,48 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          can_manage_menus: boolean
           created_at: string
           full_name: string | null
           id: string
+          menu_hidden: string[]
+          menu_shown: string[]
           onboarding_completed: boolean | null
           organization_id: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
+          work_areas: string[]
+          work_areas_asked_at: string | null
         }
         Insert: {
           avatar_url?: string | null
+          can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
           id: string
+          menu_hidden?: string[]
+          menu_shown?: string[]
           onboarding_completed?: boolean | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
+          work_areas?: string[]
+          work_areas_asked_at?: string | null
         }
         Update: {
           avatar_url?: string | null
+          can_manage_menus?: boolean
           created_at?: string
           full_name?: string | null
           id?: string
+          menu_hidden?: string[]
+          menu_shown?: string[]
           onboarding_completed?: boolean | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
+          work_areas?: string[]
+          work_areas_asked_at?: string | null
         }
         Relationships: [
           {
@@ -4560,6 +4610,23 @@ export type Database = {
           removed_keys: string[]
           removed_labels: string[]
           total: number
+        }[]
+      }
+      action_scorecard: {
+        Args: { p_brand_id: string; p_since?: string | null }
+        Returns: {
+          completed: number
+          declined: number
+          dismiss_reasons: Json
+          dismissed: number
+          final: number
+          improved: number
+          kind: string
+          median_change: number | null
+          mixed: number
+          no_change: number
+          not_measurable: number
+          pending: number
         }[]
       }
       ai_traffic_merged: {

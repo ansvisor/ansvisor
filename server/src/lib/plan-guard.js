@@ -38,7 +38,7 @@ export class PlanLimitError extends Error {
  * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
  *
  * The AI budget is the plan's $50 unless Ansvisor sets a customer's own in
- * `improveMonthlyBudgetUsd` (2026-10-27: $50 or more, a finite number, set per customer); the
+ * `improveMonthlyBudgetUsd` (2026-10-27: $50 or more, set per customer; anything else keeps $50); the
  * contract's value doesn't raise it. `contractMonthlyUsd` is the contract's
  * monthly value, entered when the deal is signed. It sets the relevance
  * budget (VIS-011) to 0.1% of the contract (never below the plan default),
@@ -54,12 +54,14 @@ export function applyPlanOverrides(plan, org) {
   ) {
     const overrides = org.plan_overrides;
     const limits = { ...plan.limits, ...overrides };
-    // A budget set by hand is used only as a number: null would read as
-    // unlimited, and "80$" would fail every AI call. Anything else keeps
-    // the plan's.
+    // A budget set by hand is used only as a number of at least the plan's
+    // ($50, Enterprise's floor): null or -1 would read as unlimited, 0 or
+    // another number below it (-5) would answer every AI call "used up",
+    // and "80$" would fail every one. Anything else keeps the plan's.
     const own = overrides.improveMonthlyBudgetUsd;
-    if (own !== undefined && !(typeof own === 'number' && Number.isFinite(own))) {
-      limits.improveMonthlyBudgetUsd = plan.limits.improveMonthlyBudgetUsd;
+    const floor = plan.limits.improveMonthlyBudgetUsd;
+    if (own !== undefined && !(typeof own === 'number' && Number.isFinite(own) && own >= floor)) {
+      limits.improveMonthlyBudgetUsd = floor;
     }
     const usd = Number(overrides.contractMonthlyUsd);
     if (overrides.relevanceMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {

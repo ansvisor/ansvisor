@@ -160,7 +160,7 @@ Some estimates are built differently, and their note says so:
 ### Where you see estimates
 
 - **Tracked Prompts** — the **Volume** column
-- **A prompt's page** — an **AI searches a month** card, when the prompt has a volume
+- **A prompt's page** — an **AI searches a month** card, when the prompt has a volume. The **Demand** card beside it is measured, not estimated (see [Real demand](#real-demand))
 - **Insights** — **Total Est. AI Volume**, **Avg. AI Volume**, the **Prompt Volumes** table's **Est. AI Vol.** column, **High Opportunity Prompts**, and the Prompt Volumes chart's tooltip
 - **Similar Topics** — the Insights card's **See all** page (`/dashboard/prompts/similar-topics`)
 - **Prompt Suggestions** — each AI suggestion's `/mo` range
@@ -174,6 +174,44 @@ Exports mark estimated volumes, so a spreadsheet doesn't read them as counts:
 - **Action Center → Export CSV / Export Excel** gives the volume as a range, followed by `volume_type` and `volume_confidence`.
 - **A content opportunity's Copy All Data and exports** give **Est. AI volume** as a range, with **Volume type** and **Volume confidence**.
 - The [MCP server](/guides/mcp-server)'s `get_prompt_volumes` returns `est_ai_volume_low`, `est_ai_volume_high`, `volume_confidence` and `volume_type` with each row.
+
+## Real demand
+
+The estimate says how many AI searches a prompt might get. A prompt's page also shows whether people really ask it, under **Demand · is this asked for real?**: four measured signals, each with its source and the day it was read.
+
+| Signal | What it shows | Read |
+|---|---|---|
+| **Search Console** | Impressions and clicks over the last 28 days for your Google queries that match the prompt, how many queries matched and the most seen one | Every night |
+| **Google Trends** | A 12-month line for the prompt's keyword: **Rising**, **Steady** or **Falling**, and the change on a year ago | About once a week |
+| **People Also Ask** | The related questions Google shows for the keyword | About once a week |
+| **YouTube** | The views across YouTube's top videos for the keyword, and the most viewed one | About once a week |
+
+Google Trends, People Also Ask and YouTube are read for the keyword with the most Google searches in the prompt's [volume analysis](#volume-analysis-insights-tab), with its location and language, so a prompt needs its volume analyzed first. A query matches a prompt when most of its words are in the prompt, the same rule the Action Center uses for Search Console signals.
+
+<Note>
+The weekly reads (Google Trends, People Also Ask and YouTube) are off by default: each one is a paid DataForSEO task. A self-hosted server turns them on with `DEMAND_SIGNALS` (see [Environment variables](/self-host/env-variables)). Until then their cards say **Weekly reads aren't turned on yet**. Search Console is read every night either way.
+</Note>
+
+When a signal isn't there, its card says why: **Connect Search Console to see real clicks** (with a **Connect** button for admins and managers), a Search Console property to pick for the brand, the first sync still running, **Analyze volume first**, a keyword Google has no searches for, being read, or not read yet.
+
+**Track a question.** Each People Also Ask question has a **+ Track** button: one click adds it as a tracked prompt in the prompt's topic, within your plan's prompt limit. A question your brand already tracks, however it's written (case, accents and punctuation aside), shows **Tracked** instead and isn't added twice.
+
+### Demand level
+
+The signals read come to a **demand level**, shown in the prompt's KPI row as **Demand · High** with how many of the four signals were read, for example **3 of 4 signals**. It carries a **Measured** badge, never **Estimate**.
+
+Each signal read gives 2 points when it's strong, 1 when there is some, 0 otherwise:
+
+- **Search Console**: 1,000 impressions or more is strong, 100 or more is some
+- **Google Trends**: rising is strong, steady is some; falling or too little data gives nothing
+- **People Also Ask**: 4 questions or more is strong, 1 or more is some
+- **YouTube**: 100,000 views or more is strong, 5,000 or more is some
+
+The level is the share of the points the signals read could give: **High** at 60% or more with at least two signals read, **Medium** at 30% or more, **Low** below. A signal that was read and found nothing counts; one never read doesn't.
+
+### Demand and the Priority Score
+
+The level feeds the [Priority Score](/guides/action-center#the-priority-score) of the Action Center's actions about the prompt. **High** raises its demand to at least what about 2,500 monthly AI searches would give, **Medium** to about 160; **Low** leaves it as it is, because signals that found little don't prove nobody asks. When a prompt's level changes, the brand's open actions are scored again that night, and **Why this priority?** names a High or Medium level, for example *measured demand High*. Low isn't named, since it doesn't change the score.
 
 ## Volume Analysis (Insights tab)
 
@@ -218,6 +256,8 @@ If a draft that isn't published yet already covers the prompt — one started fr
 | Anything else | No content step |
 
 **Optimize content** opens Start on the page of yours AI engines cite most for the prompt. When none is cited, Start lists your pages that answer the prompt so you can pick one. When a draft already covers the prompt, the step offers **Open draft**.
+
+The tab's suggestions per platform are written from the answers' evidence and from this brand's last two Improve actions on the prompt for the same region: which of their suggestions were done or skipped, and how each platform moved since. They build on what moved, and don't suggest again what was done on a platform that didn't, or what your team skipped. An action sent less than a week ago is too early to tell either way. Only this brand's own actions are read.
 
 ## Best practices
 
