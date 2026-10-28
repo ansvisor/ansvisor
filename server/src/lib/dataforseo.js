@@ -103,41 +103,61 @@ async function callApi(path, { method = 'GET', body } = {}) {
  * the answer maps each tag to its task's id; a task DataForSEO refused has no
  * entry. Charged as each task is set.
  *
+ * Sent MAX_TASKS_PER_POST at a time. A request that fails costs only its own
+ * tasks: the others are still set, and what was set comes back. `onChunk`
+ * is awaited with each request's ids as soon as they're in, so the caller
+ * can keep them before the next one goes (a task set is paid for); an error
+ * it throws stops the rest.
+ *
  * @param {string} path
  * @param {Array<{ tag: string } & Record<string, unknown>>} tasks
- * @returns {Promise<Map<string, string>>} tag → task id
+ * @param {{ onChunk?: (ids: Map<string, string>) => Promise<void> | void }} [options]
+ * @returns {Promise<{ ids: Map<string, string>, failed: number, errors: string[] }>}
+ *   tag → task id; `failed`: tasks in the requests that failed, and why
  */
-export async function postTasks(path, tasks) {
+export async function postTasks(path, tasks, { onChunk } = {}) {
   const ids = new Map();
+  const errors = [];
+  let failed = 0;
   for (let i = 0; i < tasks.length; i += MAX_TASKS_PER_POST) {
-    const data = await callApi(`${path}/task_post`, {
-      method: 'POST',
-      body: tasks.slice(i, i + MAX_TASKS_PER_POST),
-    });
+    const chunk = tasks.slice(i, i + MAX_TASKS_PER_POST);
+    let data;
+    try {
+      data = await callApi(`${path}/task_post`, { method: 'POST', body: chunk });
+    } catch (err) {
+      failed += chunk.length;
+      errors.push(err?.message ?? String(err));
+      continue;
+    }
+    const set = new Map();
     for (const task of data.tasks ?? []) {
       // 20100: Task Created.
       const tag = task?.data?.tag;
-      if (task?.status_code === 20100 && task.id && typeof tag === 'string') ids.set(tag, task.id);
+      if (task?.status_code === 20100 && task.id && typeof tag === 'string') set.set(tag, task.id);
     }
+    for (const [tag, id] of set) ids.set(tag, id);
+    if (onChunk && set.size > 0) await onChunk(set);
   }
-  return ids;
+  return { ids, failed, errors };
 }
 
 /**
- * The ids of the endpoint's tasks that are done and not collected yet (up to
- * 1,000, from the last three days). A task leaves the list once its result
- * is read.
+ * The endpoint's tasks that are done and not collected yet (up to 1,000,
+ * from the last three days), each with the tag it was set with. A task
+ * leaves the list once its result is read.
  *
  * @param {string} path e.g. /v3/keywords_data/google_trends/explore
- * @returns {Promise<Set<string>>}
+ * @returns {Promise<Map<string, string | null>>} task id → tag
  */
-export async function readyTaskIds(path) {
+export async function readyTasks(path) {
   const data = await callApi(`${path}/tasks_ready`);
-  const ids = new Set();
+  const ready = new Map();
   for (const task of data.tasks ?? []) {
-    for (const ready of task?.result ?? []) if (ready?.id) ids.add(ready.id);
+    for (const done of task?.result ?? []) {
+      if (done?.id) ready.set(done.id, typeof done.tag === 'string' ? done.tag : null);
+    }
   }
-  return ids;
+  return ready;
 }
 
 /** Status codes of a task still being worked on: 40601 Task Handed, 40602 Task In Queue. */

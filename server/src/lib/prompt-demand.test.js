@@ -11,6 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 let tables;
 let writes;
 let rpcCalls;
+/** The database's now(), for the claims. */
+let dbNow;
+/** Runs on each Search Console read (a brand being matched). */
+let onGscRead;
 
 function valueAt(row, path) {
   return path.split('.').reduce((v, key) => (v == null ? v : v[key]), row);
@@ -49,6 +53,13 @@ function query(table) {
     maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
     then: (resolve, reject) => {
       if (op === 'upsert') {
+        // The foreign key: a row for a prompt that is gone fails the whole write.
+        const promptIds = new Set((tables.prompts ?? []).map((p) => p.id));
+        if (table === 'prompt_demand' && payload.some((row) => !promptIds.has(row.prompt_id))) {
+          return Promise.resolve({
+            error: { code: '23503', message: 'violates foreign key constraint' },
+          }).then(resolve, reject);
+        }
         writes.push({ table, rows: payload });
         const kept = tables[table] ?? (tables[table] = []);
         for (const row of payload) {
@@ -64,15 +75,60 @@ function query(table) {
   return chain;
 }
 
+/** prompt_demand_claim: no task waiting and no claim younger than p_stale_minutes. */
+function claim({ p_rows, p_stale_minutes }) {
+  const at = new Date(dbNow).toISOString();
+  const claimed = [];
+  for (const { prompt_id, brand_id } of p_rows) {
+    if (!tables.prompts.some((p) => p.id === prompt_id)) continue;
+    const row = tables.prompt_demand.find((r) => r.prompt_id === prompt_id);
+    if (!row) {
+      tables.prompt_demand.push({
+        prompt_id,
+        brand_id,
+        claimed_at: at,
+        tasks: null,
+        gsc: null,
+        level: null,
+        signals: 0,
+        updated_at: at,
+      });
+    } else {
+      if (row.tasks) continue;
+      if (row.claimed_at && Date.parse(row.claimed_at) >= dbNow - p_stale_minutes * 60_000)
+        continue;
+      row.claimed_at = at;
+    }
+    claimed.push(prompt_id);
+  }
+  return claimed;
+}
+
+/** prompt_demand_brand_updates: each brand's last write. */
+function brandUpdates() {
+  const out = {};
+  for (const row of tables.prompt_demand) {
+    if (row.updated_at && !(out[row.brand_id] >= row.updated_at))
+      out[row.brand_id] = row.updated_at;
+  }
+  return out;
+}
+
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => query(table),
     rpc: async (name, args) => {
       rpcCalls.push({ name, args });
+      if (name === 'prompt_demand_claim') return { data: claim(args), error: null };
+      if (name === 'prompt_demand_brand_updates') return { data: brandUpdates(), error: null };
+      onGscRead?.(args.p_brand_id);
       return { data: tables.gsc?.[args.p_brand_id] ?? [], error: null };
     },
   },
 }));
+
+const gscReads = () =>
+  rpcCalls.filter((c) => c.name === 'prompt_demand_gsc_queries').map((c) => c.args.p_brand_id);
 
 // The plan check (#1608): the organizations and brands whose plan ended.
 let endedOrgs;
@@ -83,16 +139,26 @@ vi.mock('./active-subscriptions.js', () => ({
 }));
 
 const postTasks = vi.fn();
-const readyTaskIds = vi.fn();
+const readyTasks = vi.fn();
 const getTask = vi.fn();
 vi.mock('./dataforseo.js', () => ({
   isDataForSeoConfigured: () => true,
   postTasks,
-  readyTaskIds,
+  readyTasks,
   getTask,
 }));
 
+/** postTasks setting every task, each id `${path}#${tag}`, in one request. */
+async function setAll(path, tasks, { onChunk } = {}) {
+  const ids = new Map(tasks.map((t) => [t.tag, `${path}#${t.tag}`]));
+  if (onChunk) await onChunk(ids);
+  return { ids, failed: 0, errors: [] };
+}
+
+const { logger } = await import('./logger.js');
+
 const {
+  CLAIM_STALE_MINUTES,
   LEVEL_RULE,
   NIGHTLY_LIMIT,
   REFRESH_DAYS,
@@ -105,6 +171,8 @@ const {
   isDue,
   paaSignal,
   pickDue,
+  postDemandTasks,
+  sweepOrder,
   sweepPromptDemand,
   topKeyword,
   trendsKeyword,
@@ -335,15 +403,20 @@ beforeEach(() => {
   };
   writes = [];
   rpcCalls = [];
+  dbNow = NOW;
+  onGscRead = null;
   endedOrgs = new Set();
   endedBrands = new Set();
   postTasks.mockReset();
-  readyTaskIds.mockReset();
+  readyTasks.mockReset().mockResolvedValue(new Map());
   getTask.mockReset();
   vi.stubEnv('DEMAND_SIGNALS', 'false');
 });
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 const demandRow = (promptId) => tables.prompt_demand.find((r) => r.prompt_id === promptId);
 
@@ -609,14 +682,15 @@ describe('sweepPromptDemand', () => {
 
     expect(outcome).toMatchObject({ brands: 1, written: 2, posted: 0, paid: false });
     expect(postTasks).not.toHaveBeenCalled();
-    expect(readyTaskIds).not.toHaveBeenCalled();
+    expect(readyTasks).not.toHaveBeenCalled();
     expect(getTask).not.toHaveBeenCalled();
-    expect(rpcCalls).toEqual([
+    expect(rpcCalls.filter((c) => c.name === 'prompt_demand_gsc_queries')).toEqual([
       {
         name: 'prompt_demand_gsc_queries',
         args: { p_brand_id: 'b1', p_from: '2026-10-01', p_to: '2026-10-28', p_limit: 5000 },
       },
     ]);
+    expect(rpcCalls.some((c) => c.name === 'prompt_demand_claim')).toBe(false);
     expect(demandRow('p1')).toMatchObject({
       brand_id: 'b1',
       gsc: { impressions: 4120, clicks: 96, queries: 2 },
@@ -631,7 +705,7 @@ describe('sweepPromptDemand', () => {
     tables.brands[0].gsc_property = null;
     const outcome = await sweepPromptDemand({ now: NOW });
     expect(outcome.written).toBe(0);
-    expect(rpcCalls).toEqual([]);
+    expect(gscReads()).toEqual([]);
     expect(tables.prompt_demand).toEqual([]);
   });
 
@@ -659,13 +733,16 @@ describe('sweepPromptDemand', () => {
     tables.prompt_volumes = [volume('p1', { 'ai search monitoring': 1900, 'ai monitoring': 300 })];
     // p2 was analysed, and Google has no searches for its keywords.
     tables.prompt_volumes.push(volume('p2', { 'track brand chatgpt answers': 0 }));
-    postTasks.mockImplementation(
-      async (path, tasks) => new Map(tasks.map((t) => [t.tag, `${path}#${t.tag}`])),
-    );
+    postTasks.mockImplementation(setAll);
 
     const outcome = await sweepPromptDemand({ now: NOW });
 
-    expect(outcome).toMatchObject({ paid: true, posted: 1 });
+    expect(outcome).toMatchObject({ paid: true, due: 1, posted: 1 });
+    // Claimed before it was set.
+    expect(rpcCalls.find((c) => c.name === 'prompt_demand_claim').args).toEqual({
+      p_rows: [{ prompt_id: 'p1', brand_id: 'b1' }],
+      p_stale_minutes: CLAIM_STALE_MINUTES,
+    });
     expect(postTasks).toHaveBeenCalledTimes(3);
     expect(postTasks.mock.calls.map(([path]) => path)).toEqual([
       '/v3/keywords_data/google_trends/explore',
@@ -699,7 +776,6 @@ describe('sweepPromptDemand', () => {
 
   it('does not set a prompt read this week again, nor one whose tasks are waiting', async () => {
     vi.stubEnv('DEMAND_SIGNALS', 'true');
-    readyTaskIds.mockResolvedValue(new Set());
     tables.prompt_volumes = [
       volume('p1', { 'ai search monitoring': 1900 }),
       volume('p2', { 'track brand chatgpt': 500 }),
@@ -732,7 +808,6 @@ describe('sweepPromptDemand', () => {
 
   it('sets at most the limit a night, the longest waiting first', async () => {
     vi.stubEnv('DEMAND_SIGNALS', 'true');
-    readyTaskIds.mockResolvedValue(new Set());
     tables.prompts = Array.from({ length: 5 }, (_, i) => prompt(`p${i}`, 'b1', `prompt ${i}`));
     tables.prompt_volumes = tables.prompts.map((p) => volume(p.id, { [`keyword ${p.id}`]: 100 }));
     tables.prompt_demand = tables.prompts.map((p, i) => ({
@@ -745,11 +820,12 @@ describe('sweepPromptDemand', () => {
       level: null,
       gsc: null,
     }));
-    postTasks.mockImplementation(async (_path, tasks) => new Map(tasks.map((t) => [t.tag, 'id'])));
+    postTasks.mockImplementation(setAll);
 
     const outcome = await sweepPromptDemand({ now: NOW, limit: 2 });
 
-    expect(outcome.posted).toBe(2);
+    // Five were due; the two waiting longest were set.
+    expect(outcome).toMatchObject({ due: 5, posted: 2 });
     expect(postTasks.mock.calls[0][1].map((t) => t.tag)).toEqual(['p4', 'p3']);
   });
 
@@ -765,15 +841,244 @@ describe('sweepPromptDemand', () => {
         tasks: { posted_at: daysAgo(1), trends: 't-p2', paa: null, youtube: null },
       },
     ];
-    readyTaskIds.mockResolvedValue(new Set(['t-p2']));
+    readyTasks.mockResolvedValue(new Map([['t-p2', 'p2']]));
 
     const outcome = await sweepPromptDemand({ now: NOW });
 
     expect(outcome).toMatchObject({ brands: 0, skipped: 1, posted: 0, read: 0 });
-    expect(rpcCalls).toEqual([]);
+    expect(gscReads()).toEqual([]);
     expect(postTasks).not.toHaveBeenCalled();
     expect(getTask).not.toHaveBeenCalled();
     expect(writes).toEqual([]);
+  });
+});
+
+// ─── Setting the tasks: nothing paid for twice, nothing paid for lost ───────
+
+describe('setting the paid tasks', () => {
+  beforeEach(() => {
+    vi.stubEnv('DEMAND_SIGNALS', 'true');
+    tables.prompt_volumes = [
+      volume('p1', { 'ai search monitoring': 1900 }),
+      volume('p2', { 'track brand chatgpt': 500 }),
+    ];
+  });
+
+  const tasksOf = (promptId) => demandRow(promptId)?.tasks ?? null;
+
+  it("writes each request's ids as soon as it's back, and keeps them when a later one fails", async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    postTasks.mockImplementation(async (path, tasks, { onChunk }) => {
+      // People Also Ask: p1's request goes through, p2's fails.
+      if (path === SOURCES.paa.path) {
+        await onChunk(new Map([['p1', `${path}#p1`]]));
+        return {
+          ids: new Map([['p1', `${path}#p1`]]),
+          failed: 1,
+          errors: ['DataForSEO API error (502): Bad Gateway'],
+        };
+      }
+      // The others, one request per prompt.
+      for (const t of tasks) await onChunk(new Map([[t.tag, `${path}#${t.tag}`]]));
+      return { ids: new Map(tasks.map((t) => [t.tag, `${path}#${t.tag}`])), failed: 0, errors: [] };
+    });
+
+    const outcome = await sweepPromptDemand({ now: NOW });
+
+    expect(outcome).toMatchObject({ due: 2, posted: 2 });
+    // The first request's id was written before the next request went.
+    const taskWrites = writes.filter((w) => w.rows.some((r) => r.tasks));
+    expect(taskWrites[0].rows).toEqual([
+      expect.objectContaining({
+        prompt_id: 'p1',
+        tasks: {
+          posted_at: AT,
+          trends: '/v3/keywords_data/google_trends/explore#p1',
+          paa: null,
+          youtube: null,
+        },
+      }),
+    ]);
+    expect(tasksOf('p1')).toEqual({
+      posted_at: AT,
+      trends: '/v3/keywords_data/google_trends/explore#p1',
+      paa: '/v3/serp/google/organic#p1',
+      youtube: '/v3/serp/youtube/organic#p1',
+    });
+    expect(tasksOf('p2')).toEqual({
+      posted_at: AT,
+      trends: '/v3/keywords_data/google_trends/explore#p2',
+      paa: null,
+      youtube: '/v3/serp/youtube/organic#p2',
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: 'paa', failed: 1 }),
+      '[prompt-demand] tasks not set',
+    );
+  });
+
+  it("keeps the other prompts' ids when one prompt was deleted meanwhile", async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    postTasks.mockImplementation(async (path, tasks, options) => {
+      // p2 is deleted while its tasks are being set (its row goes with it).
+      tables.prompts = tables.prompts.filter((p) => p.id !== 'p2');
+      tables.prompt_demand = tables.prompt_demand.filter((r) => r.prompt_id !== 'p2');
+      return setAll(path, tasks, options);
+    });
+
+    const outcome = await sweepPromptDemand({ now: NOW });
+
+    expect(outcome.posted).toBe(2);
+    expect(tasksOf('p1')).toMatchObject({
+      trends: '/v3/keywords_data/google_trends/explore#p1',
+      paa: '/v3/serp/google/organic#p1',
+      youtube: '/v3/serp/youtube/organic#p1',
+    });
+    expect(demandRow('p2')).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      { promptIds: ['p2'] },
+      '[prompt-demand] rows of deleted prompts not written',
+    );
+  });
+
+  it('sets each prompt once when two sweeps run at once: the second finds them claimed', async () => {
+    postTasks.mockImplementation(setAll);
+
+    const outcomes = await Promise.all([
+      sweepPromptDemand({ now: NOW }),
+      sweepPromptDemand({ now: NOW }),
+    ]);
+
+    expect(outcomes.map((o) => o.posted).sort()).toEqual([0, 2]);
+    // Three requests (one per signal), each with both prompts once.
+    expect(postTasks).toHaveBeenCalledTimes(3);
+    for (const [, tasks] of postTasks.mock.calls) {
+      expect(tasks.map((t) => t.tag)).toEqual(['p1', 'p2']);
+    }
+    expect(rpcCalls.filter((c) => c.name === 'prompt_demand_claim')).toHaveLength(2);
+  });
+
+  it("doesn't set a prompt another sweep claimed, until the claim is older than its window", async () => {
+    postTasks.mockImplementation(setAll);
+    const claimedBy = (minutesAgo) => ({
+      prompt_id: 'p1',
+      brand_id: 'b1',
+      keyword: 'ai search monitoring',
+      posted_at: daysAgo(8),
+      claimed_at: new Date(NOW - minutesAgo * 60_000).toISOString(),
+      tasks: null,
+      gsc: null,
+      level: null,
+      signals: 0,
+    });
+    const due = [
+      {
+        promptId: 'p1',
+        brandId: 'b1',
+        keyword: 'ai search monitoring',
+        locationCode: 2840,
+        languageCode: 'en',
+      },
+    ];
+
+    // A sweep claimed it half an hour ago and died before setting it.
+    tables.prompt_demand = [claimedBy(30)];
+    expect(isDue(tables.prompt_demand[0], { keyword: 'ai search monitoring' }, NOW)).toBe(false);
+    expect(await postDemandTasks(due, { now: NOW })).toBe(0);
+    expect(postTasks).not.toHaveBeenCalled();
+
+    // Past the window, it's taken again.
+    tables.prompt_demand = [claimedBy(CLAIM_STALE_MINUTES + 1)];
+    expect(isDue(tables.prompt_demand[0], { keyword: 'ai search monitoring' }, NOW)).toBe(true);
+    expect(await postDemandTasks(due, { now: NOW })).toBe(1);
+    expect(postTasks).toHaveBeenCalledTimes(3);
+    expect(demandRow('p1').claimed_at).toBe(AT);
+  });
+});
+
+// ─── The brands' order and the night's time ─────────────────────────────────
+
+describe("the night's brands", () => {
+  beforeEach(() => {
+    tables.brands = ['b1', 'b2', 'b3'].map((id) => ({
+      id,
+      organization_id: 'o1',
+      gsc_property: `sc-domain:${id}.example`,
+      is_active: true,
+    }));
+    tables.prompts = [
+      prompt('p1', 'b1', 'ai search monitoring tool'),
+      prompt('p2', 'b2', 'ai search monitoring tool'),
+      prompt('p3', 'b3', 'ai search monitoring tool'),
+    ];
+    tables.gsc = Object.fromEntries(
+      ['b1', 'b2', 'b3'].map((id) => [
+        id,
+        [{ query: 'ai search monitoring tool', clicks: 1, impressions: 200 }],
+      ]),
+    );
+    // b1 written last night, b3 two nights ago, b2 never.
+    tables.prompt_demand = [
+      {
+        prompt_id: 'p1',
+        brand_id: 'b1',
+        gsc: null,
+        level: null,
+        signals: 0,
+        updated_at: daysAgo(1),
+      },
+      {
+        prompt_id: 'p3',
+        brand_id: 'b3',
+        gsc: null,
+        level: null,
+        signals: 0,
+        updated_at: daysAgo(2),
+      },
+    ];
+  });
+
+  it('takes the brands never written first, then the ones written longest ago', async () => {
+    expect(
+      sweepOrder(
+        tables.brands,
+        new Map([
+          ['b1', NOW - DAY],
+          ['b3', NOW - 2 * DAY],
+        ]),
+      ).map((b) => b.id),
+    ).toEqual(['b2', 'b3', 'b1']);
+
+    const outcome = await sweepPromptDemand({ now: NOW });
+
+    expect(gscReads()).toEqual(['b2', 'b3', 'b1']);
+    expect(outcome).toMatchObject({ brands: 3, unfinished: 0 });
+  });
+
+  it('counts the brands it ran out of time for and says so; they go first the next night', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    let clock = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => clock);
+    // Matching the first brand takes the whole 20 minutes.
+    onGscRead = () => {
+      clock += 21 * 60_000;
+    };
+
+    const outcome = await sweepPromptDemand({ now: NOW });
+
+    expect(gscReads()).toEqual(['b2']);
+    expect(outcome).toMatchObject({ brands: 1, unfinished: 2 });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ unfinished: 2, brands: 1 }),
+      '[prompt-demand] sweep ran out of time: brands left for the next night',
+    );
+
+    // The next night starts with the two left.
+    clock = 0;
+    rpcCalls = [];
+    onGscRead = null;
+    await sweepPromptDemand({ now: NOW + DAY });
+    expect(gscReads()).toEqual(['b3', 'b1', 'b2']);
   });
 });
 
@@ -796,7 +1101,7 @@ describe('collectDemandTasks', () => {
   it('does nothing with DEMAND_SIGNALS off', async () => {
     tables.prompt_demand = [waiting({ posted_at: daysAgo(1), trends: 't1' })];
     expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 0, waiting: 0, skipped: 'off' });
-    expect(readyTaskIds).not.toHaveBeenCalled();
+    expect(readyTasks).not.toHaveBeenCalled();
   });
 
   it('reads the tasks that are done, keeps the level, and clears what was read', async () => {
@@ -804,8 +1109,13 @@ describe('collectDemandTasks', () => {
     tables.prompt_demand = [
       waiting({ posted_at: daysAgo(1), trends: 't1', paa: 's1', youtube: 'y1' }),
     ];
-    readyTaskIds.mockImplementation(async (path) =>
-      path.includes('youtube') ? new Set() : new Set(['t1', 's1']),
+    readyTasks.mockImplementation(async (path) =>
+      path.includes('youtube')
+        ? new Map()
+        : new Map([
+            ['t1', 'p1'],
+            ['s1', 'p1'],
+          ]),
     );
     const rising = Array.from({ length: 52 }, (_, i) => (i < 4 ? 25 : i >= 48 ? 41 : 30));
     getTask.mockImplementation(async (path) => {
@@ -839,7 +1149,6 @@ describe('collectDemandTasks', () => {
         { youtube: before },
       ),
     ];
-    readyTaskIds.mockResolvedValue(new Set());
     getTask.mockResolvedValue({ status: 'pending' });
 
     await collectDemandTasks({ now: NOW });
@@ -853,7 +1162,7 @@ describe('collectDemandTasks', () => {
     tables.prompt_demand = [
       waiting({ posted_at: daysAgo(1), trends: null, paa: 's1', youtube: null }),
     ];
-    readyTaskIds.mockResolvedValue(new Set(['s1']));
+    readyTasks.mockResolvedValue(new Map([['s1', 'p1']]));
     getTask.mockResolvedValue({ status: 'done', result: null });
 
     await collectDemandTasks({ now: NOW });
@@ -863,6 +1172,83 @@ describe('collectDemandTasks', () => {
       tasks: null,
       signals: 2,
     });
+  });
+});
+
+describe('collecting the tasks whose ids were lost', () => {
+  // A prompt's id is the tag its tasks are set with.
+  const P1 = '6f1c2a3b-0d4e-4f5a-9b6c-7d8e9f0a1b2c';
+  const OTHER = '0a0b0c0d-1e1f-4a2b-8c3d-4e5f6a7b8c9d';
+
+  beforeEach(() => {
+    vi.stubEnv('DEMAND_SIGNALS', 'true');
+    tables.prompts = [prompt(P1, 'b1', 'What is the best AI search monitoring tool?')];
+  });
+
+  it('reads a done task no row knows when its tag is one of our prompts, and nothing else', async () => {
+    // Claimed and set; the request timed out, so its ids were never written.
+    tables.prompt_demand = [
+      {
+        prompt_id: P1,
+        brand_id: 'b1',
+        gsc: null,
+        trends: null,
+        paa: null,
+        youtube: null,
+        tasks: null,
+        posted_at: daysAgo(8),
+        level: null,
+        signals: 0,
+      },
+    ];
+    readyTasks.mockImplementation(async (path) =>
+      path === SOURCES.paa.path
+        ? new Map([
+            ['lost-paa', P1],
+            // Someone else's: a prompt that isn't ours, and a tag that isn't a prompt.
+            ['theirs-1', OTHER],
+            ['theirs-2', 'weekly-report'],
+          ])
+        : new Map(),
+    );
+    getTask.mockResolvedValue({ status: 'done', result: SERP_RESULT });
+
+    expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 1, waiting: 0 });
+
+    expect(getTask.mock.calls).toEqual([['/v3/serp/google/organic/task_get/advanced/lost-paa']]);
+    expect(demandRow(P1)).toMatchObject({ tasks: null, signals: 1 });
+    expect(demandRow(P1).paa.questions).toHaveLength(3);
+  });
+
+  it("gives a waiting row the lost task of a signal it isn't waiting for", async () => {
+    tables.prompt_demand = [
+      {
+        prompt_id: P1,
+        brand_id: 'b1',
+        gsc: null,
+        trends: null,
+        paa: null,
+        youtube: null,
+        tasks: { posted_at: daysAgo(1), trends: 't1', paa: null, youtube: null },
+        posted_at: daysAgo(1),
+        level: null,
+        signals: 0,
+      },
+    ];
+    readyTasks.mockImplementation(async (path) =>
+      path === SOURCES.paa.path ? new Map([['lost-paa', P1]]) : new Map(),
+    );
+    getTask.mockResolvedValue({ status: 'done', result: SERP_RESULT });
+
+    expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 1, waiting: 1 });
+
+    expect(demandRow(P1).tasks).toEqual({
+      posted_at: daysAgo(1),
+      trends: 't1',
+      paa: null,
+      youtube: null,
+    });
+    expect(demandRow(P1).paa.questions).toHaveLength(3);
   });
 });
 
