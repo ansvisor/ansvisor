@@ -20,6 +20,7 @@ import catalogRoutes from './catalog.js';
 import cmsRoutes from './cms.js';
 import cmsWordPressRoutes from './cms-wordpress.js';
 import cmsFramerRoutes from './cms-framer.js';
+import cmsWixRoutes from './cms-wix.js';
 
 const router = Router();
 
@@ -44,6 +45,7 @@ router.use('/catalog', catalogRoutes);
 router.use('/cms', cmsRoutes);
 router.use('/cms', cmsWordPressRoutes);
 router.use('/cms', cmsFramerRoutes);
+router.use('/cms', cmsWixRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });
