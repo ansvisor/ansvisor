@@ -4530,6 +4530,23 @@ export type Database = {
           total: number
         }[]
       }
+      action_scorecard: {
+        Args: { p_brand_id: string; p_since?: string | null }
+        Returns: {
+          completed: number
+          declined: number
+          dismiss_reasons: Json
+          dismissed: number
+          final: number
+          improved: number
+          kind: string
+          median_change: number | null
+          mixed: number
+          no_change: number
+          not_measurable: number
+          pending: number
+        }[]
+      }
       ai_traffic_merged: {
         Args: {
           p_analytics?: boolean

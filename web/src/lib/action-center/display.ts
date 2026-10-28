@@ -38,6 +38,14 @@ export function humanizeKind(kind: string): string {
 }
 
 /**
+ * A kind's name, as a group of actions (the History scorecard, learning
+ * B3): its title without targets, else its id read as words.
+ */
+export function actionKindName(kind: string, t: Translator): string {
+  return isActionKind(kind) ? t(`${kind}.titleGeneric`) : humanizeKind(kind);
+}
+
+/**
  * "11 prompts", "6 sources" — how many of what an action is about.
  *
  * Every payload carries `targetEntity` and `targetCount` (server

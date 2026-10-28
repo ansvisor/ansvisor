@@ -2660,6 +2660,29 @@
         "description": "Select a brand to view its action history."
       },
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
+      "view": {
+        "actions": "Actions",
+        "scorecard": "Scorecard"
+      },
+      "scorecard": {
+        "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",
+        "columns": {
+          "kind": "Kind of action",
+          "completed": "Completed",
+          "results": "Results",
+          "successRate": "Success rate",
+          "medianChange": "Median change",
+          "dismissed": "Dismissed"
+        },
+        "tooFew": "Too few results",
+        "mostly": "Mostly: {reason}",
+        "empty": {
+          "title": "Nothing to score in this range",
+          "description": "A kind of action shows here once one of its actions is completed or dismissed."
+        },
+        "error": "The scorecard couldn't be loaded.",
+        "retry": "Try again"
+      },
       "outcomeSoFar": "so far: day {day} of {final}",
       "outcomeHint": {
         "pending_measurement": "no result recorded",
