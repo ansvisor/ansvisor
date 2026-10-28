@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { BrandSwitcher } from './brand-switcher';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const push = vi.fn();
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/content' }));
@@ -40,12 +41,17 @@ vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 let container: HTMLDivElement;
 let root: Root;
 const onNavigate = vi.fn();
+const openUpgrade = vi.fn();
 
-async function render(collapsed = false) {
+async function render(collapsed = false, isLocked = false) {
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <BrandSwitcher collapsed={collapsed} onNavigate={onNavigate} />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <BrandSwitcher collapsed={collapsed} onNavigate={onNavigate} />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     ),
   );
@@ -69,6 +75,7 @@ beforeEach(() => {
   store.activeBrandId = 'b1';
   push.mockReset();
   onNavigate.mockReset();
+  openUpgrade.mockReset();
   store.setActiveBrand.mockReset();
   nav.pathname = '/dashboard/content';
   role.canManage = true;
@@ -130,6 +137,35 @@ describe('BrandSwitcher', () => {
     const items = await openMenu();
     await act(async () => items[3].click());
     expect(push).toHaveBeenCalledWith('/dashboard/brands/new');
+  });
+
+  it('adds no brand on a read-only workspace: Add Brand opens the upgrade dialog', async () => {
+    await render(false, true);
+    const items = await openMenu();
+    await act(async () => items[3].click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding brands needs a plan');
+    expect(push).not.toHaveBeenCalled();
+    // The mobile menu closes first, so the dialog isn't left behind it.
+    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(onNavigate.mock.invocationCallOrder[0]).toBeLessThan(
+      openUpgrade.mock.invocationCallOrder[0],
+    );
+    // All brands is reading: it stays open.
+    await act(async () => (await openMenu())[2].click());
+    expect(push).toHaveBeenCalledWith('/dashboard/brands');
+
+    // With no brand yet, the menu is the Add Brand button.
+    act(() => root.unmount());
+    document.body.replaceChildren(container);
+    root = createRoot(container);
+    store.brands = [];
+    push.mockReset();
+    await render(false, true);
+    onNavigate.mockReset();
+    await act(async () => container.querySelector('button')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding brands needs a plan');
+    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
   });
 
   // brands: admin/manager insert — the others would hit the wizard's first error.
