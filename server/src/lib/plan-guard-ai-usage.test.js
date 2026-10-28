@@ -68,6 +68,8 @@ afterEach(() => {
   vi.useRealTimers();
   delete process.env.IS_CLOUD;
   vi.doUnmock('../config/supabase.js');
+  // One test reads plans.js mocked: here, so a failing one can't pass it on.
+  vi.doUnmock('../config/plans.js');
 });
 
 describe('getAiUsage', () => {
@@ -88,11 +90,10 @@ describe('getAiUsage', () => {
       plan: 'starter',
       unlimited: false,
       percentUsed: 42.5,
+      // Only what used some: the task writer and the quality checks had none.
       features: [
         { feature: 'improve', percent: 12.5 },
         { feature: 'content', percent: 30 },
-        { feature: 'action_center', percent: 0 },
-        { feature: 'quality', percent: 0 },
       ],
     });
     // The period follows the subscription: it renews on the 20th.
@@ -108,28 +109,53 @@ describe('getAiUsage', () => {
     const usage = await guard.getAiUsage('o1');
     expect(usage.percentUsed).toBe(100);
     expect(usage.features).toEqual([
-      { feature: 'improve', percent: 0 },
       { feature: 'content', percent: 75 },
       { feature: 'action_center', percent: 25 },
-      { feature: 'quality', percent: 0 },
     ]);
   });
 
-  it('lists spend it can’t place only when there is some', async () => {
-    spend = [{ feature: 'other', cost_usd: '0.25' }];
-    expect((await guard.getAiUsage('o1')).features).toContainEqual({
-      feature: 'other',
-      percent: 5,
-    });
+  it('counts the Content Editor’s quality checks in its row, which has no row of its own', async () => {
+    spend = [
+      { feature: 'quality', cost_usd: '0.25' },
+      { feature: 'improve', cost_usd: '0.5' },
+      { feature: 'content', cost_usd: '1' },
+    ];
+    const usage = await guard.getAiUsage('o1');
+    expect(usage.percentUsed).toBe(35);
+    // In the meter's order, whatever order the spend comes in.
+    expect(usage.features).toEqual([
+      { feature: 'improve', percent: 10 },
+      { feature: 'content', percent: 25 },
+    ]);
+    // Quality checks alone still make the Content Editor's row.
+    spend = [{ feature: 'quality', cost_usd: '0.05' }];
+    expect((await guard.getAiUsage('o1')).features).toEqual([{ feature: 'content', percent: 1 }]);
+  });
+
+  it('lists a sliver of spend at 0, for the page to read as under a tenth', async () => {
+    // $0.002 of Starter's $5 is 0.04%: under a tenth, but used.
+    spend = [
+      { feature: 'action_center', cost_usd: '0.002' },
+      { feature: 'content', cost_usd: '0' },
+    ];
+    const usage = await guard.getAiUsage('o1');
+    expect(usage.percentUsed).toBe(0);
+    expect(usage.features).toEqual([{ feature: 'action_center', percent: 0 }]);
+  });
+
+  it('lists spend it can’t place last, and nothing when nothing was spent', async () => {
+    spend = [
+      { feature: 'other', cost_usd: '0.25' },
+      { feature: 'improve', cost_usd: '0.5' },
+    ];
+    expect((await guard.getAiUsage('o1')).features).toEqual([
+      { feature: 'improve', percent: 10 },
+      { feature: 'other', percent: 5 },
+    ]);
     spend = [];
     const empty = await guard.getAiUsage('o1');
     expect(empty.percentUsed).toBe(0);
-    expect(empty.features.map((f) => f.feature)).toEqual([
-      'improve',
-      'content',
-      'action_center',
-      'quality',
-    ]);
+    expect(empty.features).toEqual([]);
   });
 
   it('reads just under the budget as just under, and all of it only once spent', async () => {
@@ -150,11 +176,31 @@ describe('getAiUsage', () => {
   });
 
   it('reads a budget of nothing as used up, as the AI features are', async () => {
-    org = { ...org, plan: 'enterprise', plan_overrides: { improveMonthlyBudgetUsd: 0 } };
+    // No plan has one, and a budget set by hand below the plan's isn't
+    // taken (#1598): a plan read with 0 all the same still reads used up.
+    vi.resetModules();
+    vi.doMock('../config/plans.js', async (importOriginal) => {
+      const real = await importOriginal();
+      return {
+        ...real,
+        getPlan: (id) => {
+          const plan = real.getPlan(id);
+          return { ...plan, limits: { ...plan.limits, improveMonthlyBudgetUsd: 0 } };
+        },
+      };
+    });
+    guard = await import('./plan-guard.js');
     spend = [];
     const usage = await guard.getAiUsage('o1');
     expect(usage.percentUsed).toBe(100);
-    expect(usage.features.every((f) => f.percent === 0)).toBe(true);
+    expect(usage.features).toEqual([]);
+  });
+
+  it('meters an Enterprise budget set below the plan’s on the plan’s $50 (#1598)', async () => {
+    org = { ...org, plan: 'enterprise', plan_overrides: { improveMonthlyBudgetUsd: 0 } };
+    spend = [{ feature: 'improve', cost_usd: 5 }];
+    const usage = await guard.getAiUsage('o1');
+    expect(usage.percentUsed).toBe(10);
   });
 
   it('has no meter without an active plan', async () => {

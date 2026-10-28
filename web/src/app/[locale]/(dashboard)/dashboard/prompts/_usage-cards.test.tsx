@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { PromptUsageSummary } from '@/lib/prompt-usage-summary';
+import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import {
   PromptUsageCards,
   countByStatus,
@@ -108,6 +109,30 @@ describe('PromptUsageCards', () => {
 
     expect(values().slice(3)).toEqual(['64 / 50', '0']);
     expect(container.textContent).toContain('over limit');
+  });
+
+  it('says an ended plan has ended, with no slots left and Choose a plan', () => {
+    render({
+      status: 'ready',
+      usage: summary({
+        plan: {
+          key: 'growth',
+          name: 'Growth plan',
+          locationLimit: 200,
+          cta: 'choose_plan',
+          ended: true,
+        },
+      }),
+    });
+
+    expect(values().slice(3)).toEqual(['46 / 200', '0']);
+    expect(container.textContent).toContain('Growth plan · ended');
+    expect(container.textContent).toContain('Your Growth plan has ended · Choose a plan');
+    expect(container.textContent).not.toContain('Starter');
+    const choose = [...container.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Choose a plan',
+    );
+    expect(choose).toBeDefined();
   });
 
   it('asks an Enterprise account to contact us, against the limit set for it', () => {
@@ -289,6 +314,29 @@ describe('locationQuotaFromUsage', () => {
         }),
       ).maxPrompts,
     ).toBe(-1);
+  });
+
+  it('leaves no slot to the Add Prompt dialog and bulk import once the plan has ended', () => {
+    const ended = (locationLimit: number | null) =>
+      locationQuotaFromUsage(
+        summary({
+          plan: {
+            key: 'growth',
+            name: 'Growth plan',
+            locationLimit,
+            cta: 'choose_plan',
+            ended: true,
+          },
+        }),
+      );
+
+    // Limited or not, nothing can be added until a plan is chosen again.
+    for (const quota of [ended(200), ended(null)]) {
+      expect(quota).toMatchObject({ used: 46, planId: 'growth', planName: 'Growth' });
+      const usage = getPromptUsage(quota.used, quota.maxPrompts);
+      expect(usage.remaining).toBe(0);
+      expect(isPromptLimitReached(usage)).toBe(true);
+    }
   });
 });
 

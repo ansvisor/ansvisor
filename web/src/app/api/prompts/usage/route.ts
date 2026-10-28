@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { fetchPromptUsageRow, toPromptUsageSummary } from '@/lib/prompt-usage-summary';
 
 /**
@@ -52,8 +52,9 @@ export async function GET(req: Request) {
     if (brandError) throw new Error(brandError.message);
     if (!brand || !row) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
 
-    const plan = planFromOrgRow(brand.organizations);
-    return NextResponse.json(toPromptUsageSummary(row, plan), {
+    // An organization whose plan ended counts against the plan it was on.
+    const { plan, ended } = usagePlanFromOrgRow(brand.organizations);
+    return NextResponse.json(toPromptUsageSummary(row, plan, new Date(), { ended }), {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   } catch (err) {
