@@ -20,6 +20,7 @@ import { skipGettingStartedStep } from '@/lib/actions/getting-started';
 import type { TeamMember } from '@/lib/actions/team';
 import type { GettingStartedStep } from '@/lib/getting-started/steps';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   GETTING_STARTED_CHIP,
   StepStatusBadge,
@@ -60,6 +61,10 @@ export function GettingStartedStepCard({
   const [opened, setOpened] = useState(false);
   const [confirmingSkip, setConfirmingSkip] = useState(false);
   const [skipping, setSkipping] = useState(false);
+  // A read-only workspace (plan not active): Skip opens the upgrade dialog
+  // instead of its question; opening the step's page stays.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   // Another step: its own "opened" note.
   useEffect(() => setOpened(false), [step.key]);
@@ -123,7 +128,7 @@ export function GettingStartedStepCard({
             <Button
               variant="ghost"
               disabled={skipping}
-              onClick={() => setConfirmingSkip(true)}
+              onClick={guard(() => setConfirmingSkip(true), { action: tActions('skipSteps') })}
               className="text-muted-foreground"
             >
               {t('panel.skip')}
