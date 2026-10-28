@@ -32,8 +32,11 @@ function getApiKey() {
   return key;
 }
 
-export function buildRequestBody(promptText, scraperId, region, state) {
+export function buildRequestBody(promptText, scraperId, region, state, location) {
   const country = region || 'US';
+  // A city (PROMPT-015d): Google's canonical name, which the Google
+  // endpoints take as `location` beside the country. Only they get it.
+  const locationField = location ? { location } : {};
 
   // State-level geo-targeting (#554): the AI endpoints accept a USPS state
   // code alongside country US and route through an in-state proxy. Google
@@ -62,6 +65,7 @@ export function buildRequestBody(promptText, scraperId, region, state) {
     return {
       query: promptText,
       country,
+      ...locationField,
       include: {
         html: false,
         aioverview: { markdown: true },
@@ -73,6 +77,7 @@ export function buildRequestBody(promptText, scraperId, region, state) {
     return {
       prompt: promptText,
       country,
+      ...locationField,
       include: {
         html: false,
         markdown: true,
@@ -259,19 +264,26 @@ export function parseScraperResponse(result, scraperId) {
  * @param {string} promptText
  * @param {string} scraperId
  * @param {string} [region]
- * @param {{ webhookUrl?: string, state?: string }} [opts] - `state` is the
+ * @param {{ webhookUrl?: string, state?: string, location?: string }} [opts] - `state` is the
  *   USPS code of the location this task targets (#554, per-prompt since
- *   #691); only forwarded on US AI-endpoint tasks.
+ *   #691); only forwarded on US AI-endpoint tasks. `location` is a city's
+ *   Google canonical name (PROMPT-015d), forwarded on Google tasks only.
  * @returns {Promise<{ taskId: string, scraperId: string }>}
  */
 export async function submitScraperTask(promptText, scraperId, region, opts = {}) {
   const taskType = SCRAPER_TASK_TYPES[scraperId];
   if (!taskType) throw new Error(`Unknown scraper: ${scraperId}`);
 
-  const payload = buildRequestBody(promptText, scraperId, region, opts.state);
+  const payload = buildRequestBody(promptText, scraperId, region, opts.state, opts.location);
 
   logger.info(
-    { taskType, scraperId, region: region || 'US', state: payload.state },
+    {
+      taskType,
+      scraperId,
+      region: region || 'US',
+      state: payload.state,
+      location: payload.location,
+    },
     'submitting cloro scraper task',
   );
 

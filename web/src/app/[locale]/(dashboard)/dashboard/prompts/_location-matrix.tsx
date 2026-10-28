@@ -113,7 +113,7 @@ export function clearLocationMatrixCache() {
 /** A location's kind, for its column's second line. */
 function locationKind(code: string): 'country' | 'state' | 'city' {
   const parsed = parseLocation(code);
-  return parsed?.state ? 'state' : 'country';
+  return parsed?.city ? 'city' : parsed?.state ? 'state' : 'country';
 }
 
 /**
@@ -301,6 +301,14 @@ export function LocationMatrix({
                 <span className="block text-[11px] font-normal text-muted-foreground">
                   {t(`kind.${locationKind(r)}`)}
                 </span>
+                {locationKind(r) === 'city' && (
+                  <span
+                    className="mt-0.5 inline-block rounded-full bg-muted px-1.5 text-[10px] font-normal text-muted-foreground"
+                    title={t('cityEnginesTip')}
+                  >
+                    {t('cityEngines')}
+                  </span>
+                )}
               </TableHead>
             ))}
             <TableHead className="pr-6 text-right" title={t('gapTip')}>

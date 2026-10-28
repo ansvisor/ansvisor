@@ -5,7 +5,7 @@ export const REGIONS = [
   { code: 'GB', label: 'United Kingdom' },
   { code: 'DE', label: 'Germany' },
   { code: 'FR', label: 'France' },
-  { code: 'TR', label: 'Turkey' },
+  { code: 'TR', label: 'Türkiye' },
   { code: 'JP', label: 'Japan' },
   { code: 'BR', label: 'Brazil' },
   { code: 'IN', label: 'India' },

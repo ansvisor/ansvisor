@@ -3,8 +3,16 @@
 import { useMemo } from 'react';
 import { X } from 'lucide-react';
 
+import { CITIES } from '@/config/cities';
 import { TRACKING_COUNTRIES, US_STATES } from '@/config/prompt-options';
-import { formatRegionDisplay, locationCode, parseLocation } from '@/lib/region';
+import {
+  cityCode,
+  formatRegionDisplay,
+  locationCode,
+  locationSearchText,
+  parseLocation,
+  regionLabel,
+} from '@/lib/region';
 import { Badge } from '@/components/ui/badge';
 import {
   Combobox,
@@ -78,13 +86,22 @@ export function LocationPicker({
     () => [
       ...TRACKING_COUNTRIES.map((region) => ({
         value: region.code,
-        label: region.label,
+        // Found by its other names too: "Turkey" or "Turkiye" finds Türkiye.
+        label: locationSearchText(region.code),
         sublabel: 'Country',
       })),
       ...US_STATES.map((state) => ({
         value: locationCode('US', state.code),
         label: state.label,
         sublabel: 'United States · state',
+      })),
+      // Cities (PROMPT-015d): asked by Google's engines and the API models.
+      ...CITIES.map((city) => ({
+        value: cityCode(city.country, city.id),
+        // Found typed with or without its marks, or by its country: "Ist" finds
+        // İstanbul, "Sao" São Paulo, "Turkey" every city in Türkiye.
+        label: locationSearchText(cityCode(city.country, city.id)),
+        sublabel: `City · ${regionLabel(city.country)}`,
       })),
     ],
     [],
@@ -98,6 +115,7 @@ export function LocationPicker({
   const canRemove = allowEmpty || value.length > 1;
 
   const hasStatePick = value.some((code) => parseLocation(code)?.state);
+  const hasCityPick = value.some((code) => parseLocation(code)?.city);
   const countryOnlyEngines = (platforms ?? []).filter((id) => COUNTRY_ONLY_PLATFORMS.has(id));
   const showCountryOnlyNote = hasStatePick && countryOnlyEngines.length > 0;
 
@@ -125,7 +143,7 @@ export function LocationPicker({
       <Combobox items={options} value={null} onValueChange={add}>
         <ComboboxTrigger className="w-full">
           <span className="truncate text-muted-foreground">
-            {atCap ? 'Plan limit reached' : 'Add a country or US state'}
+            {atCap ? 'Plan limit reached' : 'Add a country, US state or city'}
           </span>
         </ComboboxTrigger>
         <ComboboxContent>
@@ -169,6 +187,13 @@ export function LocationPicker({
             </Badge>
           ))}
         </div>
+      )}
+
+      {hasCityPick && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Perplexity,
+          Copilot, Gemini and Grok answer per country, so track the country too to see them.
+        </p>
       )}
 
       {showCountryOnlyNote && (

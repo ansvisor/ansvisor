@@ -88,7 +88,7 @@ describe('LocationMatrix', () => {
       regions: ['US', 'TR'],
     });
     expect(text).toContain('United States');
-    expect(text).toContain('Turkey');
+    expect(text).toContain('Türkiye');
     expect(bodyRows()).toEqual([
       ['All prompts · average', '—', '41', '35', '—'],
       ['best specialty coffee subscription', 'Coffee', '62', '35', '27'],
@@ -96,6 +96,18 @@ describe('LocationMatrix', () => {
     ]);
     expect(text).toContain('Weakest location');
     expect(text).toContain('Biggest gap between locations');
+  });
+
+  it('marks a city column with the engines that answer from it (PROMPT-015d)', async () => {
+    rows[0] = prompt('p1', 'best specialty coffee subscription', ['US', 'TR', 'TR~ISTANBUL']);
+    getPromptLocationMatrix.mockResolvedValue({
+      p1: { US: cell(62), TR: cell(35), 'TR~ISTANBUL': cell(41) },
+    });
+    const text = await render();
+    expect(text).toContain('İstanbul');
+    expect(text).toContain('City');
+    expect(text).toContain('AI Mode · AIO · APIs');
+    rows[0] = prompt('p1', 'best specialty coffee subscription', ['US', 'TR']);
   });
 
   it('switches the metric, and reads a prompt never named there as such', async () => {
@@ -118,13 +130,13 @@ describe('LocationMatrix', () => {
     await render();
     (
       container.querySelector(
-        'button[aria-label="best specialty coffee subscription in Turkey: open its positions"]',
+        'button[aria-label="best specialty coffee subscription in Türkiye: open its positions"]',
       ) as HTMLButtonElement
     ).click();
     expect(onOpenCell).toHaveBeenCalledWith('p1', 'TR');
     (
       container.querySelector(
-        'button[aria-label="Track “same day coffee delivery near me” in Turkey"]',
+        'button[aria-label="Track “same day coffee delivery near me” in Türkiye"]',
       ) as HTMLButtonElement
     ).click();
     expect(onTrack).toHaveBeenCalledWith(rows[1], 'TR');

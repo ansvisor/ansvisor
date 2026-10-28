@@ -7473,6 +7473,8 @@
         "state": "US state",
         "city": "City"
       },
+      "cityEngines": "AI Mode · AIO · APIs",
+      "cityEnginesTip": "Google AI Mode, AI Overview and the API models answer from this city. ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country.",
       "weakest": "Weakest location",
       "weakestBody": "Visibility, against {overall} across all locations · {untracked, plural, =0 {every prompt tracked there} one {# prompt not tracked there} other {# prompts not tracked there}}",
       "strongest": "Strongest location",
@@ -7506,6 +7508,8 @@
       "over": "This needs {adding, plural, one {# more tracked location} other {# more tracked locations}}; {left, plural, =0 {none are} one {# is} other {# are}} left on your {plan} plan.",
       "overHint": "Pick fewer prompts or places. {plan, select, starter {Or upgrade your plan, or contact us for a custom plan.} growth {Or contact us for a custom plan.} other {Or contact us to raise your limit.}}",
       "nothing": "These prompts are already tracked in these locations.",
+      "cityBlocked": "None of these prompts runs an engine that answers from a city (Google AI Mode, AI Overview or an API model). Add one of those engines to the prompts first.",
+      "cityPartly": "{count, plural, one {# of these prompts doesn't} other {# of these prompts don't}} run an engine that answers from a city; a city counts on the plan for them but isn't asked there.",
       "noPrompts": "Choose the prompts to add these locations to.",
       "cancel": "Cancel",
       "submit": "Track in {count, plural, =0 {these locations} one {# location} other {# locations}}",
