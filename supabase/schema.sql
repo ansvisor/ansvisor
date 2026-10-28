@@ -41941,3 +41941,651 @@ comment on column public.content_drafts.shopping_path is
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00352_content_shopping_checks.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00352: whether a page's shopping links still sell (shopping path, part 7)
+-- ============================================================================
+-- A buying guide, a best-of list or a comparison sends its readers, and the
+-- AI answers that quote it, to the category pages and the products of its
+-- shopping path (00351). A product sells out, Google Merchant Center refuses
+-- it, or it leaves the catalog, and the page goes on linking it. After each
+-- catalog sync the API reads every page with a shopping path again: the live
+-- page where it is published (content_drafts.published_url, or an optimized
+-- page's own address), else the draft, and keeps here what its links do with
+-- the path. The Content Library shows it in its Shopping path column.
+--
+--   * One row per draft with a shopping path; it goes with the draft, and
+--     the next check removes a row whose draft lost its path or was archived.
+--   * `bad`: the linked products that no longer sell, [{id, title, state}]
+--     with state sold_out, refused or gone, and `needs_attention` whether
+--     there are any.
+--   * Members read their brands' rows; the server writes them.
+
+create table if not exists public.content_shopping_checks (
+  draft_id uuid primary key references public.content_drafts(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  -- Where the links were read: the live page, or the draft when it isn't
+  -- published or its page couldn't be read.
+  read_from text not null check (read_from in ('page', 'draft')),
+  page_url text check (
+    page_url is null or (char_length(page_url) <= 2048 and page_url ~* '^https?://')
+  ),
+  -- The path's category pages and products, and how many of them the page links.
+  categories smallint not null default 0 check (categories between 0 and 5),
+  categories_linked smallint not null default 0,
+  products smallint not null default 0 check (products between 0 and 40),
+  products_linked smallint not null default 0,
+  bad jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(bad) = 'array' and jsonb_array_length(bad) <= 40
+  ),
+  needs_attention boolean generated always as (
+    jsonb_typeof(bad) = 'array' and jsonb_array_length(bad) > 0
+  ) stored,
+  checked_at timestamptz not null default now(),
+  constraint content_shopping_checks_linked_check check (
+    categories_linked between 0 and categories and products_linked between 0 and products
+  )
+);
+
+create index if not exists content_shopping_checks_brand_idx
+  on public.content_shopping_checks (brand_id, needs_attention);
+
+alter table public.content_shopping_checks enable row level security;
+revoke all on table public.content_shopping_checks from anon, authenticated;
+grant select on table public.content_shopping_checks to authenticated;
+grant all on table public.content_shopping_checks to service_role;
+
+drop policy if exists "content_shopping_checks: member select" on public.content_shopping_checks;
+create policy "content_shopping_checks: member select"
+  on public.content_shopping_checks
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.content_shopping_checks is
+  'Shopping path, part 7 (00352): what a page''s links do with its shopping path (00351) as the last catalog sync left the catalog: how many of its category pages and products it links, and the linked products that no longer sell (sold out, refused by Merchant Center, gone). Read from the live page when published, else the draft. Server writes, members read.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00365_action_outcome_mixed.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00365: an action's result can read "mixed" (learning A4)
+-- ============================================================================
+-- The validation sweep (server/src/lib/action-center/validate.js) compares an
+-- action's metrics before it was raised and after it closed. One metric up
+-- and another down used to read as "improved", which taught that anything
+-- moving up was the work paying off. It now reads "mixed", as does a Site
+-- Audit fix whose pages, audited again, only partly pass. The action's main
+-- metric decides when it was measured; see deriveOutcome.
+
+alter table public.actions
+  drop constraint if exists actions_outcome_check;
+
+alter table public.actions
+  add constraint actions_outcome_check
+  check (outcome in (
+    'pending_measurement',
+    'improved',
+    'mixed',
+    'no_meaningful_change',
+    'declined',
+    'not_measurable'
+  ));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00366_action_dismiss_reason.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00366: why an action was dismissed (learning A5)
+-- ============================================================================
+-- Dismissing an Action Center action asked nothing, so a dismissal taught
+-- nothing: the same definition could open again 14 days later for the same
+-- reason it was turned down. The person now says why, as a content
+-- opportunity's dismissal does (CONTENT-006): the reason is kept while the
+-- action stays dismissed, and cleared when it's set to another status.
+-- Nothing reads it to rank or rest actions yet (phase B).
+
+alter table public.actions
+  add column if not exists dismiss_reason text;
+
+alter table public.actions
+  drop constraint if exists actions_dismiss_reason_check;
+
+alter table public.actions
+  add constraint actions_dismiss_reason_check
+  check (
+    dismiss_reason is null
+    or dismiss_reason in ('not_relevant', 'already_done', 'wrong_data', 'not_now')
+  );
+
+comment on column public.actions.dismiss_reason is
+  'Why the action was dismissed (00366, learning A5): not_relevant, already_done, wrong_data or not_now; null when no reason was given or the action is not dismissed.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00367_content_suggestion_decisions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00367: how a brand decides the Content Agent's suggestions, by rule
+-- (learning B6)
+-- ============================================================================
+-- Each suggestion the agent leaves on a draft (00217) names the rules it
+-- fixes (rule_keys), and keeps whether a person accepted or rejected it. Read
+-- one at a time, nothing learned from them. This sums a brand's decisions
+-- since a day by rule: the agent keeps its changes small for a rule people
+-- there mostly reject (content-suggestion-stats.js). One brand's own
+-- decisions only, read by the API (service role).
+--
+-- Only its small changes count, a passage's words replaced or blocks
+-- inserted: a whole page rewritten to the rules (kind 'page', 00247) names
+-- every rule it was asked for, and one rejected would count against each.
+-- `drafts` is how many drafts a rule's suggestions were rejected on, so one
+-- Reject all on one draft isn't read as a habit, even beside an Accept on
+-- another.
+
+-- A database with an earlier shape of it (a dev database, before review)
+-- takes this one in its place: create or replace can't change its rows.
+drop function if exists public.content_suggestion_decisions(uuid, timestamptz);
+
+create or replace function public.content_suggestion_decisions(
+  p_brand_id uuid,
+  p_since timestamptz
+)
+returns table (rule_key text, accepted integer, rejected integer, drafts integer)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  select k.rule_key,
+         count(*) filter (where s.status = 'accepted')::integer as accepted,
+         count(*) filter (where s.status = 'rejected')::integer as rejected,
+         count(distinct s.draft_id) filter (where s.status = 'rejected')::integer as drafts
+    from public.content_draft_suggestions s
+    join public.content_drafts d on d.id = s.draft_id
+    cross join lateral unnest(s.rule_keys) as k(rule_key)
+   where d.brand_id = p_brand_id
+     and s.kind in ('replace', 'insert')
+     and s.status in ('accepted', 'rejected')
+     and s.decided_at >= p_since
+   group by k.rule_key;
+$$;
+
+revoke all on function public.content_suggestion_decisions(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.content_suggestion_decisions(uuid, timestamptz) to service_role;
+
+comment on function public.content_suggestion_decisions(uuid, timestamptz) is
+  'A brand''s accepted and rejected Content Agent suggestions since a day, by rule key, and the drafts they were rejected on; small changes only, not page rewrites (00367, learning B6). Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00368_action_scorecard.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00368: what worked at a brand, by kind of action (learning B3)
+-- ============================================================================
+-- Each completed action keeps its result (server action-center/validate.js,
+-- read a week, two weeks and a month after it closed) and a dismissed one
+-- why it was turned down (00366). Read one at a time, a brand can't see
+-- which kinds of work pay off for it. This sums the brand's actions raised
+-- since a day by kind: how many were completed, what their results read,
+-- the median change in each one's main metric, and how many were dismissed
+-- and why. One brand's own actions only, never another's: the History tab
+-- reads it with the member's session (RLS keeps it to their organization),
+-- the API with the service role.
+
+create or replace function public.action_scorecard(
+  p_brand_id uuid,
+  p_since timestamptz default null
+)
+returns table (
+  kind text,
+  completed integer,
+  improved integer,
+  mixed integer,
+  no_change integer,
+  declined integer,
+  not_measurable integer,
+  pending integer,
+  final integer,
+  median_change numeric,
+  dismissed integer,
+  dismiss_reasons jsonb
+)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with closed as (
+    select a.kind,
+           a.status,
+           a.outcome,
+           a.dismiss_reason,
+           a.validation->>'final' = 'true' as is_final,
+           -- The relative change in its main metric (learning A4), when the
+           -- metric was read before and after and had a before to scale by.
+           (select (m->>'after')::numeric / nullif((m->>'before')::numeric, 0) - 1
+              from jsonb_array_elements(
+                     case when jsonb_typeof(a.validation->'metrics') = 'array'
+                          then a.validation->'metrics' else '[]'::jsonb end
+                   ) as m
+             where m->>'metric' = a.validation->>'primary'
+               and jsonb_typeof(m->'before') = 'number'
+               and jsonb_typeof(m->'after') = 'number'
+             limit 1) as change
+      from public.actions a
+     where a.brand_id = p_brand_id
+       and a.deleted_at is null
+       and a.status in ('completed', 'dismissed')
+       and (p_since is null or a.created_at >= p_since)
+  )
+  select c.kind,
+         count(*) filter (where c.status = 'completed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'improved')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'mixed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'no_meaningful_change')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'declined')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'not_measurable')::integer,
+         count(*) filter (
+           where c.status = 'completed'
+             and (c.outcome is null or c.outcome = 'pending_measurement')
+         )::integer,
+         count(*) filter (where c.status = 'completed' and c.is_final)::integer,
+         -- The median, so one small page that went from 1 to 20 doesn't
+         -- read as the kind's typical result. Over the results with a
+         -- verdict only.
+         round(
+           (percentile_cont(0.5) within group (order by c.change) filter (
+             where c.status = 'completed'
+               and c.outcome in ('improved', 'mixed', 'no_meaningful_change', 'declined')
+           ))::numeric,
+           4
+         ),
+         count(*) filter (where c.status = 'dismissed')::integer,
+         coalesce(
+           (select jsonb_object_agg(r.reason, r.n)
+              from (select coalesce(d.dismiss_reason, 'none') as reason, count(*) as n
+                      from closed d
+                     where d.kind = c.kind and d.status = 'dismissed'
+                     group by 1) as r),
+           '{}'::jsonb
+         )
+    from closed c
+   group by c.kind;
+$$;
+
+revoke all on function public.action_scorecard(uuid, timestamptz) from public, anon;
+grant execute on function public.action_scorecard(uuid, timestamptz) to authenticated, service_role;
+
+comment on function public.action_scorecard(uuid, timestamptz) is
+  'A brand''s actions raised since a day, by kind: completed, results, median change in the main metric, dismissed and why (00368, learning B3). RLS applies to the caller.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00370_prompt_demand.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00370: real demand for a tracked prompt (PROMPT-014)
+-- ============================================================================
+-- A prompt's AI search volume is an estimate (PROMPT-013). Its Demand card
+-- shows the signs that people really ask it, each with its source and date:
+--
+--   * Search Console: impressions and clicks over 28 days for the brand's
+--     queries that match the prompt (gsc_query_stats, read every night).
+--   * Google Trends: the 12 months of its keyword, rising, steady or falling.
+--   * People Also Ask: the questions Google lists for its keyword.
+--   * YouTube: the videos for its keyword, and their views.
+--
+-- The last three are DataForSEO's queued (Standard) tasks, read about once a
+-- week: the keyword is the prompt's volume analysis's own (prompt_volumes),
+-- where it is measured, so a prompt never analysed has none of them. A task
+-- is set one night and read when it's done, that night or the next (`tasks`).
+-- A sweep claims a prompt before it sets its tasks (prompt_demand_claim), so
+-- two sweeps at once never pay for the same prompt twice.
+--
+-- The level (high, medium, low) weighs the signals there are; `signals` is
+-- how many of the four were read. The Action Center's priority reads it.
+--
+--   * Members read their brands' rows; the server's nightly sweep writes
+--     them (service role). The app reads them through the server
+--     (GET /api/prompts/:id/demand).
+--   * prompt_demand_gsc_queries: a brand's Search Console queries over a
+--     window, with their clicks and impressions, for the sweep to match to
+--     its prompts. Service role only.
+--   * prompt_demand_claim: claims the prompts a sweep is about to set tasks
+--     for. Service role only.
+--   * prompt_demand_brand_updates: when each brand's rows were last written,
+--     so a night starts with the brands waiting longest. Service role only.
+
+create table if not exists public.prompt_demand (
+  prompt_id     uuid primary key references public.prompts(id) on delete cascade,
+  brand_id      uuid not null references public.brands(id) on delete cascade,
+  -- What the paid signals were read for: the volume analysis's top keyword,
+  -- its DataForSEO location and language.
+  keyword       text,
+  location_code integer,
+  language_code text,
+  -- Each { ..., at }: what was read and when. Null: never read, or the
+  -- source isn't there (no Search Console property, no keyword).
+  gsc           jsonb,
+  trends        jsonb,
+  paa           jsonb,
+  youtube       jsonb,
+  -- The DataForSEO tasks set and not read yet: { posted_at, trends, paa, youtube } (task ids).
+  tasks         jsonb,
+  -- When the paid signals were last set to be read: about once a week.
+  posted_at     timestamptz,
+  -- When a sweep last claimed the prompt to set its tasks
+  -- (prompt_demand_claim). A claim older than the sweep's window is one
+  -- that died, and may be taken again.
+  claimed_at    timestamptz,
+  level         text
+    constraint prompt_demand_level_check check (level in ('high', 'medium', 'low')),
+  signals       smallint not null default 0
+    constraint prompt_demand_signals_check check (signals between 0 and 4),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists prompt_demand_brand_idx on public.prompt_demand (brand_id);
+-- The tasks waiting to be read: few at a time, looked up every night.
+create index if not exists prompt_demand_tasks_idx
+  on public.prompt_demand (prompt_id) where tasks is not null;
+
+-- Read by the brand's members (the policy below); written by the server.
+alter table public.prompt_demand enable row level security;
+revoke all on table public.prompt_demand from anon, authenticated;
+grant select on table public.prompt_demand to authenticated;
+grant all on table public.prompt_demand to service_role;
+
+drop policy if exists "prompt_demand: member select" on public.prompt_demand;
+create policy "prompt_demand: member select"
+  on public.prompt_demand
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.prompt_demand is
+  'Real demand for a tracked prompt (PROMPT-014): Search Console impressions and clicks (nightly), Google Trends, People Also Ask and YouTube (DataForSEO, about weekly), and the level they come to. Written by the server''s nightly sweep; members read.';
+
+-- A brand's Search Console queries over a window, the most seen first, with
+-- their clicks and impressions: the sweep matches each one to a prompt.
+-- jsonb, so PostgREST's row cap doesn't cut the list at 1,000.
+create or replace function public.prompt_demand_gsc_queries(
+  p_brand_id uuid, p_from date, p_to date, p_limit integer default 5000
+) returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(row_to_json(x)), '[]'::jsonb) from (
+    select g.query,
+           sum(g.clicks)::bigint as clicks,
+           sum(g.impressions)::bigint as impressions
+    from public.gsc_query_stats g
+    where g.brand_id = p_brand_id and g.date between p_from and p_to
+    group by g.query
+    order by sum(g.impressions) desc, g.query
+    limit greatest(least(coalesce(p_limit, 5000), 20000), 1)
+  ) x
+$$;
+
+revoke all on function public.prompt_demand_gsc_queries(uuid, date, date, integer) from public, anon, authenticated;
+grant execute on function public.prompt_demand_gsc_queries(uuid, date, date, integer) to service_role;
+
+comment on function public.prompt_demand_gsc_queries(uuid, date, date, integer) is
+  'PROMPT-014 (00370): a brand''s Search Console queries between two days with their clicks and impressions, the most seen first, at most p_limit (default 5,000). The demand sweep matches them to prompts. Service role only.';
+
+-- Claims the prompts a sweep is about to set DataForSEO tasks for, before
+-- it sets them: a prompt is claimed when no task of its is waiting and no
+-- other sweep claimed it in the last p_stale_minutes. Makes the row of a
+-- prompt that has none yet; a prompt deleted since is left out. Returns
+-- the prompt ids claimed (jsonb, past PostgREST's row cap): only those are
+-- set. Two sweeps at once: the row's lock makes the second wait, and then
+-- find the claim.
+create or replace function public.prompt_demand_claim(
+  p_rows jsonb, p_stale_minutes integer default 120
+) returns jsonb
+language sql
+volatile
+set search_path = public
+as $$
+  with asked as (
+    select distinct on (r.prompt_id) r.prompt_id, r.brand_id
+    from jsonb_to_recordset(coalesce(p_rows, '[]'::jsonb)) as r(prompt_id uuid, brand_id uuid)
+    join public.prompts p on p.id = r.prompt_id
+    where r.brand_id is not null
+    order by r.prompt_id
+  ), claimed as (
+    insert into public.prompt_demand as d (prompt_id, brand_id, claimed_at)
+    select a.prompt_id, a.brand_id, now() from asked a
+    on conflict (prompt_id) do update
+      set claimed_at = excluded.claimed_at
+      where d.tasks is null
+        and (
+          d.claimed_at is null
+          or d.claimed_at < now() - make_interval(mins => greatest(coalesce(p_stale_minutes, 120), 1))
+        )
+    returning d.prompt_id
+  )
+  select coalesce(jsonb_agg(c.prompt_id), '[]'::jsonb) from claimed c
+$$;
+
+revoke all on function public.prompt_demand_claim(jsonb, integer) from public, anon, authenticated;
+grant execute on function public.prompt_demand_claim(jsonb, integer) to service_role;
+
+comment on function public.prompt_demand_claim(jsonb, integer) is
+  'PROMPT-014 (00370): claims [{prompt_id, brand_id}] for a sweep about to set their DataForSEO tasks: those with no task waiting and no claim in the last p_stale_minutes (default 120). Returns the prompt ids claimed. Service role only.';
+
+-- When each brand's demand rows were last written, { brand_id: timestamptz }:
+-- a night takes the brands never written first, then the ones waiting
+-- longest, so a sweep that runs out of time leaves different brands each
+-- night.
+create or replace function public.prompt_demand_brand_updates()
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(jsonb_object_agg(x.brand_id, x.updated_at), '{}'::jsonb) from (
+    select d.brand_id, max(d.updated_at) as updated_at
+    from public.prompt_demand d
+    group by d.brand_id
+  ) x
+$$;
+
+revoke all on function public.prompt_demand_brand_updates() from public, anon, authenticated;
+grant execute on function public.prompt_demand_brand_updates() to service_role;
+
+comment on function public.prompt_demand_brand_updates() is
+  'PROMPT-014 (00370): when each brand''s prompt_demand rows were last written, as { brand_id: updated_at }, for the nightly sweep''s brand order. Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00374_menu_access.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00374: menu access — which left-menu sections each role and person sees
+-- ============================================================================
+-- Admins pick which sections of the left menu each role sees, and can let
+-- chosen managers do it too (Settings › Menu access). People pick what they
+-- work on or lead, which narrows their own menu (the "What do you work on?"
+-- step and Settings › Account). Hide only: a hidden section is off the menu,
+-- its pages still open from a link, and roles and data access don't change.
+-- Nobody takes a section off an admin's menu (only their own work areas
+-- narrow it), and Action Center is on everyone's menu (the app applies both).
+--
+-- Sections are named by their route under /dashboard ('content', 'audit',
+-- 'insights'…), so a section added later is on everyone's menu until someone
+-- hides it.
+--
+--   * organization_menu_roles: per organization and role (not admin), the
+--     sections that role doesn't see. No row = the role sees every section.
+--     Members of the organization read it (their menu needs their role's
+--     row); the server writes it (service role), for an admin or a manager
+--     who can change menus.
+--   * profiles.menu_shown / menu_hidden: a person's exception to their role:
+--     a section shown that the role hides, or hidden that it shows.
+--     profiles.can_manage_menus: a manager an admin let change menus. All
+--     three are set by the server (the guard below), like role, and belong
+--     to the organization and role they were given for: moving organization
+--     (removed, then invited elsewhere) clears all three, and a new role
+--     clears can_manage_menus (the reset below).
+--   * profiles.work_areas: what the person works on or leads, theirs to set.
+--     work_areas_asked_at: when they answered (or skipped) the step, so it
+--     is asked once.
+
+create table if not exists public.organization_menu_roles (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  role public.user_role not null check (role <> 'admin'),
+  hidden_sections text[] not null default '{}',
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  primary key (organization_id, role)
+);
+
+-- Read by members of the organization (the policy below); written by the server.
+alter table public.organization_menu_roles enable row level security;
+revoke all on table public.organization_menu_roles from anon, authenticated;
+grant select on table public.organization_menu_roles to authenticated;
+grant all on table public.organization_menu_roles to service_role;
+
+drop policy if exists "organization_menu_roles: member select" on public.organization_menu_roles;
+create policy "organization_menu_roles: member select"
+  on public.organization_menu_roles
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+drop trigger if exists trg_organization_menu_roles_updated_at on public.organization_menu_roles;
+create trigger trg_organization_menu_roles_updated_at
+  before update on public.organization_menu_roles
+  for each row execute function public.handle_updated_at();
+
+comment on table public.organization_menu_roles is
+  'Menu access: the left-menu sections (routes under /dashboard) a role of the organization doesn''t see. Hide only: the pages still open. No row = every section. Never for admins; the server writes it.';
+
+alter table public.profiles
+  add column if not exists work_areas text[] not null default '{}'
+    check (
+      work_areas <@ array[
+        'leaders', 'aeo', 'content', 'brand', 'growth',
+        'product', 'bizdev', 'developers', 'analytics'
+      ]::text[]
+    ),
+  add column if not exists work_areas_asked_at timestamptz,
+  add column if not exists menu_shown text[] not null default '{}',
+  add column if not exists menu_hidden text[] not null default '{}',
+  add column if not exists can_manage_menus boolean not null default false;
+
+comment on column public.profiles.work_areas is
+  'Menu access: what the person works on or leads; narrows their left menu to those areas'' sections. Empty = every section.';
+comment on column public.profiles.work_areas_asked_at is
+  'Menu access: when the person answered or skipped "What do you work on?"; null = not asked yet.';
+comment on column public.profiles.menu_shown is
+  'Menu access: sections shown for this person although their role hides them. Set by the server.';
+comment on column public.profiles.menu_hidden is
+  'Menu access: sections hidden for this person although their role shows them. Set by the server.';
+comment on column public.profiles.can_manage_menus is
+  'Menu access: a manager an admin let change menus (the role table and every non-admin''s exceptions). Set by the server.';
+
+-- 00228's guard, plus the menu columns: a person's own update can't give
+-- them a menu exception or the right to change menus.
+create or replace function public.guard_profile_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+  if new.role is distinct from old.role then
+    raise exception 'profile role is managed server-side' using errcode = '42501';
+  end if;
+  if new.organization_id is distinct from old.organization_id
+     and (
+       old.organization_id is not null
+       or new.organization_id is null
+       or public.organization_has_other_members(new.organization_id, new.id)
+     )
+  then
+    raise exception 'profile organization is managed server-side' using errcode = '42501';
+  end if;
+  if new.menu_shown is distinct from old.menu_shown
+     or new.menu_hidden is distinct from old.menu_hidden
+     or new.can_manage_menus is distinct from old.can_manage_menus
+  then
+    raise exception 'profile menu access is managed server-side' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+-- A removed member keeps their profile (organization_id goes null) and an
+-- invitation moves it to the next organization, so a menu manager of one
+-- organization would arrive in another still able to change its menus.
+-- Whoever makes the change, a new organization clears the menu columns and
+-- a new role clears the right to change menus (an admin gives it again);
+-- a value the same update sets stays, only one carried over goes. Fires
+-- after the guard (triggers run in name order), so the guard checks what
+-- the person asked for, not this reset.
+create or replace function public.reset_profile_menu_access()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (new.organization_id is distinct from old.organization_id
+      or new.role is distinct from old.role)
+     and new.can_manage_menus is not distinct from old.can_manage_menus
+  then
+    new.can_manage_menus := false;
+  end if;
+  if new.organization_id is distinct from old.organization_id then
+    if new.menu_shown is not distinct from old.menu_shown then
+      new.menu_shown := '{}';
+    end if;
+    if new.menu_hidden is not distinct from old.menu_hidden then
+      new.menu_hidden := '{}';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_reset_menu_access on public.profiles;
+create trigger profiles_reset_menu_access
+  before update of organization_id, role on public.profiles
+  for each row execute function public.reset_profile_menu_access();
+
+-- Everyone here before menu access counts as asked: "What do you work on?"
+-- is for new sign-ups and people joining from an invite, once. Existing
+-- people pick their work areas in Settings › Account if they want to.
+update public.profiles set work_areas_asked_at = now() where work_areas_asked_at is null;
+
+notify pgrst, 'reload schema';
+

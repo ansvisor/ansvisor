@@ -54,8 +54,8 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it('holds copy for all sixty-two definitions and the seven person-sent kinds', () => {
-    expect(ACTION_KINDS).toHaveLength(69);
+  it("holds copy for all sixty-two definitions, the seven person-sent kinds and the catalog check's", () => {
+    expect(ACTION_KINDS).toHaveLength(70);
   });
 
   it('names pages sent from AI Traffic after their list and page, or how many (AT-006)', () => {
@@ -208,6 +208,37 @@ describe('actionTexts', () => {
         t,
       ).title,
     ).not.toBe('');
+  });
+
+  it('names a live page linking products that no longer sell after it (shopping path, part 7)', () => {
+    const products = [
+      { id: 'p1', title: 'Storm Shell 2', state: 'sold_out' },
+      { id: 'p2', title: 'Pack-Lite Jacket', state: 'sold_out' },
+    ];
+    const soldOut = actionTexts(
+      action({
+        kind: 'shopping_links',
+        payload: { title: 'Best rain jackets for 2026', products, soldOut: true },
+      }),
+      t,
+    );
+    expect(soldOut.title).toBe('Best rain jackets for 2026: 2 products are sold out');
+    expect(soldOut.description).toContain('2 products');
+    // Not all sold out, and no title: the page's path, and "no longer sells".
+    expect(
+      actionTexts(
+        action({
+          kind: 'shopping_links',
+          payload: {
+            pageUrl: 'https://shop.example/blog/rain-jackets/',
+            products,
+            soldOut: false,
+          },
+        }),
+        t,
+      ).title,
+    ).toBe('/blog/rain-jackets: 2 products no longer sell');
+    expect(actionContextTags(action({ kind: 'shopping_links', payload: {} }), t)).toEqual([]);
   });
 
   /**
@@ -369,6 +400,20 @@ describe('actionEventText', () => {
     ).toBe('30-day result: not enough data to compare positions');
   });
 
+  it('names a checked task once: its title when renamed, else its library name (#1565)', () => {
+    expect(
+      actionEventText(event('task_checked', { task: 'refresh_content', title: null }), tPage, t),
+    ).toBe('Checked automatically and done: Refresh outdated content');
+    // A line written before the API sent one name carries both: the title alone.
+    expect(
+      actionEventText(
+        event('task_checked', { task: 'refresh_content', title: 'Refresh the pricing page' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Checked automatically and done: Refresh the pricing page');
+  });
+
   it("passes a task's own title and the measured verdict", () => {
     expect(actionEventText(event('task_added', { title: 'Ask the agency' }), tPage, t)).toBe(
       'Task added: “Ask the agency”',
@@ -376,6 +421,20 @@ describe('actionEventText', () => {
     expect(actionEventText(event('outcome_measured', { outcome: 'improved' }), tPage, t)).toBe(
       'Result: metrics improved after this action closed',
     );
+  });
+
+  /** Read three times after the close, each result names its day (learning B1). */
+  it('names the reading a result came from, and the final one', () => {
+    expect(
+      actionEventText(event('outcome_measured', { outcome: 'improved', day: 14 }), tPage, t),
+    ).toBe('Day 14 · Result: metrics improved after this action closed');
+    expect(
+      actionEventText(
+        event('outcome_measured', { outcome: 'mixed', day: 30, final: true }),
+        tPage,
+        t,
+      ),
+    ).toBe('Day 30, final · Result: mixed after this action closed');
   });
 });
 
@@ -423,6 +482,8 @@ describe('History events', () => {
     title: 'Ask the agency',
     outcome: 'improved',
     reviews: 0,
+    day: 0,
+    final: 'no',
   };
   const eventText = (event: string, data: Partial<typeof values> = {}) =>
     tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });

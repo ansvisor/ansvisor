@@ -80,6 +80,15 @@ The shares cover only the cited addresses whose type can be read. Forums, encycl
   category pages for e-commerce, destination and help pages for B2C.
 </Tip>
 
+### Shopping opportunities
+
+For an online shop whose product catalog (**Settings › Integrations › Product catalog**) has categories, **Shopping opportunities** above the priority list shows the pages that lead readers, and AI answers, to your category pages and products:
+
+- **Buying guide · New**: a category with at least 3 products in stock that no page of yours guides shoppers to yet (no draft's shopping path holds it, and no draft's title names it). Why says how many of your tracked prompts ask about it, and whether it has a category page to link. **Create** starts the draft, "How to choose …" as a buying guide, from the first of those prompts, and opens it in the editor. A draft already being written for the category shows **Open draft** instead.
+- **Existing post · Fix**: a published post whose last check, after a catalog sync, found it links a product that no longer sells, or not each of its shopping path's category pages. **Optimize** opens it in the editor.
+
+Rows are ranked on the Plan's Priority Score scale. A guide scores as a new page, more for the prompts asking and the products in stock; a post scores more the more products it links that no longer sell.
+
 ## New content
 
 **New content** opens from the Plan and the Library, from a Plan row's button, from **Send to Editor** on an opportunity, and from **Create content** in a prompt's menu on [Tracked Prompts](/guides/prompts).
@@ -120,6 +129,8 @@ The header shows the title, the page type, a **Rules** chip with how many rules 
 
 The page starts with its H1, which is also its title. A page has one H1: the toolbar won't add a second one. A paste is cleaned on the way in: headings, lists, links and tables stay; fonts, colors and styles go. Press ⌘/Ctrl + Shift + V to paste plain text. **Attach a file** inserts Excel, CSV, Word, Markdown, HTML or text, up to 10 MB each; a sheet comes in as a table.
 
+Words in square brackets, such as `[figure, source]` or `[competitor]`, are placeholders: the Content Agent leaves one where a real name, quote or number goes. Each is tinted amber in the page, and the toolbar counts those left to fill. Click the count or the arrows beside it to go to the next or the previous one, already selected, so you type over it. A placeholder in an image's alt text, the JSON-LD or an HTML block isn't in the page's text: it's counted too, and **Show in HTML** selects it in the HTML view. Export and Send to CMS wait until none is left.
+
 ### Side panel
 
 The panel opens on **Rules**. Its tabs are **Rules · Brief · Sources · Live page**.
@@ -135,7 +146,7 @@ Rebuilding the outline and running the Content Agent use your workspace's monthl
 
 ### Apply rules with Agent
 
-**Apply rules with Agent**, in the Rules tab, asks the Content Agent to suggest changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.
+**Apply rules with Agent**, in the Rules tab, asks the Content Agent to suggest changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**. What you accept and reject teaches it: for a rule whose suggestions this brand has mostly rejected over the last 90 days (at least five decided, on two pages or more, seven in ten rejected), it keeps its changes as small as the rule allows, and while it works its card says which rules. Only its small changes count: a rejected **Rewrite the whole page** doesn't. On a draft that optimizes a live page, it is also told how that page does now, as the **Live page** tab shows it over 30 days: how often AI answers cite it and the prompts it lost. It keeps the answers and facts AI engines cite, answers a lost prompt's question where a rule's change can, and its card says what it kept in mind. Quality's **Hand off** isn't affected.
 
 - A decided suggestion can be taken back with **Undo** or **Restore**; **Undo all** brings every one back to review.
 - One run makes at most 8 changes. Run it again for the rules still open.
@@ -155,9 +166,9 @@ The Content Agent never changes these passages. If you edit one, the editor asks
 - **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.
 - **Export** downloads the page as **Word**, **HTML** or **Markdown**. Only the HTML file carries the schema (JSON-LD).
 - **Add HTML** in the toolbar adds an HTML block: an embed, a widget or a form, kept exactly as written. Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.
-- **Products** (the bag in the toolbar, or **Add › Products** on an empty line), on an online shop's draft, adds products from your catalog: search by name, pick 1 to 4 that are in stock, and **Insert**. One shows as a card, more as a grid, each with its picture, name and price (its cheapest variant in stock), linked to its page. It goes in as an HTML block; Webflow's rich text and Framer's formatted text have no grid, so there it's a list, a product a line. A product sold out by the time you insert is left out, and the editor says so. When the Content Agent writes a new buying guide, best-of list, comparison or alternatives page with a shopping path, it adds the same grid of the path's products in stock (two or more), at the end of the section that links them most.
+- **Products** (the bag in the toolbar, or **Add › Products** on an empty line), on an online shop's draft, adds products from your catalog: search by name, pick 1 to 4 that are in stock, and **Insert**. One shows as a card, more as a grid, each with its picture, name and price (in stock before low stock, then its cheapest variant there; a sale price when it's lower), linked to its page. It goes in as an HTML block; Webflow's rich text and Framer's formatted text have no grid, so there it's a list, a product a line. A product no longer in stock by the time you insert is left out, and the editor says so. When the Content Agent writes a new buying guide, best-of list, comparison or alternatives page with a shopping path, it adds the same grid of the path's products in stock (two or more), at the end of the section that links them most.
 - **Send to CMS** (admins and managers) sends the page to the brand's Webflow or Framer collection as a draft item, to its WordPress site or its Wix site's Blog as a draft post, or to your workflow tool through the brand's webhook, for it to create the post in your CMS. See [Send to CMS](/guides/send-to-cms).
-- **Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site, or send it to your CMS.
+- **Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site, or send it to your CMS. On a page with a shopping path, **Before you publish** also names the product cards whose price has changed in your catalog since they went in. A card keeps its price: to show today's, replace the card by deleting it and adding the product again (**Add › Products**).
 - **Mark published** (the Library's **Status** menu, or the header's **Next step** once the page is ready, when Quality is on): once the page is live, tell Ansvisor where. It asks for the live address, starting from the page it optimizes or your site with the page's slug, and the **Live page** tab measures that address from then. If the draft came from the Action Center, its Publish task is completed once all the action's work is live. On a published page, the header's **Published** button changes the address. A page your CMS reports live, or one published in Webflow, WordPress, Framer or Wix, gets its address on its own. An archived page is restored first.
 - Click **Ready** in the header to move the page back to **In review**. A task that Mark ready completed is open again (**In Progress**), unless someone changed it in the Action Center since or the action is closed.
 
@@ -175,6 +186,10 @@ The **Library** lists the drafts by status, each tab with its count:
 | **Archived**    | Drafts sent to the archive. They keep their status for when they're restored. |
 
 The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. Click a row to open the draft in the editor. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, a **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published (see [Send to CMS](/guides/send-to-cms)).
+
+For an online shop, a **Shopping path** column shows what the last check found for each draft with a shopping path. After each catalog sync, every such draft is read again: the live page once it's published, else the draft. A live page off your site, too short to be the page, or linking none of its shopping path while its draft does, is read from the draft. A draft needs attention when it links a product that is sold out, refused by Merchant Center or gone from your catalog; hover the mark for the products and how many of its category pages and products it links. The **Shopping path** filter narrows the list to drafts that need attention, are fine, or have none.
+
+When a published page links a product that no longer sells, the check also opens a **Fix** action in the [Action Center](/guides/action-center), "Best rain jackets for 2026: 2 products are sold out", with one task: swap them for products that sell, its shopping path's in-stock products named. **Swap in the editor** opens the draft. The next catalog sync's check, or **Check now** on the task, closes the task, and the action, once the live page links none of them. A dismissed action isn't opened again for the same products.
 
 ### Row menu
 
