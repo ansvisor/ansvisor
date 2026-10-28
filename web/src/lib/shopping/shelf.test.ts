@@ -237,10 +237,78 @@ describe('whyNotYou', () => {
     // On a tie, the readier one.
     expect(
       whyNotYou(absent, [
-        productRow('a', { title: 'Backpack A' }, 40),
-        productRow('b', { title: 'Backpack B' }, 80),
+        productRow('a', { title: 'Hiking Backpack A' }, 40),
+        productRow('b', { title: 'Hiking Backpack B' }, 80),
       ])?.product.id,
     ).toBe('b');
+  });
+
+  it('needs two of the question’s words, or its category, not "best", "under" or a price', () => {
+    const shoes = buildShelf(
+      [
+        card({
+          prompt_text: 'best running shoes for men under $100',
+          matched_brand_role: 'competitor',
+        }),
+      ],
+      NOW,
+    )[0];
+    const tee = productRow('tee', {
+      title: "Men's Best Seller Tee",
+      category: 'Apparel > T-shirts',
+    });
+    // "best" and "under" ask, "100" is a price: only "men" is left, one word.
+    expect(whyNotYou(shoes, [tee])).toBeNull();
+    expect(whyNotYou(shoes, [productRow('top', { title: 'Top 100 Under Armour Cap' })])).toBeNull();
+    // Its category is what the question names: a candidate on one word less.
+    const runner = productRow('runner', {
+      title: 'Trail Runner X',
+      category: 'Shoes > Running shoes',
+    });
+    expect(whyNotYou(shoes, [tee, runner])?.product.id).toBe('runner');
+    // Or by its type.
+    expect(
+      whyNotYou(shoes, [
+        tee,
+        productRow('glide', { title: 'Glide 3', productType: 'Running shoes' }),
+      ])?.product.id,
+    ).toBe('glide');
+  });
+
+  it("never makes a product a candidate on who it's for alone, but breaks a tie on it", () => {
+    const asking = (prompt_text: string) =>
+      buildShelf([card({ prompt_text, matched_brand_role: 'competitor' })], NOW)[0];
+    const shoes = asking('best running shoes for men under $100');
+    // A category or a type that only says who it's for isn't what the question names.
+    for (const [question, audience, title] of [
+      [shoes, 'Men', "Men's Best Seller Tee"],
+      [asking('best running shoes for women under $100'), 'Women', "Women's Best Seller Tee"],
+      [asking('best running shoes for kids'), 'Kids', "Kids' Best Seller Tee"],
+    ] as const) {
+      expect(
+        whyNotYou(question, [productRow('tee', { title, category: `Clothing > ${audience}` })]),
+      ).toBeNull();
+      expect(whyNotYou(question, [productRow('tee', { title, productType: audience })])).toBeNull();
+    }
+    // Nor does it make up the two words: only "hiking" says what it is.
+    expect(
+      whyNotYou(asking('hiking boots for women'), [
+        productRow('socks', { title: "Women's Hiking Socks" }),
+      ]),
+    ).toBeNull();
+    // A category that names what it is, past who it's for, still does.
+    expect(
+      whyNotYou(shoes, [
+        productRow('pace', { title: 'Pace 2', category: "Footwear > Men's running shoes" }),
+      ])?.product.id,
+    ).toBe('pace');
+    // Among candidates, the one for whom the question asks, before the readier one.
+    expect(
+      whyNotYou(asking('running shoes for women'), [
+        productRow('his', { title: "Men's Running Shoe" }, 90),
+        productRow('hers', { title: "Women's Running Shoe" }, 40),
+      ])?.product.id,
+    ).toBe('hers');
   });
 
   it('names none for a shelf the brand is on, or when nothing shares a word with the question', () => {

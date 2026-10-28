@@ -8145,13 +8145,19 @@
       "pending": "Done {done}. Its result shows on {ready}, 7 days on.",
       "result": "In the 7 days after it was done, on {after} of {afterShelves, plural, one {# shelf} other {# shelves}}. In the 7 days before, on {before} of {beforeShelves}.",
       "noRuns": "Done {done}. No shopping answers were read in the 7 days after it, so there's nothing to compare.",
+      "tooMany": "Done {done}. Its questions have too many answers to read them all, so the 7 days before and after aren't compared.",
+      "resultNew": "In the 7 days after it was done, on {after} of {afterShelves, plural, one {# shelf} other {# shelves}}. None of its shelves was read in the 7 days before.",
       "trend": {
         "better": "On more of its shelves",
         "worse": "On fewer of its shelves",
-        "same": "No change"
+        "same": "No change",
+        "new": "New: nothing to compare"
       },
       "open": "Open the action",
       "short": "#{number}: {before}/{beforeShelves} → {after}/{afterShelves} shelves",
+      "shortNew": "#{number}: new · {after}/{afterShelves} shelves",
+      "shortNoRuns": "#{number} done · not run in the 7 days after",
+      "shortTooMany": "#{number} done · too many answers to compare",
       "shortPending": "#{number} done · result {ready}"
     },
     "detail": {

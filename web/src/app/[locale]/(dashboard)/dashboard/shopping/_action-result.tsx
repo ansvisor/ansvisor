@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { ArrowRight, Minus, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowRight, Minus, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +27,8 @@ const TREND = {
     tone: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400',
   },
   same: { icon: Minus, tone: 'bg-muted text-muted-foreground' },
+  // No shelf read the week before: nothing to compare yet.
+  new: { icon: Sparkles, tone: 'border-primary/30 bg-primary/10 text-primary' },
 } as const;
 
 export function ActionResultCard({ result }: { result: ActionResult }) {
@@ -56,14 +58,18 @@ export function ActionResultCard({ result }: { result: ActionResult }) {
         <p className="text-sm text-muted-foreground">
           {result.after === null
             ? t('pending', { done, ready: formatDate(result.readyAt) })
-            : result.after.shelves === 0
-              ? t('noRuns', { done })
-              : t('result', {
-                  after: result.after.on,
-                  afterShelves: result.after.shelves,
-                  before: result.before.on,
-                  beforeShelves: result.before.shelves,
-                })}
+            : result.partial
+              ? t('tooMany', { done })
+              : result.after.shelves === 0
+                ? t('noRuns', { done })
+                : trend === 'new'
+                  ? t('resultNew', { after: result.after.on, afterShelves: result.after.shelves })
+                  : t('result', {
+                      after: result.after.on,
+                      afterShelves: result.after.shelves,
+                      before: result.before.on,
+                      beforeShelves: result.before.shelves,
+                    })}
         </p>
         <Link
           href={actionHref(result)}
@@ -96,13 +102,23 @@ export function ActionResultLine({ result }: { result: ActionResult | undefined 
     >
       {result.after === null
         ? t('shortPending', { number: result.actionNo, ready: formatDate(result.readyAt) })
-        : t('short', {
-            number: result.actionNo,
-            before: result.before.on,
-            beforeShelves: result.before.shelves,
-            after: result.after.on,
-            afterShelves: result.after.shelves,
-          })}
+        : result.partial
+          ? t('shortTooMany', { number: result.actionNo })
+          : result.after.shelves === 0
+            ? t('shortNoRuns', { number: result.actionNo })
+            : trend === 'new'
+              ? t('shortNew', {
+                  number: result.actionNo,
+                  after: result.after.on,
+                  afterShelves: result.after.shelves,
+                })
+              : t('short', {
+                  number: result.actionNo,
+                  before: result.before.on,
+                  beforeShelves: result.before.shelves,
+                  after: result.after.on,
+                  afterShelves: result.after.shelves,
+                })}
     </Link>
   );
 }

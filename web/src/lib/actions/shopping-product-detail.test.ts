@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resultTrend } from '@/lib/shopping/recheck';
 
 /** A product's page read (ECOM-011). */
 
@@ -11,13 +12,15 @@ let filtered: [string, string, number][];
 let rpcArgs: Record<string, unknown>[];
 // The id lists the catalog reads filtered by, as [table, column, the ids].
 let byIds: [string, string, unknown[]][];
+// The equality filters each read made, as [table, column, value].
+let eqs: [string, string, unknown][];
 
 function query(table: string) {
   let range: [number, number] | undefined;
   let single = false;
   const q = {
     select: () => q,
-    eq: () => q,
+    eq: (column: string, value: unknown) => (eqs.push([table, column, value]), q),
     is: () => q,
     in: (column: string, values: unknown[]) => (
       filtered.push([table, column, values.length]),
@@ -56,13 +59,15 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getProductAiSays, getShoppingProductDetail } = await import('./shopping');
+const { getProductAiSays, getShoppingActionResults, getShoppingProductDetail } =
+  await import('./shopping');
 
 beforeEach(() => {
   tables = {};
   filtered = [];
   rpcArgs = [];
   byIds = [];
+  eqs = [];
 });
 
 const card = (over: Record<string, unknown>) => ({
@@ -80,17 +85,20 @@ const card = (over: Record<string, unknown>) => ({
   matched_brand_role: 'competitor',
   catalog_product_id: null,
   prompt_results: {
-    search_queries: [{ query: 'women hiking backpack' }],
-    prompt: { id: 'q1', text: 'lightweight 30L hiking backpack for women' },
+    prompt_id: 'q1',
+    prompt: { text: 'lightweight 30L hiking backpack for women' },
   },
   ...over,
 });
 
 describe('getShoppingProductDetail', () => {
-  it("refuses ids that aren't ids, and reads a product not in the catalog as none", async () => {
-    await expect(getShoppingProductDetail(BRAND, 'nope', { datePreset: '30d' })).rejects.toThrow(
+  it("refuses a brand id that isn't one, and reads a product not in the catalog as none", async () => {
+    await expect(getShoppingProductDetail('nope', PRODUCT, { datePreset: '30d' })).rejects.toThrow(
       'invalid',
     );
+    // An address with no product's id in it: none, not a failure, and nothing read.
+    expect(await getShoppingProductDetail(BRAND, 'nope', { datePreset: '30d' })).toBeNull();
+    expect(byIds).toEqual([]);
     expect(await getShoppingProductDetail(BRAND, PRODUCT, { datePreset: '30d' })).toBeNull();
   });
 
@@ -109,6 +117,11 @@ describe('getShoppingProductDetail', () => {
       { product_id: PRODUCT, category: { name: 'Hiking backpacks' } },
     ];
     tables.brand_domains = [{ domain: 'northwind.example' }];
+    tables.prompts = [
+      { id: 'q1', text: 'lightweight 30L hiking backpack for women' },
+      { id: 'q7', text: 'espresso machine for home' },
+    ];
+    tables.prompt_results = [{ id: 'r1', search_queries: [{ query: 'women hiking backpack' }] }];
     tables.prompt_result_shopping_cards = [
       card({}),
       card({
@@ -148,6 +161,15 @@ describe('getShoppingProductDetail', () => {
       { p_brand_id: BRAND, p_from: expect.any(String), p_product_id: PRODUCT },
     ]);
     expect(detail?.result).toBeNull();
+    // Its own cards, then the shelves of its questions alone, and AI's
+    // searches for each shelf's latest answer only.
+    expect(eqs).toContainEqual(['prompt_result_shopping_cards', 'catalog_product_id', PRODUCT]);
+    expect(byIds).toContainEqual([
+      'prompt_result_shopping_cards',
+      'prompt_results.prompt_id',
+      ['q1'],
+    ]);
+    expect(byIds).toContainEqual(['prompt_results', 'id', ['r1']]);
   });
 
   it('sets the week after its last done action beside the week before (ECOM-018)', async () => {
@@ -172,8 +194,7 @@ describe('getShoppingProductDetail', () => {
       ];
       const prompt = {
         prompt_id: 'q1',
-        search_queries: [],
-        prompt: { id: 'q1', text: 'lightweight 30L hiking backpack for women' },
+        prompt: { text: 'lightweight 30L hiking backpack for women' },
       };
       tables.prompt_result_shopping_cards = [
         card({
@@ -191,8 +212,9 @@ describe('getShoppingProductDetail', () => {
         }),
       ];
       const detail = await getShoppingProductDetail(BRAND, PRODUCT, { datePreset: '30d' });
-      // One read for the action's one question.
+      // One read for the action's one question (and one for the page's shelves of it).
       expect(filtered.filter(([, column]) => column === 'prompt_results.prompt_id')).toEqual([
+        ['prompt_result_shopping_cards', 'prompt_results.prompt_id', 1],
         ['prompt_result_shopping_cards', 'prompt_results.prompt_id', 1],
       ]);
       expect(detail?.result).toEqual({
@@ -265,7 +287,7 @@ describe('getProductAiSays (ECOM-012)', () => {
 });
 
 describe('the re-check read (ECOM-018)', () => {
-  it('reads the cards of many questions a hundred ids at a time', async () => {
+  it('reads the cards of every question, past 400, a hundred ids at a time', async () => {
     tables.catalog_products = [{ id: PRODUCT, title: 'Ridge 30L Backpack', description: null }];
     tables.actions = [
       {
@@ -274,7 +296,7 @@ describe('the re-check read (ECOM-018)', () => {
         completed_at: new Date(Date.now() - 86_400_000).toISOString(),
         payload: {
           target: { type: 'product', id: PRODUCT },
-          promptIds: Array.from({ length: 250 }, (_, i) => `q${i}`),
+          promptIds: Array.from({ length: 450 }, (_, i) => `q${i}`),
         },
       },
     ];
@@ -283,6 +305,86 @@ describe('the re-check read (ECOM-018)', () => {
       filtered
         .filter(([, column]) => column === 'prompt_results.prompt_id')
         .map(([, , count]) => count),
-    ).toEqual([100, 100, 50]);
+    ).toEqual([100, 100, 100, 100, 50]);
+  });
+
+  it("counts a category's own products on its shelves, not the brand's others", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T00:00:00Z'));
+    try {
+      const CATEGORY = '22222222-0000-0000-0000-000000000002';
+      tables.actions = [
+        {
+          id: 'a8',
+          action_no: 8,
+          completed_at: '2026-10-20T00:00:00Z',
+          payload: { target: { type: 'category', id: CATEGORY }, promptIds: ['q1'] },
+        },
+      ];
+      tables.catalog_product_categories = [{ product_id: 'boot', category_id: CATEGORY }];
+      const prompt = { prompt_id: 'q1' };
+      tables.prompt_result_shopping_cards = [
+        // Before: one of the brand's products, not of the category.
+        {
+          created_at: '2026-10-15T08:00:00Z',
+          platform: 'chatgpt-shopping',
+          catalog_product_id: 'tee',
+          prompt_results: prompt,
+        },
+        // After: the category's own.
+        {
+          created_at: '2026-10-22T08:00:00Z',
+          platform: 'chatgpt-shopping',
+          catalog_product_id: 'boot',
+          prompt_results: prompt,
+        },
+      ];
+      const results = await getShoppingActionResults(BRAND, [{ type: 'category', id: CATEGORY }]);
+      expect(results[`category:${CATEGORY}`]).toMatchObject({
+        before: { shelves: 1, on: 0 },
+        after: { shelves: 1, on: 1 },
+      });
+      expect(byIds).toContainEqual(['catalog_product_categories', 'category_id', [CATEGORY]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("doesn't compare an action whose questions' cards stopped at the read's limit", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T00:00:00Z'));
+    try {
+      tables.actions = [
+        {
+          id: 'a9',
+          action_no: 9,
+          completed_at: '2026-10-20T00:00:00Z',
+          payload: { target: { type: 'product', id: PRODUCT }, promptIds: ['q1'] },
+        },
+      ];
+      // Only the week after's cards fit in the read, the newest first.
+      const after = {
+        created_at: '2026-10-22T08:00:00Z',
+        platform: 'chatgpt-shopping',
+        catalog_product_id: PRODUCT,
+        prompt_results: { prompt_id: 'q1' },
+      };
+      const key = `product:${PRODUCT}`;
+      tables.prompt_result_shopping_cards = Array.from({ length: 50_000 }, () => after);
+      const cut = (await getShoppingActionResults(BRAND, [{ type: 'product', id: PRODUCT }]))[key];
+      // The week before wasn't reached: not "new", nor "better".
+      expect(cut).toMatchObject({ before: { shelves: 0 }, after: { shelves: 1, on: 1 } });
+      expect(cut.partial).toBe(true);
+      expect(resultTrend(cut)).toBeNull();
+      // One card short of the limit: every card was read.
+      tables.prompt_result_shopping_cards = Array.from({ length: 49_999 }, () => after);
+      const whole = (await getShoppingActionResults(BRAND, [{ type: 'product', id: PRODUCT }]))[
+        key
+      ];
+      expect(whole.partial).toBeUndefined();
+      expect(resultTrend(whole)).toBe('new');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

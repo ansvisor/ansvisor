@@ -44,21 +44,47 @@ export interface ProductAiSays {
 export const MAX_QUOTES = 5;
 export const MAX_SOURCES = 5;
 
-/** Where a title's name ends and its variant starts: "Ridge 30L Backpack - Black". */
+/** Where a title's parts meet: its name, its variant, its brand ("Ridge 30L Backpack - Black"). */
 const TITLE_TAIL = /\s+[-–—|:,(/]\s*|\s*[|,(]\s*/;
 
+const spaced = (text: string) => text.replace(/\s+/g, ' ').trim();
+
 /**
- * The names an answer may call the product by: each title, and its head
- * before " - ", " | ", ",", ":" or "(" when that keeps two words or more.
+ * The names an answer may call the product by: each title, and the
+ * product's own name in it, without its variant or its brand. A title's
+ * parts split at " - ", " | ", ",", ":" or "(": a part that is the brand
+ * ("The North Face | Borealis Backpack") is left out, and a brand opening a
+ * part is cut off ("The North Face Borealis Backpack" → "Borealis
+ * Backpack"); the first part left is the name when it keeps two words or
+ * more. The brand alone is never a name: every sentence about the brand
+ * would quote as the product's.
+ *
+ * @param brands the product's brand as the catalog and the cards name it
  */
-export function productNames(titles: readonly string[]): string[] {
+export function productNames(
+  titles: readonly string[],
+  brands: readonly (string | null | undefined)[] = [],
+): string[] {
+  const brandKeys = [
+    ...new Set(brands.map((brand) => spaced(brand ?? '').toLowerCase()).filter(Boolean)),
+  ];
+  const isBrand = (text: string) => brandKeys.includes(text.toLowerCase());
+  const withoutBrand = (part: string) => {
+    const lower = part.toLowerCase();
+    const brand = brandKeys.find((key) => lower.startsWith(`${key} `));
+    return brand ? part.slice(brand.length).trim() : part;
+  };
   const names = new Set<string>();
   for (const title of titles) {
-    const full = title.replace(/\s+/g, ' ').trim();
-    if (!full) continue;
+    const full = spaced(title);
+    if (!full || isBrand(full)) continue;
     names.add(full);
-    const head = full.split(TITLE_TAIL)[0].trim();
-    if (head.split(' ').length >= 2) names.add(head);
+    const own = full
+      .split(TITLE_TAIL)
+      .map((part) => part.trim())
+      .filter((part) => part && !isBrand(part))
+      .map(withoutBrand)[0];
+    if (own && own.split(' ').length >= 2 && !isBrand(own)) names.add(own);
   }
   return [...names];
 }
@@ -74,7 +100,8 @@ export function productQuote(response: string, names: string[]): string | null {
  * What the answers said: a quote from each, the latest first, one per text,
  * and the sources most of them cited. `titles`: the catalog's own, beside
  * how each answer's cards titled it; `total`: the answers that showed the
- * product, when more than those read.
+ * product, when more than those read; `brands`: the product's brand, kept
+ * out of the names it's looked for by (productNames).
  */
 export function productAiSays(
   answers: readonly AiSaysAnswer[],
@@ -86,13 +113,14 @@ export function productAiSays(
   }[],
   titles: readonly string[],
   total: number = answers.length,
+  brands: readonly (string | null | undefined)[] = [],
 ): ProductAiSays {
   const latest = [...answers].sort((a, b) => (a.at < b.at ? 1 : -1));
   const quotes: AiSaysQuote[] = [];
   const said = new Set<string>();
   for (const answer of latest) {
     if (quotes.length >= MAX_QUOTES) break;
-    const text = productQuote(answer.response, productNames([...answer.titles, ...titles]));
+    const text = productQuote(answer.response, productNames([...answer.titles, ...titles], brands));
     if (!text || said.has(text)) continue;
     said.add(text);
     quotes.push({

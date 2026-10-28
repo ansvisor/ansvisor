@@ -3,8 +3,8 @@
  * Product Visibility (a product to get on the AI shelf, a category to win)
  * names the shopping questions it's measured on; once someone completes it,
  * the shelves of those questions in the 7 days after are set beside the 7
- * days before: how many the brand's product (or, for a category, any of its
- * products) was on. Read from the cards already kept, when the page opens:
+ * days before: how many the product (or, for a category, any product of the
+ * category) was on. Read from the cards already kept, when the page opens:
  * no job, nothing stored.
  */
 
@@ -13,12 +13,11 @@ export const RECHECK_DAYS = 7;
 export const RECHECK_TARGETS = 500;
 const DAY_MS = 86_400_000;
 
-/** A card as the re-check reads it: its shelf (question × channel), when, and whose. */
+/** A card as the re-check reads it: its shelf (question × channel), when, and the catalog product it shows. */
 export interface RecheckCard {
   promptId: string;
   platform: string;
   at: string;
-  own: boolean;
   productId: string | null;
 }
 
@@ -30,6 +29,8 @@ export interface RecheckAction {
   completedAt: string;
   /** The shopping questions it's measured on. */
   promptIds: string[];
+  /** A category's products: one of them on a shelf counts. */
+  products?: readonly string[];
 }
 
 /** Shelves read in a window, and how many the brand was on. */
@@ -47,22 +48,34 @@ export interface ActionResult {
   before: ShelfPresence;
   /** Null until the 7 days after have passed. */
   after: ShelfPresence | null;
+  /**
+   * True when its questions had more answers than a read takes: the oldest
+   * weren't read, so the two weeks aren't compared.
+   */
+  partial?: boolean;
 }
 
-/** The action's shelves read in [from, to), and how many had the brand's product on them. */
+/**
+ * The action's shelves read in [from, to), and how many had its product on
+ * them: the product, or for a category one of its products, not any of the
+ * brand's.
+ */
 export function shelfPresence(
   cards: readonly RecheckCard[],
-  action: Pick<RecheckAction, 'target' | 'promptIds'>,
+  action: Pick<RecheckAction, 'target' | 'promptIds' | 'products'>,
   from: number,
   to: number,
 ): ShelfPresence {
   const prompts = new Set(action.promptIds);
+  const products = new Set(
+    action.target.type === 'product' ? [action.target.id] : (action.products ?? []),
+  );
   const shelves = new Map<string, boolean>();
   for (const card of cards) {
     const at = Date.parse(card.at);
     if (!(at >= from && at < to) || !prompts.has(card.promptId)) continue;
     const key = `${card.promptId}:${card.platform}`;
-    const ours = action.target.type === 'product' ? card.productId === action.target.id : card.own;
+    const ours = card.productId !== null && products.has(card.productId);
     shelves.set(key, (shelves.get(key) ?? false) || ours);
   }
   return { shelves: shelves.size, on: [...shelves.values()].filter(Boolean).length };
@@ -87,12 +100,16 @@ export function actionResult(
 }
 
 /**
- * Which way it went: the share of shelves it was on, after beside before.
- * Null while the week after runs, or when no answer was read in it.
+ * Which way it went: the share of shelves it was on, after beside before;
+ * 'new' when no shelf was read in the week before, so nothing to compare.
+ * Null while the week after runs, when no answer was read in it, or when
+ * not every answer could be read (partial): a week missing in the read
+ * would read as 'new' or 'better'.
  */
-export function resultTrend(result: ActionResult): 'better' | 'worse' | 'same' | null {
+export function resultTrend(result: ActionResult): 'better' | 'worse' | 'same' | 'new' | null {
   const { before, after } = result;
-  if (!after?.shelves) return null;
+  if (result.partial || !after?.shelves) return null;
+  if (!before.shelves) return 'new';
   const share = (p: ShelfPresence) => (p.shelves ? p.on / p.shelves : 0);
   const change = share(after) - share(before);
   return change > 0 ? 'better' : change < 0 ? 'worse' : 'same';

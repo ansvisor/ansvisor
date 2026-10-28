@@ -1,5 +1,5 @@
 import { categoryWords } from '@/lib/shopping/categories';
-import { matchScores, missingWords, queryTerms } from '@/lib/shopping/match-score';
+import { contentWords, matchScores, missingWords, queryTerms } from '@/lib/shopping/match-score';
 import {
   FIRST_WORDS,
   readiness,
@@ -52,7 +52,7 @@ export interface ProductShelfLine {
   platform: string;
   /** Its place on the latest shelf, from 1, or null when it isn't on it. */
   rank: number | null;
-  /** The shelf's first product, when it isn't this one. */
+  /** The shelf's first product not the brand's own, above this one; null when none is. */
   winner: ShelfProduct | null;
   /** Its keyword match with the question and AI's searches, 0–100 (Ansvisor estimate). */
   score: number;
@@ -65,6 +65,8 @@ export interface ProductShelfLine {
 export const RELEVANT_SCORE = 40;
 /** Questions a product's page lists at most. */
 export const MAX_LINES = 20;
+/** Questions whose shelves a product's page reads at most (detailPrompts). */
+export const DETAIL_PROMPTS = 60;
 
 /** What the product says first: its title and its description's opening (ECOM-024). */
 export function productText(product: CatalogProductRow): string {
@@ -74,6 +76,56 @@ export function productText(product: CatalogProductRow): string {
     .slice(0, FIRST_WORDS)
     .join(' ');
   return `${product.title} ${opening}`.trim();
+}
+
+/** The product's category's last level, as words: "Bags > Hiking backpacks" → hiking, backpack. */
+function categoryOf(product: CatalogProductRow): string[] {
+  return product.category ? categoryWords(product.category.split('>').at(-1)!) : [];
+}
+
+/**
+ * The questions whose shelves a product's page reads (ECOM-011), so it
+ * reads those, not every shelf of the window: the one asked for, those it
+ * was on (listed in `prompts` or not), those of its category, then those
+ * sharing the most words with its title and opening; `max` at most. A
+ * question none of these ties to it could only make its list through AI's
+ * searches alone (productShelves).
+ */
+export function detailPrompts(
+  product: CatalogProductRow,
+  prompts: readonly { id: string; text: string }[],
+  {
+    appeared,
+    include = null,
+    max = DETAIL_PROMPTS,
+  }: { appeared: ReadonlySet<string>; include?: string | null; max?: number },
+): string[] {
+  const category = categoryOf(product);
+  const words = new Set(contentWords(productText(product)));
+  const listed = new Set(prompts.map((prompt) => prompt.id));
+  const unlisted = [include, ...appeared].flatMap((id) =>
+    id && !listed.has(id) ? [{ id, text: '', tier: id === include ? 0 : 1, shared: 0 }] : [],
+  );
+  const ranked = prompts.flatMap((prompt) => {
+    const promptWords = new Set(categoryWords(prompt.text));
+    const tier =
+      prompt.id === include
+        ? 0
+        : appeared.has(prompt.id)
+          ? 1
+          : category.length > 0 && category.every((word) => promptWords.has(word))
+            ? 2
+            : 3;
+    const shared = contentWords(prompt.text).filter((word) => words.has(word)).length;
+    return tier < 3 || shared > 0 ? [{ id: prompt.id, text: prompt.text, tier, shared }] : [];
+  });
+  return [
+    ...new Set(
+      [...unlisted, ...ranked]
+        .sort((a, b) => a.tier - b.tier || b.shared - a.shared || a.text.localeCompare(b.text))
+        .map((prompt) => prompt.id),
+    ),
+  ].slice(0, max);
 }
 
 /**
@@ -87,7 +139,7 @@ export function productShelves(
   cards: readonly DetailCard[],
   { include = null }: { include?: string | null } = {},
 ): ProductShelfLine[] {
-  const category = product.category ? categoryWords(product.category.split('>').at(-1)!) : [];
+  const category = categoryOf(product);
   const text = productText(product);
   const shelves = new Map<string, DetailCard[]>();
   for (const card of cards) {
@@ -111,7 +163,12 @@ export function productShelves(
     const inCategory = category.length > 0 && category.every((word) => promptWords.has(word));
     const asked = include !== null && first.promptId === include;
     if (!asked && !appeared && !inCategory && scores[0] < RELEVANT_SCORE) continue;
-    const winnerCard = at === 0 ? null : latest[0];
+    // The rival above it (above all, when it isn't on the shelf): never one
+    // of the brand's own products, which it needn't beat.
+    const winnerCard =
+      latest.find(
+        (card, i) => card.role !== 'own' && card.productId !== product.id && (at < 0 || i < at),
+      ) ?? null;
     lines.push({
       promptId: first.promptId,
       promptText: first.promptText,

@@ -132,6 +132,62 @@ describe('CategoriesTable', () => {
     ]);
   });
 
+  it('says a category whose shelves were not run after its action, or not before it, apart', () => {
+    const done = {
+      actionId: 'a9',
+      actionNo: 9,
+      completedAt: '2026-10-12T09:00:00Z',
+      readyAt: '2026-10-19T09:00:00Z',
+      before: { shelves: 5, on: 1 },
+      after: { shelves: 0, on: 0 },
+    };
+    render(
+      <CategoriesTable
+        categories={[row({}), row({ id: 'packs', leaf: 'Hiking backpacks' })]}
+        loading={false}
+        failed={false}
+        results={{
+          'category:shoes': done,
+          'category:packs': {
+            ...done,
+            actionId: 'a10',
+            actionNo: 10,
+            before: { shelves: 0, on: 0 },
+            after: { shelves: 3, on: 2 },
+          },
+        }}
+      />,
+    );
+    expect([...container.querySelectorAll('tbody a')].map((a) => a.textContent)).toEqual([
+      '#9 done · not run in the 7 days after',
+      '#10: new · 2/3 shelves',
+    ]);
+  });
+
+  it('says a category whose answers were too many to read all is not compared', () => {
+    render(
+      <CategoriesTable
+        categories={[row({})]}
+        loading={false}
+        failed={false}
+        results={{
+          'category:shoes': {
+            actionId: 'a9',
+            actionNo: 9,
+            completedAt: '2026-10-12T09:00:00Z',
+            readyAt: '2026-10-19T09:00:00Z',
+            before: { shelves: 0, on: 0 },
+            after: { shelves: 3, on: 2 },
+            partial: true,
+          },
+        }}
+      />,
+    );
+    const link = container.querySelector('tbody a')!;
+    expect(link.textContent).toBe('#9 done · too many answers to compare');
+    expect(link.className).toContain('text-muted-foreground');
+  });
+
   it("plans a category's actions in a dialog, measured on its questions", async () => {
     sendShoppingActions.mockResolvedValue({ actionId: 'a1', actionNo: 302, created: true });
     render(
