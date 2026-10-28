@@ -8843,6 +8843,7 @@
       "deleteButton": "Delete Brand Permanently",
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
+      "demoCantDelete": "The demo brand can't be deleted; hide it from the brand menu instead.",
       "conversions": {
         "title": "Conversions from AI visits",
         "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",
