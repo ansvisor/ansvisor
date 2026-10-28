@@ -9,6 +9,7 @@ import {
   teamName,
   titlePlaceholders,
   withByline,
+  withoutDangling,
   withoutLeadingH1,
   type PageFields,
 } from '@/lib/content/ready-to-publish';
@@ -74,13 +75,32 @@ function upToWord(text: string, max: number): string {
 }
 
 /**
+ * A meta title from the page's title: whole when it fits; else its first
+ * part, when the title has parts ("Pour-over at home: a guide") and that
+ * one says enough; else cut at a word near 60 characters, never on a word
+ * that leads into what was cut ("…Unified Tracking Across").
+ */
+export function metaTitleOf(title: string): string {
+  if (Array.from(title).length <= META_TITLE_PREFILL) return title;
+  const [first] = title.split(/\s*[:|–—]\s+|\s+-\s+/u);
+  const firstLength = Array.from(first.trim()).length;
+  if (firstLength >= META_TITLE_PREFILL / 2 && firstLength <= META_TITLE_PREFILL) {
+    return first.trim();
+  }
+  const cut = upToWord(title, META_TITLE_PREFILL);
+  return withoutDangling(cut.split(/\s+/u))
+    .join(' ')
+    .replace(/[\s,:;|–—-]+$/u, '');
+}
+
+/**
  * What a send starts with: what the draft keeps, else what the page gives,
- * its meta title cut at a word near 60 characters.
+ * its meta title cut near 60 characters (metaTitleOf).
  */
 export function cmsFields(fields: PageFields, kept: Partial<CmsFields> | null): CmsFields {
   return {
     slug: kept?.slug || fields.slug,
-    metaTitle: kept?.metaTitle || upToWord(fields.metaTitle, META_TITLE_PREFILL),
+    metaTitle: kept?.metaTitle || metaTitleOf(fields.metaTitle),
     metaDescription: kept?.metaDescription || fields.metaDescription,
   };
 }

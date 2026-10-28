@@ -74,6 +74,7 @@ import { TopicOpportunityContext } from './topic-opportunity-context';
 import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
+import { ShoppingLinksContext } from './shopping-links-context';
 import {
   TaskDetailForm,
   TaskDetailView,
@@ -675,6 +676,11 @@ export function ActionDrawer({
                   <Separator />
                   <ContentDraftContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'shopping_links' ? (
+                <>
+                  <Separator />
+                  <ShoppingLinksContext payload={action.payload ?? {}} />
+                </>
               ) : opportunityId ? (
                 <>
                   <Separator />
@@ -731,7 +737,7 @@ export function ActionDrawer({
                       // An open task the API checks on its page (AC-010).
                       check={
                         (task.status === 'todo' || task.status === 'in_progress') &&
-                        pageCheckable(task)
+                        pageCheckable(task, action.kind)
                           ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
                           : undefined
                       }
@@ -778,9 +784,11 @@ export function ActionDrawer({
                           ? t('drawer.noSignalsMentionReview')
                           : action.kind === 'traffic_pages'
                             ? t('drawer.noSignalsTrafficPages')
-                            : opportunityId
-                              ? t('drawer.noSignalsOpportunity')
-                              : t('drawer.noSignals')}
+                            : action.kind === 'shopping_links'
+                              ? t('drawer.noSignalsShoppingLinks')
+                              : opportunityId
+                                ? t('drawer.noSignalsOpportunity')
+                                : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
