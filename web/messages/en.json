@@ -7522,6 +7522,12 @@
           "photo": "Photo in the feed",
           "stock": "In stock",
           "merchant": "Sold by"
+        },
+        "states": {
+          "match": "in place",
+          "missing": "missing",
+          "weaker": "weaker than the winner",
+          "info": "for comparison"
         }
       },
       "notes": {
