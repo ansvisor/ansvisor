@@ -45,6 +45,7 @@ import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
+import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js';
 import { runGaSync } from './lib/ga-sync.js';
 import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
@@ -287,9 +288,20 @@ async function runDailyTracking() {
 
   // Search Console sync (#644) — independent follow-up step; never blocks or
   // fails the tracking run. No-ops when Composio isn't configured.
-  runGscSync().catch((err) => {
-    logger.error({ err }, '[gsc-sync] daily run failed');
-  });
+  //
+  // Each prompt's real demand (PROMPT-014) follows it, so tonight's queries
+  // are the ones matched: Search Console every night, and the weekly Google
+  // Trends, People Also Ask and YouTube tasks when DEMAND_SIGNALS is on, read
+  // an hour later or the next night. It runs whether or not the sync did.
+  runGscSync()
+    .catch((err) => {
+      logger.error({ err }, '[gsc-sync] daily run failed');
+    })
+    .then(() => sweepPromptDemand())
+    .then(() => scheduleDemandCollect())
+    .catch((err) => {
+      logger.error({ err }, '[prompt-demand] daily sweep crashed');
+    });
 
   // AI-bot rows past their retention (AT-010): 90 days, counters 400.
   pruneBotEvents().catch((err) => {
