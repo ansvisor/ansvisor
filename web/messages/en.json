@@ -2473,7 +2473,8 @@
       "not_changed": "the page hasn't changed since the first look",
       "change_not_found": "the new text isn't on the page",
       "old_text_still_there": "the text it replaces is still on the page",
-      "off_site": "the page isn't on the brand's site"
+      "off_site": "the page isn't on the brand's site",
+      "valid_before": "the structured data was already valid at the first check: mark the task done once it's fixed"
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",
