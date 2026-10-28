@@ -3171,7 +3171,8 @@ export function DraftEditor({
   };
   // The page to publish's shopping links against the catalog (shopping path,
   // part 6), as the Shopping rules read them: every link, a product grid's
-  // too, and the products the rule asks for (none with it off). Read fresh:
+  // too, and the products the rule asks for (none with it off); and its
+  // product cards' prices against the catalog's now. Read fresh:
   // 'reading' meanwhile, for a draft known to have a path. No row while
   // none is known to, so a draft without one never shows it.
   const shopRule = rules.rules.find(({ rule }) => rule.key === 'shopProductLinks')?.rule;
@@ -3181,7 +3182,8 @@ export function DraftEditor({
     if (!publishOpen || shopping === null || shopping === 'reading') return null;
     if (shoppingRefreshing) return 'reading';
     if (shopping === 'failed') return 'failed';
-    return shoppingLinks(readPage(publishOpen.html, 0).links ?? [], shopping, shopWant);
+    const page = readPage(publishOpen.html, 0);
+    return shoppingLinks(page.links ?? [], shopping, shopWant, page.cards ?? []);
   }, [publishOpen, shopping, shoppingRefreshing, shopWant]);
   // Read once per change (a link read landing, the title), not on every render.
   const readyToPaste = useMemo((): ReadyToPaste | null => {

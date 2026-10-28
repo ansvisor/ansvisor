@@ -16,6 +16,7 @@ import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import {
   NO_PATH_REASONS,
   bestInStock,
+  priceText,
   shoppingChoicesSchema,
   shoppingPathSchema,
   type NoPathReason,
@@ -400,7 +401,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     readByIds(ids, (chunk, from, to) =>
       supabase
         .from('catalog_variants')
-        .select('id, product_id, external_id, url, availability')
+        .select('id, product_id, external_id, url, availability, price, sale_price, currency')
         .eq('brand_id', brandId)
         .in('product_id', chunk)
         .is('removed_at', null)
@@ -442,6 +443,17 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     if (list) list.push(v);
     else selling.set(v.product_id, [v]);
   }
+  // The price a card shows of it now, as one goes in (getProductsForBlock).
+  const priceOf = (id: string) => {
+    const variant = bestInStock(selling.get(id) ?? []);
+    return variant
+      ? priceText({
+          price: variant.price,
+          salePrice: variant.sale_price,
+          currency: variant.currency,
+        })
+      : null;
+  };
   const stateOf = (id: string): ShoppingLinkState => {
     const product = byId.get(id);
     if (!product || product.removed_at) return 'gone';
@@ -453,7 +465,11 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
   const pathProducts = path.products.flatMap((p): ShoppingProductCheck[] => {
     // A link the path couldn't keep (not http(s)) is null: nothing to check.
     const key = p.url ? linkKey(p.url) : null;
-    return key ? [{ key, title: p.title, state: stateOf(p.id), inPath: true }] : [];
+    if (!key) return [];
+    const state = stateOf(p.id);
+    return [
+      { key, title: p.title, state, inPath: true, price: state === 'ok' ? priceOf(p.id) : null },
+    ];
   });
   // Removed or left out: listed only when it no longer sells, at the
   // catalog's page for it (the path doesn't keep one).
@@ -465,7 +481,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     const url = product.url ?? variants.find((v) => v.product_id === id && v.url)?.url ?? null;
     const key = url ? linkKey(url) : null;
     const title = leftOutTitles.get(id) ?? product.title;
-    return key ? [{ key, title, state, inPath: false }] : [];
+    return key ? [{ key, title, state, inPath: false, price: null }] : [];
   });
   return {
     categories: path.categories

@@ -18,31 +18,17 @@ import {
   choicesOf,
   leftOutReason,
   placementOf,
-  priceAmount,
+  priceText,
   withAdded,
   withLocked,
   withRemoved,
   type NoPathReason,
   type ShoppingPath,
-  type ShoppingProduct,
 } from '@/lib/content/shopping-path';
 import { pagePath } from '@/lib/content/overlap';
 
-/** A product's price as the catalog has it, in its currency (priceAmount); null without one. */
-export function priceText(product: Pick<ShoppingProduct, 'price' | 'salePrice' | 'currency'>) {
-  const amount = priceAmount(product);
-  if (amount == null) return null;
-  try {
-    return product.currency
-      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: product.currency }).format(
-          amount,
-        )
-      : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(amount);
-  } catch {
-    // A currency code Intl doesn't know: the amount and the code as the catalog has them.
-    return `${amount} ${product.currency}`;
-  }
-}
+// Where the product dialog and the tests read it.
+export { priceText };
 
 type PathState =
   | { status: 'loading' }

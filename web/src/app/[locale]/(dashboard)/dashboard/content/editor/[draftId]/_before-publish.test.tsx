@@ -219,6 +219,27 @@ describe('BeforePublish', () => {
       );
     });
 
+    it('names the cards that show an old price, with the price now, beside the links row (#1610)', async () => {
+      await render(quality(), {
+        shopping: links({
+          linked: [product('Summit', 'ok')],
+          want: 1,
+          prices: [
+            { title: 'Summit', page: '$199.00', now: '$179.00' },
+            { title: 'Trail', page: '$50.00', now: null },
+          ],
+        }),
+      });
+      expect(rows().find((r) => r?.startsWith('2 product cards show an old price'))).toContain(
+        "Summit: $199.00 on the page, $179.00 now; Trail: $50.00 on the page, no price now. A card keeps the price it was put in with: put the product in again (Insert › Products) to show today's.",
+      );
+      // The links themselves still work.
+      expect(rows().join('|')).toContain('Shopping links work');
+
+      await render(quality(), { shopping: links({ prices: [] }) });
+      expect(rows().join('|')).not.toContain('old price');
+    });
+
     it('asks for the category page, then the products the rule wants', async () => {
       await render(quality(), { shopping: links({ categoryLinked: false, want: 3 }) });
       expect(rows().join('|')).toContain('No link to the category page');

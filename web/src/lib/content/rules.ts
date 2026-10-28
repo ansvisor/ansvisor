@@ -10,6 +10,7 @@ import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
 import {
   shoppingLinks,
+  type PageCard,
   type ShoppingCheck,
   type ShoppingLinkState,
 } from '@/lib/content/shopping-check';
@@ -573,6 +574,8 @@ export interface PageRead {
    * Shopping rules and Before you publish read (shopping path).
    */
   links?: string[];
+  /** The product cards in its HTML blocks, with the price each shows (Before you publish). */
+  cards?: PageCard[];
 }
 
 const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
@@ -603,6 +606,7 @@ export function readPage(html: string, characters: number): PageRead {
   const links = new Set(
     [...doc.body.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? ''),
   );
+  const cards: PageCard[] = [];
   for (const el of doc.body.querySelectorAll('[data-html-block]')) {
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (!inner) continue;
@@ -611,6 +615,11 @@ export function readPage(html: string, characters: number): PageRead {
       h.textContent?.trim(),
     ).length;
     for (const a of block.body.querySelectorAll('a[href]')) links.add(a.getAttribute('href') ?? '');
+    // A card's price is its span, after the name (product-block.ts).
+    for (const a of block.body.querySelectorAll('a.ansvisor-product[href]')) {
+      const price = a.querySelector('span')?.textContent?.trim();
+      cards.push({ href: a.getAttribute('href') ?? '', price: price || null });
+    }
   }
   return {
     blocks,
@@ -621,6 +630,7 @@ export function readPage(html: string, characters: number): PageRead {
     characters,
     htmlBlockH1s,
     links: [...links].filter((href) => href.trim()),
+    cards,
   };
 }
 
