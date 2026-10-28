@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
-import type { AiUsage } from '@/lib/billing/ai-usage';
+import { aiUsageFromApi, type AiUsage } from '@/lib/billing/ai-usage';
 
 /**
  * This period's AI usage for the member's workspace, for the Billing page's
@@ -26,5 +26,5 @@ export async function getAiUsage(): Promise<AiUsage | null> {
     if (body.error === 'plan_limit') return null;
     throw new Error(body.message || body.error || `Server error: ${res.status}`);
   }
-  return res.json();
+  return aiUsageFromApi(await res.json());
 }
