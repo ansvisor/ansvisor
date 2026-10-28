@@ -391,6 +391,70 @@ describe('writeTasksForAction', () => {
     expect(reserveAiBudget).not.toHaveBeenCalled();
   });
 
+  /** Its earlier rounds here (learning B5): what was done, and what it moved. */
+  it("shows the model the brand's earlier rounds of the action, without the analysis steps", async () => {
+    db.actions.push(
+      {
+        id: 'a0',
+        brand_id: 'b1',
+        kind: 'recover_lost_citations',
+        status: 'completed',
+        outcome: 'no_meaningful_change',
+        validation: {
+          primary: 'citations',
+          final: true,
+          metrics: [{ metric: 'citations', before: 3, after: 3 }],
+        },
+        completed_at: '2026-09-01T10:00:00Z',
+        updated_at: '2026-09-01T10:00:00Z',
+      },
+      // Another brand's round is never shown.
+      { id: 'x0', brand_id: 'b2', kind: 'recover_lost_citations', status: 'completed' },
+    );
+    db.action_tasks.push(
+      {
+        id: 'p1',
+        action_id: 'a0',
+        position: 1,
+        task_key: 'analyze_citations',
+        status: 'completed',
+      },
+      {
+        id: 'p2',
+        action_id: 'a0',
+        position: 2,
+        task_key: null,
+        title: 'Add a FAQ to /blog/shipping',
+        status: 'completed',
+      },
+    );
+    generateObject.mockResolvedValueOnce(answer([task()]));
+
+    const result = await writeTasksForAction('a1', { dryRun: true });
+
+    expect(result.history).toEqual([
+      {
+        closed: '2026-09-01',
+        result: 'no_meaningful_change',
+        final: true,
+        mainMetric: { metric: 'citations', before: 3, after: 3 },
+        done: ['Add a FAQ to /blog/shipping'],
+        notDone: [],
+      },
+    ]);
+    const { prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain('Earlier rounds of this action at this brand');
+    expect(prompt).toContain('Add a FAQ to /blog/shipping');
+    expect(prompt).not.toContain('Analyze citations');
+  });
+
+  it('says nothing of earlier rounds when there are none', async () => {
+    generateObject.mockResolvedValueOnce(answer([task()]));
+    const result = await writeTasksForAction('a1', { dryRun: true });
+    expect(result.history).toEqual([]);
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('Earlier rounds');
+  });
+
   it('calls no model when the signals name nothing to work on', async () => {
     db.signals[0].payload = {};
     const result = await writeTasksForAction('a1', { trigger: 'regenerate' });
