@@ -422,6 +422,20 @@ describe('actionEventText', () => {
       'Result: metrics improved after this action closed',
     );
   });
+
+  /** Read three times after the close, each result names its day (learning B1). */
+  it('names the reading a result came from, and the final one', () => {
+    expect(
+      actionEventText(event('outcome_measured', { outcome: 'improved', day: 14 }), tPage, t),
+    ).toBe('Day 14 · Result: metrics improved after this action closed');
+    expect(
+      actionEventText(
+        event('outcome_measured', { outcome: 'mixed', day: 30, final: true }),
+        tPage,
+        t,
+      ),
+    ).toBe('Day 30, final · Result: mixed after this action closed');
+  });
 });
 
 /**
@@ -468,6 +482,8 @@ describe('History events', () => {
     title: 'Ask the agency',
     outcome: 'improved',
     reviews: 0,
+    day: 0,
+    final: 'no',
   };
   const eventText = (event: string, data: Partial<typeof values> = {}) =>
     tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });

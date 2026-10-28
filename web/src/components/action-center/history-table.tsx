@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { actionTexts } from '@/lib/action-center/display';
-import type { ActionHistoryItem } from '@/lib/action-center/history';
+import { FINAL_READING_DAY, type ActionHistoryItem } from '@/lib/action-center/history';
 import type { ActionStatus } from '@/lib/action-center/registry';
 import { ActionIcon, PriorityBadge } from './action-table';
 import { cn } from '@/lib/utils';
@@ -100,10 +100,29 @@ function ResultCell({ item }: { item: ActionHistoryItem }) {
 
   if (position) return <div className="space-y-0.5">{position}</div>;
 
+  // Only a completed action is measured. A dismissed one's outcome reads
+  // pending, or not measurable from before (00084): neither says why.
+  if (item.status === 'dismissed') {
+    return (
+      <div className="space-y-0.5">
+        <p className="text-xs text-muted-foreground">{t('dismissedResult.label')}</p>
+        <p className="text-[11px] text-muted-foreground/70">{t('dismissedResult.hint')}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-0.5">
       <p className="text-xs text-muted-foreground">{tOutcome(item.outcome)}</p>
-      <p className="text-[11px] text-muted-foreground/70">{t(`outcomeHint.${item.outcome}`)}</p>
+      <p className="text-[11px] text-muted-foreground/70">
+        {/* Not final yet (learning B1): the reading so far, of the month's. */}
+        {item.readings?.length && !item.outcomeFinal
+          ? t('outcomeSoFar', {
+              day: item.readings[item.readings.length - 1].day,
+              final: FINAL_READING_DAY,
+            })
+          : t(`outcomeHint.${item.outcome}`)}
+      </p>
     </div>
   );
 }
