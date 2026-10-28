@@ -845,12 +845,14 @@ export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch', 'shopLinksLive']);
 
 /**
  * What to do instead, for the open rules the agent doesn't fix: its
- * message's key, the extra H1s' first, then the feed's.
+ * message's key, the extra H1s' first, then the feed's and the shopping
+ * links', one message for both when both are open.
  */
 export const notForAgentMessage = (open: readonly { rule: { key: string } }[]) => {
   const has = (key: string) => open.some(({ rule }) => rule.key === key);
   if (has('oneH1')) return 'notForAgent';
-  return has('shopLinksLive') && !has('feedMatch') ? 'notForAgentShopping' : 'notForAgentFeed';
+  if (!has('shopLinksLive')) return 'notForAgentFeed';
+  return has('feedMatch') ? 'notForAgentFeedShopping' : 'notForAgentShopping';
 };
 
 /**

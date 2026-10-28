@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, Fragment, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -107,35 +107,39 @@ async function render(
     disclosureAdded = false,
     product = null as Parameters<typeof BeforePublish>[0]['product'],
     category = null as Parameters<typeof BeforePublish>[0]['category'],
+    strict = false,
     shopping = null as Parameters<typeof BeforePublish>[0]['shopping'],
   } = {},
 ) {
+  const Wrap = strict ? StrictMode : Fragment;
   await act(async () => {
     root.render(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <BeforePublish
-          mode={mode}
-          paste={paste}
-          onFillNow={onFillNow}
-          contentByline={contentByline}
-          onContinue={onContinue}
-          onClose={() => {}}
-          quality={q}
-          title={title}
-          isNew={isNew}
-          pageType={pageType}
-          image={image}
-          linksPending={linksPending}
-          product={product}
-          category={category}
-          shopping={shopping}
-          onMarkReady={onMarkReady}
-          onFixFirst={onFixFirst}
-          disclosureLine={disclosureLine}
-          disclosureAdded={disclosureAdded}
-          onAddDisclosure={onAddDisclosure}
-        />
-      </NextIntlClientProvider>,
+      <Wrap>
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <BeforePublish
+            mode={mode}
+            paste={paste}
+            onFillNow={onFillNow}
+            contentByline={contentByline}
+            onContinue={onContinue}
+            onClose={() => {}}
+            quality={q}
+            title={title}
+            isNew={isNew}
+            pageType={pageType}
+            image={image}
+            linksPending={linksPending}
+            product={product}
+            category={category}
+            shopping={shopping}
+            onMarkReady={onMarkReady}
+            onFixFirst={onFixFirst}
+            disclosureLine={disclosureLine}
+            disclosureAdded={disclosureAdded}
+            onAddDisclosure={onAddDisclosure}
+          />
+        </NextIntlClientProvider>
+      </Wrap>,
     );
   });
 }
@@ -641,6 +645,107 @@ describe('BeforePublish', () => {
     await act(async () => button('Continue to send')!.click());
     expect(onContinue).toHaveBeenCalled();
     expect(onMarkReady).not.toHaveBeenCalled();
+  });
+
+  it('folds the code away on Send to CMS, and shows it on a click', async () => {
+    await render(quality(), { mode: 'send' });
+    expect(dialog().querySelector('pre')).toBeNull();
+    // Copy JSON-LD is still there, for a CMS that doesn't add it.
+    expect(button('Copy JSON-LD')).toBeDefined();
+    await act(async () => button("Show the JSON-LD, for a CMS that doesn't add it")!.click());
+    expect(jsonLd()['@type']).toBe('Article');
+    // Export and Mark ready show it as before.
+    await render(quality(), { mode: 'export' });
+    expect(dialog().querySelector('pre')).not.toBeNull();
+  });
+
+  it('opens and folds the code with one button, its focus on the code it opens', async () => {
+    await render(quality(), { mode: 'send' });
+    const show = button("Show the JSON-LD, for a CMS that doesn't add it")!;
+    expect(show.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => show.click());
+    expect(show.getAttribute('aria-expanded')).toBe('true');
+    const code = dialog().querySelector('pre')!;
+    expect(show.getAttribute('aria-controls')).toBe(code.id);
+    expect(document.activeElement).toBe(code);
+    await act(async () => show.click());
+    expect(show.getAttribute('aria-expanded')).toBe('false');
+    expect(dialog().querySelector('pre')).toBeNull();
+    // Export shows its code with no button to fold it.
+    await render(quality(), { mode: 'export' });
+    expect(dialog().querySelector('[aria-expanded]')).toBeNull();
+  });
+
+  it('says the headline is left out with the code folded too', async () => {
+    await render(quality(), { mode: 'send', title: 'How [name of a real person] forecasts' });
+    expect(dialog().querySelector('pre')).toBeNull();
+    expect(dialog().textContent).toContain(
+      'The title still has a placeholder in square brackets, so the code leaves the headline out.',
+    );
+  });
+
+  it('goes straight on to the Send dialog when there is nothing to ask about', async () => {
+    const fine = quality({ trust: trustRead({ score: 90 }) });
+    await render(fine, { mode: 'send' });
+    expect(onContinue).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    // Trust read with no score: no figure or dated source to score, nothing to ask.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render(quality({ trust: trustRead({ score: null }) }), { mode: 'send' });
+    expect(onContinue).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('goes on to the Send dialog once in StrictMode, which runs an effect twice', async () => {
+    await render(quality({ trust: trustRead({ score: 90 }) }), { mode: 'send', strict: true });
+    expect(onContinue).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('asks on Send to CMS while Trust, the authors, a category’s products or the shopping links aren’t read yet', async () => {
+    const again = async () => {
+      await act(async () => root.unmount());
+      root = createRoot(container);
+    };
+    // Trust not read yet.
+    await render(quality({ trust: null }), { mode: 'send' });
+    expect(button('Continue to send')).toBeDefined();
+    await again();
+    // The authors not read yet.
+    await render(quality({ trust: trustRead({ score: 90 }), eeat: null }), { mode: 'send' });
+    expect(button('Continue to send')).toBeDefined();
+    await again();
+    // A category page whose products are still being read.
+    await render(quality({ trust: trustRead({ score: 90 }) }), {
+      mode: 'send',
+      pageType: 'category_page',
+      category: { items: [], status: 'reading' },
+    });
+    expect(button('Continue to send')).toBeDefined();
+    await again();
+    // The page's shopping links still being read against the catalog.
+    await render(quality({ trust: trustRead({ score: 90 }) }), {
+      mode: 'send',
+      shopping: 'reading',
+    });
+    expect(button('Continue to send')).toBeDefined();
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it('asks on Send to CMS when something is missing, its links still being read, or Trust is under 60', async () => {
+    const fine = { trust: trustRead({ score: 90 }) };
+    await render(quality({ ...fine, author: null }), { mode: 'send' });
+    expect(button('Continue to send')).toBeDefined();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render(quality(fine), { mode: 'send', linksPending: 2 });
+    expect(button('Continue to send')).toBeDefined();
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render(quality(fine), { mode: 'send', paste: { ...clean, placeholders: 1 } });
+    expect(button('Continue to send')).toBeDefined();
+    expect(onContinue).not.toHaveBeenCalled();
   });
 
   it('goes to what would raise Trust from Export too', async () => {
