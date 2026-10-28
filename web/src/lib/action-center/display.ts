@@ -38,6 +38,14 @@ export function humanizeKind(kind: string): string {
 }
 
 /**
+ * A kind's name, as a group of actions (the History scorecard, learning
+ * B3): its title without targets, else its id read as words.
+ */
+export function actionKindName(kind: string, t: Translator): string {
+  return isActionKind(kind) ? t(`${kind}.titleGeneric`) : humanizeKind(kind);
+}
+
+/**
  * "11 prompts", "6 sources" — how many of what an action is about.
  *
  * Every payload carries `targetEntity` and `targetCount` (server
@@ -240,6 +248,10 @@ export function actionEventText(
     // The validation sweep's verdict once the action closed: improved,
     // declined, and so on.
     outcome: String(event.data.outcome ?? ''),
+    // Which reading it was, counted from the close, and whether the last
+    // (learning B1); none for one measured once before.
+    day: Number(event.data.day ?? 0),
+    final: event.data.final === true ? 'yes' : 'no',
   });
 }
 

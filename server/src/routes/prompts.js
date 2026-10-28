@@ -38,6 +38,7 @@ import {
   loadImproveRounds,
   sendImproveToActionCenter,
 } from '../lib/action-center/from-prompt-improve.js';
+import { brandPromptKeys, demandResponse } from '../lib/prompt-demand.js';
 
 const router = Router();
 
@@ -1082,6 +1083,38 @@ router.get('/:promptId/improve', readImprove, async (req, res) => {
     return res
       .status(error.status || 500)
       .json({ error: error.message || 'Failed to load suggestions' });
+  }
+});
+
+// The prompt's real demand (PROMPT-014): the signals the nightly sweep read
+// and their level, for the Demand card, each People Also Ask question with
+// whether the brand already tracks it. A read: a workspace whose plan has
+// ended still sees what was read.
+router.get('/:promptId/demand', async (req, res) => {
+  try {
+    const promptId = req.params.promptId;
+    const { brandId } = await loadImprovePrompt(promptId, req.user.id);
+    const [demand, volume] = await Promise.all([
+      supabaseAdmin.from('prompt_demand').select('*').eq('prompt_id', promptId).maybeSingle(),
+      supabaseAdmin
+        .from('prompt_volumes')
+        .select('google_volumes, location_code, language_code, fetched_at')
+        .eq('prompt_id', promptId)
+        .order('fetched_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (demand.error) throw demand.error;
+    if (volume.error) throw volume.error;
+    const trackedKeys = demand.data?.paa?.questions?.length
+      ? await brandPromptKeys(brandId)
+      : undefined;
+    return res.json({ demand: demandResponse(demand.data, volume.data, { trackedKeys }) });
+  } catch (error) {
+    req.log.error({ err: error }, 'prompt demand read error');
+    return res
+      .status(error.status || 500)
+      .json({ error: error.status ? error.message : 'Failed to load demand' });
   }
 });
 
