@@ -37,6 +37,10 @@ vi.mock('../logger.js', () => ({
 }));
 let credentials;
 vi.mock('./credentials.js', () => ({ readCmsCredentials: async () => credentials }));
+const markDeliveryPublished = vi.fn();
+vi.mock('../content-published.js', () => ({
+  markDeliveryPublished: (...args) => markDeliveryPublished(...args),
+}));
 const wordpress = { createPost: vi.fn(), readPost: vi.fn(), updatePost: vi.fn() };
 vi.mock('./wordpress.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -86,6 +90,7 @@ beforeEach(() => {
   queries.length = 0;
   updates.length = 0;
   logged.length = 0;
+  markDeliveryPublished.mockReset().mockResolvedValue(undefined);
   wordpress.createPost.mockReset().mockResolvedValue({ id: 41, status: 'draft', link: null });
   wordpress.readPost.mockReset().mockResolvedValue({ id: 7, status: 'draft', link: null });
   wordpress.updatePost.mockReset().mockResolvedValue({ id: 7, status: 'draft', link: null });
@@ -163,6 +168,26 @@ describe('sendToWordPress', () => {
     }
     expect(wordpress.updatePost).not.toHaveBeenCalled();
     expect(wordpress.createPost).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the publish its last send’s post had, found live before the check saw it', async () => {
+    previous = '7';
+    wordpress.readPost.mockResolvedValueOnce({
+      id: 7,
+      status: 'publish',
+      link: `${SITE}/cold-brew/`,
+    });
+    await send();
+    expect(markDeliveryPublished).toHaveBeenCalledWith(
+      expect.objectContaining({ external_id: '7' }),
+      `${SITE}/cold-brew/`,
+    );
+    // Scheduled isn't live yet.
+    previous = '7';
+    markDeliveryPublished.mockClear();
+    wordpress.readPost.mockResolvedValueOnce({ id: 7, status: 'future', link: `${SITE}/?p=7` });
+    await send();
+    expect(markDeliveryPublished).not.toHaveBeenCalled();
   });
 
   it('makes a new post when the last one is gone or in the trash', async () => {

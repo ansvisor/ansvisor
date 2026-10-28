@@ -34,6 +34,7 @@ import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
+import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -346,6 +347,10 @@ async function runDailyTracking() {
   // Pages sent to Webflow, published there since (#1331): read once a day.
   sweepWebflowPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[webflow-status] daily sweep failed');
+  });
+  // And to WordPress (00294), once a day too.
+  sweepWordPressPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wordpress-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
