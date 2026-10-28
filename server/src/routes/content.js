@@ -38,6 +38,9 @@ import {
   runningSuggestionJob,
 } from '../lib/prompt-content-suggestion.js';
 
+/** What a send says of a webhook that redirects, and the test too: nothing reaches where it points. */
+const WEBHOOK_REDIRECT_ERROR = 'The webhook address redirects. Use the address it redirects to.';
+
 const router = Router();
 
 /** The job a repeated "+ New" or alternative request already started. */
@@ -897,6 +900,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
     let sent = 0;
     let failed = 0;
+    // Failed because the address redirects: every row meets the same one.
+    let redirected = 0;
     // What the workflow receives reads the way the page shows it.
     const competitors = await competitorNames(brandId);
 
@@ -942,6 +947,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
         // A redirect isn't followed, so nothing arrived: not sent.
         if (isRedirect(webhookRes.status)) {
           failed++;
+          redirected++;
           continue;
         }
         const responseBody = webhookRes.answer;
@@ -970,7 +976,7 @@ router.post('/bulk/send-webhook', async (req, res) => {
       }
     }
 
-    return res.json({ sent, failed });
+    return res.json({ sent, failed, redirected });
   } catch (error) {
     req.log.error({ err: error }, 'bulk send webhook error');
     return res.status(500).json({
@@ -1132,7 +1138,7 @@ router.post('/:id/send-webhook', async (req, res) => {
     // opportunity keeps its status, as Send to CMS fails a 3xx.
     if (isRedirect(webhookRes.status)) {
       return res.status(502).json({
-        error: 'The webhook address redirects. Use the address it redirects to.',
+        error: WEBHOOK_REDIRECT_ERROR,
         code: 'webhook_redirect',
         webhookStatus: webhookRes.status,
       });
@@ -1257,8 +1263,9 @@ router.post('/webhook-test', webhookTestLimiter, async (req, res) => {
       success: webhookRes.status >= 200 && webhookRes.status < 300,
       status: webhookRes.status,
       statusText: STATUS_CODES[webhookRes.status] ?? '',
-      // Where a redirect points (postJson gives it for a 3xx only), so the
-      // dialog can name the address to use.
+      // A redirect in a send's words, and where it points (postJson gives
+      // it for a 3xx only), so the dialog can name the address to use.
+      ...(isRedirect(webhookRes.status) ? { error: WEBHOOK_REDIRECT_ERROR } : {}),
       ...(webhookRes.location ? { location: webhookRes.location } : {}),
     });
   } catch (error) {

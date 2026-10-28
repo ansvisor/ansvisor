@@ -58,6 +58,11 @@ export interface DraftRulesState {
   /** The sections and questions the rules ask for take more than Length allows. */
   lengthConflict: { need: number; max: number } | null;
   /**
+   * The draft's brand reads a Google Merchant Center account into its
+   * catalog (the shopping check's): the Shopping hints say what it accepts.
+   */
+  merchantCenter?: boolean;
+  /**
    * The rules checked against another page (an agent's change applied to a
    * copy): what it would meet and break (editor test 2026-10-25).
    */
@@ -278,6 +283,7 @@ export function useDraftRules({
     total,
     length: ruleLength(rules, setType),
     lengthConflict: conflict,
+    merchantCenter: typeof shopping === 'object' && shopping !== null && shopping.merchantCenter,
     checkHtml,
     change: (key, change) =>
       edited({
