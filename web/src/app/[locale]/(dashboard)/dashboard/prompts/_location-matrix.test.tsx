@@ -153,16 +153,49 @@ describe('LocationMatrix', () => {
 });
 
 describe('loadLocationMatrix', () => {
-  it('reads a matrix once a minute, and again after the cache is cleared', async () => {
+  it('reads a location once a minute, and again after the cache is cleared', async () => {
     const window = { from: '2026-10-21T00:00:00Z' };
     await loadLocationMatrix(BRAND, window, ['US', 'TR']);
-    await loadLocationMatrix(BRAND, window, ['US', 'TR']);
+    expect(await loadLocationMatrix(BRAND, window, ['US'])).toEqual({
+      p1: { US: cell(62) },
+      p2: { US: cell(20, 6.4) },
+    });
     expect(getPromptLocationMatrix).toHaveBeenCalledTimes(1);
-    await loadLocationMatrix(BRAND, window, ['US']);
-    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
     clearLocationMatrixCache();
     await loadLocationMatrix(BRAND, window, ['US', 'TR']);
-    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(3);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads only a location not read yet, as a new location column needs', async () => {
+    const window = { from: '2026-10-21T00:00:00Z' };
+    await loadLocationMatrix(BRAND, window, ['US']);
+    getPromptLocationMatrix.mockResolvedValueOnce({ p1: { DE: cell(50) } });
+    expect(await loadLocationMatrix(BRAND, window, ['US', 'DE'])).toEqual({
+      p1: { US: cell(62), DE: cell(50) },
+      p2: { US: cell(20, 6.4) },
+    });
+    expect(getPromptLocationMatrix).toHaveBeenLastCalledWith(BRAND, {
+      from: '2026-10-21T00:00:00Z',
+      to: undefined,
+      regions: ['DE'],
+    });
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs one read at a time, so a read-ahead never adds to one running', async () => {
+    const window = { from: '2026-10-21T00:00:00Z' };
+    let finish = () => {};
+    getPromptLocationMatrix.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = () => resolve({ p1: { US: cell(62) } }))),
+    );
+    const first = loadLocationMatrix(BRAND, window, ['US']);
+    const second = loadLocationMatrix(BRAND, window, ['US', 'TR']);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(1);
+    finish();
+    await Promise.all([first, second]);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
+    expect(getPromptLocationMatrix.mock.calls[1][1].regions).toEqual(['TR']);
   });
 
   it('reads again after a failed read', async () => {

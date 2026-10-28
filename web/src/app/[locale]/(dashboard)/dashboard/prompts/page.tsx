@@ -1528,8 +1528,10 @@ export default function PromptsPage() {
   }, [loadData, promptDataWanted]);
 
   // After prompts are added, paused, resumed, deleted or retargeted: reload
-  // the table and the usage cards together.
+  // the table and the usage cards together, and read the locations' figures
+  // (PROMPT-015b) anew.
   const reloadAfterChange = useCallback(() => {
+    clearLocationMatrixCache();
     setUsageVersion((v) => v + 1);
     return loadData();
   }, [loadData]);
