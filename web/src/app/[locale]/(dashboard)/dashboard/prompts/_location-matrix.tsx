@@ -30,6 +30,42 @@ import { parseLocation, regionFlag, regionLabel } from '@/lib/region';
 import { cn } from '@/lib/utils';
 import type { Prompt } from '@/types';
 
+/** Matrices read in the last minute, by key: switching views reads nothing again. */
+const MATRIX_CACHE_MS = 60_000;
+const matrixCache = new Map<string, { at: number; read: Promise<PromptLocationMatrix> }>();
+
+export function matrixKey(
+  brandId: string,
+  window: { from: string; to?: string },
+  regions: string[],
+) {
+  return `${brandId}:${window.from}:${window.to ?? ''}:${regions.join(',')}`;
+}
+
+/**
+ * The matrix for these locations: the one read in the last minute, or a new
+ * read (getPromptLocationMatrix). Also how the view's Locations button reads
+ * ahead on hover, so the view opens on data already there.
+ */
+export function loadLocationMatrix(
+  brandId: string,
+  window: { from: string; to?: string },
+  regions: string[],
+): Promise<PromptLocationMatrix> {
+  const key = matrixKey(brandId, window, regions);
+  const kept = matrixCache.get(key);
+  if (kept && Date.now() - kept.at < MATRIX_CACHE_MS) return kept.read;
+  const read = getPromptLocationMatrix(brandId, { from: window.from, to: window.to, regions });
+  matrixCache.set(key, { at: Date.now(), read });
+  read.catch(() => matrixCache.delete(key));
+  return read;
+}
+
+/** After locations change: the next read is a new one. */
+export function clearLocationMatrixCache() {
+  matrixCache.clear();
+}
+
 /** A location's kind, for its column's second line. */
 function locationKind(code: string): 'country' | 'state' | 'city' {
   const parsed = parseLocation(code);
@@ -66,7 +102,7 @@ export function LocationMatrix({
   const [metric, setMetric] = useState<LocationMetric>('visibility');
   const allRegions = matrixLocations(rows);
   const regions = allRegions.slice(0, MATRIX_REGIONS);
-  const key = `${brandId}:${window.from}:${window.to ?? ''}:${regions.join(',')}`;
+  const key = matrixKey(brandId, window, regions);
   const [read, setRead] = useState<{ key: string; matrix: PromptLocationMatrix | 'failed' } | null>(
     null,
   );
@@ -74,7 +110,7 @@ export function LocationMatrix({
   useEffect(() => {
     if (!regions.length) return;
     let cancelled = false;
-    getPromptLocationMatrix(brandId, { from: window.from, to: window.to, regions })
+    loadLocationMatrix(brandId, window, regions)
       .then((matrix) => {
         if (!cancelled) setRead({ key, matrix });
       })

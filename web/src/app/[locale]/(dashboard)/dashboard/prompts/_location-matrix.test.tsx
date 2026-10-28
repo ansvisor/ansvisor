@@ -9,7 +9,8 @@ import type { Prompt } from '@/types';
 const getPromptLocationMatrix = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/prompt', () => ({ getPromptLocationMatrix }));
 
-const { LocationMatrix } = await import('./_location-matrix');
+const { LocationMatrix, clearLocationMatrixCache, loadLocationMatrix } =
+  await import('./_location-matrix');
 
 /** Tracked Prompts' Locations view (PROMPT-015b). */
 
@@ -61,6 +62,7 @@ const bodyRows = () =>
   );
 
 beforeEach(() => {
+  clearLocationMatrixCache();
   getPromptLocationMatrix.mockReset().mockResolvedValue({
     p1: { US: cell(62), TR: cell(35, null) },
     p2: { US: cell(20, 6.4) },
@@ -147,5 +149,27 @@ describe('LocationMatrix', () => {
       );
     });
     expect(container.textContent).toContain("Your prompts aren't tracked in a location yet.");
+  });
+});
+
+describe('loadLocationMatrix', () => {
+  it('reads a matrix once a minute, and again after the cache is cleared', async () => {
+    const window = { from: '2026-10-21T00:00:00Z' };
+    await loadLocationMatrix(BRAND, window, ['US', 'TR']);
+    await loadLocationMatrix(BRAND, window, ['US', 'TR']);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(1);
+    await loadLocationMatrix(BRAND, window, ['US']);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
+    clearLocationMatrixCache();
+    await loadLocationMatrix(BRAND, window, ['US', 'TR']);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(3);
+  });
+
+  it('reads again after a failed read', async () => {
+    getPromptLocationMatrix.mockRejectedValueOnce(new Error('down'));
+    const window = { from: '2026-10-21T00:00:00Z' };
+    await expect(loadLocationMatrix(BRAND, window, ['US'])).rejects.toThrow('down');
+    await loadLocationMatrix(BRAND, window, ['US']);
+    expect(getPromptLocationMatrix).toHaveBeenCalledTimes(2);
   });
 });

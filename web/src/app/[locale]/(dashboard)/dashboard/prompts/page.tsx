@@ -131,7 +131,6 @@ import {
 import {
   deletePrompt,
   deletePrompts,
-  getPromptLocationMatrix,
   getPromptsPageData,
   importPrompts,
   setPromptActive,
@@ -198,7 +197,7 @@ import {
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
 import { ColumnsPanel } from './_columns-panel';
-import { LocationMatrix } from './_location-matrix';
+import { LocationMatrix, loadLocationMatrix } from './_location-matrix';
 import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
 import {
   effectiveView,
@@ -2889,6 +2888,12 @@ function AllPromptsTab({
   useEffect(() => {
     setLayout(readUrlChoice('layout', ['table', 'locations'] as const, 'table'));
   }, []);
+  const prefetchLocations = () => {
+    const regions = matrixLocations(filtered);
+    if (layout === 'table' && regions.length) {
+      loadLocationMatrix(activeBrandId, positionsWindow, regions).catch(() => {});
+    }
+  };
   const changeLayout = (next: 'table' | 'locations') => {
     setLayout(next);
     const params = new URLSearchParams(window.location.search);
@@ -2911,11 +2916,7 @@ function AllPromptsTab({
   useEffect(() => {
     if (layout !== 'table' || !columnRegions.length) return;
     let cancelled = false;
-    getPromptLocationMatrix(activeBrandId, {
-      from: positionsWindow.from,
-      to: positionsWindow.to,
-      regions: columnRegions,
-    })
+    loadLocationMatrix(activeBrandId, positionsWindow, columnRegions)
       .then((matrix) => {
         if (!cancelled) setColumnMatrix({ key: columnMatrixKey, matrix });
       })
@@ -3789,6 +3790,9 @@ function AllPromptsTab({
                   type="button"
                   aria-pressed={layout === l}
                   onClick={() => changeLayout(l)}
+                  // Read ahead, so the Locations view opens on its data.
+                  onPointerEnter={l === 'locations' ? prefetchLocations : undefined}
+                  onFocus={l === 'locations' ? prefetchLocations : undefined}
                   className={cn(
                     'h-7 rounded-full px-3 text-xs transition-colors',
                     layout === l

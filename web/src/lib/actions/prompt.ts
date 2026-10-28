@@ -1180,18 +1180,22 @@ export async function getPromptLocationMatrix(
     from: opts.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
     to: opts.to,
   };
-  const included = (await includedPositionPlatforms(brandId)) ?? [];
-  const reads = await Promise.all(
-    regions.map((region) =>
-      Promise.all([
-        getPromptVisibilitySummaries(brandId, { days, from: opts.from, to: opts.to, region }),
-        positionSums(brandId, window, region).catch((err) => {
-          console.error('[prompts] location position sums failed:', err);
-          return new Map<string, PlatformPositionRow[]>();
-        }),
-      ]),
+  // Every read at once: the plan's engines and each location's figures.
+  const [platforms, reads] = await Promise.all([
+    includedPositionPlatforms(brandId),
+    Promise.all(
+      regions.map((region) =>
+        Promise.all([
+          getPromptVisibilitySummaries(brandId, { days, from: opts.from, to: opts.to, region }),
+          positionSums(brandId, window, region).catch((err) => {
+            console.error('[prompts] location position sums failed:', err);
+            return new Map<string, PlatformPositionRow[]>();
+          }),
+        ]),
+      ),
     ),
-  );
+  ]);
+  const included = platforms ?? [];
   const cells: Record<string, Record<string, PromptLocationCell>> = {};
   regions.forEach((region, i) => {
     const [visibility, positions] = reads[i];
