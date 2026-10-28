@@ -161,6 +161,8 @@ describe('catalog_suggestion_categories (00371)', () => {
     expect(sql).toMatch(
       /join public\.catalog_products p\s+on p\.id = pc\.product_id and p\.brand_id = p_brand_id and p\.removed_at is null/,
     );
+    // Its live variants, as catalog_variants_brand_live_idx (00281) reads them.
+    expect(sql).toMatch(/where v\.brand_id = p_brand_id\s+and v\.removed_at is null/);
     expect(sql).toMatch(/order by v\.product_id, coalesce\(v\.sale_price, v\.price\), v\.id/);
     // The "under" price: three quarters of the products at or under it.
     expect(sql).toMatch(/percentile_disc\(0\.75\) within group \(order by pr\.amount\)/);
