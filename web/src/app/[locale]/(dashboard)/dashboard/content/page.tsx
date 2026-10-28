@@ -85,6 +85,7 @@ import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-pla
 import { OpportunityRowMenu } from '@/components/content/opportunity-row-menu';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { bulkSendNotes } from '@/lib/content/bulk-send';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -943,8 +944,10 @@ export default function ContentPage() {
         toast.error(result.error);
         return;
       }
-      toast.success(t('bulkSentToast', { sent: result.sent }));
-      if (result.failed > 0) toast.error(t('bulkSendPartialError', { failed: result.failed }));
+      const notes = bulkSendNotes(result);
+      if (notes.sent !== null) toast.success(t('bulkSentToast', { sent: notes.sent }));
+      if (notes.failure === 'redirect') toast.error(t('bulkSendRedirect'));
+      else if (notes.failure) toast.error(t('bulkSendPartialError', { failed: result.failed }));
       setSelectedIds(new Set());
       await loadData(true);
     } catch (err) {
