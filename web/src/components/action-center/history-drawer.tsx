@@ -213,6 +213,14 @@ export function HistoryDrawer({
                 {t('drawer.measuredOn', { ...item.measuredOn })}
               </p>
             )}
+            {item.auditAfter && (
+              // A fix's own aim: does the page pass when audited again?
+              <p className="mt-1 text-xs">
+                {item.auditAfter.audited
+                  ? t('drawer.auditAfter', { ...item.auditAfter })
+                  : t('drawer.auditNotYet', { pages: item.auditAfter.pages })}
+              </p>
+            )}
             {item.signalsAfter && (
               // The closest measure to the action's own aim: did what raised it end?
               <p className="mt-1 text-xs">{t('drawer.signalsAfter', { ...item.signalsAfter })}</p>

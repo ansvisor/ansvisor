@@ -122,6 +122,8 @@ export interface ActionHistoryItem {
    * A1), with the brand-wide figures kept as a second line.
    */
   measuredOn?: { entity: 'prompts' | 'pages'; count: number } | null;
+  /** A Site Audit fix's pages audited again since it closed, and how many pass (learning A2). */
+  auditAfter?: { pages: number; audited: number; passed: number } | null;
   brandWideResults?: ActionResultMetric[];
   /** Improve actions only: positions per platform against the baseline (PROMPT-008). */
   positionOutcome: ImproveOutcome | null;

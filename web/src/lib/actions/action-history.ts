@@ -73,6 +73,18 @@ interface ValidationSnapshot {
   scope?: { kind?: string; entity?: string; prompts?: number; pages?: number };
   /** The brand-wide figures, beside a measure on its targets. */
   brandWide?: ValidationSnapshot['metrics'];
+  /** A Site Audit fix's pages audited again (learning A2). */
+  audit?: { pages?: number; audited?: number; passed?: number };
+}
+
+/** A Site Audit fix's pages audited again, when the sweep read them. */
+function auditFrom(
+  validation: ValidationSnapshot | null,
+): { pages: number; audited: number; passed: number } | null {
+  const a = validation?.audit;
+  const pages = Number(a?.pages) || 0;
+  if (!pages) return null;
+  return { pages, audited: Number(a?.audited) || 0, passed: Number(a?.passed) || 0 };
 }
 
 /** The prompts or pages it was measured on, when it was measured on its own targets. */
@@ -298,6 +310,7 @@ export async function getActionHistory(
       results,
       signalsAfter: signalsFrom(row.validation),
       measuredOn: measuredOnFrom(row.validation),
+      auditAfter: auditFrom(row.validation),
       brandWideResults: resultsFrom(
         row.validation?.brandWide ? { ...row.validation, metrics: row.validation.brandWide } : null,
       ),
