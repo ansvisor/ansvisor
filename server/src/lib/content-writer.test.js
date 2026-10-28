@@ -243,6 +243,28 @@ describe('briefText', () => {
     ).toContain('- Gear');
     expect(briefText(null, null)).toMatch(/^No brief/);
   });
+
+  /** What the pages AI cites have (learning C2), as the brief's rebuild read them. */
+  it('tells the writer what the cited pages have, seen rather than guessed', () => {
+    const text = briefText(
+      {
+        goal: 'Sell beans',
+        outline: [{ heading: 'Ratio' }],
+        citedFeatures: {
+          pages: 4,
+          checks: [
+            { key: 'faq-schema', label: 'FAQ schema', pages: 3 },
+            { key: 'tables', label: 'Tables', pages: 2 },
+          ],
+        },
+      },
+      null,
+    );
+    expect(text).toContain(
+      "What the pages AI cites for these prompts have (Site Audit's checks, 4 pages read): FAQ schema on 3; Tables on 2. Give the page these where they serve its readers.",
+    );
+    expect(briefText({ goal: 'Sell beans', outline: [] }, null)).not.toContain('pages AI cites');
+  });
 });
 
 describe('startDraftWriting', () => {

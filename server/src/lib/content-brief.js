@@ -538,6 +538,18 @@ export async function rebuildDraftBrief({ draftId, brandId, sources, rules = [] 
   }
 }
 
+/**
+ * The cited pages' read as the brief keeps it: their length (CE-030), and
+ * what Site Audit's checks find on them (learning C2), when read.
+ */
+function citedOf(cited) {
+  if (!cited) return { citedLength: null };
+  return {
+    citedLength: { characters: cited.characters, pages: cited.pages },
+    ...(cited.features ? { citedFeatures: cited.features } : {}),
+  };
+}
+
 /** The rebuild itself, step by step: nothing is saved once it is stopped. */
 async function briefWithRun({
   draft,
@@ -611,7 +623,7 @@ async function briefWithRun({
       pages: sources.pages.length,
       queries: sources.queries.length,
     },
-    citedLength: await citedLength,
+    ...citedOf(await citedLength),
   };
   // Stopped meanwhile: the brief stays as it was.
   await stopIfStopped(run);

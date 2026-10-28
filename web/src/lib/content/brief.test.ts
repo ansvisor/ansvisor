@@ -117,6 +117,17 @@ describe('the brief', () => {
     ).toBe(false);
   });
 
+  /** What the cited pages have (learning C2); one that doesn't read as that is left out. */
+  it('keeps what the cited pages have, and leaves out a shape it can’t read', () => {
+    const features = { pages: 3, checks: [{ key: 'faq-schema', label: 'FAQ schema', pages: 2 }] };
+    expect(draftBriefSchema.parse({ ...brief, citedFeatures: features }).citedFeatures).toEqual(
+      features,
+    );
+    expect(
+      draftBriefSchema.parse({ ...brief, citedFeatures: { pages: 0, checks: [] } }).citedFeatures,
+    ).toBeUndefined();
+  });
+
   it('reads version 2 as the server writes it, and a brief from before it as it was (brief-v2.json)', () => {
     const read = draftBriefSchema.parse(v2);
     // Every field kept: the server's sample, as it's tested there too.

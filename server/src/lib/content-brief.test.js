@@ -293,6 +293,20 @@ describe('rebuildDraftBrief', () => {
     ]);
   });
 
+  /** What the cited pages have (learning C2), read with their length, kept on the brief. */
+  it('keeps what the cited pages have beside their length', async () => {
+    const features = { pages: 2, checks: [{ key: 'faq-schema', label: 'FAQ schema', pages: 2 }] };
+    citedPagesLength.mockResolvedValue({ characters: 4300, pages: 2, features });
+    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(brief.citedLength).toEqual({ characters: 4300, pages: 2 });
+    expect(brief.citedFeatures).toEqual(features);
+
+    citedPagesLength.mockResolvedValue(null);
+    const none = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    expect(none.citedLength).toBeNull();
+    expect(none).not.toHaveProperty('citedFeatures');
+  });
+
   it('refuses a draft of another brand before any model call', async () => {
     rows.content_drafts = {
       ...rows.content_drafts,
