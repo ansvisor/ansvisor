@@ -688,6 +688,8 @@ export default function PromptDetailPage() {
   // Its real demand (PROMPT-014): read by the server every night.
   const [demand, setDemand] = useState<PromptDemand | null>(null);
   const [demandFailed, setDemandFailed] = useState(false);
+  // An API without the demand route yet: the page shows no Demand section.
+  const [demandUnavailable, setDemandUnavailable] = useState(false);
   // The brand's Search Console, for the Demand card's state; bumped on connect.
   const [gscStatus, setGscStatus] = useState<GoogleSourceStatus | null>(null);
   const [sourcesRead, setSourcesRead] = useState(0);
@@ -728,10 +730,12 @@ export default function PromptDetailPage() {
     let cancelled = false;
     setDemand(null);
     setDemandFailed(false);
+    setDemandUnavailable(false);
     getPromptDemandSignals(promptId)
       .then((res) => {
         if (cancelled) return;
         if ('demand' in res) setDemand(res.demand);
+        else if ('unavailable' in res) setDemandUnavailable(true);
         else setDemandFailed(true);
       })
       .catch(() => {
@@ -1037,15 +1041,17 @@ export default function PromptDetailPage() {
             )}
           </div>
 
-          <DemandSection
-            demand={demand}
-            failed={demandFailed}
-            gscStatus={gscStatus}
-            brandId={data.prompt.brandId}
-            topic={data.prompt.topicName ?? ''}
-            canManage={canManage}
-            onGscConnected={() => setSourcesRead((n) => n + 1)}
-          />
+          {!demandUnavailable && (
+            <DemandSection
+              demand={demand}
+              failed={demandFailed}
+              gscStatus={gscStatus}
+              brandId={data.prompt.brandId}
+              topic={data.prompt.topicName ?? ''}
+              canManage={canManage}
+              onGscConnected={() => setSourcesRead((n) => n + 1)}
+            />
+          )}
 
           <Card>
             <CardHeader className="pb-3">

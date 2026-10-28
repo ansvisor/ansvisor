@@ -8,11 +8,13 @@ import { questionKey, type PromptDemand } from '@/lib/prompt-demand';
 /**
  * A prompt's real demand (PROMPT-014) for its Demand card: what the
  * server's nightly sweep read. A failure comes back as a value, so the card
- * can say it couldn't load instead of the page failing.
+ * can say it couldn't load instead of the page failing. A 404 without our
+ * error body is an API that doesn't have the route yet: `unavailable`, and
+ * the page leaves the section out.
  */
 export async function getPromptDemandSignals(
   promptId: string,
-): Promise<{ demand: PromptDemand } | { error: string }> {
+): Promise<{ demand: PromptDemand } | { error: string } | { unavailable: true }> {
   const supabase = await createClient();
   const {
     data: { session },
@@ -26,6 +28,7 @@ export async function getPromptDemandSignals(
       signal: AbortSignal.timeout(15_000),
     });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 404 && !data.error && !data.message) return { unavailable: true };
     if (!res.ok || !data.demand) {
       return { error: data.message || data.error || `Server error: ${res.status}` };
     }

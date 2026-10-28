@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * "+ Track" on a People Also Ask question (PROMPT-014): the question is
@@ -11,6 +11,9 @@ let pages: [number, number][] = [];
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: 'token' } } }),
+    },
     from: (table: string) => {
       expect(table).toBe('prompts');
       const chain = {
@@ -32,7 +35,7 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
   trackPagePrompts: (...args: unknown[]) => trackPagePrompts(...args),
 }));
 
-const { trackDemandQuestion } = await import('./prompt-demand-signals');
+const { getPromptDemandSignals, trackDemandQuestion } = await import('./prompt-demand-signals');
 
 beforeEach(() => {
   brandPrompts = [{ text: 'What is the best AI search monitoring tool?' }];
@@ -82,5 +85,36 @@ describe('trackDemandQuestion', () => {
       error: 'Pick a question.',
     });
     expect(trackPagePrompts).not.toHaveBeenCalled();
+  });
+});
+
+describe('getPromptDemandSignals', () => {
+  const answer = (status: number, body: string) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(body, { status })),
+    );
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reads the demand', async () => {
+    answer(200, JSON.stringify({ demand: { level: 'high' } }));
+    expect(await getPromptDemandSignals('p1')).toEqual({ demand: { level: 'high' } });
+  });
+
+  it('is unavailable on an API without the route yet', async () => {
+    answer(404, '<pre>Cannot GET /api/prompts/p1/demand</pre>');
+    expect(await getPromptDemandSignals('p1')).toEqual({ unavailable: true });
+  });
+
+  it("keeps the route's own 404 and other failures as errors", async () => {
+    answer(404, JSON.stringify({ error: 'Prompt not found' }));
+    expect(await getPromptDemandSignals('p1')).toEqual({ error: 'Prompt not found' });
+    answer(500, JSON.stringify({ error: 'Failed to load demand' }));
+    expect(await getPromptDemandSignals('p1')).toEqual({ error: 'Failed to load demand' });
+    answer(502, 'Bad gateway');
+    expect(await getPromptDemandSignals('p1')).toEqual({ error: 'Server error: 502' });
   });
 });

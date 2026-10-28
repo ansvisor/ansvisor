@@ -287,6 +287,17 @@ export function trendsSignal(result, at) {
   return { ...base, trend, change };
 }
 
+/** A link the provider gave, kept only when it's an http(s) URL; null otherwise. */
+export function webUrl(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'https:' || protocol === 'http:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * People Also Ask on Google's first page (SERP organic, advanced): each
  * question (people_also_ask_element's title) and the page Google answers it
@@ -311,7 +322,7 @@ export function paaSignal(result, at) {
         : element.expanded_element;
       questions.push({
         question,
-        url: typeof expanded?.url === 'string' ? expanded.url : null,
+        url: webUrl(expanded?.url),
         domain: typeof expanded?.domain === 'string' ? expanded.domain : null,
       });
     }
@@ -334,7 +345,7 @@ export function youtubeSignal(result, at) {
     if (!top || count > top.views) {
       top = {
         title: String(video.title ?? '').slice(0, 300),
-        url: typeof video.url === 'string' ? video.url : null,
+        url: webUrl(video.url),
         channel: typeof video.channel_name === 'string' ? video.channel_name : null,
         views: count,
         published: typeof video.timestamp === 'string' ? video.timestamp : null,
