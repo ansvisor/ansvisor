@@ -2,6 +2,7 @@
 
 import { Loader2, PlayCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
@@ -10,7 +11,8 @@ import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
  * Under onboarding's plan cards, the other way in: the demo brand, with
  * sample data and no card. The person's own brand stays as set up, and its
  * tracking starts once a plan is picked. With `preload` (an admin with no
- * demo brand yet), its setup starts as the card shows.
+ * demo brand yet), its setup starts as the card shows; one still being
+ * prepared on the click shows the setup screen until it is ready.
  */
 export function ExploreDemoCard({
   brandName,
@@ -21,7 +23,7 @@ export function ExploreDemoCard({
 }) {
   const t = useTranslations('demo.onboarding');
   const tDemo = useTranslations('demo');
-  const { explore, opening } = useExploreDemo();
+  const { explore, opening, setupDialog } = useExploreDemo();
   usePreloadDemo(preload);
   return (
     <div className="mt-8" data-slot="explore-demo">
@@ -47,6 +49,7 @@ export function ExploreDemoCard({
           {opening ? tDemo('settingUp') : t('cta')}
         </Button>
       </div>
+      <DemoSetupDialog {...setupDialog} />
     </div>
   );
 }

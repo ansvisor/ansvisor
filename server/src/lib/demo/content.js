@@ -25,6 +25,7 @@ import { clusterQueries, MAX_QUERIES_PER_CLUSTER, scopeFingerprint } from '../pr
 import { BRAND, SOURCES, TOPICS } from './brewline.js';
 import { DRAFTS } from './content-pages.js';
 import { demoId } from './random.js';
+import { allSettledOrThrow, demoWriter } from './write.js';
 import * as S from './stats.js';
 
 /** The fan-out queries a cluster keeps: run in two answers at least (FANOUT_MIN_ANSWERS). */
@@ -511,14 +512,18 @@ export function contentRows({ brandId, now }, { actionFor = () => null } = {}) {
 export const SENT_OPPORTUNITY = 'sensitive-stomach';
 export { OPPORTUNITY_ACTION_KIND };
 
-const CHUNK = 250;
-
-async function insertRows(db, table, rows) {
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await db.from(table).insert(rows.slice(i, i + CHUNK));
-    if (error) throw new Error(`demo ${table} insert: ${error.message}`);
-  }
-}
+/** Its tables' key columns where a row has no `id` of its own. */
+const KEYS = {
+  prompt_cluster_members: 'prompt_id',
+  prompt_cluster_queries: 'cluster_id,query',
+  prompt_cluster_scopes: 'brand_id,topic_id',
+  content_plan_marks: 'brand_id,row_key',
+};
+/** Its tables without a brand_id, found through their cluster. */
+const SCOPES = {
+  prompt_cluster_members: ['cluster_id', 'prompt_clusters'],
+  prompt_cluster_queries: ['cluster_id', 'prompt_clusters'],
+};
 
 /**
  * The Content module. Cluster members and searches hang off the clusters
@@ -528,6 +533,10 @@ export const content = {
   name: 'content',
   // A draft points at the action its opportunity was sent as.
   after: 'actionCenter',
+  // Rebuilt in place (write.js): written over, what isn't written again deleted after.
+  inPlace: true,
+  keys: KEYS,
+  scopes: SCOPES,
   tables: [
     'prompt_cluster_scopes',
     'prompt_clusters',
@@ -536,20 +545,37 @@ export const content = {
     'content_plan_marks',
   ],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Each step's independent tables side by side, through the build's
+   * writer (a writer over `db` for a first build without one).
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild, keys: KEYS, scopes: SCOPES }).write,
+  }) {
     const sent = demoId(brandId, `action:opportunity:${SENT_OPPORTUNITY}`);
     const rows = contentRows(
       { brandId, now },
       { actionFor: (key) => (key === SENT_OPPORTUNITY ? sent : null) },
     );
-    await insertRows(db, 'prompt_clusters', rows.clusters);
-    await insertRows(db, 'prompt_cluster_members', rows.members);
-    await insertRows(db, 'prompt_cluster_queries', rows.queries);
-    await insertRows(db, 'prompt_cluster_scopes', rows.scopes);
-    await insertRows(db, 'content_opportunities', rows.opportunities);
-    await insertRows(db, 'content_drafts', rows.drafts);
-    await insertRows(db, 'content_plan_marks', rows.marks);
+    await allSettledOrThrow([
+      write('prompt_clusters', rows.clusters),
+      write('prompt_cluster_scopes', rows.scopes),
+      write('content_plan_marks', rows.marks),
+    ]);
+    // Members, searches and opportunities point at their cluster; the drafts
+    // at their opportunity.
+    await allSettledOrThrow([
+      write('prompt_cluster_members', rows.members),
+      write('prompt_cluster_queries', rows.queries),
+      write('content_opportunities', rows.opportunities),
+    ]);
+    await write('content_drafts', rows.drafts);
     return {
       clusters: rows.clusters.length,
       opportunities: rows.opportunities.length,

@@ -192,12 +192,22 @@ describe('useUpgradeGate', () => {
   });
 
   it('offers an admin the plans, to choose one right there', async () => {
-    await render({ active: false, status: 'canceled' });
-    await runAll();
-    expect(button('Choose Starter')).toBeDefined();
-    expect(button('Choose Growth')).toBeDefined();
-    expect(dialog()?.textContent).toContain('Card required. Cancel any time.');
-    expect(button('Update payment method')).toBeUndefined();
+    // The first-month code doesn't apply here: the plain Choose buttons.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ valid: false })),
+    );
+    try {
+      await render({ active: false, status: 'canceled' });
+      await runAll();
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+      expect(button('Choose Starter')).toBeDefined();
+      expect(button('Choose Growth')).toBeDefined();
+      expect(dialog()?.textContent).toContain('Card required. Cancel any time.');
+      expect(button('Update payment method')).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('takes an admin to Stripe’s billing page while a payment is being retried', async () => {

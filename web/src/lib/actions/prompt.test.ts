@@ -24,6 +24,8 @@ let previousPositionData: Record<string, unknown>[] | null = null;
 let positionsNull = false;
 /** The web deployed before 00153: PostgREST can't find the jsonb RPC. */
 let jsonRpcMissing = false;
+/** The brand read is the organization's demo brand (00380). */
+let brandIsDemo = false;
 /** The position RPC calls, and whether any asked for a slice. */
 let positionCalls: { fn: string; ranged: boolean }[] = [];
 
@@ -79,7 +81,10 @@ vi.mock('@/lib/supabase/server', () => ({
             table === 'prompt_sets'
               ? { data: promptSetRows, error: null }
               : { data: null, error: { message: `unexpected ${table}` } },
-          maybeSingle: async () => ({ data: { organization_id: 'org-1' }, error: null }),
+          maybeSingle: async () => ({
+            data: { organization_id: 'org-1', is_demo: brandIsDemo },
+            error: null,
+          }),
           single: async () =>
             promptRow
               ? {
@@ -221,6 +226,7 @@ describe('updatePromptLocations on paused prompts', () => {
 describe('getPromptsPageData', () => {
   beforeEach(() => {
     plan = capped(50);
+    brandIsDemo = false;
     promptRow = null;
     promptSetRows = [
       {
@@ -269,6 +275,7 @@ describe('getPromptsPageData', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('fills the Positions column from the position summaries', async () => {
@@ -276,6 +283,21 @@ describe('getPromptsPageData', () => {
 
     expect(page.positions.p1.avg).toBe(2);
     expect(page.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web']);
+  });
+
+  it("gives the demo brand Growth's engines in the Positions column, on any plan", async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    const [p1] = promptSetRows[0].prompts as Record<string, unknown>[];
+    p1.platforms = ['chatgpt-web', 'perplexity-web'];
+
+    // Starter's engines alone on the organization's own brand…
+    const own = await getPromptsPageData('b1');
+    expect(own.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web']);
+
+    // …and Growth's on its demo brand.
+    brandIsDemo = true;
+    const demo = await getPromptsPageData('b1');
+    expect(demo.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web', 'perplexity-web']);
   });
 
   /** 1000 rows of other prompts, which come before p1's in the RPC's order. */

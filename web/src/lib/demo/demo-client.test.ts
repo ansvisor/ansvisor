@@ -7,7 +7,7 @@ vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({ auth: { getSession: async () => ({ data: { session } }) } }),
 }));
 
-const { ensureDemoBrand, prepareDemoBrand, resetDemoPreparation, setDemoHidden } =
+const { demoPreparation, ensureDemoBrand, prepareDemoBrand, resetDemoPreparation, setDemoHidden } =
   await import('./demo-client');
 
 const fetchMock = vi.fn();
@@ -80,8 +80,25 @@ describe('prepareDemoBrand', () => {
   it('asks again after a failure', async () => {
     answer(500, {});
     expect(await prepareDemoBrand()).toEqual({ ok: false, status: 500 });
+    expect(demoPreparation()).toBeNull();
     answer(200, { brandId: 'demo1', version: 3, rebuilt: false });
     expect(await prepareDemoBrand()).toMatchObject({ ok: true, brandId: 'demo1' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('says when the setup was asked and whether it answered', async () => {
+    expect(demoPreparation()).toBeNull();
+    let reply: (res: Response) => void = () => {};
+    fetchMock.mockReturnValue(new Promise<Response>((resolve) => (reply = resolve)));
+    const before = Date.now();
+    const request = prepareDemoBrand();
+    const asked = demoPreparation();
+    expect(asked).toEqual({ startedAt: expect.any(Number), answered: false });
+    expect(asked!.startedAt).toBeGreaterThanOrEqual(before);
+    // The session is read before the request goes out.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    reply(new Response(JSON.stringify({ brandId: 'demo1', version: 3, rebuilt: true })));
+    await request;
+    expect(demoPreparation()).toEqual({ startedAt: asked!.startedAt, answered: true });
   });
 });

@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { demoOffer, type DemoOffer } from '@/lib/demo/demo-brand';
+import { demoOffer, isDemoSelected, type DemoOffer } from '@/lib/demo/demo-brand';
 
 /** The organization's demo brand, shown in the brand list or hidden from it. */
 export interface DemoBrandInfo {
@@ -54,9 +54,7 @@ export function DemoBrandProvider({
   children: ReactNode;
 }) {
   const { isCloud } = usePlanContext();
-  const demoSelected = useBrandStore((s) =>
-    s.brands.some((b) => b.id === s.activeBrandId && b.isDemo === true),
-  );
+  const demoSelected = useBrandStore(isDemoSelected);
   const isDemo = isCloud && demoSelected;
   const value = useMemo<DemoBrandState>(
     () => ({
