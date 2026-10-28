@@ -28,6 +28,19 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// The read-only workspace's upgrade dialog.
+const openUpgrade = vi.hoisted(() => vi.fn());
+const gate = vi.hoisted(() => ({ isLocked: false }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade,
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options: { action?: string } = {}) =>
+      (...args: Args) =>
+        gate.isLocked ? openUpgrade(options.action) : fn(...args),
+  }),
+}));
 
 const { WordPressCard } = await import('./wordpress-card');
 
@@ -36,8 +49,10 @@ const { WordPressCard } = await import('./wordpress-card');
 
 /** Settings › Integrations › WordPress (Send to CMS #1331, phase 2; 00294): a brand's site and sign-in. */
 
-// Every reason the client names has its words: a missing one fails typecheck.
-const ERROR_TEXTS: Record<WordPressError, string> = messages.settings.wordpress.errors;
+// Every reason the client names has its words: a missing one fails typecheck. A read-only
+// workspace's refusal opens the upgrade dialog instead.
+const ERROR_TEXTS: Record<Exclude<WordPressError, 'subscription'>, string> = messages.settings
+  .wordpress.errors;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -95,6 +110,8 @@ beforeEach(() => {
   root = createRoot(container);
   role.canManage = true;
   store.activeBrandId = 'b1';
+  gate.isLocked = false;
+  openUpgrade.mockReset();
   for (const fn of Object.values(client)) fn.mockReset();
   for (const fn of Object.values(toast)) fn.mockReset();
   client.readWordPress.mockResolvedValue({ ok: true, configured: true, connection: null });
@@ -242,5 +259,58 @@ describe('WordPressCard', () => {
     client.readWordPress.mockResolvedValue({ ok: false, code: 'failed' });
     await render();
     expect(container.textContent).toContain("Couldn't read the WordPress connection right now.");
+  });
+  it('opens the upgrade dialog, not an error, when a read-only workspace’s connect or disconnect is refused', async () => {
+    client.connectWordPress.mockResolvedValue({ ok: false, code: 'subscription' });
+    await render();
+    await type('Site address', 'blog.acme.example');
+    await type('User', 'editor');
+    await type('Application Password', 'abcd efgh ijkl mnop qrst uvwx');
+    await submit();
+    expect(client.connectWordPress).toHaveBeenCalledTimes(1);
+    expect(openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+
+    client.readWordPress.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.disconnectWordPress.mockResolvedValue({ ok: false, code: 'subscription' });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Disconnect'));
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await click(confirm[confirm.length - 1]);
+    expect(client.disconnectWordPress).toHaveBeenCalledTimes(1);
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('on a read-only workspace, connects and changes nothing, and still disconnects', async () => {
+    gate.isLocked = true;
+    await render();
+    await type('Site address', 'blog.acme.example');
+    await type('User', 'editor');
+    await type('Application Password', 'abcd efgh ijkl mnop qrst uvwx');
+    await submit();
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(client.connectWordPress).not.toHaveBeenCalled();
+
+    client.readWordPress.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.disconnectWordPress.mockResolvedValue({ ok: true, success: true, revoked: true });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Change sign-in'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    // Disconnect ends an access: it stays open.
+    await click(button('Disconnect'));
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await click(confirm[confirm.length - 1]);
+    expect(client.disconnectWordPress).toHaveBeenCalledWith('b1');
+    expect(toast.success).toHaveBeenCalledWith('WordPress disconnected');
   });
 });
