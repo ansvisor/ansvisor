@@ -8,8 +8,9 @@ import type { ShoppingProductDetail } from '@/lib/actions/shopping';
 /** A product's page (ECOM-011). */
 
 const getShoppingProductDetail = vi.hoisted(() => vi.fn());
+const getProductAiSays = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ allowed: true }));
-vi.mock('@/lib/actions/shopping', () => ({ getShoppingProductDetail }));
+vi.mock('@/lib/actions/shopping', () => ({ getShoppingProductDetail, getProductAiSays }));
 // The query the page opens with: the Shelf's "Why not you?" names a shelf.
 const query = vi.hoisted(() => ({ value: '' }));
 vi.mock('next/navigation', () => ({
@@ -54,6 +55,7 @@ let root: Root;
 beforeEach(() => {
   gate.allowed = true;
   getShoppingProductDetail.mockReset();
+  getProductAiSays.mockReset().mockResolvedValue({ answers: 0, quotes: [], sources: [] });
   query.value = '';
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -210,6 +212,53 @@ describe('ShoppingProductPage', () => {
     const text = await render();
     expect(text).toContain('Done Oct 12, 2026. Its result shows on Oct 19, 2026, 7 days on.');
     expect(text).not.toContain('On more of its shelves');
+  });
+
+  it('quotes what AI says about it, with the sources the answers cited (ECOM-012)', async () => {
+    getShoppingProductDetail.mockResolvedValue(detail);
+    getProductAiSays.mockResolvedValue({
+      answers: 3,
+      quotes: [
+        {
+          text: 'The Ridge 30L Backpack is tougher, with a lifetime warranty.',
+          platform: 'chatgpt-shopping',
+          at: '2026-10-27T08:00:00Z',
+          promptText: 'best 30L hiking backpack',
+        },
+      ],
+      sources: [
+        {
+          url: 'https://outdoorgear.example/best',
+          domain: 'outdoorgear.example',
+          title: 'Best packs',
+          answers: 2,
+        },
+      ],
+    });
+    const text = await render();
+    expect(getProductAiSays).toHaveBeenCalledWith('b1', 'p1', { datePreset: '30d' });
+    expect(text).toContain('What AI says');
+    expect(text).toContain("the last 30 days' 3 answers that showed it");
+    expect(text).toContain('The Ridge 30L Backpack is tougher, with a lifetime warranty.');
+    expect(text).toContain('ChatGPT Shopping · “best 30L hiking backpack” · Oct 27, 2026');
+    expect(container.querySelector('a[href="https://outdoorgear.example/best"]')?.textContent).toBe(
+      'Best packs',
+    );
+    expect(text).toContain('2 answers');
+  });
+
+  it('says when no answer showed it', async () => {
+    getShoppingProductDetail.mockResolvedValue(detail);
+    expect(await render()).toContain('No answer showed it in the last 30 days.');
+  });
+
+  it('keeps the page when what AI says could not be read', async () => {
+    getShoppingProductDetail.mockResolvedValue(detail);
+    getProductAiSays.mockRejectedValue(new Error('down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const text = await render();
+    expect(text).toContain('Ridge 30L Backpack');
+    expect(text).toContain("Couldn't read what AI says right now.");
   });
 
   it('says when the product is gone, or locked', async () => {

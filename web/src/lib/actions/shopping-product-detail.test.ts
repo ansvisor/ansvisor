@@ -56,7 +56,7 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getShoppingProductDetail } = await import('./shopping');
+const { getProductAiSays, getShoppingProductDetail } = await import('./shopping');
 
 beforeEach(() => {
   tables = {};
@@ -206,6 +206,61 @@ describe('getShoppingProductDetail', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('getProductAiSays (ECOM-012)', () => {
+  it('quotes the answers that showed the product, with the sources they cited', async () => {
+    await expect(getProductAiSays(BRAND, 'nope', { datePreset: '30d' })).rejects.toThrow('invalid');
+    expect(await getProductAiSays(BRAND, PRODUCT, { datePreset: '30d' })).toEqual({
+      answers: 0,
+      quotes: [],
+      sources: [],
+    });
+    tables.catalog_products = [{ title: 'Ridge 30L Backpack' }];
+    tables.prompt_result_shopping_cards = [
+      { prompt_result_id: 'r1', product_title: 'Ridge 30L - Black', created_at: '2026-10-27' },
+      { prompt_result_id: 'r0', product_title: null, created_at: '2026-10-20' },
+    ];
+    tables.prompt_results = [
+      {
+        id: 'r1',
+        platform: 'chatgpt-shopping',
+        created_at: '2026-10-27T08:00:00Z',
+        response: 'Pick the **Ridge 30L** for its warranty. Others are lighter.',
+        prompt: { text: 'best 30L hiking backpack' },
+      },
+    ];
+    tables.prompt_result_citations = [
+      {
+        prompt_result_id: 'r1',
+        url: {
+          url: 'https://outdoorgear.example/best',
+          domain: 'outdoorgear.example',
+          title: null,
+        },
+      },
+      { prompt_result_id: 'r1', url: null },
+    ];
+    expect(await getProductAiSays(BRAND, PRODUCT, { datePreset: '30d' })).toEqual({
+      answers: 2,
+      quotes: [
+        {
+          text: 'Pick the Ridge 30L for its warranty.',
+          platform: 'chatgpt-shopping',
+          at: '2026-10-27T08:00:00Z',
+          promptText: 'best 30L hiking backpack',
+        },
+      ],
+      sources: [
+        {
+          url: 'https://outdoorgear.example/best',
+          domain: 'outdoorgear.example',
+          title: null,
+          answers: 1,
+        },
+      ],
+    });
   });
 });
 

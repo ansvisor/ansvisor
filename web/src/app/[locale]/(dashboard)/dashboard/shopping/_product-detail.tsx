@@ -15,6 +15,7 @@ import {
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import type { ShoppingProductDetail } from '@/lib/actions/shopping';
+import type { ProductAiSays } from '@/lib/shopping/ai-says';
 import { formatNumber } from '@/lib/format';
 import { priceText } from '@/lib/shopping/price';
 import { READINESS_CHECKS } from '@/lib/shopping/products';
@@ -23,6 +24,7 @@ import { productPlan } from '@/lib/shopping/action-plan';
 import { cn } from '@/lib/utils';
 import { ActionPlan } from './_action-plan';
 import { ActionResultCard } from './_action-result';
+import { AiSaysCard } from './_ai-says';
 
 const platformName = (platform: string) => PLATFORM_LABELS[platform] ?? platform;
 
@@ -35,16 +37,20 @@ const STATE_ICON: Record<ComparisonState, React.ReactNode> = {
 
 /**
  * A product's page (ECOM-011), drawn: its header with its AI visits and
- * orders, "Why not your product?" beside the winner, its last done action
- * 7 days on (ECOM-018), where it shows, and its readiness.
+ * orders, "Why not your product?" beside the winner, what AI says about it
+ * (ECOM-012), its last done action 7 days on (ECOM-018), where it shows, and
+ * its readiness.
  */
 export function ProductDetailView({
   detail,
   brandId,
+  aiSays,
 }: {
   detail: ShoppingProductDetail;
   /** The brand, to send the actions with; none, no actions. */
   brandId?: string;
+  /** What AI says, read after the rest: undefined while it's read, null when it couldn't be. */
+  aiSays?: ProductAiSays | null;
 }) {
   const t = useTranslations('shopping.detail');
   const tReady = useTranslations('shopping.products.readiness');
@@ -173,6 +179,8 @@ export function ProductDetailView({
           </CardContent>
         )}
       </Card>
+
+      <AiSaysCard says={aiSays} />
 
       {detail.result && <ActionResultCard result={detail.result} />}
 

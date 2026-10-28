@@ -8188,6 +8188,16 @@
         "lower": "{percent}% lower",
         "firstWords": "ChatGPT reads about 40 words"
       },
+      "says": {
+        "title": "What AI says",
+        "lead": "In the answers' own words: the last 30 days' {count, plural, one {# answer} other {# answers}} that showed it, and the sources they cited.",
+        "none": "No answer showed it in the last 30 days.",
+        "unnamed": "The answers showed it as a card, without naming it in their text.",
+        "asked": "“{prompt}”",
+        "sources": "Sources they cited",
+        "cited": "{count, plural, one {# answer} other {# answers}}",
+        "failed": "Couldn't read what AI says right now."
+      },
       "actions": {
         "title": "Actions to get on the shelf",
         "lead": "Grouped by type. Choose who does each one, then send them to Action Center."

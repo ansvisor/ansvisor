@@ -28,6 +28,7 @@ import {
   type ProductShelfLine,
 } from '@/lib/shopping/product-detail';
 import { priceText } from '@/lib/shopping/price';
+import { productAiSays, type AiSaysAnswer, type ProductAiSays } from '@/lib/shopping/ai-says';
 import { FROM_PRODUCTS_KINDS } from '@/lib/action-center/registry';
 import {
   RECHECK_DAYS,
@@ -1803,6 +1804,111 @@ export async function getShoppingProductDetail(
     },
     result: results[resultKey({ type: 'product', id: productId })] ?? null,
   };
+}
+
+// ── What AI says about a product (Product Visibility, ECOM-012) ───────────────
+
+/** The product's cards read at most, the latest first, for its answers. */
+const AI_SAYS_CARDS = 200;
+/** Answers quoted from at most, the latest: their whole text is read. */
+const AI_SAYS_QUOTED = 8;
+/** Answers whose sources are counted, the latest. */
+const AI_SAYS_CITED = 20;
+
+/**
+ * "What AI says" about a product (ECOM-012, V1): the answers in the period
+ * that showed it, quoted where they name it, and the sources they cited
+ * (lib/shopping/ai-says.ts). Read apart from the product's page, which it
+ * follows: the answers' text is the heavy part. Through the member's
+ * session (RLS).
+ */
+export async function getProductAiSays(
+  brandId: string,
+  productId: string,
+  filters: ShoppingFilters,
+): Promise<ProductAiSays> {
+  if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(productId).success) {
+    throw new Error('invalid');
+  }
+  const supabase = await createClient();
+  const [cards, product] = await Promise.all([
+    cardsInWindow(supabase, brandId, filters, 'prompt_result_id, product_title, created_at')
+      .eq('catalog_product_id', productId)
+      .order('created_at', { ascending: false })
+      .limit(AI_SAYS_CARDS),
+    supabase
+      .from('catalog_products')
+      .select('title')
+      .eq('brand_id', brandId)
+      .eq('id', productId)
+      .maybeSingle(),
+  ]);
+  if (cards.error) throw new Error(cards.error.message);
+  if (product.error) throw new Error(product.error.message);
+
+  // The answers, the latest first, with how each one's cards titled the product.
+  const titlesOf = new Map<string, string[]>();
+  for (const card of (cards.data ?? []) as unknown as {
+    prompt_result_id: string;
+    product_title: string | null;
+  }[]) {
+    const titles = titlesOf.get(card.prompt_result_id) ?? [];
+    if (card.product_title?.trim()) titles.push(card.product_title.trim());
+    titlesOf.set(card.prompt_result_id, titles);
+  }
+  const ids = [...titlesOf.keys()];
+  if (!ids.length) return { answers: 0, quotes: [], sources: [] };
+  const [answers, citations] = await Promise.all([
+    supabase
+      .from('prompt_results')
+      .select('id, platform, created_at, response, prompt:prompt_id ( text )')
+      .eq('brand_id', brandId)
+      .in('id', ids.slice(0, AI_SAYS_QUOTED)),
+    supabase
+      .from('prompt_result_citations')
+      .select('prompt_result_id, url:url_id ( url, domain, title )')
+      .eq('brand_id', brandId)
+      .in('prompt_result_id', ids.slice(0, AI_SAYS_CITED)),
+  ]);
+  if (answers.error) throw new Error(answers.error.message);
+  if (citations.error) throw new Error(citations.error.message);
+  const answerRows = (answers.data ?? []) as unknown as {
+    id: string;
+    platform: string;
+    created_at: string;
+    response: string | null;
+    prompt: { text: string } | null;
+  }[];
+  const citationRows = (citations.data ?? []) as unknown as {
+    prompt_result_id: string;
+    url: { url: string; domain: string; title: string | null } | null;
+  }[];
+  return productAiSays(
+    answerRows.map(
+      (row): AiSaysAnswer => ({
+        promptResultId: row.id,
+        platform: row.platform,
+        at: row.created_at,
+        promptText: row.prompt?.text ?? null,
+        response: row.response ?? '',
+        titles: titlesOf.get(row.id) ?? [],
+      }),
+    ),
+    citationRows.flatMap((row) =>
+      row.url
+        ? [
+            {
+              promptResultId: row.prompt_result_id,
+              url: row.url.url,
+              domain: row.url.domain,
+              title: row.url.title,
+            },
+          ]
+        : [],
+    ),
+    product.data?.title ? [product.data.title] : [],
+    ids.length,
+  );
 }
 
 // ── Re-check after a done action (Product Visibility, ECOM-018) ───────────────

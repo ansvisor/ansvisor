@@ -7,7 +7,12 @@ import { ArrowLeft } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
-import { getShoppingProductDetail, type ShoppingProductDetail } from '@/lib/actions/shopping';
+import {
+  getProductAiSays,
+  getShoppingProductDetail,
+  type ShoppingProductDetail,
+} from '@/lib/actions/shopping';
+import type { ProductAiSays } from '@/lib/shopping/ai-says';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ProductDetailView } from '../../_product-detail';
 
@@ -15,7 +20,9 @@ import { ProductDetailView } from '../../_product-detail';
  * A product's page in Product Visibility (ECOM-011): where it stands on the
  * AI shelves of the questions it belongs on, and "Why not your product?":
  * it beside the product AI picked for the question it's missing most, row
- * by row, with its readiness and its AI visits and orders.
+ * by row, with its readiness and its AI visits and orders. What AI says
+ * about it (ECOM-012) is read apart, its card filled when it comes: the
+ * answers' text is the heavy part.
  */
 export default function ShoppingProductPage() {
   const t = useTranslations('shopping.detail');
@@ -31,6 +38,8 @@ export default function ShoppingProductPage() {
     detail: ShoppingProductDetail | null | 'failed';
   } | null>(null);
   const key = `${activeBrandId}:${productId}:${prompt ?? ''}:${platform ?? ''}`;
+  const [says, setSays] = useState<{ key: string; says: ProductAiSays | null } | null>(null);
+  const saysKey = `${activeBrandId}:${productId}`;
 
   useEffect(() => {
     if (!activeBrandId || !productId) return;
@@ -52,6 +61,22 @@ export default function ShoppingProductPage() {
       cancelled = true;
     };
   }, [activeBrandId, productId, key, prompt, platform]);
+
+  useEffect(() => {
+    if (!activeBrandId || !productId) return;
+    let cancelled = false;
+    getProductAiSays(activeBrandId, productId, { datePreset: '30d' })
+      .then((read) => {
+        if (!cancelled) setSays({ key: saysKey, says: read });
+      })
+      .catch((err) => {
+        console.error('Failed to read what AI says about the product:', err);
+        if (!cancelled) setSays({ key: saysKey, says: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, productId, saysKey]);
 
   const back = (
     <Link
@@ -91,7 +116,11 @@ export default function ShoppingProductPage() {
   return (
     <div className="space-y-6">
       {back}
-      <ProductDetailView detail={detail} brandId={activeBrandId ?? undefined} />
+      <ProductDetailView
+        detail={detail}
+        brandId={activeBrandId ?? undefined}
+        aiSays={says?.key === saysKey ? says.says : undefined}
+      />
     </div>
   );
 }
