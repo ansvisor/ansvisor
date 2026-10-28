@@ -1072,14 +1072,20 @@ function PlatformCardRateChart({
         {loading ? (
           <Skeleton className="h-[220px] w-full" />
         ) : (
-          <ResponsiveBarChart data={chartData} />
+          <ResponsiveBarChart data={chartData} label={t('seriesCardRate')} />
         )}
       </CardContent>
     </Card>
   );
 }
 
-function ResponsiveBarChart({ data }: { data: Array<{ platform: string; rate: number }> }) {
+function ResponsiveBarChart({
+  data,
+  label,
+}: {
+  data: Array<{ platform: string; rate: number }>;
+  label: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -1093,7 +1099,7 @@ function ResponsiveBarChart({ data }: { data: Array<{ platform: string; rate: nu
   }, []);
   return (
     <div ref={ref} style={{ width: '100%', height: 220 }}>
-      {width > 0 && <DynamicPlatformCardRateChart width={width} data={data} />}
+      {width > 0 && <DynamicPlatformCardRateChart width={width} data={data} label={label} />}
     </div>
   );
 }
@@ -1113,7 +1119,14 @@ function OwnPresenceTrendChart({
         <CardTitle className="text-sm font-medium">{t('trendTitle')}</CardTitle>
       </CardHeader>
       <CardContent>
-        {loading ? <Skeleton className="h-[220px] w-full" /> : <ResponsiveLineChart data={data} />}
+        {loading ? (
+          <Skeleton className="h-[220px] w-full" />
+        ) : (
+          <ResponsiveLineChart
+            data={data}
+            labels={{ own: t('seriesOwnCards'), all: t('seriesAllCards') }}
+          />
+        )}
       </CardContent>
     </Card>
   );
@@ -1121,8 +1134,10 @@ function OwnPresenceTrendChart({
 
 function ResponsiveLineChart({
   data,
+  labels,
 }: {
   data: Array<{ date: string; ownCards: number; totalCards: number }>;
+  labels: { own: string; all: string };
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -1137,7 +1152,7 @@ function ResponsiveLineChart({
   }, []);
   return (
     <div ref={ref} style={{ width: '100%', height: 220 }}>
-      {width > 0 && <DynamicShoppingTrendChart width={width} data={data} />}
+      {width > 0 && <DynamicShoppingTrendChart width={width} data={data} labels={labels} />}
     </div>
   );
 }
