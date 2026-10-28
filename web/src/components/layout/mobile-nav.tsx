@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Crown, ExternalLink, Menu, MessageSquareHeart, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
@@ -37,6 +38,7 @@ export function MobileNav() {
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
   const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
+  const hiddenSections = useHiddenMenuSections();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard — see sidebar.tsx for the rationale; the two
@@ -80,7 +82,8 @@ export function MobileNav() {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <nav className="space-y-0.5 p-3">
-            {activeBrandId && (
+            {/* The brand's prompts: the Prompts section, off the menu with it. */}
+            {activeBrandId && !hiddenSections.has('prompts') && (
               <Link
                 href={`/dashboard/brands/${activeBrandId}/prompts`}
                 onClick={() => setOpen(false)}
@@ -100,7 +103,7 @@ export function MobileNav() {
             )}
             {dashboardNav.flatMap((group) =>
               group.items.map((item) => {
-                if (!shouldShowDashboardNavItem(item, brandPrefs)) {
+                if (!shouldShowDashboardNavItem(item, brandPrefs, hiddenSections)) {
                   return null;
                 }
 

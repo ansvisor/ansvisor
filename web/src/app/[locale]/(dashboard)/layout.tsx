@@ -7,10 +7,12 @@ import { AuthProvider } from '@/components/providers/auth-provider';
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
 import { getBrands } from '@/lib/actions/brand';
+import { getMyMenu } from '@/lib/actions/menu-access';
 import { getPlan, isCloud, type PlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { SubscriptionExpiredNotice } from '@/components/billing/subscription-expired-notice';
@@ -38,13 +40,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const role = (profile.role ?? 'analyst') as TeamRole;
 
-  const [{ data: org }, brands] = await Promise.all([
+  const [{ data: org }, brands, menu] = await Promise.all([
     supabase
       .from('organizations')
       .select('plan, subscription_status, plan_overrides')
       .eq('id', profile.organization_id)
       .single(),
     getBrands(profile.organization_id),
+    // The sections the viewer's menu leaves out; the whole menu if it can't be read.
+    getMyMenu().catch(() => null),
   ]);
 
   // Cloud mode: gate access when the subscription isn't active/trialing.
@@ -89,27 +93,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <GettingStartedPageOpened />
       <PlanProvider planId={planId} allowedModelIds={allowedModelIds}>
         <RoleProvider role={role}>
-          <AiUsageProvider>
-            <div className="flex h-screen overflow-hidden">
-              {/* Desktop sidebar */}
-              <div className="relative hidden md:flex md:flex-shrink-0">
-                <SidebarErrorBoundary>
-                  <Sidebar />
-                </SidebarErrorBoundary>
-              </div>
-
-              {/* Main area */}
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                  <MobileNav />
+          <MenuAccessProvider hidden={menu?.hidden ?? []}>
+            <AiUsageProvider>
+              <div className="flex h-screen overflow-hidden">
+                {/* Desktop sidebar */}
+                <div className="relative hidden md:flex md:flex-shrink-0">
+                  <SidebarErrorBoundary>
+                    <Sidebar />
+                  </SidebarErrorBoundary>
                 </div>
-                <main className="flex-1 overflow-y-auto bg-background p-6">
-                  <BrandGuard>{children}</BrandGuard>
-                </main>
-                <TrackingJobHandoff />
+
+                {/* Main area */}
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                    <MobileNav />
+                  </div>
+                  <main className="flex-1 overflow-y-auto bg-background p-6">
+                    <BrandGuard>{children}</BrandGuard>
+                  </main>
+                  <TrackingJobHandoff />
+                </div>
               </div>
-            </div>
-          </AiUsageProvider>
+            </AiUsageProvider>
+          </MenuAccessProvider>
         </RoleProvider>
       </PlanProvider>
     </>

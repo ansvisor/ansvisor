@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import {
   ChevronDown,
   ChevronsLeft,
@@ -151,6 +152,17 @@ export function Sidebar() {
   // Sidebar hides the item entirely when this returns false — see #155/#170
   // for why Shopping uses this on top of the existing plan-feature gate.
   const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
+  // The items the viewer sees, and the groups that keep one: a group whose
+  // sections are all off their menu goes, title and all.
+  const hiddenSections = useHiddenMenuSections();
+  const visibleNav = dashboardNav
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard: SSR can't know the resolved theme, so we render the
@@ -333,7 +345,7 @@ export function Sidebar() {
             }
           }}
         >
-          {dashboardNav.map((group, i) => (
+          {visibleNav.map((group, i) => (
             <div key={i} className="mb-4">
               {group.title && !compact && (
                 <p className="mb-1 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -348,10 +360,6 @@ export function Sidebar() {
               {group.title && compact && i > 0 && <Separator className="my-2" />}
               <nav className="space-y-0.5">
                 {group.items.map((item) => {
-                  if (!shouldShowDashboardNavItem(item, brandPrefs)) {
-                    return null;
-                  }
-
                   const isActive =
                     item.href === '/dashboard'
                       ? pathname === '/dashboard'
