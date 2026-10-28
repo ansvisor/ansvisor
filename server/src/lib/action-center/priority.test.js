@@ -363,6 +363,26 @@ describe('scorePriority', () => {
     expect(sent('no_ai_traffic', { valueSignal: 'revenue' }).reason.commercial).toBe(true);
   });
 
+  it('scores a live page linking products that no longer sell as a sure, quick fix (shopping path, part 7)', () => {
+    const linked = scorePriority(
+      {
+        action: action({
+          kind: 'shopping_links',
+          category: 'fix',
+          impact: 'medium',
+          created_at: daysAgo(0),
+          payload: { source: 'shopping_check', targetEntity: 'pages', targetCount: 1 },
+        }),
+      },
+      NOW,
+    );
+    expect(linked.reason).toMatchObject({
+      change: 'issue',
+      subject: { entity: 'pages', count: 1 },
+    });
+    expect(linked.reason.factors).toMatchObject({ severity: 0.6, confidence: 0.9 });
+  });
+
   it('stays within 0–100 and returns whole numbers', () => {
     for (const impact of ['high', 'medium', 'low', 'unknown']) {
       const { score } = scorePriority({ action: action({ impact }), signals: [] }, NOW);
