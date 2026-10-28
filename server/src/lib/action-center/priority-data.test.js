@@ -15,9 +15,15 @@ let signalRows = [];
 let queries = [];
 let saved = [];
 let unsaved = new Set();
+let rpcCalls = [];
+let rpcResult = { data: [], error: null };
 
 vi.mock('../../config/supabase.js', () => ({
   default: {
+    rpc: async (fn, args) => {
+      rpcCalls.push([fn, args]);
+      return rpcResult;
+    },
     from: (table) => {
       let ids = [];
       const op = { table, filters: [] };
@@ -73,7 +79,7 @@ vi.mock('../../config/supabase.js', () => ({
 }));
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
-const { loadPromptDemand, priorityOnCreate, rescoreBrandActions } =
+const { loadKindTrack, loadPromptDemand, priorityOnCreate, rescoreBrandActions } =
   await import('./priority-data.js');
 
 beforeEach(() => {
@@ -85,6 +91,8 @@ beforeEach(() => {
   queries = [];
   saved = [];
   unsaved = new Set();
+  rpcCalls = [];
+  rpcResult = { data: [], error: null };
   // Newest first, as the read orders them.
   rows = [
     { prompt_id: 'p1', est_ai_volume: 300, intent: 'comparison', fetched_at: '2026-10-10' },
@@ -128,6 +136,26 @@ describe('loadPromptDemand', () => {
   });
 });
 
+describe('loadKindTrack', () => {
+  it("reads the brand's own results by kind over the last half year (learning B4)", async () => {
+    rpcResult = {
+      data: [
+        { kind: 'recover_lost_citations', improved: 2, mixed: 1, no_change: 1, declined: 1 },
+        { kind: 'fix_low_scores', improved: 0, mixed: 0, no_change: 0, declined: 0 },
+      ],
+      error: null,
+    };
+
+    const track = await loadKindTrack('b1', new Date('2026-10-15T00:00:00Z'));
+
+    expect(rpcCalls).toEqual([
+      ['action_scorecard', { p_brand_id: 'b1', p_since: '2026-04-18T00:00:00.000Z' }],
+    ]);
+    expect(track.get('recover_lost_citations')).toEqual({ improved: 2, results: 5 });
+    expect(track.get('fix_low_scores')).toEqual({ improved: 0, results: 0 });
+  });
+});
+
 describe('priorityOnCreate', () => {
   const NOW = new Date('2026-10-15T00:00:00Z');
   const improve = {
@@ -150,6 +178,26 @@ describe('priorityOnCreate', () => {
     const columns = await priorityOnCreate(improve, NOW);
     expect(columns.priority_reason.demand).toBeNull();
     expect(columns.priority_score).toEqual(expect.any(Number));
+  });
+
+  it("weighs how its kind did at the brand, and scores it without when that can't be read", async () => {
+    rpcResult = {
+      data: [{ kind: 'prompt_improve', improved: 3, mixed: 0, no_change: 0, declined: 0 }],
+      error: null,
+    };
+    const withTrack = await priorityOnCreate({ ...improve, brand_id: 'b1' }, NOW);
+    expect(rpcCalls).toHaveLength(1);
+    expect(withTrack.priority_reason.pastSuccess).toEqual({
+      improved: 3,
+      results: 3,
+      points: 3.75,
+    });
+
+    rpcResult = { data: null, error: { message: 'timeout' } };
+    const without = await priorityOnCreate({ ...improve, brand_id: 'b1' }, NOW);
+    expect(without.priority_reason.pastSuccess).toBeNull();
+    expect(without.priority_reason.factors).not.toHaveProperty('pastSuccess');
+    expect(without.priority_score).toBeLessThan(withTrack.priority_score);
   });
 });
 
@@ -189,9 +237,12 @@ describe('rescoreBrandActions', () => {
       ['in', 'status', ['new', 'acknowledged']],
       ['not', 'action_id', null],
     ]);
-    // The signals and the demand are read once for the brand, not per action.
+    // The signals, the demand and the track are read once for the brand, not per action.
     expect(queries.filter((q) => q.table === 'signals')).toHaveLength(1);
     expect(reads).toEqual([['p1']]);
+    expect(rpcCalls.map(([fn, args]) => [fn, args.p_brand_id])).toEqual([
+      ['action_scorecard', 'b1'],
+    ]);
 
     const byId = Object.fromEntries(saved.map(({ id, row }) => [id, row]));
     expect(byId.a1).toMatchObject({

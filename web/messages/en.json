@@ -1045,6 +1045,10 @@
           "highDemand": "high search demand",
           "commercial": "commercial intent",
           "heldBefore": "previously visible",
+          "pastSuccess": {
+            "worked": "{improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here",
+            "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here"
+          },
           "sources": "confirmed by {count} sources",
           "sentence": {
             "withWhen": "{what} {when}",

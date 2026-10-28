@@ -354,6 +354,21 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     /** In the queue of waiting findings, per day waited, up to `waitCapDays`. */
     waitPerDay: 1,
     waitCapDays: 14,
+    /**
+     * Past success (learning B4): how this brand's own earlier actions of
+     * the same kind turned out, from its History scorecard over the last
+     * `pastSuccessDays`. The share that improved, pulled toward
+     * `pastSuccessPrior` by `pastSuccessPseudoCount` imagined results, so a
+     * couple of results barely move it: a kind with none sits at the prior
+     * and its score doesn't move. Never another brand's history. The score
+     * moves by the rate's distance from the prior times `pastSuccessSwing`:
+     * up to 10 points either way, about 6.7 for a kind that improved 10
+     * times out of 10.
+     */
+    pastSuccessSwing: 20,
+    pastSuccessPrior: 0.5,
+    pastSuccessPseudoCount: 5,
+    pastSuccessDays: 180,
   }),
 
   /** How an action's effect is measured once it closes. */
