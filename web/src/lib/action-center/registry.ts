@@ -175,6 +175,13 @@ export const ACTION_DISMISS_REASONS = [
 ] as const;
 export type ActionDismissReason = (typeof ACTION_DISMISS_REASONS)[number];
 
+/** A stored dismiss reason, if it is one of ACTION_DISMISS_REASONS; null otherwise. */
+export function dismissReasonOf(value: unknown): ActionDismissReason | null {
+  return (ACTION_DISMISS_REASONS as readonly unknown[]).includes(value)
+    ? (value as ActionDismissReason)
+    : null;
+}
+
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
 

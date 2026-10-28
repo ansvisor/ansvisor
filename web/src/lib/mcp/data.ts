@@ -37,6 +37,8 @@ import {
   withTemplateCheck,
   withTemplateDoneWhen,
 } from '@/lib/action-center/task-details';
+import { controlNetOf } from '@/lib/action-center/history';
+import { dismissReasonOf, type ActionDismissReason } from '@/lib/action-center/registry';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
@@ -2986,6 +2988,10 @@ export interface ActionDetailForMcp {
   impact: string;
   status: string;
   outcome: string | null;
+  /** Its change net of the brand's prompts it didn't touch (learning B2); null when not netted. */
+  net_of_control: McpNetOfControl | null;
+  /** Why it was dismissed, as the person said (learning A5); null otherwise. */
+  dismiss_reason: ActionDismissReason | null;
   payload: Record<string, unknown>;
   kpi_keys: string[];
   assignee: { id: string; full_name: string | null } | null;
@@ -3060,7 +3066,7 @@ export async function getActionFor(
   const { data: action, error } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, brand_id, category, kind, impact, status, outcome, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
+      'id, action_no, brand_id, category, kind, impact, status, outcome, validation, dismiss_reason, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
     )
     .eq('id', actionId)
     .eq('brands.organization_id', auth.organizationId)
@@ -3111,6 +3117,8 @@ export async function getActionFor(
     impact: action.impact,
     status: action.status,
     outcome: action.outcome ?? null,
+    net_of_control: netOfControl(action.validation),
+    dismiss_reason: dismissReasonOf(action.dismiss_reason),
     payload,
     kpi_keys: action.kpi_keys ?? [],
     assignee: action.assignee_id
@@ -3281,6 +3289,27 @@ export interface ActionHistoryRow {
   final: boolean;
   /** The day after closing its latest reading was taken on; null before one. */
   reading_day: number | null;
+  /** Its change net of the brand's prompts it didn't touch (learning B2); null when not netted. */
+  net_of_control: McpNetOfControl | null;
+  /** Why it was dismissed, as the person said (learning A5); null otherwise. */
+  dismiss_reason: ActionDismissReason | null;
+}
+
+/** An action's change net of a control basket's (learning B2). */
+export interface McpNetOfControl {
+  /** The control: the prompts of the same topics, or the brand's others. */
+  basis: 'topics' | 'brand';
+  control_prompts: number;
+  /** Per metric: a rate's move in points, a count's in percent, minus the control's. */
+  metrics: { metric: string; net: number; unit: 'points' | 'percent' }[];
+}
+
+/** The net result the validation sweep kept, if it could net one. */
+function netOfControl(validation: unknown): McpNetOfControl | null {
+  const control = controlNetOf(validation as Parameters<typeof controlNetOf>[0]);
+  return control
+    ? { basis: control.basis, control_prompts: control.prompts, metrics: control.net }
+    : null;
 }
 
 interface ValidationMetric {
@@ -3307,7 +3336,7 @@ export async function listActionHistoryFor(
   const { data, error } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, category, kind, impact, status, outcome, validation, created_at, completed_at',
+      'id, action_no, category, kind, impact, status, outcome, validation, dismiss_reason, created_at, completed_at',
     )
     .eq('brand_id', params.brandId)
     .in('status', ['completed', 'dismissed'])
@@ -3348,6 +3377,8 @@ export async function listActionHistoryFor(
         validation?.final === true ||
         (days.length === 0 && outcome != null && outcome !== 'pending_measurement'),
       reading_day: days.length ? Math.max(...days) : null,
+      net_of_control: netOfControl(validation),
+      dismiss_reason: dismissReasonOf(r.dismiss_reason),
     };
   });
 }
