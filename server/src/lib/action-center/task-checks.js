@@ -14,7 +14,10 @@
  *    rotating quote moving (optimize, refresh, strengthen, the call to
  *    action): the first look keeps a sketch of the page's words, and
  *    enough of them must have changed;
- *  - a written task's new text is on it, and the text it replaces gone.
+ *  - a written task's new text is on it, and the text it replaces gone;
+ *  - a shopping links task's page links no product that no longer sells,
+ *    read as the catalog sync's shopping check reads it (shopping-check.js;
+ *    Check now only: the sync checks it, not the sweep).
  *
  * A task that passes is completed, with the check kept on it and a line in
  * the action's History; one that doesn't keeps what is missing, for its
@@ -29,6 +32,7 @@ import * as cheerio from 'cheerio';
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
+import { checkShoppingDraft } from '../shopping-check.js';
 import { furnitureNamed } from '../page-content.js';
 import { onBrandDomain } from '../audit/host.js';
 import { aiBotAccess } from '../audit/signals/trust.js';
@@ -106,10 +110,14 @@ const PASS_ONLY = new Set(['json-ld-validity']);
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
 
+/** A shopping links task's mark (action-center/from-shopping-check.js). */
+const SHOPPING_SOURCE = 'shopping_check';
+
 /** What a task's check reads, or null when it has none here. */
 export function checkKind(task) {
   const d = task.details ?? {};
   if (d.check !== 'auto' || !text(d.url)) return null;
+  if (d.source === SHOPPING_SOURCE) return 'shoppingLinks';
   if (task.task_key) return CHECKS[task.task_key] ?? null;
   return text(d.change?.after) ? 'text' : null;
 }
@@ -494,6 +502,46 @@ async function writeCheck(task, details, { completes = false, now }) {
 }
 
 /**
+ * A shopping links task: its draft's page checked again as the catalog sync
+ * checks it (checkShoppingDraft), which keeps the Library's row and, once
+ * the live page links no product that no longer sells, completes the task
+ * with its check kept and closes the action, each in its History
+ * (from-shopping-check.js). A page read from its draft (not reached, too
+ * short to be the page, off the brand's site) is no answer; a draft with no
+ * shopping path left (archived, its path removed) has nothing to check.
+ */
+async function checkShoppingTask(task, action, { fetch, now }) {
+  const d = task.details ?? {};
+  if (!text(d.draftId)) return { reason: 'not_checkable' };
+  const found = await checkShoppingDraft(action.brand_id, d.draftId, { readPage: fetch, now });
+  if (!found) return { reason: 'no_shopping_path' };
+  if (found.readFrom !== 'page') {
+    await writeCheck(
+      task,
+      { ...d, autoCheck: { ...(d.autoCheck ?? {}), triedAt: now.toISOString() } },
+      { now },
+    );
+    return { reason: 'no_answer' };
+  }
+  const autoCheck = {
+    at: now.toISOString(),
+    triedAt: now.toISOString(),
+    url: found.pageUrl,
+    passed: !found.bad.length,
+    missing: found.bad.length ? ['links_not_for_sale'] : [],
+  };
+  // Passed: the check completed the task, its autoCheck kept, unless
+  // someone changed it meanwhile.
+  if (autoCheck.passed) {
+    return found.action === 'closed' || found.action === 'kept'
+      ? { autoCheck }
+      : { reason: 'changed' };
+  }
+  if (!(await writeCheck(task, { ...d, autoCheck }, { now }))) return { reason: 'changed' };
+  return { autoCheck };
+}
+
+/**
  * Checks one task and keeps what it found on it (`details.autoCheck`, with
  * the page it read): passed, it is completed and the action's History says
  * so. A task someone reopened after it passed on this page is held: its
@@ -501,7 +549,8 @@ async function writeCheck(task, details, { completes = false, now }) {
  * sweep leaves it (the call is theirs). Returns `{ autoCheck }`, or
  * `{ reason }` when nothing was checked: 'not_checkable' (no check here),
  * 'not_open' (done or skipped), 'no_answer' (the page couldn't be read),
- * 'changed' (someone changed the task meanwhile).
+ * 'changed' (someone changed the task meanwhile), 'no_shopping_path' (a
+ * shopping links task whose draft has no path left to check).
  *
  * @param {{ id: string, action_id: string, task_key: string|null, title?: string|null,
  *   status: string, details: object|null, updated_at?: string }} task
@@ -511,6 +560,7 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
   const kind = checkKind(read);
   if (!kind) return { reason: uncheckable(read) };
   if (!OPEN.includes(read.status)) return { reason: 'not_open' };
+  if (kind === 'shoppingLinks') return checkShoppingTask(read, action, { fetch, now });
   const d = read.details ?? {};
   const previous = d.autoCheck ?? null;
   // Tried now, before anything is read: a task that can't be checked here
@@ -572,7 +622,12 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
     const { error: eventError } = await supabaseAdmin.from('action_events').insert({
       action_id: task.action_id,
       event: 'task_checked',
-      data: { taskId: task.id, task: task.task_key ?? null, title: task.title ?? null },
+      // Named once: by its own title when someone renamed it, else its library key.
+      data: {
+        taskId: task.id,
+        task: task.title ? null : (task.task_key ?? null),
+        title: task.title ?? null,
+      },
       actor_id: null,
     });
     if (eventError) logger.warn({ err: eventError }, '[task-checks] History line not written');
@@ -624,7 +679,10 @@ export async function sweepTaskChecks({
     if (error) throw new Error(error.message);
     for (const row of rows ?? []) {
       if (due.length >= limit) break;
-      if (!checkKind(row) || Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since) continue;
+      const kind = checkKind(row);
+      // A shopping links task is checked after each catalog sync, not here.
+      if (!kind || kind === 'shoppingLinks') continue;
+      if (Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since) continue;
       const action = Array.isArray(row.actions) ? row.actions[0] : row.actions;
       const taken = perBrand.get(action?.brand_id) ?? 0;
       if (taken >= SWEEP_PER_BRAND) continue;

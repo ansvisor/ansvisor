@@ -166,6 +166,52 @@ describe('syncCatalog', () => {
     expect(fake.rows('catalog_images').map((i) => i.url)).not.toContain('ftp://x/y.jpg');
   });
 
+  it('removes and rewrites many products with filters of at most 100 ids, so no request runs too long', async () => {
+    const lines = ['id,item_group_id,title,link,price,availability,product_type'];
+    for (let i = 0; i < 250; i++) {
+      lines.push(
+        `M-${i},M-${i},Mug ${i},https://s.example/m/${i},10.00 USD,in stock,Kitchen > Mugs`,
+      );
+    }
+    const { items: many } = parseCsvFeed(lines.join('\n'));
+    await syncCatalog(BRAND, 'feed', many, { db: fake.db, now: new Date('2026-10-20T00:00:00Z') });
+    // Each .in() filter goes in the request's URL: count the ids per filter.
+    const sizes = [];
+    const db = {
+      from: (table) => {
+        const builder = fake.db.from(table);
+        const watch = (b) =>
+          new Proxy(b, {
+            get(target, key) {
+              const value = target[key];
+              if (key === 'in') {
+                return (column, values) => {
+                  sizes.push(values.length);
+                  return watch(value.call(target, column, values));
+                };
+              }
+              if (typeof value !== 'function' || key === 'then') return value;
+              return (...args) => {
+                const out = value.apply(target, args);
+                return out === target ? watch(target) : out;
+              };
+            },
+          });
+        return watch(builder);
+      },
+    };
+    const counts = await syncCatalog(BRAND, 'feed', [], {
+      db,
+      now: new Date('2026-10-21T00:00:00Z'),
+    });
+    expect(counts.products.removed).toBe(250);
+    expect(
+      fake.rows('catalog_products').every((p) => p.removed_at === '2026-10-21T00:00:00.000Z'),
+    ).toBe(true);
+    expect(sizes.length).toBeGreaterThan(2);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(100);
+  });
+
   it('imports a 10,000-row CSV, and a second import writes nothing', async () => {
     const lines = ['id,item_group_id,title,link,price,availability,color,product_type'];
     for (let i = 0; i < 10_000; i++) {
