@@ -45,7 +45,8 @@ const SENTIMENTS: readonly string[] = ['positive', 'neutral', 'negative'];
  *
  * Reads through the caller's RLS-scoped client, so a prompt outside the
  * caller's organisations comes back as null. Engines the brand's plan (the
- * org's, Growth's on the demo brand) doesn't include are never queried: their rows carry only the upgrade state.
+ * org's, Growth's on the demo brand) doesn't include are never queried:
+ * their rows carry only the upgrade state.
  * Answer text and source lists stay on the server; the panel gets the
  * folded numbers. Answers are filed under the viewer's days (`timeZone`, an
  * IANA zone from the browser; UTC when missing or unknown).
