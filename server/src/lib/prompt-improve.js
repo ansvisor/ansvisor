@@ -11,6 +11,9 @@
 
 import { z } from 'zod';
 import { extractHostname } from './response-parser.js';
+import { FEATURE_CHECKS, featureGaps } from './action-center/competitor-pages.js';
+import { describeSignal } from './audit/rubric.js';
+import { opportunityKey } from './audit/opportunities.js';
 
 /** Labels for the engines the Positions panel lists (web/src/lib/prompt-positions.ts). */
 export const IMPROVE_PLATFORM_LABELS = {
@@ -323,8 +326,52 @@ function evidenceBlock(evidence) {
   if (evidence.brandPages.length) {
     lines.push(`Brand pages cited: ${evidence.brandPages.map((u) => u.url).join(' ; ')}`);
   }
+  // What Site Audit's checks found on those pages, read lately (learning C2).
+  if (evidence.pageChecks?.length) {
+    lines.push(
+      `Checks on these pages (Site Audit, read lately): ${evidence.pageChecks
+        .map((p) => `${p.url}${p.own ? ' (brand)' : ''}: ${p.passes.join(', ') || 'none of them'}`)
+        .join(' ; ')}`,
+    );
+  }
+  if (evidence.checkGaps?.length) {
+    lines.push(`The competitor pages have and the brand's don't: ${evidence.checkGaps.join(', ')}`);
+  }
   if (evidence.excerpt) lines.push(`Latest AI answer (excerpt): """${evidence.excerpt}"""`);
   return lines.map((l) => `  ${l}`).join('\n');
+}
+
+/**
+ * A platform's evidence with what Site Audit's checks found on its cited
+ * pages, where they were read lately (learning C2): each page's passing
+ * checks by name, and the checks most of the competitor pages pass that
+ * the brand's cited page doesn't. Unchanged when none was read.
+ *
+ * @param {object} evidence as collectEvidence gives it
+ * @param {Map<string, { own: boolean, checks: Record<string, string> }>} stored storedFeatures'
+ */
+export function withPageChecks(evidence, stored) {
+  if (!stored?.size) return evidence;
+  const read = [
+    ...evidence.competitorUrls.map((u) => ({ url: u.url, own: false })),
+    ...evidence.brandPages.map((u) => ({ url: u.url, own: true })),
+  ].flatMap((page) => {
+    const found = stored.get(opportunityKey(page.url));
+    return found ? [{ ...page, checks: found.checks }] : [];
+  });
+  if (!read.length) return evidence;
+  const name = (key) => describeSignal(key)?.label ?? key;
+  const theirs = read.filter((p) => !p.own);
+  const ours = read.find((p) => p.own) ?? null;
+  return {
+    ...evidence,
+    pageChecks: read.map((p) => ({
+      url: p.url,
+      own: p.own,
+      passes: FEATURE_CHECKS.filter((key) => p.checks[key] === 'pass').map(name),
+    })),
+    checkGaps: ours && theirs.length ? featureGaps(theirs, ours).map((gap) => gap.label) : [],
+  };
 }
 
 /**

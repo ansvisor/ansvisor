@@ -42,6 +42,7 @@ const {
   citedPages,
   featureGaps,
   pageFeatures,
+  storedFeatures,
 } = await import('./competitor-pages.js');
 const { signalRegistry } = await import('../audit/signals/index.js');
 
@@ -226,5 +227,23 @@ describe('analyzeCompetitorPages', () => {
     expect(
       await analyzeCompetitorPages({ brandId: 'b1', payload: {}, now: NOW, read }),
     ).toMatchObject({ reason: 'no_prompts' });
+  });
+});
+
+/** What the checks found on pages read lately, for Improve (learning C2). */
+describe('storedFeatures', () => {
+  it('reads the pages read lately by key, leaving out one that could not be read', async () => {
+    tables.cited_page_features = [
+      { page_key: 'rival.com/kettles', own: false, features: { checks: { tables: 'pass' } } },
+      { page_key: 'blog.example/best', own: false, features: { unreadable: true } },
+    ];
+    const stored = await storedFeatures('b1', [
+      'https://www.rival.com/kettles/',
+      'https://blog.example/best',
+    ]);
+    expect([...stored.entries()]).toEqual([
+      ['rival.com/kettles', { own: false, checks: { tables: 'pass' } }],
+    ]);
+    expect(await storedFeatures('b1', [])).toEqual(new Map());
   });
 });
