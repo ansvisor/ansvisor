@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { inView, productRows, readiness, viewRows, type CatalogProductRow } from './products';
+import {
+  inView,
+  productRows,
+  readiness,
+  viewCounts,
+  viewRows,
+  type CatalogProductRow,
+} from './products';
 
 /** Product Visibility's Products table (ECOM-007). */
 
@@ -120,5 +127,12 @@ describe('productRows and the views', () => {
     expect(ids('topSellers')).toEqual(['seller']);
     expect(ids('all')).toEqual(['clicked', 'seller', 'shown', 'never']);
     expect(rows.every((row) => inView(row, 'all'))).toBe(true);
+  });
+
+  it('counts each view, All and Never shown out of the whole catalog when the rows are part of it', () => {
+    const counts = { all: 4, never: 1, notClicked: 1, notBought: 1, topSellers: 1 };
+    expect(viewCounts(rows, 4)).toEqual(counts);
+    // The rows of a 5,000-product catalog: the 3 shown are among them, the other 4,997 never were.
+    expect(viewCounts(rows, 5000)).toEqual({ ...counts, all: 5000, never: 4997 });
   });
 });

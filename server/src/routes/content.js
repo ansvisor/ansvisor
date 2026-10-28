@@ -17,7 +17,8 @@ import { resolveModel } from '../lib/ai-provider.js';
 import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from '../lib/chunked-in.js';
-import { postJson } from '../lib/safe-post.js';
+import { isRedirect, postJson } from '../lib/safe-post.js';
+import { webhookTestLimiter } from '../middleware/rate-limiter.js';
 import {
   assertBrandAccess,
   assertOpportunitiesAccess,
@@ -336,7 +337,8 @@ router.post('/:id/alternative', requireFeature('content_optimization'), async (r
  */
 router.get(
   '/prompts/:promptId/suggestion',
-  requireFeature('content_optimization'),
+  // Reads only: a workspace whose plan ended still opens its suggestion.
+  requireFeature('content_optimization', { readOnly: true }),
   async (req, res) => {
     const { promptId } = req.params;
     try {
@@ -937,6 +939,11 @@ router.post('/bulk/send-webhook', async (req, res) => {
         const webhookRes = await postJson(webhookConfig.webhook_url, JSON.stringify(payload), {
           headers,
         });
+        // A redirect isn't followed, so nothing arrived: not sent.
+        if (isRedirect(webhookRes.status)) {
+          failed++;
+          continue;
+        }
         const responseBody = webhookRes.answer;
 
         // A workflow may call callback_url before it sends its HTTP response.
@@ -1121,6 +1128,15 @@ router.post('/:id/send-webhook', async (req, res) => {
     const webhookRes = await postJson(webhookConfig.webhook_url, JSON.stringify(payload), {
       headers,
     });
+    // A redirect isn't followed, so the payload never arrived: the
+    // opportunity keeps its status, as Send to CMS fails a 3xx.
+    if (isRedirect(webhookRes.status)) {
+      return res.status(502).json({
+        error: 'The webhook address redirects. Use the address it redirects to.',
+        code: 'webhook_redirect',
+        webhookStatus: webhookRes.status,
+      });
+    }
     const responseBody = webhookRes.answer;
 
     const { data: statusUpdate } = await supabaseAdmin
@@ -1167,18 +1183,58 @@ router.post('/:id/send-webhook', async (req, res) => {
   }
 });
 
+/** Who can set up a brand's webhook, and so test one for it. */
+const WEBHOOK_ROLES = ['admin', 'manager'];
+
+/** The brand is the caller's, and the caller can edit its webhook; else 404 / 403. */
+async function assertWebhookEditor(brandId, userId) {
+  await assertBrandAccess(brandId, userId);
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (!WEBHOOK_ROLES.includes(profile?.role)) {
+    const err = new Error('Only admins and managers can test the webhook.');
+    err.status = 403;
+    err.code = 'forbidden';
+    throw err;
+  }
+}
+
+const webhookTestSchema = z.object({
+  brandId: z.guid(),
+  webhookUrl: z.string().trim().min(1),
+  webhookSecret: z.string().nullish(),
+});
+
 /**
  * POST /api/content/webhook-test
- * Test a webhook URL with a dummy payload.
+ * Test a webhook URL with a dummy payload, for a brand whose webhook the
+ * caller can edit (admins and managers), 10 a minute.
+ * Body: { brandId, webhookUrl, webhookSecret? }. Answers { success, status,
+ * statusText }, with `location` for a redirect; { success: false, status: 0,
+ * error } when the address is refused or can't be reached (with the network
+ * error's code, e.g. ENOTFOUND).
  */
-router.post('/webhook-test', async (req, res) => {
+router.post('/webhook-test', webhookTestLimiter, async (req, res) => {
+  const parsed = webhookTestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+  }
+  const { brandId, webhookUrl, webhookSecret } = parsed.data;
+
   try {
-    const { webhookUrl, webhookSecret } = req.body;
-
-    if (!webhookUrl) {
-      return res.status(400).json({ error: 'webhookUrl is required' });
+    await assertWebhookEditor(brandId, req.user.id);
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
     }
+    req.log.error({ err: error }, 'webhook test access error');
+    return res.status(500).json({ error: 'Failed to test webhook' });
+  }
 
+  try {
     const payload = {
       event: 'webhook.test',
       message: 'This is a test webhook from AEO platform.',
@@ -1201,12 +1257,20 @@ router.post('/webhook-test', async (req, res) => {
       success: webhookRes.status >= 200 && webhookRes.status < 300,
       status: webhookRes.status,
       statusText: STATUS_CODES[webhookRes.status] ?? '',
+      // Where a redirect points (postJson gives it for a 3xx only), so the
+      // dialog can name the address to use.
+      ...(webhookRes.location ? { location: webhookRes.location } : {}),
     });
   } catch (error) {
     return res.json({
       success: false,
       status: 0,
-      error: error.message,
+      // Why it couldn't be reached: PageFetchError's errno (ENOTFOUND,
+      // ECONNREFUSED, a TLS error…); a system error's own errno is a number.
+      error:
+        typeof error.errno === 'string' && error.errno
+          ? `${error.message} (${error.errno})`
+          : error.message,
     });
   }
 });
@@ -1449,7 +1513,8 @@ router.get('/briefs/quota', async (req, res) => {
       // Self-hosted single-user setups may have no org row; no quota applies.
       return res.json({ used: 0, limit: -1, remaining: -1 });
     }
-    const quota = await getBriefQuotaStatus(orgId);
+    // Read-only once the plan has ended (2026-10-27): no plan reads as a limit of 0.
+    const quota = await getBriefQuotaStatus(orgId, { readOnly: true });
     return res.json(quota);
   } catch (error) {
     if (error instanceof PlanLimitError) {
@@ -1486,7 +1551,8 @@ router.get('/usage', async (req, res) => {
         briefs: unlimited,
       });
     }
-    return res.json(await getContentUsage(orgId));
+    // Read-only once the plan has ended (2026-10-27): no plan reads as limits of 0.
+    return res.json(await getContentUsage(orgId, { readOnly: true }));
   } catch (error) {
     if (error instanceof PlanLimitError) {
       return res.status(error.statusCode).json({
