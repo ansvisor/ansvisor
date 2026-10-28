@@ -270,12 +270,12 @@ function MenuAccessSettingsView() {
           <MenuManagersCard
             settings={settings}
             onChange={updateSettings}
-            onSaved={() => router.refresh()}
+            onFailed={() => void reload()}
           />
           <MenuPeopleCard
             settings={settings}
             onChange={updateSettings}
-            onSaved={() => router.refresh()}
+            onFailed={() => void reload()}
           />
         </>
       )}

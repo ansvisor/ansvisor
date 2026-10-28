@@ -37,7 +37,7 @@ const member = (over: Partial<MenuMember>): MenuMember => ({
 });
 
 let settings: MenuAccessSettings;
-const onSaved = vi.fn();
+const onFailed = vi.fn();
 let container: HTMLDivElement;
 let root: Root;
 
@@ -71,14 +71,21 @@ afterEach(() => {
   container.remove();
 });
 
-/** The cards over settings that change as they save, as the section holds them. */
+/**
+ * The cards over settings that change as they save, as the section holds
+ * them; a failed save reads them again (here: as they started).
+ */
 function Cards() {
   const [current, setCurrent] = useState(settings);
   const onChange = (update: (s: MenuAccessSettings) => MenuAccessSettings) => setCurrent(update);
+  const reload = () => {
+    onFailed();
+    setCurrent(settings);
+  };
   return (
     <>
-      <MenuManagersCard settings={current} onChange={onChange} onSaved={onSaved} />
-      <MenuPeopleCard settings={current} onChange={onChange} onSaved={onSaved} />
+      <MenuManagersCard settings={current} onChange={onChange} onFailed={reload} />
+      <MenuPeopleCard settings={current} onChange={onChange} onFailed={reload} />
     </>
   );
 }
@@ -134,14 +141,15 @@ describe('MenuManagersCard', () => {
     await act(async () => deniz.click());
     expect(actions.setMenuManager).toHaveBeenCalledWith('deniz', false);
     expect(deniz.getAttribute('aria-checked')).toBe('false');
-    expect(onSaved).toHaveBeenCalled();
+    expect(onFailed).not.toHaveBeenCalled();
   });
 
-  it('puts the switch back when the save fails', async () => {
+  it('reads the settings again when the save fails', async () => {
     actions.setMenuManager.mockRejectedValueOnce(new Error('nope'));
     await render();
     const ece = el('[aria-label="Ece Yılmaz can change menus"]');
     await act(async () => ece.click());
+    expect(onFailed).toHaveBeenCalled();
     expect(ece.getAttribute('aria-checked')).toBe('false');
     expect(toast.error).toHaveBeenCalledWith("Couldn't save the menu. Try again.");
   });
@@ -198,11 +206,12 @@ describe('MenuPeopleCard', () => {
     expect(row('ece').textContent).toContain("Manager's menu");
   });
 
-  it('puts the box back when the save fails', async () => {
+  it('reads the settings again when the save fails', async () => {
     actions.setMemberMenu.mockRejectedValueOnce(new Error('nope'));
     await render();
     await act(async () => buttonIn(row('mert'), 'Customize').click());
     await act(async () => el('[aria-label="Mert Aydın sees Content"]').click());
+    expect(onFailed).toHaveBeenCalled();
     expect(el('[aria-label="Mert Aydın sees Content"]').getAttribute('aria-checked')).toBe('false');
     expect(toast.error).toHaveBeenCalled();
   });
