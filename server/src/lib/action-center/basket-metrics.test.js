@@ -5,8 +5,15 @@ vi.mock('../../config/supabase.js', () => ({
   default: { from: (table) => tables[table]() },
 }));
 
-const { BASKET_KPIS, basketScope, basketValues, controlScope, netEffect, pageScope } =
-  await import('./basket-metrics.js');
+const {
+  BASKET_KPIS,
+  CONTROL_MIN_COUNT,
+  basketScope,
+  basketValues,
+  controlScope,
+  netEffect,
+  pageScope,
+} = await import('./basket-metrics.js');
 
 /** A query builder that resolves to `result` however it is chained. */
 function chain(result) {
@@ -177,6 +184,16 @@ describe('netEffect', () => {
         after: { mentions: 12 },
       }),
     ).toEqual([]);
+  });
+
+  it('leaves out a count read from fewer than five before: one more is a swing, not a result', () => {
+    const control = { before: { mentions: 100 }, after: { mentions: 100 } };
+    expect(CONTROL_MIN_COUNT).toBe(5);
+    // 4 → 6 would read +50% net.
+    expect(netEffect([metric('mentions', 'count', 4, 6)], control)).toEqual([]);
+    expect(netEffect([metric('mentions', 'count', 5, 6)], control)).toEqual([
+      { metric: 'mentions', net: 20, unit: 'percent', control: { before: 100, after: 100 } },
+    ]);
   });
 });
 

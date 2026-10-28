@@ -203,10 +203,17 @@ export async function controlScope(brandId, promptIds, since) {
 }
 
 /**
+ * Fewest the action's count must read before to be netted: from 2, one more
+ * mention reads +50%, a swing no control speaks to.
+ */
+export const CONTROL_MIN_COUNT = 5;
+
+/**
  * The action's change net of the control's (learning B2), a difference in
  * differences, for each metric both read: a rate in points (its move minus
  * theirs), a count in percent (its relative move minus theirs, so a basket
- * of 300 prompts weighs as one of 3).
+ * of 300 prompts weighs as one of 3), not from fewer than CONTROL_MIN_COUNT
+ * before.
  *
  * @returns {Array<{ metric: string, net: number, unit: 'points' | 'percent', control: { before: number, after: number } }>}
  */
@@ -217,7 +224,7 @@ export function netEffect(metrics, controlValues) {
     const after = controlValues.after[m.metric];
     if (!read(m.before, m.after) || !read(before, after)) return [];
     if (m.unit === 'count') {
-      if (!(m.before > 0 && before > 0)) return [];
+      if (!(m.before >= CONTROL_MIN_COUNT && before > 0)) return [];
       const net = round1((m.after / m.before - after / before) * 100);
       return [{ metric: m.metric, net, unit: 'percent', control: { before, after } }];
     }
