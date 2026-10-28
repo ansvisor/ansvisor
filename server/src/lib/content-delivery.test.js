@@ -17,9 +17,11 @@ const db = {
   webflow: null,
   webflowConfigured: true,
   // Its WordPress connection (00294), and whether this server can keep its sign-in
-  // (or a Wix site's API key: the same key keeps both).
+  // (Framer's and Wix's API keys too: one CONNECTOR_CREDENTIALS_KEY).
   wordpress: null,
   wordpressConfigured: true,
+  // Its Framer connection (00295).
+  framer: null,
   // Its Wix connection (00372).
   wix: null,
   queued: [],
@@ -56,8 +58,8 @@ function from(table) {
     if (table === 'webhook_configs') return { data: db.configs, error: null };
     if (table === 'brand_cms_connections') {
       const provider = q.filters.find(([op, col]) => op === 'eq' && col === 'provider')?.[2];
-      const connections = { wordpress: db.wordpress, wix: db.wix };
-      return { data: provider in connections ? connections[provider] : db.webflow, error: null };
+      const connection = { wordpress: db.wordpress, framer: db.framer, wix: db.wix }[provider];
+      return { data: connection === undefined ? db.webflow : connection, error: null };
     }
     if (table === 'brands') {
       db.brandReads += 1;
@@ -108,6 +110,10 @@ vi.mock('./catalog/credentials.js', () => ({
 const sendToWordPress = vi.fn();
 vi.mock('./cms/wordpress-delivery.js', () => ({
   sendToWordPress: (...args) => sendToWordPress(...args),
+}));
+const sendToFramer = vi.fn();
+vi.mock('./cms/framer-delivery.js', () => ({
+  sendToFramer: (...args) => sendToFramer(...args),
 }));
 const sendToWix = vi.fn();
 vi.mock('./cms/wix-delivery.js', () => ({ sendToWix: (...args) => sendToWix(...args) }));
@@ -164,11 +170,13 @@ beforeEach(() => {
   db.webflowConfigured = true;
   db.wordpress = null;
   db.wordpressConfigured = true;
+  db.framer = null;
   db.wix = null;
   db.rpcError = null;
   postJson.mockReset().mockResolvedValue({ status: 200, answer: '{"ok":true}' });
   sendToWebflow.mockReset();
   sendToWordPress.mockReset();
+  sendToFramer.mockReset();
   sendToWix.mockReset();
 });
 
@@ -723,6 +731,145 @@ describe('sendContentPages to WordPress (phase 2, 00294)', () => {
       (u) =>
         u.table === 'content_draft_deliveries' &&
         u.update.error === 'WordPress refused the user or the Application Password.',
+    );
+    expect(closed).toHaveLength(2);
+  });
+});
+
+describe('sendContentPages to Framer (phase 2, 00295)', () => {
+  const connection = {
+    id: 'cn1',
+    brand_id: 'b1',
+    status: 'connected',
+    site_id: 'AbCdEfGhIj0123456789',
+    collection_id: 'cBlog',
+    field_map: { title: 'fTitle', body: 'fBody' },
+    updated_at: '2026-10-27T09:00:00Z',
+  };
+  const toFramer = (pages = [page()]) =>
+    sendContentPages({ orgId: 'o1', brandId: 'b1', userId: 'u1', pages, target: 'framer' });
+
+  it('sends a page to the brand’s collection, not its webhooks, and keeps the item on the delivery', async () => {
+    db.framer = connection;
+    sendToFramer.mockResolvedValue({
+      taken: true,
+      externalId: 'item-1',
+      collectionId: 'cBlog',
+      updated: true,
+      live: true,
+      changed: { images: 2 },
+    });
+    const sent = await toFramer();
+    expect(db.rpc[0].args.p_target).toBe('framer');
+    expect(postJson).not.toHaveBeenCalled();
+    expect(sendToWebflow).not.toHaveBeenCalled();
+    expect(sendToWordPress).not.toHaveBeenCalled();
+    expect(sendToFramer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connection,
+        html: '<h2>Why</h2><p>Because.</p>',
+        jsonLd: [],
+        page: expect.objectContaining({ draftId: page().draftId, slug: 'best-aeo-tools' }),
+      }),
+    );
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'sent',
+      error: null,
+      external_id: 'item-1',
+      target_collection: 'cBlog',
+    });
+    // How Framer took it goes in the answer, as Webflow's and WordPress's do.
+    expect(sent.deliveries[0]).toMatchObject({
+      status: 'sent',
+      updated: true,
+      live: true,
+      changed: { images: 2 },
+    });
+  });
+
+  it('writes a page Framer didn’t take as failed, with the reason', async () => {
+    db.framer = connection;
+    sendToFramer.mockResolvedValue({
+      taken: false,
+      failure: 'Another item in Blog has the slug "best-aeo-tools".',
+    });
+    const sent = await toFramer();
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'failed',
+      error: 'Another item in Blog has the slug "best-aeo-tools".',
+    });
+    expect(write.update).not.toHaveProperty('external_id');
+    expect(sent.deliveries[0]).toMatchObject({ refused: false });
+  });
+
+  it('refuses before reserving when Framer isn’t set up, connected or ready to take pages', async () => {
+    db.wordpressConfigured = false;
+    await expect(toFramer()).rejects.toMatchObject({
+      code: 'framer_not_configured',
+      status: 503,
+      message: 'Framer is not set up on this server.',
+    });
+    db.wordpressConfigured = true;
+    await expect(toFramer()).rejects.toMatchObject({
+      code: 'no_framer',
+      status: 409,
+      message: 'Connect Framer in Settings › Integrations.',
+    });
+    db.framer = { ...connection, status: 'auth_failed' };
+    await expect(toFramer()).rejects.toMatchObject({ code: 'framer_refused', status: 409 });
+    for (const ready of [
+      { collection_id: null },
+      { field_map: { body: 'fBody' } },
+      { field_map: { title: 'fTitle' } },
+    ]) {
+      db.framer = { ...connection, ...ready };
+      await expect(toFramer()).rejects.toMatchObject({
+        code: 'framer_not_ready',
+        status: 409,
+        message: 'Pick the Framer collection and its fields in Settings › Integrations.',
+      });
+    }
+    // A WordPress connection isn't a Framer one.
+    db.framer = null;
+    db.wordpress = {
+      id: 'cn2',
+      brand_id: 'b1',
+      status: 'connected',
+      site_url: 'https://x.example',
+    };
+    await expect(toFramer()).rejects.toMatchObject({ code: 'no_framer' });
+    expect(db.rpc).toEqual([]);
+    expect(sendToFramer).not.toHaveBeenCalled();
+  });
+
+  it('refuses a page already on its way to Framer, naming it', async () => {
+    db.framer = connection;
+    db.rpcError = { message: 'delivery_in_progress' };
+    await expect(toFramer()).rejects.toMatchObject({
+      code: 'in_progress',
+      message: 'A page is already being sent to Framer. Wait for it, then send again.',
+    });
+  });
+
+  it('stops a batch once Framer refuses the key, closing the rest with the reason', async () => {
+    vi.useFakeTimers();
+    db.framer = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToFramer.mockResolvedValue({
+      taken: false,
+      failure: 'Framer refused the API key.',
+      refused: true,
+    });
+    await toFramer([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToFramer).toHaveBeenCalledTimes(1);
+    const closed = db.updates.filter(
+      (u) =>
+        u.table === 'content_draft_deliveries' && u.update.error === 'Framer refused the API key.',
     );
     expect(closed).toHaveLength(2);
   });
