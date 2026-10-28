@@ -5,6 +5,8 @@
  * by convention and not worth a Scrape.do credit each.
  */
 
+import { nestsTooDeep } from '../html-depth.js';
+
 const SCRAPEDO_API = 'https://api.scrape.do';
 
 function getToken() {
@@ -14,11 +16,13 @@ function getToken() {
 }
 
 /**
- * Fetch a URL through Scrape.do and return the rendered HTML.
+ * Fetch a URL through Scrape.do and return the rendered HTML. A page nested
+ * deeper than any browser keeps comes back not ok, with no HTML and the error
+ * 'too_deep', so it isn't parsed (html-depth.js).
  *
  * @param {string} targetUrl
  * @param {{ render?: boolean }} [opts]
- * @returns {Promise<{ ok: boolean, status: number, html: string, contentType: string|null }>}
+ * @returns {Promise<{ ok: boolean, status: number, html: string, contentType: string|null, error?: string }>}
  */
 export async function fetchViaScrapeDo(targetUrl, { render = true, retries = 1 } = {}) {
   const params = new URLSearchParams({ token: getToken(), url: targetUrl });
@@ -30,7 +34,11 @@ export async function fetchViaScrapeDo(targetUrl, { render = true, retries = 1 }
     try {
       const res = await fetch(endpoint);
       const html = await res.text();
-      last = { ok: res.ok, status: res.status, html, contentType: res.headers.get('content-type') };
+      const contentType = res.headers.get('content-type');
+      if (res.ok && nestsTooDeep(html)) {
+        return { ok: false, status: res.status, html: '', contentType, error: 'too_deep' };
+      }
+      last = { ok: res.ok, status: res.status, html, contentType };
       // Retry only on proxy-side 5xx (transient); 4xx is the target's verdict.
       if (res.ok || res.status < 500) return last;
     } catch (err) {
