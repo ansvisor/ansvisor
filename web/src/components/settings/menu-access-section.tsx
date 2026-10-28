@@ -22,7 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useRouter } from '@/i18n/navigation';
 import { dashboardNav } from '@/config/dashboard';
 import { getDashboardNavGroupLabel, getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import {
@@ -82,7 +81,6 @@ function MenuAccessSettingsView() {
   const t = useTranslations('settings.menuAccess');
   const tSettings = useTranslations('settings');
   const tNav = useTranslations('nav');
-  const router = useRouter();
   const [settings, setSettings] = useState<MenuAccessSettings | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -101,18 +99,21 @@ function MenuAccessSettingsView() {
     };
   }, []);
 
+  // After a failed save, the settings as the server has them: a change saved
+  // meanwhile stays, which putting back the state before it wouldn't.
+  const reload = () => getMenuAccessSettings().then(setSettings, () => setFailed(true));
+
+  // The save's own revalidation brings the menu up to date (setRoleMenu).
   const saveRole = async (role: MenuRole, hidden: string[]) => {
     if (!settings) return;
-    const before = settings.roles[role];
-    setSettings({ ...settings, roles: { ...settings.roles, [role]: hidden } });
+    setSettings((current) =>
+      current ? { ...current, roles: { ...current.roles, [role]: hidden } } : current,
+    );
     try {
       await setRoleMenu(role, hidden);
-      router.refresh();
     } catch {
-      setSettings((current) =>
-        current ? { ...current, roles: { ...current.roles, [role]: before } } : current,
-      );
       toast.error(t('saveFailed'));
+      void reload();
     }
   };
 
@@ -157,8 +158,8 @@ function MenuAccessSettingsView() {
             <Table className="table-fixed">
               {/* Fixed shares, so the table fits Settings' column at 1024 px wide. */}
               <colgroup>
-                <col className="w-[22%]" />
-                <col className="w-[15%]" />
+                <col className="w-[20%]" />
+                <col className="w-[14%]" />
                 {MENU_ROLES.map((role) => (
                   <col key={role} />
                 ))}
@@ -192,7 +193,7 @@ function MenuAccessSettingsView() {
                       >
                         <SelectTrigger
                           size="sm"
-                          className="h-7 w-full min-w-0 gap-0.5 px-1 text-xs [&_svg]:size-3.5"
+                          className="h-7 w-full min-w-0 gap-0.5 px-1 text-xs [&_svg]:size-3"
                           aria-label={t('useSetLabel', { role: roleName(role) })}
                         >
                           <SelectValue placeholder={t('useSet')} className="min-w-0 truncate" />
