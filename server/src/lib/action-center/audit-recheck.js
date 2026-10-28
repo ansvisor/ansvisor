@@ -88,10 +88,10 @@ export async function auditRecheck(action) {
 /**
  * A fix's verdict from its pages audited again: its aim is the check
  * passing, more than any metric over a week. All passing reads improved;
- * none, no meaningful change; some, improved (part of the work took).
+ * none, no meaningful change; some, mixed (part of the work took).
  */
 export function auditOutcome({ audited, passed }) {
   if (!audited) return null;
   if (passed === 0) return 'no_meaningful_change';
-  return 'improved';
+  return passed === audited ? 'improved' : 'mixed';
 }

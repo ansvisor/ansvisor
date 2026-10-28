@@ -26,8 +26,9 @@ Ansvisor never publishes on its own. When your workflow tells Ansvisor where the
    | Meta title | Plain text | Optional |
    | Meta description | Plain text | Optional |
    | JSON-LD (structured data) | Plain text | Optional |
+   | Date (the day it's first sent) | Date/Time | Optional |
 
-   The page's title and slug always go to the item's **Name** and **Slug**. Ansvisor suggests fields from their names (`post-body`, `post-summary`, `seo-title`…); change them if they're wrong, and **Save**. A collection that requires a field Ansvisor doesn't fill can't be saved: **Save** names the field. Make it optional in Webflow first.
+   The page's title and slug always go to the item's **Name** and **Slug**. Ansvisor suggests fields from their names (`post-body`, `post-summary`, `seo-title`…); change them if they're wrong, and **Save**. A collection that requires a field Ansvisor doesn't fill can't be saved: **Save** names the field. Make it optional in Webflow first. A page sent again keeps its item's date; an item that has none (sent before you mapped a date field) gets the day it's sent again.
 4. To use the JSON-LD field, add an **Embed** to the collection template that puts the field inside a `<script type="application/ld+json">` tag.
 
 A site token is one site's, so each brand connects its own. **Replace token** changes it (the collection and fields stay when it's the same site), and **Disconnect** removes it. If Webflow refuses the saved token, the card says so and asks for a new one.
