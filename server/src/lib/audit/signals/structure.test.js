@@ -36,6 +36,18 @@ describe('json-ld-validity', () => {
     const none = { '@graph': GRAPH['@graph'] };
     expect(jsonLdValidity.evaluate(page(none)).status).toBe('fail');
   });
+
+  it('reads a large shared context once, not once per node', () => {
+    // About 500 KB: a wrapper context of ~250 KB and thousands of tiny nodes.
+    const vocab = {};
+    for (let i = 0; i < 7_300; i++) vocab[`t${i}`] = `https://schema.org/T${i}`;
+    const nodes = [];
+    for (let i = 0; i < 9_500; i++) nodes.push({ '@type': 'Thing', n: i });
+    const big = { '@context': ['https://schema.org', vocab], '@graph': nodes };
+    const started = Date.now();
+    expect(jsonLdValidity.evaluate(page(big)).status).toBe('pass');
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
 });
 
 describe('json-ld-relevance', () => {
