@@ -149,3 +149,88 @@ export async function measureBasket(brandId, scope, from, to) {
   if (error) throw new Error(`opportunity_basket_metrics: ${error.message}`);
   return basketValues(data || {}, { pageCount: pages.keys.length });
 }
+
+/** Fewest prompts a control basket is read from: fewer, and one prompt's swing is its result. */
+export const CONTROL_MIN_PROMPTS = 5;
+/** Most prompts it is read from. */
+const CONTROL_MAX_PROMPTS = 300;
+
+/**
+ * The control basket (learning B2): the brand's active prompts the action
+ * didn't touch — in the same topics as its own first, else any of the
+ * brand's — read over the same windows, so what moved for every prompt (an
+ * engine's update, a season, a night tracking missed) is told apart from
+ * what moved for the action's own. Its prompts only, never another brand's,
+ * and only ones tracked by `since` (the first day of the week before): one
+ * added later reads in the week after alone, and would swell it. Null with
+ * too few to read.
+ *
+ * @returns {Promise<{ basis: 'topics' | 'brand', promptIds: string[], pages: [] } | null>}
+ */
+export async function controlScope(brandId, promptIds, since) {
+  if (!promptIds?.length) return null;
+  const own = new Set(promptIds);
+  const { data: targets, error } = await supabaseAdmin
+    .from('prompts')
+    .select('topic_id')
+    .in('id', promptIds.slice(0, 200));
+  if (error) throw new Error(error.message);
+  const topics = [...new Set((targets ?? []).map((p) => p.topic_id).filter(Boolean))];
+  const others = async (byTopic) => {
+    let query = supabaseAdmin
+      .from('prompts')
+      .select('id, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .eq('is_active', true)
+      .lt('created_at', `${since}T00:00:00Z`);
+    if (byTopic) query = query.in('topic_id', topics);
+    const { data, error: readError } = await query
+      .order('id')
+      .limit(CONTROL_MAX_PROMPTS + own.size);
+    if (readError) throw new Error(readError.message);
+    return (data ?? [])
+      .map((p) => p.id)
+      .filter((id) => !own.has(id))
+      .slice(0, CONTROL_MAX_PROMPTS);
+  };
+  let basis = 'topics';
+  let ids = topics.length ? await others(true) : [];
+  if (ids.length < CONTROL_MIN_PROMPTS) {
+    basis = 'brand';
+    ids = await others(false);
+  }
+  return ids.length >= CONTROL_MIN_PROMPTS ? { basis, promptIds: ids, pages: [] } : null;
+}
+
+/**
+ * Fewest the action's count must read before to be netted: from 2, one more
+ * mention reads +50%, a swing no control speaks to.
+ */
+export const CONTROL_MIN_COUNT = 5;
+
+/**
+ * The action's change net of the control's (learning B2), a difference in
+ * differences, for each metric both read: a rate in points (its move minus
+ * theirs), a count in percent (its relative move minus theirs, so a basket
+ * of 300 prompts weighs as one of 3), not from fewer than CONTROL_MIN_COUNT
+ * before. Never AI sessions: they're read on pages, and a control of
+ * prompts has none.
+ *
+ * @returns {Array<{ metric: string, net: number, unit: 'points' | 'percent', control: { before: number, after: number } }>}
+ */
+export function netEffect(metrics, controlValues) {
+  const read = (before, after) => before != null && after != null;
+  return metrics.flatMap((m) => {
+    if (m.unit === 'sessions') return [];
+    const before = controlValues.before[m.metric];
+    const after = controlValues.after[m.metric];
+    if (!read(m.before, m.after) || !read(before, after)) return [];
+    if (m.unit === 'count') {
+      if (!(m.before >= CONTROL_MIN_COUNT && before > 0)) return [];
+      const net = round1((m.after / m.before - after / before) * 100);
+      return [{ metric: m.metric, net, unit: 'percent', control: { before, after } }];
+    }
+    const net = round1(m.after - m.before - (after - before));
+    return [{ metric: m.metric, net, unit: 'points', control: { before, after } }];
+  });
+}

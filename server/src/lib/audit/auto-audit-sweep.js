@@ -1,9 +1,11 @@
 /**
  * The daily auto-audit sweep (SA-006). For each organization whose run is
  * due, it claims the run (one site_audit_auto_runs row per org, period and
- * run day, so a second sweep the same day does nothing), audits the top
- * pages of its brands' Opportunities inboxes, and once every audit has
- * finished, records the run and, when the team asked for it, e-mails them.
+ * run day, so a second sweep the same day does nothing), audits the pages
+ * its brands' Site Audit fixes were completed on and not audited or tried
+ * since (learning B7), then the top pages of their Opportunities inboxes,
+ * and once every audit has finished, records the run and, when the team
+ * asked for it, e-mails them.
  *
  * The inbox read and the audit start live in routes/audits.js; they're
  * passed in, so this module doesn't import a route (and tests stand them in).
@@ -13,9 +15,11 @@ import supabaseAdmin from '../../config/supabase.js';
 import { getSiteAuditQuotaStatus, PlanLimitError } from '../plan-guard.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { logger } from '../logger.js';
-import { AUTO_AUDIT, pickRunPages } from './auto-audit.js';
+import { AUTO_AUDIT, pickRunPages, runPageKey } from './auto-audit.js';
 import { sendAutoAuditEmail } from './auto-audit-email.js';
-import { opportunityKey } from './opportunities.js';
+import { excludePatternMatcher, opportunityKey } from './opportunities.js';
+import { pageKey } from './history.js';
+import { onBrandDomain } from './host.js';
 
 /**
  * @typedef {object} SweepDeps
@@ -108,8 +112,15 @@ async function startRun(orgId, brands, { readInbox, startAudits, now }) {
 
   const inboxes = [];
   let triedKeys = new Set();
+  let fixed = [];
   if (slots > 0) {
     triedKeys = await recentlyTriedPages(brands, now);
+    // Pages fixed since their last audit come first (learning B7). A read
+    // that fails leaves the run to the inboxes, as before.
+    fixed = await fixedPages(brands, now).catch((err) => {
+      logger.warn({ err, orgId }, '[auto-audit] fixed pages not read');
+      return [];
+    });
     for (const brand of brands) {
       try {
         const { opportunities } = await readInbox(brand.id);
@@ -119,7 +130,7 @@ async function startRun(orgId, brands, { readInbox, startAudits, now }) {
       }
     }
   }
-  const pages = pickRunPages(inboxes, slots, now, triedKeys);
+  const pages = pickRunPages(inboxes, slots, now, triedKeys, fixed);
 
   const auditIds = [];
   const audits = [];
@@ -166,6 +177,152 @@ async function recentlyTriedPages(brands, now) {
     .gte('created_at', since.toISOString());
   if (error) throw new Error(error.message);
   return new Set((data ?? []).map((row) => opportunityKey(row.url)).filter(Boolean));
+}
+
+/**
+ * Pages one fix action offers at most, of those still due (its others are
+ * left out first): a run takes few anyway.
+ */
+const FIXED_PER_ACTION = 20;
+
+/**
+ * Pages a Site Audit fix (an Action Center action of the fix category) was
+ * completed on in the last 30 days and that no audit has read or tried
+ * since (any audit of the brand's, finished or not), the most recently
+ * fixed first (learning B7). Its targets name the pages, by their
+ * addresses, on the action's brand's own domains and not left out of
+ * auto-audits (excluded, or under an exclude pattern and not pinned); one
+ * fixed twice counts from its last fix.
+ *
+ * @returns {Promise<Array<{ brandId: string, key: string, url: string, path: string }>>}
+ */
+export async function fixedPages(brands, now) {
+  const since = new Date(now.getTime() - AUTO_AUDIT.freshDays * 24 * 60 * 60 * 1000);
+  const brandIds = brands.map((b) => b.id);
+  const { data: actions, error } = await supabaseAdmin
+    .from('actions')
+    .select('brand_id, payload, completed_at')
+    .in('brand_id', brandIds)
+    .eq('status', 'completed')
+    .eq('category', 'fix')
+    .is('deleted_at', null)
+    .gte('completed_at', since.toISOString())
+    .order('completed_at', { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  if (!actions?.length) return [];
+
+  // Only a brand's own pages: a fix's target on another site (a
+  // competitor's page, say) costs an audit and says nothing of the fix. A
+  // brand without a domain has none. Nor the pages the team left out of
+  // Opportunities and auto-audits: excluded ones, and those under the
+  // brand's exclude patterns unless pinned, as the inbox does.
+  const [domainRows, prefRows, settingRows] = await Promise.all([
+    supabaseAdmin.from('brand_domains').select('brand_id, domain').in('brand_id', brandIds),
+    readAllRpcRows('site_audit_page_prefs', (from, to) =>
+      supabaseAdmin
+        .from('site_audit_page_prefs')
+        .select('brand_id, page_key, state')
+        .in('brand_id', brandIds)
+        .order('brand_id', { ascending: true })
+        .order('page_key', { ascending: true })
+        .range(from, to),
+    ),
+    supabaseAdmin
+      .from('site_audit_brand_settings')
+      .select('brand_id, exclude_patterns')
+      .in('brand_id', brandIds),
+  ]);
+  for (const read of [domainRows, prefRows, settingRows]) {
+    if (read.error) throw new Error(read.error.message);
+  }
+  const domains = new Map();
+  for (const row of domainRows.data ?? []) {
+    if (!domains.has(row.brand_id)) domains.set(row.brand_id, []);
+    domains.get(row.brand_id).push(row.domain);
+  }
+  const prefs = new Map(
+    (prefRows.data ?? []).map((row) => [runPageKey(row.brand_id, row.page_key), row.state]),
+  );
+  const excludedByPattern = new Map(
+    (settingRows.data ?? []).map((row) => [
+      row.brand_id,
+      excludePatternMatcher(row.exclude_patterns ?? []),
+    ]),
+  );
+  const leftOut = (brandId, key, path) => {
+    const state = prefs.get(runPageKey(brandId, key));
+    if (state === 'excluded') return true;
+    return state !== 'pinned' && Boolean(excludedByPattern.get(brandId)?.(path));
+  };
+
+  // By the brand's page (runPageKey): brands sharing a domain fix their own.
+  const pages = new Map();
+  for (const [index, action] of actions.entries()) {
+    const own = domains.get(action.brand_id) ?? [];
+    const p = action.payload ?? {};
+    const urls = [
+      ...(Array.isArray(p.targets) ? p.targets.map((t) => t?.id) : []),
+      ...(Array.isArray(p.targetIds) ? p.targetIds : []),
+    ].filter(
+      (url) => typeof url === 'string' && /^https?:\/\//i.test(url) && onBrandDomain(url, own),
+    );
+    for (const url of urls) {
+      const key = opportunityKey(url);
+      const id = key ? runPageKey(action.brand_id, key) : null;
+      // Newest fix first: the first one read for a page is its last.
+      if (!id || pages.has(id)) continue;
+      const path = pageKey(url)?.path ?? '/';
+      if (leftOut(action.brand_id, key, path)) continue;
+      pages.set(id, {
+        brandId: action.brand_id,
+        key,
+        url,
+        path,
+        fixedAt: Date.parse(action.completed_at),
+        action: index,
+      });
+    }
+  }
+  if (pages.size === 0) return [];
+
+  // The audits since the oldest of those fixes, by the address asked for or
+  // ended at: the brand's own, as the action's result reads them (A2). Every
+  // one, past PostgREST's 1000-row page: a busy month has more.
+  const oldest = [...pages.values()].reduce((min, page) =>
+    page.fixedAt < min.fixedAt ? page : min,
+  ).fixedAt;
+  const { data: audits, error: auditsErr } = await readAllRpcRows('site_audits', (from, to) =>
+    supabaseAdmin
+      .from('site_audits')
+      .select('brand_id, url, final_url, created_at')
+      .in('brand_id', brandIds)
+      .gte('created_at', new Date(oldest).toISOString())
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  if (auditsErr) throw new Error(auditsErr.message);
+  const lastAudit = new Map();
+  for (const audit of audits ?? []) {
+    for (const url of [audit.url, audit.final_url]) {
+      const key = url ? opportunityKey(url) : null;
+      const id = key ? runPageKey(audit.brand_id, key) : null;
+      const at = Date.parse(audit.created_at);
+      if (id && !(lastAudit.get(id) >= at)) lastAudit.set(id, at);
+    }
+  }
+  // The pages still due, each fix's first FIXED_PER_ACTION of them.
+  const perAction = new Map();
+  const due = [];
+  for (const [id, page] of pages) {
+    if (lastAudit.get(id) >= page.fixedAt) continue;
+    const taken = perAction.get(page.action) ?? 0;
+    if (taken >= FIXED_PER_ACTION) continue;
+    perAction.set(page.action, taken + 1);
+    due.push({ brandId: page.brandId, key: page.key, url: page.url, path: page.path });
+  }
+  return due;
 }
 
 /** Record the finished run and, when the org asked for it, e-mail what it found. */
