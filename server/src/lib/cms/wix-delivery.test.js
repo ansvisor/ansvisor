@@ -163,6 +163,13 @@ describe('sendToWix', () => {
     expect(wix.createDraftPost).not.toHaveBeenCalled();
   });
 
+  it('writes a scheduled post as a draft, not as a live post’s draft version', async () => {
+    previous = POST;
+    wix.readDraftPost.mockResolvedValue({ id: POST, status: 'SCHEDULED', url: null });
+    expect(await send()).toMatchObject({ taken: true, updated: true });
+    expect(wix.updateDraftPost.mock.calls[0][4]).toMatchObject({ live: false });
+  });
+
   it('writes a new post when the last one was deleted or is gone', async () => {
     previous = POST;
     wix.readDraftPost.mockResolvedValue({ id: POST, status: 'DELETED', url: null });
