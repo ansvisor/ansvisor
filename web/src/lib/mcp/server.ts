@@ -709,12 +709,15 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       description:
         'Check tracked-prompt usage against the plan — the numbers on the Tracked Prompts usage cards. ' +
-        'Returns { plan: { key, name, locationLimit, cta }, brand: { active, paused, total }, ' +
+        'Returns { plan: { key, name, locationLimit, cta, ended? }, brand: { active, paused, total }, ' +
         'account: { activePrompts, brands, locationsUsed }, updatedAt }. The plan limit counts ' +
         'prompt LOCATIONS across every brand of the account: each active prompt uses one slot per ' +
         'location it targets, and paused prompts use none. Slots left = locationLimit − ' +
-        'locationsUsed (never below 0); locationLimit null means unlimited. Use this for "how many ' +
-        'prompts can we still add?" / "how close are we to the limit?". This is a read.',
+        'locationsUsed (never below 0); locationLimit null means unlimited. When plan.ended is ' +
+        'true the organization\'s plan has ended (plan is the one it was on, cta is "choose_plan"): ' +
+        '0 slots are left, whatever the limit says, and a plan must be chosen before any prompt ' +
+        'can be added. Use this for "how many prompts can we still add?" / "how close are we to ' +
+        'the limit?". This is a read.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
       },
@@ -1266,7 +1269,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_action_history',
     {
       description:
-        'List closed Action Center actions (completed or dismissed) for a brand with their measured result, most recently closed first. `outcome` is the verdict (improved, no_meaningful_change, declined, not_measurable, or pending_measurement while the after-window is still open) and `results` holds the before/after values the validation sweep measured. Use this to answer "did what we did last month work?".',
+        'List closed Action Center actions (completed or dismissed) for a brand with their measured result, most recently closed first. `outcome` is the verdict (improved, mixed when its metrics moved both ways or only some of a fix\u2019s pages pass, no_meaningful_change, declined, not_measurable, or pending_measurement while the first week after it closed is still open; read again 14 and 30 days on, the day-30 reading final) and `results` holds the before/after values the validation sweep measured. `reading_day` is the day after closing the latest reading was taken on (7, 14 or 30; null before the first, or for one measured once before readings began). Until `final` is true, the outcome is a reading so far (day 7 or 14), not the result. Use this to answer "did what we did last month work?".',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z

@@ -45,6 +45,7 @@ import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
+import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js';
 import { runGaSync } from './lib/ga-sync.js';
 import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
@@ -180,16 +181,19 @@ async function runDailyTracking() {
   // Write the tasks of recent actions whose writing a pass missed (AC-004):
   // the budget was spent, the model failed, or the process restarted.
   // Bounded per sweep; a no-op unless ACTION_TASKS_AI is on.
-  sweepActionTasks().catch((err) => {
-    logger.error({ err }, '[task-writer] daily sweep crashed');
-  });
-
-  // Check the open tasks checked `auto` on their pages (AC-010): a page
+  //
+  // Then check the open tasks checked `auto` on their pages (AC-010): a page
   // fetched again with the free reader, one at a time, bounded per night. A
-  // task that passes is completed. Fire-and-forget like the rest.
-  sweepTaskChecks().catch((err) => {
-    logger.error({ err }, '[task-checks] daily sweep crashed');
-  });
+  // task that passes is completed. Once the writer's sweep settles, as it
+  // can delete a task a check just completed. Fire-and-forget like the rest.
+  sweepActionTasks()
+    .catch((err) => {
+      logger.error({ err }, '[task-writer] daily sweep crashed');
+    })
+    .then(() => sweepTaskChecks())
+    .catch((err) => {
+      logger.error({ err }, '[task-checks] daily sweep crashed');
+    });
 
   // Insights rollup backstop (00066). Re-refreshes the trailing days for
   // every brand, so days whose run never stamped (partial, crashed) and
@@ -284,9 +288,20 @@ async function runDailyTracking() {
 
   // Search Console sync (#644) — independent follow-up step; never blocks or
   // fails the tracking run. No-ops when Composio isn't configured.
-  runGscSync().catch((err) => {
-    logger.error({ err }, '[gsc-sync] daily run failed');
-  });
+  //
+  // Each prompt's real demand (PROMPT-014) follows it, so tonight's queries
+  // are the ones matched: Search Console every night, and the weekly Google
+  // Trends, People Also Ask and YouTube tasks when DEMAND_SIGNALS is on, read
+  // an hour later or the next night. It runs whether or not the sync did.
+  runGscSync()
+    .catch((err) => {
+      logger.error({ err }, '[gsc-sync] daily run failed');
+    })
+    .then(() => sweepPromptDemand())
+    .then(() => scheduleDemandCollect())
+    .catch((err) => {
+      logger.error({ err }, '[prompt-demand] daily sweep crashed');
+    });
 
   // AI-bot rows past their retention (AT-010): 90 days, counters 400.
   pruneBotEvents().catch((err) => {
