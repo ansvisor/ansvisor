@@ -106,6 +106,19 @@ describe('deriveOutcome', () => {
     expect(deriveOutcome([up], 'mentions')).toBe('improved');
   });
 
+  it('counts only the metrics the action aims at, given them', () => {
+    const visibility = { metric: 'ai_visibility', unit: 'percent', before: 20, after: 30 };
+    const lead = { metric: 'competitor_lead', unit: 'points', before: 0.4, after: 0.3 };
+    // A basket reads its lead too; the action never aimed at it.
+    expect(deriveOutcome([visibility, lead], 'ai_visibility', ['ai_visibility'])).toBe('improved');
+    // One it names moving the other way is mixed.
+    expect(
+      deriveOutcome([visibility, lead], 'ai_visibility', ['ai_visibility', 'competitor_lead']),
+    ).toBe('mixed');
+    // None of them read: nothing it aims at could be.
+    expect(deriveOutcome([lead], 'ai_visibility', ['ai_visibility'])).toBe('not_measurable');
+  });
+
   // Nothing to scale a ratio by, so any real arrival counts.
   it('treats a first arrival from zero as movement', () => {
     expect(deriveOutcome([pair('citations', 0, 3)])).toBe('improved');
@@ -283,6 +296,34 @@ describe('validateAction', () => {
     expect(rpc).toHaveBeenCalledWith('opportunity_basket_metrics', expect.anything());
     const patch = writes.updated.find((w) => w.table === 'actions').patch;
     expect(patch.validation.scope).toEqual({ kind: 'basket', prompts: 2, pages: 0 });
+  });
+
+  it('judges a basket by the metrics the action names, keeping the rest to see', async () => {
+    // Visibility 20 → 30 on the prompts; the lead over the top competitor 0.4 → 0.3.
+    const basket = (before, after) =>
+      rpc.mockImplementation(async (_name, args) => ({
+        data: args.p_from < daysAgo(20).slice(0, 10) ? before : after,
+        error: null,
+      }));
+    const sent = (kpiKeys) =>
+      action({ kind: 'mention_review', kpi_keys: kpiKeys, payload: { promptIds: ['p1'] } });
+
+    let writes = mockWrites();
+    basket(
+      { cells: 100, visible: 20, top_competitor_visible: 19.6 },
+      { cells: 100, visible: 30, top_competitor_visible: 29.7 },
+    );
+    expect(await validateAction(sent(['ai_visibility']), { now: NOW })).toBe('improved');
+    const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(validation.metrics.find((m) => m.metric === 'competitor_lead')).toMatchObject({
+      before: 0.4,
+      after: 0.3,
+    });
+
+    writes = mockWrites();
+    expect(await validateAction(sent(['ai_visibility', 'competitor_lead']), { now: NOW })).toBe(
+      'mixed',
+    );
   });
 
   it('measures pages sent from AI Traffic on those pages (AT-006)', async () => {

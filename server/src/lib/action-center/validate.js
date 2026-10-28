@@ -202,9 +202,17 @@ async function measureTraffic(brandId, from, to) {
  * the other way. Without one measured, every metric counts, and movement
  * both ways is `mixed`: it used to read as improved, which taught that
  * anything moving up was the work paying off.
+ *
+ * Given `aims` (the success metrics the action names), only those and the
+ * main metric count: a basket reads every metric it can, and one the action
+ * never aimed at drifting the other way isn't a mixed result. The others
+ * stay in `metrics`, to see.
  */
-export function deriveOutcome(metrics, primary = null) {
-  const measured = metrics.filter((m) => m.before != null && m.after != null);
+export function deriveOutcome(metrics, primary = null, aims = null) {
+  const counted = aims ? new Set([...aims, ...(primary ? [primary] : [])]) : null;
+  const measured = metrics.filter(
+    (m) => m.before != null && m.after != null && (!counted || counted.has(m.metric)),
+  );
   if (measured.length === 0) return 'not_measurable';
 
   const direction = ({ before, after }) => {
@@ -328,12 +336,17 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // metrics. A fix whose pages were audited again is judged by that: the
   // check passing is its aim.
   const [signals, audit] = await Promise.all([signalOutcome(action.id), auditRecheck(action)]);
-  const finish = async (validation, outcome) => {
+  // The verdict from the metrics kept, by its main metric; given `aims`,
+  // only the metrics the action names count (see deriveOutcome).
+  const finish = async (validation, aims = null) => {
     const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}) };
     const kept =
       validation || Object.keys(beside).length
         ? { measuredAt: now.toISOString(), ...(validation ?? {}), ...beside }
         : null;
+    const outcome = validation
+      ? deriveOutcome(validation.metrics, validation.primary, aims)
+      : 'not_measurable';
     const verdict = (audit && auditOutcome(audit)) ?? outcome;
     await write(action.id, kept, verdict, now);
     return verdict;
@@ -377,7 +390,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
         primary,
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
       },
-      deriveOutcome(metrics, primary),
+      action.kpi_keys ?? [],
     );
   }
 
@@ -430,7 +443,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
           },
           ...(brandWide.length ? { brandWide } : {}),
         },
-        deriveOutcome(metrics, primary),
+        asked,
       );
     }
   }
@@ -438,7 +451,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // An action with no success metrics has nothing to measure. That is a gap
   // in the rule that produced it, not a failure here — say so plainly rather
   // than inventing a metric it never claimed.
-  if (kpiKeys.length === 0) return finish(null, 'not_measurable');
+  if (kpiKeys.length === 0) return finish(null);
 
   const [before, after] = await Promise.all([
     measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
@@ -454,10 +467,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
 
   // Its aim: the first success metric its signals name.
   const primary = kpiKeys[0];
-  return finish(
-    { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics, primary },
-    deriveOutcome(metrics, primary),
-  );
+  return finish({ measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics, primary });
 }
 
 async function write(actionId, validation, outcome, now) {
