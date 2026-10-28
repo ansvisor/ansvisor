@@ -16,17 +16,23 @@ import { draftLanguage } from '@/lib/content/rules';
  * The editor's helpers read HTML with a DOM, which the server has none of:
  * jsdom's window is given to them (setContentDom), made on the first call
  * and kept, and imported here alone, so no other tool waits for it and the
- * browser's bundle never carries it.
+ * browser's bundle never carries it. The MCP server imports this module on
+ * the tool's first call too.
  */
 
 let dom: Promise<void> | null = null;
 
-/** jsdom's window for the editor's helpers, made once. */
+/** jsdom's window for the editor's helpers, made once; a failed load is tried again. */
 function withContentDom(): Promise<void> {
-  dom ??= import('jsdom').then(({ JSDOM }) => {
-    const { window } = new JSDOM('<!doctype html><html><head></head><body></body></html>');
-    setContentDom(window as ContentWindow);
-  });
+  dom ??= import('jsdom')
+    .then(({ JSDOM }) => {
+      const { window } = new JSDOM('<!doctype html><html><head></head><body></body></html>');
+      setContentDom(window as ContentWindow);
+    })
+    .catch((err: unknown) => {
+      dom = null;
+      throw err;
+    });
   return dom;
 }
 
@@ -40,8 +46,8 @@ export interface McpCmsPackage {
   meta_description: string;
   /**
    * The page's HTML ready to paste: cleaned as the editor's Copy HTML cleans
-   * it, placeholders filled, with the brand's byline line when it puts one in
-   * the content, and without its H1, which the CMS's title field carries.
+   * it, no placeholders left, with the brand's byline line when it puts one
+   * in the content, and without its H1, which the CMS's title field carries.
    */
   html: string;
   /** The JSON-LD blocks the HTML carries, parsed, for a CMS that takes them apart. */

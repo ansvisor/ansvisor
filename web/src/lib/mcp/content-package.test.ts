@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import {
@@ -34,6 +36,7 @@ const readContentAuthors = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/authors-read', () => ({ readContentAuthors }));
 
 const { getContentDraftPackageFor } = await import('./content-package');
+const { createMcpServer } = await import('./server');
 
 const auth: McpAuthContext = {
   userId: 'user-1',
@@ -103,5 +106,70 @@ describe('getContentDraftPackageFor', () => {
     expect(
       await getContentDraftPackageFor({ ...auth, organizationId: null }, DRAFT_ID),
     ).toMatchObject({ error: 'not_found' });
+  });
+});
+
+describe('the get_content_draft_package tool', () => {
+  it('lists as a read-only tool and answers a page that can’t go yet as the REST route does', async () => {
+    const server = createMcpServer(auth);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientTransport);
+    const text = (result: Awaited<ReturnType<Client['callTool']>>) =>
+      JSON.parse((result.content as { text: string }[])[0].text);
+
+    const { tools } = await client.listTools();
+    expect(tools.find((t) => t.name === 'get_content_draft_package')).toMatchObject({
+      title: 'Draft as a CMS-ready page',
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    });
+
+    const ready = await client.callTool({
+      name: 'get_content_draft_package',
+      arguments: { draft_id: DRAFT_ID },
+    });
+    expect(ready.isError).toBeFalsy();
+    expect(text(ready)).toMatchObject({ draft_id: DRAFT_ID, html: EXPECTED_HTML });
+
+    draft = { ...DRAFT_ROW, body_html: '<h1>Cold brew</h1><p>It steeps for [number] hours.</p>' };
+    const notReady = await client.callTool({
+      name: 'get_content_draft_package',
+      arguments: { draft_id: DRAFT_ID },
+    });
+    expect(notReady.isError).toBe(true);
+    expect(text(notReady)).toEqual({
+      error: expect.stringContaining('[placeholders]'),
+      code: 'not_ready',
+      problem: 'placeholders',
+    });
+  });
+});
+
+describe('jsdom’s window', () => {
+  afterEach(() => {
+    vi.doUnmock('jsdom');
+    vi.resetModules();
+  });
+
+  it('is made again on the next call when the first try fails', async () => {
+    vi.resetModules();
+    const made = vi.fn();
+    vi.doMock('jsdom', async () => {
+      const real = await vi.importActual<typeof import('jsdom')>('jsdom');
+      return {
+        JSDOM: class extends real.JSDOM {
+          constructor(html?: string) {
+            made();
+            if (made.mock.calls.length === 1) throw new Error('jsdom failed to load');
+            super(html);
+          }
+        },
+      };
+    });
+    const { getContentDraftPackageFor: fresh } = await import('./content-package');
+    await expect(fresh(auth, DRAFT_ID)).rejects.toThrow('jsdom failed to load');
+    expect(await fresh(auth, DRAFT_ID)).toMatchObject({ draft_id: DRAFT_ID, html: EXPECTED_HTML });
+    expect(made).toHaveBeenCalledTimes(2);
   });
 });
