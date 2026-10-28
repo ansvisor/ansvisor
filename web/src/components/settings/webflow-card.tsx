@@ -28,6 +28,9 @@ import {
 } from '@/components/ui/select';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { DEMO_WEBFLOW_COLLECTION, demoIntegration } from '@/lib/demo/integrations';
+import { SampleDataBadge } from './sample-data-badge';
 import {
   WEBFLOW_PARTS,
   WEBFLOW_PART_TYPES,
@@ -71,6 +74,10 @@ const STALE: readonly WebflowError[] = ['auth_failed', 'changed', 'not_connected
  * Admins and managers connect it with a site token, pick the collection
  * pages go to and which of its fields takes each part of a page, replace
  * the token and disconnect; members see where pages go.
+ *
+ * On the demo brand, connected with sample data (lib/demo/integrations):
+ * where its pages go, and Replace token and Disconnect opening the plan
+ * dialog. Nothing is read from Webflow.
  */
 export function WebflowCard() {
   const t = useTranslations('settings.webflow');
@@ -82,6 +89,8 @@ export function WebflowCard() {
   const { guard, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
+  const { isDemo } = useDemoBrand();
+  const demo = isDemo && demoIntegration('webflow') === 'connected';
 
   // The connection as read for a brand: another brand's never shows.
   const [read, setRead] = useState<{
@@ -100,7 +109,7 @@ export function WebflowCard() {
   const [reads, setReads] = useState(0);
 
   useEffect(() => {
-    if (!activeBrandId) return;
+    if (!activeBrandId || demo) return;
     let cancelled = false;
     readWebflow(activeBrandId).then((result) => {
       if (cancelled) return;
@@ -118,9 +127,28 @@ export function WebflowCard() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, reads]);
+  }, [activeBrandId, reads, demo]);
 
-  const current = read?.brandId === activeBrandId ? read : null;
+  // The demo brand's sample connection, never read from the API.
+  const demoRead =
+    demo && activeBrandId
+      ? {
+          brandId: activeBrandId,
+          configured: true,
+          connection: {
+            status: 'connected' as const,
+            siteId: 'demo',
+            siteName: brand?.name ?? null,
+            collectionId: 'demo',
+            collectionName: DEMO_WEBFLOW_COLLECTION,
+            fieldMap: {},
+            connectedAt: '',
+            updatedAt: '',
+          },
+          failed: false,
+        }
+      : null;
+  const current = demoRead ?? (read?.brandId === activeBrandId ? read : null);
   const connection = current?.connection ?? null;
   const setConnection = (next: WebflowConnection | null) =>
     setRead((r) => (r && r.brandId === activeBrandId ? { ...r, connection: next } : r));
@@ -156,6 +184,7 @@ export function WebflowCard() {
                 {t('connected')}
               </Badge>
             )}
+            {demo && <SampleDataBadge />}
             {/* Connected, but nothing goes to Webflow until a collection is saved. */}
             {connection?.status === 'connected' && !connection.collectionId && (
               <Badge
@@ -195,37 +224,50 @@ export function WebflowCard() {
                   {t('replaceToken')}
                 </Button>
               )}
-              <Dialog>
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      disabled={disconnecting}
-                    />
-                  }
+              {demo ? (
+                // Sample data: there is nothing to disconnect.
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => openUpgrade(tActions('disconnectIntegrations'))}
                 >
-                  {disconnecting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="h-3.5 w-3.5" />
-                  )}
+                  <Unplug className="h-3.5 w-3.5" />
                   {t('disconnect')}
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>{t('disconnectTitle')}</DialogTitle>
-                    <DialogDescription>{t('disconnectDescription')}</DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-                    <DialogClose render={<Button variant="destructive" onClick={disconnect} />}>
-                      {t('disconnect')}
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                </Button>
+              ) : (
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={disconnecting}
+                      />
+                    }
+                  >
+                    {disconnecting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Unplug className="h-3.5 w-3.5" />
+                    )}
+                    {t('disconnect')}
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle>{t('disconnectTitle')}</DialogTitle>
+                      <DialogDescription>{t('disconnectDescription')}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
+                      <DialogClose render={<Button variant="destructive" onClick={disconnect} />}>
+                        {t('disconnect')}
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           )}
         </div>
@@ -237,6 +279,10 @@ export function WebflowCard() {
         <p className="text-sm text-muted-foreground">{t('unavailable')}</p>
       ) : !current.configured ? (
         <p className="text-sm text-muted-foreground">{t('notConfigured')}</p>
+      ) : demo ? (
+        <p className="text-sm text-muted-foreground">
+          {t('pagesGoTo', { collection: DEMO_WEBFLOW_COLLECTION })}
+        </p>
       ) : !canManage ? (
         <p className="text-sm text-muted-foreground">
           {!connection

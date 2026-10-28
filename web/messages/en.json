@@ -241,7 +241,8 @@
       "removeAuthors": "Removing authors needs a plan",
       "setDefaultAuthor": "Setting a default author needs a plan",
       "setByline": "Changing the byline setting needs a plan",
-      "changeContentSettings": "Changing content settings needs a plan"
+      "changeContentSettings": "Changing content settings needs a plan",
+      "disconnectIntegrations": "Disconnecting an integration needs a plan"
     },
     "plans": {
       "perMonthBilledYearly": "{price} a month, billed yearly",
@@ -8609,6 +8610,25 @@
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
     "integrations_comingSoon": "Coming soon",
+    "demoIntegrations": {
+      "sampleData": "Sample data",
+      "shopify": {
+        "label": "Shopify",
+        "description": "Your Shopify store's products, for Product Visibility and its pages."
+      },
+      "wordpress": {
+        "label": "WordPress",
+        "description": "Where Send to CMS puts a brand's pages on your WordPress site."
+      },
+      "framer": {
+        "label": "Framer",
+        "description": "Where Send to CMS puts a brand's pages on your Framer site."
+      },
+      "wix": {
+        "label": "Wix",
+        "description": "Where Send to CMS puts a brand's pages on your Wix site."
+      }
+    },
     "integrations_disconnect": "Disconnect",
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",
