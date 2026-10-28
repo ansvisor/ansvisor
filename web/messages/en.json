@@ -190,7 +190,6 @@
       "deleteReports": "Deleting reports needs a plan",
       "startChat": "Starting a chat needs a plan",
       "sendChat": "Chatting with the agent needs a plan",
-      "deleteChats": "Deleting chats needs a plan",
       "addBrands": "Adding brands needs a plan",
       "saveBrandSettings": "Saving brand settings needs a plan",
       "saveDomains": "Saving domains needs a plan",

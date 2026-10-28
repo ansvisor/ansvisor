@@ -398,9 +398,9 @@ function AgentChat(props: {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Read-only: the upgrade dialog instead of the confirm.
-                  if (isLocked) openUpgrade(tActions('deleteChats'));
-                  else setPendingConfirm(c.id);
+                  // Open in read-only too: deleting a conversation costs nothing
+                  // and the API (#1613) and the FAQ keep it open.
+                  setPendingConfirm(c.id);
                 }}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
                 aria-label={t('deleteConversation')}
