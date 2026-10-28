@@ -6,9 +6,9 @@ import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
- * Chat on a read-only workspace (plan not active): New chat, sending and
- * deleting a conversation open the upgrade dialog, named, and send nothing.
- * The conversations still list and open.
+ * Chat on a read-only workspace (plan not active): New chat and sending open
+ * the upgrade dialog, named, and send nothing. The conversations still list
+ * and open, and deleting one stays open, as its route does.
  */
 
 const chat = vi.hoisted(() => ({
@@ -141,4 +141,17 @@ describe('Chat on a read-only workspace', () => {
       expect(openUpgrade).not.toHaveBeenCalled();
     },
   );
+
+  it('still deletes a conversation on a read-only workspace, after its confirm', async () => {
+    await render(true);
+    await act(async () => remove().click());
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const confirm = [...dialog.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Delete',
+    )!;
+    await act(async () => confirm.click());
+    expect(writes()).toEqual([['/api/agent/conversations/c1', { method: 'DELETE' }]]);
+    expect(container.textContent).not.toContain('Pricing questions');
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
 });
