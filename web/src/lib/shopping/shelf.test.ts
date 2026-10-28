@@ -275,6 +275,42 @@ describe('whyNotYou', () => {
     ).toBe('glide');
   });
 
+  it("never makes a product a candidate on who it's for alone, but breaks a tie on it", () => {
+    const asking = (prompt_text: string) =>
+      buildShelf([card({ prompt_text, matched_brand_role: 'competitor' })], NOW)[0];
+    const shoes = asking('best running shoes for men under $100');
+    // A category or a type that only says who it's for isn't what the question names.
+    for (const [question, audience, title] of [
+      [shoes, 'Men', "Men's Best Seller Tee"],
+      [asking('best running shoes for women under $100'), 'Women', "Women's Best Seller Tee"],
+      [asking('best running shoes for kids'), 'Kids', "Kids' Best Seller Tee"],
+    ] as const) {
+      expect(
+        whyNotYou(question, [productRow('tee', { title, category: `Clothing > ${audience}` })]),
+      ).toBeNull();
+      expect(whyNotYou(question, [productRow('tee', { title, productType: audience })])).toBeNull();
+    }
+    // Nor does it make up the two words: only "hiking" says what it is.
+    expect(
+      whyNotYou(asking('hiking boots for women'), [
+        productRow('socks', { title: "Women's Hiking Socks" }),
+      ]),
+    ).toBeNull();
+    // A category that names what it is, past who it's for, still does.
+    expect(
+      whyNotYou(shoes, [
+        productRow('pace', { title: 'Pace 2', category: "Footwear > Men's running shoes" }),
+      ])?.product.id,
+    ).toBe('pace');
+    // Among candidates, the one for whom the question asks, before the readier one.
+    expect(
+      whyNotYou(asking('running shoes for women'), [
+        productRow('his', { title: "Men's Running Shoe" }, 90),
+        productRow('hers', { title: "Women's Running Shoe" }, 40),
+      ])?.product.id,
+    ).toBe('hers');
+  });
+
   it('names none for a shelf the brand is on, or when nothing shares a word with the question', () => {
     expect(whyNotYou(absent, [productRow('mug', { title: 'Coffee mug' })])).toBeNull();
     const on = { ...absent, ownRank: 2 };
