@@ -108,8 +108,11 @@ export default function ContentLibraryPage() {
   const [starting, setStarting] = useState(false);
   const { canManage } = useUserRole();
   // A read-only workspace (plan not active): the reads the Library asks for
-  // by itself are left out, and it lists what is stored.
-  const { isLocked } = useUpgradeGate();
+  // by itself are left out, and it lists what is stored. New content, Send
+  // and the row menu's changes open the upgrade dialog instead; tabs, the
+  // date filter and Export stay open.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The draft whose Delete waits for a confirmation.
   const [deleting, setDeleting] = useState<ContentDraftListItem | null>(null);
   const [deletePending, setDeletePending] = useState(false);
@@ -141,12 +144,12 @@ export default function ContentLibraryPage() {
     setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
     setSent(readUrlChoice('sent', SEND_FILTERS, 'all'));
     setShoppingFilter(readUrlChoice('shopping', SHOPPING_FILTERS, 'all'));
-    // Once: closed, it doesn't open again on a reload.
+    // Once: closed, it doesn't open again on a reload. Read-only, it doesn't open.
     if (readUrlParam('new') === '1') {
-      setStarting(true);
+      if (!isLocked) setStarting(true);
       writeUrlParams({ new: null });
     }
-  }, []);
+  }, [isLocked]);
   const { exporting, exportList, exportDraft } = useLibraryExport(activeBrandId);
 
   useEffect(() => {
@@ -274,25 +277,40 @@ export default function ContentLibraryPage() {
     else toast.error(t('rowMenu.sendFailed'));
   };
 
+  const changeStatus = (draft: ContentDraftListItem, status: DraftStatus) => {
+    // Published asks where the page is live (CE-013): tracking starts there.
+    if (status === 'published') {
+      setPublishing(draft.id);
+      return;
+    }
+    // Ready keeps a History version and completes the draft's task, as the editor's Mark ready.
+    const change =
+      status === 'ready'
+        ? markContentDraftReady(draft.id)
+        : setContentDraftStatus(draft.id, status);
+    change.then(reload, failed);
+  };
   const rowActions: LibraryRowActions = {
     canManage,
-    onStatus: (draft: ContentDraftListItem, status: DraftStatus) => {
-      // Published asks where the page is live (CE-013): tracking starts there.
-      if (status === 'published') {
-        setPublishing(draft.id);
-        return;
-      }
-      // Ready keeps a History version and completes the draft's task, as the editor's Mark ready.
-      const change =
-        status === 'ready'
-          ? markContentDraftReady(draft.id)
-          : setContentDraftStatus(draft.id, status);
-      change.then(reload, failed);
-    },
-    onArchive: (draft, archived) => void archive(draft, archived),
-    onDelete: setDeleting,
+    onStatus: (draft, status) =>
+      guard(changeStatus, {
+        action: tActions(
+          status === 'published'
+            ? 'markPublished'
+            : status === 'ready'
+              ? 'markReady'
+              : 'changeContentStatus',
+        ),
+      })(draft, status),
+    onArchive: (draft, archived) =>
+      guard(() => void archive(draft, archived), {
+        action: tActions(archived ? 'archiveContent' : 'restoreContent'),
+      })(),
+    onDelete: guard(setDeleting, { action: tActions('deleteContent') }),
     onExport: (draft, format) => void exportDraft(draft, format),
-    onSend: (draft) => void openSend(draft),
+    onSend: guard((draft: ContentDraftListItem) => void openSend(draft), {
+      action: tActions('sendToCms'),
+    }),
   };
 
   const confirmDelete = async () => {
@@ -388,7 +406,10 @@ export default function ContentLibraryPage() {
               exporting={exporting}
               onExport={(format) => void exportList(listed, tab, format)}
             />
-            <Button className="gap-2" onClick={() => setStarting(true)}>
+            <Button
+              className="gap-2"
+              onClick={guard(() => setStarting(true), { action: tActions('createContent') })}
+            >
               <Plus className="h-4 w-4" />
               {t('newContent')}
             </Button>
@@ -498,14 +519,16 @@ export default function ContentLibraryPage() {
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
                 disabled={tooMany}
-                onClick={() =>
-                  setBulk({
-                    brandId: activeBrandId,
-                    brandName: activeBrand?.name ?? '',
-                    brandLanguage: activeBrand?.language,
-                    drafts: pickedDrafts,
-                  })
-                }
+                onClick={guard(
+                  () =>
+                    setBulk({
+                      brandId: activeBrandId,
+                      brandName: activeBrand?.name ?? '',
+                      brandLanguage: activeBrand?.language,
+                      drafts: pickedDrafts,
+                    }),
+                  { action: tActions('sendToCms') },
+                )}
               >
                 <Send className="h-3 w-3" />
                 {t('bulk.sendSelected')}
