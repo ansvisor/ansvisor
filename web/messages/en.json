@@ -7986,6 +7986,19 @@
       "trends": "Trends",
       "failed": "Couldn't read the shelves right now. The other tabs still work; try again in a moment."
     },
+    "categories": {
+      "columns": {
+        "category": "Category",
+        "share": "Shelf share",
+        "onShelf": "On shelf",
+        "rival": "Top rival",
+        "revenue": "AI revenue"
+      },
+      "prompts": "{count, plural, one {# shopping question} other {# shopping questions}}",
+      "attention": "needs attention",
+      "empty": "Your catalog has no categories yet. Categories come from your feed's product type or Google product category, or your store's collections.",
+      "failed": "Couldn't read your catalog's categories right now. Try again in a moment."
+    },
     "products": {
       "label": "Your products",
       "viewsLabel": "Product views",
@@ -8075,6 +8088,7 @@
     "lockedTitle": "Upgrade for full shopping analytics",
     "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
     "tabShelf": "Shelf",
+    "tabCategories": "Categories",
     "tabProducts": "Products",
     "tabMyProducts": "My Products",
     "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",

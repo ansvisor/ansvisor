@@ -17,6 +17,7 @@ import {
   type ShelfRow,
   type ShelfStats,
 } from '@/lib/shopping/shelf';
+import { categoryRows, type CategoryCardRow, type CategoryRow } from '@/lib/shopping/categories';
 import {
   productRows,
   type CatalogProductRow,
@@ -1527,4 +1528,110 @@ async function readCatalogProducts(
       hasGtin: own.some((v) => !!v.gtin),
     };
   });
+}
+
+// ── Categories (Product Visibility, ECOM-008) ─────────────────────────────────
+
+/**
+ * The Categories table: each category of the brand's catalog with its
+ * shopping questions, the brand's share of their shelves, its products on
+ * them, the top rival there and its products' AI revenue, over the filter
+ * window. Null when the catalog has no categories.
+ */
+export async function getShoppingCategories(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<CategoryRow[] | null> {
+  const supabase = await createClient();
+  const categories = await readCatalogRows<{ id: string; name: string }>(
+    () =>
+      supabase.from('catalog_categories').select('id, name').eq('brand_id', brandId).order('id'),
+    CARD_MAX_ROWS,
+  );
+  if (!categories.length) return null;
+
+  const { from } = resolveDateRange(filters);
+  const [live, links, cards, competitors, stats] = await Promise.all([
+    readCatalogRows<{ id: string }>(
+      () =>
+        supabase
+          .from('catalog_products')
+          .select('id')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
+      CARD_MAX_ROWS,
+    ),
+    readCatalogRows<{ product_id: string; category_id: string }>(
+      () =>
+        supabase
+          .from('catalog_product_categories')
+          .select('product_id, category_id')
+          .eq('brand_id', brandId)
+          .order('product_id')
+          .order('category_id'),
+      CARD_MAX_ROWS,
+    ),
+    fetchAllCards<{
+      matched_brand_role: string;
+      matched_brand_id: string | null;
+      product_brand: string | null;
+      merchant_domain: string | null;
+      catalog_product_id: string | null;
+      prompt_results: { prompt: { id: string; text: string } | null } | null;
+    }>(() =>
+      cardsInWindow(
+        supabase,
+        brandId,
+        filters,
+        'matched_brand_role, matched_brand_id, product_brand, merchant_domain, catalog_product_id, prompt_results:prompt_result_id ( prompt:prompt_id ( id, text ) )',
+      ),
+    ),
+    supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
+    readProductAiStats(supabase, brandId, from ?? daysAgoIso(90)),
+  ]);
+  if (competitors.error) throw new Error(competitors.error.message);
+
+  const liveIds = new Set(live.map((row) => row.id));
+  const productsOf = new Map<string, string[]>();
+  for (const link of links) {
+    if (!liveIds.has(link.product_id)) continue;
+    if (!productsOf.has(link.category_id)) productsOf.set(link.category_id, []);
+    productsOf.get(link.category_id)!.push(link.product_id);
+  }
+  const rows: CategoryCardRow[] = cards.flatMap((card) => {
+    const prompt = card.prompt_results?.prompt;
+    if (!prompt) return [];
+    return [
+      {
+        promptId: prompt.id,
+        promptText: prompt.text,
+        role: card.matched_brand_role,
+        competitorId: card.matched_brand_role === 'competitor' ? card.matched_brand_id : null,
+        productBrand: card.product_brand,
+        merchant: card.merchant_domain,
+        productId: card.catalog_product_id,
+      },
+    ];
+  });
+  return categoryRows(
+    categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      productIds: productsOf.get(category.id) ?? [],
+    })),
+    rows,
+    {
+      competitors: new Map(
+        (competitors.data ?? []).map((c) => [c.id, { name: c.name, domain: c.domain }]),
+      ),
+      revenueOf: new Map(
+        stats.flatMap((row) =>
+          row.orders && row.revenue !== null
+            ? [[row.product_id, { value: Number(row.revenue), currency: row.currency }] as const]
+            : [],
+        ),
+      ),
+    },
+  );
 }

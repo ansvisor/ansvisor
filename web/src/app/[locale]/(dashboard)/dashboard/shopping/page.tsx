@@ -38,6 +38,7 @@ import {
   getCompetitorProducts,
   getCompetitorSummary,
   getShoppingAiOrders,
+  getShoppingCategories,
   getShoppingProducts,
   getShoppingShelf,
   type ShoppingChartData,
@@ -88,12 +89,14 @@ import { toCsv } from '@/lib/csv';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
+import type { CategoryRow } from '@/lib/shopping/categories';
 import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { CatalogNote } from './_catalog-note';
 import { ProductDataStrip, useProductSources } from './_data-strip';
+import { CategoriesTable } from './_categories-table';
 import { ProductsTable } from './_products-table';
 import { ShelfKpis, ShelfRows } from './_shelf';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
@@ -109,7 +112,7 @@ import { useOpenAiIndex } from './use_openai_index';
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
 /** The page's tabs, the one open in the URL (?tab=products). */
-const SHOPPING_TABS = ['shelf', 'products', 'competitors'] as const;
+const SHOPPING_TABS = ['shelf', 'categories', 'products', 'competitors'] as const;
 type ShoppingTab = (typeof SHOPPING_TABS)[number];
 
 // Theme tokens in globals.css ship as full oklch values; reference them
@@ -147,6 +150,11 @@ export default function ShoppingPage() {
   const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
   const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
   const [orders, setOrders] = useState<ShoppingAiOrders | null>(null);
+  // The catalog's categories (ECOM-008), read when their tab opens, for the filters they were read with.
+  const [categories, setCategories] = useState<{
+    key: string;
+    rows: CategoryRow[] | null | 'failed';
+  } | null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
   const [activeTab, setActiveTab] = useState<ShoppingTab>('shelf');
@@ -279,6 +287,34 @@ export default function ShoppingPage() {
   // Null for a brand without a catalog, and while it reads.
   const catalogTable: ShoppingProducts | null | 'failed' = productsRead ?? null;
 
+  // The Categories tab reads when it's open, once per brand and filters.
+  const categoriesKey = `${activeBrandId}:${JSON.stringify(filters)}`;
+  useEffect(() => {
+    if (activeTab !== 'categories' || !activeBrandId || !hasFullAccess) return;
+    if (!shoppingMarket.ready || categories?.key === categoriesKey) return;
+    let cancelled = false;
+    getShoppingCategories(activeBrandId, filters)
+      .then((rows) => {
+        if (!cancelled) setCategories({ key: categoriesKey, rows });
+      })
+      .catch((err) => {
+        console.error('Failed to read the categories:', err);
+        if (!cancelled) setCategories({ key: categoriesKey, rows: 'failed' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeTab,
+    activeBrandId,
+    hasFullAccess,
+    shoppingMarket.ready,
+    categoriesKey,
+    categories?.key,
+    filters,
+  ]);
+  const categoriesRead = categories?.key === categoriesKey ? categories.rows : undefined;
+
   // Orders from AI visits, the last 30 days whatever the filters (ECOM-006).
   useEffect(() => {
     if (!activeBrandId || !hasFullAccess) return;
@@ -397,6 +433,14 @@ export default function ShoppingPage() {
           >
             <TabsList>
               <TabsTrigger value="shelf">{t('tabShelf')}</TabsTrigger>
+              <TabsTrigger value="categories">
+                {t('tabCategories')}
+                {Array.isArray(categoriesRead) && (
+                  <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
+                    {categoriesRead.length}
+                  </span>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="products">{t('tabProducts')}</TabsTrigger>
               <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
             </TabsList>
@@ -452,6 +496,18 @@ export default function ShoppingPage() {
                     />
                   )}
                 </>
+              ) : (
+                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
+              )}
+            </TabsContent>
+
+            <TabsContent value="categories" className="space-y-6">
+              {hasFullAccess ? (
+                <CategoriesTable
+                  categories={categoriesRead === 'failed' ? null : (categoriesRead ?? null)}
+                  loading={categoriesRead === undefined}
+                  failed={categoriesRead === 'failed'}
+                />
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}
