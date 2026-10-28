@@ -6985,6 +6985,7 @@
         "title": "Columns",
         "mine": "Drag, or use the arrows, to reorder. Saved for you only.",
         "fromBrand": "Showing the view shared on {brand}. Your changes are saved for you only.",
+        "sharedMine": "Drag, or use the arrows, to reorder. Shared on {brand}: your changes also update the brand's view.",
         "promptColumn": "Prompt",
         "always": "Always shown",
         "moveUp": "Move {column} up",
