@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   answerExcerpt,
   buildImprovePrompt,
@@ -9,6 +9,11 @@ import {
   sanitizeSuggestions,
   withPageChecks,
 } from './prompt-improve.js';
+
+// competitor-pages.js (the page checks' gaps) reaches the supabase admin
+// client at import time, whose config hard-exits when SUPABASE_* env is
+// absent, as in CI.
+vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 const BRAND_DOMAINS = ['acme.com'];
 
@@ -331,12 +336,16 @@ describe('withPageChecks', () => {
     fanouts: [],
     citedDomains: [],
     competitors: [],
-    competitorUrls: [{ url: 'https://rival.com/kettles', count: 3 }],
+    competitorUrls: [
+      { url: 'https://rival.com/kettles', count: 3 },
+      { url: 'https://other-rival.com/best-kettles', count: 2 },
+    ],
     brandPages: [{ url: 'https://acme.com/kettles', count: 1 }],
     excerpt: '',
   };
   const stored = new Map([
     ['rival.com/kettles', { own: false, checks: { 'faq-schema': 'pass', tables: 'pass' } }],
+    ['other-rival.com/best-kettles', { own: false, checks: { 'faq-schema': 'pass' } }],
     ['acme.com/kettles', { own: true, checks: { tables: 'pass' } }],
   ]);
 
@@ -344,8 +353,11 @@ describe('withPageChecks', () => {
     const shown = withPageChecks(evidence, stored);
     expect(shown.pageChecks.map((p) => [p.url, p.own, p.passes.length])).toEqual([
       ['https://rival.com/kettles', false, 2],
+      ['https://other-rival.com/best-kettles', false, 1],
       ['https://acme.com/kettles', true, 1],
     ]);
+    // Compared over two competitor pages at least (C1): FAQ schema on both,
+    // not on the brand's.
     expect(shown.checkGaps).toHaveLength(1);
 
     const { prompt } = buildImprovePrompt({
