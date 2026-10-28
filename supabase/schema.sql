@@ -41845,3 +41845,5 @@ alter table public.actions
 comment on column public.actions.dismiss_reason is
   'Why the action was dismissed (00366, learning A5): not_relevant, already_done, wrong_data or not_now; null when no reason was given or the action is not dismissed.';
 
+notify pgrst, 'reload schema';
+
