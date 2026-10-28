@@ -44,6 +44,7 @@ import { cn } from '@/lib/utils';
 import { HtmlBlockDialog } from './_html-block';
 import { ProductBlockDialog } from './_product-block-dialog';
 import { h1Positions } from './_one-h1';
+import { PlaceholderNav } from './_placeholder-nav';
 
 /**
  * Where the insert menu shows: the cursor on an empty paragraph between the
@@ -63,8 +64,8 @@ export function onEmptyLine(editor: Editor, state: EditorState): boolean {
 
 /**
  * The editor's toolbar (CE-004, spec §6): H1 H2 H3 · B I link · lists,
- * quote · table, image, Add HTML, attach a file · </> HTML, and the length counter against the page
- * type's target. Inside a table it adds a row, a column, or removes the
+ * quote · table, image, Add HTML, attach a file · </> HTML, the placeholders left to fill
+ * (PlaceholderNav) and the length counter against the page type's target. Inside a table it adds a row, a column, or removes the
  * table. While the HTML view is open, only its own button works. On an empty
  * line, a small menu offers an HTML block, a table or an image there. With
  * `productsBrandId` (an online shop's draft), both offer products from its
@@ -78,6 +79,7 @@ export function EditorToolbar({
   onToggleHtml,
   onAttach,
   linkRequest = 0,
+  placeholders,
   productsBrandId = null,
 }: {
   editor: Editor;
@@ -92,6 +94,8 @@ export function EditorToolbar({
    * source, its claim selected (CE-045).
    */
   linkRequest?: number;
+  /** The placeholders a send or an export finds outside the page's text, and how to show them. */
+  placeholders?: { hidden: number; onShowHidden: () => void };
   /** The brand whose catalog + Insert › Products picks from; null hides it. */
   productsBrandId?: string | null;
 }) {
@@ -259,18 +263,27 @@ export function EditorToolbar({
           ))}
         </div>
       )}
-      <span
-        className={cn(
-          'ml-auto text-xs font-medium tabular-nums text-muted-foreground',
-          lengthWarning && 'text-amber-700 dark:text-amber-400',
+      <div className="ml-auto flex items-center gap-3">
+        {placeholders && !htmlView && (
+          <PlaceholderNav
+            editor={editor}
+            hidden={placeholders.hidden}
+            onShowHidden={placeholders.onShowHidden}
+          />
         )}
-      >
-        {t('counter', {
-          count: formatNumber(state.characters),
-          target: formatNumber(target),
-          words: state.words,
-        })}
-      </span>
+        <span
+          className={cn(
+            'text-xs font-medium tabular-nums text-muted-foreground',
+            lengthWarning && 'text-amber-700 dark:text-amber-400',
+          )}
+        >
+          {t('counter', {
+            count: formatNumber(state.characters),
+            target: formatNumber(target),
+            words: state.words,
+          })}
+        </span>
+      </div>
 
       {/* On an empty line, what can go there, as Webflow offers between
           blocks; not on an empty page, which shows its placeholder. */}
