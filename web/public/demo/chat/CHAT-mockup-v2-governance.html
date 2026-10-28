@@ -50,6 +50,12 @@ svg.i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .cni .b.am{background:var(--amberbg);color:var(--amber)}
 .newp{margin-left:auto;font-size:10.5px;font-weight:500;border:1px solid #d6d3cf;border-radius:20px;padding:0 7px;color:#57534e;background:#fff}
 .csec{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);padding:12px 8px 4px}
+/* Menu section fold, as in Core Chat (same localStorage key); folded, its header keeps the Inbox count */
+.mgh{display:flex;align-items:center;gap:6px}.mgbox{display:flex;flex-direction:column;gap:2px}.mgbox.shut{display:none}
+.mgt{margin-left:auto;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--ink);font-size:13px;text-align:center}.mgt:hover{background:#efeeec}
+.mgq{display:none;align-items:center;gap:4px;margin-left:auto;text-transform:none;letter-spacing:0;font-size:10.5px;line-height:16px;color:#44403c;background:#e4e2de;border-radius:6px;padding:0 6px}.mgq i{width:6px;height:6px;border-radius:50%;background:var(--amber)}.mgh.shut .mgq{display:inline-flex}.mgh.shut .mgt{margin-left:0}
+.cni .ibw{margin-left:auto;display:inline-flex;align-items:center;gap:6px}.cni .ibw .b{margin-left:0}.cni .ibd{width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none}
+.cni.arcl{color:var(--mut);font-size:12.5px}.cni.arcl:hover{color:var(--ink)}
 /* main */
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 .top{display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--line);height:52px;flex:none}
@@ -587,11 +593,15 @@ aside.side{display:none !important}
  <!-- CHAT SUB-NAV -->
  <nav class="cnav" id="cnav" aria-label="Chat">
   <button data-action="chat.new" class="newc" data-toast="New chat opens in Chat"><svg class="i"><use href="#i-plus"/></svg>New chat<kbd>Ctrl ⇧ O</kbd></button>
-  <button data-action="chatMenu.openHome" class="cni" data-href="CHAT-mockup-v2.html#s-home">Home<span class="b am">1</span></button>
+  <div class="csec mgh" id="mgHead">Menu<button data-action="chatMenu.openInbox" class="mgq" data-href="CHAT-mockup-v2.html#s-inbox" id="mgInbox" aria-label="Inbox · 3 items · 1 needs you" title="Inbox · 3 items · 1 needs you"><i></i>3</button><button data-action="chatMenu.toggleMenuSection" class="mgt" id="mgTog" aria-label="Show or hide the Menu section" aria-expanded="true" aria-controls="mgBox">▴</button></div>
+  <div class="mgbox" id="mgBox">
+  <button data-action="chatMenu.openHome" class="cni" data-href="CHAT-mockup-v2.html#s-home">Home</button>
+  <button data-action="chatMenu.openInbox" class="cni" data-href="CHAT-mockup-v2.html#s-inbox" aria-label="Inbox · 3 items · 1 needs you">Inbox<span class="ibw"><span class="ibd" title="1 needs you"></span><span class="b">3</span></span></button>
   <button data-action="chatMenu.openAgents" class="cni" data-c="agents" data-go="g-agents">Agents<span class="newp">New</span></button>
   <button data-action="chatMenu.openSkills" class="cni" data-toast="Opens Skills">Skills</button>
   <button data-action="chatMenu.openScheduled" class="cni" data-toast="Opens Scheduled · 4 jobs">Scheduled<span class="b">4</span></button>
   <button data-action="chatMenu.openFiles" class="cni" data-toast="Opens Files">Files</button>
+  </div>
   <div class="csec">Governance</div>
   <button data-action="chatMenu.openActivity" class="cni" data-c="activity" data-go="g-activity">Activity<span class="b" id="cnActN" title="Today">11</span></button>
   <button data-action="chatMenu.openCapabilities" class="cni" data-c="capabilities" data-go="g-capabilities">What Chat can do</button>
@@ -599,6 +609,7 @@ aside.side{display:none !important}
   <div class="csec">Chats <span class="cnt">148</span></div>
   <button data-action="chatMenu.openChat" class="cni" data-toast="Opens chat · Why did Google AI Overviews citations drop?"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Why did Google AI Overviews…</span></button>
   <button data-action="chatMenu.openChat" class="cni" data-toast="Opens chat · Share of voice vs competitors"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Share of voice vs…</span></button>
+  <button data-action="chatMenu.openArchived" class="cni arcl" data-href="CHAT-mockup-v2.html#s-allchats/archived">Archived · 2 ›</button>
  </nav>
 
  <div class="main">
@@ -1428,6 +1439,11 @@ function canW(r){return r=='Admin'||r=='Manager'}
 document.addEventListener('mouseover',function(e){var el=e.target;if(el&&el.nodeType==1&&!el.title&&el.scrollWidth>el.clientWidth+1&&getComputedStyle(el).textOverflow=='ellipsis')el.title=el.textContent});
 renderPlanStrip();updateGates();renderCap();renderAg();renderRuns();renderSk();renderConns();renderAppr();renderAct();setStep(0);setRole(ROLE,true);
 go((location.hash||'#g-roles').slice(1));
+/* Menu section fold · shares ansvisor.chatMenuSection with Core Chat */
+function setMg(shut,save){var b=$('#mgBox'),h=$('#mgHead'),t=$('#mgTog');if(!b)return;b.classList.toggle('shut',shut);h.classList.toggle('shut',shut);t.textContent=shut?'▾':'▴';t.setAttribute('aria-expanded',String(!shut));
+ if(save){try{localStorage.setItem('ansvisor.chatMenuSection',shut?'off':'on')}catch(e){}}}
+document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('#mgTog'))setMg(!$('#mgBox').classList.contains('shut'),true)});
+try{if(localStorage.getItem('ansvisor.chatMenuSection')=='off')setMg(true,false)}catch(e){}
 </script>
 </body>
 </html>

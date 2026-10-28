@@ -44,6 +44,7 @@ body.papp-on #app{visibility:hidden}body.papp-on .demo{right:auto;left:244px}
 .li.on{background:var(--act);color:var(--ink);font-weight:500}
 .li .b{margin-left:auto;font-size:11px;line-height:18px;border-radius:6px;padding:0 6px;background:#e4e2de;color:#44403c;min-width:22px;text-align:center}.li .newp{line-height:16px}
 .li .b.am{background:var(--amberbg);color:var(--amtx)}
+.li .ibw{margin-left:auto;display:inline-flex;align-items:center;gap:6px}.li .ibw .b{margin-left:0}.li .ibd{width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none}
 .lscroll{flex:1;overflow:auto;margin:0 -4px;padding:0 4px;min-height:0}
 .srch{display:block;width:100%;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font-size:12.5px;margin:6px 0 4px;outline:0}
 .srch:focus{border-color:#cfcac2}
@@ -55,7 +56,10 @@ body.papp-on #app{visibility:hidden}body.papp-on .demo{right:auto;left:244px}
 .conn.shut .cnbox,.conn.shut .cs{display:none!important}
 .lscroll::-webkit-scrollbar,.cnbox::-webkit-scrollbar,.thread::-webkit-scrollbar,.pg::-webkit-scrollbar,.awmore::-webkit-scrollbar{width:4px}
 .lscroll::-webkit-scrollbar-thumb,.cnbox::-webkit-scrollbar-thumb,.thread::-webkit-scrollbar-thumb,.pg::-webkit-scrollbar-thumb,.awmore::-webkit-scrollbar-thumb{background:#dcd9d4;border-radius:4px}
-.chh,.awh{display:flex;align-items:center;gap:6px;white-space:nowrap}.chh .cnt,.awh .cnt{margin-left:auto}
+.chh,.awh,.mgh{display:flex;align-items:center;gap:6px;white-space:nowrap}.chh .cnt,.awh .cnt,.mgh .cnt{margin-left:auto}
+/* Menu section fold (Home, Inbox, Settings … Files); folded, its header keeps the Inbox count */
+.mgbox{display:flex;flex-direction:column;gap:4px}.mgbox.shut{display:none}
+.mgq{display:none;align-items:center;gap:4px;margin-left:auto;text-transform:none;letter-spacing:0;font-size:10.5px;line-height:16px;color:#44403c;background:#e4e2de;border-radius:6px;padding:0 6px}.mgq i{width:6px;height:6px;border-radius:50%;background:var(--amber)}.mgh.shut .mgq{display:inline-flex}.mgh.shut .cnt{margin-left:0}
 .awn{font-size:10.5px;letter-spacing:0;background:#e4e2de;color:#44403c;border-radius:6px;padding:0 5px}
 .lscroll.chshut>:not(.chh){display:none}
 .awh .q{width:16px;height:16px;border-radius:50%;border:1px solid #cfcac2;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--mut);text-transform:none}
@@ -403,7 +407,9 @@ body.papp-on #app{visibility:hidden}body.papp-on .demo{right:auto;left:244px}
 /* home */
 .hero{text-align:center;margin:34px 0 18px}.hero h1{font-size:24px;font-weight:700;letter-spacing:-.6px;margin:0}
 .hero p{color:var(--mut);margin:6px 0 0}
-.inbox{max-width:720px;margin:0 auto;padding:0 20px;width:100%}
+.inbox,.homew{max-width:720px;margin:0 auto;padding:0 20px;width:100%}
+.inbox.ibpage{max-width:880px;margin:0;padding:0}.ibsub{color:var(--mut);font-size:13px;margin:-4px 0 14px}
+.inbox .ib.need{border-color:#f1dcae;background:#fffcf6}
 .inbox .ib{display:grid;grid-template-columns:8px minmax(0,1fr) 112px 84px;gap:12px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:11px 13px;margin-bottom:8px;background:#fff;cursor:pointer;min-height:62px}.inbox .ib>.btn{width:100%}.inbox .ib .prog{max-width:none;width:100%}
 .inbox .ib{box-shadow:var(--sh);transition:transform .18s ease-out,box-shadow .18s ease-out}.inbox .ib:hover{box-shadow:var(--shh);transform:translateY(-1px)}
 .inbox .ib .tx{font-size:13.5px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.inbox .ib .tx em{font-style:normal;display:block;font-size:12px;color:var(--mut);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -412,11 +418,12 @@ body.papp-on #app{visibility:hidden}body.papp-on .demo{right:auto;left:244px}
 .inbox .ib .p{font-size:11px;color:var(--mut2);white-space:nowrap}
 .ibempty{border:1px dashed #cfcac2;border-radius:14px;padding:18px;text-align:center;color:var(--mut);font-size:13px}
 .skgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
-.ag{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff;font-size:13px;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start}
-.ag em,.ag .st{display:block}
+/* Home skill cards: icon + title + one meta line; the description is the hover/focus tooltip */
+.ag{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:#fff;font-size:13px;text-align:left;display:grid;grid-template-columns:26px minmax(0,1fr);column-gap:10px;align-items:center}
 .ag{box-shadow:var(--sh);transition:transform .18s ease-out,box-shadow .18s ease-out}.ag:hover{box-shadow:var(--shh);transform:translateY(-1px)}
-.ag b{display:block;margin:8px 0 2px}.ag em{font-style:normal;font-size:12px;color:var(--mut)}
-.ag .st{display:flex;gap:6px;align-items:center;margin-top:auto;padding-top:8px;font-size:11.5px;color:var(--mut)}
+.ag .av{grid-row:1/span 2}
+.ag b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-width:0;line-height:1.3}
+.ag .st{display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:var(--mut);margin-top:2px}
 /* runs tray */
 .tray{position:absolute;right:14px;top:52px;width:340px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 36px rgba(0,0,0,.14);z-index:20;display:none}
 .tray.on{display:block}
@@ -496,6 +503,7 @@ body.papp-on #app{visibility:hidden}body.papp-on .demo{right:auto;left:244px}
 .ic3:hover{background:var(--soft);color:var(--ink)}.ic3 svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .acts{align-items:center;gap:2px}.acts .ic3{width:28px}
 .tip2{position:fixed;z-index:95;background:var(--ink);color:#fff;font-size:11.5px;line-height:1.3;border-radius:7px;padding:4px 8px;white-space:nowrap;pointer-events:none;display:none;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.tip2.wrap{white-space:normal;max-width:280px;text-align:left}
 /* agentic answer: compact step chips, options fade in */
 .tools{display:flex;flex-wrap:wrap;gap:6px}
 .chips,.opts,#aExtra .acts{animation:rise .35s ease-out}
@@ -626,6 +634,11 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
 
 /* Ansvisor demo: the app's own left menu sits beside this preview, so the preview's copy of it is hidden. */
 .rail{display:none !important}
+/* Home v3 (2026-10-28): Inbox link in the greeting, composer always in view, archived chats */
+.hlnk{color:var(--ink);text-decoration:underline;text-decoration-color:#d6d3cf;text-underline-offset:2px}.hlnk:hover{text-decoration-color:var(--ink)}
+#s-home .cwrap{position:sticky;bottom:0;z-index:3;padding-top:14px;background:linear-gradient(rgba(250,250,249,0),var(--bg) 14px)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.archbar{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:8px 10px 8px 12px;font-size:13px;color:var(--mut);margin:0 0 14px}.archbar b{color:var(--ink);font-weight:500}.archbar .btn{margin-left:auto}
 </style>
 </head>
 <body>
@@ -658,7 +671,10 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
  <nav class="rail" id="rail" aria-label="Ansvisor"></nav>
  <div class="list" id="list">
   <div class="nchrow"><button data-action="chatMenu.toggle" class="mtog" id="mTog" aria-label="Hide chat menu" aria-expanded="true" aria-controls="list" data-tip="Hide menu · Ctrl+\"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg></button><button data-action="chat.new" class="newc" id="newChat" data-tip="New chat · Ctrl+Shift+O">＋ New chat <kbd>Ctrl ⇧ O</kbd></button></div>
-  <button data-action="chatMenu.openHome" class="li on" data-go="home">Home <span class="b am" title="Needs you">1</span></button>
+  <div class="sec mgh" id="mgHead">Menu<button data-action="chatMenu.openInbox" class="mgq" data-go="inbox" id="mgInbox" aria-label="Inbox · 3 items · 1 needs you" title="Inbox · 3 items · 1 needs you"><i></i>3</button><button data-action="chatMenu.toggleMenuSection" class="cnt" id="mgTog" aria-label="Show or hide the Menu section" aria-expanded="true" aria-controls="mgBox">▴</button></div>
+  <div class="mgbox" id="mgBox">
+  <button data-action="chatMenu.openHome" class="li on" data-go="home">Home</button>
+  <button data-action="chatMenu.openInbox" class="li" data-go="inbox" id="inboxLi" aria-label="Inbox · 3 items · 1 needs you">Inbox <span class="ibw"><span class="ibd" id="inboxDot" title="1 needs you"></span><span class="b" id="inboxN">3</span></span></button>
   <button data-action="chatMenu.openSettings" class="li" data-go="settings">Settings <span class="usg2" title="AI usage this month"><span class="ub"><i style="width:18%"></i></span>18%</span></button>
   <button data-action="chatMenu.openSkills" class="li" data-go="skills">Skills <span class="newp">New</span></button>
   <div class="conn shut">
@@ -687,6 +703,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
   </div>
   <button data-action="chatMenu.openScheduled" class="li" data-go="sched">Scheduled <span class="b" id="schedN">4</span></button>
   <button data-action="chatMenu.openFiles" class="li" data-go="files">Files</button>
+  </div>
   <div class="sec awh">Agents at work <span class="awn" title="Across your team">24</span><button data-action="chatMenu.dotLegend" class="q" id="awQ" aria-label="What the colors mean">?</button><a data-action="chatMenu.openAgents" href="CHAT-mockup-v2-governance.html#g-agents" title="Agents: skill + mode + connections + model">Agents</a><button data-action="chatMenu.toggleAgentsAtWork" class="cnt" id="awTog" aria-label="Show or hide agents at work" aria-expanded="true">▴</button></div>
   <div class="aw" id="aw">
    <div data-action="runs.open" class="li2" data-go="need" id="rowTasks"><span class="sd need"></span><div class="tx"><b>Action Center tasks</b><em class="amt">Needs your OK · step 4 of 6</em></div></div>
@@ -713,11 +730,12 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Reddit threads for “AEO tools”</b><em>List · 18 threads</em></div></div>
    <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>llms.txt for ansvisor.com</b><em>File · 1</em></div></div>
    <button data-action="chatMenu.openAllChats" class="allc" data-go="allchats">All chats · 148 ›</button>
+   <button data-action="chatMenu.openArchived" class="allc" id="archLink">Archived · <span id="archN">2</span> ›</button>
   </div>
  </div>
 
  <div class="main" id="mainCol">
-  <div class="top"><div class="mstrip" id="mStrip" role="toolbar" aria-label="Chat menu shortcuts"><button data-action="chatMenu.toggle" class="mtog" data-mtog aria-label="Show chat menu" aria-expanded="false" aria-controls="list" data-tip="Show menu · Ctrl+\"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg></button><button data-action="chat.new" class="btn sm" data-mnew data-tip="New chat · Ctrl+Shift+O">＋ New chat</button><button data-action="search.open" class="btn sm" id="mSearchBtn" aria-haspopup="true" data-tip="Search chats and pages · Ctrl K">Search <kbd>Ctrl K</kbd></button><span id="mRunsSlot"></span><button data-action="chatMenu.openScheduled" class="btn sm" data-go="sched">Scheduled <span class="b" id="mSchedN">4</span></button><span class="msep" aria-hidden="true"></span></div><button data-action="nav.backToChat" class="btn sm" id="backChat" style="display:none" aria-label="Back to Chat">← Back to Chat</button><span class="t" id="ttl"></span><span class="pill" id="st" style="display:none"></span>
+  <div class="top"><div class="mstrip" id="mStrip" role="toolbar" aria-label="Chat menu shortcuts"><button data-action="chatMenu.toggle" class="mtog" data-mtog aria-label="Show chat menu" aria-expanded="false" aria-controls="list" data-tip="Show menu · Ctrl+\"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg></button><button data-action="chat.new" class="btn sm" data-mnew data-tip="New chat · Ctrl+Shift+O">＋ New chat</button><button data-action="search.open" class="btn sm" id="mSearchBtn" aria-haspopup="true" data-tip="Search chats and pages · Ctrl K">Search <kbd>Ctrl K</kbd></button><span id="mRunsSlot"></span><button data-action="chatMenu.openInbox" class="btn sm" data-go="inbox">Inbox <span class="b" id="mInboxN">3</span></button><button data-action="chatMenu.openScheduled" class="btn sm" data-go="sched">Scheduled <span class="b" id="mSchedN">4</span></button><span class="msep" aria-hidden="true"></span></div><button data-action="nav.backToChat" class="btn sm" id="backChat" style="display:none" aria-label="Back to Chat">← Back to Chat</button><span class="t" id="ttl"></span><span class="pill" id="st" style="display:none"></span>
    <div class="r"><button data-action="nav.backToPage" class="btn sm" id="backPanel" style="display:none">↙ Back to Visibility</button>
     <div class="runs"><button data-action="runs.toggleTray" class="runsbtn" id="runsBtn" aria-label="Your runs" aria-expanded="false"><span class="tdots" style="color:var(--ink)"><i></i><i></i><i></i></span><span id="runsTx">1 running</span><span class="n" title="Needs you">1</span></button>
      <div class="tray" id="tray"><div class="trh">Your runs<span style="margin-left:auto" id="trayCnt">1 running · 1 needs you</span></div>
@@ -730,16 +748,10 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
 
   <!-- HOME -->
   <div class="body scr on" id="s-home"><div class="thread"><div class="col" style="flex:0">
-   <div class="hero"><h1>Good afternoon, Alex</h1><p id="heroP">Your agents worked while you were away. 1 thing needs you.</p></div></div>
-   <div class="inbox">
+   <div class="hero"><h1>Good afternoon, Alex</h1><p id="heroP">Your agents worked while you were away. <button data-action="home.openInbox" class="hlnk" data-go="inbox">1 thing needs you</button>.</p></div></div>
+   <div class="homew">
     <div class="since"><div><small>Since you left</small><div class="big"><span><img class="eng" data-e="Google AI Overviews" alt="">Google AI Overviews citations</span><span class="num neg2" data-count="-20" aria-label="down 20"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10"/><path d="M17 9v8H9"/></svg>20</span><span style="color:var(--mut)">· 2 pages</span><a data-action="why.open" class="chip why" href="CHAT-mockup-v2-signature.html#f-why">Why?</a></div></div><div><small>One win</small><div class="big"><span><img class="eng" data-e="ChatGPT" alt="">ChatGPT citations</span><span class="num pos2" data-count="14" aria-label="up 14"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg>14</span></div></div></div>
-    <div class="sec" style="margin-left:2px">Your inbox</div>
-    <div id="inboxList">
-     <div data-action="home.openInboxItem" class="ib" data-go="need"><span class="k am"></span><div class="tx">Action Center tasks need your OK on one change<em>Step 4 of 6 · a cited passage on /pricing (cited 12× last month)</em></div><span class="p">10 min ago</span><button data-action="home.review" class="btn pri sm" data-go="need">Review</button></div>
-     <div data-action="home.openInboxItem" class="ib" data-run="winback-f"><span class="k run"></span><div class="tx">Win back citations · /features<em>Step 2 of 5 · comparing cited pages</em></div><div class="prog"><i style="width:30%"></i></div><button data-action="home.watch" class="btn sm" data-run="winback-f">Watch</button></div>
-     <div data-action="home.openInboxItem" class="ib" data-report><span class="k ok"></span><div class="tx">Weekly citations report sent<em>ChatGPT +14 citations, Google AI Overviews −20 · emailed to 3 teammates at 08:02</em></div><span class="p">Today</span><button data-action="home.openReport" class="btn sm" data-report>Open</button></div>
-    </div>
-    <div class="sec" style="margin-left:2px;margin-top:16px">For you now</div>
+    <div class="sec" style="margin-left:2px">For you now</div>
     <div class="scut">
      <button data-action="home.askAnything" class="sc0" data-go="ask">Ask anything</button>
      <button data-action="home.runShortcut" data-skill="tasks">Complete tasks <b>4 due</b></button>
@@ -754,6 +766,17 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    </div>
    <div style="flex:1"></div>
    <div class="cwrap" data-comp data-ctx="Ansvisor|Last 30 days" data-text="Complete this week’s Action Center tasks. Have them ready by Friday." data-send="plan:tasks" data-hint="/ skills · @ data · Tab to accept"></div>
+  </div></div>
+
+  <!-- INBOX (off Home since 2026-10-28; opened from the chat menu and from Home’s “needs you” link) -->
+  <div class="body scr" id="s-inbox"><div class="pg">
+   <div class="pgh"><h1>Inbox</h1><div class="r"><button data-action="inbox.notifySettings" class="btn" data-go="settings">Notification settings</button></div></div>
+   <p class="ibsub" id="inboxSub">1 needs you · 1 running · 1 done today. Results from your agents and scheduled jobs land here.</p>
+   <div class="inbox ibpage" id="inboxList">
+     <div data-action="inbox.openItem" class="ib need" data-go="need"><span class="k am"></span><div class="tx">Action Center tasks need your OK on one change<em>Step 4 of 6 · a cited passage on /pricing (cited 12× last month)</em></div><span class="p">10 min ago</span><button data-action="inbox.review" class="btn pri sm" data-go="need">Review</button></div>
+     <div data-action="inbox.openItem" class="ib" data-run="winback-f"><span class="k run"></span><div class="tx">Win back citations · /features<em>Step 2 of 5 · comparing cited pages</em></div><div class="prog"><i style="width:30%"></i></div><button data-action="inbox.watch" class="btn sm" data-run="winback-f">Watch</button></div>
+     <div data-action="inbox.openItem" class="ib" data-report><span class="k ok"></span><div class="tx">Weekly citations report sent<em>ChatGPT +14 citations, Google AI Overviews −20 · emailed to 3 teammates at 08:02</em></div><span class="p">Today</span><button data-action="inbox.openReport" class="btn sm" data-report>Open</button></div>
+   </div>
   </div></div>
 
   <!-- FOCUS PICKER (CHAT-24) · first open, and Settings › General › Your focus -->
@@ -978,7 +1001,8 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
   <!-- ALL CHATS -->
   <div class="body scr" id="s-allchats"><div class="pg">
    <div class="pgh"><h1>All chats</h1><div class="r"><button data-action="allChats.archiveSelected" class="btn" id="archSel" disabled>Archive selected</button></div></div>
-   <div class="fl" data-filter="#s-allchats .tr2.c:not(.th)"><input data-action="allChats.search" class="srch2" placeholder="Search chats and results" aria-label="Search chats and results" data-search="#s-allchats .tr2.c:not(.th)"><button data-action="allChats.filter" class="fc on" data-f="all">All</button><button data-action="allChats.filter" class="fc" data-f="run">Running <i>1</i></button><button data-action="allChats.filter" class="fc" data-f="need">Needs you <i>1</i></button><button data-action="allChats.filter" class="fc" data-f="done">Done</button><button data-action="allChats.filter" class="fc" data-f="mine">Mine</button><button data-action="allChats.filter" class="fc" data-f="team">Team</button><button data-action="allChats.filter" class="fc" data-f="archived">Archived</button></div>
+   <div class="tabs2" role="tablist"><button data-action="allChats.tab" class="on" data-atab="active" role="tab" aria-selected="true">Active <i id="actTabN">148</i></button><button data-action="allChats.tab" data-atab="archived" role="tab" aria-selected="false">Archived <i id="archTabN">2</i></button></div>
+   <div class="fl" data-filter="#s-allchats .tr2.c:not(.th)"><input data-action="allChats.search" class="srch2" placeholder="Search chats and results" aria-label="Search chats and results" data-search="#s-allchats .tr2.c:not(.th)"><button data-action="allChats.filter" class="fc on" data-f="all">All</button><button data-action="allChats.filter" class="fc" data-f="run">Running <i>1</i></button><button data-action="allChats.filter" class="fc" data-f="need">Needs you <i>1</i></button><button data-action="allChats.filter" class="fc" data-f="done">Done</button><button data-action="allChats.filter" class="fc" data-f="mine">Mine</button><button data-action="allChats.filter" class="fc" data-f="team">Team</button></div>
    <div class="tbl chats">
     <div class="tr2 th c"><span></span><span>Chat</span><span>Skill</span><span>Owner</span><span>Updated</span></div>
     <div data-action="allChats.openChat" class="tr2 c" data-go="need" data-f="need mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt am"></i><b>Action Center tasks</b><em class="amt">Needs your OK · step 4 of 6</em></span><span><code>/tasks</code></span><span>AK</span><span>10 min</span></div>
@@ -987,6 +1011,8 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
     <div class="tr2 c" data-action="allChats.openChat" data-f="done mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Share of voice vs competitors</b><em>Table · 2 files</em></span><span>—</span><span>AK</span><span>Today</span></div>
     <div class="tr2 c" data-action="allChats.openChat" data-f="done team"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Schema for /features</b><em>JSON-LD · published by Sam Lee</em></span><span><code>/publish</code></span><span>SL</span><span>Yesterday</span></div>
     <div class="tr2 c" data-action="allChats.openChat" data-f="done mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Onboarding: what should I track?</b><em>12 prompts added</em></span><span>—</span><span>AK</span><span>Oct 19</span></div>
+    <div class="tr2 c" data-action="allChats.openChat" data-f="done mine" data-arch="Oct 2"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Q3 content plan</b><em>12 drafts planned · archived Oct 2</em></span><span><code>/tasks</code></span><span>AK</span><span>Sep 14</span></div>
+    <div class="tr2 c" data-action="allChats.openChat" data-f="done team" data-arch="Sep 28"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Northwind pricing check</b><em>Table · 1 file · archived Sep 28</em></span><span>—</span><span>SL</span><span>Sep 21</span></div>
     <div class="empty" id="acEmpty">No chats match.</div>
    </div>
   </div></div>
@@ -1399,15 +1425,15 @@ function skillCard(k){var s=SK[k],n=s.steps.length;
   (s.conns.length||s.needConn?'<div class="cuse">'+s.conns.map(function(c){return '<span class="cchip"><i></i>'+c+'</span>'}).join('')+(s.needConn?'<span class="cchip off"><i></i>'+s.needConn+' · not connected</span>':'')+'</div>':'')+
   '<div class="ska">'+(s.needConn?'<button data-action="integrations.connect" class="btn sm" data-toast="Opens '+s.needConn+' sign-in · read-only first">Connect '+s.needConn+'</button>':(s.sched?'<button data-action="skills.editSchedule" class="btn sm" data-go="sched">Edit schedule</button>':'<button data-action="skills.schedule" class="btn sm" data-sched="'+k+'">Schedule</button>')+'<button data-action="skills.run" class="btn sm pri" data-skill="'+k+'">Run</button>')+'</div></div>'}
 function renderSkills(){$('#sk-a').innerHTML=Object.keys(SK).map(skillCard).join('');
- $('#homeSkills').innerHTML=['winback','tasks','compare'].map(function(k){var s=SK[k];return '<button data-action="home.runSkill" class="ag" data-skill="'+k+'"><span class="av s26">'+BOT+'</span><b>'+s.card+'</b><em>'+s.desc+'</em><span class="st">'+(s.badge?s.badge+' · ':'')+s.steps.length+' steps · '+(hasExec(k)?'publishing needs your click':'asks before changes')+'</span></button>'}).join('');
+ $('#homeSkills').innerHTML=['winback','tasks','compare'].map(function(k){var s=SK[k],tip=(s.desc+' '+(hasExec(k)?'Publishing needs your click.':'Asks before changes.')).replace(/"/g,'&quot;');return '<button data-action="home.runSkill" class="ag" data-skill="'+k+'" data-tip="'+tip+'" data-tipwrap aria-describedby="hsk-'+k+'"><span class="av s26">'+BOT+'</span><b>'+s.card+'</b><span class="st">'+(s.badge?s.badge+' · ':'')+s.steps.length+' steps</span><span class="vh" id="hsk-'+k+'">'+tip+'</span></button>'}).join('');
  var g=[['Do',['tasks','winback','publish']],['Create',['faq','quality']],['Analyze',['wrongclaim','compare']],['Report',['report']]];
  $('#slash').innerHTML='<div class="slh">Skills <span>type to filter · ↑↓ · Enter</span></div>'+g.map(function(x){return '<div class="slg">'+x[0]+'</div>'+x[1].map(function(k){var s=SK[k];return '<button data-action="slashMenu.pickSkill" class="slr" role="option" data-skill="'+k+'"><span class="av s22">'+BOT+'</span><div><b>'+s.code+'</b> '+s.card+'<em>'+s.steps.length+' steps · '+s.mode+'</em></div>'+(s.isNew?'<span class="newp" style="margin-left:0">New</span>':s.badge?'<span class="kb2">'+s.badge+'</span>':'')+'</button>'}).join('')}).join('')+
   '<div class="slg">Library skills · 701 · MIT</div><button data-action="slashMenu.browseLibrary" class="slr" role="option" data-go="skills" data-libtab><span class="sli">◇</span><div><b>Browse library skills</b><em>copywriting, SEO, analytics, social…</em></div></button><button data-action="slashMenu.createSkill" class="slr" role="option" data-toast="Describe the skill in plain words. Chat writes it and you review it."><span class="sli">＋</span><div><b>Create a skill</b><em>describe it in plain words</em></div></button>';
  $('#smSkill').innerHTML=Object.keys(SK).map(function(k){return '<option value="'+k+'">'+SK[k].code+' · '+SK[k].card+'</option>'}).join('');
  $('#smMode').innerHTML=MODES.map(function(m){return '<option'+(m=='Full auto'&&!growthPlus()?' disabled':'')+'>'+m+(m=='Full auto'&&!growthPlus()?' · Needs Growth':'')+'</option>'}).join('')}
 /* ---------- titles ---------- */
-var TT={home:['',''],settings:['Settings',''],ask:['New chat',['Answering','run']],plan:['Action Center tasks',['Plan ready','']],work:['Action Center tasks',['Working','run']],need:['Action Center tasks',['Needs you','am']],done:['Action Center tasks',['Done','ok']],followup:['Win back citations',['Done','ok']],skills:['Skills',''],sched:['Scheduled',''],files:['Files',''],allchats:['All chats',''],conns:['Integrations',''],memory:['Memory',''],failed:['Merchant feed fix · EU',['Failed','red']],viewer:['Why did Google AI Overviews citations drop?',['Analyst · read-only','']],denied:['Add 5 prompts to tracking',['Needs Manager or Admin','am']],limits:['AI limit',''],help:['Go to a page · Help',''],past:['Chat',''],'panel-app':['Visibility','']};
-var SUBP=['skills','conns','sched','files','memory','allchats','limits','help'],CONV=['ask','plan','work','need','done','followup','failed','viewer','denied','past'],LASTCONV=null,PASTRUN=false;
+var TT={home:['',''],settings:['Settings',''],ask:['New chat',['Answering','run']],plan:['Action Center tasks',['Plan ready','']],work:['Action Center tasks',['Working','run']],need:['Action Center tasks',['Needs you','am']],done:['Action Center tasks',['Done','ok']],followup:['Win back citations',['Done','ok']],skills:['Skills',''],sched:['Scheduled',''],files:['Files',''],inbox:['Inbox',''],allchats:['All chats',''],conns:['Integrations',''],memory:['Memory',''],failed:['Merchant feed fix · EU',['Failed','red']],viewer:['Why did Google AI Overviews citations drop?',['Analyst · read-only','']],denied:['Add 5 prompts to tracking',['Needs Manager or Admin','am']],limits:['AI limit',''],help:['Go to a page · Help',''],past:['Chat',''],'panel-app':['Visibility','']};
+var SUBP=['skills','inbox','conns','sched','files','memory','allchats','limits','help'],CONV=['ask','plan','work','need','done','followup','failed','viewer','denied','past'],LASTCONV=null,PASTRUN=false;
 function isSub(s){return SUBP.indexOf(s)>-1||(s=='past'&&PASTRUN)}
 function setTitle(s){var t=TT[s]||[s,''];if(isSub(s)){$('#ttl').innerHTML='<button data-action="nav.breadcrumb" class="crumb" data-go="home">Chat</button><span class="crs">›</span>'+t[0];$('#backChat').style.display='inline-flex';$('#backChat').title=LASTCONV?'Back to your last conversation':'Back to Chat Home'}else{$('#ttl').textContent=t[0];$('#backChat').style.display='none'}var st=$('#st');if(t[1]){st.style.display='';st.textContent=t[1][0];st.className='pill '+t[1][1]}else st.style.display='none'}
 /* ---------- router (hash deep links: #s-name or #s-name/variant) ---------- */
@@ -1420,7 +1446,8 @@ function go(s,v){if(s=='panel')s='panel-app';var el=document.getElementById('s-'
  if(s!='past')$$('.list .li2').forEach(function(x){x.classList.remove('on')});
  $('#tray').classList.remove('on');
  try{history.replaceState(null,'','#s-'+s+(v?'/'+v:''))}catch(e){}
- if(s=='home')renderInbox(v=='empty');
+ if(s=='home')IBE=v=='empty';if(s=='inbox'&&v)IBE=v=='empty';if(s=='home'||s=='inbox')renderInbox(IBE);
+ if(s=='allchats')archTab(v=='archived'?'archived':'active');
  if(s=='plan')renderPlan(v||CURSK);
  if(s=='work')runWork(0);
  if(s=='ask')runAsk();
@@ -1443,11 +1470,21 @@ function setMode(m,quiet){if(m=='Full auto'&&!growthPlus()){toast(lockMsg(FA_LOC
  MODE=m;$$('.mode[aria-label="Run mode"]').forEach(function(x){x.innerHTML=modeInner()});retag();FUS='none';renderFU();
  if(!quiet)toast(m=='Full auto'?'Full auto: the agent makes changes without asking. Nothing is published or sent without your click. Every change is in the Activity log.':m=='Ask me first'?'Ask me first: the agent asks before every step.':'Auto, ask before changes: the agent reads freely and asks before every change.')}
 /* ---------- home inbox ---------- */
-var INBOX0=null;
+var INBOX0=null,IBE=false;
 function renderInbox(empty){var b=$('#inboxList');if(!INBOX0)INBOX0=b.innerHTML;
- if(empty){b.innerHTML='<div class="ibempty">Nothing needs you. Results from your agents land here.</div>';$('#heroP').textContent='All caught up.';return}
- b.innerHTML=INBOX0;$('#heroP').textContent='Your agents worked while you were away. 1 thing needs you.';
- if(USE>=80&&USE<100)b.insertAdjacentHTML('afterbegin','<div class="ib" data-usgrow><span class="k am"></span><div class="tx">85% of this month’s AI limit is used<em>Resets Nov 1 · scheduled jobs ask before they start</em></div><span></span><button data-action="credits.getMore" class="btn sm" data-getmore>Get more</button></div>')}
+ if(empty){b.innerHTML='<div class="ibempty">Nothing needs you. Results from your agents land here.</div>';heroLine('All caught up.');inboxBadge();return}
+ b.innerHTML=INBOX0;heroLine('Your agents worked while you were away. 1 thing needs you.');
+ if(USE>=80&&USE<100)b.insertAdjacentHTML('afterbegin','<div class="ib need" data-usgrow><span class="k am"></span><div class="tx">85% of this month’s AI limit is used<em>Resets Nov 1 · scheduled jobs ask before they start</em></div><span></span><button data-action="credits.getMore" class="btn sm" data-getmore>Get more</button></div>');inboxBadge()}
+/* the menu’s Inbox badge: item count, amber dot while something needs you */
+function inboxBadge(){var rows=$$('#inboxList .ib'),n=rows.length,need=rows.filter(function(r){return r.querySelector('.k.am')&&!(PUB&&r.dataset.go=='need')}).length,run=rows.filter(function(r){return r.querySelector('.k.run')}).length,ok=n-need-run;
+ var lbl='Inbox · '+n+(n==1?' item':' items')+(need?' · '+need+' needs you':'');
+ var b=$('#inboxN');if(b){b.textContent=n;b.style.display=n?'':'none'}var d=$('#inboxDot');if(d){d.style.display=need?'':'none';d.title=need+' needs you'}
+ var li=$('#inboxLi');if(li)li.setAttribute('aria-label',lbl);var m=$('#mInboxN');if(m){m.textContent=n;m.style.display=n?'':'none'}
+ var q=$('#mgInbox');if(q){q.innerHTML=(need?'<i></i>':'')+n;q.setAttribute('aria-label',lbl);q.title=lbl;q.style.display=n?'':'none'}
+ var s=$('#inboxSub');if(s){s.style.display=n?'':'none';s.textContent=[need?need+' needs you':'',run?run+' running':'',ok?ok+' done today':''].filter(Boolean).join(' · ')+'. Results from your agents and scheduled jobs land here.'}}
+/* Home greeting: “1 thing needs you” links to the Inbox */
+function heroLine(t){var p=$('#heroP'),m=/\d+ things? needs? you/.exec(t);p.textContent=m?t.slice(0,m.index):t;if(!m)return;
+ var a=document.createElement('button');a.className='hlnk';a.dataset.action='home.openInbox';a.dataset.go='inbox';a.textContent=m[0];p.appendChild(a);p.appendChild(document.createTextNode(t.slice(m.index+m[0].length)))}
 /* ---------- plan ---------- */
 var HUB='<div class="step"><span class="sn">+</span><div class="tx">Optional: tie the FAQ to revenue<em>Needs HubSpot to see which AI visits became deals</em><div class="need-conn">HubSpot isn’t connected. I can do everything else without it.<button data-action="integrations.connect" class="btn sm" data-hubconnect>Connect HubSpot</button><button data-action="plan.skipStep" class="btn sm ghost" data-rmstep>Skip</button></div></div></div>';
 function renderPlan(k){CURSK=k=SK[k]?k:'tasks';var s=SK[k];$('#planQ').textContent=s.ask;
@@ -1529,7 +1566,7 @@ function renderDone(){var full=PUB;
  TT.done=['Action Center tasks',full?['Done','ok']:['Needs your click','exe']];renderFU();
  $('#memCard').outerHTML='<div class="follow" id="memCard"><span class="sli">☰</span><div>Save to memory?<em>“Weekly Action Center tasks should be ready by Friday.” · only you</em></div><button data-action="memory.suggestNotNow" class="btn sm" data-mem="no">Not now</button><button data-action="memory.suggestSave" class="btn sm pri" data-mem="save">Save</button></div>'}
 function setTasksRow(state){var r=$('#rowTasks');if(!r)return;var sd=r.querySelector('.sd'),em=r.querySelector('em');
- if(state=='done'){sd.className='sd ok';sd.textContent='✓';em.className='';em.textContent='Done · published 14:32';r.classList.add('unread');$('.list .li .b.am').style.display='none';$('.runsbtn .n').style.display='none';$('#trayCnt').textContent='1 running'}}
+ if(state=='done'){sd.className='sd ok';sd.textContent='✓';em.className='';em.textContent='Done · published 14:32';r.classList.add('unread');inboxBadge();$('.runsbtn .n').style.display='none';$('#trayCnt').textContent='1 running'}}
 /* ---------- follow-up check: one click in Ask modes, auto + logged + Undo in Full auto ---------- */
 var CPS='<div class="cps"><span title="Day 7 · Nov 2 · Pending, early signal"><b>Day 7 · Nov 2</b>Early signal</span><span title="Day 14 · Nov 9 · first verdict"><b>Day 14 · Nov 9</b>First verdict</span><span title="Day 30 · Nov 25 · confirmed"><b>Day 30 · Nov 25</b>Confirmed</span><span title="Day 90 · Jan 24, 2027 · lasting effect"><b>Day 90 · Jan 24</b>Lasting effect</span></div>';
 function fuHTML(){var what='Compares citations for the 6 /pricing prompts on Google AI Overviews and ChatGPT with the 14 days before · uses scheduled tracking data · No extra cost';
@@ -1634,7 +1671,7 @@ function applyState(){renderComposers();$('#ubig').innerHTML=usageInner();render
  $$('#aw .li2').forEach(function(r){var sd=r.querySelector('.sd'),em=r.querySelector('em');if(!sd)return;if(!r.dataset.o&&sd.classList.contains('run')){r.dataset.o=em.textContent}if(r.dataset.o){sd.className=full?'sd paused':'sd run';sd.innerHTML=full?'':'<i></i>';em.textContent=full?'Paused · limit reached':r.dataset.o}});
  $('#runsTx').textContent=full?'1 paused':'1 running';$('#trayCnt').textContent=full?'1 paused · 1 needs you':'1 running · 1 needs you';$('#trWinSub').textContent=full?'Paused · limit reached':'Step 2 of 5 · comparing cited pages';$('#trWinAv').className='av s26'+(full?'':' work');
  $$('#schedTbl [data-next]').forEach(function(e){var sw=e.closest('.tr2').querySelector('.sw');e.textContent=full?'Paused · limit reached':sw&&sw.classList.contains('on')?e.dataset.next:'Paused';e.className=full?'amt':''});
- retag();renderFU();if(CUR=='home')renderInbox(false)}
+ retag();renderFU();if(CUR=='home'||CUR=='inbox')renderInbox(IBE)}
 /* ---------- side panel ---------- */
 function panelSize(sz,init){var p=$('#s-panel-app');p.classList.remove('wide','full','closed');if(sz!='compact')p.classList.add(sz);
  $$('[data-psize]').forEach(function(b){b.classList.toggle('on',b.dataset.psize==sz);b.setAttribute('aria-pressed',b.dataset.psize==sz)});
@@ -1688,7 +1725,7 @@ function applyFilter(fl){var sel=fl.dataset.filter,on=fl.querySelector('.fc.on')
  $$(sel).forEach(function(r){if(r.closest('[style*="display: none"]')&&r.parentNode.style.display=='none')return;var ok=(f=='all'||(' '+(r.dataset.f||'')+' ').indexOf(' '+f+' ')>-1)&&(!q||r.textContent.toLowerCase().indexOf(q)>-1);r.style.display=ok?'':'none';if(ok)n++});
  var e=fl.parentNode.querySelector('.empty');if(e)e.classList.toggle('on',n==0)}
 /* ---------- demo menu ---------- */
-var DEMO=[['Core screens',[['home','Home · inbox'],['home/empty','Home · nothing needs you'],['ask','Answering'],['plan','Plan'],['work','Working + live canvas'],['need','Needs you · 2 approvals'],['done','Done · publish needs your click'],['followup/ask','Follow-up check · Ask modes'],['followup/full','Follow-up check · Full auto'],['panel-app','Side panel · compact'],['panel-app/wide','Side panel · wide'],['panel-app/full','Side panel · full'],['help','Go to a page + Help'],['skills','Skills'],['sched','Scheduled'],['files','Files'],['allchats','All chats'],['past','Past conversation'],['conns','Integrations'],['memory','Memory'],['failed','Failed run'],['viewer','Analyst · read-only'],['viewer/agency','Agency partner · shared brands only'],['denied','Out of permission · role'],['denied/plan','Out of permission · plan'],['denied/policy','Out of permission · tool policy']]],['Preview as… (plan, usage, role)',[['use:85','Usage 85%'],['limits','Limit reached'],['limits/trial','Trial · $1 cap used'],['limits/starter','Starter · Growth+ locks'],['many','Integrations 20+'],['role:admin','Preview as Admin'],['role:manager','Preview as Manager (default)'],['role:analyst','Preview as Analyst'],['role:agency','Preview as Agency partner'],['reset','Reset · Growth (your plan) 18% · Manager']]]];
+var DEMO=[['Core screens',[['home','Home'],['home/empty','Home · nothing needs you'],['inbox','Inbox · needs you, running, done'],['ask','Answering'],['plan','Plan'],['work','Working + live canvas'],['need','Needs you · 2 approvals'],['done','Done · publish needs your click'],['followup/ask','Follow-up check · Ask modes'],['followup/full','Follow-up check · Full auto'],['panel-app','Side panel · compact'],['panel-app/wide','Side panel · wide'],['panel-app/full','Side panel · full'],['help','Go to a page + Help'],['skills','Skills'],['sched','Scheduled'],['files','Files'],['allchats','All chats'],['allchats/archived','All chats · Archived'],['past','Past conversation'],['conns','Integrations'],['memory','Memory'],['failed','Failed run'],['viewer','Analyst · read-only'],['viewer/agency','Agency partner · shared brands only'],['denied','Out of permission · role'],['denied/plan','Out of permission · plan'],['denied/policy','Out of permission · tool policy']]],['Preview as… (plan, usage, role)',[['use:85','Usage 85%'],['limits','Limit reached'],['limits/trial','Trial · $1 cap used'],['limits/starter','Starter · Growth+ locks'],['many','Integrations 20+'],['role:admin','Preview as Admin'],['role:manager','Preview as Manager (default)'],['role:analyst','Preview as Analyst'],['role:agency','Preview as Agency partner'],['reset','Reset · Growth (your plan) 18% · Manager']]]];
 var XL=[['index.html','v2 index'],[GOV+'#g-roles','Roles & access'],[GOV+'#g-policy','Settings › Chat · tool policy'],[GOV+'#g-capabilities','What Chat can do'],[GOV+'#g-agents','Agents'],[GOV+'#g-agent','Agent detail'],[GOV+'#g-agent-new','Create agent'],[GOV+'#g-run-agent','Run agent from Action Center'],[GOV+'#g-activity','Activity log'],[SIG+'#f-why','Why did it move'],[SIG+'#f-impact','Impact ledger · Action Center › History · Reports'],[SIG+'#f-mcp','MCP · Ansvisor everywhere'],[SIG+'#f-pr','Ship as a pull request'],[SIG+'#f-watch','Watch rules'],[SIG+'#f-brief','Morning brief']];
 function renderDemo(){var n=0;$('#dmenu').innerHTML=DEMO.map(function(g){return '<div class="ph">'+g[0]+'</div>'+g[1].map(function(x){return '<button data-action="demo.goToScreen" class="mi2" data-demo="'+x[0]+'"><span class="ck2" style="color:var(--mut2);width:20px">'+(++n)+'</span><div>'+x[1]+'</div></button>'}).join('')}).join('')+'<div class="ph">Other v2 mockups</div>'+XL.map(function(x){return '<a data-action="demo.openFile" class="mi2" href="'+x[0]+'"><span class="ck2">↗</span><div>'+x[1]+'</div></a>'}).join('')}
 function demo(k){closePops();if(k=='reset'){PLAN='growth';USE=18;ROLE='manager';applyState();go('home');toast('Growth · 18% · Manager');return}
@@ -1741,7 +1778,7 @@ document.addEventListener('mouseover',function(e){var el=e.target.closest&&e.tar
 /* text actions become 28px icon buttons with a name tooltip */
 var ICN={'Copy':['a-copy','Copy'],'Download ▾':['a-dl','Download'],'Download':['a-dl','Download'],'Save to Files':['a-save','Save to Files'],'Retry':['a-retry','Retry'],'Send to Action Center':['a-ac','Send to Action Center'],'Open':['a-open','Open'],'Ship as PR ↗':['a-pr','Ship as pull request · Copy as agent task on every plan · Open PR on Growth+']};
 function iconize(){$$('.acts>button,.tbl.files .acts2>.btn,.file .r>.btn').forEach(function(b){if(b.dataset.ico)return;var tx=b.textContent.trim(),m=ICN[tx];if(!m)return;var tip=m[1];if(b.dataset.dl)tip='Download · md, docx, pdf'+(b.dataset.table=='1'?', csv, xlsx':'');b.dataset.ico=1;b.className='ic3';b.innerHTML='<svg aria-hidden="true"><use href="#'+m[0]+'"/></svg>';b.setAttribute('aria-label',tip.split(' · ')[0]);b.dataset.tip=tip})}
-function showTip(el){var t=$('#tip2');t.textContent=el.dataset.tip;t.style.display='block';var r=el.getBoundingClientRect(),w=t.offsetWidth;var top=r.top-t.offsetHeight-6;if(top<4)top=r.bottom+6;t.style.left=Math.max(4,Math.min(innerWidth-w-4,r.left+r.width/2-w/2))+'px';t.style.top=top+'px'}
+function showTip(el){var t=$('#tip2');t.textContent=el.dataset.tip;t.classList.toggle('wrap',el.hasAttribute('data-tipwrap'));t.style.display='block';var r=el.getBoundingClientRect(),w=t.offsetWidth;var top=r.top-t.offsetHeight-6;if(top<4)top=r.bottom+6;t.style.left=Math.max(4,Math.min(innerWidth-w-4,r.left+r.width/2-w/2))+'px';t.style.top=top+'px'}
 document.addEventListener('mouseover',function(e){var el=e.target.closest&&e.target.closest('[data-tip]');if(el)showTip(el);else $('#tip2').style.display='none'});
 document.addEventListener('focusin',function(e){var el=e.target.closest&&e.target.closest('[data-tip]');if(el)showTip(el);else $('#tip2').style.display='none'});
 document.addEventListener('click',function(){$('#tip2').style.display='none'},true);
@@ -1770,7 +1807,7 @@ var HMA={'Chat settings':'policy.open','Open in split view':'chat.openSplit','Op
 document.addEventListener('click',function(e){var t=e.target,c;
  if(t.closest('a[href]'))return;
  if(t.closest('input[type=checkbox]')){e.stopPropagation();var tb=t.closest('#s-allchats');if(tb)$('#archSel').disabled=!$$('#s-allchats input[type=checkbox]:checked').length;return}
- if(t.closest('#archSel')){var ch=$$('#s-allchats input[type=checkbox]:checked');ch.forEach(function(i){i.checked=false;var r=i.closest('.tr2');r.dataset.f=(r.dataset.f||'')+' archived';r.style.display='none'});$('#archSel').disabled=true;toast(ch.length+' archived · find them under Archived');return}
+ if(t.closest('#archSel')){archSelected();return}
  /* layers */
  if((c=t.closest('#demoBtn'))){var was=$('#dmenu').classList.contains('on');openPop('#dmenu',c,'left');c.setAttribute('aria-expanded',!was);return}
  if((c=t.closest('[data-demo]'))){demo(c.dataset.demo);return}
@@ -1884,7 +1921,7 @@ document.addEventListener('click',function(e){var t=e.target,c;
   if(a3=='split'){openSplit(curRow);return}
   if(a3=='rename'){var b=curRow.querySelector('b');b.contentEditable='true';b.classList.add('edit');b.focus();var rg=document.createRange();rg.selectNodeContents(b);var sl=getSelection();sl.removeAllRanges();sl.addRange(rg);return}
   if(a3=='pin'){togglePin(curRow);return}
-  if(a3=='archive'){curRow.style.display='none';toast('Archived · find it in All chats › Archived');return}
+  if(a3=='archive'){archiveChat(nm);return}
   if(a3=='pause'||a3=='stop'){var sd=curRow.querySelector('.sd'),em=curRow.querySelector('em');sd.className='sd '+(a3=='stop'?'fail':'paused');sd.innerHTML='';em.textContent=a3=='stop'?'Stopped · done steps stay in History':'Paused · resume from the chat';toast(a3=='stop'?'Stopped · done steps stay in History, nothing else changes':'Paused · resume any time');return}
   toast({newwin:'Opens “'+nm+'” in a new browser window',share:'Shared with your team'}[a3]);return}
  if(t.closest('#newChat')){newChat();return}
@@ -2025,7 +2062,7 @@ function mergeFocus(key,max){var out=[],seen={},lists=FOCUS.map(function(f){retu
 function focusLabel(){if(!FOCUS.length)return '';var n=FOCUS.map(function(f){return DEPTS[f].name});return n.length<=2?n.join(' and '):n.slice(0,2).join(', ')+' +'+(n.length-2)}
 function applyDept(){var sc=$('#s-home .scut');if(SCUT0==null){SCUT0=sc.innerHTML;HERO0=$('#heroP').textContent}
  var first=FOCUS.filter(function(f){return DEPTS[f].hero})[0];
- $('#heroP').textContent=first?DEPTS[first].hero:HERO0;
+ heroLine(first?DEPTS[first].hero:HERO0);
  var scs=mergeFocus('sc',6);
  sc.innerHTML=FOCUS.length?'<button data-action="home.askAnything" class="sc0" data-go="ask">Ask anything</button>'+scs.map(function(x){return '<button data-action="dept.runShortcut" data-t="'+esc2(x[0][0])+'">'+esc2(x[0][0])+' <b>'+esc2(x[0][1])+'</b></button>'}).join('')+'<button data-action="home.moreShortcuts" class="more" data-slash>More ▾</button>':SCUT0;
  var dl=$('#deptLine');if(!dl){$('#heroP').insertAdjacentHTML('afterend','<div id="deptLine"></div>');dl=$('#deptLine')}
@@ -2057,7 +2094,7 @@ SRC.pd2=['Slack alerts page','The page AI cites for your Slack alerts',[['northw
 SRC.bd1=['German review sites','Cited in German-language CRM answers',[['capterra.de/crm-software','41 answers · lists Kestrel CRM, Contoso Sales'],['omr.com/de/reviews/crm','17 answers · lists Harbor CRM, Fabrikam CRM']]];
 GENT['buyer-questions-integrations']='14:20';GENT['germany-market-gaps']='14:24';
 DEMO.push(['Focus areas (CHAT-24)',[['dept','Choose your focus · first open'],['dept:pd','Home · Product and buyer needs'],['dept:bd','Home · Markets and partners'],['dept:pd,bd','Home · Product + Markets (2 picked)'],['dept:comp,brand','Home · Competitors + Brand'],['pdans','Answer · buyer questions'],['bdans','Answer · market gaps'],['dept:none','Home · no focus chosen']]]);
-var go0=go;go=function(s,v){go0(s,v);if(s=="home"&&v!="empty"){var f=FOCUS.filter(function(x){return DEPTS[x].hero})[0];if(f)$("#heroP").textContent=DEPTS[f].hero}if(s=='dept'){FPICK=FOCUS.slice();syncPick()}if(TT[s]&&typeof setTitle=='function')setTitle(s)};
+var go0=go;go=function(s,v){go0(s,v);if(s=="home"&&v!="empty"){var f=FOCUS.filter(function(x){return DEPTS[x].hero})[0];if(f)heroLine(DEPTS[f].hero)}if(s=='dept'){FPICK=FOCUS.slice();syncPick()}if(TT[s]&&typeof setTitle=='function')setTitle(s)};
 var demo0=demo;demo=function(k){if(k.indexOf('dept:')==0){var v=k.slice(5);FOCUS=v=='none'?[]:v.split(',');applyDept();go('home');toast(FOCUS.length?'Home focused on '+focusLabel():'No focus chosen · default Home');return}demo0(k)};
 document.addEventListener('click',function(e){var t=e.target,c;if(!t.closest)return;
  if((c=t.closest('[data-action="dept.pick"]'))){var k=c.dataset.dept,i=FPICK.indexOf(k);if(i>-1)FPICK.splice(i,1);else FPICK.push(k);syncPick();e.stopPropagation();return}
@@ -2073,6 +2110,57 @@ document.addEventListener('click',function(e){var t=e.target,c;if(!t.closest)ret
 try{var sv=JSON.parse(localStorage.getItem('ansvisor.focus')||'[]');if(sv.every(function(x){return DEPTS[x]}))FOCUS=sv}catch(e){}
 renderDemo();applyDept();if(CUR&&TT[CUR])setTitle(CUR);if(CUR=='dept'){FPICK=FOCUS.slice();syncPick()}
 
+/* ---------- 2026-10-28: Menu section fold + archived chats (All chats › Archived) ---------- */
+function setMg(shut,save){var b=$('#mgBox'),h=$('#mgHead'),t=$('#mgTog');if(!b)return;b.classList.toggle('shut',shut);h.classList.toggle('shut',shut);t.textContent=shut?'▾':'▴';t.setAttribute('aria-expanded',String(!shut));
+ if(save){try{localStorage.setItem('ansvisor.chatMenuSection',shut?'off':'on')}catch(e){}}}
+try{if(localStorage.getItem('ansvisor.chatMenuSection')=='off')setMg(true,false)}catch(e){}
+var ACT=148,ARCHTAB=ARCHTAB||'active',ARCHD={};
+PASTC['Q3 content plan']={q:'Plan our Q3 content.',d:'Sep 14',t:'10:12',a:'I planned 12 drafts for Q3 across 3 topics: AI visibility tools, AEO and pricing questions. All 12 are in Content Plan.',files:fileRow('▤','Q3 content plan','12 drafts · 3 topics','q3-content-plan')};
+PASTC['Northwind pricing check']={q:'Compare Northwind’s pricing with ours.',d:'Sep 21',t:'16:40',tb:1,a:'Northwind has 3 plans. AI answers mention its free trial more often than ours.',files:fileRow('▦','Northwind pricing check','CSV · 3 plans','northwind-pricing-check',1)};
+function chatName(r){var b=r&&r.querySelector('b');return b?b.textContent:''}
+function menuRow(nm){return $$('.list .li2').filter(function(r){return r.id!='newItem'&&chatName(r)==nm})[0]}
+function allRow(nm){return $$('#s-allchats .tr2.c:not(.th)').filter(function(r){return chatName(r)==nm})[0]}
+function curPast(){if(CUR!='past')return '';var bar=$('#archBar');if(bar)return bar.dataset.nm;var on=$('.list .li2.on');return on?chatName(on):''}
+function archCounts(){var n=$$('#s-allchats .tr2.c[data-arch]').length;$('#archN').textContent=n;$('#archTabN').textContent=n;$('#actTabN').textContent=ACT;
+ var h=$('.chh .awn');if(h)h.textContent=ACT;var a=$('.allc[data-go="allchats"]');if(a)a.textContent='All chats · '+ACT+' ›'}
+function archTab(tab){ARCHTAB=tab;var arch=tab=='archived',s='#s-allchats .tr2.c:not(.th)',fl=$('#s-allchats .fl');
+ $$('[data-atab]').forEach(function(x){var on=x.dataset.atab==tab;x.classList.toggle('on',on);x.setAttribute('aria-selected',String(on))});
+ fl.dataset.filter=s+(arch?'[data-arch]':':not([data-arch])');$$(s).forEach(function(r){r.style.display='none'});
+ $$('#s-allchats input[type=checkbox]:checked').forEach(function(i){i.checked=false});
+ var b=$('#archSel');b.textContent=arch?'Unarchive selected':'Archive selected';b.dataset.action=arch?'allChats.unarchiveSelected':'allChats.archiveSelected';b.disabled=true;
+ applyFilter(fl)}
+function pastArchBar(nm,on){var bar=$('#archBar');if(bar)bar.remove();
+ if(on){$('#pastCol').insertAdjacentHTML('afterbegin','<div class="archbar" id="archBar"><span>▤</span><div><b>Archived chat</b> · hidden from Chats and search. Unarchive it to see it in the list again.</div><button data-action="chat.unarchive" class="btn sm" data-unarch>Unarchive</button></div>');$('#archBar').dataset.nm=nm}
+ TT.past=[nm,on?['Archived','']:['Done','ok']];if(CUR=='past')setTitle('past')}
+function archiveChat(nm,quiet){var open=curPast()==nm,mr=menuRow(nm),ar=allRow(nm),ln='';
+ if(mr){ln=mr.querySelector('em')?mr.querySelector('em').textContent:'';ARCHD[nm]={row:mr,par:mr.parentNode,nx:mr.nextSibling};mr.classList.remove('on');mr.remove()}
+ if(!ar){$('#acEmpty').insertAdjacentHTML('beforebegin','<div class="tr2 c" data-action="allChats.openChat" data-f="done mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b></b><em></em></span><span>—</span><span>AK</span><span>Today</span></div>');ar=$('#acEmpty').previousElementSibling;ar.querySelector('b').textContent=nm;ar.querySelector('em').textContent=ln}
+ if(!ar.dataset.arch){ar.dataset.arch='today';ACT--}
+ archCounts();if(CUR=='allchats')archTab(ARCHTAB);if(open)pastArchBar(nm,true);
+ if(!quiet)toast('Archived · find it in All chats › Archived')}
+function unarchiveChat(nm,quiet){var ar=allRow(nm);if(ar&&ar.dataset.arch){delete ar.dataset.arch;ACT++}
+ if(!menuRow(nm)){var d=ARCHD[nm];
+  if(d&&d.par.isConnected)d.par.insertBefore(d.row,d.nx&&d.nx.parentNode==d.par?d.nx:null);
+  else{var em=ar&&ar.querySelector('em');$('#todaySec').insertAdjacentHTML('afterend','<div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b></b><em></em></div></div>');var nr=$('#todaySec').nextElementSibling;nr.querySelector('b').textContent=nm;nr.querySelector('em').textContent=em?em.textContent.replace(/ · archived [^·]*$/,''):'';addDots()}
+  delete ARCHD[nm]}
+ archCounts();if(CUR=='allchats')archTab(ARCHTAB);if(curPast()==nm)pastArchBar(nm,false);
+ if(!quiet)toast('Unarchived · back in Chats')}
+function archSelected(){var un=ARCHTAB=='archived',ch=$$('#s-allchats input[type=checkbox]:checked');
+ ch.forEach(function(i){var nm=chatName(i.closest('.tr2'));if(un)unarchiveChat(nm,true);else archiveChat(nm,true)});
+ archTab(ARCHTAB);toast(un?ch.length+' unarchived · back in Chats':ch.length+' archived · find them under Archived')}
+function openArchived(r){var nm=chatName(r),em=r.querySelector('em');fillPast(nm,em?em.textContent:'');PASTRUN=false;go('past');pastArchBar(nm,true)}
+/* an archived row opens as a read-back chat with an Unarchive bar (runs before the row's own data-go / data-report) */
+document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;var r=t.closest('#s-allchats .tr2.c[data-arch]');if(!r||t.closest('input'))return;e.stopPropagation();openArchived(r)},true);
+document.addEventListener('click',function(e){var t=e.target,c;if(!t.closest)return;
+ if(t.closest('#mgTog')){setMg(!$('#mgBox').classList.contains('shut'),true);return}
+ if(t.closest('#archLink')){go('allchats','archived');return}
+ if((c=t.closest('[data-atab]'))){archTab(c.dataset.atab);try{history.replaceState(null,'','#s-allchats'+(c.dataset.atab=='archived'?'/archived':''))}catch(e2){}return}
+ if(t.closest('[data-unarch]')){closePops();unarchiveChat(curPast());return}
+ if(t.closest('[data-archcur]')){closePops();archiveChat(curPast());return}
+ /* header ⋯ on an open chat: Archive really archives it; an archived one offers Unarchive */
+ if(t.closest('#topMore')&&CUR=='past'&&curPast()){var it=$$('#topmenu .mi2').filter(function(x){return x.dataset.action=='chat.archive'})[0];if(!it)return;it.removeAttribute('data-tm');
+  if($('#archBar')){it.dataset.action='chat.unarchive';it.setAttribute('data-unarch','');it.querySelector('div').textContent='Unarchive'}else it.setAttribute('data-archcur','')}});
+archCounts();archTab(ARCHTAB);inboxBadge();
 </script>
 </body>
 </html>
