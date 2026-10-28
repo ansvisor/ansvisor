@@ -393,7 +393,7 @@ describe('validateAction', () => {
           cells: 10,
           visible: 10,
           mention_answers: 10,
-          mentioning_answers: 10,
+          named_answers: 10,
           positive_answers: after ? 6 : 2,
         },
         error: null,

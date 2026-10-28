@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 const tables = {};
@@ -68,7 +69,7 @@ describe('basketValues', () => {
     page_citations: 7,
     ga_connected: true,
     page_ai_sessions: 55,
-    mentioning_answers: 16,
+    named_answers: 16,
     positive_answers: 7,
   };
 
@@ -87,17 +88,50 @@ describe('basketValues', () => {
   });
 
   it('reads no sentiment while the window isn’t counted, or no answer named the brand', () => {
+    expect(basketValues({ ...raw, named_answers: null }, { pageCount: 1 }).positive_sentiment).toBe(
+      null,
+    );
+    expect(basketValues({ ...raw, named_answers: 0 }, { pageCount: 1 }).positive_sentiment).toBe(
+      null,
+    );
+  });
+
+  /** As Insights' Positive Sentiment card (00191): an answer only citing the brand is always neutral. */
+  it('reads sentiment over the answers naming the brand, never those only citing it', () => {
+    // 16 answers named or cited it, 10 named it, 4 of those positive: 40%, not 25%.
     expect(
-      basketValues({ ...raw, mentioning_answers: null }, { pageCount: 1 }).positive_sentiment,
-    ).toBe(null);
+      basketValues(
+        { ...raw, mentioning_answers: 16, named_answers: 10, positive_answers: 4 },
+        { pageCount: 1 },
+      ).positive_sentiment,
+    ).toBe(40);
+    // A window of cited-only answers has no sentiment to read.
     expect(
-      basketValues({ ...raw, mentioning_answers: 0 }, { pageCount: 1 }).positive_sentiment,
+      basketValues(
+        { ...raw, mentioning_answers: 16, named_answers: 0, positive_answers: 0 },
+        { pageCount: 1 },
+      ).positive_sentiment,
     ).toBe(null);
+  });
+
+  it('is fed the rollup’s answers naming the brand by 00373, not those naming or citing it', () => {
+    const sql = readFileSync(
+      new URL(
+        '../../../../supabase/migrations/00373_basket_positive_sentiment.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(sql).toMatch(/coalesce\(sum\(d\.mention_answers\), 0\) as named_answers/);
+    expect(sql).toMatch(/'named_answers', \(select case when unfilled = 0 then named_answers end/);
+    // Unfilled by the column it divides by.
+    expect(sql).toMatch(/filter \(where d\.mention_answers is null or d\.positive_count is null\)/);
+    expect(sql).not.toMatch(/sum\((d\.)?mentioning_answers\)/);
   });
 
   it('leaves unanswerable metrics unmeasured instead of zero', () => {
     const none = basketValues(
-      { ...raw, cells: 0, visible: 0, competitor_visible_total: 0, mentioning_answers: 0 },
+      { ...raw, cells: 0, visible: 0, competitor_visible_total: 0, named_answers: 0 },
       {
         pageCount: 0,
       },

@@ -41962,11 +41962,14 @@ notify pgrst, 'reload schema';
 -- (opportunity_basket_metrics, 00116), but the basket read mentions,
 -- visibility and citations only: an action sent to turn negative answers
 -- around was judged by how often the brand was named, not by how it was
--- spoken of. The basket now reads its prompts' answers naming the brand and
--- the positive ones among them, from the prompt-grain rollup (00130), as
--- Insights' Positive sentiment card counts them; the server turns them into
--- the positive share (basket-metrics.js). Null while a day of the window
--- isn't rewritten with them yet. Otherwise as 00116.
+-- spoken of. The basket now reads its prompts' answers naming the brand
+-- (the rollup's mention_answers, 00130) and the positive ones among them;
+-- the server turns them into the positive share (basket-metrics.js). That is
+-- the base Insights' Positive Sentiment card divides by since 00191: an
+-- answer that only cites the brand is always neutral, so counting it (the
+-- rollup's mentioning_answers, naming OR citing) would pull the share down.
+-- Null while a day of the window isn't rewritten with them yet. Otherwise
+-- as 00116.
 
 create or replace function public.opportunity_basket_metrics(
   p_brand_id uuid,
@@ -41986,12 +41989,14 @@ as $$
     select count(*) as cells,
            count(*) filter (where has_mention or has_citation) as visible,
            coalesce(sum(answer_count) filter (where has_mention), 0) as mention_answers,
-           -- Sentiment (00373): the answers naming the brand, and the positive
-           -- ones among them, as Insights' Positive sentiment card counts them.
-           coalesce(sum(mentioning_answers), 0) as mentioning_answers,
-           coalesce(sum(positive_count), 0) as positive_answers,
-           count(*) filter (where mentioning_answers is null or positive_count is null) as unfilled
-    from insights_prompt_daily
+           -- Sentiment (00373): the answers naming the brand (the rollup's
+           -- column, not the alias above; never the ones only citing it), and
+           -- the positive ones among them, as Insights' Positive Sentiment
+           -- card counts them (00191).
+           coalesce(sum(d.mention_answers), 0) as named_answers,
+           coalesce(sum(d.positive_count), 0) as positive_answers,
+           count(*) filter (where d.mention_answers is null or d.positive_count is null) as unfilled
+    from insights_prompt_daily d
     where brand_id = p_brand_id
       and day between p_from and p_to
       and prompt_id = any(p_prompt_ids)
@@ -42020,7 +42025,7 @@ as $$
     'mention_answers', (select mention_answers from cells),
     -- Null while a day of the window isn't rewritten with them yet (00130):
     -- a partial count would read as a change.
-    'mentioning_answers', (select case when unfilled = 0 then mentioning_answers end from cells),
+    'named_answers', (select case when unfilled = 0 then named_answers end from cells),
     'positive_answers', (select case when unfilled = 0 then positive_answers end from cells),
     'competitor_visible_total', (select coalesce(sum(visible), 0) from comp),
     'top_competitor_visible', (select coalesce(max(visible), 0) from comp),

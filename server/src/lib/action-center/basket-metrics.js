@@ -21,7 +21,8 @@ export const BASKET_KPIS = {
   citations: 'count',
   ai_referral_traffic: 'sessions',
   // The positive share of the answers naming the brand (learning D1, 00373),
-  // as Insights' Positive sentiment card reads it.
+  // as Insights' Positive Sentiment card reads it (00191): an answer only
+  // citing the brand isn't in it.
   positive_sentiment: 'percent',
 };
 
@@ -75,8 +76,8 @@ export function basketValues(raw, { pageCount }) {
     ai_referral_traffic: pageCount && raw.ga_connected ? Number(raw.page_ai_sessions) || 0 : null,
     // Null when no answer named the brand, or the window's sentiment isn't counted yet.
     positive_sentiment:
-      raw.mentioning_answers != null && Number(raw.mentioning_answers) > 0
-        ? round1(((Number(raw.positive_answers) || 0) / Number(raw.mentioning_answers)) * 100)
+      raw.named_answers != null && Number(raw.named_answers) > 0
+        ? round1(((Number(raw.positive_answers) || 0) / Number(raw.named_answers)) * 100)
         : null,
   };
 }
