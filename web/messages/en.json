@@ -2903,6 +2903,9 @@
       "alreadySentDescription": "AC-{number} is open for this page.",
       "failed": "Couldn't send to the Action Center",
       "nothingToFix": "This page passes its checks: nothing to send.",
+      "newerAudit": "This page has a newer audit",
+      "newerAuditDescription": "Send it from its latest report, so the action names the checks it fails now.",
+      "openLatest": "Open the latest report",
       "open": "Open"
     },
     "deleteConfirm": "This permanently deletes this audit and its results. This can't be undone.",

@@ -652,14 +652,17 @@ export async function getAuditHubExtras(brandId: string): Promise<AuditHubExtras
 /**
  * "Send to Action Center" on a Site Audit report (learning D2): the page and
  * the checks it fails as one Fix action. The server reads the audit again;
- * the same page sent again returns the action open for it. Returned, not
- * thrown: a thrown error's message is masked in production.
+ * the same page sent again returns the action open for it, and an older
+ * report of a page audited since is refused with its latest audit's id.
+ * Returned, not thrown: a thrown error's message is masked in production.
  */
 export async function sendAuditToActionCenter(
   brandId: string,
   auditId: string,
 ): Promise<
-  { actionId: string; actionNo: number; created: boolean } | { error: string; code?: string }
+  | { actionId: string; actionNo: number; created: boolean }
+  // newer_audit names the page's latest audit, to send from instead.
+  | { error: string; code?: string; latestAuditId?: string }
 > {
   const supabase = await createClient();
   const {
@@ -680,6 +683,7 @@ export async function sendAuditToActionCenter(
     return {
       error: body.details || body.error || `Server error: ${res.status}`,
       ...(typeof body.code === 'string' ? { code: body.code } : {}),
+      ...(typeof body.latestAuditId === 'string' ? { latestAuditId: body.latestAuditId } : {}),
     };
   }
   return res.json();

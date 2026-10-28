@@ -39,8 +39,17 @@ function table(name) {
       state.filters[col] = val;
       return chain;
     },
+    gt: (col, val) => {
+      state.filters[`${col}>`] = val;
+      return chain;
+    },
+    not: (col, op, val) => {
+      state.filters[`${col} not ${op}`] = val;
+      return chain;
+    },
     order: () => chain,
     limit: () => chain,
+    range: () => chain,
     maybeSingle: async () => result(),
     single: async () => result(),
     then: (resolve, reject) => Promise.resolve(result()).then(resolve, reject),
@@ -70,9 +79,16 @@ beforeEach(() => {
   db = {
     inserts: [],
     insertError: null,
+    newer: [],
+    newerRead: null,
     rows: {
-      site_audits: (f) =>
-        f.id === AUDIT && f.brand_id === 'b1'
+      site_audits: (f) => {
+        // The brand's completed audits after the sent one (newer_audit).
+        if (f.id === undefined) {
+          db.newerRead = f;
+          return db.newer;
+        }
+        return f.id === AUDIT && f.brand_id === 'b1'
           ? {
               id: AUDIT,
               brand_id: 'b1',
@@ -80,8 +96,10 @@ beforeEach(() => {
               final_url: URL_,
               status: 'completed',
               total_score: 0.42,
+              created_at: '2026-10-20T10:00:00Z',
             }
-          : null,
+          : null;
+      },
       audit_signal_results: () => [
         { signal_key: 'faq-schema', status: 'fail' },
         { signal_key: 'tables', status: 'warn' },
@@ -156,6 +174,38 @@ describe('sendAuditToActionCenter', () => {
       created: false,
     });
     expect(db.inserts).toEqual([]);
+  });
+
+  it('refuses an older report of a page audited since, naming its latest audit', async () => {
+    db.newer = [
+      // Another page, audited later still: not this page's.
+      { id: 'a-other', url: 'https://acme.example/blog/latte', final_url: null },
+      // The same page, read with www. and a trailing slash, as the Pages list groups it.
+      { id: 'a-new', url: 'http://www.acme.example/blog/espresso/', final_url: null },
+      { id: 'a-mid', url: URL_, final_url: URL_ },
+    ];
+    await expect(
+      sendAuditToActionCenter('b1', { auditId: AUDIT, userId: 'u1' }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'newer_audit',
+      extra: { latestAuditId: 'a-new' },
+    });
+    // Read within the brand: completed, scored, and after the sent one.
+    expect(db.newerRead).toMatchObject({
+      brand_id: 'b1',
+      status: 'completed',
+      'total_score not is': null,
+      'created_at>': '2026-10-20T10:00:00Z',
+    });
+    expect(db.inserts).toEqual([]);
+  });
+
+  it('sends a report when only other pages were audited since', async () => {
+    db.newer = [{ id: 'a-other', url: 'https://acme.example/blog/latte', final_url: null }];
+    expect(await sendAuditToActionCenter('b1', { auditId: AUDIT, userId: 'u1' })).toMatchObject({
+      created: true,
+    });
   });
 
   it("refuses another brand's audit, one not finished, and a page with nothing to fix", async () => {

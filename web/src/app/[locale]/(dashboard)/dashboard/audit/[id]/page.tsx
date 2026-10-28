@@ -138,6 +138,20 @@ export default function AuditDetailPage() {
     try {
       const result = await sendAuditToActionCenter(audit.brandId, audit.id);
       if ('error' in result) {
+        // An older report of a page audited since: send from its latest report instead.
+        const latestAuditId = result.code === 'newer_audit' ? result.latestAuditId : undefined;
+        if (latestAuditId) {
+          toast.error(t('sendToAction.newerAudit'), {
+            id: toastId,
+            description: t('sendToAction.newerAuditDescription'),
+            duration: 10_000,
+            action: {
+              label: t('sendToAction.openLatest'),
+              onClick: () => router.push(`/dashboard/audit/${latestAuditId}`),
+            },
+          });
+          return;
+        }
         toast.error(t('sendToAction.failed'), {
           id: toastId,
           description:

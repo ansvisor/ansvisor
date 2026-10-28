@@ -323,7 +323,8 @@ const auditPageSchema = z.object({
  *
  * "Send to Action Center" on a Site Audit report (learning D2): the page and
  * the checks it fails as one Fix action. Sending the page again returns the
- * action already open for it.
+ * action already open for it; sending an older report of a page audited since
+ * is refused (409 newer_audit, with latestAuditId).
  */
 router.post('/audits', async (req, res) => {
   try {
@@ -343,6 +344,8 @@ router.post('/audits', async (req, res) => {
       error: 'Failed to send to the Action Center',
       details: error.message,
       ...(error.code ? { code: error.code } : {}),
+      // newer_audit: the page's latest audit, to open instead.
+      ...(error.extra ?? {}),
     });
   }
 });
