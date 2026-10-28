@@ -110,6 +110,7 @@
         "failed": "Couldn't check the code. Try again."
       }
     },
+    "noPlan": "No active plan",
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
       "editPrompts": "Editing prompts needs a plan",
@@ -6217,7 +6218,8 @@
       "plan": "{plan} plan",
       "resets": "Resets {date}",
       "upgrade": "Upgrade plan",
-      "tooltip": "Every new opportunity counts once, whether Ansvisor suggested it or you asked for it; dismissed and deleted ones still count, merged duplicates don't. Generating a brief counts separately. Unused allowance doesn't carry over. Both reset on {date}, when your subscription renews."
+      "tooltip": "Every new opportunity counts once, whether Ansvisor suggested it or you asked for it; dismissed and deleted ones still count, merged duplicates don't. Generating a brief counts separately. Unused allowance doesn't carry over.",
+      "tooltipResets": "Both reset on {date}, when your subscription renews."
     },
     "kpi": {
       "total": "Total Opportunities",
@@ -8957,7 +8959,9 @@
       "back": "Back",
       "next": "Next",
       "finish": "Finish Setup",
-      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings."
+      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings.",
+      "suggestionsUsedUp": "Setup suggestions are used up for today. Try again tomorrow, or add your own.",
+      "promptSuggestionsUsedUp": "Setup suggestions are used up for today. Add your own prompts to each topic below to continue."
     },
     "settings": {
       "facts": {

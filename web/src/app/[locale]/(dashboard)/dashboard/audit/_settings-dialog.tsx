@@ -86,8 +86,9 @@ export function AuditSettingsDialog({
   const t = useTranslations('audit.settings');
   // A read-only workspace (plan not active): the settings open to read; Save
   // and Unpin open the upgrade dialog instead.
-  const { guard } = useUpgradeGate();
+  const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
   const [settings, setSettings] = useState<AuditSettings | null>(null);
   const [autoAudit, setAutoAudit] = useState(false);
   const [emailAfterRun, setEmailAfterRun] = useState(false);
@@ -165,17 +166,21 @@ export function AuditSettingsDialog({
   };
 
   const auto = settings?.autoAudit;
+  // Read-only (no active plan): the month's audits read 0, so it says there's
+  // no plan, not "all 0 audits a month are yours".
   const autoLine = !auto
     ? null
-    : auto.limit === -1
-      ? t('autoAuditUnlimited', { perRun: auto.perRun })
-      : autoAudit
-        ? t('autoAuditOn', {
-            perRun: auto.perRun,
-            total: formatNumber(auto.perRun * 5),
-            limit: formatNumber(auto.limit),
-          })
-        : t('autoAuditOff', { limit: formatNumber(auto.limit) });
+    : isLocked
+      ? tReadOnly('noPlan')
+      : auto.limit === -1
+        ? t('autoAuditUnlimited', { perRun: auto.perRun })
+        : autoAudit
+          ? t('autoAuditOn', {
+              perRun: auto.perRun,
+              total: formatNumber(auto.perRun * 5),
+              limit: formatNumber(auto.limit),
+            })
+          : t('autoAuditOff', { limit: formatNumber(auto.limit) });
 
   const timing: string[] = [];
   if (auto && autoAudit && schedule && now) {

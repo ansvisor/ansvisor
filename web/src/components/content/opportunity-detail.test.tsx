@@ -172,3 +172,28 @@ describe('the opportunity panel on a read-only workspace', () => {
     expect(openUpgrade).not.toHaveBeenCalled();
   });
 });
+
+describe('the brief quota without an active plan', () => {
+  it('says "No active plan", not the limit, and Generate opens the upgrade dialog', async () => {
+    // The server reads 0 of 0 with `noPlan` once the plan has ended.
+    content.getBriefQuota.mockResolvedValue({ used: 4, limit: 0, remaining: 0, noPlan: true });
+    await render(true);
+    expect(container.textContent).toContain('No active plan');
+    expect(container.textContent).not.toContain('Monthly Brief Limit Reached');
+    expect(container.textContent).not.toContain('0/0');
+    const generate = buttonNamed('Generate Content Brief');
+    expect(generate.disabled).toBe(false);
+    expect(buttonNamed('Generate Brief').disabled).toBe(false);
+    await act(async () => generate.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Generating a brief needs a plan');
+    expect(content.generateBrief).not.toHaveBeenCalled();
+  });
+
+  it('still says the limit is reached once an active plan is used up', async () => {
+    content.getBriefQuota.mockResolvedValue({ used: 10, limit: 10, remaining: 0 });
+    await render(false);
+    expect(container.textContent).toContain('Monthly Brief Limit Reached');
+    expect(container.textContent).not.toContain('No active plan');
+    expect(buttonNamed('Generate Brief').disabled).toBe(true);
+  });
+});

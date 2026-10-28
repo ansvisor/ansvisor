@@ -7,6 +7,7 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { getAuditQuota, runAuditsBulk, type AuditQuota } from '@/lib/actions/audits';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import { generateOpportunitiesOnDemand, getGenerationJobStatus } from '@/lib/actions/content';
 import { suggestForPage } from '@/lib/content-job';
 import {
@@ -205,13 +206,16 @@ export function usePageActions(brandId: string, dateWindow: TrafficDateWindow) {
 /**
  * Why a bulk audit of `count` pages can't start, or null when it can: the
  * month's audits are spent, or fewer are left than pages (the server starts
- * all of them or none). An unknown or unlimited quota never blocks.
+ * all of them or none). An unknown or unlimited quota never blocks, nor one
+ * read without an active plan (0 of 0, or a read-only workspace: `isLocked`):
+ * Audit opens the plan dialog.
  */
 export function auditBlock(
   quota: AuditQuota | null,
   count: number,
+  isLocked = false,
 ): { reason: 'noneLeft' } | { reason: 'overQuota'; remaining: number } | null {
-  if (!quota || quota.limit === -1) return null;
+  if (!quota || quota.limit === -1 || isNoPlan(quota, isLocked)) return null;
   const remaining = Math.max(0, quota.remaining);
   if (remaining === 0) return { reason: 'noneLeft' };
   if (count > remaining) return { reason: 'overQuota', remaining };

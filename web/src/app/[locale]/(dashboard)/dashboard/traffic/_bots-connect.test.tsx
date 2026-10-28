@@ -4,6 +4,8 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { PlanProvider } from '@/components/providers/plan-provider';
+import type { PlanId } from '@/config/plans';
 import type { BotConnections, NewBotConnection } from '@/lib/actions/ai-bots';
 
 /**
@@ -67,17 +69,27 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   document.body.innerHTML = '';
+  vi.unstubAllEnvs();
 });
 
 const openUpgrade = vi.fn();
-async function render(canConnect = true, isLocked = false) {
+/** `planId`: on Ansvisor Cloud, the plan the workspace is (or was) on. */
+async function render(canConnect = true, isLocked = false, planId?: PlanId) {
+  const source = <BotsSource brandId="b1" canConnect={canConnect} />;
+  if (planId) vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <UpgradeDialogContext.Provider
           value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
         >
-          <BotsSource brandId="b1" canConnect={canConnect} />
+          {planId ? (
+            <PlanProvider planId={planId} subscriptionActive={!isLocked}>
+              {source}
+            </PlanProvider>
+          ) : (
+            source
+          )}
         </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
@@ -132,6 +144,40 @@ describe('BotsSource', () => {
     expect(page()).toContain('Authorization: Bearer abot_s3cret');
     expect(page()).toContain('Format: JSON. Log sources: static, lambda.');
     expect(getBotConnections).toHaveBeenCalledTimes(2);
+  });
+
+  // The server reads caps of 0 without an active plan (noPlan): the plan it was on decides.
+  it('shows a workspace whose Growth plan ended its own connections and use, not Upgrade', async () => {
+    openUpgrade.mockReset();
+    getBotConnections.mockResolvedValue(
+      info({
+        connections: [
+          { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: hoursAgo(1) },
+        ],
+        usage: { ...info().usage, stored: 1_200, cap: 0, rawCap: 0, noPlan: true },
+      }),
+    );
+    await render(true, true, 'growth');
+    expect(card()).toContain('Cloudflare / Vercel · last event 1h ago');
+    expect(card()).not.toContain('Growth+');
+    expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
+    await act(async () => button('Manage')!.click());
+    expect(page()).toContain('This month: 1,200 detailed rows. · No active plan');
+    expect(page()).not.toContain('of 0');
+    await act(async () => button('Create connection')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Connecting bot logs needs a plan');
+    expect(createBotConnection).not.toHaveBeenCalled();
+  });
+
+  it('keeps Upgrade for a workspace whose Starter plan ended', async () => {
+    getBotConnections.mockResolvedValue(
+      info({ usage: { ...info().usage, cap: 0, rawCap: 0, noPlan: true } }),
+    );
+    await render(true, true, 'starter');
+    expect(card()).toContain('Cloudflare / Vercel · Growth+');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      '/dashboard/settings?tab=billing',
+    );
   });
 
   it('makes no connection on a read-only workspace: Create connection opens the upgrade dialog', async () => {

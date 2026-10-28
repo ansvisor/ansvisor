@@ -104,6 +104,7 @@ import {
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { ContentUsageCard } from '@/components/content/content-usage-card';
 import { hasContentQuota, onDemandMax, type ContentUsage } from '@/lib/content-usage';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import { suggestedBounds, suggestedDate, type SuggestedRange } from '@/lib/suggested-date';
 import {
   DEFAULT_OPPORTUNITY_SORT,
@@ -870,7 +871,10 @@ export default function ContentPage() {
   });
 
   const requestMax = contentUsage ? onDemandMax(contentUsage) : FALLBACK_REQUEST_MAX;
-  const limitReached = hasContentQuota(contentUsage) && requestMax === 0;
+  // Without an active plan the quota reads 0 of 0: New stays clickable, and
+  // opens the plan dialog.
+  const limitReached =
+    hasContentQuota(contentUsage) && !isNoPlan(contentUsage, isLocked) && requestMax === 0;
   const resetsOn = contentUsage?.periodEnd
     ? new Date(contentUsage.periodEnd).toLocaleDateString(locale, {
         month: 'short',

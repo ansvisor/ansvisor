@@ -33,10 +33,14 @@ vi.mock('@/lib/actions/tracking', () => ({
   getBrandFilterOptions: vi.fn(async () => ({ regions: [] })),
 }));
 vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
+const contentUsage = vi.hoisted(() => ({ value: null as object | null }));
+const getOpenSuggestionForPrompt = vi.hoisted(() =>
+  vi.fn(async (): Promise<string | null> => null),
+);
 vi.mock('@/lib/actions/content', () => ({
-  getContentUsage: vi.fn(async () => null),
+  getContentUsage: vi.fn(async () => contentUsage.value),
   getGenerationJobStatus: vi.fn(),
-  getOpenSuggestionForPrompt: vi.fn(async () => null),
+  getOpenSuggestionForPrompt,
   suggestContentForPrompt: vi.fn(),
 }));
 vi.mock('@/lib/actions/content-drafts', () => ({ getDraftForPrompt: vi.fn(async () => null) }));
@@ -55,14 +59,16 @@ vi.mock('@/stores/use-brand-store', () => ({
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
 }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+// The route names the tab: Tracked unless a test opens Insights.
+const nav = vi.hoisted(() => ({ pathname: '/dashboard/prompts/tracked', push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: ReactNode }) => (
     <a href={href} {...props}>
       {children}
     </a>
   ),
-  usePathname: () => '/dashboard/prompts/tracked',
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => nav.pathname,
+  useRouter: () => ({ push: nav.push, replace: vi.fn() }),
 }));
 const toast = vi.hoisted(() =>
   Object.assign(vi.fn(), {
@@ -122,6 +128,9 @@ const dialog = () => document.querySelector('[role="dialog"]');
 
 beforeEach(() => {
   vi.clearAllMocks();
+  nav.pathname = '/dashboard/prompts/tracked';
+  contentUsage.value = null;
+  getOpenSuggestionForPrompt.mockResolvedValue(null);
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({ ok: false, json: async () => ({}) })),
@@ -235,5 +244,105 @@ describe('volumes on a read-only workspace', () => {
     expect(toast.warning).toHaveBeenCalledWith(
       'Volume data is temporarily unavailable — showing prompts without it.',
     );
+  });
+});
+
+describe('the volume quota without an active plan', () => {
+  // The server reads 0 of 0 with `noPlan` once the plan has ended.
+  const noPlan = { used: 3, limit: 0, remaining: 0, noPlan: true };
+  const pageData = (quota: object | null) => ({
+    volumes: [],
+    quota,
+    promptSets: [{ prompts: [prompt] }],
+    visibility: {},
+    positions: {},
+  });
+  const reds = () => container.querySelectorAll('.text-red-500');
+
+  it('offers Analyze on Tracked, not "limit is reached", and it opens the upgrade dialog', async () => {
+    actions.getPromptsPageData.mockResolvedValue(pageData(noPlan));
+    await render(true);
+    expect(container.textContent).toContain('Run volume analysis to fill in');
+    expect(container.textContent).not.toContain('limit is reached');
+    const analyze = button('Analyze 1 prompt')!;
+    expect(analyze.disabled).toBe(false);
+    await act(async () => analyze.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Analyzing prompts needs a plan');
+    expect(volumes.startPromptVolumeAnalysis).not.toHaveBeenCalled();
+  });
+
+  it("keeps the row menu's Suggest content clickable at a content quota of 0 of 0: it opens the upgrade dialog", async () => {
+    contentUsage.value = {
+      plan: 'growth',
+      planName: 'Growth',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      opportunities: { used: 2, limit: 0, remaining: 0, perRequest: 0, noPlan: true },
+      briefs: { used: 0, limit: 0, remaining: 0, noPlan: true },
+      noPlan: true,
+    };
+    await render(true);
+    const trigger = container.querySelector<HTMLElement>(
+      `[aria-label="Actions for ${prompt.text}"]`,
+    )!;
+    await act(async () => trigger.click());
+    const suggest = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((el) =>
+      el.textContent?.startsWith('Suggest content'),
+    )!;
+    expect(suggest.textContent).toBe('Suggest content');
+    expect(suggest.hasAttribute('data-disabled')).toBe(false);
+    await act(async () => suggest.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Suggesting content needs a plan');
+  });
+
+  it("opens the prompt's content suggestion from the row menu, which costs nothing", async () => {
+    contentUsage.value = {
+      plan: 'growth',
+      planName: 'Growth',
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      opportunities: { used: 2, limit: 0, remaining: 0, perRequest: 0, noPlan: true },
+      briefs: { used: 0, limit: 0, remaining: 0, noPlan: true },
+      noPlan: true,
+    };
+    getOpenSuggestionForPrompt.mockResolvedValue('opp-1');
+    await render(true);
+    const trigger = container.querySelector<HTMLElement>(
+      `[aria-label="Actions for ${prompt.text}"]`,
+    )!;
+    await act(async () => trigger.click());
+    expect(getOpenSuggestionForPrompt).toHaveBeenCalledWith('p1');
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    const open = items.find((el) => el.textContent === 'Open content suggestion')!;
+    expect(open).toBeDefined();
+    expect(items.some((el) => el.textContent?.startsWith('Suggest content'))).toBe(false);
+    await act(async () => open.click());
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/content?opportunity=opp-1');
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('says "No active plan" on Insights, not a red 0/0 or "limit reached"', async () => {
+    nav.pathname = '/dashboard/prompts/insights';
+    actions.getPromptsPageData.mockResolvedValue(pageData(noPlan));
+    await render(true);
+    expect(container.textContent).toContain('No active plan');
+    expect(container.textContent).not.toContain('0/0');
+    expect(container.textContent).not.toContain('Monthly analysis limit reached');
+    expect(reds()).toHaveLength(0);
+    const analyze = button('Analyze Volumes')!;
+    expect(analyze.disabled).toBe(false);
+    await act(async () => analyze.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Analyzing prompts needs a plan');
+  });
+
+  it('still says the limit is reached, in red, once an active plan is used up', async () => {
+    nav.pathname = '/dashboard/prompts/insights';
+    actions.getPromptsPageData.mockResolvedValue(pageData({ used: 10, limit: 10, remaining: 0 }));
+    await render(false);
+    expect(container.textContent).toContain('0/10 analyses left');
+    expect(container.textContent).toContain('Monthly analysis limit reached');
+    expect(container.textContent).not.toContain('No active plan');
+    expect(reds().length).toBeGreaterThan(0);
+    expect(button('Analyze Volumes')!.disabled).toBe(true);
   });
 });

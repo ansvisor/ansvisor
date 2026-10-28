@@ -34,6 +34,7 @@ import {
 import { SourceCard } from './_source-card';
 import { getBotConnections } from '@/lib/traffic-reads';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { usePlanContext } from '@/components/providers/plan-provider';
 
 const KINDS: BotConnectionKind[] = ['cloudflare_worker', 'cloudflare_logpush', 'vercel_drain'];
 
@@ -163,6 +164,7 @@ export function BotsDialog({
   // upgrade dialog instead; revoking one stays open (it ends an access).
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
 
   const close = (next: boolean) => {
     if (!next) {
@@ -280,12 +282,14 @@ export function BotsDialog({
                   ))}
                 </ul>
                 <p className="text-xs text-muted-foreground">
-                  {usage.cap < 0
+                  {/* Without an active plan the cap reads 0: the month's rows, not "of 0". */}
+                  {usage.cap < 0 || usage.noPlan
                     ? t('usageNoCap', { stored: formatNumber(usage.stored), count: usage.stored })
                     : t('usage', {
                         stored: formatNumber(usage.stored),
                         cap: formatNumber(usage.cap),
                       })}
+                  {usage.noPlan && ` · ${tReadOnly('noPlan')}`}
                   {pausedUntil && ` ${t('paused', { day: shortDay(pausedUntil) })}`}
                 </p>
                 {/* Log senders' records count against their own cap (§6.3). */}
@@ -382,6 +386,9 @@ export function BotsSource({
     failed: boolean;
   } | null>(null);
   const [open, setOpen] = useState(false);
+  // Without an active plan the caps read 0: the plan it was on decides the lock.
+  const { isLocked } = useUpgradeGate();
+  const { planId } = usePlanContext();
 
   const load = useCallback(() => {
     const done = (next: BotConnections | null) =>
@@ -412,7 +419,7 @@ export function BotsSource({
     );
   }
 
-  const state = botsCardState(info);
+  const state = botsCardState(info, { isLocked, planId });
   const button = (label: string, primary: boolean) => (
     <Button
       size="sm"

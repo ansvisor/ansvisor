@@ -127,6 +127,35 @@ describe('SiteAuditPage Run audit', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  // The server reads 0 of 0 without an active plan (noPlan): not "used up".
+  it('keeps Run Audit clickable without an active plan, with no red 0/0: it opens the upgrade dialog', async () => {
+    audits.getAuditHub.mockResolvedValue({
+      pages: { pages: [], total: 0, primaryHost: 'acme.com' },
+      quota: { used: 12, limit: 0, remaining: 0, noPlan: true },
+      trend: null,
+      overview: null,
+    });
+    await render(true);
+    expect(runButton().disabled).toBe(false);
+    expect(container.textContent).not.toContain('0/0');
+    expect(container.querySelector('.text-destructive')).toBeNull();
+    await act(async () => runButton().click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Running an audit needs a plan');
+    expect(audits.runAudit).not.toHaveBeenCalled();
+  });
+
+  it('still keeps Run Audit off with the red count once an active plan is used up', async () => {
+    audits.getAuditHub.mockResolvedValue({
+      pages: { pages: [], total: 0, primaryHost: 'acme.com' },
+      quota: { used: 10, limit: 10, remaining: 0 },
+      trend: null,
+      overview: null,
+    });
+    await render(false);
+    expect(runButton().disabled).toBe(true);
+    expect(container.querySelector('.text-destructive')?.textContent).toContain('0/10');
+  });
+
   it('starts an audit on the button on an active plan, and opens it', async () => {
     await render(false);
     await act(async () => runButton().click());

@@ -175,6 +175,16 @@ describe('AuditSettingsDialog', () => {
     expect(actions.setOpportunityPrefs).not.toHaveBeenCalled();
   });
 
+  // The server reads the month's audits as 0 once the plan has ended.
+  it('says "No active plan" on a read-only workspace, not "all 0 audits a month are yours"', async () => {
+    actions.getAuditSettings.mockResolvedValue(
+      settings({ autoAudit: { enabled: false, setting: null, perRun: 5, limit: 0 } }),
+    );
+    await render(true, undefined, true);
+    expect(dialog().textContent).toContain('No active plan');
+    expect(dialog().textContent).not.toContain('audits a month are yours');
+  });
+
   it("shows the server's message when a pattern is refused", async () => {
     actions.saveAuditSettings.mockRejectedValue(
       new Error('"careers" isn\'t a page path. Start it with /, as in /legal/*.'),

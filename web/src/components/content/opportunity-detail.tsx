@@ -71,6 +71,7 @@ import { getOpportunityDrafts } from '@/lib/actions/content-drafts';
 import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-plan';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { OpportunityActions } from '@/components/content/opportunity-actions';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
@@ -159,8 +160,9 @@ export function OpportunityDetail({
   const locale = useLocale();
   // A read-only workspace (plan not active): every action here opens the
   // upgrade dialog instead; Copy, Export and Open draft stay open.
-  const { guard } = useUpgradeGate();
+  const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -444,7 +446,10 @@ export function OpportunityDetail({
   const primaryType = assetTypeLabel(sd.assets?.[0]?.type);
   const canSendToActionCenter = !['dismissed', 'archived', 'done'].includes(opportunity.status);
   const quotaLimited = quota !== null && quota.limit !== -1;
-  const quotaExhausted = quotaLimited && quota.remaining <= 0;
+  // Without an active plan the quota reads 0 of 0: not used up. Generate
+  // stays clickable, and opens the plan dialog.
+  const noPlan = isNoPlan(quota, isLocked);
+  const quotaExhausted = quotaLimited && !noPlan && quota.remaining <= 0;
   const actionId = sd.actions?.all ?? Object.values(sd.actions ?? {})[0];
   const canSendToWorkflow = !['dismissed', 'archived'].includes(opportunity.status);
 
@@ -908,7 +913,9 @@ export function OpportunityDetail({
                   </Button>
                   {quotaLimited && (
                     <p className="text-xs text-muted-foreground mt-3 tabular-nums">
-                      {quota.remaining}/{quota.limit} briefs remaining this billing period
+                      {noPlan
+                        ? tReadOnly('noPlan')
+                        : `${quota.remaining}/${quota.limit} briefs remaining this billing period`}
                     </p>
                   )}
                 </>

@@ -27,6 +27,7 @@ import { qualityPhase } from '@/lib/content/quality';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import {
   runAudit,
   runAuditsBulk,
@@ -97,7 +98,7 @@ export default function SiteAuditPage() {
   // A read-only workspace (plan not active): Run audit, the bulk bars' Audit,
   // Pin, Exclude and Restore, and deleting a run open the upgrade dialog
   // instead; the settings open to read, and their Save asks too.
-  const { guard } = useUpgradeGate();
+  const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
 
   // Prefill the URL with the active brand's primary domain (read once at init).
@@ -234,7 +235,10 @@ export default function SiteAuditPage() {
     };
   }, [groupByTemplate, activeBrandId, refreshKey, t]);
 
-  const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
+  // Without an active plan the quota reads 0 of 0: not used up. Run audit
+  // stays clickable, and opens the plan dialog.
+  const quotaExhausted =
+    quota !== null && !isNoPlan(quota, isLocked) && quota.limit !== -1 && quota.remaining <= 0;
 
   // Trend points within the selected range (oldest → newest).
   const rangePoints = useMemo(() => {

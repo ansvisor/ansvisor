@@ -219,6 +219,61 @@ describe('Content Opportunities on a read-only workspace', () => {
   });
 });
 
+describe('the usage card and New without an active plan', () => {
+  // The server reads limits of 0 and `noPlan` once the plan has ended.
+  const usage = (over: Record<string, unknown> = {}) => ({
+    plan: 'growth',
+    planName: 'Growth',
+    periodStart: '2026-10-01T00:00:00.000Z',
+    periodEnd: '2026-11-01T00:00:00.000Z',
+    opportunities: { used: 2, limit: 0, remaining: 0, perRequest: 0, noPlan: true },
+    briefs: { used: 4, limit: 0, remaining: 0, noPlan: true },
+    noPlan: true,
+    ...over,
+  });
+
+  it('says "No active plan", not "Limit reached" or the old plan, and New opens the plan dialog', async () => {
+    content.getContentUsage.mockResolvedValue(usage());
+    await render(true);
+    expect(container.textContent).toContain('No active plan');
+    expect(container.textContent).not.toContain('Limit reached');
+    expect(container.textContent).not.toContain('Growth plan');
+    // The usage card: the counts used, no red bar or line.
+    const card = [...container.querySelectorAll('[data-slot="card"]')].find((el) =>
+      el.textContent?.includes('This billing period'),
+    )!;
+    expect(card.textContent).toContain('New opportunities2');
+    expect(card.querySelector('.text-red-600, .bg-red-500')).toBeNull();
+    // Nothing renews without a plan: the hint says what counts, not when it resets.
+    const hint = card.querySelector('[title]')!.getAttribute('title');
+    expect(hint).toContain('Every new opportunity counts once');
+    expect(hint).not.toContain('when your subscription renews');
+    expect(buttonNamed('New').disabled).toBe(false);
+    await act(async () => buttonNamed('New').click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Generating opportunities needs a plan');
+  });
+
+  it('still says "Limit reached" with the plan, and keeps New off, once an active plan is used up', async () => {
+    content.getContentUsage.mockResolvedValue({
+      ...usage(),
+      noPlan: undefined,
+      opportunities: { used: 50, limit: 50, remaining: 0, perRequest: 5 },
+      briefs: { used: 4, limit: 50, remaining: 46 },
+    });
+    await render(false);
+    expect(container.textContent).toContain('Limit reached');
+    expect(container.textContent).toContain('Growth plan');
+    expect(container.textContent).not.toContain('No active plan');
+    const card = [...container.querySelectorAll('[data-slot="card"]')].find((el) =>
+      el.textContent?.includes('This billing period'),
+    )!;
+    expect(card.querySelector('[title]')!.getAttribute('title')).toContain(
+      "Unused allowance doesn't carry over. Both reset on Nov 1, when your subscription renews.",
+    );
+    expect(buttonNamed('New').disabled).toBe(true);
+  });
+});
+
 describe('Content Opportunities on an active plan', () => {
   it('runs the actions', async () => {
     await render(false);
