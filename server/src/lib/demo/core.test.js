@@ -298,6 +298,7 @@ describe('core.refresh', () => {
     // The demo's month of answer terms in one call.
     expect(rollups.refreshMentionsDaily).toHaveBeenCalledWith(BRAND_ID, first, '2026-10-28', {
       termDays: 31,
+      together: true,
     });
     expect(rollups.refreshPerceptionSnapshots).toHaveBeenCalledWith(BRAND_ID);
     // A first build reads nothing back.

@@ -65,6 +65,36 @@ describe('refreshMentionsDaily', () => {
     ]);
   });
 
+  it('refreshes the rollups beside the terms when asked', async () => {
+    const started = [];
+    let finishRollups = () => {};
+    rpc.mockImplementation((fn) => {
+      started.push(fn);
+      if (fn === 'refresh_mentions_daily') {
+        return new Promise((resolve) => (finishRollups = () => resolve({ error: null })));
+      }
+      return Promise.resolve({ error: null });
+    });
+    const done = refreshMentionsDaily('brand-1', '2026-10-01', '2026-10-17', {
+      termDays: 31,
+      together: true,
+    });
+    await Promise.resolve();
+    // The terms started without waiting for the rollups.
+    expect(started).toEqual(['refresh_mentions_daily', 'refresh_mention_terms']);
+    finishRollups();
+    await expect(done).resolves.toBe(true);
+
+    rpc
+      .mockReset()
+      .mockImplementation(async (fn) =>
+        fn === 'refresh_mention_terms' ? { error: { message: 'x' } } : { error: null },
+      );
+    await expect(
+      refreshMentionsDaily('brand-1', '2026-10-17', '2026-10-17', { together: true }),
+    ).resolves.toBe(false);
+  });
+
   // Derived state: a failed refresh costs freshness until the next sweep and
   // must never throw into a tracking run's finalize path.
   it('reports failure without throwing', async () => {
