@@ -8,6 +8,7 @@ import {
   agentStateOf,
   contentEditorPath,
   draftsCreatedIn,
+  draftsLastSent,
   draftsInTab,
   isPageType,
   libraryTabCounts,
@@ -54,6 +55,27 @@ describe('the Library’s Created filter', () => {
     expect(ids('7d')).toEqual(['today', 'week']);
     expect(ids('30d')).toEqual(['today', 'week', 'month']);
     expect(ids('90d')).toEqual(['today', 'week', 'month']);
+  });
+});
+
+describe('the Library’s Last send filter (#1331)', () => {
+  const list = ['going', 'sent', 'failed', 'live', 'never'].map((id) => draft(id, 'draft'));
+  const sends = new Map([
+    ['going', { status: 'queued' }],
+    ['sent', { status: 'sent' }],
+    ['failed', { status: 'failed' }],
+    ['live', { status: 'published' }],
+  ]);
+  const ids = (filter: Parameters<typeof draftsLastSent>[2]) =>
+    draftsLastSent(list, sends, filter).map((d) => d.id);
+
+  it('keeps the drafts whose last send is as picked, or never sent', () => {
+    expect(ids('all')).toEqual(['going', 'sent', 'failed', 'live', 'never']);
+    expect(ids('never')).toEqual(['never']);
+    expect(ids('queued')).toEqual(['going']);
+    expect(ids('sent')).toEqual(['sent']);
+    expect(ids('failed')).toEqual(['failed']);
+    expect(ids('published')).toEqual(['live']);
   });
 });
 

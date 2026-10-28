@@ -390,12 +390,16 @@ const reading = new Map();
  * (site_trust.scraped_at), whoever asks and however often: a read within the
  * day keeps what that one showed.
  *
- * @returns {Promise<{ checks: object, score: number, complete: boolean, checkedAt: string }>}
+ * `keptOnly` (an organization whose plan has ended) answers the kept read
+ * however old, and null when none is kept: the site is never read for it.
+ *
+ * @returns {Promise<{ checks: object, score: number, complete: boolean, checkedAt: string } | null>}
  */
 export async function readSiteTrust(
   brandId,
   {
     refresh = false,
+    keptOnly = false,
     db = supabaseAdmin,
     fetcher = fetchPage,
     scraper = process.env.SCRAPEDO_API_KEY ? scrapeHome : null,
@@ -408,17 +412,17 @@ export async function readSiteTrust(
     .eq('brand_id', brandId)
     .maybeSingle();
   if (error) throw new Error(error.message);
+  const keptRead = kept && {
+    checks: kept.checks,
+    score: kept.score,
+    complete: kept.complete !== false,
+    checkedAt: kept.checked_at,
+  };
+  if (keptOnly) return keptRead || null;
   if (kept) {
     const age = now - Date.parse(kept.checked_at);
     const holds = refresh || kept.complete === false ? RECHECK_MS : SITE_TRUST_TTL_MS;
-    if (age < holds) {
-      return {
-        checks: kept.checks,
-        score: kept.score,
-        complete: kept.complete !== false,
-        checkedAt: kept.checked_at,
-      };
-    }
+    if (age < holds) return keptRead;
   }
   let pending = reading.get(brandId);
   if (!pending) {

@@ -7,7 +7,7 @@ import { markGettingStartedPageOpened } from '@/lib/actions/getting-started';
 import { pageOpenedStep } from '@/lib/getting-started/steps';
 
 /**
- * Getting started's explore steps ("See where you stand in Visibility" and
+ * Getting started's explore steps ("See where you stand in Brand Visibility" and
  * the like) are done when their page is opened. Mounted once in the
  * dashboard layout, so it counts the page however it was reached: the step's
  * button, the sidebar or a link. Each brand and step is sent until the
