@@ -7,7 +7,9 @@
  *
  *   impact          the action's impact grade;
  *   demand          how much the affected prompts, queries or pages are
- *                   searched or visited — the most demanded few of them;
+ *                   searched or visited — the most demanded few of them —
+ *                   at least what a prompt's measured demand level says
+ *                   (PROMPT-014: High, Medium);
  *   severity        how bad the change is: lost before dropping, dropping
  *                   before slipping, slipping before a gap;
  *   business value  how commercial the searches are (intent), or what the
@@ -17,6 +19,10 @@
  *   recoverability  whether the brand held this before and lost it, which is
  *                   nearer to hand than winning it from nothing;
  *   recency         how new the latest evidence is, halving every few days.
+ *
+ * And, on top, past success: a kind of action that has improved results at
+ * this brand before sits a little higher, one that rarely has a little
+ * lower (learning B4).
  *
  * Pure: the caller reads the signals and the prompts' demand and passes them
  * in. Alongside the score it returns the facts it rests on, from which the
@@ -178,6 +184,25 @@ const PAGE_VALUE = { revenue: 1, transactions: 0.95, key_events: 0.85, engagemen
 
 /** Commercial enough to say so in "Why this priority?". */
 const COMMERCIAL = 0.85;
+
+const LEVEL_RANK = { low: 1, medium: 2, high: 3 };
+
+/**
+ * The highest measured demand level (PROMPT-014) among the prompts the
+ * evidence names, and the demand it brings the action up to: High and
+ * Medium raise it (`realDemandHigh`, `realDemandMedium`), Low leaves it.
+ * Null without a level read.
+ */
+function realDemandOf(payloads, prompts) {
+  let level = null;
+  for (const id of promptIdsOf(payloads)) {
+    const known = prompts.get(id)?.level;
+    if (LEVEL_RANK[known] && (!level || LEVEL_RANK[known] > LEVEL_RANK[level])) level = known;
+  }
+  const floor =
+    level === 'high' ? P.realDemandHigh : level === 'medium' ? P.realDemandMedium : null;
+  return { level, floor };
+}
 
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -392,6 +417,22 @@ function sentByHand(action) {
   return null;
 }
 
+/**
+ * Past success (learning B4): from a kind's results at this brand, the
+ * share that improved, shrunk toward the prior by a few imagined results,
+ * and the points that moves the score. None read: the prior, no points.
+ *
+ * @param {{ improved?: number, results?: number } | undefined} track
+ */
+export function pastSuccessOf(track) {
+  const improved = Math.max(0, Math.floor(Number(track?.improved) || 0));
+  const results = Math.max(improved, Math.floor(Number(track?.results) || 0));
+  const rate =
+    (improved + P.pastSuccessPseudoCount * P.pastSuccessPrior) /
+    (results + P.pastSuccessPseudoCount);
+  return { rate, points: (rate - P.pastSuccessPrior) * P.pastSuccessSwing, improved, results };
+}
+
 /** The level a score falls in. */
 export function priorityLevel(score) {
   if (score >= P.levelCritical) return 'critical';
@@ -409,12 +450,17 @@ export function priorityLevel(score) {
  * @param {Array<{ kind: string, impact?: string, source?: string[], payload?: object,
  *   detected_at?: string, current_value?: number|null }>} input.signals
  *   Its open signals: the evidence it rests on now.
- * @param {Map<string, { volume: number|null, intent: string|null }>} [input.prompts]
- *   Demand and intent of the prompts the evidence names.
+ * @param {Map<string, { volume: number|null, intent: string|null, level?: string|null }>} [input.prompts]
+ *   Demand, intent and measured demand level of the prompts the evidence names.
+ * @param {Map<string, { improved: number, results: number }>} [input.track]
+ *   Per kind, the brand's results with a verdict and how many improved (loadKindTrack).
  * @param {Date} now
  * @returns {{ score: number, level: string, reason: object }}
  */
-export function scorePriority({ action, signals = [], prompts = new Map() }, now = new Date()) {
+export function scorePriority(
+  { action, signals = [], prompts = new Map(), track = new Map() },
+  now = new Date(),
+) {
   const payloads = [action.payload, ...signals.map((s) => s.payload)].filter(Boolean);
   const byHand = signals.length === 0 ? sentByHand(action) : null;
 
@@ -431,7 +477,12 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
   // Every finding behind it resolved: nothing open says what changed.
   if (change === null) severity = NO_EVIDENCE_SEVERITY;
 
-  const { demand, promptDemand, businessValue } = demandAndValue(payloads, signals, prompts);
+  const scaled = demandAndValue(payloads, signals, prompts);
+  const { promptDemand, businessValue } = scaled;
+  // A measured level is better evidence of demand than the estimate it
+  // stands beside: High or Medium raise the demand to at least theirs.
+  const real = realDemandOf(payloads, prompts);
+  const demand = real.floor === null ? scaled.demand : Math.max(scaled.demand ?? 0, real.floor);
 
   const confidence = byHand
     ? { value: byHand.confidence, kinds: 0, sources: 0 }
@@ -463,6 +514,7 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
     recoverability,
     recency,
   };
+  const past = pastSuccessOf(track.get(action.kind));
   const score = Math.round(
     factors.impact * P.weightImpact +
       factors.demand * P.weightDemand +
@@ -470,7 +522,8 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
       factors.businessValue * P.weightBusinessValue +
       factors.confidence * P.weightConfidence +
       factors.recoverability * P.weightRecoverability +
-      factors.recency * P.weightRecency,
+      factors.recency * P.weightRecency +
+      past.points,
   );
   const bounded = Math.min(100, Math.max(0, score));
 
@@ -489,13 +542,27 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
       subject,
       // Measured demand only: an unmeasured one is not called low.
       demand: demand === null ? null : demand >= 0.67 ? 'high' : demand >= 0.4 ? 'medium' : 'low',
+      // The prompts' measured demand level (PROMPT-014), the highest, when it
+      // raised the demand (High, Medium); null otherwise. Low raises nothing,
+      // so it's no reason for the score.
+      realDemand: real.floor === null ? null : real.level,
       searches: promptDemand,
       commercial: businessValue !== null && businessValue >= COMMERCIAL,
       heldBefore: recoverability >= 1,
       days: signals.length ? Math.floor(days) : null,
       kinds: confidence.kinds,
       sources: confidence.sources,
-      factors: Object.fromEntries(Object.entries(factors).map(([k, v]) => [k, round2(v)])),
+      // How its kind did here before (learning B4); null with nothing to go on.
+      pastSuccess: past.results
+        ? { improved: past.improved, results: past.results, points: round2(past.points) }
+        : null,
+      // Its rate only with a result behind it: with none, the prior would
+      // read as a measured 0.5.
+      factors: Object.fromEntries(
+        Object.entries({ ...factors, ...(past.results ? { pastSuccess: past.rate } : {}) }).map(
+          ([k, v]) => [k, round2(v)],
+        ),
+      ),
     },
   };
 }
