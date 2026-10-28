@@ -6,6 +6,8 @@ const BRAND = '33333333-3333-3333-3333-333333333333';
 const PRODUCT = '11111111-0000-0000-0000-000000000001';
 
 let tables: Record<string, Record<string, unknown>[]>;
+// The id lists each read filtered by, as [table, column, how many].
+let filtered: [string, string, number][];
 
 function query(table: string) {
   let range: [number, number] | undefined;
@@ -14,7 +16,7 @@ function query(table: string) {
     select: () => q,
     eq: () => q,
     is: () => q,
-    in: () => q,
+    in: (column: string, values: unknown[]) => (filtered.push([table, column, values.length]), q),
     not: () => q,
     gte: () => q,
     lte: () => q,
@@ -48,6 +50,7 @@ const { getProductAiSays, getShoppingProductDetail } = await import('./shopping'
 
 beforeEach(() => {
   tables = {};
+  filtered = [];
 });
 
 const card = (over: Record<string, unknown>) => ({
@@ -166,6 +169,10 @@ describe('getShoppingProductDetail', () => {
         }),
       ];
       const detail = await getShoppingProductDetail(BRAND, PRODUCT, { datePreset: '30d' });
+      // One read for the action's one question.
+      expect(filtered.filter(([, column]) => column === 'prompt_results.prompt_id')).toEqual([
+        ['prompt_result_shopping_cards', 'prompt_results.prompt_id', 1],
+      ]);
       expect(detail?.result).toEqual({
         actionId: 'a7',
         actionNo: 7,
@@ -232,5 +239,28 @@ describe('getProductAiSays (ECOM-012)', () => {
         },
       ],
     });
+  });
+});
+
+describe('the re-check read (ECOM-018)', () => {
+  it('reads the cards of many questions a hundred ids at a time', async () => {
+    tables.catalog_products = [{ id: PRODUCT, title: 'Ridge 30L Backpack', description: null }];
+    tables.actions = [
+      {
+        id: 'a7',
+        action_no: 7,
+        completed_at: new Date(Date.now() - 86_400_000).toISOString(),
+        payload: {
+          target: { type: 'product', id: PRODUCT },
+          promptIds: Array.from({ length: 250 }, (_, i) => `q${i}`),
+        },
+      },
+    ];
+    await getShoppingProductDetail(BRAND, PRODUCT, { datePreset: '30d' });
+    expect(
+      filtered
+        .filter(([, column]) => column === 'prompt_results.prompt_id')
+        .map(([, , count]) => count),
+    ).toEqual([100, 100, 50]);
   });
 });
