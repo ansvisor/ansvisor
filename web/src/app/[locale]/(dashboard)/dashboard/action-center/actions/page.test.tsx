@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
 import type { ActionItem } from '@/lib/actions/action-center';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import {
   buildGettingStarted,
   type GettingStartedFacts,
@@ -136,8 +137,17 @@ let root: Root;
 const exportButton = () =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === 'exportCsv')!;
 
-async function render() {
-  await act(async () => root.render(<ActionCenterActionsPage />));
+const openUpgrade = vi.fn();
+async function render(isLocked = false) {
+  await act(async () =>
+    root.render(
+      <UpgradeDialogContext.Provider
+        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+      >
+        <ActionCenterActionsPage />
+      </UpgradeDialogContext.Provider>,
+    ),
+  );
 }
 
 beforeEach(() => {
@@ -436,6 +446,35 @@ describe('starting and skipping Getting started', () => {
     expect(pageText()).not.toContain('secondBrand.title');
     // Start takes the question's place, to run it later.
     expect(buttonNamed('start.button')).toBeDefined();
+  });
+
+  // next-intl is mocked: the upgrade dialog's label is its key.
+  it('starts and skips nothing on a read-only workspace: each opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    getGettingStarted.mockResolvedValue(started({ startedAt: null }));
+    await render(true);
+    await act(async () => buttonNamed('start.button')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('startGettingStarted');
+    expect(startGettingStarted).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    getGettingStarted.mockResolvedValue(started());
+    await render(true);
+    await act(async () => buttonNamed('skip.button')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('skipGettingStarted');
+    expect(pageText()).not.toContain('skip.body');
+    expect(skipGettingStarted).not.toHaveBeenCalled();
+  });
+
+  it("doesn't ask on a read-only workspace whether to run it for a new brand: Start waits", async () => {
+    openUpgrade.mockReset();
+    getGettingStarted.mockResolvedValue(started({ confirmedAt: null }));
+    await render(true);
+    expect(pageText()).not.toContain('secondBrand.title');
+    await act(async () => buttonNamed('start.button')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('startGettingStarted');
+    expect(startGettingStarted).not.toHaveBeenCalled();
   });
 
   it('asks a manager whether to run it for a brand added beside others', async () => {
