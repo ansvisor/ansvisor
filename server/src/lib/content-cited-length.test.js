@@ -101,6 +101,19 @@ describe('citedPagesLength', () => {
     expect(read.mock.calls.map(([address]) => address)).toEqual([url(2)]);
   });
 
+  it('reads one page cited under two addresses once, at the first', async () => {
+    const variant = 'https://www.site2.example/a/?utm_source=chatgpt.com';
+    urlRows.push({ id: 9, url: variant });
+    citedIds.push(9);
+    const read = vi.fn(async () => 3000);
+    const result = await citedPagesLength(
+      { brandId: BRAND, pages: [page(2), { url: variant }, page(3)] },
+      { read },
+    );
+    expect(read.mock.calls.map(([address]) => address)).toEqual([url(2), url(3)]);
+    expect(result).toEqual({ characters: 3000, pages: 2 });
+  });
+
   it('reads at most a few, in the Sources order, and stops looking once it has them', async () => {
     const read = vi.fn(async () => 2000);
     await citedPagesLength(
