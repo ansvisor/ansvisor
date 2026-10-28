@@ -49,6 +49,9 @@ function table(name) {
 
 vi.mock('../../config/supabase.js', () => ({ default: { from: (name) => table(name) } }));
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+// A shopping links task's check: the catalog sync's, on its one draft (shopping-check.js).
+const checkShoppingDraft = vi.hoisted(() => vi.fn());
+vi.mock('../shopping-check.js', () => ({ checkShoppingDraft }));
 
 const {
   CHANGED_BELOW,
@@ -121,6 +124,10 @@ describe('checkKind', () => {
     ).toBeNull();
     expect(checkKind({ task_key: 'publish_content', details: { check: 'auto' } })).toBeNull();
     expect(checkKind({ task_key: null, details: auto })).toBeNull();
+    // A shopping links task: checked on its draft's page, as the catalog sync checks it.
+    expect(
+      checkKind({ task_key: null, details: { ...auto, source: 'shopping_check', draftId: 'd1' } }),
+    ).toBe('shoppingLinks');
   });
 
   it('puts a path on the brand’s domain, and reads a bare host and path as https', () => {
@@ -484,6 +491,16 @@ describe('runTaskCheck', () => {
     });
   });
 
+  it('names a renamed task in History by its title alone (#1565)', async () => {
+    const renamed = task({ title: 'Fix the pricing link' });
+    await runTaskCheck(renamed, action, { fetch: fetchOf({ [PAGE]: html('x') }), now });
+    expect(ops.find((op) => op.table === 'action_events').payload.data).toEqual({
+      taskId: 't1',
+      task: null,
+      title: 'Fix the pricing link',
+    });
+  });
+
   it('holds a task someone reopened: open, its checks kept, never closed again on that page', async () => {
     const reopened = task({
       details: {
@@ -681,6 +698,99 @@ describe('runTaskCheck', () => {
   });
 });
 
+describe('runTaskCheck on a shopping links task', () => {
+  const action = { brand_id: 'b1' };
+  const LIVE = 'https://acme.example/blog/boots';
+  const task = (over = {}) => ({
+    id: 't1',
+    action_id: 'a1',
+    task_key: null,
+    title: 'Swap the product that no longer sells',
+    status: 'todo',
+    updated_at: '2026-10-26T10:00:00Z',
+    details: { check: 'auto', url: LIVE, source: 'shopping_check', draftId: 'd1' },
+    ...over,
+  });
+  const now = new Date('2026-10-27T03:00:00Z');
+  const at = now.toISOString();
+  const fetch = vi.fn();
+
+  beforeEach(() => {
+    checkShoppingDraft.mockReset();
+  });
+
+  it('checks its draft as the catalog sync does; passed, that check completed it', async () => {
+    checkShoppingDraft.mockResolvedValue({
+      readFrom: 'page',
+      pageUrl: LIVE,
+      bad: [],
+      action: 'closed',
+    });
+    expect(await runTaskCheck(task(), action, { fetch, now })).toEqual({
+      autoCheck: { at, triedAt: at, url: LIVE, passed: true, missing: [] },
+    });
+    expect(checkShoppingDraft).toHaveBeenCalledWith('b1', 'd1', { readPage: fetch, now });
+    // The task, its History and the action are the shopping check's to write.
+    expect(ops).toEqual([]);
+    expect(reads.some((r) => r.table === 'brand_domains')).toBe(false);
+  });
+
+  it('keeps what is missing on a page that still links a product that no longer sells', async () => {
+    checkShoppingDraft.mockResolvedValue({
+      readFrom: 'page',
+      pageUrl: LIVE,
+      bad: [{ id: 'p2', title: 'Boot', state: 'sold_out' }],
+      action: 'kept',
+    });
+    const result = await runTaskCheck(task(), action, { fetch, now });
+    expect(result).toEqual({
+      autoCheck: { at, triedAt: at, url: LIVE, passed: false, missing: ['links_not_for_sale'] },
+    });
+    const update = ops.find((op) => op.table === 'action_tasks');
+    expect(update.payload).toMatchObject({
+      details: { source: 'shopping_check', draftId: 'd1', autoCheck: { passed: false } },
+    });
+    expect(update.payload.status).toBeUndefined();
+    expect(update.filters).toContainEqual(['updated_at', '2026-10-26T10:00:00Z']);
+    expect(ops.some((op) => op.table === 'action_events')).toBe(false);
+  });
+
+  it("says the page couldn't be read when only its draft was, and keeps the try", async () => {
+    checkShoppingDraft.mockResolvedValue({
+      readFrom: 'draft',
+      pageUrl: null,
+      bad: [{ id: 'p2', title: 'Boot', state: 'sold_out' }],
+      action: null,
+    });
+    expect(await runTaskCheck(task(), action, { fetch, now })).toEqual({ reason: 'no_answer' });
+    expect(ops.find((op) => op.table === 'action_tasks').payload).toMatchObject({
+      details: { autoCheck: { triedAt: at } },
+    });
+  });
+
+  it('says why nothing was checked: no path left, no draft named, or changed meanwhile', async () => {
+    checkShoppingDraft.mockResolvedValue(null);
+    expect(await runTaskCheck(task(), action, { fetch, now })).toEqual({
+      reason: 'no_shopping_path',
+    });
+    expect(
+      await runTaskCheck(
+        task({ details: { check: 'auto', url: LIVE, source: 'shopping_check' } }),
+        action,
+        { fetch, now },
+      ),
+    ).toEqual({ reason: 'not_checkable' });
+    checkShoppingDraft.mockResolvedValue({
+      readFrom: 'page',
+      pageUrl: LIVE,
+      bad: [],
+      action: 'none',
+    });
+    expect(await runTaskCheck(task(), action, { fetch, now })).toEqual({ reason: 'changed' });
+    expect(checkShoppingDraft).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('sweepTaskChecks', () => {
   const now = new Date('2026-10-27T03:00:00Z');
   const row = (id, over = {}) => ({
@@ -738,5 +848,17 @@ describe('sweepTaskChecks', () => {
     const fetch = fetchOf({ [PAGE]: html('x') });
     expect(await sweepTaskChecks({ fetch, now })).toEqual({ checked: 1, passed: 1 });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a shopping links task to the catalog sync', async () => {
+    db.action_tasks = [
+      row('t1', {
+        task_key: null,
+        details: { check: 'auto', url: PAGE, source: 'shopping_check', draftId: 'd1' },
+      }),
+    ];
+    checkShoppingDraft.mockReset();
+    expect(await sweepTaskChecks({ fetch: fetchOf({}), now })).toEqual({ checked: 0, passed: 0 });
+    expect(checkShoppingDraft).not.toHaveBeenCalled();
   });
 });

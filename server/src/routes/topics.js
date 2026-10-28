@@ -4,6 +4,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { requireFeature } from '../lib/plan-guard.js';
+import { boundedBrandSetup, boundedTopicName, brandSetupSchema } from '../lib/brand-setup-input.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { withRetry } from '../lib/retry.js';
 import { webResearch } from '../lib/web-research.js';
@@ -201,7 +202,12 @@ IMPORTANT: Generate all topic names in ${langName}.`;
     { attempts: 3, baseDelayMs: 500, label: 'topic-suggest' },
   );
 
-  return object.topics;
+  // A name longer than a topic's prompts call takes is cut at a word, so
+  // choosing it (in setup, or from the Topics page's suggestions) never fails
+  // that call; a max in the schema would re-run the whole research instead.
+  return object.topics
+    .map((topic) => ({ ...topic, name: boundedTopicName(topic.name) }))
+    .filter((topic) => topic.name);
 }
 
 /**
@@ -211,11 +217,11 @@ IMPORTANT: Generate all topic names in ${langName}.`;
  */
 router.post('/suggest', async (req, res) => {
   try {
-    const { brandName, industry, description, website, language } = req.body;
-
-    if (!brandName) {
-      return res.status(400).json({ error: 'brandName is required' });
+    const parsed = brandSetupSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
     }
+    const { brandName, industry, description, website, language } = parsed.data;
 
     const topics = await generateTopicIdeas({
       brandName,
@@ -290,10 +296,12 @@ router.post(
       ]);
 
       const ideas = await generateTopicIdeas({
-        brandName: brand.name,
-        industry: brand.industry,
-        description: brand.description,
-        website: primaryDomain?.domain,
+        ...boundedBrandSetup({
+          brandName: brand.name,
+          industry: brand.industry,
+          description: brand.description,
+          website: primaryDomain?.domain,
+        }),
         language: brand.language,
         signals,
       });
