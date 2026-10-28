@@ -18,20 +18,29 @@ const db = vi.hoisted(() => ({
   onboarded: false,
   // The filters each brands read was made with.
   brandFilters: [] as [string, unknown][][],
+  // The organization has its demo brand already.
+  hasDemo: false,
 }));
 vi.mock('@/lib/supabase/client', () => {
   /** A query that answers `data` however it ends (single, limit, or awaited). */
-  const query = (data: unknown, filters?: [string, unknown][]) => {
+  const query = (read: () => unknown, filters?: [string, unknown][]) => {
     const q: Record<string, unknown> = {};
     for (const m of ['select', 'limit', 'order', 'update']) q[m] = () => q;
     q.eq = (column: string, value: unknown) => {
       filters?.push([column, value]);
       return q;
     };
-    q.single = async () => ({ data });
-    q.then = (resolve: (v: unknown) => unknown) => resolve({ data });
+    q.single = async () => ({ data: read() });
+    q.then = (resolve: (v: unknown) => unknown) => resolve({ data: read() });
     return q;
   };
+  /** The demo brand, for a read that asks for it. */
+  const demoRows = (filters: [string, unknown][]) =>
+    filters.some(([column, value]) => column === 'is_demo' && value === true)
+      ? db.hasDemo
+        ? [{ id: 'demo' }]
+        : []
+      : null;
   const rows: Record<string, () => unknown> = {
     profiles: () => ({ organization_id: 'org-1', onboarding_completed: db.onboarded }),
     brands: () => [
@@ -51,11 +60,16 @@ vi.mock('@/lib/supabase/client', () => {
       from: (table: string) => {
         const filters: [string, unknown][] = [];
         if (table === 'brands') db.brandFilters.push(filters);
-        return query(rows[table]?.() ?? null, filters);
+        return query(
+          () => (table === 'brands' ? demoRows(filters) : null) ?? rows[table]?.() ?? null,
+          filters,
+        );
       },
     }),
   };
 });
+const prepareDemoBrand = vi.hoisted(() => vi.fn(async () => ({ ok: false, status: 0 })));
+vi.mock('@/lib/demo/demo-client', () => ({ prepareDemoBrand, setDemoHidden: vi.fn() }));
 vi.mock('@/lib/actions/topic', () => ({
   getTopics: vi.fn(async () => [{ id: 't1', name: 'Coffee' }]),
   createTopics: vi.fn(async () => undefined),
@@ -109,6 +123,7 @@ beforeEach(() => {
   db.promptSets = [];
   db.onboarded = false;
   db.brandFilters = [];
+  db.hasDemo = false;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -291,5 +306,18 @@ describe('the plan step', () => {
     );
     await act(async () => modeButtons('buy')[0].click());
     expect(checkoutBody()).toEqual({ planId: 'starter', organizationId: 'org-1', mode: 'buy' });
+  });
+
+  it('starts the demo brand setup ahead for an organization with none yet', async () => {
+    await render();
+    await act(async () => {});
+    expect(prepareDemoBrand).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts nothing ahead when the demo brand is there already', async () => {
+    db.hasDemo = true;
+    await render();
+    await act(async () => {});
+    expect(prepareDemoBrand).not.toHaveBeenCalled();
   });
 });

@@ -8,8 +8,10 @@ import messages from '../../../messages/en.json';
 
 const explore = vi.hoisted(() => vi.fn());
 const state = vi.hoisted(() => ({ opening: false }));
+const preload = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/use-explore-demo', () => ({
   useExploreDemo: () => ({ explore, opening: state.opening }),
+  usePreloadDemo: preload,
 }));
 
 const { ExploreDemoCard } = await import('./explore-demo-card');
@@ -20,11 +22,11 @@ const { ExploreDemoCard } = await import('./explore-demo-card');
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(brandName: string | null) {
+async function render(brandName: string | null, withPreload = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ExploreDemoCard brandName={brandName} />
+        <ExploreDemoCard brandName={brandName} preload={withPreload} />
       </NextIntlClientProvider>,
     );
   });
@@ -64,9 +66,17 @@ describe('ExploreDemoCard', () => {
     expect(container.textContent).toContain('Your brand stays saved');
   });
 
-  it('waits while the demo opens', async () => {
+  it('says the demo is being set up while it opens', async () => {
     state.opening = true;
     await render('Acme');
     expect(button().disabled).toBe(true);
+    expect(button().textContent).toBe('Setting up the demo…');
+  });
+
+  it('starts the setup ahead only when asked', async () => {
+    await render('Acme', true);
+    expect(preload).toHaveBeenLastCalledWith(true);
+    await render('Acme', false);
+    expect(preload).toHaveBeenLastCalledWith(false);
   });
 });

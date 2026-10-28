@@ -7,10 +7,12 @@ vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({ auth: { getSession: async () => ({ data: { session } }) } }),
 }));
 
-const { ensureDemoBrand, setDemoHidden } = await import('./demo-client');
+const { ensureDemoBrand, prepareDemoBrand, resetDemoPreparation, setDemoHidden } =
+  await import('./demo-client');
 
 const fetchMock = vi.fn();
 beforeEach(() => {
+  resetDemoPreparation();
   session = { access_token: 'tok' };
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
@@ -61,5 +63,25 @@ describe('setDemoHidden', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/aeo/api/demo');
     expect(init).toMatchObject({ method: 'PATCH', body: JSON.stringify({ hidden: true }) });
+  });
+});
+
+describe('prepareDemoBrand', () => {
+  it('asks once per page: a setup started ahead is the one the click waits for', async () => {
+    answer(200, { brandId: 'demo1', version: 3, rebuilt: true });
+    const ahead = prepareDemoBrand();
+    const click = prepareDemoBrand();
+    expect(click).toBe(ahead);
+    expect(await click).toMatchObject({ ok: true, brandId: 'demo1' });
+    expect(await prepareDemoBrand()).toMatchObject({ ok: true, brandId: 'demo1' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again after a failure', async () => {
+    answer(500, {});
+    expect(await prepareDemoBrand()).toEqual({ ok: false, status: 500 });
+    answer(200, { brandId: 'demo1', version: 3, rebuilt: false });
+    expect(await prepareDemoBrand()).toMatchObject({ ok: true, brandId: 'demo1' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

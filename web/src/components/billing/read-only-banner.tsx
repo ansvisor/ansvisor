@@ -12,7 +12,7 @@ import {
 } from '@/components/providers/upgrade-dialog-provider';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { useUserRole } from '@/hooks/use-user-role';
-import { useExploreDemo } from '@/hooks/use-explore-demo';
+import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 import type { ReadOnlyReason } from '@/lib/billing/subscription-access';
 import { offerChoice } from '@/lib/billing/plan-purchase';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
@@ -52,6 +52,8 @@ function Band({
   const { demoBrand } = useDemoBrand();
   const { explore, opening } = useExploreDemo();
   const seeTheDemo = !payment && (canManage || (demoBrand !== null && !demoBrand.hidden));
+  // No demo brand yet: its setup starts as the band shows, for an admin or a manager.
+  usePreloadDemo(seeTheDemo && canManage && demoBrand === null);
 
   return (
     <div
@@ -73,7 +75,7 @@ function Band({
       {seeTheDemo && (
         <Button variant="outline" size="sm" onClick={() => void explore()} disabled={opening}>
           {opening ? <Loader2 className="animate-spin" aria-hidden /> : <PlayCircle aria-hidden />}
-          {tDemo('seeTheDemo')}
+          {opening ? tDemo('settingUp') : tDemo('seeTheDemo')}
         </Button>
       )}
     </div>

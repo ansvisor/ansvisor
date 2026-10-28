@@ -26,14 +26,14 @@ vi.hoisted(() => {
 
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => router }));
-const demoClient = vi.hoisted(() => ({ ensureDemoBrand: vi.fn(), setDemoHidden: vi.fn() }));
+const demoClient = vi.hoisted(() => ({ prepareDemoBrand: vi.fn(), setDemoHidden: vi.fn() }));
 vi.mock('@/lib/demo/demo-client', () => demoClient);
 const getBrandById = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ getBrandById }));
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast: { error: toastError } }));
 
-const { useExploreDemo } = await import('./use-explore-demo');
+const { useExploreDemo, usePreloadDemo } = await import('./use-explore-demo');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -93,7 +93,7 @@ afterEach(() => {
 describe('useExploreDemo', () => {
   it('makes the demo brand, lists it, selects it and opens the Action Center', async () => {
     const demo = brand('demo', { isDemo: true, name: 'Brewline Coffee' });
-    demoClient.ensureDemoBrand.mockResolvedValue({
+    demoClient.prepareDemoBrand.mockResolvedValue({
       ok: true,
       brandId: 'demo',
       version: 1,
@@ -111,7 +111,7 @@ describe('useExploreDemo', () => {
 
   it('shows a hidden demo brand again first', async () => {
     const demo = brand('demo', { isDemo: true, demoHiddenAt: '2026-10-20T00:00:00Z' });
-    demoClient.ensureDemoBrand.mockResolvedValue({ ok: true, brandId: 'demo', version: 1 });
+    demoClient.prepareDemoBrand.mockResolvedValue({ ok: true, brandId: 'demo', version: 1 });
     getBrandById.mockResolvedValue(demo);
     demoClient.setDemoHidden.mockResolvedValue({ ok: true, brandId: 'demo', hidden: false });
     await clickExplore();
@@ -125,7 +125,7 @@ describe('useExploreDemo', () => {
       brands: [brand('own'), brand('demo', { isDemo: true })],
       activeBrandId: 'own',
     });
-    demoClient.ensureDemoBrand.mockResolvedValue({ ok: false, status: 403 });
+    demoClient.prepareDemoBrand.mockResolvedValue({ ok: false, status: 403 });
     await clickExplore();
     expect(getBrandById).not.toHaveBeenCalled();
     expect(useBrandStore.getState().activeBrandId).toBe('demo');
@@ -133,11 +133,43 @@ describe('useExploreDemo', () => {
   });
 
   it('says so, and stays, when there is no demo brand to open', async () => {
-    demoClient.ensureDemoBrand.mockResolvedValue({ ok: false, status: 500 });
+    demoClient.prepareDemoBrand.mockResolvedValue({ ok: false, status: 500 });
     await clickExplore();
     expect(toastError).toHaveBeenCalledWith("Couldn't open the demo brand. Try again.");
     expect(useBrandStore.getState().activeBrandId).toBe('own');
     expect(router.push).not.toHaveBeenCalled();
     expect(container.querySelector('button')!.dataset.opening).toBe('false');
+  });
+});
+
+describe('usePreloadDemo', () => {
+  function Preload({ enabled }: { enabled: boolean }) {
+    usePreloadDemo(enabled);
+    return null;
+  }
+
+  it('starts the setup ahead while it is asked to, and not otherwise', async () => {
+    demoClient.prepareDemoBrand.mockResolvedValue({ ok: false, status: 0 });
+    await act(async () => root.render(<Preload enabled={false} />));
+    expect(demoClient.prepareDemoBrand).not.toHaveBeenCalled();
+    await act(async () => root.render(<Preload enabled />));
+    expect(demoClient.prepareDemoBrand).toHaveBeenCalledTimes(1);
+    // A failure says nothing: the click asks again.
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('opens the demo with the setup started ahead, asked once', async () => {
+    const demo = brand('demo', { isDemo: true });
+    demoClient.prepareDemoBrand.mockResolvedValue({
+      ok: true,
+      brandId: 'demo',
+      version: 1,
+      rebuilt: false,
+    });
+    getBrandById.mockResolvedValue(demo);
+    await act(async () => root.render(<Preload enabled />));
+    await clickExplore();
+    expect(useBrandStore.getState().activeBrandId).toBe('demo');
+    expect(demoClient.prepareDemoBrand).toHaveBeenCalledTimes(2);
   });
 });

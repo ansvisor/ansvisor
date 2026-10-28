@@ -33,7 +33,10 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh }),
 }));
 const ensureDemoBrand = vi.fn();
-vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand: () => ensureDemoBrand() }));
+vi.mock('@/lib/demo/demo-client', () => ({
+  ensureDemoBrand: () => ensureDemoBrand(),
+  prepareDemoBrand: vi.fn(async () => ({ ok: false, status: 0 })),
+}));
 
 const { PlanProvider } = await import('@/components/providers/plan-provider');
 const { RoleProvider } = await import('@/components/providers/role-provider');

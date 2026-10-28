@@ -48,7 +48,11 @@ vi.mock('@/i18n/navigation', () => ({
   usePathname: () => '/dashboard/insights',
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand: vi.fn(), setDemoHidden: vi.fn() }));
+vi.mock('@/lib/demo/demo-client', () => ({
+  ensureDemoBrand: vi.fn(),
+  prepareDemoBrand: vi.fn(async () => ({ ok: false, status: 0 })),
+  setDemoHidden: vi.fn(),
+}));
 
 const pass = ({ children }: { children: ReactNode }) => <>{children}</>;
 const none = () => null;

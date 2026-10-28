@@ -394,6 +394,26 @@ export default function OnboardingPage() {
   }, [step]);
   const [currentPlanId, setCurrentPlanId] = useState<PlanId>('starter');
 
+  // Whether the organization has no demo brand yet: then the plan step starts
+  // its setup ahead, so "Explore the demo" waits less.
+  const [demoMissing, setDemoMissing] = useState(false);
+  useEffect(() => {
+    if (step !== 6 || !organizationId) return;
+    let cancelled = false;
+    createClient()
+      .from('brands')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('is_demo', true)
+      .limit(1)
+      .then(({ data }) => {
+        if (!cancelled) setDemoMissing(!data?.length);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, organizationId]);
+
   // What the dashboard preview shows when the plan step is reached by resuming
   // (a cancelled checkout, a lapsed trial) rather than by walking the steps, so
   // the wizard state it normally reads is empty. Kept apart from that state:
@@ -1951,6 +1971,7 @@ export default function OnboardingPage() {
           {/* No card yet: the demo brand, with sample data. */}
           <ExploreDemoCard
             brandName={createdBrand?.name ?? resumedPreview?.brandName ?? (brandName || null)}
+            preload={demoMissing}
           />
         </div>
 

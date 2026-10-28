@@ -4,16 +4,25 @@ import { Loader2, PlayCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useExploreDemo } from '@/hooks/use-explore-demo';
+import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 
 /**
  * Under onboarding's plan cards, the other way in: the demo brand, with
  * sample data and no card. The person's own brand stays as set up, and its
- * tracking starts once a plan is picked.
+ * tracking starts once a plan is picked. With `preload` (an admin with no
+ * demo brand yet), its setup starts as the card shows.
  */
-export function ExploreDemoCard({ brandName }: { brandName: string | null }) {
+export function ExploreDemoCard({
+  brandName,
+  preload = false,
+}: {
+  brandName: string | null;
+  preload?: boolean;
+}) {
   const t = useTranslations('demo.onboarding');
+  const tDemo = useTranslations('demo');
   const { explore, opening } = useExploreDemo();
+  usePreloadDemo(preload);
   return (
     <div className="mt-8" data-slot="explore-demo">
       <div className="flex items-center gap-3 text-xs font-medium uppercase text-muted-foreground">
@@ -35,7 +44,7 @@ export function ExploreDemoCard({ brandName }: { brandName: string | null }) {
           disabled={opening}
         >
           {opening ? <Loader2 className="animate-spin" aria-hidden /> : <PlayCircle aria-hidden />}
-          {t('cta')}
+          {opening ? tDemo('settingUp') : t('cta')}
         </Button>
       </div>
     </div>

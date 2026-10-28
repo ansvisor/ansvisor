@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { getBrandById } from '@/lib/actions/brand';
-import { ensureDemoBrand, setDemoHidden } from '@/lib/demo/demo-client';
+import { prepareDemoBrand, setDemoHidden } from '@/lib/demo/demo-client';
 import { useBrandStore } from '@/stores/use-brand-store';
 
 /** Where the demo opens: the page the product starts on. */
@@ -16,7 +16,8 @@ export const DEMO_START_HREF = '/dashboard/action-center';
  * read-only band): the organization's demo brand, made or brought up to
  * date (POST /api/demo), shown again if it was hidden, selected, and opened
  * on the Action Center. When the API can't be asked (a member's call
- * refused), a demo brand already in the list still opens.
+ * refused), a demo brand already in the list still opens. The setup started
+ * ahead (usePreloadDemo) is the one waited for.
  */
 export function useExploreDemo() {
   const t = useTranslations('demo.explore');
@@ -30,7 +31,7 @@ export function useExploreDemo() {
       setOpening(false);
     };
     const { brands } = useBrandStore.getState();
-    const ensured = await ensureDemoBrand();
+    const ensured = await prepareDemoBrand();
     const brandId = ensured.ok ? ensured.brandId : (brands.find((b) => b.isDemo)?.id ?? null);
     if (!brandId) return fail();
     const brand =
@@ -49,4 +50,16 @@ export function useExploreDemo() {
   }, [router, t]);
 
   return { explore, opening };
+}
+
+/**
+ * Starts the demo brand's setup in the background, once, while `enabled`: a
+ * screen that offers the demo to someone who has none yet, so the click
+ * that opens it waits less. Nothing is said when it fails; the click asks
+ * again.
+ */
+export function usePreloadDemo(enabled: boolean) {
+  useEffect(() => {
+    if (enabled) void prepareDemoBrand();
+  }, [enabled]);
 }

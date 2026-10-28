@@ -59,6 +59,30 @@ export function ensureDemoBrand(): Promise<DemoCall<DemoEnsured>> {
   );
 }
 
+// The setup asked for on this page, shared by whoever asks next.
+let preparing: Promise<DemoCall<DemoEnsured>> | null = null;
+
+/**
+ * The demo brand's setup, asked once per page: a screen that offers the
+ * demo starts it ahead in the background (it takes a while the first time),
+ * and the click that opens the demo waits for that same request, done at
+ * once when it is. A failed one is asked again next time.
+ */
+export function prepareDemoBrand(): Promise<DemoCall<DemoEnsured>> {
+  if (!preparing) {
+    preparing = ensureDemoBrand().then((result) => {
+      if (!result.ok) preparing = null;
+      return result;
+    });
+  }
+  return preparing;
+}
+
+/** Lets tests ask again. */
+export function resetDemoPreparation() {
+  preparing = null;
+}
+
 /** Hides the demo brand from the brand list, or shows it again; it is never deleted. */
 export function setDemoHidden(
   hidden: boolean,
