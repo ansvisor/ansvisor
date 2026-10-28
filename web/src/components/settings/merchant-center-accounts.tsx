@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { MERCHANT_CENTER_KIND } from '@/lib/catalog';
 import {
   connectSignInAccount,
@@ -49,6 +50,8 @@ export function accountLabel(account: SignInAccount): string {
  * account's products are read into the brand's catalog every day, with the
  * issues Merchant Center reports for them. The account then shows in
  * Product catalog, where it is synced or removed. Admins and managers only.
+ * On a read-only workspace (plan not active) the accounts show, and picking
+ * or adding one opens the upgrade dialog instead.
  *
  * `sources`: the catalog's sources as its card read them; the accounts the
  * brand has already are marked in the picker and can't be picked again.
@@ -64,6 +67,9 @@ export function MerchantCenterAccounts({
   const tStores = useTranslations('settings.catalog.stores');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
+  const { guard, isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const needsPlan = { action: tActions('connectStores') };
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
 
   // The accounts as read for a brand: another brand's never show.
@@ -119,6 +125,11 @@ export function MerchantCenterAccounts({
   };
 
   const add = async () => {
+    // A read-only workspace: the upgrade dialog, not the add.
+    if (isLocked) {
+      openUpgrade(needsPlan.action);
+      return;
+    }
     if (!activeBrandId || !brand || !chosen || addingRef.current) return;
     // The brand and account as clicked: switching brands meanwhile changes neither.
     const brandId = activeBrandId;
@@ -129,6 +140,11 @@ export function MerchantCenterAccounts({
     const result = await connectSignInAccount(brandId, MERCHANT_CENTER_KIND, account.id);
     addingRef.current = false;
     setAdding(null);
+    // The plan ended while the page was open: the server's refusal opens the upgrade dialog.
+    if (!result.ok && result.code === 'subscription') {
+      openUpgrade(needsPlan.action);
+      return;
+    }
     if (!result.ok) {
       toast.error(result.code === 'failed' ? t('addFailed') : errorText(result.code));
       return;
@@ -171,7 +187,10 @@ export function MerchantCenterAccounts({
           <Select
             items={items}
             value={chosen?.id ?? null}
-            onValueChange={(v) => setPicked(v ? { brandId: brand.id, id: v } : null)}
+            onValueChange={guard(
+              (v: string | null) => setPicked(v ? { brandId: brand.id, id: v } : null),
+              needsPlan,
+            )}
           >
             <SelectTrigger className="h-8 w-full text-xs sm:w-80" aria-label={t('pick')}>
               <SelectValue placeholder={t('pick')} />
