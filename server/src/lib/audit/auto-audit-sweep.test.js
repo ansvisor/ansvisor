@@ -17,6 +17,8 @@ let failCounts;
 let fixedActions;
 let recentAudits;
 let domainRows;
+let prefRows;
+let settingRows;
 
 class PlanLimitError extends Error {}
 
@@ -55,11 +57,19 @@ function query(table) {
     },
     order: () => builder,
     limit: () => builder,
+    range: (from, to) => {
+      op.range = [from, to];
+      return builder;
+    },
     then: (resolve) => {
       ops.push(op);
       // Fix actions completed lately (learning B7), and the audits since.
       if (table === 'actions') return resolve({ data: fixedActions, error: null });
       if (table === 'brand_domains') return resolve({ data: domainRows, error: null });
+      if (table === 'site_audit_page_prefs') {
+        return resolve({ data: prefRows.slice(op.range[0], op.range[1] + 1), error: null });
+      }
+      if (table === 'site_audit_brand_settings') return resolve({ data: settingRows, error: null });
       if (table === 'site_audits' && op.select === 'url, final_url, created_at') {
         return resolve({ data: recentAudits, error: null });
       }
@@ -136,6 +146,8 @@ beforeEach(async () => {
     { brand_id: 'brand-a', domain: 'acme.com' },
     { brand_id: 'brand-b', domain: 'https://www.acme.com/' },
   ];
+  prefRows = [];
+  settingRows = [];
   sendAutoAuditEmail = vi.fn().mockResolvedValue(true);
   readInbox = vi.fn(async (brandId) => ({ opportunities: inboxes[brandId] ?? [] }));
   startAudits = vi.fn(async (brandId, urls) => ({
@@ -144,9 +156,15 @@ beforeEach(async () => {
   }));
 
   vi.doMock('../../config/supabase.js', () => ({ default: { from: (t) => query(t) } }));
-  vi.doMock('../rpc-pages.js', () => ({
-    readAllRpcRows: async () => ({ data: brandRows, error: null }),
-  }));
+  // The brands stand in; every other read goes through the real paging loop.
+  vi.doMock('../rpc-pages.js', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+      ...actual,
+      readAllRpcRows: async (name, page) =>
+        name === 'brands' ? { data: brandRows, error: null } : actual.readAllRpcRows(name, page),
+    };
+  });
   vi.doMock('../plan-guard.js', () => ({
     PlanLimitError,
     getSiteAuditQuotaStatus: vi.fn(async (orgId) => {
@@ -393,5 +411,45 @@ describe('fixedPages', () => {
     const { fixedPages } = await import('./auto-audit-sweep.js');
     expect(await fixedPages(brandRows, NOW)).toEqual([]);
     expect(ops.map((op) => op.table)).toEqual(['actions']);
+  });
+
+  it('leaves out the pages the team excluded, or put under an exclude pattern and not pinned', async () => {
+    fixedActions = [
+      {
+        brand_id: 'brand-a',
+        completed_at: '2026-10-09T10:00:00Z',
+        payload: {
+          targets: [
+            { id: 'https://acme.com/a-excluded' },
+            { id: 'https://acme.com/Legal/terms' },
+            { id: 'https://acme.com/legal/pinned' },
+            { id: 'https://acme.com/a-kept' },
+          ],
+        },
+      },
+      // Another brand's prefs and patterns are its own.
+      {
+        brand_id: 'brand-b',
+        completed_at: '2026-10-09T09:00:00Z',
+        payload: { targets: [{ id: 'https://acme.com/legal/b-terms' }] },
+      },
+    ];
+    prefRows = [
+      { brand_id: 'brand-a', page_key: 'acme.com/a-excluded', state: 'excluded' },
+      { brand_id: 'brand-a', page_key: 'acme.com/legal/pinned', state: 'pinned' },
+    ];
+    settingRows = [{ brand_id: 'brand-a', exclude_patterns: ['/legal/*'] }];
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+
+    expect((await fixedPages(brandRows, NOW)).map((p) => [p.brandId, p.path])).toEqual([
+      ['brand-a', '/legal/pinned'],
+      ['brand-a', '/a-kept'],
+      ['brand-b', '/legal/b-terms'],
+    ]);
+    for (const table of ['site_audit_page_prefs', 'site_audit_brand_settings']) {
+      expect(ops.find((op) => op.table === table).filters).toEqual([
+        ['in', 'brand_id', ['brand-a', 'brand-b']],
+      ]);
+    }
   });
 });

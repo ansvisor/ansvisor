@@ -109,7 +109,8 @@ export const FIXED_SHARE = 0.5;
  * @param {Date} now
  * @param {Set<string>} [triedKeys]  page keys a run audited in the last 30 days
  * @param {Array<{ brandId: string, key: string, url: string, path: string }>} [fixed]
- *   pages fixed since their last audit, the most recently fixed first
+ *   pages fixed since their last audit, the most recently fixed first, already
+ *   kept to the brand's own domains and its auto-audit exclusions (fixedPages)
  * @returns {Array<{ brandId: string, url: string, path: string, pinned: boolean, priority: number, fixed?: true }>}
  */
 export function pickRunPages(inboxes, slots, now, triedKeys = new Set(), fixed = []) {

@@ -15,7 +15,7 @@ import { readAllRpcRows } from '../rpc-pages.js';
 import { logger } from '../logger.js';
 import { AUTO_AUDIT, pickRunPages } from './auto-audit.js';
 import { sendAutoAuditEmail } from './auto-audit-email.js';
-import { opportunityKey } from './opportunities.js';
+import { excludePatternMatcher, opportunityKey } from './opportunities.js';
 import { pageKey } from './history.js';
 import { onBrandDomain } from './host.js';
 
@@ -184,8 +184,9 @@ const FIXED_PER_ACTION = 20;
  * Pages a Site Audit fix (an Action Center action of the fix category) was
  * completed on in the last 30 days and that no audit has read since, the
  * most recently fixed first (learning B7). Its targets name the pages, by
- * their addresses, on the action's brand's own domains; one fixed twice
- * counts from its last fix.
+ * their addresses, on the action's brand's own domains and not left out of
+ * auto-audits (excluded, or under an exclude pattern and not pinned); one
+ * fixed twice counts from its last fix.
  *
  * @returns {Promise<Array<{ brandId: string, key: string, url: string, path: string }>>}
  */
@@ -207,17 +208,47 @@ export async function fixedPages(brands, now) {
 
   // Only a brand's own pages: a fix's target on another site (a
   // competitor's page, say) costs an audit and says nothing of the fix. A
-  // brand without a domain has none.
-  const { data: domainRows, error: domainsErr } = await supabaseAdmin
-    .from('brand_domains')
-    .select('brand_id, domain')
-    .in('brand_id', brandIds);
-  if (domainsErr) throw new Error(domainsErr.message);
+  // brand without a domain has none. Nor the pages the team left out of
+  // Opportunities and auto-audits: excluded ones, and those under the
+  // brand's exclude patterns unless pinned, as the inbox does.
+  const [domainRows, prefRows, settingRows] = await Promise.all([
+    supabaseAdmin.from('brand_domains').select('brand_id, domain').in('brand_id', brandIds),
+    readAllRpcRows('site_audit_page_prefs', (from, to) =>
+      supabaseAdmin
+        .from('site_audit_page_prefs')
+        .select('brand_id, page_key, state')
+        .in('brand_id', brandIds)
+        .order('brand_id', { ascending: true })
+        .order('page_key', { ascending: true })
+        .range(from, to),
+    ),
+    supabaseAdmin
+      .from('site_audit_brand_settings')
+      .select('brand_id, exclude_patterns')
+      .in('brand_id', brandIds),
+  ]);
+  for (const read of [domainRows, prefRows, settingRows]) {
+    if (read.error) throw new Error(read.error.message);
+  }
   const domains = new Map();
-  for (const row of domainRows ?? []) {
+  for (const row of domainRows.data ?? []) {
     if (!domains.has(row.brand_id)) domains.set(row.brand_id, []);
     domains.get(row.brand_id).push(row.domain);
   }
+  const prefs = new Map(
+    (prefRows.data ?? []).map((row) => [`${row.brand_id}|${row.page_key}`, row.state]),
+  );
+  const excludedByPattern = new Map(
+    (settingRows.data ?? []).map((row) => [
+      row.brand_id,
+      excludePatternMatcher(row.exclude_patterns ?? []),
+    ]),
+  );
+  const leftOut = (brandId, key, path) => {
+    const state = prefs.get(`${brandId}|${key}`);
+    if (state === 'excluded') return true;
+    return state !== 'pinned' && Boolean(excludedByPattern.get(brandId)?.(path));
+  };
 
   const pages = new Map();
   for (const action of actions) {
@@ -233,11 +264,13 @@ export async function fixedPages(brands, now) {
       const key = opportunityKey(url);
       // Newest fix first: the first one read for a page is its last.
       if (!key || pages.has(key)) continue;
+      const path = pageKey(url)?.path ?? '/';
+      if (leftOut(action.brand_id, key, path)) continue;
       pages.set(key, {
         brandId: action.brand_id,
         key,
         url,
-        path: pageKey(url)?.path ?? '/',
+        path,
         fixedAt: Date.parse(action.completed_at),
       });
     }
