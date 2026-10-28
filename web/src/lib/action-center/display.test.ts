@@ -54,8 +54,8 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions, the nine person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(72);
+  it("holds copy for all sixty-two definitions, the ten person-sent kinds and the catalog check's", () => {
+    expect(ACTION_KINDS).toHaveLength(73);
   });
 
   it('names a product or category sent from Product Visibility after it (ECOM-013)', () => {
@@ -286,6 +286,33 @@ describe('actionTexts', () => {
     expect(texts.title).toBe('Seize the means');
     expect(texts.description).toBe(messages.actionCenter.actionTexts.unknown.description);
     expect(actionGoal('seize_the_means', t)).toBe(messages.actionCenter.actionTexts.unknown.goal);
+  });
+});
+
+/** A page sent from a Site Audit report (learning D2). */
+describe('actionTexts for a page sent from Site Audit', () => {
+  const tTexts = createTranslator({
+    locale: 'en',
+    messages,
+    namespace: 'actionCenter.actionTexts',
+  });
+  it('names the page and how many checks it fails', () => {
+    expect(
+      actionTexts(
+        {
+          kind: 'audit_page',
+          payload: {
+            targets: [{ id: 'https://acme.example/blog/espresso', label: '/blog/espresso' }],
+            checks: [{ key: 'faq-schema' }, { key: 'json-ld-validity' }],
+          },
+        },
+        tTexts as unknown as (key: string, values?: Record<string, string | number>) => string,
+      ),
+    ).toEqual({
+      title: 'Fix the issues Site Audit found on /blog/espresso',
+      description:
+        'Sent from Site Audit: the page fails 2 checks. Audit it again once fixed to see them pass.',
+    });
   });
 });
 
