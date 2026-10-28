@@ -508,6 +508,7 @@ describe('the Rules tab', () => {
     const shopping = {
       categories: [],
       site: null,
+      merchantCenter: true,
       products: titles.map((t, i) => ({
         key: `shop.example/products/${t}`,
         title: t.toUpperCase(),
@@ -532,11 +533,36 @@ describe('the Rules tab', () => {
     }));
     await render(state(undefined, { rules: checked, ...rulesMet(checked) }));
     const live = [...container.querySelectorAll('li')].find((li) =>
-      li.textContent?.startsWith('No sold-out or refused product linked'),
+      li.textContent?.startsWith('No out-of-stock or refused product linked'),
     )!;
     expect(live.textContent).toContain('4 found');
     expect(live.textContent).toContain(
-      'A (sold out), B (Merchant Center refuses it), C (sold out) +1 more: remove or replace these links on the page.',
+      'A (not in stock), B (Merchant Center refuses it), C (not in stock) +1 more: remove or replace these links on the page.',
+    );
+  });
+
+  it('explains the Shopping rules on hover, accepted by Merchant Center only when the brand has it', async () => {
+    const checked = activeRules(ruleSet('buying_guide', { shopping: true }), {
+      overrides: {},
+    }).map((rule) => ({ rule, status: { state: 'ok' as const } }));
+    const hint = (name: string) =>
+      [...container.querySelectorAll('span')].find((s) => s.textContent === name)?.title;
+
+    await render(state(undefined, { rules: checked, ...rulesMet(checked) }));
+    expect(hint('Links its category page')).toContain('A link to the category page');
+    expect(hint("Links the shopping path's products")).toBe(
+      'Links to the products in Brief › Shopping path that are in stock: this many, or all of them when fewer are. A product card or grid counts.',
+    );
+    expect(hint('No out-of-stock or refused product linked')).toBe(
+      "Every product the page links from its shopping path, or removed from it, is in stock and still in the catalog. Remove or replace a link to one that isn't, on the page.",
+    );
+
+    await render(state(undefined, { rules: checked, ...rulesMet(checked), merchantCenter: true }));
+    expect(hint("Links the shopping path's products")).toContain(
+      'that are in stock and accepted by Merchant Center: this many',
+    );
+    expect(hint('No out-of-stock or refused product linked')).toContain(
+      'is in stock, accepted by Merchant Center for free listings, and still in the catalog.',
     );
   });
 
