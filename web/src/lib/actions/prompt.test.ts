@@ -26,6 +26,16 @@ let positionsNull = false;
 let jsonRpcMissing = false;
 /** The position RPC calls, and whether any asked for a slice. */
 let positionCalls: { fn: string; ranged: boolean }[] = [];
+/** When set, each heavy read takes a moment, counted while it runs. */
+let slowReads: { running: number; most: number } | null = null;
+const slowRead = async <T>(read: () => T): Promise<T> => {
+  if (!slowReads) return read();
+  const reads = slowReads;
+  reads.most = Math.max(reads.most, ++reads.running);
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  reads.running--;
+  return read();
+};
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: vi.fn() }));
@@ -68,7 +78,10 @@ vi.mock('@/lib/supabase/server', () => ({
           call.ranged = true;
           return chain;
         },
-        then: (resolve: (value: unknown) => unknown) => resolve(result()),
+        then: (resolve: (value: unknown) => unknown) =>
+          fn === 'prompt_position_summaries_json'
+            ? slowRead(result).then(resolve)
+            : resolve(result()),
       };
       return chain;
     },
@@ -422,5 +435,36 @@ describe('getPromptLocationMatrix (PROMPT-015b)', () => {
       p1: { TR: { score: 35, mentions: 9, citations: 2, position: 2.5, runs: 6 } },
     });
     await expect(getPromptLocationMatrix('nope', { regions: ['TR'] })).rejects.toThrow('invalid');
+  });
+
+  it('runs at most three of its heavy reads at once, however many locations', async () => {
+    slowReads = { running: 0, most: 0 };
+    positionCalls = [];
+    vi.mocked(getPromptVisibilitySummaries).mockClear();
+    const summaries = vi.mocked(getPromptVisibilitySummaries).getMockImplementation()!;
+    vi.mocked(getPromptVisibilitySummaries).mockImplementation((brand, opts) =>
+      slowRead(() => summaries(brand, opts)),
+    );
+    const regions = ['TR', 'US', 'DE', 'FR', 'GB', 'ES', 'IT', 'NL', 'JP', 'BR', 'CA', 'AU'];
+    try {
+      const matrix = await getPromptLocationMatrix(BRAND, {
+        from: '2026-10-21T00:00:00Z',
+        regions,
+      });
+      expect(vi.mocked(getPromptVisibilitySummaries)).toHaveBeenCalledTimes(12);
+      expect(positionCalls.filter((c) => c.fn === 'prompt_position_summaries_json')).toHaveLength(
+        12,
+      );
+      expect(slowReads.most).toBe(3);
+      expect(matrix.p1.TR).toEqual({
+        score: 35,
+        mentions: 9,
+        citations: 2,
+        position: 2.5,
+        runs: 6,
+      });
+    } finally {
+      slowReads = null;
+    }
   });
 });

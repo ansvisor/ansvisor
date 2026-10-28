@@ -60,7 +60,10 @@ export function ColumnsPanel({
   const tLabels = useTranslations('prompts.columns.labels');
   const tMetrics = useTranslations('prompts.locations.metrics');
   const view = effectiveView(views.mine, views.brand);
-  const shared = views.brand !== null && sameView(views.brand, view);
+  // Linked to the brand's view only once an admin or manager shared their
+  // own: someone just looking at the brand's view changes theirs alone.
+  const shared =
+    canManage && views.mine !== null && views.brand !== null && sameView(views.brand, views.mine);
   const [dragging, setDragging] = useState<TableColumnId | null>(null);
   const [newMetric, setNewMetric] = useState<LocationMetric>('visibility');
   const [newRegion, setNewRegion] = useState('');
@@ -86,13 +89,16 @@ export function ColumnsPanel({
     }, SAVE_AFTER_MS);
   };
 
+  // Sharing saves the view as the person's own too, so it stays linked to
+  // the brand's and their later changes keep updating both.
   const share = async (on: boolean) => {
     onViewsChange({ mine: view, brand: on ? view : null });
     const result = on
       ? await savePromptTableView(brandId, view, 'brand')
       : await removePromptTableView(brandId, 'brand');
     report(result);
-    if (!result.ok) onViewsChange(views);
+    if (!result.ok) return onViewsChange(views);
+    if (on && views.mine === null) report(await savePromptTableView(brandId, view, 'mine'));
   };
 
   const reset = async () => {
@@ -114,9 +120,11 @@ export function ColumnsPanel({
         <div className="space-y-1">
           <PopoverTitle className="text-sm font-semibold">{t('title')}</PopoverTitle>
           <p className="text-xs text-muted-foreground">
-            {views.mine === null && views.brand !== null
-              ? t('fromBrand', { brand: brandName })
-              : t('mine')}
+            {shared
+              ? t('sharedMine', { brand: brandName })
+              : views.mine === null && views.brand !== null
+                ? t('fromBrand', { brand: brandName })
+                : t('mine')}
           </p>
         </div>
         <ul className="space-y-0.5" aria-label={t('title')}>
