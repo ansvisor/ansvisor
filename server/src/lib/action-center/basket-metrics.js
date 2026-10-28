@@ -160,12 +160,14 @@ const CONTROL_MAX_PROMPTS = 300;
  * didn't touch — in the same topics as its own first, else any of the
  * brand's — read over the same windows, so what moved for every prompt (an
  * engine's update, a season, a night tracking missed) is told apart from
- * what moved for the action's own. Its prompts only, never another brand's.
- * Null with too few to read.
+ * what moved for the action's own. Its prompts only, never another brand's,
+ * and only ones tracked by `since` (the first day of the week before): one
+ * added later reads in the week after alone, and would swell it. Null with
+ * too few to read.
  *
  * @returns {Promise<{ basis: 'topics' | 'brand', promptIds: string[], pages: [] } | null>}
  */
-export async function controlScope(brandId, promptIds) {
+export async function controlScope(brandId, promptIds, since) {
   if (!promptIds?.length) return null;
   const own = new Set(promptIds);
   const { data: targets, error } = await supabaseAdmin
@@ -179,7 +181,8 @@ export async function controlScope(brandId, promptIds) {
       .from('prompts')
       .select('id, prompt_sets!inner(brand_id)')
       .eq('prompt_sets.brand_id', brandId)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .lt('created_at', `${since}T00:00:00Z`);
     if (byTopic) query = query.in('topic_id', topics);
     const { data, error: readError } = await query
       .order('id')

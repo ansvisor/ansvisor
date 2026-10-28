@@ -467,7 +467,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
  */
 async function controlOf(brandId, promptIds, metrics, { beforeWindow, afterWindow }) {
   try {
-    const scope = await controlScope(brandId, promptIds);
+    const scope = await controlScope(brandId, promptIds, beforeWindow.from);
     if (!scope) return null;
     const [before, after] = await Promise.all([
       measureBasket(brandId, scope, beforeWindow.from, beforeWindow.to),

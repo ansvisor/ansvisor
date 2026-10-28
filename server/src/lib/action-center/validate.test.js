@@ -29,7 +29,7 @@ const EVERY_NIGHT = Array.from({ length: 60 }, (_, i) => ({ completed_at: daysAg
 /** Records every write so a test can assert what was stored; `rows` answers a table's reads. */
 function mockWrites(rows = {}) {
   rows = { tracking_runs: EVERY_NIGHT, ...rows };
-  const writes = { updated: [], inserted: [], ors: [] };
+  const writes = { updated: [], inserted: [], ors: [], lts: [] };
   from.mockImplementation((table) => {
     const builder = {
       or: (filter) => {
@@ -45,7 +45,10 @@ function mockWrites(rows = {}) {
       limit: () => builder,
       order: () => builder,
       gt: () => builder,
-      lt: () => builder,
+      lt: (...args) => {
+        writes.lts.push({ table, args });
+        return builder;
+      },
       in: () => builder,
       maybeSingle: async () => ({ data: (rows[table] ?? [])[0] ?? null, error: null }),
       update: (patch) => {
@@ -311,6 +314,11 @@ describe('validateAction', () => {
     });
     // Beside the result, not in its verdict.
     expect(patch.outcome).toBe('improved');
+    // Of the prompts tracked by the first day of the week before it was raised.
+    expect(writes.lts).toContainEqual({
+      table: 'prompts',
+      args: ['created_at', `${daysAgo(37).slice(0, 10)}T00:00:00Z`],
+    });
   });
 
   it('measures before and after over equal windows and stores both', async () => {

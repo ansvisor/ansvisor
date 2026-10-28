@@ -14,11 +14,24 @@ function chain(result) {
     select: () => b,
     eq: () => b,
     in: () => b,
+    lt: () => b,
     order: () => b,
     limit: () => Promise.resolve(result),
     maybeSingle: () => Promise.resolve(result),
     then: (resolve) => resolve(result),
   };
+  return b;
+}
+
+/** `chain`, recording each filter it is given as [method, ...args] in `calls`. */
+function recordingChain(result, calls) {
+  const b = chain(result);
+  for (const method of ['eq', 'in', 'lt']) {
+    b[method] = (...args) => {
+      calls.push([method, ...args]);
+      return b;
+    };
+  }
   return b;
 }
 
@@ -168,13 +181,15 @@ describe('netEffect', () => {
 });
 
 describe('controlScope', () => {
+  /** The first day of the week before the action was raised. */
+  const SINCE = '2026-09-01';
   const others = (n, topic = 't1') =>
     Array.from({ length: n }, (_, i) => ({ id: `c${i + 1}`, topic_id: topic }));
 
   it("takes the brand's other prompts in the action's topics, never its own", async () => {
     tables.prompts = () =>
       chain({ data: [{ id: 'p1', topic_id: 't1' }, ...others(6)], error: null });
-    const scope = await controlScope('b1', ['p1']);
+    const scope = await controlScope('b1', ['p1'], SINCE);
     expect(scope).toEqual({
       basis: 'topics',
       promptIds: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'],
@@ -190,10 +205,18 @@ describe('controlScope', () => {
         data: call++ < 2 ? [{ id: 'p1', topic_id: 't1' }, ...others(2)] : others(6, 't9'),
         error: null,
       });
-    expect((await controlScope('b1', ['p1'])).basis).toBe('brand');
+    expect((await controlScope('b1', ['p1'], SINCE)).basis).toBe('brand');
 
     tables.prompts = () => chain({ data: others(3), error: null });
-    expect(await controlScope('b1', ['p1'])).toBeNull();
-    expect(await controlScope('b1', [])).toBeNull();
+    expect(await controlScope('b1', ['p1'], SINCE)).toBeNull();
+    expect(await controlScope('b1', [], SINCE)).toBeNull();
+  });
+
+  it('leaves out prompts tracked after the week before began: they read in the week after alone', async () => {
+    const calls = [];
+    tables.prompts = () =>
+      recordingChain({ data: [{ id: 'p1', topic_id: 't1' }, ...others(6)], error: null }, calls);
+    await controlScope('b1', ['p1'], SINCE);
+    expect(calls).toContainEqual(['lt', 'created_at', '2026-09-01T00:00:00Z']);
   });
 });
