@@ -39,6 +39,8 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     conversionsEnabled: brand.conversions_enabled === true,
     conversionsConsent: brand.conversions_consent === 'always' ? 'always' : 'wait',
     isActive: brand.is_active === undefined ? true : !!brand.is_active,
+    isDemo: brand.is_demo === true,
+    demoHiddenAt: (brand.demo_hidden_at as string | null | undefined) ?? null,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
     updatedAt: brand.updated_at as string,

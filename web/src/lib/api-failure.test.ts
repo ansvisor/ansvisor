@@ -26,6 +26,12 @@ describe('apiFailure', () => {
     expect(apiFailure(401, { code: 'subscription_inactive' })).toBe('session');
   });
 
+  it("reads the demo brand's refusal as the upgrade dialog's, with its offer", () => {
+    // The server's 402 for a run or a change on the demo brand's sample data.
+    expect(apiFailure(402, { error: 'Demo brand', code: 'demo_brand' })).toBe('subscription');
+    expect(apiFailure(401, { code: 'demo_brand' })).toBe('session');
+  });
+
   it('reads a rate limit as busy, never as an allowance to upgrade', () => {
     // server/src/middleware/rate-limiter.js: a message, no error.
     const limiter = { success: false, message: 'Too many requests, please try again later.' };
@@ -65,6 +71,11 @@ describe('isSubscriptionInactive', () => {
     expect(isSubscriptionInactive(body)).toBe(true);
     // The AI SDK's chat transport: new Error(await response.text()).
     expect(isSubscriptionInactive(new Error(JSON.stringify(body)).message)).toBe(true);
+  });
+
+  it("reads the demo brand's refusal the same way", () => {
+    expect(isSubscriptionInactive({ code: 'demo_brand' })).toBe(true);
+    expect(isSubscriptionInactive(JSON.stringify({ code: 'demo_brand' }))).toBe(true);
   });
 
   it('is false for anything else', () => {

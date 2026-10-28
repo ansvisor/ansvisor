@@ -22,7 +22,8 @@ import type { ReadOnlyReason } from '@/lib/billing/subscription-access';
  */
 export function ReadOnlyBanner() {
   const state = useUpgradeDialog();
-  if (!state?.isLocked) return null;
+  // The demo brand has its own band: one band at a time.
+  if (!state?.isLocked || state.isDemo || state.reason === 'demo') return null;
   return <Band reason={state.reason} adminName={state.adminName} openUpgrade={state.openUpgrade} />;
 }
 

@@ -14,6 +14,7 @@ import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud, type PlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 
@@ -77,6 +78,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const planId = (org?.plan ?? 'starter') as PlanId;
 
+  // The organization's demo brand (sample data, 00380), shown or hidden: the
+  // dialog's offer reads whether the organization ever subscribed.
+  const demoBrand = brands.find((b) => b.isDemo) ?? null;
+
   // Effective API-model allowlist for the client (null = all allowed).
   // Enterprise orgs can be switched on per customer via
   // organizations.plan_overrides — same merge getOrgPlan applies.
@@ -101,32 +106,39 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionStatus={subscriptionStatus}
       >
         <RoleProvider role={role}>
-          <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
-            {/* Inside the provider: it records nothing while the workspace is read-only. */}
-            <GettingStartedPageOpened />
-            <AiUsageProvider>
-              <div className="flex h-screen overflow-hidden">
-                {/* Desktop sidebar */}
-                <div className="relative hidden md:flex md:flex-shrink-0">
-                  <SidebarErrorBoundary>
-                    <Sidebar />
-                  </SidebarErrorBoundary>
-                </div>
-
-                {/* Main area */}
-                <div className="flex flex-1 flex-col overflow-hidden">
-                  <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                    <MobileNav />
+          <DemoBrandProvider
+            demoBrand={
+              demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
+            }
+            everSubscribed={Boolean(org?.stripe_subscription_id)}
+          >
+            <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
+              {/* Inside the provider: it records nothing while the workspace is read-only. */}
+              <GettingStartedPageOpened />
+              <AiUsageProvider>
+                <div className="flex h-screen overflow-hidden">
+                  {/* Desktop sidebar */}
+                  <div className="relative hidden md:flex md:flex-shrink-0">
+                    <SidebarErrorBoundary>
+                      <Sidebar />
+                    </SidebarErrorBoundary>
                   </div>
-                  <ReadOnlyBanner />
-                  <main className="flex-1 overflow-y-auto bg-background p-6">
-                    <BrandGuard>{children}</BrandGuard>
-                  </main>
-                  <TrackingJobHandoff />
+
+                  {/* Main area */}
+                  <div className="flex flex-1 flex-col overflow-hidden">
+                    <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                      <MobileNav />
+                    </div>
+                    <ReadOnlyBanner />
+                    <main className="flex-1 overflow-y-auto bg-background p-6">
+                      <BrandGuard>{children}</BrandGuard>
+                    </main>
+                    <TrackingJobHandoff />
+                  </div>
                 </div>
-              </div>
-            </AiUsageProvider>
-          </UpgradeDialogProvider>
+              </AiUsageProvider>
+            </UpgradeDialogProvider>
+          </DemoBrandProvider>
         </RoleProvider>
       </PlanProvider>
     </>

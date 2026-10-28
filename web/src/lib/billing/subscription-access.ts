@@ -65,6 +65,13 @@ export async function evaluateSubscriptionAccess(
 export type ReadOnlyReason = 'ended' | 'payment_failed';
 
 /**
+ * Why an action opens the upgrade dialog: the workspace is read-only, or the
+ * brand on screen is the demo brand ('demo'), whose dialog makes the demo's
+ * offer.
+ */
+export type UpgradeReason = ReadOnlyReason | 'demo';
+
+/**
  * The reason, from Stripe's subscription status. A payment being retried
  * (`past_due`, `unpaid`) is fixed by updating the card in Stripe's billing
  * page. Anything else — a trial or a plan canceled, a first payment that

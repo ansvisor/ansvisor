@@ -78,12 +78,31 @@
       "ended": "Ask your admin to choose a plan.",
       "endedNamed": "Ask {name}, your workspace admin, to choose a plan.",
       "payment_failed": "Ask your workspace admin to update the payment method.",
-      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method."
+      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method.",
+      "demo": "Ask your admin to choose a plan.",
+      "demoNamed": "Ask {name}, your workspace admin, to choose a plan."
     },
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
     "portalFailed": "Couldn't open the billing page. Try again.",
     "noPlan": "No active plan",
+    "demo": {
+      "dialog": {
+        "title": {
+          "trial": "Start with your brand: {days} days free, then 50% off",
+          "first_month": "Use Ansvisor for your brand: 50% off your first month"
+        },
+        "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
+        "action": "{action} works on your own brand",
+        "label": "This is a demo brand with sample data",
+        "startTrial": "Start free trial"
+      },
+      "ownBrand": {
+        "title": "This is a demo brand",
+        "body": "It shows Ansvisor with sample data, so nothing here runs. Switch to your own brand to do this."
+      },
+      "switchToOwnBrand": "Switch to your brand"
+    },
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
       "editPrompts": "Editing prompts needs a plan",

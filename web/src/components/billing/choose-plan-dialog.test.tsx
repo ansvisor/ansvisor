@@ -37,7 +37,8 @@ const save50 = {
 async function render({
   role = 'admin',
   action = 'Adding prompts needs a plan',
-}: { role?: TeamRole; action?: string | null } = {}) {
+  demo = null,
+}: { role?: TeamRole; action?: string | null; demo?: 'trial' | 'first_month' | null } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -48,6 +49,7 @@ async function render({
             action={action}
             askAdmin="Ask your admin to choose a plan."
             organizationId="org1"
+            demo={demo}
           />
         </RoleProvider>
       </NextIntlClientProvider>,
@@ -303,6 +305,91 @@ describe('ChoosePlanDialog', () => {
     // The period still switches, to see the prices.
     await click('AnnualSave 20%');
     expect(price('growth')).toContain('$2,390/yr');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('ChoosePlanDialog from the demo brand', () => {
+  const demoBody =
+    'This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.';
+
+  it('starts a workspace that never subscribed with the free trial, SAVE50 applied', async () => {
+    await render({ demo: 'trial', action: 'Adding prompts works on your own brand' });
+    expect(dialog().querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
+      'Adding prompts works on your own brand',
+    );
+    expect(dialog().textContent).toContain('Start with your brand: 14 days free, then 50% off');
+    expect(dialog().textContent).toContain(demoBody);
+    expect(dialog().textContent).not.toContain('Choose a plan to keep going');
+    // The first-month code, tried as the dialog opens.
+    await vi.waitFor(() =>
+      expect(dialog().querySelector('[data-slot="promo-applied"]')?.textContent).toContain(
+        'SAVE50 · 50% off your first month',
+      ),
+    );
+    expect(sent('/api/stripe/promo-code')).toEqual({ code: 'SAVE50' });
+    expect(price('starter')).toContain('$24.50');
+    expect(button('Choose Starter')).toBeUndefined();
+    expect(card('starter').querySelector('button')?.textContent).toBe('Start free trial');
+    expect(card('growth').querySelector('button')?.textContent).toBe('Start free trial');
+  });
+
+  it('opens Checkout with the code from Start free trial', async () => {
+    await render({ demo: 'trial' });
+    await vi.waitFor(() =>
+      expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
+    );
+    await act(async () => {
+      card('growth').querySelector('button')!.click();
+    });
+    expect(sent('/api/stripe/checkout')).toEqual({
+      planId: 'growth',
+      organizationId: 'org1',
+      interval: 'month',
+      returnTo: 'billing',
+      promotionCode: 'SAVE50',
+    });
+  });
+
+  it('gives a workspace whose plan ended 50% off its first month, with Choose', async () => {
+    await render({ demo: 'first_month' });
+    expect(dialog().textContent).toContain('Use Ansvisor for your brand: 50% off your first month');
+    expect(dialog().textContent).toContain(demoBody);
+    await vi.waitFor(() =>
+      expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
+    );
+    expect(button('Choose Starter')).toBeDefined();
+    expect(button('Choose Growth')).toBeDefined();
+  });
+
+  it('leaves the field empty, with no error, when the code does not apply', async () => {
+    answer({ valid: false });
+    await render({ demo: 'first_month' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(dialog().querySelector('[data-slot="promo-applied"]')).toBeNull();
+    expect(codeInput()?.value).toBe('');
+    expect(note()).toBe('');
+  });
+
+  it('leaves the field empty when the code could not be checked', async () => {
+    fetchMock.mockImplementation(async () => {
+      throw new Error('offline');
+    });
+    await render({ demo: 'trial' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(codeInput()?.value).toBe('');
+    expect(note()).toBe('');
+  });
+
+  it("doesn't try a code for a member, who can't buy", async () => {
+    await render({ demo: 'trial', role: 'analyst' });
+    expect(dialog().textContent).toContain('Start with your brand: 14 days free, then 50% off');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(button('Start free trial')).toBeUndefined();
+  });
+
+  it('tries no code when opened from read-only, outside the demo', async () => {
+    await render();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

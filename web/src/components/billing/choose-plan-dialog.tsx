@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowUpRight, Check, CreditCard, Loader2, Lock, Mail, Tag, X } from 'lucide-react';
+import { ArrowUpRight, Check, CreditCard, Loader2, Lock, Mail, Play, Tag, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -33,6 +33,8 @@ import {
   type BillingInterval,
 } from '@/lib/billing/plan-purchase';
 import { discountedPrice, type PromoOffer } from '@/lib/billing/promo-code';
+import { TRIAL_DAYS } from '@/lib/billing/trial';
+import type { DemoOffer } from '@/lib/demo/demo-brand';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +64,33 @@ function offerValues(offer: PromoOffer) {
 
 type CodeError = { kind: 'invalid'; code: string } | { kind: 'failed' };
 
+/**
+ * A promotion code as Stripe has it now (POST /api/stripe/promo-code): what
+ * it takes off, 'invalid' when it can't be redeemed, 'failed' when it
+ * couldn't be checked.
+ */
+async function checkPromoCode(code: string): Promise<PromoOffer | 'invalid' | 'failed'> {
+  try {
+    const res = await fetch('/api/stripe/promo-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data) return 'failed';
+    if (!data.valid) return 'invalid';
+    return {
+      code: data.code,
+      percentOff: data.percentOff ?? null,
+      amountOff: data.amountOff ?? null,
+      duration: data.duration,
+      durationInMonths: data.durationInMonths ?? null,
+    };
+  } catch {
+    return 'failed';
+  }
+}
+
 const PROMO_INPUT_ID = 'upgrade-promo-code';
 const PROMO_NOTE_ID = 'upgrade-promo-note';
 
@@ -72,6 +101,12 @@ const PROMO_NOTE_ID = 'upgrade-promo-note';
  * (checked with Stripe, monthly plans only) and opens Stripe Checkout for a
  * new subscription from a card; another member is asked to turn to an admin
  * and sees the plain prices. ×, Escape or a click outside close it.
+ *
+ * From the demo brand (`demo`), the same plans with the demo's offer: a
+ * workspace that never subscribed starts its free trial, then 50% off; one
+ * whose plan ended gets 50% off its first month. An admin finds the
+ * first-month code already applied; when it doesn't apply, the field is
+ * simply left empty.
  */
 export function ChoosePlanDialog({
   open,
@@ -79,6 +114,7 @@ export function ChoosePlanDialog({
   action,
   askAdmin,
   organizationId,
+  demo = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -88,6 +124,8 @@ export function ChoosePlanDialog({
   askAdmin: string;
   /** The organization the new subscription is for. */
   organizationId: string | null;
+  /** Opened from the demo brand: the offer its title and buttons make. */
+  demo?: DemoOffer | null;
 }) {
   const t = useTranslations('readOnly');
   const tPlans = useTranslations('readOnly.plans');
@@ -105,6 +143,17 @@ export function ChoosePlanDialog({
   // The plan whose Checkout is opening.
   const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The demo's code is tried once, the first time the dialog opens.
+  const demoCodeTried = useRef(false);
+
+  useEffect(() => {
+    if (!open || !demo || !canAdmin || demoCodeTried.current) return;
+    demoCodeTried.current = true;
+    void checkPromoCode(FIRST_MONTH_CODE).then((found) => {
+      // Quietly: a code that doesn't apply leaves the field as it was.
+      if (typeof found === 'object') setOffer((current) => current ?? found);
+    });
+  }, [open, demo, canAdmin]);
 
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
   // The code lowers this period's prices: a monthly plan, for an admin.
@@ -119,30 +168,11 @@ export function ChoosePlanDialog({
     }
     setChecking(true);
     setCodeError(null);
-    try {
-      const res = await fetch('/api/stripe/promo-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: typed }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data) throw new Error('promo check failed');
-      if (data.valid) {
-        setOffer({
-          code: data.code,
-          percentOff: data.percentOff ?? null,
-          amountOff: data.amountOff ?? null,
-          duration: data.duration,
-          durationInMonths: data.durationInMonths ?? null,
-        });
-      } else {
-        setCodeError({ kind: 'invalid', code: typed.toUpperCase() });
-      }
-    } catch {
-      setCodeError({ kind: 'failed' });
-    } finally {
-      setChecking(false);
-    }
+    const found = await checkPromoCode(typed);
+    if (found === 'invalid') setCodeError({ kind: 'invalid', code: typed.toUpperCase() });
+    else if (found === 'failed') setCodeError({ kind: 'failed' });
+    else setOffer(found);
+    setChecking(false);
   }
 
   function removeCode() {
@@ -233,13 +263,19 @@ export function ChoosePlanDialog({
             data-slot="upgrade-action"
             className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"
           >
-            <Lock className="size-3" aria-hidden />
+            {demo ? (
+              <Play className="size-3" aria-hidden />
+            ) : (
+              <Lock className="size-3" aria-hidden />
+            )}
             {action ?? t('dialog.readOnlyLabel')}
           </span>
           <DialogTitle className="text-xl leading-tight font-bold tracking-tight">
-            {t('dialog.title.ended')}
+            {demo ? t(`demo.dialog.title.${demo}`, { days: TRIAL_DAYS }) : t('dialog.title.ended')}
           </DialogTitle>
-          <DialogDescription className="max-w-2xl">{t('dialog.body.ended')}</DialogDescription>
+          <DialogDescription className="max-w-2xl">
+            {demo ? t('demo.dialog.body') : t('dialog.body.ended')}
+          </DialogDescription>
         </DialogHeader>
 
         {!canAdmin && (
@@ -425,7 +461,9 @@ export function ChoosePlanDialog({
                           <Loader2 className="animate-spin" aria-hidden />
                           {tPlans('openingCheckout')}
                         </>
-                      ) : firstPrice != null ? (
+                      ) : demo === 'trial' ? (
+                        t('demo.dialog.startTrial')
+                      ) : firstPrice != null && !demo ? (
                         tPlans('chooseToday', { plan: plan.name, price: money(firstPrice) })
                       ) : (
                         tSettings('choosePlanFor', { plan: plan.name })

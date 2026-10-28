@@ -17,9 +17,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { useUserRole } from '@/hooks/use-user-role';
-import { readOnlyReason, type ReadOnlyReason } from '@/lib/billing/subscription-access';
+import {
+  readOnlyReason,
+  type ReadOnlyReason,
+  type UpgradeReason,
+} from '@/lib/billing/subscription-access';
 import { openBillingPortal } from '@/lib/billing/portal-client';
+import { demoActionName, type DemoOffer } from '@/lib/demo/demo-brand';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { ChoosePlanDialog } from '@/components/billing/choose-plan-dialog';
 import { CHOOSE_PLAN_HREF, UpgradeDialogContext } from './upgrade-gate';
 
@@ -36,6 +43,11 @@ export { CHOOSE_PLAN_HREF, useUpgradeDialog, useUpgradeGate } from './upgrade-ga
  * Stripe's Checkout; other members are asked to turn to an admin. A payment
  * being retried asks for the payment method instead. Self-hosted is never
  * locked.
+ *
+ * The demo brand (sample data) is locked the same way, whatever the plan:
+ * its dialog makes the demo's offer (the free trial for a workspace that
+ * never subscribed, 50% off the first month for one whose plan ended), or,
+ * with a plan active, points back to the workspace's own brand.
  */
 export function UpgradeDialogProvider({
   adminName = null,
@@ -48,6 +60,7 @@ export function UpgradeDialogProvider({
   children: ReactNode;
 }) {
   const { subscriptionActive, subscriptionStatus } = usePlanContext();
+  const { isDemo, offer } = useDemoBrand();
   const [open, setOpen] = useState(false);
   // What was clicked, for the dialog's label; none when it wasn't said.
   const [action, setAction] = useState<string | null>(null);
@@ -56,15 +69,20 @@ export function UpgradeDialogProvider({
     setAction(typeof label === 'string' && label ? label : null);
     setOpen(true);
   }, []);
-  const value = useMemo(
-    () => ({
-      isLocked: !subscriptionActive,
-      reason: readOnlyReason(subscriptionStatus),
+  const value = useMemo(() => {
+    const lapsed = readOnlyReason(subscriptionStatus);
+    // A payment being retried is fixed in Billing, demo brand or not: a plan
+    // bought from the demo's offer would be a second subscription.
+    const reason: UpgradeReason =
+      isDemo && (subscriptionActive || lapsed !== 'payment_failed') ? 'demo' : lapsed;
+    return {
+      isLocked: !subscriptionActive || isDemo,
+      isDemo,
+      reason,
       adminName,
       openUpgrade,
-    }),
-    [subscriptionActive, subscriptionStatus, adminName, openUpgrade],
-  );
+    };
+  }, [subscriptionActive, subscriptionStatus, isDemo, adminName, openUpgrade]);
 
   return (
     <UpgradeDialogContext.Provider value={value}>
@@ -76,6 +94,8 @@ export function UpgradeDialogProvider({
         adminName={adminName}
         action={action}
         organizationId={organizationId}
+        offer={offer}
+        subscriptionActive={subscriptionActive}
       />
     </UpgradeDialogContext.Provider>
   );
@@ -85,7 +105,7 @@ export function UpgradeDialogProvider({
  * What a member who isn't an admin is asked to do: have an admin choose a
  * plan, or update the payment method; by the admin's name when known.
  */
-export function useAskAdmin(reason: ReadOnlyReason, adminName: string | null): string {
+export function useAskAdmin(reason: UpgradeReason, adminName: string | null): string {
   const t = useTranslations('readOnly.ask');
   return adminName ? t(`${reason}Named`, { name: adminName }) : t(reason);
 }
@@ -138,7 +158,9 @@ export function ReadOnlyAction({
  * The workspace is read-only: once the plan ended, "Choose a plan to keep
  * going" with the plans (ChoosePlanDialog); while a payment is being
  * retried, what was clicked when the caller said and the one thing to do,
- * update the payment method.
+ * update the payment method. On the demo brand, the plans with the demo's
+ * offer, its label naming what was clicked as something that "works on your
+ * own brand"; with a plan already active, the way back to that brand.
  */
 function UpgradeDialog({
   open,
@@ -147,17 +169,39 @@ function UpgradeDialog({
   adminName,
   action,
   organizationId,
+  offer,
+  subscriptionActive,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  reason: ReadOnlyReason;
+  reason: UpgradeReason;
   adminName: string | null;
   action: string | null;
   organizationId: string | null;
+  offer: DemoOffer;
+  subscriptionActive: boolean;
 }) {
   const t = useTranslations('readOnly');
   const { canAdmin } = useUserRole();
   const ask = useAskAdmin(reason, adminName);
+
+  if (reason === 'demo') {
+    const label = action
+      ? t('demo.dialog.action', { action: demoActionName(action) })
+      : t('demo.dialog.label');
+    return subscriptionActive ? (
+      <DemoOwnBrandDialog open={open} onOpenChange={onOpenChange} label={label} />
+    ) : (
+      <ChoosePlanDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        action={label}
+        askAdmin={ask}
+        organizationId={organizationId}
+        demo={offer}
+      />
+    );
+  }
 
   if (reason === 'ended') {
     return (
@@ -187,6 +231,51 @@ function UpgradeDialog({
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>{t('dialog.notNow')}</DialogClose>
           {canAdmin && <ReadOnlyAction reason={reason} onChoose={() => onOpenChange(false)} />}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The demo brand while the workspace's plan is active: nothing runs on its
+ * sample data, and the same action works on the workspace's own brand,
+ * one click away.
+ */
+function DemoOwnBrandDialog({
+  open,
+  onOpenChange,
+  label,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  label: string;
+}) {
+  const t = useTranslations('readOnly');
+  const ownBrandId = useBrandStore((s) => s.brands.find((b) => !b.isDemo)?.id ?? null);
+  const setActiveBrand = useBrandStore((s) => s.setActiveBrand);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <Badge variant="secondary" className="w-fit" data-slot="upgrade-action">
+            {label}
+          </Badge>
+          <DialogTitle>{t('demo.ownBrand.title')}</DialogTitle>
+          <DialogDescription>{t('demo.ownBrand.body')}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>{t('dialog.notNow')}</DialogClose>
+          {ownBrandId && (
+            <Button
+              onClick={() => {
+                setActiveBrand(ownBrandId);
+                onOpenChange(false);
+              }}
+            >
+              {t('demo.switchToOwnBrand')}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

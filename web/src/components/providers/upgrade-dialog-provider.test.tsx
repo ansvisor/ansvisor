@@ -6,6 +6,24 @@ import messages from '../../../messages/en.json';
 import { PlanProvider } from './plan-provider';
 import { RoleProvider, type TeamRole } from './role-provider';
 import { UpgradeDialogProvider, useUpgradeGate } from './upgrade-dialog-provider';
+import { DemoBrandProvider } from './demo-brand-provider';
+import { useBrandStore } from '@/stores/use-brand-store';
+import type { Brand } from '@/types';
+
+// An in-memory localStorage for the brand store to persist to, before the store
+// loads: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -47,30 +65,54 @@ async function render({
   role = 'admin',
   adminName = null,
   provider = true,
+  everSubscribed = true,
 }: {
   active: boolean;
   status?: string | null;
   role?: TeamRole;
   adminName?: string | null;
   provider?: boolean;
+  everSubscribed?: boolean;
 }) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <PlanProvider planId="starter" subscriptionActive={active} subscriptionStatus={status}>
           <RoleProvider role={role}>
-            {provider ? (
-              <UpgradeDialogProvider adminName={adminName}>
+            <DemoBrandProvider everSubscribed={everSubscribed}>
+              {provider ? (
+                <UpgradeDialogProvider adminName={adminName}>
+                  <Probe />
+                </UpgradeDialogProvider>
+              ) : (
                 <Probe />
-              </UpgradeDialogProvider>
-            ) : (
-              <Probe />
-            )}
+              )}
+            </DemoBrandProvider>
           </RoleProvider>
         </PlanProvider>
       </NextIntlClientProvider>,
     );
   });
+}
+
+function brand(id: string, isDemo = false): Brand {
+  return {
+    id,
+    organizationId: 'org1',
+    name: isDemo ? 'Brewline Coffee' : 'Acme',
+    slug: id,
+    shoppingModeEnabled: false,
+    isActive: true,
+    isDemo,
+    domains: [],
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+  };
+}
+
+/** The workspace's own brand and its demo brand, the given one selected. */
+function selectBrand(id: 'own' | 'demo') {
+  useBrandStore.setState({ brands: [brand('own'), brand('demo', true)], activeBrandId: id });
 }
 
 const probe = () => container.querySelector<HTMLButtonElement>('button[data-locked]')!;
@@ -87,6 +129,7 @@ async function runAll() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  useBrandStore.setState({ brands: [], activeBrandId: null });
   returned = undefined;
   label = undefined;
   container = document.createElement('div');
@@ -217,6 +260,85 @@ describe('useUpgradeGate', () => {
 
   it('runs the action outside the dashboard’s provider', async () => {
     await render({ active: false, provider: false });
+    await runAll();
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(dialog()).toBeNull();
+  });
+});
+
+describe('useUpgradeGate on the demo brand', () => {
+  const fetchMock = vi.fn(async () => Response.json({ valid: false }));
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('starts a workspace that never subscribed with the trial, naming what was clicked', async () => {
+    selectBrand('demo');
+    label = 'Adding prompts needs a plan';
+    await render({ active: false, status: null, everSubscribed: false });
+    expect(probe().dataset.locked).toBe('true');
+    await runAll();
+    expect(action).not.toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain('Start with your brand: 14 days free, then 50% off');
+    expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
+      'Adding prompts works on your own brand',
+    );
+    expect(button('Start free trial')).toBeDefined();
+  });
+
+  it('gives a workspace whose plan ended 50% off its first month', async () => {
+    selectBrand('demo');
+    await render({ active: false, status: 'canceled' });
+    await runAll();
+    expect(dialog()?.textContent).toContain(
+      'Use Ansvisor for your brand: 50% off your first month',
+    );
+    // Opened without a label: what the demo is.
+    expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
+      'This is a demo brand with sample data',
+    );
+    expect(button('Choose Starter')).toBeDefined();
+  });
+
+  it('locks the demo brand with a plan active too, and switches to the own brand', async () => {
+    selectBrand('demo');
+    await render({ active: true, status: 'active' });
+    expect(probe().dataset.locked).toBe('true');
+    await runAll();
+    expect(action).not.toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain('This is a demo brand');
+    expect(button('Choose Starter')).toBeUndefined();
+    await act(async () => {
+      button('Switch to your brand')!.click();
+    });
+    expect(useBrandStore.getState().activeBrandId).toBe('own');
+    // On its own brand, the action runs.
+    await runAll();
+    expect(action).toHaveBeenCalledWith('Run all');
+  });
+
+  it('asks for the payment method while a payment is being retried', async () => {
+    selectBrand('demo');
+    await render({ active: false, status: 'past_due' });
+    await runAll();
+    expect(dialog()?.textContent).toContain('Update your payment method to keep going');
+  });
+
+  it("keeps the workspace's own brand as it was", async () => {
+    selectBrand('own');
+    await render({ active: true, status: 'active' });
+    expect(probe().dataset.locked).toBe('false');
+    await runAll();
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it('never treats a demo brand as one self-hosted', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    selectBrand('demo');
+    await render({ active: true, status: 'active' });
     await runAll();
     expect(action).toHaveBeenCalledTimes(1);
     expect(dialog()).toBeNull();
