@@ -75,6 +75,7 @@ import {
   type MentionsFilterParams,
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
+import { gateWriteTools } from './subscription-gate';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -137,10 +138,15 @@ const MENTIONS_BASIS =
   'read no change into it. Sentiment is measured for the brand only, not competitors.';
 
 export function createMcpServer(auth: McpAuthContext): McpServer {
-  const server = new McpServer({
-    name: 'ansvisor',
-    version: '0.1.0',
-  });
+  // A read-only workspace (Cloud, plan not active) keeps its list_/get_ tools;
+  // every other tool answers subscription_inactive until a plan is chosen.
+  const server = gateWriteTools(
+    new McpServer({
+      name: 'ansvisor',
+      version: '0.1.0',
+    }),
+    auth.organizationId,
+  );
 
   server.registerTool(
     'list_brands',

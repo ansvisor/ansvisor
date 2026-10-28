@@ -22,6 +22,7 @@ export const PLANS = {
       maxSiteAudits: -1,
       maxBotEventsPerMonth: -1,
       maxBotRawRecordsPerMonth: -1,
+      maxCatalogProducts: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [
@@ -70,6 +71,11 @@ export const PLANS = {
       // Raw log records a month a Vercel drain or Logpush job may send
       // (AT-010, spec §6.3): Growth 20M, Enterprise 200M.
       maxBotRawRecordsPerMonth: 0,
+      // Live catalog products a workspace's brands may have across their
+      // sources (ECOM-019): Starter 5,000, Growth 50,000, Enterprise per
+      // customer through plan_overrides; -1 = no cap. Products past it aren't
+      // synced. Decided 2026-10-28.
+      maxCatalogProducts: 5_000,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
       allowedScrapers: ['chatgpt-web', 'copilot-web'],
@@ -110,6 +116,7 @@ export const PLANS = {
       maxSiteAudits: 500,
       maxBotEventsPerMonth: 2_000_000,
       maxBotRawRecordsPerMonth: 20_000_000,
+      maxCatalogProducts: 50_000,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
       // API-model tracking (Claude) is not part of Growth — scraper engines
@@ -156,6 +163,7 @@ export const PLANS = {
       maxSiteAudits: -1,
       maxBotEventsPerMonth: 20_000_000,
       maxBotRawRecordsPerMonth: 200_000_000,
+      maxCatalogProducts: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       // API-model tracking (Claude) is a per-customer opt-in on Enterprise:

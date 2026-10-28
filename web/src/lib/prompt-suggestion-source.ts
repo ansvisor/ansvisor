@@ -35,9 +35,26 @@ export interface GaSuggestionSourceData {
   pageTitle: string | null;
 }
 
-export type SuggestionSourceData = GscSuggestionSourceData | GaSuggestionSourceData;
+/**
+ * The catalog category behind a shopping suggestion (ECOM-003): its live
+ * products and, when they share a currency, their price band.
+ */
+export interface CatalogSuggestionSourceData {
+  category: string;
+  products: number;
+  priceLow: number | null;
+  priceHigh: number | null;
+  /** The round price most of its products sell under. */
+  priceUnder: number | null;
+  currency: string | null;
+}
 
-export type PromptSuggestionSource = 'llm' | 'heuristic' | 'gsc' | 'ga';
+export type SuggestionSourceData =
+  | GscSuggestionSourceData
+  | GaSuggestionSourceData
+  | CatalogSuggestionSourceData;
+
+export type PromptSuggestionSource = 'llm' | 'heuristic' | 'gsc' | 'ga' | 'catalog';
 
 interface SourceCarrier {
   source: PromptSuggestionSource;
@@ -58,6 +75,11 @@ export function gscSourceData(s: SourceCarrier): GscSuggestionSourceData | null 
 
 export function gaSourceData(s: SourceCarrier): GaSuggestionSourceData | null {
   return s.source === 'ga' && s.sourceData && 'landingPage' in s.sourceData ? s.sourceData : null;
+}
+
+/** A shopping question drawn from the brand's catalog: Prompt Suggestions' "Shopping" filter. */
+export function catalogSourceData(s: SourceCarrier): CatalogSuggestionSourceData | null {
+  return s.source === 'catalog' && s.sourceData && 'category' in s.sourceData ? s.sourceData : null;
 }
 
 /**
