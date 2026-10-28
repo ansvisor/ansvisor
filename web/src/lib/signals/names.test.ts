@@ -4,7 +4,7 @@ import { isOnPlatform, locationName, platformFamily, platformName, targetName } 
 describe('platformName', () => {
   it('names the tracked apps the way people know them', () => {
     expect(platformName('gemini-web')).toBe('Gemini');
-    expect(platformName('google-aio')).toBe('Google AI Overview');
+    expect(platformName('google-aio')).toBe('Google AI Overviews');
     expect(platformName('google-aimode')).toBe('Google AI Mode');
     expect(platformName('chatgpt-web')).toBe('ChatGPT');
     expect(platformName('copilot-web')).toBe('Microsoft Copilot');
