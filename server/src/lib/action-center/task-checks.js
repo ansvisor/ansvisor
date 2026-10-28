@@ -78,12 +78,12 @@ export const MIN_CHANGED_RUNS = 80;
  * Words in a block's class or id that name what changes by itself (a
  * sidebar, testimonials, the latest posts): left out of the words a change
  * is measured on, as furniture is, unless they hold most of the page. Not
- * left out of the words a written task's text is looked for in.
+ * left out of the words a written task's text is looked for in. "widget"
+ * and "popular" alone aren't such words: Elementor and HubSpot name each of
+ * the page's blocks a widget, and a pricing page its "Most popular" plan.
  */
 const SELF_CHANGING = new Set([
   'sidebar',
-  'widget',
-  'widgets',
   'promo',
   'announcement',
   'pagination',
@@ -92,9 +92,25 @@ const SELF_CHANGING = new Set([
   'testimonials',
   'latest',
   'recent',
-  'popular',
   'trending',
 ]);
+/** …and two words, one after the other, that do: a theme's widget area, a popular posts list. */
+const SELF_CHANGING_PAIRS = new Set([
+  'widget area',
+  'widgets area',
+  'footer widgets',
+  'popular posts',
+  'popular post',
+  'popular articles',
+]);
+
+/** Whether an element's class or id names what changes by itself. */
+function selfChanging(attribs) {
+  const names = classIdWords(attribs);
+  return names.some(
+    (word, i) => SELF_CHANGING.has(word) || SELF_CHANGING_PAIRS.has(`${word} ${names[i + 1]}`),
+  );
+}
 /**
  * The way a sketch reads a page. A first look kept by another (before
  * SELF_CHANGING was left out, 2026-10-28) isn't compared: the page gets a
@@ -230,7 +246,7 @@ function textLengths(start) {
  * words is the page (an <article class="category-social-media">, a page in
  * one <form>), and is read. Two passes over the body, as stacks: linear on
  * any page, never out of stack. With `steady`, what changes by itself
- * (SELF_CHANGING) is left out too: the words a change is measured on.
+ * (selfChanging) is left out too: the words a change is measured on.
  *
  * @param {string} html
  * @param {import('cheerio').CheerioAPI} [$] the page, when it is parsed already
@@ -254,7 +270,7 @@ export function visibleText(html, $ = loadPage(html), { steady = false } = {}) {
     const aside =
       AROUND.has(node.name) ||
       furnitureNamed(node.attribs) ||
-      (steady && classIdWords(node.attribs).some((word) => SELF_CHANGING.has(word)));
+      (steady && selfChanging(node.attribs));
     if (aside && (lengths.get(node) ?? 0) <= most) continue;
     // A block's words start and end with it: "Pricing" and "Plans" never run together.
     out.push(' ');

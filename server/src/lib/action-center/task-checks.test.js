@@ -412,6 +412,44 @@ describe('checkPage', () => {
       });
     });
 
+    it.each([
+      [
+        'Elementor',
+        '<div class="elementor-widget-wrap">',
+        (text) =>
+          `<div class="elementor-element elementor-widget elementor-widget-text-editor">` +
+          `<div class="elementor-widget-container"><p>${text}</p></div></div>`,
+      ],
+      [
+        'HubSpot',
+        '<div class="row-fluid">',
+        (text) =>
+          `<div class="span12 widget-span widget-type-rich_text">` +
+          `<div class="cell-wrapper"><p>${text}</p></div></div>`,
+      ],
+    ])('passes a %s page rewritten in its widgets', async (_, wrap, widget) => {
+      const built = (prefix) =>
+        `<html><head><title>Pricing</title></head><body>${wrap}` +
+        `${[0, 1, 2, 3].map((i) => widget(run(`${prefix}${i}x`, 50))).join('')}</div></body></html>`;
+      const first = await look(built('old'));
+      expect((await look(built('new'), { ...first, url: PAGE })).passed).toBe(true);
+    });
+
+    it('counts a pricing page’s “Most popular” plan, and still leaves out a sidebar', () => {
+      const read = visibleText(
+        `<html><body><main><h1>Pricing</h1><div class="plan popular"><p>Growth plan words</p></div>` +
+          `<p>${FILLER}</p></main><aside class="sidebar"><p>Sidebar words</p></aside>` +
+          `<div class="widget-area"><p>Widget area words</p></div>` +
+          `<div class="popular-posts"><p>Popular posts words</p></div></body></html>`,
+        undefined,
+        { steady: true },
+      );
+      expect(read).toContain('Growth plan words');
+      expect(read).not.toContain('Sidebar words');
+      expect(read).not.toContain('Widget area words');
+      expect(read).not.toContain('Popular posts words');
+    });
+
     it('takes a new first look over one kept before these were left out', async () => {
       const first = await look(page('quoteA', 'postA'));
       expect(first.sketch.v).toBe(SKETCH_VERSION);
