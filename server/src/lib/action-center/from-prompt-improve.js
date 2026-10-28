@@ -13,7 +13,12 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { IMPROVE_PLATFORM_LABELS } from '../prompt-improve.js';
-import { compareOutcome, outcomeWindow, readPlatformStates } from './improve-outcome.js';
+import {
+  OUTCOME_WINDOW_DAYS,
+  compareOutcome,
+  outcomeWindow,
+  readPlatformStates,
+} from './improve-outcome.js';
 import { priorityOnCreate } from './priority-data.js';
 
 export const IMPROVE_ACTION_KIND = 'prompt_improve';
@@ -103,6 +108,114 @@ export function improveGoal(promptText, platforms) {
  */
 export function improveBaseline(snapshots, capturedAt, window) {
   return { capturedAt, window, platforms: snapshots };
+}
+
+/** Earlier Improve rounds on a prompt the next generation is shown (learning B5). */
+export const IMPROVE_PAST_ROUNDS = 2;
+
+/** Suggestions of one earlier round the next generation is shown, in task order. */
+export const IMPROVE_ROUND_TASKS = 12;
+
+const DAY_MS = 86_400_000;
+
+/** How the next generation reads a task's status: done, skipped by the team, or neither. */
+function suggestionStatus(status) {
+  if (status === 'completed') return 'done';
+  if (status === 'skipped') return 'skipped';
+  return 'not_done';
+}
+
+/**
+ * One earlier Improve round on a prompt, as the next generation reads it
+ * (learning B5): when it was sent and how many days before `now`, whether
+ * it's still open, how each of its platforms moved since (final a month
+ * after it was completed), and the suggestions it carried, each with whether
+ * it was done or skipped.
+ *
+ * Until its read is OUTCOME_WINDOW_DAYS past the send, the read's days still
+ * overlap the baseline's (on the day it's sent, every platform is
+ * "unchanged"), so its platforms are `too_early` rather than a verdict.
+ *
+ * @param {{ created_at?: string, status: string, position_outcome?: object | null }} action
+ * @param {Array<{ title?: string | null, status: string, details?: { platform?: string } | null }>} tasks
+ * @param {Date} [now]
+ */
+export function improveRound(action, tasks, now = new Date()) {
+  const outcome = action.position_outcome ?? {};
+  const sentMs = typeof action.created_at === 'string' ? Date.parse(action.created_at) : NaN;
+  const sent = Number.isFinite(sentMs);
+  const readMs = Date.parse(outcome.measuredAt);
+  const tooEarly =
+    sent && (!Number.isFinite(readMs) || readMs - sentMs < OUTCOME_WINDOW_DAYS * DAY_MS);
+  return {
+    sent: sent ? action.created_at.slice(0, 10) : null,
+    daysAgo: sent ? Math.max(0, Math.floor((now.getTime() - sentMs) / DAY_MS)) : null,
+    open: action.status !== 'completed',
+    final: outcome.final === true,
+    platforms: (Array.isArray(outcome.platforms) ? outcome.platforms : [])
+      .filter((p) => typeof p?.platform === 'string')
+      .map((p) => ({
+        id: p.platform,
+        verdict: tooEarly ? 'too_early' : (p.verdict ?? 'not_enough_data'),
+      })),
+    suggestions: tasks
+      .filter((task) => typeof task.title === 'string' && task.title.trim())
+      .slice(0, IMPROVE_ROUND_TASKS)
+      .map((task) => ({
+        platform: task.details?.platform ?? null,
+        // One line in the prompt, however the title was edited.
+        title: task.title.replace(/\s+/g, ' ').trim(),
+        status: suggestionStatus(task.status),
+      })),
+  };
+}
+
+/**
+ * The brand's last Improve rounds on a prompt, newest first: sent and not
+ * dismissed, nor deleted. The brand's own actions only, sent from a set of
+ * the same region (an Improve set is kept per region): '' or null is all
+ * regions, which is how an action sent without a region is measured.
+ *
+ * @returns {Promise<ReturnType<typeof improveRound>[]>}
+ */
+export async function loadImproveRounds({
+  promptId,
+  brandId,
+  region = null,
+  limit = IMPROVE_PAST_ROUNDS,
+  now = new Date(),
+}) {
+  let q = supabaseAdmin
+    .from('actions')
+    .select('id, status, created_at, position_outcome')
+    .eq('brand_id', brandId)
+    .eq('kind', IMPROVE_ACTION_KIND)
+    .eq('payload->>promptId', promptId);
+  q = region ? q.eq('payload->>region', region) : q.is('payload->>region', null);
+  const { data: actions, error } = await q
+    .neq('status', 'dismissed')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`earlier Improve rounds read failed: ${error.message}`);
+  if (!actions?.length) return [];
+  const { data: tasks, error: tasksError } = await supabaseAdmin
+    .from('action_tasks')
+    .select('action_id, position, title, status, details')
+    .in(
+      'action_id',
+      actions.map((action) => action.id),
+    )
+    .order('position');
+  if (tasksError)
+    throw new Error(`earlier Improve rounds' tasks read failed: ${tasksError.message}`);
+  return actions.map((action) =>
+    improveRound(
+      action,
+      (tasks ?? []).filter((task) => task.action_id === action.id),
+      now,
+    ),
+  );
 }
 
 /** One task row per selected suggestion, in the order they were shown. */
@@ -218,6 +331,7 @@ export async function sendImproveToActionCenter({
       },
       dedup_key: dedupKey,
       ...(await priorityOnCreate({
+        brand_id: brandId,
         kind: IMPROVE_ACTION_KIND,
         category: 'compete',
         impact,

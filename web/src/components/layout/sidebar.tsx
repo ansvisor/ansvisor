@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import {
   ChevronDown,
   ChevronsLeft,
@@ -151,6 +152,17 @@ export function Sidebar() {
   // Sidebar hides the item entirely when this returns false — see #155/#170
   // for why Shopping uses this on top of the existing plan-feature gate.
   const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
+  // The items the viewer sees, and the groups that keep one: a group whose
+  // sections are all off their menu goes, title and all.
+  const hiddenSections = useHiddenMenuSections();
+  const visibleNav = dashboardNav
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard: SSR can't know the resolved theme, so we render the
@@ -202,9 +214,11 @@ export function Sidebar() {
   }, [underMenu]);
 
   // The count beside Tracked Prompts, refreshed on brand switch and on every
-  // page change so adding or deleting prompts shows up.
+  // page change so adding or deleting prompts shows up. Not read while
+  // Prompts is off the viewer's menu.
+  const promptsOnMenu = !hiddenSections.has('prompts');
   useEffect(() => {
-    if (!activeBrandId) return;
+    if (!activeBrandId || !promptsOnMenu) return;
     let cancelled = false;
     getTrackedPromptCount(activeBrandId)
       .then((n) => !cancelled && setTrackedCount(n))
@@ -212,7 +226,7 @@ export function Sidebar() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, pathname]);
+  }, [activeBrandId, pathname, promptsOnMenu]);
 
   const setSubmenuOpen = (href: string, open: boolean) => {
     setOpenMenus((prev) => ({ ...prev, [href]: open }));
@@ -333,7 +347,7 @@ export function Sidebar() {
             }
           }}
         >
-          {dashboardNav.map((group, i) => (
+          {visibleNav.map((group, i) => (
             <div key={i} className="mb-4">
               {group.title && !compact && (
                 <p className="mb-1 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -348,10 +362,6 @@ export function Sidebar() {
               {group.title && compact && i > 0 && <Separator className="my-2" />}
               <nav className="space-y-0.5">
                 {group.items.map((item) => {
-                  if (!shouldShowDashboardNavItem(item, brandPrefs)) {
-                    return null;
-                  }
-
                   const isActive =
                     item.href === '/dashboard'
                       ? pathname === '/dashboard'
@@ -533,6 +543,18 @@ export function Sidebar() {
         </ScrollArea>
 
         <div className="space-y-1 p-2">
+          {/* Menu access: how much is off the viewer's menu, and where they change it. */}
+          {!compact && hiddenSections.size > 0 && (
+            <p className="px-2 pb-1 text-[11px] text-muted-foreground">
+              {t('menuOff', { count: hiddenSections.size })}{' '}
+              <Link
+                href="/dashboard/settings/account"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {t('menuOffChange')}
+              </Link>
+            </p>
+          )}
           <a
             href={siteConfig.links.feedback}
             target="_blank"
