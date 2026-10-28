@@ -1,11 +1,12 @@
 import supabaseAdmin from '../../config/supabase.js';
-import { isSubscriptionActive } from '../../config/plans.js';
+import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { connectorFor, isSignIn, isStore } from '../../connectors/index.js';
 import { ConnectorHttpError, requestJson } from '../../connectors/http.js';
 import { FeedFormatError, parseFeed } from '../feeds/index.js';
 import { isComposioConfigured } from '../composio.js';
 import { PageFetchError } from '../safe-fetch.js';
 import { logger } from '../logger.js';
+import { PlanLimitError, getCatalogProductCap } from '../plan-guard.js';
 import { queueShoppingCheck } from '../shopping-check.js';
 import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { saveItemIssues } from './issues.js';
@@ -20,6 +21,9 @@ import { syncCatalog } from './sync.js';
  * shows. A store is read with its saved sign-in (credentials.js); a
  * platform like Google Merchant Center with the workspace's own sign-in
  * (sign-in.js), and the issues it reports per item are kept (issues.js).
+ * On the managed cloud, the plan caps the workspace's live products
+ * (ECOM-019): a source keeps what's left of it, and records how many it
+ * couldn't.
  */
 
 /** Feeds and stores read again after this long, by the daily run. */
@@ -55,6 +59,7 @@ const STORE_WORDS = {
 /** Why a sync failed, in words a person can act on. No page, feed or store text. */
 export function failureOf(err, connector = null) {
   if (err instanceof FeedFormatError) return { status: 'format_error', error: err.message };
+  if (err instanceof PlanLimitError) return { status: 'failed', error: err.message };
   if (err instanceof ConnectorHttpError && isSignIn(connector)) {
     // The workspace's sign-in, not the source's: it's reconnected in Settings › Integrations.
     if (err.code === 'auth') {
@@ -129,6 +134,44 @@ export function redact(message, credentials) {
   return text;
 }
 
+/**
+ * The live products a source may keep (ECOM-019): its workspace's cap less
+ * the live products of the workspace's other sources, on any of its brands.
+ * `room` is Infinity (and `cap` -1) on a self-hosted server, or for a plan
+ * without a cap.
+ */
+export async function productRoom(
+  source,
+  { db = supabaseAdmin, capOf = getCatalogProductCap } = {},
+) {
+  const none = { room: Infinity, cap: -1 };
+  if (!isCloud()) return none;
+  const { data: brand, error } = await db
+    .from('brands')
+    .select('organization_id')
+    .eq('id', source.brand_id)
+    .maybeSingle();
+  if (error) throw new Error(`brands read: ${error.message}`);
+  const cap = await capOf(brand?.organization_id ?? null);
+  if (cap < 0) return none;
+  const { data: brands, error: brandsError } = await db
+    .from('brands')
+    .select('id')
+    .eq('organization_id', brand.organization_id);
+  if (brandsError) throw new Error(`brands read: ${brandsError.message}`);
+  const { count, error: countError } = await db
+    .from('catalog_products')
+    .select('id', { count: 'exact', head: true })
+    .in(
+      'brand_id',
+      (brands ?? []).map((b) => b.id),
+    )
+    .neq('source', sourceKey(source.id))
+    .is('removed_at', null);
+  if (countError) throw new Error(`catalog_products count: ${countError.message}`);
+  return { room: Math.max(0, cap - (count ?? 0)), cap };
+}
+
 async function record(db, id, at, outcome) {
   const { error } = await db
     .from('catalog_sources')
@@ -155,10 +198,11 @@ async function record(db, id, at, outcome) {
  * checked against it (shopping-check.js), behind the answer.
  *
  * @param {{ id: string, brand_id: string, kind: string, format: string, url?: string|null, account?: string|null }} source
- * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number, afterSync?: Function }} [options]
+ * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number, capOf?: Function, afterSync?: Function }} [options]
  *   `fetch` (a feed's), `request` (a store's HTTP client), `signInRequest`
- *   (the workspace sign-in's, sign-in.js), `connectors`, `readMs` and
- *   `afterSync` (the shopping check's queue) are the tests' stand-ins
+ *   (the workspace sign-in's, sign-in.js), `connectors`, `readMs`, `capOf`
+ *   (the plan's product cap, by organization) and `afterSync` (the shopping
+ *   check's queue) are the tests' stand-ins
  */
 export async function syncSource(source, { afterSync = queueShoppingCheck, ...options } = {}) {
   if (reading.has(source.id)) {
@@ -189,6 +233,7 @@ async function syncOnce(
     signInRequest = workspaceSignIn,
     connectors,
     readMs = STORE_READ_MS,
+    capOf,
   },
 ) {
   const at = now.toISOString();
@@ -232,9 +277,11 @@ async function syncOnce(
       }
     }
     if (!outcome) {
+      const { room, cap } = await productRoom(source, { db, capOf });
       const counts = await syncCatalog(source.brand_id, sourceKey(source.id), parsed.items, {
         db,
         now,
+        room,
       });
       outcome = {
         status: 'ok',
@@ -245,6 +292,8 @@ async function syncOnce(
           errors: parsed.errors.slice(0, ERRORS_KEPT).map((e) => e.message),
           products: counts.products,
           variants: counts.variants,
+          // Products past the plan's cap, not kept (ECOM-019), and the cap.
+          ...(counts.overLimit ? { overLimit: counts.overLimit, limit: cap } : {}),
         },
       };
       // An item listed again (another language or feed label), kept once: not skipped.

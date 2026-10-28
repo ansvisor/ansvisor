@@ -8993,6 +8993,8 @@
       "issues": "{count, plural, one {# with an issue} other {# with issues}}",
       "repeated": "{count, plural, one {# listed again, kept once} other {# listed again, kept once}}",
       "skipped": "{count, plural, one {# product was skipped} other {# products were skipped}}",
+      "overLimit": "{count, plural, one {# product isn't} other {# products aren't}} in the catalog: your plan tracks up to {limit, plural, one {# product} other {# products}} across your brands.",
+      "upgrade": "Upgrade",
       "syncNow": "Sync now",
       "remove": "Remove",
       "removeConfirm": "Remove this source? Its products leave the catalog.",
