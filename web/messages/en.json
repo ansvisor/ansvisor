@@ -1693,6 +1693,7 @@
         "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
+        "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
         "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
         "topicOpportunity": {
           "source": "Source",
@@ -1728,6 +1729,13 @@
           },
           "swaps": "In stock, from its shopping path",
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
+        },
+        "auditPage": {
+          "source": "Source",
+          "sourceValue": "Site Audit report",
+          "openReport": "Open the report",
+          "page": "Page",
+          "checks": "{count, plural, one {The check it failed when sent} other {The # checks it failed when sent}}"
         },
         "mentionReview": {
           "source": "Source",
@@ -2476,6 +2484,14 @@
         "noAiDescription": "Sent from AI Traffic Analytics: {count, plural, one {a page} other {# pages}} with visitors or in your sitemap that got no AI visit in the range.",
         "goal": "Earn AI-referred visits to these pages."
       },
+      "audit_page": {
+        "title": "Fix the issues Site Audit found on {targets}",
+        "titleGeneric": "Fix the issues Site Audit found on a page",
+        "pageTitle": "Fix the issues Site Audit found on {page}",
+        "description": "Sent from Site Audit: a page and the checks it fails.",
+        "checksDescription": "Sent from Site Audit: the page fails {count, plural, one {# check} other {# checks}}. Audit it again once fixed to see them pass.",
+        "goal": "Get the page to pass the checks it fails, so AI engines read and cite it."
+      },
       "content_draft": {
         "title": "Write a page for {targets}",
         "titleGeneric": "Write a page",
@@ -3174,6 +3190,20 @@
     "deleteAudit": "Delete audit",
     "loadFailed": "Couldn't load this audit",
     "reaudit": "Re-run audit",
+    "sendToAction": {
+      "button": "Send to Action Center",
+      "sending": "Sending to the Action Center…",
+      "sent": "Sent to the Action Center",
+      "sentDescription": "AC-{number}: fix the {count, plural, one {# check} other {# checks}} this page fails.",
+      "alreadySent": "Already in the Action Center",
+      "alreadySentDescription": "AC-{number} is open for this page.",
+      "failed": "Couldn't send to the Action Center",
+      "nothingToFix": "This page passes its checks: nothing to send.",
+      "newerAudit": "This page has a newer audit",
+      "newerAuditDescription": "Send it from its latest report, so the action names the checks it fails now.",
+      "openLatest": "Open the latest report",
+      "open": "Open"
+    },
     "deleteConfirm": "This permanently deletes this audit and its results. This can't be undone.",
     "cancel": "Cancel",
     "auditsLeft": "audits left this month",
@@ -3954,6 +3984,12 @@
           "sent": "In WordPress as a draft post since {when}",
           "failed": "The last send to WordPress failed, {when}",
           "published": "Published {when}"
+        },
+        "framer": {
+          "queued": "Sending to Framer since {when}",
+          "sent": "In Framer as a draft item since {when}",
+          "failed": "The last send to Framer failed, {when}",
+          "published": "Published {when}"
         }
       },
       "bulk": {
@@ -3967,6 +4003,7 @@
         "description": "Each page goes to the brand's webhook as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
+        "descriptionFramer": "Each page goes to {collection} in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them. A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
         "notFound": "A page was archived or deleted since you picked it. Close this, pick the pages again and send.",
@@ -3998,6 +4035,7 @@
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
         "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
         "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
+        "inProgressFramer": "A page is already on its way to Framer. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
         "send": "{count, plural, one {Send # page} other {Send # pages}}",
@@ -5090,11 +5128,12 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS: Webflow, WordPress, or your workflow through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
         "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
+        "descriptionFramer": "The page goes to {collection} in Framer as a draft item, with its slug and meta. Images aren't sent yet. You publish it in Framer.",
         "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
           "label": "Send to",
@@ -5109,12 +5148,19 @@
             "hint": "A draft post on {site}",
             "notReady": "Sign-in refused: connect WordPress again in Settings › Integrations"
           },
+          "framer": {
+            "title": "Framer",
+            "hint": "A draft item in {collection}",
+            "collection": "your collection",
+            "notReady": "Not ready: connect it again or pick its collection and fields in Settings › Integrations"
+          },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
           "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
           "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
+          "uncheckedFramer": "Couldn't check Framer just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
@@ -5156,6 +5202,12 @@
           "failed": "The last send to WordPress failed, {when}.",
           "published": "Published {when}."
         },
+        "lastFramer": {
+          "queued": "Last sent to Framer {when}, still on its way.",
+          "sent": "In Framer as a draft item since {when}.",
+          "failed": "The last send to Framer failed, {when}.",
+          "published": "Published {when}."
+        },
         "errors": {
           "no_webhook": "This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.",
           "webhook_not_subscribed": "The brand's webhook doesn't receive \"Content page sent\". Turn it on in Webhook Settings on Content Opportunities.",
@@ -5180,7 +5232,14 @@
           "no_wordpress": "Connect WordPress in Settings › Integrations first.",
           "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
           "in_progressWordPress": "This page is already on its way to WordPress. Wait for it, then send again.",
-          "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations."
+          "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations.",
+          "framerFailed": "Framer didn't take the page: {reason}",
+          "framer_not_configured": "Framer isn't set up on this server. Send to your workflow instead.",
+          "no_framer": "Connect Framer in Settings › Integrations first.",
+          "framer_refused": "Framer refused the brand's API key. Connect it again in Settings › Integrations.",
+          "framer_not_ready": "Pick the Framer collection and its fields in Settings › Integrations.",
+          "in_progressFramer": "This page is already on its way to Framer. Wait for it, then send again.",
+          "no_webhookFramer": "This brand's Framer isn't ready, and it has no webhook. Connect Framer again or pick its collection and fields in Settings › Integrations."
         },
         "cancel": "Cancel",
         "send": "Send",
@@ -5192,7 +5251,11 @@
         "sentWordPress": "Sent to WordPress as a draft post",
         "sentWordPressUpdated": "Draft post updated in WordPress",
         "wordpressLive": "Its post was already published or scheduled, so the page went as a new draft. Move the text over in WordPress; published as it is, its slug gets \"-2\".",
-        "wordpressJsonLd": "JSON-LD left out: add schema with your SEO plugin."
+        "wordpressJsonLd": "JSON-LD left out: add schema with your SEO plugin.",
+        "sentFramer": "Sent to Framer as a draft item",
+        "sentFramerUpdated": "Updated in Framer",
+        "framerImages": "{images, plural, one {# image wasn't sent: add it in Framer.} other {# images weren't sent: add them in Framer.}}",
+        "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site."
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipReading": "Rules · reading",

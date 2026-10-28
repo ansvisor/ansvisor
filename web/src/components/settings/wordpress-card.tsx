@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   Dialog,
   DialogClose,
@@ -38,6 +39,11 @@ export function WordPressCard() {
   const t = useTranslations('settings.wordpress');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
+  // A read-only workspace's refusal opens the upgrade dialog, not a toast;
+  // while it is read-only, Change sign-in opens it at once. Disconnect stays
+  // open: it ends an access, it starts nothing.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
 
   // The connection as read for a brand: another brand's never shows.
@@ -85,7 +91,8 @@ export function WordPressCard() {
     const result = await disconnectWordPress(activeBrandId);
     setDisconnecting(false);
     if (!result.ok) {
-      toast.error(t(`errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else toast.error(t(`errors.${result.code}`));
       return;
     }
     setConnection(null);
@@ -134,7 +141,13 @@ export function WordPressCard() {
           {canManage && connection && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {!replacing && current?.configured && connection.status === 'connected' && (
-                <Button variant="outline" size="sm" onClick={() => setReplacingFor(activeBrandId)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={guard(() => setReplacingFor(activeBrandId), {
+                    action: tActions('connectCms'),
+                  })}
+                >
                   {t('replace')}
                 </Button>
               )}
@@ -227,6 +240,9 @@ function SignInForm({
   onCancel?: () => void;
 }) {
   const t = useTranslations('settings.wordpress');
+  // Read-only (plan not active): Connect opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [siteUrl, setSiteUrl] = useState(initial?.siteUrl ?? '');
   const [username, setUsername] = useState(initial?.account ?? '');
   const [password, setPassword] = useState('');
@@ -245,20 +261,22 @@ function SignInForm({
     });
     setConnecting(false);
     if (!result.ok) {
-      toast.error(t(`errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else toast.error(t(`errors.${result.code}`));
       return;
     }
     setPassword('');
     toast.success(t('connectedToast'));
     onConnected(result.connection);
   };
+  const connectSite = guard(() => void connect(), { action: tActions('connectCms') });
 
   return (
     <form
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (ready && !connecting) void connect();
+        if (ready && !connecting) connectSite();
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">

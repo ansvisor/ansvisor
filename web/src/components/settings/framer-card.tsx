@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   Dialog,
   DialogClose,
@@ -59,6 +60,11 @@ export function FramerCard() {
   const t = useTranslations('settings.framer');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
+  // A read-only workspace's refusal opens the upgrade dialog, not a toast;
+  // while it is read-only, Replace key opens it at once. Disconnect stays
+  // open: it ends an access, it starts nothing.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
 
   // The connection as read for a brand: another brand's never shows.
@@ -117,7 +123,8 @@ export function FramerCard() {
     const result = await disconnectFramer(activeBrandId);
     setDisconnecting(false);
     if (!result.ok) {
-      toast.error(t(`errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else toast.error(t(`errors.${result.code}`));
       return;
     }
     setConnection(null);
@@ -173,7 +180,13 @@ export function FramerCard() {
           {canManage && connection && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {!replacing && current?.configured && connection.status === 'connected' && (
-                <Button variant="outline" size="sm" onClick={() => setReplacingFor(activeBrandId)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={guard(() => setReplacingFor(activeBrandId), {
+                    action: tActions('connectCms'),
+                  })}
+                >
                   {t('replace')}
                 </Button>
               )}
@@ -280,6 +293,9 @@ function KeyForm({
   onCancel?: () => void;
 }) {
   const t = useTranslations('settings.framer');
+  // Read-only (plan not active): Connect opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The API takes the project's id as well as its address.
   const [project, setProject] = useState(initial?.projectId ?? '');
   const [apiKey, setApiKey] = useState('');
@@ -295,7 +311,11 @@ function KeyForm({
     const result = await connectFramer(brandId, { project: project.trim(), apiKey: key });
     setConnecting(false);
     if (!result.ok) {
-      toast.error(t(result.code === 'invalid' ? 'errors.invalidConnect' : `errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else
+        toast.error(
+          t(result.code === 'invalid' ? 'errors.invalidConnect' : `errors.${result.code}`),
+        );
       return;
     }
     setApiKey('');
@@ -303,13 +323,14 @@ function KeyForm({
     toast.success(t(result.connection.collectionId ? 'connectedToast' : 'connectedSetupToast'));
     onConnected(result.connection);
   };
+  const connectProject = guard(() => void connect(), { action: tActions('connectCms') });
 
   return (
     <form
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (ready && !connecting) void connect();
+        if (ready && !connecting) connectProject();
       }}
     >
       <div className="space-y-1.5">
@@ -389,6 +410,9 @@ function FramerMapping({
 }) {
   const t = useTranslations('settings.framer');
   const format = useFormatter();
+  // Read-only (plan not active): Save opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The saved settings, for the collections read: a save doesn't read them again.
   const saved = useRef(connection);
   useEffect(() => {
@@ -400,6 +424,10 @@ function FramerMapping({
   }, [onStale]);
   /** Says what went wrong, and reads the connection again when it changed. */
   const report = (code: FramerError) => {
+    if (code === 'subscription') {
+      openUpgrade();
+      return;
+    }
     toast.error(t(`errors.${code}`));
     if (STALE.includes(code)) stale.current();
   };
@@ -624,7 +652,7 @@ function FramerMapping({
           <Button
             size="sm"
             className="gap-2"
-            onClick={save}
+            onClick={guard(save, { action: tActions('saveCmsSettings') })}
             disabled={saving || !fits || unmapped.length > 0}
           >
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

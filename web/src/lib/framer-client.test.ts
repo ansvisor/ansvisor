@@ -122,6 +122,9 @@ describe('framer-client', () => {
     expect(await readFramer('b1')).toEqual({ ok: false, code: 'workspace' });
     answer(429, { message: 'Too many requests' });
     expect(await readFramer('b1')).toEqual({ ok: false, code: 'busy' });
+    // A read-only workspace: the upgrade dialog's, not a message.
+    answer(402, { code: 'subscription_inactive', error: 'x' });
+    expect(await connectFramer('b1', input)).toEqual({ ok: false, code: 'subscription' });
     answer(502, { code: 'failed', error: 'Something went wrong with Framer' });
     expect(await readFramer('b1')).toEqual({ ok: false, code: 'failed' });
     fetchMock.mockRejectedValue(new TypeError('offline'));

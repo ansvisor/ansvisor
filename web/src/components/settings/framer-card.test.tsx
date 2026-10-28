@@ -30,6 +30,19 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// The read-only workspace's upgrade dialog.
+const openUpgrade = vi.hoisted(() => vi.fn());
+const gate = vi.hoisted(() => ({ isLocked: false }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade,
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options: { action?: string } = {}) =>
+      (...args: Args) =>
+        gate.isLocked ? openUpgrade(options.action) : fn(...args),
+  }),
+}));
 
 const { FramerCard } = await import('./framer-card');
 
@@ -38,8 +51,10 @@ const { FramerCard } = await import('./framer-card');
 
 /** Settings › Integrations › Framer (Send to CMS #1331, phase 2; 00295): a brand's project, collection and fields. */
 
-// Every reason the client names has its words: a missing one fails typecheck.
-const ERROR_TEXTS: Record<FramerError, string> = messages.settings.framer.errors;
+// Every reason the client names has its words: a missing one fails typecheck. A read-only
+// workspace's refusal opens the upgrade dialog instead.
+const ERROR_TEXTS: Record<Exclude<FramerError, 'subscription'>, string> = messages.settings.framer
+  .errors;
 const TEXT = messages.settings.framer;
 
 let container: HTMLDivElement;
@@ -186,6 +201,8 @@ beforeEach(() => {
   root = createRoot(container);
   role.canManage = true;
   store.activeBrandId = 'b1';
+  gate.isLocked = false;
+  openUpgrade.mockReset();
   for (const fn of Object.values(client)) fn.mockReset();
   for (const fn of Object.values(toast)) fn.mockReset();
   connectedWith(null);
@@ -662,5 +679,58 @@ describe('FramerCard', () => {
     expect(container.textContent).not.toContain('Acme Site');
     expect(container.textContent).not.toContain('Pages go to Blog');
     expect(client.readFramer).toHaveBeenLastCalledWith('b2');
+  });
+
+  it('opens the upgrade dialog, not an error, when a read-only workspace’s connect, save or disconnect is refused', async () => {
+    client.connectFramer.mockResolvedValue({ ok: false, code: 'subscription' });
+    await render();
+    await type('Project address', PROJECT_ID);
+    await type('API key', KEY);
+    await submit();
+    expect(client.connectFramer).toHaveBeenCalledTimes(1);
+    expect(openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+
+    connectedWith(CONNECTED);
+    client.saveFramerTarget.mockResolvedValue({ ok: false, code: 'subscription' });
+    client.disconnectFramer.mockResolvedValue({ ok: false, code: 'subscription' });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Save'));
+    expect(client.saveFramerTarget).toHaveBeenCalledTimes(1);
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    await click(button('Disconnect'));
+    await click(button('Disconnect', document.querySelector('[role="dialog"]')!));
+    expect(client.disconnectFramer).toHaveBeenCalledTimes(1);
+    expect(openUpgrade).toHaveBeenCalledTimes(3);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('on a read-only workspace, connects, replaces and saves nothing, and still disconnects', async () => {
+    gate.isLocked = true;
+    await render();
+    await type('Project address', PROJECT_ID);
+    await type('API key', KEY);
+    await submit();
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(client.connectFramer).not.toHaveBeenCalled();
+
+    connectedWith(CONNECTED);
+    client.disconnectFramer.mockResolvedValue({ ok: true, success: true, revoked: false });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Replace key'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    await click(button('Save'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Saving the CMS settings needs a plan');
+    expect(client.saveFramerTarget).not.toHaveBeenCalled();
+    // Disconnect ends an access: it stays open.
+    await click(button('Disconnect'));
+    await click(button('Disconnect', document.querySelector('[role="dialog"]')!));
+    expect(client.disconnectFramer).toHaveBeenCalledWith('b1');
+    expect(toast.warning).toHaveBeenCalledWith(TEXT.disconnectedNotRevoked);
   });
 });
