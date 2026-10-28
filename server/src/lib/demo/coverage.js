@@ -18,6 +18,8 @@ export const SKIPPED = {
   suggestion_relevance_usage:
     'AI spend on suggestion relevance: nothing is spent for a demo brand.',
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
+  prompt_table_views:
+    "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
     "A person's sentiment corrections on Mentions: the demo's answers carry their own.",
 };
@@ -79,6 +81,8 @@ export const PENDING = {
   catalog_item_issues: SITE,
 
   agent_conversations: CHAT,
+  prompt_demand:
+    "demo follow-up (PR 7): each demo prompt's demand level (PROMPT-014, 00370); the nightly read never runs for a demo brand",
 };
 
 const name = (raw) =>
