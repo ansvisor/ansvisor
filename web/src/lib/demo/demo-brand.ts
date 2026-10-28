@@ -6,6 +6,9 @@
  * instead, with the demo's offer.
  */
 
+import { getPlan, type Plan, type PlanId } from '@/config/plans';
+import type { Brand } from '@/types';
+
 /**
  * What the plan dialog offers from the demo brand: a workspace that never
  * had a subscription chooses between the free trial and buying now (the
@@ -16,6 +19,38 @@ export type DemoOffer = 'trial' | 'first_month';
 /** The offer, from whether the organization ever had a Stripe subscription. */
 export function demoOffer(everSubscribed: boolean): DemoOffer {
   return everSubscribed ? 'first_month' : 'trial';
+}
+
+/** Whether the brand on screen is the demo brand, from the brand store's state (useBrandStore). */
+export function isDemoSelected(state: {
+  brands: Pick<Brand, 'id' | 'isDemo'>[];
+  activeBrandId: string | null;
+}): boolean {
+  return state.brands.some((b) => b.id === state.activeBrandId && b.isDemo === true);
+}
+
+/**
+ * The plan the demo brand is shown with: Growth, the whole product, whatever
+ * the workspace's own plan (or none). Only what it reads follows it: its
+ * locked tabs, platforms and reports open, and the Growth marks go. Anything
+ * that writes, runs or spends still opens the plan dialog on it.
+ */
+export const DEMO_BRAND_PLAN_ID: PlanId = 'growth';
+
+/**
+ * The plan a brand's pages read with: the workspace's own, raised to
+ * DEMO_BRAND_PLAN_ID on the demo brand. A plan above it (Enterprise) and
+ * self-hosted keep their own. The one rule for the client's plan context and
+ * the server actions' reads.
+ */
+export function effectivePlanIdForBrand(planId: PlanId, isDemo: boolean): PlanId {
+  return isDemo && planId === 'starter' ? DEMO_BRAND_PLAN_ID : planId;
+}
+
+/** {@link effectivePlanIdForBrand} for a plan read on the server (getOrgPlan). */
+export function effectivePlanForBrand(plan: Plan, isDemo: boolean): Plan {
+  const planId = effectivePlanIdForBrand(plan.id, isDemo);
+  return planId === plan.id ? plan : getPlan(planId);
 }
 
 /**

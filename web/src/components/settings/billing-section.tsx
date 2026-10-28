@@ -55,7 +55,8 @@ function statusLabel(status: string) {
 
 export function BillingSection() {
   const t = useTranslations('settings');
-  const { planId: contextPlanId } = usePlanContext();
+  // The organization's own plan: the demo brand's Growth is only how it is shown.
+  const { ownPlanId: contextPlanId } = usePlanContext();
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   // For a new subscription's Checkout, once the old one has ended.
   const [organizationId, setOrganizationId] = useState<string | null>(null);
