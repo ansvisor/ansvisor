@@ -425,6 +425,18 @@ function sentByHand(action) {
       subject: { entity: 'pages', count: p.targetCount ?? null },
     };
   }
+  // A page sent from a Site Audit report (learning D2): a fix on the site,
+  // as urgent as the checks it fails are many, near to hand.
+  if (action.kind === 'audit_page') {
+    const failing = Array.isArray(p.checks) ? p.checks.length : 0;
+    return {
+      change: 'issue',
+      severity: failing >= 5 ? 0.6 : 0.5,
+      confidence: 0.6,
+      recoverability: 0.9,
+      subject: { entity: 'pages', count: 1 },
+    };
+  }
   return null;
 }
 

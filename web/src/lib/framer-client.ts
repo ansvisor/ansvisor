@@ -74,6 +74,8 @@ export type FramerError =
   | 'unreachable'
   | 'session'
   | 'workspace'
+  /** A read-only workspace (plan not active): the upgrade dialog, not a message. */
+  | 'subscription'
   | 'failed';
 
 const KNOWN: readonly FramerError[] = [
@@ -126,7 +128,10 @@ async function call<T>(
       return {
         ok: false,
         code:
-          general === 'session' || general === 'workspace' || general === 'busy'
+          general === 'session' ||
+          general === 'workspace' ||
+          general === 'busy' ||
+          general === 'subscription'
             ? general
             : 'failed',
       };

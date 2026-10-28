@@ -58,6 +58,9 @@ describe('wordpress-client', () => {
     }
     answer(401, { error: 'Unauthorized' });
     expect(await readWordPress('b1')).toEqual({ ok: false, code: 'session' });
+    // A read-only workspace: the upgrade dialog's, not a message.
+    answer(402, { code: 'subscription_inactive', error: 'x' });
+    expect(await connectWordPress('b1', input)).toEqual({ ok: false, code: 'subscription' });
     answer(500, { code: 'something_else' });
     expect(await readWordPress('b1')).toEqual({ ok: false, code: 'failed' });
     fetchMock.mockRejectedValue(new TypeError('offline'));

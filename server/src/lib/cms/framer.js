@@ -13,6 +13,8 @@ import {
  *
  * Each use opens a WebSocket to Framer (wss://api.framer.com) and closes it
  * once done (withProject): one left open keeps the process from exiting.
+ * Pages published since a send are read the same way (readPublished,
+ * framer-status.js).
  *
  * The key is never put in a message, a log or an answer. Our answers and
  * logs carry our own words, never Framer's messages; framer-api's own
@@ -21,8 +23,10 @@ import {
 
 export class FramerError extends Error {
   /**
-   * @param {'invalid'|'auth_failed'|'no_access'|'not_found'|'busy'|'unreachable'|'failed'} code
-   *   'auth_failed': Framer refused the key (the person connects again)
+   * @param {'invalid'|'auth_failed'|'no_access'|'not_found'|'busy'|'unreachable'|'slug_taken'|
+   *   'failed'} code
+   *   'auth_failed': Framer refused the key (the person connects again); 'slug_taken': another
+   *   item has the page's slug (a send's, never a route's)
    * @param {string} message
    */
   constructor(code, message) {
@@ -306,6 +310,182 @@ export async function collectionOf(project, apiKey, collectionId, opts) {
         );
       }
       return collectionShape(collection);
+    },
+    opts,
+  );
+}
+
+/** The collection's items once more: a read changes nothing, so a failed one is tried again, once. */
+async function itemsAgain(collection) {
+  try {
+    return await collection.getItems();
+  } catch {
+    return collection.getItems();
+  }
+}
+
+/**
+ * Whether the item holding the page's slug is one a send of this page made
+ * and couldn't keep the id of (the connection dropped, or Framer's list
+ * didn't answer, after the item was added): still a draft, with the very
+ * title this send writes in the title field. Taking it over is safe: the
+ * slug and title are this page's, and a draft isn't on the site, so writing
+ * to it changes nothing anyone sees (a draft made by hand with this slug
+ * and title would be taken too, and written with this page). Any other
+ * item keeps its slug.
+ */
+function halfSent(item, fieldData, titleField) {
+  const title = titleField ? fieldData[titleField]?.value : undefined;
+  return (
+    item.draft === true &&
+    typeof title === 'string' &&
+    item.fieldData?.[titleField]?.value === title
+  );
+}
+
+/**
+ * Writes a page's item in one connection (framer-delivery.js): the item
+ * the page's last send made (`before`) is updated while it's in the
+ * collection, its draft state as it is; else a draft its half-done send
+ * left (halfSent) is; else a new draft item is made. A slug another item
+ * has is refused before anything is written.
+ *
+ * Framer doesn't say which item it made: it is the one new item with the
+ * slug, among those the first read didn't have.
+ *
+ * @param {string} project the connection's project (site_id)
+ * @param {{ before: string|null, slug: string, fieldData: object, titleField?: string|null }}
+ *   item titleField: the field the page's title goes to (field_map.title)
+ * @returns {Promise<{ id: string, updated: boolean, live: boolean }>} live: the item
+ *   updated isn't a draft, so the page goes live with the site's next publish
+ */
+export async function writeItem(
+  project,
+  apiKey,
+  collectionId,
+  { before, slug, fieldData, titleField = null },
+  opts,
+) {
+  return withProject(
+    project,
+    apiKey,
+    async (framer) => {
+      const collection = usersOwn(await framer.getCollections()).find((c) => c.id === collectionId);
+      if (!collection) {
+        throw new FramerError(
+          'not_found',
+          'The collection pages go to is gone from the project: pick another in Settings › Integrations.',
+        );
+      }
+      const items = await collection.getItems();
+      const current = before ? (items.find((item) => item.id === before) ?? null) : null;
+      const holder = items.find((item) => item.slug === slug && item.id !== current?.id) ?? null;
+      if (holder && (current || !halfSent(holder, fieldData, titleField))) {
+        throw new FramerError(
+          'slug_taken',
+          `Another item in ${collection.name} has the slug "${slug}": change the page’s slug, or that item’s.`,
+        );
+      }
+      const own = current ?? holder;
+      if (own) {
+        // No draft: the item stays a draft, or live, as it is.
+        await collection.addItems([{ id: own.id, slug, fieldData }]);
+        return { id: own.id, updated: true, live: !own.draft };
+      }
+      const known = new Set(items.map((item) => item.id));
+      await collection.addItems([{ slug, draft: true, fieldData }]);
+      const made = (await itemsAgain(collection)).filter(
+        (item) => !known.has(item.id) && item.slug === slug,
+      );
+      if (made.length !== 1)
+        throw new FramerError('failed', 'Framer didn’t say which item it made.');
+      return { id: made[0].id, updated: false, live: false };
+    },
+    opts,
+  );
+}
+
+/** A publish time further ahead than this is a unit read wrong: nothing is marked on it. */
+const AHEAD_MS = 10 * 60 * 1000;
+
+/**
+ * When the site was last published, in ms, or null. The unit of
+ * `deploymentTime` is undocumented by Framer: framer-api (5.1.0) types it as
+ * a plain number, so this is a guess. One too small to be ms since 1970
+ * (before 1973) is read as seconds; a time read as more than ten minutes
+ * ahead is none, so a wrong guess marks nothing published.
+ */
+function deployedAtOf(production) {
+  const time = production?.deploymentTime;
+  if (typeof time !== 'number' || !Number.isFinite(time) || time <= 0) return null;
+  const ms = time < 1e11 ? time * 1000 : time;
+  return ms > Date.now() + AHEAD_MS ? null : ms;
+}
+
+/**
+ * The path of the collection's detail page ("/blog/:slug"), a draft page
+ * left out (it isn't published); of more than one, the shortest.
+ */
+function detailPathOf(pages, collectionId) {
+  let best = null;
+  for (const page of pages ?? []) {
+    const path = typeof page?.path === 'string' ? page.path.trim() : '';
+    if (page?.collectionId !== collectionId || page.draft || !path) continue;
+    if (best === null || path.length < best.length) best = path;
+  }
+  return best;
+}
+
+/**
+ * What tells whether the items pages were sent as are live (framer-status.js),
+ * read in one connection: the site's published address and when it was last
+ * published (production; none while the site isn't), the path of the
+ * collection's detail page, and the asked-for items' slugs, draft state and
+ * last change. An item gone from the collection isn't in the map.
+ *
+ * @param {string} project the connection's project (site_id)
+ * @param {string[]} itemIds
+ * @returns {Promise<{ siteUrl: string|null, deployedAt: number|null, detailPath: string|null,
+ *   items: Map<string, { slug: string, draft: boolean, updatedAt: string|null }> }>}
+ *   deployedAt: in ms; updatedAt: the item's ISO time, when Framer gives it
+ */
+export async function readPublished(project, apiKey, collectionId, itemIds, opts) {
+  return withProject(
+    project,
+    apiKey,
+    async (framer) => {
+      const collection = usersOwn(await framer.getCollections()).find((c) => c.id === collectionId);
+      if (!collection) {
+        throw new FramerError(
+          'not_found',
+          'The collection pages go to is gone from the project: pick another in Settings › Integrations.',
+        );
+      }
+      const [items, publish, pages] = await Promise.all([
+        collection.getItems(),
+        framer.getPublishInfo(),
+        framer.getNodesWithType('WebPageNode'),
+      ]);
+      const wanted = new Set(itemIds);
+      const production = publish?.production ?? null;
+      return {
+        siteUrl: siteUrlOf(production),
+        deployedAt: deployedAtOf(production),
+        detailPath: detailPathOf(pages, collectionId),
+        // A draft state Framer doesn't give is read as a draft: nothing is marked live on a guess.
+        items: new Map(
+          items
+            .filter((item) => wanted.has(item.id))
+            .map((item) => [
+              item.id,
+              {
+                slug: item.slug,
+                draft: item.draft !== false,
+                updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : null,
+              },
+            ]),
+        ),
+      };
     },
     opts,
   );

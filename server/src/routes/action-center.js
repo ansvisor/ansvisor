@@ -26,6 +26,7 @@ import {
   PRODUCT_WORK_TYPES,
   sendProductActions,
 } from '../lib/action-center/from-products.js';
+import { sendAuditToActionCenter } from '../lib/action-center/from-audit.js';
 import { runTaskCheck } from '../lib/action-center/task-checks.js';
 import { taskCheckLimiter } from '../middleware/rate-limiter.js';
 
@@ -311,6 +312,45 @@ router.post('/pages', async (req, res) => {
     return res.status(status).json({
       error: 'Failed to send to the Action Center',
       details: error.message,
+    });
+  }
+});
+
+const auditPageSchema = z.object({
+  // guid, not uuid: seeded ids aren't RFC 4122 versions.
+  brandId: z.guid(),
+  auditId: z.guid(),
+});
+
+/**
+ * POST /api/action-center/audits
+ * Body: { brandId, auditId }
+ *
+ * "Send to Action Center" on a Site Audit report (learning D2): the page and
+ * the checks it fails as one Fix action. Sending the page again returns the
+ * action already open for it; sending an older report of a page audited since
+ * is refused (409 newer_audit, with latestAuditId).
+ */
+router.post('/audits', async (req, res) => {
+  try {
+    const parsed = auditPageSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
+    }
+    const { brandId, auditId } = parsed.data;
+    await assertBrandAccess(brandId, req.user.id);
+
+    const result = await sendAuditToActionCenter(brandId, { auditId, userId: req.user.id });
+    return res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) req.log.error({ err: error }, 'audit page action error');
+    return res.status(status).json({
+      error: 'Failed to send to the Action Center',
+      details: error.message,
+      ...(error.code ? { code: error.code } : {}),
+      // newer_audit: the page's latest audit, to open instead.
+      ...(error.extra ?? {}),
     });
   }
 });
