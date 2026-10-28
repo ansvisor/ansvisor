@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, Trash2, RefreshCw, AlertCircle, ListChecks } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { getAudit, runAudit, deleteAudit, type AuditResult } from '@/lib/actions/audits';
+import {
+  getAudit,
+  runAudit,
+  deleteAudit,
+  sendAuditToActionCenter,
+  type AuditResult,
+} from '@/lib/actions/audits';
 import { AuditReport } from '@/components/audit/audit-report';
+import { failingChecks } from '@/lib/audit/failing-checks';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
@@ -126,6 +133,69 @@ export default function AuditDetailPage() {
     }
   };
 
+  // The page and the checks it fails, sent to the Action Center as one Fix action (learning D2).
+  const [sendingToAction, setSendingToAction] = useState(false);
+  const failing = failingChecks(audit?.signals ?? []);
+  const handleSendToAction = async () => {
+    if (!audit) return;
+    setSendingToAction(true);
+    const toastId = toast.loading(t('sendToAction.sending'));
+    try {
+      const result = await sendAuditToActionCenter(audit.brandId, audit.id);
+      if ('error' in result) {
+        // An older report of a page audited since: send from its latest report instead.
+        const latestAuditId = result.code === 'newer_audit' ? result.latestAuditId : undefined;
+        if (latestAuditId) {
+          toast.error(t('sendToAction.newerAudit'), {
+            id: toastId,
+            description: t('sendToAction.newerAuditDescription'),
+            duration: 10_000,
+            action: {
+              label: t('sendToAction.openLatest'),
+              onClick: () => router.push(`/dashboard/audit/${latestAuditId}`),
+            },
+          });
+          return;
+        }
+        toast.error(t('sendToAction.failed'), {
+          id: toastId,
+          description:
+            result.code === 'nothing_to_fix' ? t('sendToAction.nothingToFix') : result.error,
+        });
+        return;
+      }
+      const open = {
+        label: t('sendToAction.open'),
+        onClick: () => router.push(`/dashboard/action-center/actions?action=${result.actionId}`),
+      };
+      if (result.created) {
+        toast.success(t('sendToAction.sent'), {
+          id: toastId,
+          description: t('sendToAction.sentDescription', {
+            number: result.actionNo,
+            count: failing,
+          }),
+          duration: 10_000,
+          action: open,
+        });
+      } else {
+        toast.info(t('sendToAction.alreadySent'), {
+          id: toastId,
+          description: t('sendToAction.alreadySentDescription', { number: result.actionNo }),
+          duration: 10_000,
+          action: open,
+        });
+      }
+    } catch (err) {
+      toast.error(t('sendToAction.failed'), {
+        id: toastId,
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setSendingToAction(false);
+    }
+  };
+
   // Re-run the audit on the same URL → navigate to the new audit's detail page.
   const handleRefresh = async () => {
     if (!audit) return;
@@ -153,6 +223,22 @@ export default function AuditDetailPage() {
           </Link>
           {audit && (audit.status !== 'running' || timedOut) && (
             <div className="flex items-center gap-1">
+              {audit.status === 'completed' && failing > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mr-1 gap-1.5"
+                  disabled={sendingToAction}
+                  onClick={() => void handleSendToAction()}
+                >
+                  {sendingToAction ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ListChecks className="h-3.5 w-3.5" />
+                  )}
+                  {t('sendToAction.button')}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

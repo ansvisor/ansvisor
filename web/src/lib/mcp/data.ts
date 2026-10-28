@@ -41,6 +41,7 @@ import { controlNetOf } from '@/lib/action-center/history';
 import { dismissReasonOf, type ActionDismissReason } from '@/lib/action-center/registry';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
+import { readPromptDemand, type PromptDemand } from './prompt-demand';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
 import {
   filterPromptSuggestionEngines,
@@ -2324,6 +2325,12 @@ export interface PromptVolumeRow {
   /** Bucketed competition label ("LOW" | "MEDIUM" | "HIGH"), or null. */
   competition: string | null;
   fetched_at: string | null;
+  /**
+   * The prompt's real demand (PROMPT-014): Search Console, Google Trends,
+   * People Also Ask and YouTube, with the level they come to. Null until the
+   * nightly sweep read any.
+   */
+  measured_demand: PromptDemand | null;
 }
 
 const PROMPT_VOLUMES_DEFAULT_LIMIT = 100;
@@ -2390,6 +2397,10 @@ export async function getPromptVolumesFor(
       prompts: { text: string } | Array<{ text: string }> | null;
     }> | null) ?? [];
 
+  const demand = await readPromptDemand(
+    params.brandId,
+    rows.map((r) => r.prompt_id),
+  );
   const now = new Date();
   return rows.map((r) => {
     const prompt = Array.isArray(r.prompts) ? (r.prompts[0] ?? null) : r.prompts;
@@ -2419,6 +2430,7 @@ export async function getPromptVolumesFor(
       competition_index: r.competition_index,
       competition: r.competition,
       fetched_at: r.fetched_at,
+      measured_demand: demand.get(r.prompt_id) ?? null,
     };
   });
 }
