@@ -1,3 +1,6 @@
+import { categoryLeaf, categoryWords } from './categories';
+import type { ProductRow } from './products';
+
 /**
  * Product Visibility's Shelf (ECOM-006): for each shopping question the
  * brand tracks, the products AI put on its "shelf", in order, on each
@@ -210,4 +213,45 @@ export function inPriceBand(row: ShelfRow, band: PriceBand): boolean {
   const middle = prices[Math.floor((prices.length - 1) / 2)];
   const [min, max] = BAND_RANGE[band];
   return middle >= min && middle < max;
+}
+
+/**
+ * "Why not you?" (the mockup's Shelf): for a shelf the brand isn't on, the
+ * product of its catalog the question asks for most, by the question's
+ * words in the product's title, category and type; the readier one on a
+ * tie. Null when none shares a word with the question, or the brand is on
+ * the shelf.
+ */
+export function whyNotYou(row: ShelfRow, products: readonly ProductRow[]): ProductRow | null {
+  if (row.ownRank !== null) return null;
+  const asked = new Set(categoryWords(row.promptText));
+  let best: { row: ProductRow; score: number } | null = null;
+  for (const candidate of products) {
+    const { product } = candidate;
+    const words = new Set(
+      categoryWords(
+        [
+          product.title,
+          product.category ? categoryLeaf(product.category) : '',
+          product.productType ?? '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      ),
+    );
+    let score = 0;
+    for (const word of asked) if (words.has(word)) score += 1;
+    if (score === 0) continue;
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score &&
+        (candidate.readiness > best.row.readiness ||
+          (candidate.readiness === best.row.readiness &&
+            candidate.product.title.localeCompare(best.row.product.title) < 0)))
+    ) {
+      best = { row: candidate, score };
+    }
+  }
+  return best?.row ?? null;
 }

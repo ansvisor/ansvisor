@@ -1679,10 +1679,13 @@ export async function getShoppingProductDetail(
   brandId: string,
   productId: string,
   filters: ShoppingFilters,
+  /** The shelf to explain first: the Shelf's "Why not you?" (a question, its channel). */
+  focusOn: { promptId: string; platform?: string | null } | null = null,
 ): Promise<ShoppingProductDetail | null> {
   if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(productId).success) {
     throw new Error('invalid');
   }
+  const asked = focusOn && z.guid().safeParse(focusOn.promptId).success ? focusOn : null;
   const supabase = await createClient();
   const { from } = resolveDateRange(filters);
   const [[product], cards, stats, domain] = await Promise.all([
@@ -1757,8 +1760,8 @@ export async function getShoppingProductDetail(
   const shown = detailCards
     .filter((card) => card.productId === productId)
     .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
-  const shelves = productShelves(product, detailCards);
-  const focus = focusShelf(shelves);
+  const shelves = productShelves(product, detailCards, { include: asked?.promptId ?? null });
+  const focus = focusShelf(shelves, asked);
   const ai = (stats.data ?? []).find((row) => row.product_id === productId);
   return {
     product,

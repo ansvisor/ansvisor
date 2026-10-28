@@ -9,8 +9,10 @@ import { buildShelf, shelfStats, type ShelfCardRow } from '@/lib/shopping/shelf'
 /** The Shelf's numbers and rows (ECOM-006). */
 
 vi.mock('@/i18n/navigation', () => ({
-  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -146,6 +148,56 @@ describe('ShelfRows', () => {
     expect(text).toContain('2 · You');
     expect(text).toContain('via Amazon');
     expect(text).toContain('$129');
+  });
+
+  it('offers "Why not you?" on a shelf the brand isn’t on, opening its product on that shelf', () => {
+    const ridge = {
+      product: {
+        id: 'ridge',
+        title: 'Ridge 30L Hiking Backpack',
+        url: null,
+        productType: null,
+        brand: null,
+        description: null,
+        image: null,
+        category: 'Bags > Hiking backpacks',
+        price: 119,
+        currency: 'USD',
+        inStock: true,
+        hasGtin: true,
+      },
+      shelves: 0,
+      winRate: null,
+      avgRank: null,
+      aiVisits: 0,
+      orders: 0,
+      revenue: null,
+      currency: null,
+      readiness: 64,
+      missing: [],
+      wrongPrice: null,
+    };
+    const text = render(
+      <ShelfRows
+        shelf={shelf}
+        platforms={['chatgpt-shopping']}
+        platform="all"
+        onPlatform={() => {}}
+        products={[ridge]}
+      />,
+    );
+    expect(text).toContain('Yours, not here');
+    const link = container.querySelector('a[href^="/dashboard/shopping/products/ridge"]')!;
+    expect(link.textContent).toBe('Why not you?');
+    // Its name for a screen reader starts with what it shows.
+    expect(link.getAttribute('aria-label')).toBe(
+      'Why not you? Open Ridge 30L Hiking Backpack beside the product AI picked on this shelf',
+    );
+    expect(link.getAttribute('href')).toBe(
+      '/dashboard/shopping/products/ridge?prompt=p1&platform=chatgpt-shopping',
+    );
+    // Only where the brand is missing: the shoes shelf has its own.
+    expect(container.querySelectorAll('a[href^="/dashboard/shopping/products/"]')).toHaveLength(1);
   });
 
   it('filters by channel through the page, and by the price of the shelf', () => {

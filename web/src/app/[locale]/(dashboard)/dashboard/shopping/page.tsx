@@ -287,6 +287,14 @@ export default function ShoppingPage() {
     'the products',
   );
   const productsLoading = productsRead === undefined;
+  // "Why not you?" on the Shelf needs the catalog's products, not the
+  // window's numbers: read once per brand there, apart from the table.
+  const shelfProducts = useKeyedRead(
+    canRead && activeTab === 'shelf' && !productsRead,
+    activeBrandId ?? '',
+    () => getShoppingProducts(activeBrandId!, filters),
+    'the products for the shelf',
+  );
   // Null for a brand without a catalog, and while it reads.
   const catalogTable: ShoppingProducts | null | 'failed' = productsRead ?? null;
 
@@ -477,6 +485,13 @@ export default function ShoppingPage() {
                     platforms={filterOpts.platforms}
                     platform={platform}
                     onPlatform={setPlatform}
+                    products={
+                      catalogTable && catalogTable !== 'failed'
+                        ? catalogTable.rows
+                        : shelfProducts && shelfProducts !== 'failed'
+                          ? shelfProducts.rows
+                          : undefined
+                    }
                   />
                   <h2 className="pt-2 text-sm font-semibold">{t('shelf.trends')}</h2>
                   <div className="grid gap-4 lg:grid-cols-2">

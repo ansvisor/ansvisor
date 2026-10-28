@@ -10,7 +10,12 @@ import type { ShoppingProductDetail } from '@/lib/actions/shopping';
 const getShoppingProductDetail = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ allowed: true }));
 vi.mock('@/lib/actions/shopping', () => ({ getShoppingProductDetail }));
-vi.mock('next/navigation', () => ({ useParams: () => ({ productId: 'p1' }) }));
+// The query the page opens with: the Shelf's "Why not you?" names a shelf.
+const query = vi.hoisted(() => ({ value: '' }));
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ productId: 'p1' }),
+  useSearchParams: () => new URLSearchParams(query.value),
+}));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -49,6 +54,7 @@ let root: Root;
 beforeEach(() => {
   gate.allowed = true;
   getShoppingProductDetail.mockReset();
+  query.value = '';
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -136,7 +142,7 @@ describe('ShoppingProductPage', () => {
   it('shows the product, where it shows, and why AI picked another one', async () => {
     getShoppingProductDetail.mockResolvedValue(detail);
     const text = await render();
-    expect(getShoppingProductDetail).toHaveBeenCalledWith('b1', 'p1', { datePreset: '30d' });
+    expect(getShoppingProductDetail).toHaveBeenCalledWith('b1', 'p1', { datePreset: '30d' }, null);
     expect(text).toContain('Ridge 30L Backpack');
     expect(text).toContain('$119 · Hiking backpacks · On 1 of 2 shelves · Readiness 48');
     expect(text).toContain(
@@ -162,6 +168,18 @@ describe('ShoppingProductPage', () => {
     // Actions to get on the shelf, from what it misses beside the winner (ECOM-013).
     expect(text).toContain('Actions to get on the shelf');
     expect(text).toContain('Send 4 actions to Action Center');
+  });
+
+  it('asks for the shelf the Shelf’s "Why not you?" opened it on', async () => {
+    query.value = 'prompt=q9&platform=gemini-web';
+    getShoppingProductDetail.mockResolvedValue(detail);
+    await render();
+    expect(getShoppingProductDetail).toHaveBeenCalledWith(
+      'b1',
+      'p1',
+      { datePreset: '30d' },
+      { promptId: 'q9', platform: 'gemini-web' },
+    );
   });
 
   it('says when the product is gone, or locked', async () => {

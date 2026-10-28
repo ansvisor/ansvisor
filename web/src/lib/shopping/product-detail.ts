@@ -79,11 +79,13 @@ export function productText(product: CatalogProductRow): string {
 /**
  * The product's shelves: the questions of its category (its name in them),
  * those it was on, and those its words match well enough, each channel's
- * latest shelf, most relevant first.
+ * latest shelf, most relevant first. `include`: a question kept whatever
+ * its match, the one the Shelf's "Why not you?" opened the product for.
  */
 export function productShelves(
   product: CatalogProductRow,
   cards: readonly DetailCard[],
+  { include = null }: { include?: string | null } = {},
 ): ProductShelfLine[] {
   const category = product.category ? categoryWords(product.category.split('>').at(-1)!) : [];
   const text = productText(product);
@@ -107,7 +109,8 @@ export function productShelves(
     const appeared = shelf.some((card) => card.productId === product.id);
     const promptWords = new Set(categoryWords(first.promptText));
     const inCategory = category.length > 0 && category.every((word) => promptWords.has(word));
-    if (!appeared && !inCategory && scores[0] < RELEVANT_SCORE) continue;
+    const asked = include !== null && first.promptId === include;
+    if (!asked && !appeared && !inCategory && scores[0] < RELEVANT_SCORE) continue;
     const winnerCard = at === 0 ? null : latest[0];
     lines.push({
       promptId: first.promptId,
@@ -140,8 +143,24 @@ export function productShelves(
     .slice(0, MAX_LINES);
 }
 
-/** The shelf to explain: the most relevant one it's missing, else the one it ranks lowest on. */
-export function focusShelf(lines: readonly ProductShelfLine[]): ProductShelfLine | null {
+/**
+ * The shelf to explain: the one asked for (the Shelf's "Why not you?", a
+ * question and its channel) when it has a winner, else the most relevant
+ * one it's missing, else the one it ranks lowest on.
+ */
+export function focusShelf(
+  lines: readonly ProductShelfLine[],
+  prefer: { promptId: string; platform?: string | null } | null = null,
+): ProductShelfLine | null {
+  if (prefer) {
+    const asked = lines.find(
+      (line) =>
+        line.promptId === prefer.promptId &&
+        (!prefer.platform || line.platform === prefer.platform) &&
+        line.winner,
+    );
+    if (asked) return asked;
+  }
   const missing = lines.filter((line) => line.rank === null && line.winner);
   if (missing.length) return missing[0];
   const behind = lines

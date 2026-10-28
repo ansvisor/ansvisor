@@ -129,6 +129,21 @@ describe('focusShelf', () => {
   });
 });
 
+describe('a shelf asked for (the Shelf’s "Why not you?")', () => {
+  it('keeps the question whatever its match, and explains that shelf first', () => {
+    // q3 isn't the product's: kept when it's the one asked for.
+    expect(productShelves(product, cards).some((line) => line.promptId === 'q3')).toBe(false);
+    const lines = productShelves(product, cards, { include: 'q3' });
+    expect(lines.some((line) => line.promptId === 'q3')).toBe(true);
+    expect(focusShelf(lines, { promptId: 'q3', platform: 'chatgpt-shopping' })?.promptId).toBe(
+      'q3',
+    );
+    // Another channel than the one asked for, or a shelf it leads: the usual one.
+    expect(focusShelf(lines, { promptId: 'q3', platform: 'gemini-web' })?.promptId).toBe('q1');
+    expect(focusShelf(lines, { promptId: 'q2' })?.promptId).toBe('q1');
+  });
+});
+
 describe('comparison', () => {
   it('sets the product beside the winner, row by row', () => {
     const q1 = productShelves(product, cards).find((line) => line.promptId === 'q1')!;
