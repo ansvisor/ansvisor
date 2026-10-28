@@ -173,13 +173,18 @@ function wordsOf($el) {
   return nameWords($el.attr('class'), $el.attr('id'));
 }
 
+/** An element's class and id, as lower-case words, from its attributes. */
+export function classIdWords(attribs = {}) {
+  return nameWords(attribs.class, attribs.id);
+}
+
 /**
  * Whether an element's class or id names furniture anywhere on a page
  * (author box, share buttons, related posts, ads…), from its attributes:
  * the Action Center's page checks read a page's words without it.
  */
 export function furnitureNamed(attribs = {}) {
-  return nameWords(attribs.class, attribs.id).some((word) => FURNITURE_WORDS.has(word));
+  return classIdWords(attribs).some((word) => FURNITURE_WORDS.has(word));
 }
 
 function named($el, words) {
