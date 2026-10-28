@@ -14,19 +14,46 @@ vi.mock('@/lib/stripe', () => ({
   },
 }));
 
+/** The demo brand's update: what it set, the filters it was made with, and its answer. */
+const brands = vi.hoisted(() => ({
+  update: vi.fn(),
+  filters: [] as [string, string, unknown][],
+  answer: { error: null } as { error: { message: string } | null },
+}));
 const db = vi.hoisted(() => ({ update: vi.fn(), eq: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    from: () => ({
-      update: (values: unknown) => {
-        db.update(values);
-        return { eq: db.eq };
-      },
-      // The plan before an update, to tell a plan change.
-      select: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: { id: 'org1', plan: 'starter' } }) }),
-      }),
-    }),
+    from: (table: string) => {
+      if (table === 'brands') {
+        return {
+          update: (values: unknown) => {
+            brands.update(values);
+            const chain = {
+              eq: (column: string, value: unknown) => {
+                brands.filters.push(['eq', column, value]);
+                return chain;
+              },
+              is: (column: string, value: unknown) => {
+                brands.filters.push(['is', column, value]);
+                return chain;
+              },
+              then: (resolve: (value: unknown) => unknown) => resolve(brands.answer),
+            };
+            return chain;
+          },
+        };
+      }
+      return {
+        update: (values: unknown) => {
+          db.update(values);
+          return { eq: db.eq };
+        },
+        // The plan before an update, to tell a plan change.
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { id: 'org1', plan: 'starter' } }) }),
+        }),
+      };
+    },
   },
 }));
 
@@ -61,6 +88,8 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
   db.eq.mockResolvedValue({ error: null });
+  brands.filters = [];
+  brands.answer = { error: null };
 });
 
 describe('checkout.session.completed', () => {
@@ -104,5 +133,48 @@ describe('customer.subscription.updated', () => {
     db.update.mockClear();
     await deliver('customer.subscription.updated', subscription('past_due'));
     expect(db.update).toHaveBeenCalledWith({ subscription_status: 'past_due', plan: 'growth' });
+  });
+});
+
+describe('the demo brand after a purchase', () => {
+  const checkout = () =>
+    deliver('checkout.session.completed', { customer: 'cus1', subscription: 'sub1' });
+
+  it('hides a shown demo brand when a subscription starts, trial included', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('trialing', 1_800_000_000));
+    const res = await checkout();
+    expect(res.status).toBe(200);
+    expect(brands.update).toHaveBeenCalledTimes(1);
+    const [values] = brands.update.mock.calls[0] as [{ demo_hidden_at: string }];
+    expect(Date.parse(values.demo_hidden_at)).not.toBeNaN();
+    // The organization's demo brand, only while it is shown: never deleted.
+    expect(brands.filters).toEqual([
+      ['eq', 'organization_id', 'org1'],
+      ['eq', 'is_demo', true],
+      ['is', 'demo_hidden_at', null],
+    ]);
+  });
+
+  it('leaves it alone on a later update, so a demo brand shown again stays shown', async () => {
+    await deliver('customer.subscription.updated', subscription('active', 1_800_000_000));
+    await deliver('invoice.payment_succeeded', { customer: 'cus1' });
+    expect(brands.update).not.toHaveBeenCalled();
+  });
+
+  it('hides nothing for a subscription whose first payment is still open', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('incomplete'));
+    await checkout();
+    expect(brands.update).not.toHaveBeenCalled();
+  });
+
+  it('answers Stripe as usual when the organization has no demo brand, or the write fails', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('active'));
+    // No demo brand: the update matches no row.
+    expect((await checkout()).status).toBe(200);
+    brands.answer = { error: { message: 'timeout' } };
+    const res = await checkout();
+    expect(res.status).toBe(200);
+    expect(db.update).toHaveBeenCalledWith(expect.objectContaining({ plan: 'growth' }));
+    expect(align).toHaveBeenCalled();
   });
 });
