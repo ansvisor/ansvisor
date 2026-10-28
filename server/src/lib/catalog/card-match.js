@@ -55,6 +55,12 @@ export const COMMON_WORD_SHARE = 0.05;
 export const COMMON_WORD_MIN = 500;
 /** Cards matched between two breaths for the event loop. */
 export const MATCH_SLICE = 500;
+/**
+ * A card title's first words a title match reads, at most: a product title
+ * says what it is in far fewer, and each word more is compared with up to
+ * every product it finds.
+ */
+export const MAX_CARD_TITLE_WORDS = 40;
 
 const AMBIGUOUS = Symbol('ambiguous');
 
@@ -97,7 +103,13 @@ export function pathKey(url) {
   try {
     const parsed = new URL(String(url ?? '').trim());
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    return `${parsed.hostname.toLowerCase().replace(/^www\./, '')}${parsed.pathname.replace(/\/+$/, '').toLowerCase()}`;
+    // Its trailing slashes, cut by a walk back: a regex anchored at the end
+    // tries each run of slashes from each of its slashes.
+    let path = parsed.pathname;
+    let end = path.length;
+    while (end > 0 && path[end - 1] === '/') end -= 1;
+    path = path.slice(0, end);
+    return `${parsed.hostname.toLowerCase().replace(/^www\./, '')}${path.toLowerCase()}`;
   } catch {
     return null;
   }
@@ -226,7 +238,9 @@ export function matchCard(card, index) {
       pick(index.byPath, pathKey(card.merchant_url));
     if (page) return { productId: page, match: 'url' };
   }
-  const words = titleWords(card.product_title, index.skip);
+  const words = new Set(
+    [...titleWords(card.product_title, index.skip)].slice(0, MAX_CARD_TITLE_WORDS),
+  );
   if (!words.size) return null;
   const compared = new Set();
   for (const word of words) {
