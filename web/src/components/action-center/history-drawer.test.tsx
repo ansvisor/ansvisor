@@ -225,6 +225,33 @@ describe('HistoryDrawer', () => {
     );
   });
 
+  it('says which nights tracking missed, and when too many to compare (learning A6)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, dataGaps: { before: 1, after: 2, tooMany: false } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Tracking missed 1 night of the week before it and 2 nights of the week after it: mentions and citations are counted as for a full week.',
+    );
+
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, dataGaps: { before: 0, after: 4, tooMany: true } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Tracking missed 4 nights of the week after it: too many to compare mentions and citations fairly, so they are left out of the result.',
+    );
+  });
+
   it('says a dismissed action was not measured, not that nothing could be read', async () => {
     getActionSignals.mockResolvedValue([]);
     for (const outcome of ['not_measurable', 'pending_measurement'] as const) {

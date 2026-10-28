@@ -2597,6 +2597,8 @@
         "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
         "brandWide": "Brand-wide over the same days: {list}",
         "primary": "Judged by {metric}, its main metric.",
+        "gaps": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week after it} other {# nights of the week after it}}: mentions and citations are counted as for a full week.",
+        "gapsTooMany": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week after it} other {# nights of the week after it}}: too many to compare mentions and citations fairly, so they are left out of the result.",
         "auditAfter": "Audited again since it closed: {passed} of {audited} {audited, plural, one {page passes} other {pages pass}}.",
         "auditNotYet": "None of its {pages, plural, one {page} other {# pages}} was audited again since it closed: the result is from the metrics.",
         "signalsAfter": "Of the {total, plural, one {signal} other {# signals}} that raised it, when measured: {ended} ended{replaced, plural, =0 {} other {, # turned into another}}{dismissed, plural, =0 {} other {, # dismissed}}{open, plural, =0 {} other {, # still open}}.",

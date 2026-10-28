@@ -59,6 +59,16 @@ export const VALIDATION_WAIT_DAYS = MEASUREMENT_WINDOW_DAYS + 1;
  */
 export const MEANINGFUL_CHANGE_RATIO = validation.meaningfulChangeRatio;
 
+/** Days a window may lack a tracking run and still be compared (learning A6). */
+export const MAX_GAP_DAYS = validation.maxGapDays;
+
+/**
+ * Metrics tracking's answers add up night by night: a night without a run
+ * reads low in them. The rates (visibility, share of voice, the lead over a
+ * competitor) are shares of the answers there were, and don't drift from one.
+ */
+const COUNT_METRICS = new Set(['mentions', 'citations']);
+
 /** Every metric here reads higher-is-better; a drop is a decline. */
 const MEASURABLE_KPIS = {
   ai_visibility: 'percent',
@@ -240,6 +250,52 @@ export function deriveOutcome(metrics, primary = null, aims = null) {
   return 'no_meaningful_change';
 }
 
+/**
+ * The days of a window (inclusive, UTC) with no stamped tracking run for the
+ * brand (learning A6): a night whose collection failed, or fell short and
+ * was discarded, leaves no stamped row.
+ */
+export async function missingDays(brandId, window) {
+  const end = new Date(Date.parse(`${window.to}T00:00:00Z`) + DAY_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('tracking_runs')
+    .select('completed_at')
+    .eq('brand_id', brandId)
+    .not('completed_at', 'is', null)
+    .gte('completed_at', `${window.from}T00:00:00Z`)
+    .lt('completed_at', end)
+    .limit(1000);
+  if (error) throw new Error(`tracking_runs: ${error.message}`);
+  const ran = new Set((data ?? []).map((r) => new Date(r.completed_at).toISOString().slice(0, 10)));
+  let missing = 0;
+  for (let t = Date.parse(`${window.from}T00:00:00Z`); t < Date.parse(end); t += DAY_MS) {
+    if (!ran.has(new Date(t).toISOString().slice(0, 10))) missing += 1;
+  }
+  return missing;
+}
+
+/**
+ * The counts read over windows tracking missed nights of, each at a full
+ * window's worth (learning A6): what the nights that ran read, per night,
+ * times the window's nights. Both windows on the same scale, a missed night
+ * no longer reads as a decline nobody caused. What was read stays as `raw`.
+ */
+export function fullWindowCounts(metrics, gaps) {
+  if (!metrics || !(gaps.before || gaps.after)) return metrics;
+  const full = (value, missing) => {
+    if (value == null || !missing) return value;
+    const ran = MEASUREMENT_WINDOW_DAYS - missing;
+    return ran > 0 ? Math.round(((value * MEASUREMENT_WINDOW_DAYS) / ran) * 10) / 10 : null;
+  };
+  return metrics.map((m) => {
+    if (!COUNT_METRICS.has(m.metric)) return m;
+    const before = full(m.before, gaps.before);
+    const after = full(m.after, gaps.after);
+    if (before === m.before && after === m.after) return m;
+    return { ...m, before, after, raw: { before: m.before, after: m.after } };
+  });
+}
+
 /** A target the night engine names that a basket can be measured on (learning A1). */
 const TARGET_BASKETS = new Set(['prompts', 'pages']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -339,14 +395,48 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // The verdict from the metrics kept, by its main metric; given `aims`,
   // only the metrics the action names count (see deriveOutcome).
   const finish = async (validation, aims = null) => {
-    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}) };
+    // Nights tracking missed in either window (A6), when a count was read.
+    // Up to MAX_GAP_DAYS, its counts are read at a full window's worth; past
+    // it, too few nights ran to scale from: the counts stay as read and
+    // don't count toward the verdict, and an action whose main metric is a
+    // count can't be compared. The rates can.
+    const counted = [...(validation?.metrics ?? []), ...(validation?.brandWide ?? [])].some(
+      (m) => COUNT_METRICS.has(m.metric) && m.before != null && m.after != null,
+    );
+    const [gapBefore, gapAfter] = counted
+      ? await Promise.all([
+          missingDays(action.brand_id, beforeWindow),
+          missingDays(action.brand_id, afterWindow),
+        ])
+      : [0, 0];
+    const tooMany = Math.max(gapBefore, gapAfter) > MAX_GAP_DAYS;
+    const gaps =
+      gapBefore || gapAfter
+        ? { gaps: { before: gapBefore, after: gapAfter, ...(tooMany ? { tooMany: true } : {}) } }
+        : {};
+    const nights = { before: gapBefore, after: gapAfter };
+    const read =
+      validation && !tooMany
+        ? {
+            ...validation,
+            metrics: fullWindowCounts(validation.metrics, nights),
+            ...(validation.brandWide
+              ? { brandWide: fullWindowCounts(validation.brandWide, nights) }
+              : {}),
+          }
+        : validation;
+    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}), ...gaps };
     const kept =
-      validation || Object.keys(beside).length
-        ? { measuredAt: now.toISOString(), ...(validation ?? {}), ...beside }
+      read || Object.keys(beside).length
+        ? { measuredAt: now.toISOString(), ...(read ?? {}), ...beside }
         : null;
-    const outcome = validation
-      ? deriveOutcome(validation.metrics, validation.primary, aims)
-      : 'not_measurable';
+    const comparable = tooMany
+      ? read?.metrics.filter((m) => !COUNT_METRICS.has(m.metric))
+      : read?.metrics;
+    const outcome =
+      !read || (tooMany && COUNT_METRICS.has(read.primary))
+        ? 'not_measurable'
+        : deriveOutcome(comparable, read.primary, aims);
     const verdict = (audit && auditOutcome(audit)) ?? outcome;
     await write(action.id, kept, verdict, now);
     return verdict;

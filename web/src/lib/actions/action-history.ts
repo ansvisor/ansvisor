@@ -77,6 +77,18 @@ interface ValidationSnapshot {
   audit?: { pages?: number; audited?: number; passed?: number };
   /** The metric its result is judged by (learning A4). */
   primary?: string;
+  /** Nights tracking missed in each window (learning A6). */
+  gaps?: { before?: number; after?: number; tooMany?: boolean };
+}
+
+/** Nights tracking missed in its windows, when there were any. */
+function gapsFrom(
+  validation: ValidationSnapshot | null,
+): { before: number; after: number; tooMany: boolean } | null {
+  const g = validation?.gaps;
+  const before = Number(g?.before) || 0;
+  const after = Number(g?.after) || 0;
+  return before || after ? { before, after, tooMany: g?.tooMany === true } : null;
 }
 
 /** A Site Audit fix's pages audited again, when the sweep read them. */
@@ -313,6 +325,7 @@ export async function getActionHistory(
       signalsAfter: signalsFrom(row.validation),
       measuredOn: measuredOnFrom(row.validation),
       auditAfter: auditFrom(row.validation),
+      dataGaps: gapsFrom(row.validation),
       // Shown only when it was measured: a main metric with no pair says nothing.
       primaryMetric: resultsFrom(row.validation).some((m) => m.metric === row.validation?.primary)
         ? (row.validation?.primary ?? null)

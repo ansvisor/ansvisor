@@ -122,6 +122,11 @@ export interface ActionHistoryItem {
    * A1), with the brand-wide figures kept as a second line.
    */
   measuredOn?: { entity: 'prompts' | 'pages'; count: number } | null;
+  /**
+   * Nights tracking missed in its before and after windows (learning A6);
+   * `tooMany` when past the limit, the result then not measurable.
+   */
+  dataGaps?: { before: number; after: number; tooMany: boolean } | null;
   /** The metric its result is judged by (learning A4); absent before it was measured. */
   primaryMetric?: string | null;
   /** A Site Audit fix's pages audited again since it closed, and how many pass (learning A2). */
