@@ -6,6 +6,7 @@ import messages from '../../../messages/en.json';
 import type { CatalogSource } from '@/lib/catalog';
 import type { StoreResult } from '@/lib/catalog-client';
 import type { CatalogSourcesRead } from './catalog-sources-card';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const listSignInAccounts = vi.fn();
 const connectSignInAccount = vi.fn();
@@ -75,12 +76,19 @@ const { MerchantCenterAccounts, OWN_ERRORS, accountLabel } =
 let container: HTMLDivElement;
 let root: Root;
 const onConnected = vi.fn();
+const openUpgrade = vi.fn();
+// A read-only workspace (plan not active) when set.
+let isLocked = false;
 
 async function render(sources?: CatalogSourcesRead | null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <MerchantCenterAccounts onConnected={onConnected} sources={sources} />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <MerchantCenterAccounts onConnected={onConnected} sources={sources} />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -132,6 +140,8 @@ beforeEach(() => {
   });
   connectSignInAccount.mockReset().mockResolvedValue({ ok: true });
   onConnected.mockReset();
+  openUpgrade.mockReset();
+  isLocked = false;
   toast.error.mockReset();
   toast.success.mockReset();
   container = document.createElement('div');
@@ -335,5 +345,29 @@ describe('MerchantCenterAccounts', () => {
     );
     // The catalog card below says this one already.
     expect(container.textContent).not.toContain('Admins and managers can add and sync sources.');
+  });
+
+  it('adds no account on a read-only workspace: the pick opens the upgrade dialog', async () => {
+    isLocked = true;
+    await render();
+    // The accounts still show.
+    expect(options().map((o) => o.textContent)).toEqual(['', 'Acme Outdoor (123)', '456']);
+    await pick('123');
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Connecting a store needs a plan');
+    expect(select().value).toBe('');
+    expect(button('Add account')!.disabled).toBe(true);
+    expect(connectSignInAccount).not.toHaveBeenCalled();
+  });
+
+  it('opens the upgrade dialog, not a missing message, when the server says the plan has ended', async () => {
+    connectSignInAccount.mockResolvedValue({ ok: false, code: 'subscription', message: null });
+    await render();
+    await pick('123');
+    await act(async () => button('Add account')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Connecting a store needs a plan');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+    // The pick stays, to add it once there's a plan.
+    expect(select().value).toBe('123');
   });
 });

@@ -26,6 +26,7 @@ import {
   type AutoAuditRun,
 } from '@/lib/actions/audits';
 import { nextAutoRun } from '@/lib/audit-auto-runs';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 
 /** One pattern per line, blank lines dropped. */
@@ -83,6 +84,11 @@ export function AuditSettingsDialog({
   now?: Date;
 }) {
   const t = useTranslations('audit.settings');
+  // A read-only workspace (plan not active): the settings open to read; Save
+  // and Unpin open the upgrade dialog instead.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
   const [settings, setSettings] = useState<AuditSettings | null>(null);
   const [autoAudit, setAutoAudit] = useState(false);
   const [emailAfterRun, setEmailAfterRun] = useState(false);
@@ -160,17 +166,21 @@ export function AuditSettingsDialog({
   };
 
   const auto = settings?.autoAudit;
+  // Read-only (no active plan): the month's audits read 0, so it says there's
+  // no plan, not "all 0 audits a month are yours".
   const autoLine = !auto
     ? null
-    : auto.limit === -1
-      ? t('autoAuditUnlimited', { perRun: auto.perRun })
-      : autoAudit
-        ? t('autoAuditOn', {
-            perRun: auto.perRun,
-            total: formatNumber(auto.perRun * 5),
-            limit: formatNumber(auto.limit),
-          })
-        : t('autoAuditOff', { limit: formatNumber(auto.limit) });
+    : isLocked
+      ? tReadOnly('noPlan')
+      : auto.limit === -1
+        ? t('autoAuditUnlimited', { perRun: auto.perRun })
+        : autoAudit
+          ? t('autoAuditOn', {
+              perRun: auto.perRun,
+              total: formatNumber(auto.perRun * 5),
+              limit: formatNumber(auto.limit),
+            })
+          : t('autoAuditOff', { limit: formatNumber(auto.limit) });
 
   const timing: string[] = [];
   if (auto && autoAudit && schedule && now) {
@@ -258,7 +268,9 @@ export function AuditSettingsDialog({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleUnpin(page.url)}
+                          onClick={guard(() => void handleUnpin(page.url), {
+                            action: tActions('unpinPages'),
+                          })}
                           disabled={unpinning !== null}
                         >
                           {unpinning === page.url && (
@@ -282,7 +294,10 @@ export function AuditSettingsDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={!canManage || !changed || saving}>
+          <Button
+            onClick={guard(handleSave, { action: tActions('saveAuditSettings') })}
+            disabled={!canManage || !changed || saving}
+          >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {t('save')}
           </Button>

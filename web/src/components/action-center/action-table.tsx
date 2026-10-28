@@ -64,6 +64,7 @@ import {
 import type { PriorityLevel } from '@/lib/action-center/priority';
 import { formatRelative } from '@/lib/format-relative';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
@@ -230,6 +231,10 @@ function ActionMenu({
 }) {
   const t = useTranslations('actionCenter.actionsPage');
   const [confirming, setConfirming] = useState(false);
+  // A read-only workspace (plan not active): a status, and Delete (before its
+  // confirm), open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // Dismissing asks why first (learning A5).
   const [dismissing, setDismissing] = useState(false);
   return (
@@ -252,9 +257,11 @@ function ActionMenu({
             <DropdownMenuItem
               key={status}
               disabled={action.status === status}
-              onClick={() =>
-                status === 'dismissed' ? setDismissing(true) : onStatusChange(action, status)
-              }
+              onClick={guard(
+                () =>
+                  status === 'dismissed' ? setDismissing(true) : onStatusChange(action, status),
+                { action: tActions('changeActionStatus') },
+              )}
             >
               <Icon className="h-4 w-4" />
               {t(`rowMenu.${status}`)}
@@ -265,7 +272,7 @@ function ActionMenu({
             variant="destructive"
             disabled={!canDelete}
             title={canDelete ? undefined : t('rowMenu.deleteNotAllowed')}
-            onClick={() => setConfirming(true)}
+            onClick={guard(() => setConfirming(true), { action: tActions('deleteActions') })}
           >
             <Trash2 className="h-4 w-4" />
             {t('rowMenu.delete')}

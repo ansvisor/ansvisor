@@ -29,6 +29,7 @@ import { NeedsTag, SourceUnavailable } from './_source-gate';
 import { UntrackedQueriesCard } from './_untracked-queries';
 import { getTrafficGooglePages } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /** CTR as the table shows it: "3.1%". */
 function ctr(clicks: number, impressions: number): string {
@@ -96,6 +97,10 @@ export function GoogleSection({
   // The page whose suggested prompts are open; each opening starts afresh.
   const [promptsFor, setPromptsFor] = useState<string | null>(null);
   const [promptsOpened, setPromptsOpened] = useState(0);
+  // A read-only workspace (plan not active): Add prompts (its dialog asks the
+  // AI as it opens) opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const gscReady = source === null || googleSourceStatus(source) === 'connected';
 
@@ -191,10 +196,13 @@ export function GoogleSection({
                   variant="outline"
                   className="h-7 text-xs"
                   title={t('taking.addPromptsTip')}
-                  onClick={() => {
-                    setPromptsFor(row.page);
-                    setPromptsOpened((n) => n + 1);
-                  }}
+                  onClick={guard(
+                    () => {
+                      setPromptsFor(row.page);
+                      setPromptsOpened((n) => n + 1);
+                    },
+                    { action: tActions('suggestPrompts') },
+                  )}
                 >
                   {t('taking.addPrompts')}
                 </Button>
