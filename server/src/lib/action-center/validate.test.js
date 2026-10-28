@@ -272,6 +272,47 @@ describe('validateAction', () => {
     expect(outcome).not.toBeNull();
   });
 
+  /** Net of the brand's prompts it didn't touch (learning B2), beside the result. */
+  it("keeps a basket's change net of the brand's other prompts over the same windows", async () => {
+    const writes = mockWrites({
+      prompts: [
+        { id: 'p1', topic_id: 't1' },
+        ...Array.from({ length: 6 }, (_, i) => ({ id: `c${i + 1}`, topic_id: 't1' })),
+      ],
+    });
+    // The action's prompts went from 20% to 30% visible; the others from 40% to 44%.
+    let reads = 0;
+    rpc.mockImplementation(async (name, args) => {
+      if (name !== 'opportunity_basket_metrics') return { data: {}, error: null };
+      const own = args.p_prompt_ids.includes('p1');
+      const after = reads++ % 2 === 1;
+      return {
+        data: { cells: 100, visible: own ? (after ? 30 : 20) : after ? 44 : 40 },
+        error: null,
+      };
+    });
+
+    await validateAction(
+      action({
+        kind: 'mention_review',
+        kpi_keys: ['ai_visibility'],
+        payload: { promptIds: ['p1'] },
+      }),
+      { now: NOW },
+    );
+
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.control).toMatchObject({
+      basis: 'topics',
+      prompts: 6,
+      net: expect.arrayContaining([
+        { metric: 'ai_visibility', net: 6, unit: 'points', control: { before: 40, after: 44 } },
+      ]),
+    });
+    // Beside the result, not in its verdict.
+    expect(patch.outcome).toBe('improved');
+  });
+
   it('measures before and after over equal windows and stores both', async () => {
     const writes = mockWrites();
     rpc

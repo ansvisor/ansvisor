@@ -5,14 +5,17 @@ vi.mock('../../config/supabase.js', () => ({
   default: { from: (table) => tables[table]() },
 }));
 
-const { BASKET_KPIS, basketScope, basketValues, pageScope } = await import('./basket-metrics.js');
+const { BASKET_KPIS, basketScope, basketValues, controlScope, netEffect, pageScope } =
+  await import('./basket-metrics.js');
 
 /** A query builder that resolves to `result` however it is chained. */
 function chain(result) {
   const b = {
     select: () => b,
     eq: () => b,
-    in: () => Promise.resolve(result),
+    in: () => b,
+    order: () => b,
+    limit: () => Promise.resolve(result),
     maybeSingle: () => Promise.resolve(result),
     then: (resolve) => resolve(result),
   };
@@ -125,5 +128,72 @@ describe('basketScope', () => {
       (await basketScope({ brand_id: 'b1', payload: { topicId: 't1', promptIds: ['p1'] } }))
         .promptIds,
     ).toEqual(['p1']);
+  });
+});
+
+/**
+ * The control basket (learning B2): the brand's prompts the action didn't
+ * touch, and its change net of theirs.
+ */
+describe('netEffect', () => {
+  const metric = (name, unit, before, after) => ({ metric: name, unit, before, after });
+
+  it('takes a rate in points and a count in percent, net of the control', () => {
+    expect(
+      netEffect(
+        [
+          metric('ai_visibility', 'percent', 20, 30),
+          metric('mentions', 'count', 10, 15),
+          metric('citations', 'count', 4, 8),
+        ],
+        {
+          before: { ai_visibility: 40, mentions: 200, citations: null },
+          after: { ai_visibility: 44, mentions: 220, citations: null },
+        },
+      ),
+    ).toEqual([
+      { metric: 'ai_visibility', net: 6, unit: 'points', control: { before: 40, after: 44 } },
+      { metric: 'mentions', net: 40, unit: 'percent', control: { before: 200, after: 220 } },
+    ]);
+  });
+
+  it('leaves out a count with nothing before to scale by', () => {
+    expect(
+      netEffect([metric('mentions', 'count', 0, 3)], {
+        before: { mentions: 10 },
+        after: { mentions: 12 },
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('controlScope', () => {
+  const others = (n, topic = 't1') =>
+    Array.from({ length: n }, (_, i) => ({ id: `c${i + 1}`, topic_id: topic }));
+
+  it("takes the brand's other prompts in the action's topics, never its own", async () => {
+    tables.prompts = () =>
+      chain({ data: [{ id: 'p1', topic_id: 't1' }, ...others(6)], error: null });
+    const scope = await controlScope('b1', ['p1']);
+    expect(scope).toEqual({
+      basis: 'topics',
+      promptIds: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'],
+      pages: [],
+    });
+  });
+
+  it("falls back to the brand's other prompts, and reads none from too few", async () => {
+    let call = 0;
+    // Its topic has two others; the brand has six.
+    tables.prompts = () =>
+      chain({
+        data: call++ < 2 ? [{ id: 'p1', topic_id: 't1' }, ...others(2)] : others(6, 't9'),
+        error: null,
+      });
+    expect((await controlScope('b1', ['p1'])).basis).toBe('brand');
+
+    tables.prompts = () => chain({ data: others(3), error: null });
+    expect(await controlScope('b1', ['p1'])).toBeNull();
+    expect(await controlScope('b1', [])).toBeNull();
   });
 });

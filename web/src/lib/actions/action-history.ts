@@ -38,6 +38,7 @@ import {
   type OutcomeReading,
   type SignalOutcome,
   type TriggerSignal,
+  type ControlNet,
 } from '@/lib/action-center/history';
 
 interface HistoryRow {
@@ -91,6 +92,32 @@ interface ValidationSnapshot {
   /** Its readings, and whether the final one is in (learning B1). */
   readings?: { day?: number; outcome?: string }[];
   final?: boolean;
+  /** Its change net of the brand's prompts it didn't touch (learning B2). */
+  control?: {
+    basis?: string;
+    prompts?: number;
+    net?: { metric?: string; net?: number; unit?: string }[];
+  };
+}
+
+/** Its change net of the control basket, the metrics it can name. */
+function controlFrom(validation: ValidationSnapshot | null): ControlNet | null {
+  const control = validation?.control;
+  if (!control || !Array.isArray(control.net)) return null;
+  const net = control.net.flatMap((m) =>
+    typeof m?.metric === 'string' &&
+    typeof m.net === 'number' &&
+    Number.isFinite(m.net) &&
+    (m.unit === 'points' || m.unit === 'percent')
+      ? [{ metric: m.metric, net: m.net, unit: m.unit as 'points' | 'percent' }]
+      : [],
+  );
+  if (!net.length || !Number.isInteger(control.prompts)) return null;
+  return {
+    basis: control.basis === 'topics' ? 'topics' : 'brand',
+    prompts: control.prompts as number,
+    net,
+  };
 }
 
 /** Its readings, the days known and verdicts it can name, in order. */
@@ -365,6 +392,7 @@ export async function getActionHistory(
       brandWideResults: resultsFrom(
         row.validation?.brandWide ? { ...row.validation, metrics: row.validation.brandWide } : null,
       ),
+      controlNet: controlFrom(row.validation),
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
       dueDate: row.due_date ?? null,

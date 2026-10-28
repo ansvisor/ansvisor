@@ -90,6 +90,13 @@ export interface OutcomeReading {
   outcome: ActionOutcome;
 }
 
+/** An action's change net of a control basket's (learning B2). */
+export interface ControlNet {
+  basis: 'topics' | 'brand';
+  prompts: number;
+  net: { metric: string; net: number; unit: 'points' | 'percent' }[];
+}
+
 /** A signal that opened the action. Several signals consolidate into one
  *  action, so this is a list rather than a field. */
 export interface TriggerSignal {
@@ -158,6 +165,12 @@ export interface ActionHistoryItem {
   /** A Site Audit fix's pages audited again since it closed, and how many pass (learning A2). */
   auditAfter?: { pages: number; audited: number; passed: number } | null;
   brandWideResults?: ActionResultMetric[];
+  /**
+   * Its change net of the brand's prompts it didn't touch over the same
+   * days (learning B2): a rate in points, a count in percent. `basis` says
+   * whether they share its topics or are the brand's others.
+   */
+  controlNet?: ControlNet | null;
   /** Improve actions only: positions per platform against the baseline (PROMPT-008). */
   positionOutcome: ImproveOutcome | null;
   tasks: ActionHistoryTask[];
