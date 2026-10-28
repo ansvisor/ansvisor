@@ -30,6 +30,7 @@ import {
 } from '@/lib/shopping/product-detail';
 import { priceText } from '@/lib/shopping/price';
 import {
+  CARD_MAX_ROWS,
   PRODUCTS_TABLE_MAX,
   readCatalogProducts,
   readCatalogRows,
@@ -363,7 +364,6 @@ export async function getShoppingFilterOptions(brandId: string): Promise<{
 // ── Paged card reads ──────────────────────────────────────────────────────────
 
 const CARD_PAGE_SIZE = 1000;
-const CARD_MAX_ROWS = 50_000;
 
 /**
  * Every row a card query matches, read in `.range()` pages: an unpaged select

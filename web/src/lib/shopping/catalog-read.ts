@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  MERCHANT_CENTER_KIND,
   catalogSourceKey,
   type CatalogCounts,
   type CatalogFormat,
@@ -25,8 +26,11 @@ const IDS_PER_READ = 100;
 /** Such reads in flight at once. */
 const ID_READS_AT_ONCE = 6;
 const IN_STOCK = new Set(['in_stock', 'instock', 'available', 'limited_availability']);
-/** Rows a read for some ids takes at most, as the card reads (CARD_MAX_ROWS). */
-export const CATALOG_MAX_ROWS = 50_000;
+/**
+ * Rows one paged read takes at most, so a pathological brand can't pin the
+ * server action: Product Visibility's card reads and a catalog read for some ids.
+ */
+export const CARD_MAX_ROWS = 50_000;
 
 /** Every row of a brand's catalog table, in `.range()` pages, up to `max`. */
 export async function readCatalogRows<T>(
@@ -81,7 +85,7 @@ export async function readCatalogProducts(
     ids === null
       ? readCatalogRows<T>(build, max)
       : readForIds(ids, (some) =>
-          readCatalogRows<T>(() => build().in(column, some), CATALOG_MAX_ROWS),
+          readCatalogRows<T>(() => build().in(column, some), CARD_MAX_ROWS),
         );
   const [products, variants, images, categories] = await Promise.all([
     each<{
@@ -118,7 +122,7 @@ export async function readCatalogProducts(
           .eq('brand_id', brandId)
           .is('removed_at', null)
           .order('id'),
-      CATALOG_MAX_ROWS,
+      CARD_MAX_ROWS,
     ),
     each<{ product_id: string; url: string; position: number }>(
       'product_id',
@@ -128,7 +132,7 @@ export async function readCatalogProducts(
           .select('product_id, url, position')
           .eq('brand_id', brandId)
           .order('id'),
-      CATALOG_MAX_ROWS,
+      CARD_MAX_ROWS,
     ),
     each<{ product_id: string; category: { name: string } | null }>(
       'product_id',
@@ -139,7 +143,7 @@ export async function readCatalogProducts(
           .eq('brand_id', brandId)
           .order('product_id')
           .order('category_id'),
-      CATALOG_MAX_ROWS,
+      CARD_MAX_ROWS,
     ),
   ]);
 
@@ -231,4 +235,27 @@ export async function readCatalogSources(
       };
     }),
   );
+}
+
+/**
+ * Whether the brand reads a Google Merchant Center account into its catalog,
+ * its last sync read: only then are its products' Merchant Center issues
+ * current. None when it can't be read: the caller then says less, never more.
+ */
+export async function hasMerchantCenter(
+  supabase: SupabaseClient,
+  brandId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('catalog_sources')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('kind', MERCHANT_CENTER_KIND)
+    .eq('last_status', 'ok')
+    .limit(1);
+  if (error) {
+    console.error('Failed to read the brand’s catalog sources:', error.message);
+    return false;
+  }
+  return (data ?? []).length > 0;
 }

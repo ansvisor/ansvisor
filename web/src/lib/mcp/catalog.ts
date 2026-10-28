@@ -1,9 +1,15 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
-import { readCatalogProducts, readCatalogSources } from '@/lib/shopping/catalog-read';
+import {
+  CARD_MAX_ROWS,
+  hasMerchantCenter,
+  readCatalogProducts,
+  readCatalogRows,
+  readCatalogSources,
+  readForIds,
+} from '@/lib/shopping/catalog-read';
 import { readiness, type ReadinessCheck } from '@/lib/shopping/products';
-import { MERCHANT_CENTER_KIND } from '@/lib/catalog';
 import { brandInOrg } from './data';
 
 /**
@@ -71,13 +77,22 @@ export interface McpCatalogProduct {
   currency: string | null;
   in_stock: boolean;
   has_gtin: boolean;
-  /** How ready it is for AI shopping, 0–100, and the checks it misses or that can't be made. */
+  /**
+   * How ready it is for AI shopping, 0–100, the checks it misses, and those
+   * that can't be made (left out of the score).
+   */
   readiness: { score: number; missing: ReadinessCheck[]; unknown: ReadinessCheck[] };
-  /** Google Merchant Center's issues on its offers, by severity; null without Merchant Center. */
-  merchant_center_issues: { disapproved: number; demoted: number; not_impacted: number } | null;
+  /**
+   * Google Merchant Center's issues on its offers by severity, each issue
+   * (its code and attribute) once however many of its variants and
+   * destinations it is on; null without a Merchant Center account whose last
+   * sync went through.
+   */
+  merchant_center_issues: McpIssueCounts | null;
   /** AI-referred visits to its page and the orders they led to, over the last 30 days. */
   ai_visits_30d: number;
   orders_30d: number;
+  /** Those orders' revenue, in their main currency; null without orders. */
   revenue_30d: number | null;
   revenue_currency: string | null;
 }
@@ -99,14 +114,22 @@ interface ProductAiStatsRow {
   currency: string | null;
 }
 
+const SEVERITIES = ['disapproved', 'demoted', 'not_impacted'] as const;
+type Severity = (typeof SEVERITIES)[number];
+type McpIssueCounts = Record<Severity, number>;
+
 const PRODUCTS_DEFAULT = 50;
 const PRODUCTS_MAX = 200;
 const STATS_DAYS = 30;
-/** Variant ids an issues read filters by: each request's address stays short. */
-const IDS_PER_READ = 100;
+/** PostgREST's answer to an offset past the rows it counted (416). */
+const PAST_THE_END = 'PGRST103';
 
-/** `%`, `_` and `\` as themselves in an ilike pattern. */
-const literal = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
+/**
+ * `text` as a regular expression that matches it as written. The search is
+ * a case-insensitive regex (`~*`), not ilike: PostgREST turns every `*` of
+ * a like pattern into `%` before Postgres reads it, so no escape keeps one.
+ */
+const literal = (text: string) => text.replace(/[\\^$.*+?()[\]{}|]/g, (c) => `\\${c}`);
 
 /**
  * A page of the brand's live catalog products, by title, each read as
@@ -120,18 +143,27 @@ export async function listCatalogProductsFor(
   if (!(await brandInOrg(auth, params.brandId))) return null;
   const limit = Math.min(Math.max(params.limit ?? PRODUCTS_DEFAULT, 1), PRODUCTS_MAX);
   const offset = Math.max(params.offset ?? 0, 0);
-
-  let query = supabaseAdmin
-    .from('catalog_products')
-    .select('id', { count: 'exact' })
-    .eq('brand_id', params.brandId)
-    .is('removed_at', null);
   const search = params.search?.trim();
-  if (search) query = query.ilike('title', `%${literal(search)}%`);
-  const { data, count, error } = await query
+
+  // The brand's live products the search matches; `head` for their count alone.
+  const matching = (head: boolean) => {
+    const query = supabaseAdmin
+      .from('catalog_products')
+      .select('id', { count: 'exact', head })
+      .eq('brand_id', params.brandId)
+      .is('removed_at', null);
+    return search ? query.regexIMatch('title', literal(search)) : query;
+  };
+  const { data, count, error } = await matching(false)
     .order('title')
     .order('id')
     .range(offset, offset + limit - 1);
+  if (error?.code === PAST_THE_END) {
+    // Past the last match: an empty page, as before it.
+    const { count: total, error: countError } = await matching(true);
+    if (countError) throw new Error(countError.message);
+    return { total: total ?? 0, products: [], next_offset: null };
+  }
   if (error) throw new Error(error.message);
   const ids = (data ?? []).map((row) => row.id as string);
   const total = count ?? 0;
@@ -173,7 +205,7 @@ export async function listCatalogProductsFor(
         in_stock: product.inStock,
         has_gtin: product.hasGtin,
         readiness: readiness(product),
-        merchant_center_issues: issues.read ? (issues.byProduct.get(id) ?? NO_ISSUES) : null,
+        merchant_center_issues: issues && (issues.get(id) ?? noIssues()),
         ai_visits_30d: Number(stat?.ai_visits ?? 0),
         orders_30d: Number(stat?.orders ?? 0),
         revenue_30d: stat?.revenue == null ? null : Number(stat.revenue),
@@ -188,53 +220,69 @@ export async function listCatalogProductsFor(
   };
 }
 
-const NO_ISSUES = { disapproved: 0, demoted: 0, not_impacted: 0 };
+const noIssues = (): McpIssueCounts => ({ disapproved: 0, demoted: 0, not_impacted: 0 });
 
 /**
- * Merchant Center's issues on the products' offers (00296: one row per issue
- * per offer, an offer being a variant's external id), counted by severity
- * per product. `read` is false for a brand that doesn't read a Merchant
- * Center account into its catalog: it has no issues to say.
+ * Merchant Center's issues on the products' offers (00296: a row per issue,
+ * destination and offer, an offer being a variant's external id), counted
+ * per product by severity, each issue (code and attribute) once: one thing
+ * to fix, though it is on every size and in Shopping ads and free listings
+ * alike. Every variant and issue read, 100 ids and 1,000 rows a request.
+ * Null without a Merchant Center account whose last sync went through
+ * (hasMerchantCenter, as the editor's shopping check): its issues aren't
+ * current then, if there are any.
  */
-async function issuesOf(brandId: string, productIds: string[]) {
-  const { count, error: countError } = await supabaseAdmin
-    .from('catalog_sources')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId)
-    .eq('kind', MERCHANT_CENTER_KIND);
-  if (countError) throw new Error(countError.message);
-  const byProduct = new Map<
-    string,
-    { disapproved: number; demoted: number; not_impacted: number }
-  >();
-  if (!count) return { read: false, byProduct };
-
-  const { data: variants, error } = await supabaseAdmin
-    .from('catalog_variants')
-    .select('product_id, external_id')
-    .eq('brand_id', brandId)
-    .is('removed_at', null)
-    .in('product_id', productIds);
-  if (error) throw new Error(error.message);
-  const productOf = new Map(
-    (variants ?? []).map((v) => [v.external_id as string, v.product_id as string]),
+async function issuesOf(
+  brandId: string,
+  productIds: string[],
+): Promise<Map<string, McpIssueCounts> | null> {
+  if (!(await hasMerchantCenter(supabaseAdmin, brandId))) return null;
+  const variants = await readForIds(productIds, (some) =>
+    readCatalogRows<{ product_id: string; external_id: string }>(
+      () =>
+        supabaseAdmin
+          .from('catalog_variants')
+          .select('product_id, external_id')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .in('product_id', some)
+          .order('id'),
+      CARD_MAX_ROWS,
+    ),
   );
-  const offers = [...productOf.keys()];
-  for (let i = 0; i < offers.length; i += IDS_PER_READ) {
-    const { data: rows, error: issuesError } = await supabaseAdmin
-      .from('catalog_item_issues')
-      .select('external_id, severity')
-      .eq('brand_id', brandId)
-      .in('external_id', offers.slice(i, i + IDS_PER_READ));
-    if (issuesError) throw new Error(issuesError.message);
-    for (const row of rows ?? []) {
-      const product = productOf.get(row.external_id as string);
-      const severity = row.severity as keyof typeof NO_ISSUES;
-      if (!product || !(severity in NO_ISSUES)) continue;
-      const counts = byProduct.get(product) ?? { ...NO_ISSUES };
-      counts[severity] += 1;
-      byProduct.set(product, counts);
-    }
+  const productOf = new Map(variants.map((v) => [v.external_id, v.product_id]));
+  const issues = await readForIds([...productOf.keys()], (some) =>
+    readCatalogRows<{
+      external_id: string;
+      severity: string;
+      code: string;
+      attribute: string | null;
+    }>(
+      () =>
+        supabaseAdmin
+          .from('catalog_item_issues')
+          .select('external_id, severity, code, attribute')
+          .eq('brand_id', brandId)
+          .in('external_id', some)
+          .order('id'),
+      CARD_MAX_ROWS,
+    ),
+  );
+
+  const seen = new Map<string, Set<string>>();
+  const counts = new Map<string, McpIssueCounts>();
+  for (const issue of issues) {
+    const product = productOf.get(issue.external_id);
+    const severity = issue.severity as Severity;
+    if (!product || !SEVERITIES.includes(severity)) continue;
+    const key = JSON.stringify([severity, issue.code, issue.attribute]);
+    const own = seen.get(product) ?? new Set<string>();
+    if (own.has(key)) continue;
+    own.add(key);
+    seen.set(product, own);
+    const tally = counts.get(product) ?? noIssues();
+    tally[severity] += 1;
+    counts.set(product, tally);
   }
-  return { read: true, byProduct };
+  return counts;
 }
