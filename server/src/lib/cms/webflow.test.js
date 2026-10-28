@@ -344,6 +344,7 @@ describe('where pages live', () => {
       slug: 'cold-brew',
       live: true,
       lastPublished: '2026-10-25T10:00:00Z',
+      filledFields: ['slug', 'name'],
     });
     expect(executeWebflowTool).toHaveBeenLastCalledWith('WEBFLOW_GET_COLLECTION_ITEM', account, {
       collection_id: 'c1',

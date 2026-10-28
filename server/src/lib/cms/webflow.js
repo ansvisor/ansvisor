@@ -172,7 +172,8 @@ export async function getCollection(account, collectionId) {
 
 /**
  * An item as Webflow has it: its slug, whether it's live (published, not a
- * draft, not archived) and when it was last published. Null when it's gone.
+ * draft, not archived), when it was last published, and which of its fields
+ * hold a value (by slug). Null when it's gone.
  */
 export async function getItem(account, collectionId, itemId) {
   let item;
@@ -195,6 +196,7 @@ export async function getItem(account, collectionId, itemId) {
     slug: text(fields.slug, 256),
     live: Boolean(lastPublished) && item.isDraft !== true && item.isArchived !== true,
     lastPublished,
+    filledFields: Object.keys(fields).filter((key) => fields[key] != null && fields[key] !== ''),
   };
 }
 

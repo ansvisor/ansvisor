@@ -1,6 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
-import { WebflowError, createItem, updateItem } from './webflow.js';
+import { WebflowError, createItem, getItem, updateItem } from './webflow.js';
 import { fieldDataFor, toWebflowRichText, webflowSlug } from './webflow-items.js';
 
 /**
@@ -31,6 +31,23 @@ async function lastItem(draftId, collectionId, deliveryId) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data?.external_id ?? null;
+}
+
+/**
+ * Whether the item has no value in the date field the map gives: one sent
+ * before a date was mapped, or before the brand made its date required in
+ * Webflow, has none, and a send again gives it one (#1600). False when
+ * there's no date field, or the item can't be read: the update goes on
+ * without it.
+ */
+async function undated(account, collectionId, itemId, field) {
+  if (!field) return false;
+  try {
+    const item = await getItem(account, collectionId, itemId);
+    return Boolean(item) && !item.filledFields.includes(field);
+  } catch {
+    return false;
+  }
 }
 
 /** The token the send was refused with: Settings asks for a new one. */
@@ -68,7 +85,11 @@ export async function sendToWebflow({ delivery, page, html, jsonLd, connection }
     let itemId = null;
     if (before) {
       try {
-        itemId = await updateItem(account, collectionId, before, fieldData);
+        // An item sent again keeps its date; one that has none is given today's.
+        const fields = (await undated(account, collectionId, before, fieldMap.date))
+          ? fieldDataFor({ page, slug, body, jsonLd, sentAt: new Date() }, fieldMap)
+          : fieldData;
+        itemId = await updateItem(account, collectionId, before, fields);
       } catch (err) {
         if (!(err instanceof WebflowError && err.code === 'not_found')) throw err;
       }
