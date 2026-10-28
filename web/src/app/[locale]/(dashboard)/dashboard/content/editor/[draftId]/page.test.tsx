@@ -5923,9 +5923,22 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(
         draft({ pageType: 'blog_post', authorConfirmed: { real: true, profile: false } }),
       );
+      // Trust reads once the brand's domains are in: until then Before you publish asks.
+      getDraftSources.mockResolvedValue({
+        data: {
+          prompts: [],
+          fanouts: [],
+          citedPages: [],
+          gscQueries: [],
+          brandDomains: ['acme.com'],
+          competitorDomains: [],
+        },
+        choices: [],
+      });
       await renderPage();
       await act(async () => button('Send to CMS')!.click());
-      await act(async () => inDialog('Continue to send').click());
+      // Nothing for Before you publish to ask about: straight to the Send dialog.
+      expect(dialog()!.textContent).toContain('Meta description');
       await act(async () => inDialog('Send').click());
       // The CMS keeps its own author.
       expect(sendPagesToCms).toHaveBeenCalledWith(
