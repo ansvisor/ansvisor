@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { Brand } from '@/types';
 import {
   deleteAction,
@@ -513,6 +514,11 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // and the brand's setup is incomplete, or after a skip.
   const [confirmingSkip, setConfirmingSkip] = useState(false);
   const [switching, setSwitching] = useState(false);
+  // A read-only workspace (plan not active): Start and Skip open the upgrade
+  // dialog instead (Skip without its question), and a new brand's question
+  // doesn't open by itself: Start stays in the header for it.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The new brand's question, once answered or closed, stays closed for
   // this visit, even when the answer couldn't be saved or read back: it
   // never traps anyone on the page.
@@ -550,17 +556,23 @@ function ActionsContent({ brand }: { brand: Brand }) {
         variant="outline"
         size="sm"
         disabled={switching}
-        onClick={() => setConfirmingSkip(true)}
+        onClick={guard(() => setConfirmingSkip(true), { action: tActions('skipGettingStarted') })}
       >
         {tStarted('skip.button')}
       </Button>
     ) : // A new brand's question, once closed, leaves Start in its place.
-    (gettingStarted.asking ? askClosed : gettingStarted.needsSetup || gettingStarted.skipped) ? (
+    (
+        gettingStarted.asking
+          ? askClosed || isLocked
+          : gettingStarted.needsSetup || gettingStarted.skipped
+      ) ? (
       <div className="flex flex-col items-end gap-1">
         <Button
           size="sm"
           disabled={switching}
-          onClick={() => start((s) => tStarted('start.started', { count: s?.done ?? 0 }))}
+          onClick={guard(() => start((s) => tStarted('start.started', { count: s?.done ?? 0 })), {
+            action: tActions('startGettingStarted'),
+          })}
         >
           <Sparkles className="h-3.5 w-3.5" />
           {tStarted('start.button')}
@@ -601,7 +613,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
       {/* A brand added beside others asks before running it. */}
       <Dialog
-        open={canManage && Boolean(gettingStarted?.asking) && !askClosed}
+        open={canManage && Boolean(gettingStarted?.asking) && !askClosed && !isLocked}
         onOpenChange={(open) => {
           if (!open) setAskClosed(true);
         }}

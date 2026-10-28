@@ -17,6 +17,9 @@ const AgentChart = dynamic(
   },
 );
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { isSubscriptionInactive } from '@/lib/api-failure';
+import { takeBackUnansweredTurn } from '@/lib/agent/unanswered-turn';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
@@ -149,6 +152,9 @@ function AgentChat(props: {
   const tc = useTranslations('common');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  // A chat turn is an action: a read-only workspace gets the upgrade dialog.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   // Ref mirrors activeId for prepareSendMessagesRequest. Reading the
   // state directly from the transport closure gives us a stale snapshot —
@@ -160,7 +166,7 @@ function AgentChat(props: {
     activeIdRef.current = activeId;
   }, [activeId]);
 
-  const { messages, sendMessage, status, setMessages, stop } = useChat({
+  const { messages, sendMessage, status, setMessages, stop, error, clearError } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/agent/chat',
       // Always forward the active conversation id alongside the messages
@@ -176,6 +182,21 @@ function AgentChat(props: {
       }),
     }),
   });
+
+  // The server's subscription_inactive (the plan lapsed while the page was
+  // open): the upgrade dialog, the person's message back in the input rather
+  // than left unanswered in the thread, and the chat ready for the next try.
+  useEffect(() => {
+    if (error && isSubscriptionInactive(error.message)) {
+      const back = takeBackUnansweredTurn(messages);
+      if (back) {
+        setMessages(back.messages);
+        setInput(back.text);
+      }
+      openUpgrade();
+      clearError();
+    }
+  }, [error, messages, setMessages, setInput, openUpgrade, clearError]);
 
   // Sync hydrated messages into the chat hook whenever we switch conversation.
   useEffect(() => {
@@ -248,6 +269,10 @@ function AgentChat(props: {
   }
 
   async function newChat() {
+    if (isLocked) {
+      openUpgrade(tActions('startChat'));
+      return;
+    }
     const res = await fetch('/api/agent/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -255,6 +280,10 @@ function AgentChat(props: {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
+      if (isSubscriptionInactive(body)) {
+        openUpgrade();
+        return;
+      }
 
       toast.error(body?.error ?? 'Failed to create chat');
       return;
@@ -286,6 +315,10 @@ function AgentChat(props: {
     e.preventDefault();
     const text = input.trim();
     if (!text || status !== 'ready') return;
+    if (isLocked) {
+      openUpgrade(tActions('sendChat'));
+      return;
+    }
 
     // Resolve the conversation id we'll send with this message. If no chat
     // is selected, spin one up. Captured into a local so the sendMessage
@@ -300,6 +333,10 @@ function AgentChat(props: {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
+        if (isSubscriptionInactive(body)) {
+          openUpgrade();
+          return;
+        }
 
         toast.error(body?.error ?? 'Failed to create conversation');
         return;
@@ -310,10 +347,13 @@ function AgentChat(props: {
       activeIdRef.current = conversation.id;
       convId = conversation.id;
     }
+    // Emptied as it goes out: a refused turn (a read-only workspace) puts
+    // the text back, and so does a send that throws.
+    setInput('');
     try {
       await sendMessage({ text }, { body: { conversationId: convId } });
-      setInput('');
     } catch {
+      setInput(text);
       toast.error('Failed to send message');
     }
   }
@@ -358,6 +398,8 @@ function AgentChat(props: {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  // Open in read-only too: deleting a conversation costs nothing
+                  // and the API (#1613) and the FAQ keep it open.
                   setPendingConfirm(c.id);
                 }}
                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"

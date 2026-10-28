@@ -6,6 +6,7 @@ import { CharacterCount } from '@tiptap/extensions';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 vi.mock('@/lib/actions/shopping-path', () => ({
   searchProductsForBlock: vi.fn(),
@@ -50,13 +51,16 @@ describe('onEmptyLine', () => {
 describe('EditorToolbar', () => {
   let container: HTMLElement;
   let root: Root;
+  const openUpgrade = vi.fn();
   afterEach(() => {
+    openUpgrade.mockReset();
     act(() => root.unmount());
     container.remove();
     document.body.replaceChildren();
   });
 
-  async function render(productsBrandId: string | null) {
+  /** `isLocked`: a read-only workspace (plan not active). */
+  async function render(productsBrandId: string | null, isLocked = false) {
     editor = new Editor({
       extensions: [StarterKit, CharacterCount],
       content: '<h1>Title</h1><p>Text</p>',
@@ -67,15 +71,19 @@ describe('EditorToolbar', () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-          <EditorToolbar
-            editor={editor!}
-            target={3000}
-            lengthWarning={false}
-            htmlView={false}
-            onToggleHtml={() => {}}
-            onAttach={() => {}}
-            productsBrandId={productsBrandId}
-          />
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <EditorToolbar
+              editor={editor!}
+              target={3000}
+              lengthWarning={false}
+              htmlView={false}
+              onToggleHtml={() => {}}
+              onAttach={() => {}}
+              productsBrandId={productsBrandId}
+            />
+          </UpgradeDialogContext.Provider>
         </NextIntlClientProvider>,
       );
     });
@@ -96,5 +104,12 @@ describe('EditorToolbar', () => {
     await render('b1');
     await act(async () => products()!.click());
     expect(document.body.textContent).toContain('Add products');
+  });
+
+  it('opens the upgrade dialog from it on a read-only workspace, and adds nothing', async () => {
+    await render('b1', true);
+    await act(async () => products()!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Editing the page needs a plan');
+    expect(document.body.textContent).not.toContain('Add products');
   });
 });
