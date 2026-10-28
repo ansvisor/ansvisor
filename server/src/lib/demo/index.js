@@ -164,12 +164,10 @@ async function releaseBuild(brandId) {
 
 /**
  * Writes one module's rows: over the old ones (`inPlace`) or after clearing
- * its tables. Even a brand just created isn't empty (its triggers start
- * Getting started), so a module that isn't rebuilt in place clears its
- * tables on a first build too.
+ * its tables (`cleared`, when the clear was started earlier).
  */
-async function writeModule(module, { brandId, now, rebuild }, built) {
-  if (!module.inPlace) await clearDemoData(brandId, [module]);
+async function writeModule(module, { brandId, now, rebuild, cleared }, built) {
+  if (!module.inPlace) await (cleared.get(module.name) ?? clearDemoData(brandId, [module]));
   const writer = demoWriter({
     db: supabaseAdmin,
     brandId,
@@ -191,7 +189,21 @@ async function writeModule(module, { brandId, now, rebuild }, built) {
 async function build(brandId, now, modules, { rebuild }) {
   const started = Date.now();
   const built = {};
-  const args = { brandId, now, rebuild };
+  // Even a brand just created isn't empty (its insert trigger starts Getting
+  // started): a module not rebuilt in place clears its tables first. On a
+  // first build nobody is looking yet, so every such module starts clearing
+  // at once, alongside the core; on a rebuild each clears just before it is
+  // built, so its old rows stay on show as long as they can.
+  const cleared = new Map();
+  if (!rebuild) {
+    for (const module of modules.filter((m) => !m.inPlace)) {
+      const clear = clearDemoData(brandId, [module]);
+      // Awaited when the module is built; a build failing earlier leaves it.
+      clear.catch(() => {});
+      cleared.set(module.name, clear);
+    }
+  }
+  const args = { brandId, now, rebuild, cleared };
   try {
     // The first module (core) lays down what every other one points at; the
     // rest write their own tables side by side, each after the module it

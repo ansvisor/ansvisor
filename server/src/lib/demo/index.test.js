@@ -153,13 +153,11 @@ describe('ensureDemoBrand', () => {
     });
     const ctx = { brandId: 'brand-2', now: NOW, rebuild: false, write: expect.any(Function) };
     expect(build.mock.calls.map(([c]) => c)).toEqual([ctx, ctx]);
-    // Each module's tables, in reverse, just before it is built: a new brand
-    // already holds what its triggers made.
-    expect(state.cleared).toEqual([
-      ['b', 'brand_id', 'brand-2'],
-      ['a', 'brand_id', 'brand-2'],
-      ['c', 'brand_id', 'brand-2'],
-    ]);
+    // Every module's tables, each module's in reverse: a new brand already
+    // holds what its triggers made.
+    const cleared = state.cleared.map(([table]) => table);
+    expect(cleared.sort()).toEqual(['a', 'b', 'c']);
+    expect(state.log.indexOf('delete b')).toBeLessThan(state.log.indexOf('delete a'));
     // The real brand is untouched.
     expect(state.brands[0]).toEqual({ id: 'real-1', organization_id: 'org-1', is_demo: false });
   });
@@ -200,6 +198,24 @@ describe('ensureDemoBrand', () => {
     ];
     await ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: staged });
     expect(state.log).toEqual(['delete b', 'delete a', 'build one', 'delete c', 'build two']);
+  });
+
+  it("on a first build clears the other modules' tables while the first one is built", async () => {
+    const logged = (name) =>
+      vi.fn(async () => {
+        state.log.push(`build ${name}:start`);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        state.log.push(`build ${name}:end`);
+      });
+    const staged = [
+      { name: 'core', tables: ['a'], inPlace: true, build: logged('core') },
+      { name: 'two', tables: ['b', 'c'], build: logged('two') },
+    ];
+    await ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: staged });
+    expect(state.log.indexOf('delete b')).toBeLessThan(state.log.indexOf('build core:end'));
+    expect(state.log.indexOf('delete b')).toBeLessThan(state.log.indexOf('build two:start'));
+    // The in-place core clears nothing.
+    expect(state.cleared.map(([table]) => table)).toEqual(['c', 'b']);
   });
 
   it('builds an in-place module over a new brand without reading anything back', async () => {
