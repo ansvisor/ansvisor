@@ -10,13 +10,17 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * publishDraft for the key's user and organization.
  */
 
+let subscriptionStatus: string;
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from: () => {
       const chain = {
         select: () => chain,
         eq: () => chain,
-        maybeSingle: async () => ({ data: { subscription_status: 'active' }, error: null }),
+        maybeSingle: async () => ({
+          data: { subscription_status: subscriptionStatus },
+          error: null,
+        }),
       };
       return chain;
     },
@@ -36,6 +40,7 @@ const LIVE = 'https://acme.example/blog/cold-brew';
 const fetchMock = vi.fn();
 
 beforeEach(() => {
+  subscriptionStatus = 'active';
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('CRON_SECRET', 'secret');
@@ -78,6 +83,22 @@ describe('markContentDraftPublishedFor', () => {
     expect(await markContentDraftPublishedFor(auth, 'draft-2', LIVE)).toMatchObject({
       error: 'not_found',
     });
+    // A request the API can't read isn't the address's fault.
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ code: 'invalid', message: 'Invalid request' }, { status: 400 }),
+    );
+    await expect(markContentDraftPublishedFor(auth, 'draft-3', LIVE)).rejects.toThrow(
+      'Invalid request',
+    );
+  });
+
+  it('refuses a read-only workspace before asking the API', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    subscriptionStatus = 'canceled';
+    await expect(markContentDraftPublishedFor(auth, 'draft-1', LIVE)).rejects.toMatchObject({
+      code: 'subscription_inactive',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("passes on the API's failure, and asks nothing without an organization", async () => {

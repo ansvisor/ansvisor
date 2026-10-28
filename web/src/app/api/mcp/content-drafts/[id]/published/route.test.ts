@@ -14,9 +14,11 @@ vi.mock('@/lib/mcp-auth', () => ({
     apiKeyId: 'key-1',
   })),
 }));
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/mcp/content-delivery', () => ({ markContentDraftPublishedFor }));
 
 const { POST } = await import('./route');
+const { SubscriptionInactiveError } = await import('@/lib/mcp/subscription-gate');
 
 const DRAFT = '11111111-2222-3333-4444-555555555555';
 const post = (body: unknown, id = DRAFT) =>
@@ -51,5 +53,12 @@ describe('POST /api/mcp/content-drafts/[id]/published', () => {
     expect((await post({ url: 'ftp://x' })).status).toBe(400);
     markContentDraftPublishedFor.mockResolvedValueOnce({ error: 'not_found', message: 'No' });
     expect((await post({ url: 'https://acme.example/x' })).status).toBe(404);
+  });
+
+  it('answers 402 for a read-only workspace', async () => {
+    markContentDraftPublishedFor.mockRejectedValueOnce(new SubscriptionInactiveError());
+    const res = await post({ url: 'https://acme.example/x' });
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ code: 'subscription_inactive' });
   });
 });

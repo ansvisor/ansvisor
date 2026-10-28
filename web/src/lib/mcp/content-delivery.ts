@@ -4,6 +4,7 @@ import { API_BASE_URL } from '@/config/api';
 import { lastSend } from '@/lib/content/cms-status';
 import { draftShopping } from '@/lib/content/shopping-check';
 import { shoppingPathSchema } from '@/lib/content/shopping-path';
+import { assertSubscriptionActive } from './subscription-gate';
 
 /**
  * Where a draft went and whether its shopping links still sell, for the MCP's
@@ -17,7 +18,7 @@ import { shoppingPathSchema } from '@/lib/content/shopping-path';
 export interface McpLastSend {
   /** queued, sent, failed (a send left queued reads as failed: interrupted) or published. */
   status: string;
-  /** The brand's webhook or its Webflow collection. */
+  /** webhook, webflow or wordpress: the brand's webhook, Webflow collection or WordPress site. */
   target: string;
   /** When it was published, sent or queued. */
   at: string;
@@ -172,6 +173,9 @@ export async function markContentDraftPublishedFor(
 ): Promise<McpPublished | McpPublishError> {
   const notFound: McpPublishError = { error: 'not_found', message: 'Draft not found' };
   if (!auth.organizationId) return notFound;
+  // Nothing marked for a read-only workspace, whoever asks: the API's
+  // internal endpoint is outside its own read-only check.
+  await assertSubscriptionActive(auth.organizationId);
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) throw new Error('CRON_SECRET must be configured for MCP publishing');
 
@@ -185,7 +189,7 @@ export async function markContentDraftPublishedFor(
   );
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
   if (!res.ok) {
-    if (body?.code === 'invalid_url' || body?.code === 'invalid') {
+    if (body?.code === 'invalid_url') {
       return {
         error: 'invalid_url',
         message: 'Give the http(s) address the page is live at, with no sign-in details.',

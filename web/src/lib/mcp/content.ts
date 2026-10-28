@@ -155,6 +155,20 @@ export interface McpDraftSummary {
   shopping_links: McpShoppingLinks;
 }
 
+/** How many agent suggestions wait for review on each draft, by draft id. */
+async function openSuggestionCounts(draftIds: string[]): Promise<Map<string, number>> {
+  const open = new Map<string, number>();
+  if (!draftIds.length) return open;
+  const { data, error } = await supabaseAdmin
+    .from('content_draft_suggestions')
+    .select('draft_id')
+    .in('draft_id', draftIds)
+    .eq('status', 'open');
+  if (error) throw new Error(error.message);
+  for (const s of data ?? []) open.set(s.draft_id, (open.get(s.draft_id) ?? 0) + 1);
+  return open;
+}
+
 /** A brand's drafts, the latest changed first; null for a brand outside the organization. */
 export async function listContentDraftsFor(
   auth: McpAuthContext,
@@ -177,20 +191,8 @@ export async function listContentDraftsFor(
   if (error) throw new Error(error.message);
   const rows = data ?? [];
 
-  const open = new Map<string, number>();
-  const sends = await lastSendsOf(rows.map((r) => r.id));
-  if (rows.length) {
-    const { data: suggestions, error: suggestionsError } = await supabaseAdmin
-      .from('content_draft_suggestions')
-      .select('draft_id')
-      .in(
-        'draft_id',
-        rows.map((r) => r.id),
-      )
-      .eq('status', 'open');
-    if (suggestionsError) throw new Error(suggestionsError.message);
-    for (const s of suggestions ?? []) open.set(s.draft_id, (open.get(s.draft_id) ?? 0) + 1);
-  }
+  const ids = rows.map((r) => r.id);
+  const [open, sends] = await Promise.all([openSuggestionCounts(ids), lastSendsOf(ids)]);
   return rows.map(({ shopping_built, content_shopping_checks, ...row }) => ({
     ...row,
     open_suggestions: open.get(row.id) ?? 0,

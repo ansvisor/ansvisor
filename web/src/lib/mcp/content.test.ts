@@ -497,6 +497,32 @@ describe('where a draft went, and its shopping links (B5)', () => {
     expect(draft.last_send).toMatchObject({ status: 'failed', error: 'Not sent: interrupted' });
   });
 
+  it('names a send to WordPress as such', async () => {
+    db.rows.content_drafts = [
+      { ...draftRow(), shopping_built: null, content_shopping_checks: null },
+    ];
+    db.rows.content_draft_suggestions = [];
+    db.rpc.content_draft_last_deliveries = [
+      {
+        draft_id: 'd1',
+        status: 'sent',
+        target: 'wordpress',
+        created_at: '2026-10-25T09:00:00Z',
+        sent_at: '2026-10-25T09:00:04Z',
+        published_at: null,
+        error: null,
+        http_status: 201,
+        published_url: null,
+      },
+    ];
+    const [draft] = (await listContentDraftsFor(auth, 'b1'))!;
+    expect(draft.last_send).toMatchObject({
+      status: 'sent',
+      target: 'wordpress',
+      at: '2026-10-25T09:00:04Z',
+    });
+  });
+
   it('gives one draft its shopping path, as its Brief tab shows it', async () => {
     db.rows.content_drafts = draftRow({
       shopping_built: '2026-10-20T10:00:00Z',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { markContentDraftPublishedFor } from '@/lib/mcp/content-delivery';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 
 const body = z.object({ url: z.string().max(2048) });
@@ -28,9 +29,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed' },
-      { status: 500 },
-    );
+    return failedCallResponse(err);
   }
 }

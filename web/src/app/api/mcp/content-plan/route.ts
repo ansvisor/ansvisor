@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { getContentPlanFor } from '@/lib/mcp/content-plan';
+import { contentUuid } from '@/lib/mcp/content-schemas';
 import { PLAN_CARDS, PLAN_PERIODS, type PlanCard, type PlanPeriod } from '@/lib/content/plan';
 
 /** GET /api/mcp/content-plan — REST mirror of the `get_content_plan` MCP tool. */
@@ -9,9 +10,9 @@ export async function GET(req: Request) {
   if (auth instanceof NextResponse) return auth;
 
   const url = new URL(req.url);
-  const brandId = url.searchParams.get('brand_id');
-  if (!brandId) {
-    return NextResponse.json({ error: 'brand_id is required' }, { status: 400 });
+  const brandId = contentUuid.safeParse(url.searchParams.get('brand_id'));
+  if (!brandId.success) {
+    return NextResponse.json({ error: 'brand_id must be a brand UUID' }, { status: 400 });
   }
   const days = Number(url.searchParams.get('days') ?? 30);
   if (!(PLAN_PERIODS as readonly number[]).includes(days)) {
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
 
   try {
     const plan = await getContentPlanFor(auth, {
-      brandId,
+      brandId: brandId.data,
       days: days as PlanPeriod,
       card: (card as PlanCard | null) ?? undefined,
     });

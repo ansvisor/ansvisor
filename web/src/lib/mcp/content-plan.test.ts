@@ -9,12 +9,17 @@ import type { ContentPlanRead } from '@/lib/content/plan-read';
  */
 
 let brand: Record<string, unknown> | null;
+/** Each filter the brand read made: [table, column, value]. */
+const filters: [string, string, unknown][] = [];
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    from: () => {
+    from: (table: string) => {
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (column: string, value: unknown) => {
+          filters.push([table, column, value]);
+          return chain;
+        },
         maybeSingle: async () => ({ data: brand, error: null }),
       };
       return chain;
@@ -78,6 +83,7 @@ const READ: ContentPlanRead = {
 };
 
 beforeEach(() => {
+  filters.length = 0;
   brand = { id: 'brand-1', site_type: 'b2b', industry: null, shopping_mode_enabled: false };
   readContentPlan.mockReset().mockResolvedValue(READ);
 });
@@ -132,6 +138,19 @@ describe('getContentPlanFor', () => {
   it("answers null for another organization's brand, without reading its plan", async () => {
     brand = null;
     expect(await getContentPlanFor(auth, { brandId: 'brand-2', days: 30 })).toBeNull();
+    // The brand is read only as the key's organization's.
+    expect(filters).toEqual([
+      ['brands', 'id', 'brand-2'],
+      ['brands', 'organization_id', 'org-1'],
+    ]);
+    expect(readContentPlan).not.toHaveBeenCalled();
+  });
+
+  it('reads nothing for a key without an organization', async () => {
+    expect(
+      await getContentPlanFor({ ...auth, organizationId: null }, { brandId: 'brand-1', days: 30 }),
+    ).toBeNull();
+    expect(filters).toEqual([]);
     expect(readContentPlan).not.toHaveBeenCalled();
   });
 
