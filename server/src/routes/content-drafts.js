@@ -7,6 +7,7 @@ import { qualityPhase } from '../lib/content-quality.js';
 import { briefRules, rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
 import { NoShoppingPath, buildShoppingPath } from '../lib/shopping-path.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
+import { checkFramerPublished } from '../lib/cms/framer-status.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
@@ -200,6 +201,41 @@ router.post('/wordpress-status', cmsLimiter, async (req, res) => {
       'content draft wordpress status error',
     );
     return res.status(502).json({ error: 'WordPress could not be read', code: 'failed' });
+  }
+});
+
+/** A brand's Framer items read at most this often on demand (the daily sweep reads them too). */
+const framerChecked = new Map();
+
+/**
+ * POST /api/content-drafts/framer-status
+ * Body: { brandId }. Pages the brand sent to Framer, published there since,
+ * marked published at the item's page (cms/framer-status.js). As
+ * /webflow-status: any member, a brand at most every two minutes.
+ */
+router.post('/framer-status', cmsLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = framerChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    framerChecked.set(brandId, Date.now());
+    return res.json(await checkFramerPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, code: err?.code } },
+      'content draft framer status error',
+    );
+    return res.status(502).json({ error: 'Framer could not be read', code: 'failed' });
   }
 });
 

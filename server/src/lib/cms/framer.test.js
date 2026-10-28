@@ -7,6 +7,7 @@ import {
   collectionOf,
   listCollections,
   projectRef,
+  readPublished,
   withProject,
   writeItem,
 } from './framer.js';
@@ -659,5 +660,131 @@ describe('writeItem', () => {
       updated: false,
       live: false,
     });
+  });
+});
+
+describe('readPublished', () => {
+  /** A project with items, its site's publish and its web pages, as framer-api reads them. */
+  function publishedProject({
+    items = [
+      { id: 'i1', slug: 'cold-brew', draft: false, updatedAt: '2026-10-24T11:00:00.000Z' },
+      { id: 'i2', slug: 'espresso', draft: true },
+      { id: 'i3', slug: 'not-asked', draft: false },
+    ],
+    production = { url: 'https://www.acme.example/', deploymentTime: 1_761_600_000_000 },
+    pages = [
+      { path: '/', collectionId: null, draft: false },
+      { path: '/b/:slug', collectionId: 'cBlog', draft: true },
+      { path: '/archive/blog/:slug', collectionId: 'cBlog', draft: false },
+      { path: '/blog/:slug', collectionId: 'cBlog', draft: false },
+      { path: '/n/:slug', collectionId: 'cNews', draft: false },
+    ],
+  } = {}) {
+    const blog = {
+      ...collection('cBlog', 'Blog', 'user'),
+      getItems: vi.fn(async () => items.map((item) => ({ ...item }))),
+    };
+    const project = fakeProject({ production });
+    project.framer.getCollections = vi.fn(async () => [
+      blog,
+      collection('cSynced', 'Synced', 'anotherPlugin'),
+    ]);
+    project.framer.getNodesWithType = vi.fn(async () => pages);
+    return { ...project, blog };
+  }
+  const read = (connect, collectionId = 'cBlog', ids = ['i1', 'i2', 'gone']) =>
+    readPublished(PROJECT, KEY, collectionId, ids, { connect });
+
+  it('reads the site’s address and publish, the detail page, and the asked-for items', async () => {
+    const { framer, connect } = publishedProject();
+    const result = await read(connect);
+    expect(result).toEqual({
+      siteUrl: 'https://www.acme.example',
+      deployedAt: 1_761_600_000_000,
+      // The shortest of the collection's pages that aren't drafts.
+      detailPath: '/blog/:slug',
+      items: new Map([
+        ['i1', { slug: 'cold-brew', draft: false, updatedAt: '2026-10-24T11:00:00.000Z' }],
+        // An item without its last change's time has none.
+        ['i2', { slug: 'espresso', draft: true, updatedAt: null }],
+      ]),
+    });
+    // An item gone from the collection isn't in the map.
+    expect(result.items.has('gone')).toBe(false);
+    expect(connect).toHaveBeenCalledWith(PROJECT, KEY);
+    expect(framer.getNodesWithType).toHaveBeenCalledWith('WebPageNode');
+    expect(framer.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds no detail page when the collection’s only one is a draft, or it has none', async () => {
+    const drafted = publishedProject({
+      pages: [{ path: '/blog/:slug', collectionId: 'cBlog', draft: true }],
+    });
+    expect((await read(drafted.connect)).detailPath).toBeNull();
+    const without = publishedProject({
+      pages: [
+        { path: '/', collectionId: null, draft: false },
+        { path: null, collectionId: 'cBlog', draft: false },
+      ],
+    });
+    expect((await read(without.connect)).detailPath).toBeNull();
+  });
+
+  it('has no address or publish time for a site never published', async () => {
+    const { connect } = publishedProject({ production: null });
+    expect(await read(connect)).toMatchObject({ siteUrl: null, deployedAt: null });
+  });
+
+  it('reads a publish time given in seconds as ms', async () => {
+    const { connect } = publishedProject({
+      production: { url: 'https://acme.framer.website', deploymentTime: 1_761_600_000 },
+    });
+    expect((await read(connect)).deployedAt).toBe(1_761_600_000_000);
+  });
+
+  it('has no publish time it can’t read, or one ahead of now (a unit guessed wrong)', async () => {
+    const at = async (deploymentTime) =>
+      (
+        await read(
+          publishedProject({ production: { url: 'https://acme.framer.website', deploymentTime } })
+            .connect,
+        )
+      ).deployedAt;
+    for (const time of [0, -1, Number.NaN, Infinity, '1761600000000', null, undefined]) {
+      expect(await at(time), String(time)).toBeNull();
+    }
+    // In microseconds, or more than ten minutes ahead: none.
+    expect(await at(1_761_600_000_000_000)).toBeNull();
+    expect(await at(Date.now() + 11 * 60 * 1000)).toBeNull();
+    // A few minutes ahead (a clock a little off) is kept.
+    const soon = Date.now() + 5 * 60 * 1000;
+    expect(await at(soon)).toBe(soon);
+  });
+
+  it('reads an item whose draft state Framer doesn’t give as a draft', async () => {
+    const { connect } = publishedProject({ items: [{ id: 'i1', slug: 'cold-brew' }] });
+    expect((await read(connect)).items.get('i1')).toEqual({
+      slug: 'cold-brew',
+      draft: true,
+      updatedAt: null,
+    });
+  });
+
+  it('finds no collection gone from the project, or a plugin’s, and closes the connection', async () => {
+    for (const collectionId of ['cGone', 'cSynced']) {
+      const { framer, connect } = publishedProject();
+      await expect(read(connect, collectionId)).rejects.toMatchObject({ code: 'not_found' });
+      expect(framer.getNodesWithType).not.toHaveBeenCalled();
+      expect(framer.disconnect).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('closes the connection when a read fails, in our words', async () => {
+    const { framer, connect } = publishedProject();
+    framer.getPublishInfo.mockRejectedValue(new FramerAPIError(`No ${KEY}`, 'UNAUTHORIZED'));
+    const err = await read(connect).catch((e) => e);
+    expect(err).toMatchObject({ code: 'auth_failed' });
+    expect(err.message).not.toContain(KEY);
+    expect(framer.disconnect).toHaveBeenCalledTimes(1);
   });
 });

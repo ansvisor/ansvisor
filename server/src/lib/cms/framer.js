@@ -13,6 +13,8 @@ import {
  *
  * Each use opens a WebSocket to Framer (wss://api.framer.com) and closes it
  * once done (withProject): one left open keeps the process from exiting.
+ * Pages published since a send are read the same way (readPublished,
+ * framer-status.js).
  *
  * The key is never put in a message, a log or an answer. Our answers and
  * logs carry our own words, never Framer's messages; framer-api's own
@@ -398,6 +400,92 @@ export async function writeItem(
       if (made.length !== 1)
         throw new FramerError('failed', 'Framer didn’t say which item it made.');
       return { id: made[0].id, updated: false, live: false };
+    },
+    opts,
+  );
+}
+
+/** A publish time further ahead than this is a unit read wrong: nothing is marked on it. */
+const AHEAD_MS = 10 * 60 * 1000;
+
+/**
+ * When the site was last published, in ms, or null. The unit of
+ * `deploymentTime` is undocumented by Framer: framer-api (5.1.0) types it as
+ * a plain number, so this is a guess. One too small to be ms since 1970
+ * (before 1973) is read as seconds; a time read as more than ten minutes
+ * ahead is none, so a wrong guess marks nothing published.
+ */
+function deployedAtOf(production) {
+  const time = production?.deploymentTime;
+  if (typeof time !== 'number' || !Number.isFinite(time) || time <= 0) return null;
+  const ms = time < 1e11 ? time * 1000 : time;
+  return ms > Date.now() + AHEAD_MS ? null : ms;
+}
+
+/**
+ * The path of the collection's detail page ("/blog/:slug"), a draft page
+ * left out (it isn't published); of more than one, the shortest.
+ */
+function detailPathOf(pages, collectionId) {
+  let best = null;
+  for (const page of pages ?? []) {
+    const path = typeof page?.path === 'string' ? page.path.trim() : '';
+    if (page?.collectionId !== collectionId || page.draft || !path) continue;
+    if (best === null || path.length < best.length) best = path;
+  }
+  return best;
+}
+
+/**
+ * What tells whether the items pages were sent as are live (framer-status.js),
+ * read in one connection: the site's published address and when it was last
+ * published (production; none while the site isn't), the path of the
+ * collection's detail page, and the asked-for items' slugs, draft state and
+ * last change. An item gone from the collection isn't in the map.
+ *
+ * @param {string} project the connection's project (site_id)
+ * @param {string[]} itemIds
+ * @returns {Promise<{ siteUrl: string|null, deployedAt: number|null, detailPath: string|null,
+ *   items: Map<string, { slug: string, draft: boolean, updatedAt: string|null }> }>}
+ *   deployedAt: in ms; updatedAt: the item's ISO time, when Framer gives it
+ */
+export async function readPublished(project, apiKey, collectionId, itemIds, opts) {
+  return withProject(
+    project,
+    apiKey,
+    async (framer) => {
+      const collection = usersOwn(await framer.getCollections()).find((c) => c.id === collectionId);
+      if (!collection) {
+        throw new FramerError(
+          'not_found',
+          'The collection pages go to is gone from the project: pick another in Settings › Integrations.',
+        );
+      }
+      const [items, publish, pages] = await Promise.all([
+        collection.getItems(),
+        framer.getPublishInfo(),
+        framer.getNodesWithType('WebPageNode'),
+      ]);
+      const wanted = new Set(itemIds);
+      const production = publish?.production ?? null;
+      return {
+        siteUrl: siteUrlOf(production),
+        deployedAt: deployedAtOf(production),
+        detailPath: detailPathOf(pages, collectionId),
+        // A draft state Framer doesn't give is read as a draft: nothing is marked live on a guess.
+        items: new Map(
+          items
+            .filter((item) => wanted.has(item.id))
+            .map((item) => [
+              item.id,
+              {
+                slug: item.slug,
+                draft: item.draft !== false,
+                updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : null,
+              },
+            ]),
+        ),
+      };
     },
     opts,
   );
