@@ -130,9 +130,32 @@
     "contentLibrary": "Library",
     "contentPlan": "Plan",
     "contentEditor": "Editor",
-    "toggleSubmenu": "Show or hide {label}"
+    "toggleSubmenu": "Show or hide {label}",
+    "menuOff": "{count, plural, one {# section} other {# sections}} off your menu.",
+    "menuOffChange": "Change"
   },
   "actionCenter": {
+    "dismissReason": {
+      "title": "Why dismiss it?",
+      "description": "This helps Ansvisor suggest the work that fits you.",
+      "not_relevant": {
+        "label": "It doesn't matter to us",
+        "hint": "What it's about isn't something the brand works on."
+      },
+      "already_done": {
+        "label": "It's already done",
+        "hint": "The work was done before, or somewhere Ansvisor doesn't see."
+      },
+      "wrong_data": {
+        "label": "The data behind it is wrong",
+        "hint": "The signals, prompts or pages it's built on don't hold."
+      },
+      "not_now": {
+        "label": "Not now",
+        "hint": "It's right, but other work comes first."
+      },
+      "skip": "Dismiss without saying why"
+    },
     "tabs": {
       "label": "Action Center sections",
       "review": "Needs review",
@@ -1022,8 +1045,16 @@
             "days": "{days, plural, one {# day ago} other {# days ago}}"
           },
           "highDemand": "high search demand",
+          "realDemand": {
+            "high": "measured demand High",
+            "medium": "measured demand Medium"
+          },
           "commercial": "commercial intent",
           "heldBefore": "previously visible",
+          "pastSuccess": {
+            "worked": "{improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here",
+            "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here"
+          },
           "sources": "confirmed by {count} sources",
           "sentence": {
             "withWhen": "{what} {when}",
@@ -1286,7 +1317,7 @@
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
-          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+          "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -1363,6 +1394,9 @@
           "checkMissing": "Checked: {missing}",
           "checkNot": {
             "not_checkable": "This task isn't checked on its page: a Site Audit fix is checked by your next audit.",
+            "no_address": "This task's URL isn't a page's address. Edit it to a full address, or a path on the brand's site.",
+            "no_change_text": "This task has no new text to look for on the page. Add it under Change, or check the task yourself.",
+            "from_bot_logs": "This crawler fix came from your bot logs, and robots.txt can't show it's done. Mark it done once crawlers read the page.",
             "not_open": "This task is already done or skipped.",
             "no_answer": "Couldn't read the page. Try again later.",
             "changed": "The task changed while it was checked. Try again.",
@@ -2459,7 +2493,7 @@
       "strengthen_reference_asset": "The page is live with the facts, sources or tables added, and fetched again it has them",
       "strengthen_entity_content": "The page describes the brand as its profile does, fetched again",
       "add_internal_links": "The pages that should link to it do, fetched again",
-      "improve_cta_path": "The call to action is live on the page, fetched again",
+      "improve_cta_path": "The call to action is live on the page: you confirm it",
       "publish_content": "The page is published at its address and answers when fetched",
       "fix_crawler_access": "robots.txt and the page let the AI crawlers in, fetched again",
       "fix_structured_data": "The page has valid structured data (JSON-LD), fetched again",
@@ -2499,6 +2533,7 @@
       "change_not_found": "the new text isn't on the page",
       "old_text_still_there": "the text it replaces is still on the page",
       "off_site": "the page isn't on the brand's site",
+      "valid_before": "the structured data was valid before the fix. Mark the task done once it's fixed",
       "links_not_for_sale": "the page still links products that no longer sell"
     },
     "taskChecks": {
@@ -2590,6 +2625,21 @@
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
+        "dismissedBecause": "Dismissed: {reason}.",
+        "readings": "Read after it closed: {list}.",
+        "reading": "day {day}, {outcome}",
+        "finalOn": "The final reading is on day {day}.",
+        "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
+        "brandWide": "Brand-wide over the same days: {list}",
+        "controlNet": "Net of {basis, select, topics {the {prompts} other prompts in its topics} other {the brand's {prompts} other prompts}} over the same days: {list}",
+        "netPoints": "{metric} {value} pts",
+        "netPercent": "{metric} {value}%",
+        "primary": "Judged by {metric}, its main metric.",
+        "gaps": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week of the latest reading} other {# nights of the week of the latest reading}}: mentions and citations are counted as for a full week.",
+        "gapsTooMany": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week of the latest reading} other {# nights of the week of the latest reading}}: too many to compare mentions and citations fairly, so they are left out of the result.",
+        "auditAfter": "Audited again since it closed: {passed} of {audited} {audited, plural, one {page passes} other {pages pass}}.",
+        "auditNotYet": "None of its {pages, plural, one {page} other {# pages}} was audited again since it closed: the result is from the metrics.",
+        "signalsAfter": "Of the {total, plural, one {signal} other {# signals}} that raised it, when measured: {ended} ended{replaced, plural, =0 {} other {, # turned into another}}{dismissed, plural, =0 {} other {, # dismissed}}{open, plural, =0 {} other {, # still open}}.",
         "result": "Result",
         "visibilityChange": "Visibility Change",
         "citationsChange": "Citations Change",
@@ -2623,24 +2673,56 @@
         "description": "Select a brand to view its action history."
       },
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
+      "view": {
+        "actions": "Actions",
+        "scorecard": "Scorecard"
+      },
+      "scorecard": {
+        "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",
+        "columns": {
+          "kind": "Kind of action",
+          "completed": "Completed",
+          "results": "Results",
+          "successRate": "Success rate",
+          "medianChange": "Median change",
+          "dismissed": "Dismissed"
+        },
+        "tooFew": "Too few results",
+        "mostly": "Mostly: {reason}",
+        "empty": {
+          "title": "Nothing to score in this range",
+          "description": "A kind of action shows here once one of its actions is completed or dismissed."
+        },
+        "error": "The scorecard couldn't be loaded.",
+        "retry": "Try again"
+      },
+      "outcomeSoFar": "so far: day {day} of {final}",
       "outcomeHint": {
         "pending_measurement": "no result recorded",
         "improved": "vs before",
+        "mixed": "vs before",
         "no_meaningful_change": "vs before",
         "declined": "vs before",
-        "not_measurable": "action was dismissed"
+        "not_measurable": "nothing to read"
       },
       "outcomeExplain": {
         "pending_measurement": "This action's effect has not been measured. The metrics below fill in once validation runs.",
         "improved": "Measured after this action closed.",
+        "mixed": "Measured after this action closed; some metrics moved up and others down, or only some of its pages pass.",
         "no_meaningful_change": "Measured after this action closed; the metrics did not move.",
         "declined": "Measured after this action closed; the metrics moved the wrong way.",
-        "not_measurable": "This action was dismissed, so nothing was measured."
+        "not_measurable": "Measured after this action closed; nothing it aims at could be read."
+      },
+      "dismissedResult": {
+        "label": "Not measured",
+        "hint": "dismissed",
+        "explain": "Not measured: it was dismissed, and only a completed action is measured."
       }
     },
     "actionOutcome": {
       "pending_measurement": "Not measured",
       "improved": "Improved",
+      "mixed": "Mixed",
       "no_meaningful_change": "No meaningful change",
       "declined": "Declined",
       "not_measurable": "Not measurable"
@@ -4056,6 +4138,8 @@
         }
       },
       "agentCard": {
+        "careful": "Keeping its changes small for rules people here mostly reject: {rules}.",
+        "live": "Keeping what the live page earns: cited {citations, plural, one {# time} other {# times}} in {days} days ({before, number} before){lost, plural, =0 {} one {, # prompt lost} other {, # prompts lost}}.",
         "breaks": "would break {names}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
@@ -6148,6 +6232,7 @@
       "testFailed": "Webhook test failed: {error}",
       "testRedirect": "The address redirects (HTTP {status}) to {location}. Nothing is sent on to it: use that address instead.",
       "testForbidden": "Only admins and managers can test the webhook.",
+      "readOnly": "Only admins and managers can change or test this webhook.",
       "save": "Save Webhook",
       "saving": "Saving...",
       "saved": "Webhook saved!",
@@ -6170,7 +6255,8 @@
     "sentToWorkflow": "Sent to workflow!",
     "sendError": "Failed to send",
     "dismissError": "Failed to dismiss",
-    "bulkSentToast": "Sent {sent} opportunities to workflow",
+    "bulkSentToast": "Sent {sent, plural, one {# opportunity} other {# opportunities}} to workflow",
+    "bulkSendRedirect": "Nothing was sent: the webhook address redirects. Use the address it redirects to.",
     "bulkSendPartialError": "{failed} failed to send",
     "bulkSendError": "Failed to send opportunities.",
     "bulkDoneToast": "Marked {updated} opportunities as done",
@@ -6998,6 +7084,8 @@
       "show": "Show",
       "hide": "Hide",
       "planPill": "{plan} plan",
+      "planPillEnded": "{plan} plan · ended",
+      "ended": "Your {plan} plan has ended",
       "planLabel": {
         "self_hosted": "Self-Hosted",
         "starter": "Starter",
@@ -7024,7 +7112,8 @@
       "cta": {
         "upgrade_growth": "Upgrade to Growth",
         "upgrade": "Upgrade plan",
-        "contact": "Contact us"
+        "contact": "Contact us",
+        "choose_plan": "Choose a plan"
       },
       "footer": "Click a card to filter the table (Active · Paused · All).",
       "updated": "Counts updated {when}",
@@ -7276,6 +7365,88 @@
     "badgeLabel": "Estimate, {level} confidence: how it's built",
     "label": "{range} a month, estimated, {level} confidence",
     "perMonth": "/mo"
+  },
+  "promptDemand": {
+    "title": "Demand · is this asked for real?",
+    "keyword": "Read for “{keyword}”",
+    "loadFailed": "Couldn't load this prompt's demand.",
+    "measured": "Measured",
+    "measuredTitle": "Measured from real searches, not estimated.",
+    "kpiTitle": "Demand · {signals} of {total} signals",
+    "level": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "note": {
+      "high": "Demand level <b>High</b> raises the Priority Score of Action Center actions about this prompt.",
+      "medium": "Demand level <b>Medium</b> raises the Priority Score of Action Center actions about this prompt a little.",
+      "low": "Demand level <b>Low</b> leaves the Priority Score of Action Center actions about this prompt as it is.",
+      "none": "Once a signal is read, the demand level feeds the Priority Score of Action Center actions about this prompt."
+    },
+    "readOn": "{source} · read {date}",
+    "gsc": {
+      "title": "Search Console",
+      "window": "Measured · last 28 days",
+      "source": "Your Search Console",
+      "totals": "<b>{impressions}</b> impressions · <b>{clicks}</b> clicks",
+      "queries": "{count, plural, one {# matching query} other {# matching queries}}, e.g. “{query}”",
+      "noQueries": "None of your Search Console queries in the last 28 days matches this prompt.",
+      "notConnected": "Connect Search Console to see real clicks.",
+      "notConnectedBody": "The searches that brought people to your site are matched to this prompt every night.",
+      "connect": "Connect Search Console",
+      "connectNotAllowed": "Ask an admin or a manager to connect Search Console.",
+      "unmapped": "Pick this brand's Search Console property to see real clicks.",
+      "manage": "Manage in Settings",
+      "syncing": "Search Console is syncing. Its queries are matched to this prompt the night after the first sync.",
+      "notConfigured": "Search Console isn't set up on this server.",
+      "notRead": "Not read yet. Matching queries are read every night."
+    },
+    "trends": {
+      "title": "Google Trends",
+      "window": "12 months",
+      "source": "Google Trends via DataForSEO",
+      "rising": "Rising",
+      "steady": "Steady",
+      "falling": "Falling",
+      "change": "<b>{trend}</b> · {change} vs a year ago",
+      "risingFromNone": "<b>Rising</b> · from no search interest a year ago",
+      "label": "<b>{trend}</b>",
+      "noData": "Too little search interest to draw a line."
+    },
+    "paa": {
+      "title": "People Also Ask",
+      "window": "Google",
+      "source": "Google results via DataForSEO",
+      "track": "+ Track",
+      "trackLabel": "Track “{question}”",
+      "tracked": "Tracked",
+      "trackedLabel": "“{question}” is tracked",
+      "tracking": "Adding…",
+      "trackNotAllowed": "Only admins and managers can add prompts.",
+      "trackedToast": "“{question}” is now a tracked prompt.",
+      "alreadyTrackedToast": "“{question}” is already a tracked prompt.",
+      "planLimit": "Your plan's prompt limit is reached. Upgrade to track more prompts.",
+      "trackFailed": "Couldn't track this question.",
+      "none": "Google shows no People Also Ask questions for this keyword."
+    },
+    "youtube": {
+      "title": "YouTube",
+      "window": "Top results",
+      "source": "YouTube results via DataForSEO",
+      "totals": "<b>{views}</b> views across the top <b>{videos}</b> videos",
+      "top": "Top: “{title}” · {views} views",
+      "results": "YouTube lists about {count} results.",
+      "none": "YouTube shows no videos for this keyword."
+    },
+    "paid": {
+      "pending": "Being read. Ready within a day.",
+      "noVolume": "Analyze volume first. Trends, People Also Ask and YouTube are read for the keyword the volume analysis finds.",
+      "noVolumeLink": "Open Prompts Insights",
+      "noKeyword": "Nothing to read: Google shows no searches for this prompt's keywords.",
+      "off": "Not read yet. Weekly reads aren't turned on yet.",
+      "notRead": "Not read yet. It's read about once a week."
+    }
   },
   "mentions": {
     "title": "Mentions & Sentiment",
@@ -7665,6 +7836,9 @@
     "kpiTopMerchantSub": "Most frequent merchant domain",
     "platformBreakdownTitle": "Card rate by platform",
     "trendTitle": "Your shopping presence — last 30 days",
+    "seriesCardRate": "Card rate",
+    "seriesOwnCards": "Your cards",
+    "seriesAllCards": "All cards",
     "amazonShareDropAlert": "Amazon's share fell from {from}% to {to}% over the last seven days. AI may be leaving Amazon out; your own store link matters more.",
     "filterRegion": "Region",
     "filterPlatform": "Platform",
@@ -7924,6 +8098,19 @@
     "citationEvidence": "Citation Evidence",
     "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
   },
+  "welcome": {
+    "title": "What do you work on?",
+    "invitedTitle": "Welcome to {workspace} Workspace, {name}",
+    "invitedTitleNoName": "Welcome to {workspace} Workspace",
+    "lede": "Pick what you work on or lead, one or more. We'll set up your menu around it; your team can pick their own when they join.",
+    "invitedLede": "You've joined as {role}. What do you work on or lead? We'll set up your menu around it.",
+    "yourMenu": "Your menu",
+    "hiddenByAdmin": "{count} hidden by your admin",
+    "changeLater": "You can change this any time in Settings › Account.",
+    "skip": "Skip: show me everything",
+    "continue": "Continue",
+    "saveFailed": "Couldn't save your work areas. Try again."
+  },
   "settings": {
     "title": "Settings",
     "description": "Manage your project and account settings.",
@@ -7932,6 +8119,95 @@
     "general": "General",
     "apiKeys": "API Keys",
     "team": "Team",
+    "menuAccess": {
+      "title": "Menu access",
+      "new": "New",
+      "notAllowed": "Only admins, and managers an admin lets, choose what each role sees on the menu.",
+      "note": "Hiding a section only takes it off the menu. Its pages still open from a link, and what each role can do there doesn't change. Nobody can take a section off an admin's menu (only their own work areas narrow it), and Action Center is on everyone's menu.",
+      "rolesTitle": "Sections each role sees",
+      "rolesDescription": "Pick what's on the left menu for everyone with a role. Start from a ready-made set, then adjust.",
+      "section": "Section",
+      "everything": "Everything",
+      "useSet": "Use a set…",
+      "useSetLabel": "Fill {role} from a ready-made set",
+      "sees": "{role} sees {section}",
+      "alwaysOn": "Everyone sees {section}",
+      "adminSees": "Admins see {section}",
+      "otherGroup": "Other",
+      "saveFailed": "Couldn't save the menu. Try again.",
+      "loadFailed": "Couldn't load menu access.",
+      "managersTitle": "Who can change menus",
+      "managersDescription": "Admins always can. Let a manager do it too: they see this page, and nothing else of the admins' settings.",
+      "managersAdminOnly": "Only admins choose who can change menus.",
+      "noManagers": "No managers yet. Give someone the Manager role in Team first.",
+      "canChangeMenus": "Can change menus",
+      "canChangeMenusLabel": "{name} can change menus",
+      "peopleTitle": "People",
+      "peopleDescription": "Each person's menu is their role's sections, with an exception you set here, narrowed by the work areas they picked themselves.",
+      "noPeople": "Only admins so far. Invite people in Team.",
+      "person": "Person",
+      "workAreas": "Their work areas",
+      "menu": "Menu",
+      "allSections": "All sections",
+      "roleMenu": "{role}'s menu",
+      "custom": "Custom: {changes}",
+      "sectionCount": "{count} of {total} sections",
+      "customize": "Customize",
+      "close": "Close",
+      "personSections": "{name}'s sections",
+      "personSectionsHint": "Ticked as their role has it; a change from the role is marked.",
+      "shownForThem": "shown for them",
+      "hiddenForThem": "hidden for them",
+      "alwaysOnShort": "always on",
+      "useRoleMenu": "Use {role}'s menu",
+      "savedAsYouChange": "Saved as you change it.",
+      "personSees": "{name} sees {section}",
+      "workAreasTitle": "Your work areas",
+      "workAreasDescription": "Pick what you work on or lead, and your menu shows only what you need. Pick none to see every section you can.",
+      "workAreasDescriptionAdmin": "Pick what you work on or lead, and your menu shows only what you need. Pick none to see every section. Nobody else can take a section off an admin's menu.",
+      "yourMenu": "Your menu",
+      "hiddenByAdmin": "Hidden by your admin",
+      "notInWorkAreas": "Not in your work areas",
+      "adminTookOff": "{count, plural, one {Your admin took a section off your menu.} other {Your admin took # sections off your menu.}} Their pages still open from a link; ask an admin if you need one on your menu.",
+      "areas": {
+        "leaders": {
+          "title": "Founders & leaders",
+          "text": "Founders, C-level and team leads: whether AI recommends you, what it brings, and what the team ships."
+        },
+        "aeo": {
+          "title": "AEO/GEO & Audit",
+          "text": "Pages AI can read and cite, fixes, and the traffic they bring."
+        },
+        "content": {
+          "title": "Content",
+          "text": "Pages to write and improve, and the prompts they answer."
+        },
+        "brand": {
+          "title": "Brand & PR",
+          "text": "How AI talks about the brand, what it cites, and how that changes."
+        },
+        "growth": {
+          "title": "Growth",
+          "text": "AI visits, key events and signups, and the prompts and pages that bring them."
+        },
+        "product": {
+          "title": "Product Development",
+          "text": "What buyers ask AI about your category, how it compares you, and needs nobody meets."
+        },
+        "bizdev": {
+          "title": "Business Development",
+          "text": "Markets and segments where AI picks you or a rival, and the sources it trusts."
+        },
+        "developers": {
+          "title": "Developers",
+          "text": "Answer data through the API and MCP (keys in Settings), the site's AI checks and the tracking snippet."
+        },
+        "analytics": {
+          "title": "Analytics",
+          "text": "Where the brand stands in AI search, by prompt, engine and market."
+        }
+      }
+    },
     "content": {
       "title": "Content",
       "description": "How the Content Editor works for each brand.",
@@ -8414,6 +8690,7 @@
       "connecting": "Connecting…",
       "connectedToast": "Webflow connected",
       "connectedSetupToast": "Webflow connected. Now pick a collection and save.",
+      "connectedPickSiteToast": "Webflow connected. Now pick the site and the collection, and save.",
       "refusedNote": "Webflow refused the saved token. Paste a new one to send pages again.",
       "replaceToken": "Replace token",
       "cancel": "Cancel",
@@ -8424,6 +8701,7 @@
       "siteLabel": "Site",
       "sitePlaceholder": "Pick a site",
       "setupStep": "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.",
+      "setupStepSite": "Last step: pick the site and the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.",
       "collectionLabel": "Collection",
       "collectionPlaceholder": "Pick a collection",
       "loadingCollections": "Reading the site's collections…",
@@ -8453,7 +8731,7 @@
         "forbidden": "Only admins and managers can change the Webflow connection.",
         "not_connected": "Connect Webflow first.",
         "auth_failed": "Webflow refused this token. Check it and try again.",
-        "missing_scopes": "The token needs Sites: Read and CMS: Read and write. Generate one with them.",
+        "missing_scopes": "The token needs CMS: Read and write and Sites: Read-only. Generate a new one with them.",
         "no_access": "The token doesn't reach this site or collection.",
         "no_site": "This token reaches no Webflow site.",
         "not_found": "That site or collection is gone. Pick another.",

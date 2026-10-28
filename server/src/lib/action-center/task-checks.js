@@ -11,9 +11,10 @@
  *  - robots.txt lets the AI crawlers in, and the page isn't noindex
  *    (fix_crawler_access raised by the audit's ai-bot-access);
  *  - it changed since the first look, by more than a date, a price or a
- *    rotating quote moving (optimize, refresh, strengthen, the call to
- *    action): the first look keeps a sketch of the page's words, and
- *    enough of them must have changed;
+ *    rotating quote moving (optimize, refresh, strengthen): the first look
+ *    keeps a sketch of the page's words, and enough of them must have
+ *    changed. A call to action is confirmed by hand: a re-fetch can't tell
+ *    (tasks/templates.js);
  *  - a written task's new text is on it, and the text it replaces gone;
  *  - a shopping links task's page links no product that no longer sells,
  *    read as the catalog sync's shopping check reads it (shopping-check.js;
@@ -33,7 +34,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
 import { checkShoppingDraft } from '../shopping-check.js';
-import { furnitureNamed } from '../page-content.js';
+import { classIdWords, furnitureNamed } from '../page-content.js';
 import { onBrandDomain } from '../audit/host.js';
 import { aiBotAccess } from '../audit/signals/trust.js';
 import {
@@ -53,11 +54,15 @@ export const CHECKS = Object.freeze({
   refresh_content: 'changed',
   strengthen_reference_asset: 'changed',
   strengthen_entity_content: 'changed',
-  improve_cta_path: 'changed',
 });
 
 /** The most open tasks one nightly sweep checks: pages are fetched one at a time. */
 export const SWEEP_LIMIT = 200;
+/** The most of one brand's tasks a night's sweep checks: a brand with many new tasks doesn't hold the others back. */
+export const SWEEP_PER_BRAND = 20;
+/** Rows the sweep reads a page at a time to fill a night past the brands' caps, and pages at most. */
+const SWEEP_PAGE = 1000;
+const SWEEP_PAGES = 5;
 /** A task tried this recently isn't tried again by the sweep. */
 const RECHECK_AFTER_MS = 20 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -74,9 +79,53 @@ export const CHANGED_BELOW = 0.9;
 /**
  * …and at least this many of its runs changed: on a short page a date and
  * a price moving are a large share, never this many runs (each word is in
- * up to four).
+ * up to four). A rotated 28-word testimonial or a new 50-word review is
+ * 41–66; a rewritten 60-word paragraph 117 or more, a 150-word FAQ 146.
  */
-export const MIN_CHANGED_RUNS = 40;
+export const MIN_CHANGED_RUNS = 80;
+/**
+ * Words in a block's class or id that name what changes by itself (a
+ * sidebar, testimonials, the latest posts): left out of the words a change
+ * is measured on, as furniture is, unless they hold most of the page. Not
+ * left out of the words a written task's text is looked for in. "widget"
+ * and "popular" alone aren't such words: Elementor and HubSpot name each of
+ * the page's blocks a widget, and a pricing page its "Most popular" plan.
+ */
+const SELF_CHANGING = new Set([
+  'sidebar',
+  'promo',
+  'announcement',
+  'pagination',
+  'tags',
+  'testimonial',
+  'testimonials',
+  'latest',
+  'recent',
+  'trending',
+]);
+/** …and two words, one after the other, that do: a theme's widget area, a popular posts list. */
+const SELF_CHANGING_PAIRS = new Set([
+  'widget area',
+  'widgets area',
+  'footer widgets',
+  'popular posts',
+  'popular post',
+  'popular articles',
+]);
+
+/** Whether an element's class or id names what changes by itself. */
+function selfChanging(attribs) {
+  const names = classIdWords(attribs);
+  return names.some(
+    (word, i) => SELF_CHANGING.has(word) || SELF_CHANGING_PAIRS.has(`${word} ${names[i + 1]}`),
+  );
+}
+/**
+ * The way a sketch reads a page. A first look kept by another (before
+ * SELF_CHANGING was left out, 2026-10-28) isn't compared: the page gets a
+ * new first look, so a block left out now doesn't read as the change.
+ */
+export const SKETCH_VERSION = 2;
 /** The 4-word runs' hashes a sketch keeps, the smallest: about 2.5 KB. */
 const SKETCH_SIZE = 256;
 /** A page with fewer visible words than this isn't read: an empty shell, or bot protection's page. */
@@ -98,7 +147,12 @@ const STRUCTURED_MISSING = {
   'json-ld-relevance': 'structured_data_irrelevant',
   'faq-schema': 'no_faq_schema',
 };
-/** A fix raised without the audit's checks named: its JSON-LD must at least be valid. */
+/**
+ * A fix raised without the audit's checks named (another action's, F06's
+ * brand-entity, say): its JSON-LD must at least be valid, and since a page
+ * may have had a valid block all along (a site-wide Organization), it
+ * passes only after a check on the page found it failing (`sawFailing`).
+ */
 const DEFAULT_STRUCTURED = ['json-ld-validity'];
 /** Checks whose warn is still the problem: a block that doesn't parse. */
 const PASS_ONLY = new Set(['json-ld-validity']);
@@ -115,6 +169,19 @@ export function checkKind(task) {
   if (d.source === SHOPPING_SOURCE) return 'shoppingLinks';
   if (task.task_key) return CHECKS[task.task_key] ?? null;
   return text(d.change?.after) ? 'text' : null;
+}
+
+/**
+ * Why a task has no check here, by what it lacks, as Check now says it
+ * (en.json checkNot): no page, a written task with no new text to look
+ * for, or a library task checked elsewhere (a Site Audit fix, by the next
+ * audit).
+ */
+function uncheckable(task) {
+  const d = task.details ?? {};
+  if (d.check === 'auto' && !text(d.url)) return 'no_address';
+  if (d.check === 'auto' && !task.task_key) return 'no_change_text';
+  return 'not_checkable';
 }
 
 /** A name's last label that is a file's, not a domain's: "pricing.html" is a page. */
@@ -209,12 +276,14 @@ function textLengths(start) {
  * A block left out as furniture, or a form, that holds most of the body's
  * words is the page (an <article class="category-social-media">, a page in
  * one <form>), and is read. Two passes over the body, as stacks: linear on
- * any page, never out of stack.
+ * any page, never out of stack. With `steady`, what changes by itself
+ * (selfChanging) is left out too: the words a change is measured on.
  *
  * @param {string} html
  * @param {import('cheerio').CheerioAPI} [$] the page, when it is parsed already
+ * @param {{ steady?: boolean }} [opts]
  */
-export function visibleText(html, $ = loadPage(html)) {
+export function visibleText(html, $ = loadPage(html), { steady = false } = {}) {
   const head = [$('title').first().text(), $('meta[name="description"]').attr('content')];
   const start = $('body')[0] ?? $.root()[0];
   if (!start) return head.filter(Boolean).join(' ');
@@ -229,7 +298,10 @@ export function visibleText(html, $ = loadPage(html)) {
       continue;
     }
     if (node.type !== 'tag' || CODE.has(node.name)) continue;
-    const aside = AROUND.has(node.name) || furnitureNamed(node.attribs);
+    const aside =
+      AROUND.has(node.name) ||
+      furnitureNamed(node.attribs) ||
+      (steady && selfChanging(node.attribs));
     if (aside && (lengths.get(node) ?? 0) <= most) continue;
     // A block's words start and end with it: "Pricing" and "Plans" never run together.
     out.push(' ');
@@ -253,7 +325,7 @@ export function sketch(visible) {
   const seen = new Set();
   for (let i = 0; i + 4 <= w.length; i += 1)
     seen.add(hash(`${w[i]} ${w[i + 1]} ${w[i + 2]} ${w[i + 3]}`));
-  return { hashes: [...seen].sort().slice(0, SKETCH_SIZE), runs: seen.size };
+  return { hashes: [...seen].sort().slice(0, SKETCH_SIZE), runs: seen.size, v: SKETCH_VERSION };
 }
 
 /** The share two pages' 4-word runs have in common, estimated from their sketches. */
@@ -290,7 +362,12 @@ export function changedRuns(first, now) {
 function changedSince(previous, url, visible) {
   const now = sketch(visible);
   const first = previous?.sketch;
-  if (!Array.isArray(first?.hashes) || !Number.isFinite(first?.runs) || previous.url !== url) {
+  if (
+    !Array.isArray(first?.hashes) ||
+    !Number.isFinite(first?.runs) ||
+    first.v !== SKETCH_VERSION ||
+    previous.url !== url
+  ) {
     return { passed: false, missing: ['first_look'], sketch: now };
   }
   const changed =
@@ -305,7 +382,7 @@ function changedSince(previous, url, visible) {
 const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
 
 /**
- * A task's check on its page: `{ passed, missing, sketch?, wasMissing? }`,
+ * A task's check on its page: `{ passed, missing, sketch?, wasMissing?, sawFailing? }`,
  * or null when the page couldn't be read (no answer, a timeout, a server
  * error, a 4xx other than "not there", a page nested too deep to parse):
  * nothing but the try is kept then.
@@ -357,7 +434,18 @@ export async function checkPage(
       const { status } = STRUCTURED_CHECKS[key].evaluate({ $ });
       return status === 'fail' || (PASS_ONLY.has(key) && status !== 'pass');
     });
-    return { passed: !failing.length, missing: failing.map((key) => STRUCTURED_MISSING[key]) };
+    if (failing.length) {
+      return {
+        passed: false,
+        missing: failing.map((key) => STRUCTURED_MISSING[key]),
+        ...(named.length ? {} : { sawFailing: true }),
+      };
+    }
+    // None named, and never seen failing on this page: valid all along, not fixed.
+    if (!named.length && !(previous?.sawFailing && previous.url === url)) {
+      return { passed: false, missing: ['valid_before'] };
+    }
+    return { passed: true, missing: [] };
   }
 
   if (kind === 'crawlers') {
@@ -395,14 +483,16 @@ export async function checkPage(
     }
     return { passed: true, missing: [] };
   }
+  // A change is measured without what changes by itself.
+  const steady = () => visibleText(page.html, $, { steady: true });
   if (kind === 'published') {
     // Not there before, never seen live, and answers now: published.
     if (previous?.wasMissing && !previous.sketch && previous.url === url) {
       return { passed: true, missing: [] };
     }
-    return changedSince(previous, url, visible);
+    return changedSince(previous, url, steady());
   }
-  if (kind === 'changed') return changedSince(previous, url, visible);
+  if (kind === 'changed') return changedSince(previous, url, steady());
   return null;
 }
 
@@ -538,28 +628,29 @@ async function checkShoppingTask(task, action, { fetch, now }) {
  *   status: string, details: object|null, updated_at?: string }} task
  * @param {{ brand_id: string }} action
  */
-export async function runTaskCheck(task, action, { fetch = fetchPage, now = new Date() } = {}) {
-  const kind = checkKind(task);
-  if (!kind) return { reason: 'not_checkable' };
-  if (!OPEN.includes(task.status)) return { reason: 'not_open' };
-  if (kind === 'shoppingLinks') return checkShoppingTask(task, action, { fetch, now });
-  const d = task.details ?? {};
+export async function runTaskCheck(read, action, { fetch = fetchPage, now = new Date() } = {}) {
+  const kind = checkKind(read);
+  if (!kind) return { reason: uncheckable(read) };
+  if (!OPEN.includes(read.status)) return { reason: 'not_open' };
+  if (kind === 'shoppingLinks') return checkShoppingTask(read, action, { fetch, now });
+  const d = read.details ?? {};
+  const previous = d.autoCheck ?? null;
+  // Tried now, before anything is read: a task that can't be checked here
+  // (no address, a read that throws) leaves the head of the sweep's queue,
+  // and a second run that read the task before this one isn't let check it too.
+  const claim = { ...d, autoCheck: { ...(previous ?? {}), triedAt: now.toISOString() } };
+  if (!(await writeCheck(read, claim, { now }))) return { reason: 'changed' };
+  const task = { ...read, details: claim, updated_at: now.toISOString() };
   const domains = await brandDomains(action.brand_id);
   const url = pageAddress(d.url, storedHost(domains[0]));
-  if (!url) return { reason: 'not_checkable' };
-  const previous = d.autoCheck ?? null;
+  if (!url) return { reason: 'no_address' };
   let auditChecks = [];
   if (kind === 'structuredData' || kind === 'crawlers') {
     auditChecks = await auditChecksFor(task.action_id, url);
     // Raised from the bot logs (a cited page crawlers never read): robots.txt
-    // can't say it's fixed. Its try is kept, so the sweep goes on to others.
+    // can't say it's fixed. Its try is kept (the claim), so the sweep goes on to others.
     if (kind === 'crawlers' && !auditChecks.includes('ai-bot-access')) {
-      await writeCheck(
-        task,
-        { ...d, autoCheck: { ...(previous ?? {}), triedAt: now.toISOString() } },
-        { now },
-      );
-      return { reason: 'not_checkable' };
+      return { reason: 'from_bot_logs' };
     }
   }
 
@@ -590,6 +681,10 @@ export async function runTaskCheck(task, action, { fetch = fetchPage, now = new 
         missing: found.missing,
         ...(kept ? { sketch: kept } : {}),
         ...(found.wasMissing ? { wasMissing: true } : {}),
+        // Kept for the page, so a fix after a failing check passes.
+        ...(found.sawFailing || (samePageAsBefore && previous?.sawFailing)
+          ? { sawFailing: true }
+          : {}),
         ...(held ? { held: true } : {}),
       }
     : { ...(previous ?? {}), triedAt: now.toISOString() };
@@ -603,7 +698,12 @@ export async function runTaskCheck(task, action, { fetch = fetchPage, now = new 
     const { error: eventError } = await supabaseAdmin.from('action_events').insert({
       action_id: task.action_id,
       event: 'task_checked',
-      data: { taskId: task.id, task: task.task_key ?? null, title: task.title ?? null },
+      // Named once: by its own title when someone renamed it, else its library key.
+      data: {
+        taskId: task.id,
+        task: task.title ? null : (task.task_key ?? null),
+        title: task.title ?? null,
+      },
       actor_id: null,
     });
     if (eventError) logger.warn({ err: eventError }, '[task-checks] History line not written');
@@ -620,7 +720,7 @@ export async function runTaskCheck(task, action, { fetch = fetchPage, now = new 
  * library task with a check, or a written one with its new text) and have a
  * page, of open actions, not held (reopened after they passed), the least
  * recently tried first, none tried in the last day, one page at a time, at
- * most SWEEP_LIMIT. A failure on one task
+ * most SWEEP_LIMIT and SWEEP_PER_BRAND of one brand's. A failure on one task
  * is logged and the rest go on.
  *
  * @returns {Promise<{ checked: number, passed: number }>}
@@ -630,35 +730,43 @@ export async function sweepTaskChecks({
   fetch = fetchPage,
   now = new Date(),
 } = {}) {
-  const { data: rows, error } = await supabaseAdmin
-    .from('action_tasks')
-    .select(
-      'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at)',
-    )
-    .in('status', OPEN)
-    .eq('details->>check', 'auto')
-    .not('details->>url', 'is', null)
-    .or(
-      `task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null)`,
-    )
-    // A task reopened after it passed is the person's call: Check now still reads it.
-    .is('details->autoCheck->>held', null)
-    .is('actions.deleted_at', null)
-    .not('actions.status', 'in', '(completed,dismissed)')
-    .order('details->autoCheck->>triedAt', { ascending: true, nullsFirst: true })
-    .limit(limit);
-  if (error) throw new Error(error.message);
-
   const since = now.getTime() - RECHECK_AFTER_MS;
-  // A shopping links task is checked after each catalog sync, not here.
-  const due = (rows ?? []).filter((row) => {
-    const kind = checkKind(row);
-    return (
-      kind &&
-      kind !== 'shoppingLinks' &&
-      !(Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since)
-    );
-  });
+  const due = [];
+  const perBrand = new Map();
+  for (let page = 0; page < SWEEP_PAGES && due.length < limit; page += 1) {
+    const { data: rows, error } = await supabaseAdmin
+      .from('action_tasks')
+      .select(
+        'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at)',
+      )
+      .in('status', OPEN)
+      .eq('details->>check', 'auto')
+      .not('details->>url', 'is', null)
+      .or(
+        `task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null)`,
+      )
+      // A task reopened after it passed is the person's call: Check now still reads it.
+      .is('details->autoCheck->>held', null)
+      .is('actions.deleted_at', null)
+      .not('actions.status', 'in', '(completed,dismissed)')
+      .order('details->autoCheck->>triedAt', { ascending: true, nullsFirst: true })
+      .order('id')
+      .range(page * SWEEP_PAGE, (page + 1) * SWEEP_PAGE - 1);
+    if (error) throw new Error(error.message);
+    for (const row of rows ?? []) {
+      if (due.length >= limit) break;
+      const kind = checkKind(row);
+      // A shopping links task is checked after each catalog sync, not here.
+      if (!kind || kind === 'shoppingLinks') continue;
+      if (Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since) continue;
+      const action = Array.isArray(row.actions) ? row.actions[0] : row.actions;
+      const taken = perBrand.get(action?.brand_id) ?? 0;
+      if (taken >= SWEEP_PER_BRAND) continue;
+      perBrand.set(action?.brand_id, taken + 1);
+      due.push(row);
+    }
+    if ((rows ?? []).length < SWEEP_PAGE) break;
+  }
   let checked = 0;
   let passed = 0;
   for (const row of due) {
