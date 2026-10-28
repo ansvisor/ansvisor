@@ -41814,3 +41814,5 @@ alter table public.actions
     'not_measurable'
   ));
 
+notify pgrst, 'reload schema';
+
