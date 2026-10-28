@@ -23,7 +23,7 @@ import { PlanLimitError } from '../lib/plan-guard.js';
  * (CE-018); Hand off has it fix the page's open Quality checks (CE-051);
  * Start's Agent has the Content Agent do the page (CE-015);
  * Stop ends the agent's run under way, changing nothing (v1.1 CE-027); and
- * Send to CMS sends pages to the brand's webhook, its Webflow collection or its WordPress site (#1331).
+ * Send to CMS sends pages to the brand's webhook, its Webflow or Framer collection or its WordPress site (#1331).
  */
 
 const router = Router();
@@ -49,7 +49,7 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
  * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
  */

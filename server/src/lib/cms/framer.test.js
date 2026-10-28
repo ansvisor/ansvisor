@@ -8,6 +8,7 @@ import {
   listCollections,
   projectRef,
   withProject,
+  writeItem,
 } from './framer.js';
 
 /**
@@ -476,5 +477,187 @@ describe('checkFieldMap', () => {
         'The collection requires SEO Title, which Send to CMS doesn’t fill: make it optional in Framer, or pick another collection',
       ],
     );
+  });
+});
+
+describe('writeItem', () => {
+  /** A user's collection of items as framer-api reads them; addItems keeps what it's given. */
+  function itemsProject(items = []) {
+    const store = items.map((item) => ({ ...item }));
+    let made = 0;
+    const blog = {
+      ...collection('cBlog', 'Blog', 'user'),
+      getItems: vi.fn(async () => store.map((item) => ({ ...item }))),
+      addItems: vi.fn(async (input) => {
+        for (const item of input) {
+          if (item.id)
+            Object.assign(
+              store.find((s) => s.id === item.id),
+              item,
+            );
+          else store.push({ id: `new-${++made}`, draft: false, ...item });
+        }
+      }),
+    };
+    const project = fakeProject();
+    project.framer.getCollections = vi.fn(async () => [
+      blog,
+      collection('cSynced', 'Synced', 'anotherPlugin'),
+    ]);
+    return { ...project, blog, store };
+  }
+  const fieldData = { fTitle: { type: 'string', value: 'Cold brew' } };
+  const write = (
+    connect,
+    before,
+    { slug = 'cold-brew', collectionId = 'cBlog', titleField = 'fTitle' } = {},
+  ) => writeItem(PROJECT, KEY, collectionId, { before, slug, fieldData, titleField }, { connect });
+  /** An item as Framer reads it, its title in the title field. */
+  const item = (id, slug, draft, title = 'Cold brew') => ({
+    id,
+    slug,
+    draft,
+    fieldData: { fTitle: { type: 'string', value: title, valueByLocale: {} } },
+  });
+
+  it('makes a page sent for the first time a draft item, found by its slug', async () => {
+    const { framer, connect, blog } = itemsProject([{ id: 'i7', slug: 'other', draft: false }]);
+    expect(await write(connect, null)).toEqual({ id: 'new-1', updated: false, live: false });
+    expect(connect).toHaveBeenCalledWith(PROJECT, KEY);
+    expect(blog.addItems).toHaveBeenCalledWith([{ slug: 'cold-brew', draft: true, fieldData }]);
+    expect(framer.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates the item the page’s last send made, its draft state as it is', async () => {
+    const { connect, blog } = itemsProject([{ id: 'i1', slug: 'cold-brew-old', draft: false }]);
+    expect(await write(connect, 'i1')).toEqual({ id: 'i1', updated: true, live: true });
+    expect(blog.addItems).toHaveBeenCalledWith([{ id: 'i1', slug: 'cold-brew', fieldData }]);
+    expect(blog.addItems.mock.calls[0][0][0]).not.toHaveProperty('draft');
+    const draft = itemsProject([{ id: 'i1', slug: 'cold-brew', draft: true }]);
+    expect(await write(draft.connect, 'i1')).toEqual({ id: 'i1', updated: true, live: false });
+  });
+
+  it('makes a new draft item when the last one was deleted in Framer', async () => {
+    const { connect, blog } = itemsProject([]);
+    expect(await write(connect, 'gone')).toEqual({ id: 'new-1', updated: false, live: false });
+    expect(blog.addItems).toHaveBeenCalledWith([{ slug: 'cold-brew', draft: true, fieldData }]);
+  });
+
+  it('refuses a slug another item has, writing nothing', async () => {
+    const message =
+      'Another item in Blog has the slug "cold-brew": change the page’s slug, or that item’s.';
+    const updating = itemsProject([
+      { id: 'i1', slug: 'cold-brew-old', draft: true },
+      { id: 'i2', slug: 'cold-brew', draft: false },
+    ]);
+    await expect(write(updating.connect, 'i1')).rejects.toMatchObject({
+      code: 'slug_taken',
+      message,
+    });
+    expect(updating.blog.addItems).not.toHaveBeenCalled();
+    const making = itemsProject([{ id: 'i9', slug: 'cold-brew', draft: false }]);
+    await expect(write(making.connect, null)).rejects.toMatchObject({
+      code: 'slug_taken',
+      message,
+    });
+    expect(making.blog.addItems).not.toHaveBeenCalled();
+    expect(making.framer.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails when Framer’s items don’t show the one it made', async () => {
+    const { connect, blog } = itemsProject([]);
+    blog.addItems.mockResolvedValueOnce(undefined);
+    await expect(write(connect, null)).rejects.toMatchObject({
+      code: 'failed',
+      message: 'Framer didn’t say which item it made.',
+    });
+  });
+
+  it('finds no collection gone from the project, or a plugin’s', async () => {
+    for (const collectionId of ['cGone', 'cSynced']) {
+      const { framer, connect } = itemsProject([]);
+      await expect(write(connect, null, { collectionId })).rejects.toMatchObject({
+        code: 'not_found',
+        message:
+          'The collection pages go to is gone from the project: pick another in Settings › Integrations.',
+      });
+      expect(framer.disconnect).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('reads the items again once when the read after adding fails, and finds the item', async () => {
+    const { connect, blog } = itemsProject([]);
+    const read = blog.getItems.getMockImplementation();
+    blog.getItems
+      .mockImplementationOnce(read)
+      .mockRejectedValueOnce(new FramerPluginError('read failed'));
+    expect(await write(connect, null)).toEqual({ id: 'new-1', updated: false, live: false });
+    expect(blog.getItems).toHaveBeenCalledTimes(3);
+    expect(blog.addItems).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails when the items can’t be read after adding, twice, adding nothing more', async () => {
+    const { connect, blog, framer } = itemsProject([]);
+    const read = blog.getItems.getMockImplementation();
+    blog.getItems
+      .mockImplementationOnce(read)
+      .mockRejectedValueOnce(new FramerPluginError('read failed'))
+      .mockRejectedValueOnce(new FramerPluginError('read failed'));
+    await expect(write(connect, null)).rejects.toMatchObject({ code: 'failed' });
+    expect(blog.getItems).toHaveBeenCalledTimes(3);
+    expect(blog.addItems).toHaveBeenCalledTimes(1);
+    expect(framer.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes over the draft a half-done send of the page left: its slug and title', async () => {
+    for (const before of [null, 'gone']) {
+      const { connect, blog } = itemsProject([item('i5', 'cold-brew', true)]);
+      expect(await write(connect, before)).toEqual({ id: 'i5', updated: true, live: false });
+      expect(blog.addItems).toHaveBeenCalledWith([{ id: 'i5', slug: 'cold-brew', fieldData }]);
+    }
+  });
+
+  it('leaves an item of the slug alone when it isn’t a draft, its title differs, or no title is mapped', async () => {
+    for (const [items, titleField] of [
+      [[item('i5', 'cold-brew', false)], 'fTitle'],
+      [[item('i5', 'cold-brew', true, 'Iced coffee')], 'fTitle'],
+      [[item('i5', 'cold-brew', true)], null],
+    ]) {
+      const { connect, blog } = itemsProject(items);
+      await expect(write(connect, null, { titleField })).rejects.toMatchObject({
+        code: 'slug_taken',
+      });
+      expect(blog.addItems).not.toHaveBeenCalled();
+    }
+    // Updating its own item, the page doesn't take over another of its new slug.
+    const { connect, blog } = itemsProject([
+      item('i1', 'cold-brew-old', true),
+      item('i5', 'cold-brew', true),
+    ]);
+    await expect(write(connect, 'i1')).rejects.toMatchObject({ code: 'slug_taken' });
+    expect(blog.addItems).not.toHaveBeenCalled();
+  });
+
+  it('reads the item it made among the new ones only, and fails on two of its slug', async () => {
+    const { connect, blog, store } = itemsProject([item('i1', 'other', false)]);
+    blog.addItems.mockImplementationOnce(async ([added]) => {
+      // Another send, or a person, added an item of the same slug meanwhile.
+      store.push({ id: 'theirs', draft: true, ...added }, { id: 'ours', draft: true, ...added });
+    });
+    await expect(write(connect, null)).rejects.toMatchObject({
+      code: 'failed',
+      message: 'Framer didn’t say which item it made.',
+    });
+    // An item the first read had, given the slug meanwhile, isn't taken for the new one.
+    const renamed = itemsProject([item('i1', 'other', false)]);
+    renamed.blog.addItems.mockImplementationOnce(async ([added]) => {
+      renamed.store[0].slug = 'cold-brew';
+      renamed.store.push({ id: 'ours', draft: true, ...added });
+    });
+    expect(await write(renamed.connect, null)).toEqual({
+      id: 'ours',
+      updated: false,
+      live: false,
+    });
   });
 });
