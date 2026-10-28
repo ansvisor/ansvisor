@@ -6093,6 +6093,30 @@ describe('the side panel', () => {
       await act(async () => inDialog('Cancel').click());
     });
 
+    it('keeps the focus on the placeholder Fill now selects in the HTML view, not on the header’s button', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Send to CMS')!.focus();
+      await act(async () => button('Send to CMS')!.click());
+      await act(async () => {});
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
+    });
+
     it('is for admins and managers only', async () => {
       getContentDraft.mockResolvedValue(draft());
       await renderPage('analyst');
@@ -6317,7 +6341,7 @@ describe('the side panel', () => {
       expect(editor.state.doc.textBetween(from, to)).toBe('[name of a real person]');
     });
 
-    it('says where a placeholder only an HTML block holds is', async () => {
+    it('keeps the focus on the placeholder Export’s Fill now selects in the HTML view, not on the header’s button', async () => {
       const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
       getContentDraft.mockResolvedValue(
         draft({
@@ -6327,6 +6351,32 @@ describe('the side panel', () => {
         }),
       );
       await renderPage();
+      // Opened from the header's button, where a closing dialog gives the focus back.
+      button('Export')!.focus();
+      await act(async () => button('Export')!.click());
+      await act(async () => inDialog('Fill now').click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(dialog()).toBeNull();
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+      expect(document.activeElement).toBe(area);
+    });
+
+    it('selects a placeholder only an HTML block holds in the HTML view, and says where it is', async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>' +
+            htmlBlockElement('<div class="cta">Call [phone number]</div>'),
+        }),
+      );
+      await renderPage();
+      // The toolbar counts it, though the page doesn't show it.
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeTruthy();
       await act(async () => button('Export')!.click());
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Review').click());
@@ -6335,8 +6385,48 @@ describe('the side panel', () => {
       expect(dialog()!.textContent).toContain('1 placeholder is still open');
       await act(async () => inDialog('Fill now').click());
       expect(toast).toHaveBeenCalledWith(
-        'The placeholders are in an HTML block: open it with </> to fill them.',
+        "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view (</>): type over it, then apply.",
       );
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[phone number]'),
+      )!;
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
+    });
+
+    it('opens the HTML view at the placeholder the page hides from Show in HTML, past the five it shows', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1>' +
+            '<p>Ask [competitor] and [name of a real person].</p>' +
+            '<p><img src="https://cdn.example.com/a.jpg" alt="[photo of the founder]"></p>' +
+            '<p>Costs [price], since [year], at [city].</p>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('6 placeholders to fill');
+      await act(async () => button('Show in HTML')!.click());
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[photo of the founder]'),
+      )!;
+      expect(area).toBeTruthy();
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe(
+        '[photo of the founder]',
+      );
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      expect(editor.state.selection.empty).toBe(true);
+    });
+
+    it("counts a code block's placeholder once in the toolbar", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><pre><code>token = "[api key]"</code></pre>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeFalsy();
     });
 
     it('puts the byline under the H1 for a brand that adds it to content, and says so', async () => {
