@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table';
 import { getPromptLocationMatrix } from '@/lib/actions/prompt';
 import { formatNumber } from '@/lib/format';
+import { createLimiter } from '@/lib/limiter';
 import { HEAT_SHADES } from '@/lib/insights-topics';
 import {
   LOCATION_METRICS,
@@ -24,15 +25,29 @@ import {
   metricValue,
   rowGap,
   type LocationMetric,
+  type PromptLocationCell,
   type PromptLocationMatrix,
 } from '@/lib/prompt-location-matrix';
 import { parseLocation, regionFlag, regionLabel } from '@/lib/region';
 import { cn } from '@/lib/utils';
 import type { Prompt } from '@/types';
 
-/** Matrices read in the last minute, by key: switching views reads nothing again. */
+/**
+ * Each location's figures read in the last minute, by brand, window and
+ * location: switching views reads nothing again, and a location column
+ * added to the table reads only its own location.
+ */
 const MATRIX_CACHE_MS = 60_000;
-const matrixCache = new Map<string, { at: number; read: Promise<PromptLocationMatrix> }>();
+const regionCache = new Map<
+  string,
+  { at: number; read: Promise<Record<string, PromptLocationCell>> }
+>();
+/**
+ * One matrix read from the page at a time, read-ahead included: the server
+ * runs MATRIX_READS_AT_ONCE of a read's database reads at once, so the page
+ * never runs more than that.
+ */
+const serverReads = createLimiter(1);
 
 export function matrixKey(
   brandId: string,
@@ -43,27 +58,55 @@ export function matrixKey(
 }
 
 /**
- * The matrix for these locations: the one read in the last minute, or a new
- * read (getPromptLocationMatrix). Also how the view's Locations button reads
- * ahead on hover, so the view opens on data already there.
+ * The matrix for these locations: each location read in the last minute
+ * as it was, the others in one new read (getPromptLocationMatrix). Also how
+ * the view's Locations button reads ahead on hover, so the view opens on
+ * data already there.
  */
 export function loadLocationMatrix(
   brandId: string,
   window: { from: string; to?: string },
   regions: string[],
 ): Promise<PromptLocationMatrix> {
-  const key = matrixKey(brandId, window, regions);
-  const kept = matrixCache.get(key);
-  if (kept && Date.now() - kept.at < MATRIX_CACHE_MS) return kept.read;
-  const read = getPromptLocationMatrix(brandId, { from: window.from, to: window.to, regions });
-  matrixCache.set(key, { at: Date.now(), read });
-  read.catch(() => matrixCache.delete(key));
-  return read;
+  const now = Date.now();
+  const keyOf = (region: string) => matrixKey(brandId, window, [region]);
+  const missing = regions.filter((r) => {
+    const kept = regionCache.get(keyOf(r));
+    return !kept || now - kept.at >= MATRIX_CACHE_MS;
+  });
+  if (missing.length) {
+    const read = serverReads(() =>
+      getPromptLocationMatrix(brandId, { from: window.from, to: window.to, regions: missing }),
+    );
+    for (const region of missing) {
+      const key = keyOf(region);
+      const one = read.then((matrix) => {
+        const cells: Record<string, PromptLocationCell> = {};
+        for (const [promptId, byRegion] of Object.entries(matrix)) {
+          if (byRegion[region]) cells[promptId] = byRegion[region];
+        }
+        return cells;
+      });
+      regionCache.set(key, { at: now, read: one });
+      one.catch(() => {
+        if (regionCache.get(key)?.read === one) regionCache.delete(key);
+      });
+    }
+  }
+  return Promise.all(regions.map((r) => regionCache.get(keyOf(r))!.read)).then((reads) => {
+    const matrix: PromptLocationMatrix = {};
+    reads.forEach((cells, i) => {
+      for (const [promptId, cell] of Object.entries(cells)) {
+        (matrix[promptId] ??= {})[regions[i]] = cell;
+      }
+    });
+    return matrix;
+  });
 }
 
-/** After locations change: the next read is a new one. */
+/** After prompts or their locations change: the next read is a new one. */
 export function clearLocationMatrixCache() {
-  matrixCache.clear();
+  regionCache.clear();
 }
 
 /** A location's kind, for its column's second line. */
