@@ -66,7 +66,7 @@ export const AI_PLATFORM_SHARES: {
   share: number;
   color: string;
 }[] = [
-  { name: 'Google AI Overview', share: 0.602, color: '#4285f4' },
+  { name: 'Google AI Overviews', share: 0.602, color: '#4285f4' },
   { name: 'ChatGPT', share: 0.27, color: '#10a37f' },
   { name: 'Google Gemini', share: 0.055, color: '#8ab4f8' },
   { name: 'Microsoft Copilot', share: 0.029, color: '#0ea5e9' },

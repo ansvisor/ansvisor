@@ -20,6 +20,13 @@ export const MAX_SOURCE_PAGES = 20;
 /** Query parameters that only track a visit. */
 const TRACKING = /^(utm_\w+|gclid|fbclid|msclkid|mc_cid|mc_eid|ref)$/i;
 
+/** A path without the slashes it ends in, read back from its end. */
+function withoutTrailingSlashes(path) {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === '/') end -= 1;
+  return path.slice(0, end);
+}
+
 /**
  * A URL as links compare: an http(s) address, its host lower-cased without
  * www, no hash, no tracking parameters, no trailing slash. Null for anything else.
@@ -35,8 +42,7 @@ export function linkKey(url) {
   const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
   const params = [...parsed.searchParams].filter(([name]) => !TRACKING.test(name));
   const search = params.length ? `?${new URLSearchParams(params).toString()}` : '';
-  const path = parsed.pathname.replace(/\/+$/, '');
-  return `${host}${path}${search}`;
+  return `${host}${withoutTrailingSlashes(parsed.pathname)}${search}`;
 }
 
 /** A URL as a link keeps it: without tracking parameters or a hash; null when not http(s). */

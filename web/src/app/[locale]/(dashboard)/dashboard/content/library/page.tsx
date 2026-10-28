@@ -57,6 +57,11 @@ import {
   type SendFilter,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
+import {
+  SHOPPING_FILTERS,
+  draftsByShopping,
+  type ShoppingFilter,
+} from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -82,6 +87,8 @@ interface LibraryRead {
  * send it to the CMS (#1331), archive, restore and delete. The tab lives in
  * the URL (?tab=in_review), so a link can open "Library › In review";
  * ?new=1 opens New content (Content › Editor with no draft to go back to).
+ * An online shop's pages show their shopping path's links, and a filter
+ * lists the ones that need attention (?shopping=attention, 00352).
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
@@ -93,6 +100,8 @@ export default function ContentLibraryPage() {
   const [created, setCreated] = useState<CreatedRange>('all');
   // How the listed drafts' last send to the CMS stands (#1331): ?sent=failed.
   const [sent, setSent] = useState<SendFilter>('all');
+  // Which shopping paths are listed, on an online shop: ?shopping=attention.
+  const [shoppingFilter, setShoppingFilter] = useState<ShoppingFilter>('all');
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
@@ -127,6 +136,7 @@ export default function ContentLibraryPage() {
     setTab(readUrlChoice('tab', LIBRARY_TABS, 'all'));
     setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
     setSent(readUrlChoice('sent', SEND_FILTERS, 'all'));
+    setShoppingFilter(readUrlChoice('shopping', SHOPPING_FILTERS, 'all'));
     // Once: closed, it doesn't open again on a reload.
     if (readUrlParam('new') === '1') {
       setStarting(true);
@@ -311,6 +321,11 @@ export default function ContentLibraryPage() {
     clearPicked();
     writeUrlParams({ sent: next }, { sent: 'all' });
   };
+  const changeShopping = (next: ShoppingFilter) => {
+    setShoppingFilter(next);
+    clearPicked();
+    writeUrlParams({ shopping: next }, { shopping: 'all' });
+  };
 
   if (!activeBrandId) {
     return (
@@ -326,11 +341,14 @@ export default function ContentLibraryPage() {
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
   const createdIn = draftsCreatedIn(inTab, created);
+  // Shopping paths are an online shop's (shopping path, 00351).
+  const isShop = siteTypeOf(activeBrand ?? {}) === 'ecommerce';
+  const shopped = isShop ? draftsByShopping(createdIn, shoppingFilter) : createdIn;
   // Filtered by their last send only once these drafts' sends are read (a
   // list read again in another order needn't wait); till then, none listed
   // to export or pick.
   const sendsRead = sent === 'all' || !drafts || drafts.every((draft) => cmsReadFor.has(draft.id));
-  const listed = sendsRead ? draftsLastSent(createdIn, cms, sent) : [];
+  const listed = sendsRead ? draftsLastSent(shopped, cms, sent) : [];
   // Any of this brand's drafts sent: the sends of the last brand don't count.
   const anySent = !!drafts?.some((draft) => cms.has(draft.id));
   // Picked rows still listed (a read may have moved some), never archived ones.
@@ -435,6 +453,27 @@ export default function ContentLibraryPage() {
               ))}
             </SelectContent>
           </Select>
+          {isShop && (
+            <Select
+              value={shoppingFilter}
+              onValueChange={(value) => changeShopping(value as ShoppingFilter)}
+              items={SHOPPING_FILTERS.map((filter) => ({
+                value: filter,
+                label: `${t('shopping.label')}: ${t(`shopping.filters.${filter}`)}`,
+              }))}
+            >
+              <SelectTrigger size="sm" aria-label={t('shopping.label')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {SHOPPING_FILTERS.map((filter) => (
+                  <SelectItem key={filter} value={filter}>
+                    {t(`shopping.filters.${filter}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
@@ -494,7 +533,13 @@ export default function ContentLibraryPage() {
             </div>
           ) : listed.length === 0 && inTab.length > 0 ? (
             <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-              {t(createdIn.length === 0 ? 'created.empty' : 'lastSend.empty')}
+              {t(
+                createdIn.length === 0
+                  ? 'created.empty'
+                  : shopped.length === 0
+                    ? 'shopping.empty'
+                    : 'lastSend.empty',
+              )}
             </p>
           ) : (
             <LibraryTable
@@ -503,6 +548,7 @@ export default function ContentLibraryPage() {
               actions={rowActions}
               cms={cms}
               selection={selection}
+              shopping={isShop}
             />
           )}
         </CardContent>
@@ -573,14 +619,18 @@ export default function ContentLibraryPage() {
         </DialogContent>
       </Dialog>
       {/* The cap's note: a filter that narrows the list isn't the cap. */}
-      {counts && created === 'all' && sent === 'all' && listed.length < counts[tab] && (
-        <p className="text-xs text-muted-foreground">
-          {t('latestOnly', {
-            shown: formatNumber(listed.length),
-            count: formatNumber(counts[tab]),
-          })}
-        </p>
-      )}
+      {counts &&
+        created === 'all' &&
+        sent === 'all' &&
+        (!isShop || shoppingFilter === 'all') &&
+        listed.length < counts[tab] && (
+          <p className="text-xs text-muted-foreground">
+            {t('latestOnly', {
+              shown: formatNumber(listed.length),
+              count: formatNumber(counts[tab]),
+            })}
+          </p>
+        )}
     </div>
   );
 }
