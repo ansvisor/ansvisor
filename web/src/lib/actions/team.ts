@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
 import { enforceLimit, getOrgPlan } from '@/lib/guards/plan-guard';
+import { assertWritable } from '@/lib/subscription-guard';
 
 export type TeamRole = 'admin' | 'manager' | 'analyst' | 'agency_partner';
 
@@ -163,6 +164,7 @@ export type InviteMemberResult = { inviteLink: string; emailSent: boolean } | { 
  * meaningless digest string (#550).
  */
 export async function inviteMember(email: string, role: TeamRole): Promise<InviteMemberResult> {
+  await assertWritable();
   const { user, profile } = await requireAdmin();
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -273,6 +275,7 @@ export async function inviteMember(email: string, role: TeamRole): Promise<Invit
   return { inviteLink: shareLink, emailSent };
 }
 
+/** Open while the workspace is read-only: it takes back access, never gives it. */
 export async function revokeInvitation(invitationId: string) {
   const { profile } = await requireAdmin();
   const supabase = await createClient();
@@ -288,6 +291,7 @@ export async function revokeInvitation(invitationId: string) {
 }
 
 export async function resendInvitation(invitationId: string) {
+  await assertWritable();
   const { profile } = await requireAdmin();
 
   const { data: invitation, error } = await supabaseAdmin
@@ -325,6 +329,7 @@ export async function resendInvitation(invitationId: string) {
 }
 
 export async function updateMemberRole(userId: string, role: TeamRole) {
+  await assertWritable();
   const { user, profile } = await requireAdmin();
 
   if (userId === user.id) {
@@ -341,6 +346,7 @@ export async function updateMemberRole(userId: string, role: TeamRole) {
   revalidatePath('/dashboard/settings');
 }
 
+/** Open while the workspace is read-only: it takes back access, never gives it. */
 export async function removeMember(userId: string) {
   const { user, profile } = await requireAdmin();
 
@@ -378,6 +384,9 @@ export type AcceptInvitationResult = { organizationId: string; role: TeamRole } 
  * server action, so the most actionable message in this flow — telling the
  * user which email to sign in with — would otherwise reach them as the
  * meaningless digest string (#550).
+ *
+ * Open while the workspace is read-only: the invited person's own account
+ * joins, and finds the workspace read-only.
  */
 export async function acceptInvitation(token: string): Promise<AcceptInvitationResult> {
   const supabase = await createClient();
