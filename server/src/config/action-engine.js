@@ -368,6 +368,14 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      * floor every outcome would be a verdict and none would mean anything.
      */
     meaningfulChangeRatio: 0.05,
+
+    /**
+     * Days of a window with no stamped tracking run beyond which its counts
+     * can't be compared (learning A6): a missed night reads as fewer
+     * mentions and citations, a decline nobody caused. Up to this many is
+     * read and flagged; more reads not measurable.
+     */
+    maxGapDays: 2,
   }),
 });
 
