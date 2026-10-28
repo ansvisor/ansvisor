@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The module imports the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
-const { tables, reads } = vi.hoisted(() => ({ tables: {}, reads: [] }));
+const { tables, errors, reads } = vi.hoisted(() => ({ tables: {}, errors: {}, reads: [] }));
 vi.mock('../../config/supabase.js', () => ({
   default: {
-    // A read of one table, its filters recorded, its rows as given.
+    // A read of one table, its filters, order and limit recorded, its rows
+    // as given, or its error.
     from: (table) => {
       const filters = [];
       reads.push({ table, filters });
@@ -15,9 +16,14 @@ vi.mock('../../config/supabase.js', () => ({
         neq: (column, value) => (filters.push(['neq', column, value]), chain),
         in: (column, value) => (filters.push(['in', column, value]), chain),
         is: (column, value) => (filters.push(['is', column, value]), chain),
-        order: () => chain,
-        limit: () => chain,
-        then: (resolve) => resolve({ data: tables[table] ?? [], error: null }),
+        order: (column, options) => (filters.push(['order', column, options]), chain),
+        limit: (count) => (filters.push(['limit', count]), chain),
+        then: (resolve) =>
+          resolve(
+            errors[table]
+              ? { data: null, error: errors[table] }
+              : { data: tables[table] ?? [], error: null },
+          ),
       };
       return chain;
     },
@@ -25,6 +31,7 @@ vi.mock('../../config/supabase.js', () => ({
 }));
 
 const {
+  IMPROVE_PAST_ROUNDS,
   IMPROVE_ROUND_TASKS,
   improveBaseline,
   improveRound,
@@ -299,16 +306,26 @@ describe('improveRound suggestions', () => {
 });
 
 describe('loadImproveRounds', () => {
-  it("reads the brand's own rounds on the prompt, not dismissed, with their suggestions", async () => {
+  beforeEach(() => {
     reads.length = 0;
-    tables.actions = [{ id: 'a1', status: 'completed', created_at: '2026-09-10T08:00:00Z' }];
+    for (const table of Object.keys(errors)) delete errors[table];
+  });
+
+  it("reads the brand's own last two rounds on the prompt, newest first, not dismissed, with their suggestions", async () => {
+    // As the read returns them: newest first.
+    tables.actions = [
+      { id: 'a2', status: 'in_progress', created_at: '2026-10-01T08:00:00Z' },
+      { id: 'a1', status: 'completed', created_at: '2026-09-10T08:00:00Z' },
+    ];
     tables.action_tasks = [
       { action_id: 'a1', title: 'Add a table to /pricing', status: 'completed', details: {} },
+      { action_id: 'a2', title: 'Pitch seriouseats.com', status: 'todo', details: {} },
       { action_id: 'other', title: 'Not this round', status: 'completed', details: {} },
     ];
 
     const rounds = await loadImproveRounds({ promptId: 'p1', brandId: 'b1' });
 
+    expect(IMPROVE_PAST_ROUNDS).toBe(2);
     expect(reads[0]).toEqual({
       table: 'actions',
       filters: [
@@ -318,11 +335,36 @@ describe('loadImproveRounds', () => {
         ['is', 'payload->>region', null],
         ['neq', 'status', 'dismissed'],
         ['is', 'deleted_at', null],
+        ['order', 'created_at', { ascending: false }],
+        ['limit', 2],
       ],
     });
-    expect(rounds.map((round) => round.suggestions.map((s) => s.title))).toEqual([
-      ['Add a table to /pricing'],
+    // The tasks of those rounds only, in their order on the action.
+    expect(reads[1]).toEqual({
+      table: 'action_tasks',
+      filters: [
+        ['in', 'action_id', ['a2', 'a1']],
+        ['order', 'position', undefined],
+      ],
+    });
+    expect(rounds.map((round) => [round.sent, round.suggestions.map((s) => s.title)])).toEqual([
+      ['2026-10-01', ['Pitch seriouseats.com']],
+      ['2026-09-10', ['Add a table to /pricing']],
     ]);
+  });
+
+  it('fails with what could not be read, for the route to write without it', async () => {
+    errors.actions = { message: 'timeout' };
+    await expect(loadImproveRounds({ promptId: 'p1', brandId: 'b1' })).rejects.toThrow(
+      'earlier Improve rounds read failed: timeout',
+    );
+
+    delete errors.actions;
+    tables.actions = [{ id: 'a1', status: 'completed', created_at: '2026-09-10T08:00:00Z' }];
+    errors.action_tasks = { message: 'permission denied' };
+    await expect(loadImproveRounds({ promptId: 'p1', brandId: 'b1' })).rejects.toThrow(
+      "earlier Improve rounds' tasks read failed: permission denied",
+    );
   });
 
   /**
