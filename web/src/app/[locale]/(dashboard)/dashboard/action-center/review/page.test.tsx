@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 import { parseTaskDetails } from '@/lib/action-center/task-details';
 import type { TaskReview } from '@/lib/actions/action-task-reviews';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * Needs review (AC-010): an admin or a manager fills what an agent's task
@@ -67,12 +68,17 @@ const review: TaskReview = {
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
-async function render() {
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ActionCenterReviewPage />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ActionCenterReviewPage />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -202,6 +208,18 @@ describe('Needs review', () => {
     );
     expect(dismissTaskReview).toHaveBeenCalledWith('b1', 'r1');
     expect(container.textContent).toContain('Nothing waits for review');
+  });
+
+  it('approves and dismisses nothing on a read-only workspace: the upgrade dialog instead', async () => {
+    await render(true);
+    act(() => button('Edit')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Approving tasks needs a plan');
+    expect(button('Approve')).toBeUndefined();
+    act(() => button('Dismiss')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Dismissing tasks needs a plan');
+    expect(container.textContent).not.toContain("Dismiss this task? It won't reach the action.");
+    expect(approveTaskReview).not.toHaveBeenCalled();
+    expect(dismissTaskReview).not.toHaveBeenCalled();
   });
 
   it('reads nothing for someone who is not an admin or a manager', async () => {

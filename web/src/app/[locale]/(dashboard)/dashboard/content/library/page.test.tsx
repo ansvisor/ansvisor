@@ -49,6 +49,8 @@ const readCmsStatuses = vi.hoisted(() => vi.fn());
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 const refreshWebflowPublished = vi.hoisted(() => vi.fn());
+const refreshWordPressPublished = vi.hoisted(() => vi.fn());
+const refreshFramerPublished = vi.hoisted(() => vi.fn());
 // Mark published (CE-013).
 const publishPage = vi.hoisted(() => vi.fn());
 const readPublishAddress = vi.hoisted(() => vi.fn());
@@ -56,6 +58,8 @@ vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress
 vi.mock('@/lib/content/cms-send-client', () => ({
   readCmsStatuses,
   refreshWebflowPublished,
+  refreshWordPressPublished,
+  refreshFramerPublished,
   readDraftCms,
   sendPagesToCms,
   readKeptFields: vi.fn(async () => new Map()),
@@ -65,7 +69,35 @@ vi.mock('@/lib/content/cms-send-client', () => ({
 vi.mock('@/lib/webflow-client', () => ({
   readWebflow: async () => ({ ok: true, configured: false, connection: null }),
 }));
+// Nor its WordPress site (00294).
+vi.mock('@/lib/wordpress-client', () => ({
+  readWordPress: async () => ({ ok: true, configured: false, connection: null }),
+}));
+// Nor its Framer collection (00295).
+vi.mock('@/lib/framer-client', () => ({
+  readFramer: async () => ({ ok: true, configured: false, connection: null }),
+}));
 vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
+// The workspace's plan: active unless a test says it's read-only.
+const gate = vi.hoisted(() => ({ isLocked: false, openUpgrade: vi.fn() }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade: gate.openUpgrade,
+    // As the real one: read-only, the dialog with the action's label instead.
+    guard:
+      <Args extends unknown[], Result>(
+        fn: (...args: Args) => Result,
+        options: { action?: string } = {},
+      ) =>
+      (...args: Args) => {
+        if (!gate.isLocked) return fn(...args);
+        gate.openUpgrade(options.action);
+        return undefined;
+      },
+  }),
+  useUpgradeDialog: () => null,
+}));
 
 /** jsdom's Blob has no text(): read it as a browser's FileReader would. */
 const readText = (blob: Blob) =>
@@ -135,12 +167,16 @@ const tab = (name: string) =>
 
 beforeEach(() => {
   brandState.activeBrandId = 'brand-1';
+  gate.isLocked = false;
+  gate.openUpgrade.mockReset();
   window.history.replaceState(null, '', '/dashboard/content/library');
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   getContentDrafts.mockReset();
   refreshWebflowPublished.mockReset().mockResolvedValue([]);
+  refreshWordPressPublished.mockReset().mockResolvedValue([]);
+  refreshFramerPublished.mockReset().mockResolvedValue([]);
   readPublishAddress.mockReset().mockResolvedValue('https://acme.example/pipeline-forecasting');
   publishPage.mockReset().mockResolvedValue({
     ok: true,
@@ -554,10 +590,234 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
   });
 
+  it('doesn’t ask Webflow or WordPress by itself while the workspace is read-only', async () => {
+    gate.isLocked = true;
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    await renderPage();
+    // What is stored is listed; nothing is asked of the API.
+    expect(container.textContent).toContain('Pipeline forecasting');
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
+  });
+
   it('doesn’t ask Webflow for a brand with no page there', async () => {
     getContentDrafts.mockResolvedValue([row({})]);
     await renderPage();
     expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
+    expect(refreshFramerPublished).not.toHaveBeenCalled();
+  });
+
+  it('says a page sent to WordPress is a draft post there, and asks WordPress once', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('wordpress')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    refreshWordPressPublished.mockResolvedValue(['d1']);
+    await renderPage();
+    await act(async () => {});
+    expect(
+      container.querySelectorAll('[aria-label^="In WordPress as a draft post since Oct 24, 2026"]'),
+    ).toHaveLength(2);
+    // WordPress says when a post goes live: asked once, the list read again as it marked one.
+    expect(refreshWordPressPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWordPressPublished).toHaveBeenCalledWith('brand-1');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+  });
+
+  it('asks Webflow and WordPress once each when pages went to both', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    refreshWebflowPublished.mockResolvedValue(['d1']);
+    refreshWordPressPublished.mockResolvedValue(['d2']);
+    await renderPage();
+    await act(async () => {});
+    expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWordPressPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWebflowPublished).toHaveBeenCalledWith('brand-1');
+    expect(refreshWordPressPublished).toHaveBeenCalledWith('brand-1');
+    expect(refreshFramerPublished).not.toHaveBeenCalled();
+  });
+
+  it('says a page sent to Framer is a draft item there, and asks Framer once', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn' }),
+      row({ id: 'd3', title: 'Pricing' }),
+    ]);
+    const sent = (status: string, error: string | null = null) => ({
+      status,
+      target: 'framer',
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('sent')],
+        ['d2', sent('sent')],
+        // Its item deleted in Framer since (framer-status).
+        ['d3', sent('failed', 'Removed in Framer')],
+      ]),
+    );
+    refreshFramerPublished.mockResolvedValue(['d1']);
+    await renderPage();
+    await act(async () => {});
+    expect(
+      container.querySelectorAll('[aria-label^="In Framer as a draft item since Oct 24, 2026"]'),
+    ).toHaveLength(2);
+    // Framer says when an item goes live: asked once, the list read again as it marked one.
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(1);
+    expect(refreshFramerPublished).toHaveBeenCalledWith('brand-1');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
+
+    const mark = container.querySelector<HTMLElement>(
+      '[aria-label^="The last send to Framer failed, Oct 24, 2026"]',
+    )!;
+    await act(async () => {
+      mark.focus();
+      mark.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.body.textContent).toContain('Removed in Framer');
+  });
+
+  it('doesn’t ask Framer when none of its pages is in Framer as a draft item', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn' }),
+      row({ id: 'd3', title: 'Pricing' }),
+    ]);
+    const last = (status: string) => ({
+      status,
+      target: 'framer',
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', last('queued')],
+        ['d2', last('failed')],
+        ['d3', last('published')],
+      ]),
+    );
+    await renderPage();
+    await act(async () => {});
+    expect(container.querySelector('[aria-label^="Sending to Framer since"]')).not.toBeNull();
+    expect(refreshFramerPublished).not.toHaveBeenCalled();
+  });
+
+  it('asks Framer again for another brand, once a brand per visit', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'framer',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    await act(async () => {});
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(1);
+    expect(refreshFramerPublished).toHaveBeenLastCalledWith('brand-1');
+    brandState.activeBrandId = 'brand-2';
+    await renderPage();
+    await act(async () => {});
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(2);
+    expect(refreshFramerPublished).toHaveBeenLastCalledWith('brand-2');
+    // Back to the first: read already on this visit.
+    brandState.activeBrandId = 'brand-1';
+    await renderPage();
+    await act(async () => {});
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks Webflow, WordPress and Framer once each when pages went to all three', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn' }),
+      row({ id: 'd3', title: 'Pricing' }),
+    ]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
+        ['d3', sent('framer')],
+      ]),
+    );
+    refreshWebflowPublished.mockResolvedValue(['d1']);
+    refreshWordPressPublished.mockResolvedValue(['d2']);
+    refreshFramerPublished.mockResolvedValue(['d3']);
+    await renderPage();
+    await act(async () => {});
+    for (const refresh of [
+      refreshWebflowPublished,
+      refreshWordPressPublished,
+      refreshFramerPublished,
+    ]) {
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(refresh).toHaveBeenCalledWith('brand-1');
+    }
   });
 
   it('says the workflow’s reason for a page its webhook took that then failed', async () => {
@@ -1166,6 +1426,81 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
       (b) => b.textContent === 'Export',
     )!;
     expect(exportButton.disabled).toBe(true);
+  });
+});
+
+describe('the Library on a read-only workspace (plan not active)', () => {
+  const pick = async (title: string, item: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    const found = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === item,
+    )!;
+    await act(async () => found.click());
+  };
+  const buttonNamed = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    )!;
+
+  beforeEach(() => {
+    gate.isLocked = true;
+  });
+
+  it('opens the upgrade dialog from New content, Send and the row menu, and changes nothing', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    await renderPage();
+
+    await act(async () => buttonNamed('New content').click());
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Creating content needs a plan');
+    expect(getContentStartOptions).not.toHaveBeenCalled();
+
+    await pick('Pipeline forecasting', 'Ready');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Marking a page ready needs a plan');
+    await pick('Pipeline forecasting', 'Published');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Marking a page published needs a plan');
+    await pick('Pipeline forecasting', 'In progress');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith("Changing a page's status needs a plan");
+    await pick('Pipeline forecasting', 'Send to CMS');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Sending to your CMS needs a plan');
+    await pick('Pipeline forecasting', 'Send to Archive');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Archiving content needs a plan');
+    await pick('Pipeline forecasting', 'Delete');
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Deleting content needs a plan');
+
+    // Picking rows is no action; sending them is.
+    const box = container.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-label="Select Churn guide"]',
+    )!;
+    await act(async () => box.click());
+    await act(async () => buttonNamed('Send to CMS').click());
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Sending to your CMS needs a plan');
+
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(8);
+    expect(markContentDraftReady).not.toHaveBeenCalled();
+    expect(setContentDraftStatus).not.toHaveBeenCalled();
+    expect(readPublishAddress).not.toHaveBeenCalled();
+    expect(archiveContentDraft).not.toHaveBeenCalled();
+    expect(getContentDraftPages).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('still exports a page', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    await pick('Pipeline forecasting', 'Export Markdown');
+    await act(async () => {});
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    expect(gate.openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('doesn’t open New content by itself when the URL asks', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?new=1');
+    getContentDrafts.mockResolvedValue([]);
+    await renderPage();
+    expect(document.body.textContent).not.toContain('Pick how you want to start.');
+    expect(window.location.search).toBe('');
+    expect(gate.openUpgrade).not.toHaveBeenCalled();
   });
 });
 

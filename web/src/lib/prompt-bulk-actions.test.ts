@@ -61,6 +61,13 @@ describe('bulkSuggestBlock', () => {
     expect(bulkSuggestBlock(6, usage(-1, 5, -1))).toBe('Select up to 5 to suggest content');
   });
 
+  test('never blocks without an active plan: 0 of 0 is no plan, and the click opens its dialog', () => {
+    expect(bulkSuggestBlock(1, { ...usage(0, 0, 0), noPlan: true })).toBeNull();
+    // A read-only workspace reads the same, marked or not.
+    expect(bulkSuggestBlock(1, usage(0, 0, 0), { isLocked: true })).toBeNull();
+    expect(bulkSuggestBlock(1, usage(0, 0, 0))).toBe('Monthly limit reached');
+  });
+
   test('waits for the quota before asking for anything', () => {
     expect(bulkSuggestBlock(1, null)).toBe('Checking your content quota…');
   });

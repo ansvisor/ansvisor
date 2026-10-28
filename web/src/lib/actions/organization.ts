@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import { slugify } from '@/lib/slug';
+import { assertWritable } from '@/lib/subscription-guard';
 
 // ---------------------------------------------------------------------------
 // Shared helpers (mirrors the pattern in team.ts)
@@ -50,6 +51,7 @@ async function requireAdmin() {
  *   any existing deep-links or external references that use the slug.
  */
 export async function updateOrganizationName(name: string): Promise<void> {
+  await assertWritable();
   const { profile } = await requireAdmin();
 
   const trimmed = name.trim();
@@ -113,6 +115,8 @@ export async function getOrganization(): Promise<OrganizationInfo> {
  * 2. `auth.users.user_metadata.full_name` — so the Supabase JWT and
  *    client-side `supabase.auth.getUser()` stay in sync without a
  *    separate reload of the profile row.
+ *
+ * Open while the workspace is read-only: the person's own profile.
  */
 export async function updateAccountName(name: string): Promise<void> {
   const supabase = await createClient();
@@ -141,6 +145,7 @@ export async function updateAccountName(name: string): Promise<void> {
 }
 
 export async function createOrganization(name: string) {
+  await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
   const {
@@ -191,7 +196,7 @@ export async function getMyProfile() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*, organizations(*)')
+    .select('*, organizations!profiles_organization_id_fkey(*)')
     .eq('id', user.id)
     .single();
 
