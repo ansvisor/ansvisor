@@ -100,7 +100,7 @@ export function medianVolume(volumes) {
  * column is unchanged from when each prompt had the response to itself. Two
  * keywords that resolve to the same returned one count once.
  */
-function summarizeVolumes(keywords, volumes) {
+export function summarizeVolumes(keywords, volumes) {
   const byKeyword = new Map();
   for (const [keyword, data] of Object.entries(volumes)) {
     byKeyword.set(keyword.trim().toLowerCase(), [keyword, data]);
