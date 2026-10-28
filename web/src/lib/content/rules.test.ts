@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import messages from '../../../messages/en.json';
 import { htmlBlockElement } from './html-allowlist';
+import { productBlockHtml } from './product-block';
 import type { ShoppingCheck, ShoppingLinkState } from './shopping-check';
 import {
   NO_DRAFT_RULES,
@@ -471,6 +473,7 @@ describe('shopping path rules (shopping path, part 6)', () => {
       item(4, 'Alpine', 'ok'),
     ],
     site: 'https://shop.example/blog/boots',
+    merchantCenter: true,
   };
   const shopRule = (key: string, value?: string) => {
     const found = activeRules(
@@ -523,6 +526,20 @@ describe('shopping path rules (shopping path, part 6)', () => {
     ]);
     expect(status('shopProductLinks', read)).toEqual({ state: 'ok' });
     expect(status('shopCategoryLink')).toEqual({ state: 'ok' });
+  });
+
+  it('read the product cards with the price each shows, from the editor’s own markup (#1610)', () => {
+    const block = productBlockHtml([
+      { title: 'Summit', url: 'https://shop.example/products/p1', image: null, price: '$189.00' },
+      { title: 'Trail', url: 'https://shop.example/products/p2', image: null, price: null },
+    ]);
+    const read = page(`<p>Intro</p>${htmlBlockElement(block)}`);
+    expect(read.cards).toEqual([
+      { href: 'https://shop.example/products/p1', price: '$189.00' },
+      { href: 'https://shop.example/products/p2', price: null },
+    ]);
+    // A link in the text is no card.
+    expect(page('<p><a href="https://shop.example/products/p1">Summit</a></p>').cards).toEqual([]);
   });
 
   it('count only the products that sell towards the number, and name the ones that don’t', () => {
@@ -604,14 +621,26 @@ describe('shopping path rules (shopping path, part 6)', () => {
     });
   });
 
-  it('says what to do instead when only a sold-out link is open: not the feed’s message', () => {
+  it('says what to do instead when only a sold-out link is open, and both when the feed’s is too', () => {
     expect(notForAgentMessage([{ rule: { key: 'shopLinksLive' } }])).toBe('notForAgentShopping');
     expect(
       notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'feedMatch' } }]),
-    ).toBe('notForAgentFeed');
+    ).toBe('notForAgentFeedShopping');
     expect(
       notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'oneH1' } }]),
     ).toBe('notForAgent');
+  });
+
+  it('has a message in the editor for each of its answers', () => {
+    const answers = [
+      [{ rule: { key: 'oneH1' } }],
+      [{ rule: { key: 'feedMatch' } }],
+      [{ rule: { key: 'shopLinksLive' } }],
+      [{ rule: { key: 'feedMatch' } }, { rule: { key: 'shopLinksLive' } }],
+    ].map(notForAgentMessage);
+    expect(new Set(answers).size).toBe(4);
+    const suggestions: Record<string, unknown> = messages.contentEditor.editor.suggestions;
+    for (const key of answers) expect(suggestions[key]).toEqual(expect.any(String));
   });
 });
 
@@ -1202,6 +1231,14 @@ describe('My rules and text rules', () => {
   it('starts only a page brought in to optimize at its own length (F)', () => {
     expect(pageTextLength('<h1>Pricing</h1><p>Plans &amp; prices</p>')).toBe(22);
     expect(pageTextLength('<p>a<script>x()</script>  b</p><style>p{}</style>')).toBe(3);
+    // Tags left open are read in time near the page's size.
+    expect(pageTextLength('<p>a</p><script>b')).toBe('a b'.length);
+    for (const tag of ['<p', '<script', '<style ', '<', '</div']) {
+      const html = `<p>Lead</p>${tag.repeat(Math.ceil(100_000 / tag.length))}`;
+      const started = performance.now();
+      expect(pageTextLength(html)).toBeGreaterThan(4);
+      expect(performance.now() - started).toBeLessThan(2000);
+    }
     const page = `<h1>Pricing</h1><p>${'word '.repeat(40)}</p>`;
     expect(startingRules('optimize', page)).toEqual({ ...NO_DRAFT_RULES, importLength: 207 });
     // Within the range the Length rule takes.

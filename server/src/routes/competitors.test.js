@@ -82,4 +82,11 @@ describe('POST /api/competitors/suggest', () => {
     expect((await suggest({})).status).toBe(400);
     expect(webResearch).not.toHaveBeenCalled();
   });
+
+  it('refuses a body past the setup limits before asking any model (#1611)', async () => {
+    const res = await suggest({ brandName: 'Acme Coffee', description: 'x'.repeat(2001) });
+    expect(res.status).toBe(400);
+    expect(webResearch).not.toHaveBeenCalled();
+    expect(generateObject).not.toHaveBeenCalled();
+  });
 });

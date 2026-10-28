@@ -89,6 +89,24 @@ describe('GET /api/prompts/usage', () => {
     });
   });
 
+  it('counts an organization whose plan ended against the plan it was on, not Starter', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    brand.data = {
+      organization_id: 'org1',
+      organizations: { plan: 'growth', subscription_status: 'canceled', plan_overrides: null },
+    };
+
+    const body = await (await get(`?brandId=${BRAND}`)).json();
+
+    expect(body.plan).toEqual({
+      key: 'growth',
+      name: 'Growth plan',
+      locationLimit: 200,
+      cta: 'choose_plan',
+      ended: true,
+    });
+  });
+
   it('is unlimited on a self-hosted install', async () => {
     const body = await (await get(`?brandId=${BRAND}`)).json();
     expect(body.plan).toEqual({
