@@ -34,6 +34,7 @@ function table(name) {
     or: filter('or'),
     order: filter('order'),
     limit: () => chain,
+    range: filter('range'),
     maybeSingle: async () => {
       reads.push({ table: name, filters: q.filters });
       const row = db[name];
@@ -55,6 +56,7 @@ vi.mock('../shopping-check.js', () => ({ checkShoppingDraft }));
 const {
   CHANGED_BELOW,
   MIN_CHANGED_RUNS,
+  SWEEP_PER_BRAND,
   changedRuns,
   checkKind,
   checkPage,
@@ -468,6 +470,8 @@ describe('runTaskCheck', () => {
   });
   const now = new Date('2026-10-27T03:00:00Z');
   const at = now.toISOString();
+  /** The task's last write: what the check found (the first is its claim, triedAt alone). */
+  const lastWrite = () => ops.filter((op) => op.table === 'action_tasks').at(-1);
 
   it('completes a task that passes, keeps the check on it and tells History', async () => {
     const fetch = fetchOf({ [PAGE]: html('x') });
@@ -477,15 +481,19 @@ describe('runTaskCheck', () => {
     });
     // A page read up to 512 KB.
     expect(fetch.mock.calls[0][1]).toMatchObject({ maxBytes: 512 * 1024, truncate: true });
-    const update = ops.find((op) => op.table === 'action_tasks');
+    const update = lastWrite();
     expect(update.payload).toMatchObject({
       status: 'completed',
       // The template's mark stays: a check is no one's edit.
       details: { source: 'template', autoCheck: { passed: true } },
     });
-    // Only if no one moved or edited it meanwhile.
+    // Only if no one moved or edited it meanwhile: the claim on the task as
+    // read, the result on the claim.
+    const [claim] = ops.filter((op) => op.table === 'action_tasks');
+    expect(claim.payload.details.autoCheck).toEqual({ triedAt: at });
+    expect(claim.filters).toContainEqual(['updated_at', '2026-10-26T10:00:00Z']);
     expect(update.filters).toContainEqual(['status', 'todo']);
-    expect(update.filters).toContainEqual(['updated_at', '2026-10-26T10:00:00Z']);
+    expect(update.filters).toContainEqual(['updated_at', at]);
     expect(ops.find((op) => op.table === 'action_events').payload).toMatchObject({
       action_id: 'a1',
       event: 'task_checked',
@@ -517,7 +525,7 @@ describe('runTaskCheck', () => {
       now,
     });
     expect(result.autoCheck).toMatchObject({ passed: true, url: PAGE, held: true });
-    expect(ops.find((op) => op.table === 'action_tasks').payload).not.toHaveProperty('status');
+    expect(lastWrite().payload).not.toHaveProperty('status');
     expect(ops.some((op) => op.table === 'action_events')).toBe(false);
     // A check that fails meanwhile keeps it held; one that passes again doesn't close it.
     ops = [];
@@ -534,7 +542,7 @@ describe('runTaskCheck', () => {
       { fetch: fetchOf({ [PAGE]: html('x') }), now },
     );
     expect(again.autoCheck).toMatchObject({ passed: true, held: true });
-    expect(ops.find((op) => op.table === 'action_tasks').payload).not.toHaveProperty('status');
+    expect(lastWrite().payload).not.toHaveProperty('status');
     // Its URL edited since: a new page, checked as one.
     ops = [];
     await runTaskCheck(
@@ -542,7 +550,42 @@ describe('runTaskCheck', () => {
       action,
       { fetch: fetchOf({ 'https://acme.example/plans': html('x') }), now },
     );
-    expect(ops.find((op) => op.table === 'action_tasks').payload.status).toBe('completed');
+    expect(lastWrite().payload.status).toBe('completed');
+  });
+
+  it('marks a task tried before reading anything, so one it can’t check leaves the queue (#1565 C6)', async () => {
+    // No address can be made: still tried.
+    const typed = task({ details: { check: 'auto', url: 'not an address' } });
+    const fetch = fetchOf({});
+    expect(await runTaskCheck(typed, action, { fetch, now })).toEqual({ reason: 'not_checkable' });
+    expect(lastWrite().payload.details.autoCheck).toEqual({ triedAt: at });
+    expect(fetch).not.toHaveBeenCalled();
+    // Claimed by another run meanwhile (the task changed since it was read): left to it.
+    ops = [];
+    db.moved = true;
+    expect(await runTaskCheck(task(), action, { fetch, now })).toEqual({ reason: 'changed' });
+    expect(fetch).not.toHaveBeenCalled();
+    db.moved = false;
+  });
+
+  it('a read that throws still writes triedAt', async () => {
+    // The page comes back, then reading it throws: the claim already marked the task tried.
+    const fetch = vi.fn(async (url) => ({
+      url,
+      status: 200,
+      get html() {
+        throw new Error('unreadable');
+      },
+    }));
+    const written = task({
+      task_key: null,
+      details: { check: 'auto', url: '/pricing', change: { after: 'Plans from $9' } },
+    });
+    await expect(runTaskCheck(written, action, { fetch, now })).rejects.toThrow('unreadable');
+    expect(fetch).toHaveBeenCalled();
+    const writes = ops.filter((op) => op.table === 'action_tasks');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].payload.details.autoCheck).toEqual({ triedAt: at });
   });
 
   it('reads only the brand’s own pages', async () => {
@@ -634,7 +677,7 @@ describe('runTaskCheck', () => {
       reason: 'not_checkable',
     });
     expect(fetch).not.toHaveBeenCalled();
-    expect(ops.find((op) => op.table === 'action_tasks').payload.details.autoCheck).toEqual({
+    expect(lastWrite().payload.details.autoCheck).toEqual({
       triedAt: at,
     });
     db.actions = { targets: [{ id: PAGE, checks: ['ai-bot-access'] }] };
@@ -669,7 +712,7 @@ describe('runTaskCheck', () => {
       missing: ['page_error'],
       sketch: { hashes: ['aa'], runs: 1 },
     });
-    const update = ops.find((op) => op.table === 'action_tasks');
+    const update = lastWrite();
     expect(update.payload).not.toHaveProperty('status');
     expect(ops.some((op) => op.table === 'action_events')).toBe(false);
     // Another page's first look isn't kept for this one.
@@ -696,7 +739,7 @@ describe('runTaskCheck', () => {
     expect(await runTaskCheck(tried, action, { fetch: fetchOf({}), now })).toEqual({
       reason: 'no_answer',
     });
-    expect(ops.find((op) => op.table === 'action_tasks').payload.details.autoCheck).toEqual({
+    expect(lastWrite().payload.details.autoCheck).toEqual({
       at: 'x',
       passed: false,
       missing: ['page_error'],
@@ -840,6 +883,21 @@ describe('sweepTaskChecks', () => {
     ]);
     // A held task (reopened after it passed) is left to the person.
     expect(filters).toContainEqual(['is', 'details->autoCheck->>held', null]);
+  });
+
+  it('checks at most SWEEP_PER_BRAND of one brand’s tasks a night, the others’ too', async () => {
+    const other = { brand_id: 'b2', status: 'new', deleted_at: null };
+    db.action_tasks = [
+      ...Array.from({ length: 25 }, (_, i) => row(`a${i}`)),
+      ...Array.from({ length: 3 }, (_, i) => row(`b${i}`, { actions: other })),
+    ];
+    const fetch = fetchOf({ [PAGE]: html('x') });
+    expect(await sweepTaskChecks({ fetch, now })).toEqual({ checked: 23, passed: 23 });
+    expect(SWEEP_PER_BRAND).toBe(20);
+    // Read a page at a time, in a steady order.
+    const filters = reads.find((r) => r.table === 'action_tasks').filters;
+    expect(filters).toContainEqual(['range', 0, 999]);
+    expect(filters).toContainEqual(['order', 'id']);
   });
 
   it('checks the open tasks not tried in the last day, one at a time', async () => {

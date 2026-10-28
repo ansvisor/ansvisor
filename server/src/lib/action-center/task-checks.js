@@ -58,6 +58,11 @@ export const CHECKS = Object.freeze({
 
 /** The most open tasks one nightly sweep checks: pages are fetched one at a time. */
 export const SWEEP_LIMIT = 200;
+/** The most of one brand's tasks a night's sweep checks: a brand with many new tasks doesn't hold the others back. */
+export const SWEEP_PER_BRAND = 20;
+/** Rows the sweep reads a page at a time to fill a night past the brands' caps, and pages at most. */
+const SWEEP_PAGE = 1000;
+const SWEEP_PAGES = 5;
 /** A task tried this recently isn't tried again by the sweep. */
 const RECHECK_AFTER_MS = 20 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -554,27 +559,28 @@ async function checkShoppingTask(task, action, { fetch, now }) {
  *   status: string, details: object|null, updated_at?: string }} task
  * @param {{ brand_id: string }} action
  */
-export async function runTaskCheck(task, action, { fetch = fetchPage, now = new Date() } = {}) {
-  const kind = checkKind(task);
+export async function runTaskCheck(read, action, { fetch = fetchPage, now = new Date() } = {}) {
+  const kind = checkKind(read);
   if (!kind) return { reason: 'not_checkable' };
-  if (!OPEN.includes(task.status)) return { reason: 'not_open' };
-  if (kind === 'shoppingLinks') return checkShoppingTask(task, action, { fetch, now });
-  const d = task.details ?? {};
+  if (!OPEN.includes(read.status)) return { reason: 'not_open' };
+  if (kind === 'shoppingLinks') return checkShoppingTask(read, action, { fetch, now });
+  const d = read.details ?? {};
+  const previous = d.autoCheck ?? null;
+  // Tried now, before anything is read: a task that can't be checked here
+  // (no address, a read that throws) leaves the head of the sweep's queue,
+  // and a second run that read the task before this one isn't let check it too.
+  const claim = { ...d, autoCheck: { ...(previous ?? {}), triedAt: now.toISOString() } };
+  if (!(await writeCheck(read, claim, { now }))) return { reason: 'changed' };
+  const task = { ...read, details: claim, updated_at: now.toISOString() };
   const domains = await brandDomains(action.brand_id);
   const url = pageAddress(d.url, storedHost(domains[0]));
   if (!url) return { reason: 'not_checkable' };
-  const previous = d.autoCheck ?? null;
   let auditChecks = [];
   if (kind === 'structuredData' || kind === 'crawlers') {
     auditChecks = await auditChecksFor(task.action_id, url);
     // Raised from the bot logs (a cited page crawlers never read): robots.txt
-    // can't say it's fixed. Its try is kept, so the sweep goes on to others.
+    // can't say it's fixed. Its try is kept (the claim), so the sweep goes on to others.
     if (kind === 'crawlers' && !auditChecks.includes('ai-bot-access')) {
-      await writeCheck(
-        task,
-        { ...d, autoCheck: { ...(previous ?? {}), triedAt: now.toISOString() } },
-        { now },
-      );
       return { reason: 'not_checkable' };
     }
   }
@@ -645,7 +651,7 @@ export async function runTaskCheck(task, action, { fetch = fetchPage, now = new 
  * library task with a check, or a written one with its new text) and have a
  * page, of open actions, not held (reopened after they passed), the least
  * recently tried first, none tried in the last day, one page at a time, at
- * most SWEEP_LIMIT. A failure on one task
+ * most SWEEP_LIMIT and SWEEP_PER_BRAND of one brand's. A failure on one task
  * is logged and the rest go on.
  *
  * @returns {Promise<{ checked: number, passed: number }>}
@@ -655,35 +661,43 @@ export async function sweepTaskChecks({
   fetch = fetchPage,
   now = new Date(),
 } = {}) {
-  const { data: rows, error } = await supabaseAdmin
-    .from('action_tasks')
-    .select(
-      'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at)',
-    )
-    .in('status', OPEN)
-    .eq('details->>check', 'auto')
-    .not('details->>url', 'is', null)
-    .or(
-      `task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null)`,
-    )
-    // A task reopened after it passed is the person's call: Check now still reads it.
-    .is('details->autoCheck->>held', null)
-    .is('actions.deleted_at', null)
-    .not('actions.status', 'in', '(completed,dismissed)')
-    .order('details->autoCheck->>triedAt', { ascending: true, nullsFirst: true })
-    .limit(limit);
-  if (error) throw new Error(error.message);
-
   const since = now.getTime() - RECHECK_AFTER_MS;
-  // A shopping links task is checked after each catalog sync, not here.
-  const due = (rows ?? []).filter((row) => {
-    const kind = checkKind(row);
-    return (
-      kind &&
-      kind !== 'shoppingLinks' &&
-      !(Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since)
-    );
-  });
+  const due = [];
+  const perBrand = new Map();
+  for (let page = 0; page < SWEEP_PAGES && due.length < limit; page += 1) {
+    const { data: rows, error } = await supabaseAdmin
+      .from('action_tasks')
+      .select(
+        'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at)',
+      )
+      .in('status', OPEN)
+      .eq('details->>check', 'auto')
+      .not('details->>url', 'is', null)
+      .or(
+        `task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null)`,
+      )
+      // A task reopened after it passed is the person's call: Check now still reads it.
+      .is('details->autoCheck->>held', null)
+      .is('actions.deleted_at', null)
+      .not('actions.status', 'in', '(completed,dismissed)')
+      .order('details->autoCheck->>triedAt', { ascending: true, nullsFirst: true })
+      .order('id')
+      .range(page * SWEEP_PAGE, (page + 1) * SWEEP_PAGE - 1);
+    if (error) throw new Error(error.message);
+    for (const row of rows ?? []) {
+      if (due.length >= limit) break;
+      const kind = checkKind(row);
+      // A shopping links task is checked after each catalog sync, not here.
+      if (!kind || kind === 'shoppingLinks') continue;
+      if (Date.parse(row.details?.autoCheck?.triedAt ?? '') >= since) continue;
+      const action = Array.isArray(row.actions) ? row.actions[0] : row.actions;
+      const taken = perBrand.get(action?.brand_id) ?? 0;
+      if (taken >= SWEEP_PER_BRAND) continue;
+      perBrand.set(action?.brand_id, taken + 1);
+      due.push(row);
+    }
+    if ((rows ?? []).length < SWEEP_PAGE) break;
+  }
   let checked = 0;
   let passed = 0;
   for (const row of due) {
