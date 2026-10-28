@@ -39,6 +39,7 @@ import {
   type MenuRole,
 } from '@/lib/actions/menu-access';
 import { useCanManageMenus } from '@/components/providers/menu-access-provider';
+import { MenuManagersCard, MenuPeopleCard } from '@/components/settings/menu-access-people';
 
 const MENU_ROLES: MenuRole[] = ['manager', 'analyst', 'agency_partner'];
 
@@ -127,6 +128,8 @@ function MenuAccessSettingsView() {
   };
 
   const roleName = (role: MenuRole) => tSettings(`team_role_${role}`);
+  const updateSettings = (update: (current: MenuAccessSettings) => MenuAccessSettings) =>
+    setSettings((current) => (current ? update(current) : current));
   const setItems = [
     { value: 'all', label: t('everything') },
     ...WORK_AREAS.map((area) => ({ value: area.id, label: t(`areas.${area.id}.title`) })),
@@ -260,6 +263,21 @@ function MenuAccessSettingsView() {
           )}
         </CardContent>
       </Card>
+
+      {settings && (
+        <>
+          <MenuManagersCard
+            settings={settings}
+            onChange={updateSettings}
+            onSaved={() => router.refresh()}
+          />
+          <MenuPeopleCard
+            settings={settings}
+            onChange={updateSettings}
+            onSaved={() => router.refresh()}
+          />
+        </>
+      )}
     </div>
   );
 }
