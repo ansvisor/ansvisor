@@ -20,6 +20,7 @@ import {
   type PlanTracking,
 } from '@/lib/content/plan';
 import { googleSourceStatus } from '@/lib/traffic-sources';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * What the Content plan (CE-014) is built from, read through the signed-in
@@ -237,6 +238,7 @@ export async function setPlanRowPriority(
   rowKey: string,
   priority: boolean,
 ): Promise<void> {
+  await assertWritable();
   if (!markInput.safeParse({ brandId, rowKey }).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
@@ -288,6 +290,7 @@ export async function getPlanPriorities(
  * agrees, and remembers the status it had for showing it again.
  */
 export async function hidePlanRow(brandId: string, rowKey: string): Promise<void> {
+  await assertWritable();
   if (!markInput.safeParse({ brandId, rowKey }).success) throw new Error('invalid');
   const opportunityId = checkedOpportunityId(rowKey);
   const supabase = await createClient();
@@ -327,6 +330,7 @@ export async function hidePlanRow(brandId: string, rowKey: string): Promise<void
  * and only the mark goes.
  */
 export async function showPlanRow(brandId: string, rowKey: string): Promise<void> {
+  await assertWritable();
   if (!markInput.safeParse({ brandId, rowKey }).success) throw new Error('invalid');
   const opportunityId = checkedOpportunityId(rowKey);
   const supabase = await createClient();

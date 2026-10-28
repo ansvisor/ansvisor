@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { ImageUploadButton } from '@/components/content/image-upload-button';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -100,6 +101,11 @@ export function EditorToolbar({
   productsBrandId?: string | null;
 }) {
   const t = useTranslations('contentEditor.editor.toolbar');
+  // A read-only workspace (plan not active): each tool that changes the page
+  // opens the upgrade dialog instead; </> HTML still shows the source.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const edit = (run: () => void) => guard(run, { action: tActions('editContent') });
   const [dialog, setDialog] = useState<'link' | 'image' | 'htmlBlock' | 'products' | null>(null);
   // Only a new request opens it: not the toolbar showing again.
   const [linkAsked, setLinkAsked] = useState(linkRequest);
@@ -236,7 +242,7 @@ export function EditorToolbar({
               pressed={!htmlView && tool.on}
               disabled={htmlView}
               blocked={!!off[tool.key]}
-              onClick={tool.run}
+              onClick={edit(tool.run)}
             >
               <tool.icon className="h-4 w-4" />
               {tool.text && <span className="ml-1 text-xs font-medium">{tool.text}</span>}
@@ -257,7 +263,7 @@ export function EditorToolbar({
         <div className="flex items-center gap-0.5">
           <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-border" />
           {tableTools.map((tool) => (
-            <ToolButton key={tool.key} label={t(tool.key)} onClick={tool.run}>
+            <ToolButton key={tool.key} label={t(tool.key)} onClick={edit(tool.run)}>
               <tool.icon className="h-4 w-4" />
             </ToolButton>
           ))}

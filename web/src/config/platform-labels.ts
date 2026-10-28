@@ -23,6 +23,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
 
   // Tracked scraper platform slugs, as stored in `prompt_results.platform`.
   'chatgpt-web': 'ChatGPT',
+  'chatgpt-shopping': 'ChatGPT Shopping',
   'google-aio': 'Google AI Overviews',
   'google-aimode': 'Google AI Mode',
   'copilot-web': 'Microsoft Copilot',

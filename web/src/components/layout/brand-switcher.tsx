@@ -6,6 +6,7 @@ import { brandPagePath } from '@/lib/brand-path';
 import type { Brand } from '@/types';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +48,19 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
     onNavigate?.();
     router.push(href);
   };
+  // A read-only workspace (plan not active): Add brand opens the upgrade
+  // dialog instead of the new brand's page, the mobile menu closed first so
+  // the dialog isn't left behind it.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const addBrand = () => {
+    if (isLocked) {
+      onNavigate?.();
+      openUpgrade(tActions('addBrands'));
+    } else {
+      go('/dashboard/brands/new');
+    }
+  };
   // On a brand's own page (its settings, prompts or topics), the same page
   // of the brand picked; elsewhere the page stays.
   const select = (brandId: string) => {
@@ -59,7 +73,7 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
     if (!canManage) return null;
     return (
       <button
-        onClick={() => go('/dashboard/brands/new')}
+        onClick={addBrand}
         className={cn(
           'flex w-full items-center gap-2 rounded-md border border-dashed px-2 py-2 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary',
           collapsed && 'justify-center px-0',
@@ -128,7 +142,7 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
           </DropdownMenuItem>
           {canManage && (
             <DropdownMenuItem
-              onClick={() => go('/dashboard/brands/new')}
+              onClick={addBrand}
               className="flex items-center gap-2 text-muted-foreground"
             >
               <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">

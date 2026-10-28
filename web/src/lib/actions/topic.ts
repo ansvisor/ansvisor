@@ -5,6 +5,7 @@ import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import type { Topic } from '@/types';
 import { DAY_MS, topicTrendDays, type TopicsWindow } from '@/lib/topic-trend';
+import { assertWritable } from '@/lib/subscription-guard';
 import { TOPIC_NAME_CHARS, topicNameFits } from '@/lib/topic-names';
 
 export type { TopicsWindow } from '@/lib/topic-trend';
@@ -27,6 +28,7 @@ function assertTopicNames(names: string[]) {
 }
 
 export async function createTopics(brandId: string, names: string[]): Promise<Topic[]> {
+  await assertWritable({ onboarding: true });
   assertTopicNames(names);
   const supabase = await createClient();
 
@@ -82,6 +84,7 @@ export async function getTopicById(brandId: string, topicId: string): Promise<To
 }
 
 export async function createTopic(brandId: string, name: string): Promise<Topic> {
+  await assertWritable();
   assertTopicNames([name]);
   const supabase = await createClient();
 
@@ -96,6 +99,7 @@ export async function createTopic(brandId: string, name: string): Promise<Topic>
 }
 
 export async function updateTopic(topicId: string, name: string): Promise<Topic> {
+  await assertWritable();
   assertTopicNames([name]);
   const supabase = await createClient();
 
@@ -438,6 +442,7 @@ export async function getTopicsOverview(
 }
 
 export async function deleteTopic(topicId: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   // Fetch topic to get name and brand_id
