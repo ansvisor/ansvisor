@@ -236,7 +236,7 @@ describe('HistoryDrawer', () => {
     );
     await act(async () => {});
     expect(under('Result')).toContain(
-      'Tracking missed 1 night of the week before it and 2 nights of the week after it: mentions and citations read a little low there.',
+      'Tracking missed 1 night of the week before it and 2 nights of the week after it: mentions and citations are counted as for a full week.',
     );
 
     render(
@@ -248,7 +248,7 @@ describe('HistoryDrawer', () => {
     );
     await act(async () => {});
     expect(under('Result')).toContain(
-      'Tracking missed 4 nights of the week after it: too many to compare the weeks fairly, so the result reads not measurable.',
+      'Tracking missed 4 nights of the week after it: too many to compare mentions and citations fairly, so they are left out of the result.',
     );
   });
 
