@@ -117,4 +117,33 @@ describe('categoryRows', () => {
     expect(many[0]).toMatchObject({ prompts: 3, needsAttention: true, revenue: null });
     expect(byId.packs.needsAttention).toBe(false);
   });
+
+  it("reads a big catalog's categories without walking every card for each", () => {
+    // 1,000 collections of 10 products, each named "… > Hiking backpacks", so
+    // each is in all of 1,000 questions and their 50,000 cards.
+    const many = Array.from({ length: 1000 }, (_, i) => ({
+      id: `c${i}`,
+      name: `Line ${i} > Hiking backpacks`,
+      productIds: Array.from({ length: 10 }, (_, j) => `p${i * 10 + j}`),
+    }));
+    const shelves = Array.from({ length: 50_000 }, (_, i) =>
+      card({
+        promptId: `q${i % 1000}`,
+        promptText: `best hiking backpack for women ${i % 1000}`,
+        role: i % 5 ? 'competitor' : 'own',
+        competitorId: i % 5 ? 'c-summit' : null,
+        productId: i % 5 ? null : `p${i % 10_000}`,
+      }),
+    );
+    const started = Date.now();
+    const read = categoryRows(many, shelves, { competitors, revenueOf: new Map() });
+    expect(Date.now() - started).toBeLessThan(1500);
+    // Its products p70 and p75 were on a shelf; p71…p74 and p76…p79 weren't.
+    expect(read.find((row) => row.id === 'c7')).toMatchObject({
+      prompts: 1000,
+      shelfShare: 0.2,
+      productsOnShelf: 2,
+      topRival: { name: 'Summit Gear' },
+    });
+  });
 });
