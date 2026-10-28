@@ -439,6 +439,7 @@ describe('a task with AC-004 fields', () => {
             effort: '~2h',
             role: 'Content writer',
             sent: { content: null, webhook: null },
+            lastCheck: null,
           },
         },
       ],

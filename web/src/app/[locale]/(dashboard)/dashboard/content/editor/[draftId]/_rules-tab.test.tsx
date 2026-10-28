@@ -503,6 +503,43 @@ describe('the Rules tab', () => {
     expect(row('Length').textContent).not.toContain('Raise Length');
   });
 
+  it('names the linked products that no longer sell under their Shopping rule, the first three', async () => {
+    const titles = ['a', 'b', 'c', 'd'];
+    const shopping = {
+      categories: [],
+      site: null,
+      products: titles.map((t, i) => ({
+        key: `shop.example/products/${t}`,
+        title: t.toUpperCase(),
+        state: i === 1 ? ('refused' as const) : ('sold_out' as const),
+        inPath: true,
+      })),
+    };
+    const page = readPage(
+      titles.map((t) => `<p><a href="https://shop.example/products/${t}">x</a></p>`).join(''),
+      100,
+    );
+    const checked = activeRules(ruleSet('buying_guide', { shopping: true }), {
+      overrides: {},
+    }).map((rule) => ({
+      rule,
+      status: checkRule(rule, page, {
+        brandDomains: [],
+        competitorDomains: [],
+        fanouts: [],
+        shopping,
+      }),
+    }));
+    await render(state(undefined, { rules: checked, ...rulesMet(checked) }));
+    const live = [...container.querySelectorAll('li')].find((li) =>
+      li.textContent?.startsWith('No sold-out or refused product linked'),
+    )!;
+    expect(live.textContent).toContain('4 found');
+    expect(live.textContent).toContain(
+      'A (sold out), B (Merchant Center refuses it), C (sold out) +1 more: remove or replace these links on the page.',
+    );
+  });
+
   it('shows Ansvisor’s set when a draft on My rules has none for its type', async () => {
     await render(state(undefined, { source: 'mine', mineTypes: [] }));
     const trigger = container.querySelector('[aria-label="Rule set"]')!;

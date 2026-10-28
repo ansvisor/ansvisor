@@ -27,6 +27,7 @@
  */
 
 import supabaseAdmin from '../config/supabase.js';
+import { activeOrgFilter } from './active-subscriptions.js';
 import { isExcludedPath } from './page-paths.js';
 import { logger } from './logger.js';
 import { resolve } from '../config/action-engine.js';
@@ -328,8 +329,9 @@ export async function detectPageOpportunitiesInWindow(
 }
 
 /**
- * Detect for every brand with synced GA data; optionally scoped to one
- * organization. Per-brand failures are logged and skipped.
+ * Detect for every brand with synced GA data, on an active subscription;
+ * optionally scoped to one organization. Per-brand failures are logged and
+ * skipped.
  */
 export async function runPageOpportunityDetection({ organizationId } = {}) {
   let brandQuery = supabaseAdmin
@@ -338,9 +340,12 @@ export async function runPageOpportunityDetection({ organizationId } = {}) {
     .eq('is_active', true)
     .not('ga_property_id', 'is', null);
   if (organizationId) brandQuery = brandQuery.eq('organization_id', organizationId);
-  const { data: brands, error } = await brandQuery;
+  const { data: rows, error } = await brandQuery;
   if (error) throw new Error(error.message);
-  if (!brands?.length) return { scanned: 0, results: [] };
+  // Once the plan has ended, nothing new is found for the organization.
+  const isActive = await activeOrgFilter((rows ?? []).map((b) => b.organization_id));
+  const brands = (rows ?? []).filter((b) => isActive(b.organization_id));
+  if (!brands.length) return { scanned: 0, results: [] };
 
   const results = [];
   for (const brand of brands) {

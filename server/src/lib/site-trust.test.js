@@ -400,6 +400,34 @@ describe('readSiteTrust', () => {
     });
   });
 
+  it('answers only the kept read, however old, once the plan has ended', async () => {
+    const fetcher = vi.fn();
+    const scraper = vi.fn();
+    let { db, writes } = fakeDb({ ...base, site_trust: kept(SITE_TRUST_TTL_MS * 30, false) });
+    const read = await readSiteTrust('b1', {
+      db,
+      fetcher,
+      scraper,
+      now: NOW,
+      refresh: true,
+      keptOnly: true,
+    });
+    expect(read).toEqual({
+      checks: { about: { ok: true, url: 'https://acme.com/about' } },
+      score: 1,
+      complete: false,
+      checkedAt: new Date(NOW - SITE_TRUST_TTL_MS * 30).toISOString(),
+    });
+
+    ({ db, writes } = fakeDb({ ...base, site_trust: null }));
+    expect(await readSiteTrust('b1', { db, fetcher, scraper, now: NOW, keptOnly: true })).toBe(
+      null,
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(scraper).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+  });
+
   it('reads a partial read again after a few minutes, and says it is partial', async () => {
     let { db, writes } = fakeDb({ ...base, site_trust: kept(60_000, false) });
     expect((await readSiteTrust('b1', { db, fetcher: vi.fn(), now: NOW })).complete).toBe(false);
