@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
   detectAmazonShareDrop,
@@ -16,6 +17,13 @@ import {
   type ShelfRow,
   type ShelfStats,
 } from '@/lib/shopping/shelf';
+import {
+  productRows,
+  type CatalogProductRow,
+  type ProductAiStats,
+  type ProductCardRow,
+  type ProductRow,
+} from '@/lib/shopping/products';
 import {
   toMerchantSplit,
   type MerchantSplitRow,
@@ -1220,4 +1228,303 @@ export async function getShoppingAiOrders(brandId: string): Promise<ShoppingAiOr
       .map(([source, orders]) => ({ source, orders }))
       .sort((a, b) => b.orders - a.orders || a.source.localeCompare(b.source)),
   };
+}
+
+// ── Products (Product Visibility, ECOM-007) ───────────────────────────────────
+
+/** Catalog products the table reads at most. */
+const PRODUCTS_TABLE_MAX = 2000;
+const CATALOG_PAGE = 1000;
+/** Product ids one catalog read filters by: each request's address stays short. */
+const IDS_PER_READ = 100;
+/** Such reads in flight at once. */
+const ID_READS_AT_ONCE = 6;
+const IN_STOCK = new Set(['in_stock', 'instock', 'available', 'limited_availability']);
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+
+export interface ShoppingProducts {
+  rows: ProductRow[];
+  /** The brand's live catalog products; more than `rows` when past PRODUCTS_TABLE_MAX. */
+  total: number;
+}
+
+/** Every row of a brand's catalog table, in `.range()` pages, up to `max`. */
+async function readCatalogRows<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
+  build: () => any,
+  max: number,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let start = 0; start < max; start += CATALOG_PAGE) {
+    const { data, error } = await build().range(start, Math.min(start + CATALOG_PAGE, max) - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as T[]));
+    if ((data ?? []).length < CATALOG_PAGE) break;
+  }
+  return rows;
+}
+
+/** A catalog table's rows for these ids: IDS_PER_READ ids a read, ID_READS_AT_ONCE reads at a time. */
+async function readForIds<T>(ids: readonly string[], read: (some: string[]) => Promise<T[]>) {
+  const slices: string[][] = [];
+  for (let i = 0; i < ids.length; i += IDS_PER_READ) slices.push(ids.slice(i, i + IDS_PER_READ));
+  const out: T[][] = [];
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(ID_READS_AT_ONCE, slices.length) }, async () => {
+      while (next < slices.length) {
+        const at = next++;
+        out[at] = await read(slices[at]);
+      }
+    }),
+  );
+  return out.flat();
+}
+
+/**
+ * Per product, its AI visits and orders over the window (00361): only the
+ * products with either, every page of them.
+ */
+async function readProductAiStats(supabase: ServerClient, brandId: string, from: string) {
+  return readAllRpcRows((start, end) =>
+    supabase
+      .rpc('catalog_product_ai_stats', { p_brand_id: brandId, p_from: from })
+      .order('product_id')
+      .range(start, end),
+  );
+}
+
+/**
+ * The Products table: the brand's catalog, each product with its shelves,
+ * win rate and average place over the filter window (its cards, 00360),
+ * the AI visits its page got and the orders they led to (00361), and its
+ * readiness. Null when the brand has no catalog.
+ *
+ * Past PRODUCTS_TABLE_MAX products, the table holds the products on a
+ * shelf or visited from AI first (those with orders, then the most shelves,
+ * then the most visits), then the rest by id; `total` counts them all.
+ */
+export async function getShoppingProducts(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingProducts | null> {
+  const supabase = await createClient();
+  const { count: total, error: countErr } = await supabase
+    .from('catalog_products')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .is('removed_at', null);
+  if (countErr) throw new Error(countErr.message);
+  if (!total) return null;
+
+  const { from } = resolveDateRange(filters);
+  const [cards, stats] = await Promise.all([
+    fetchAllCards<{
+      catalog_product_id: string;
+      position: number;
+      platform: string;
+      prompt_results: { prompt_id: string } | null;
+    }>(() =>
+      cardsInWindow(
+        supabase,
+        brandId,
+        filters,
+        'catalog_product_id, position, platform, prompt_results:prompt_result_id ( prompt_id )',
+      )
+        .eq('matched_brand_role', 'own')
+        .not('catalog_product_id', 'is', null),
+    ),
+    // All time reads the last 90 days of visits and orders.
+    readProductAiStats(supabase, brandId, from ?? daysAgoIso(90)),
+  ]);
+
+  const shelfCards: ProductCardRow[] = cards.map((card) => ({
+    productId: card.catalog_product_id,
+    shelf: `${card.prompt_results?.prompt_id ?? '?'}:${card.platform}`,
+    rank: card.position + 1,
+  }));
+  const aiStats: ProductAiStats[] = stats.map((row) => ({
+    productId: row.product_id,
+    aiVisits: Number(row.ai_visits),
+    orders: Number(row.orders),
+    revenue: row.revenue === null ? null : Number(row.revenue),
+    currency: row.currency,
+  }));
+  const ids =
+    total > PRODUCTS_TABLE_MAX
+      ? await tableProductIds(supabase, brandId, shelfCards, aiStats)
+      : null;
+  const catalog = await readCatalogProducts(supabase, brandId, ids);
+  return { rows: productRows(catalog, shelfCards, aiStats), total };
+}
+
+/**
+ * The PRODUCTS_TABLE_MAX products a catalog bigger than that lists: those on
+ * a shelf or visited from AI, the ones with orders first, then the most
+ * shelves, then the most visits; then the rest of the catalog by id.
+ */
+async function tableProductIds(
+  supabase: ServerClient,
+  brandId: string,
+  cards: readonly ProductCardRow[],
+  stats: readonly ProductAiStats[],
+): Promise<string[]> {
+  const shelvesOf = new Map<string, Set<string>>();
+  for (const card of cards) {
+    if (!shelvesOf.has(card.productId)) shelvesOf.set(card.productId, new Set());
+    shelvesOf.get(card.productId)!.add(card.shelf);
+  }
+  const statsOf = new Map(stats.map((row) => [row.productId, row]));
+  const active = [...new Set([...shelvesOf.keys(), ...statsOf.keys()])].sort(
+    (a, b) =>
+      (statsOf.get(b)?.orders ?? 0) - (statsOf.get(a)?.orders ?? 0) ||
+      (shelvesOf.get(b)?.size ?? 0) - (shelvesOf.get(a)?.size ?? 0) ||
+      (statsOf.get(b)?.aiVisits ?? 0) - (statsOf.get(a)?.aiVisits ?? 0) ||
+      (a < b ? -1 : 1),
+  );
+  const ids = new Set(active.slice(0, PRODUCTS_TABLE_MAX));
+  if (ids.size < PRODUCTS_TABLE_MAX) {
+    // The rest, by id: as many as could be needed past those already in.
+    const rest = await readCatalogRows<{ id: string }>(
+      () =>
+        supabase
+          .from('catalog_products')
+          .select('id')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
+      PRODUCTS_TABLE_MAX,
+    );
+    for (const { id } of rest) {
+      if (ids.size >= PRODUCTS_TABLE_MAX) break;
+      ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
+/**
+ * The brand's live catalog products as Product Visibility reads them, with
+ * their variants' stock, price and GTIN, first photo and category: the
+ * whole catalog (up to PRODUCTS_TABLE_MAX) for `ids` null, else the products
+ * `ids` names, their rows read IDS_PER_READ ids at a time.
+ */
+async function readCatalogProducts(
+  supabase: ServerClient,
+  brandId: string,
+  ids: readonly string[] | null,
+): Promise<CatalogProductRow[]> {
+  // Each table read for the whole catalog, or for the ids, a slice at a time.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
+  const each = <T>(column: string, build: () => any, max: number): Promise<T[]> =>
+    ids === null
+      ? readCatalogRows<T>(build, max)
+      : readForIds(ids, (some) =>
+          readCatalogRows<T>(() => build().in(column, some), CARD_MAX_ROWS),
+        );
+  const [products, variants, images, categories] = await Promise.all([
+    each<{
+      id: string;
+      title: string;
+      url: string | null;
+      product_type: string | null;
+      product_brand: string | null;
+      description: string | null;
+    }>(
+      'id',
+      () =>
+        supabase
+          .from('catalog_products')
+          .select('id, title, url, product_type, product_brand, description')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
+      PRODUCTS_TABLE_MAX,
+    ),
+    each<{
+      product_id: string;
+      gtin: string | null;
+      price: number | null;
+      sale_price: number | null;
+      currency: string | null;
+      availability: string | null;
+    }>(
+      'product_id',
+      () =>
+        supabase
+          .from('catalog_variants')
+          .select('product_id, gtin, price, sale_price, currency, availability')
+          .eq('brand_id', brandId)
+          .is('removed_at', null)
+          .order('id'),
+      CARD_MAX_ROWS,
+    ),
+    each<{ product_id: string; url: string; position: number }>(
+      'product_id',
+      () =>
+        supabase
+          .from('catalog_images')
+          .select('product_id, url, position')
+          .eq('brand_id', brandId)
+          .order('id'),
+      CARD_MAX_ROWS,
+    ),
+    each<{ product_id: string; category: { name: string } | null }>(
+      'product_id',
+      () =>
+        supabase
+          .from('catalog_product_categories')
+          .select('product_id, category:category_id ( name )')
+          .eq('brand_id', brandId)
+          .order('product_id')
+          .order('category_id'),
+      CARD_MAX_ROWS,
+    ),
+  ]);
+
+  const variantsOf = new Map<string, typeof variants>();
+  for (const v of variants) {
+    if (!variantsOf.has(v.product_id)) variantsOf.set(v.product_id, []);
+    variantsOf.get(v.product_id)!.push(v);
+  }
+  const imageOf = new Map<string, { url: string; position: number }>();
+  for (const image of images) {
+    const kept = imageOf.get(image.product_id);
+    if (!kept || image.position < kept.position) imageOf.set(image.product_id, image);
+  }
+  const categoryOf = new Map<string, string>();
+  for (const row of categories) {
+    if (row.category?.name && !categoryOf.has(row.product_id)) {
+      categoryOf.set(row.product_id, row.category.name);
+    }
+  }
+  return products.map((p) => {
+    const own = variantsOf.get(p.id) ?? [];
+    const stocked = own.filter((v) =>
+      IN_STOCK.has(
+        String(v.availability ?? '')
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_'),
+      ),
+    );
+    const priced = (stocked.length ? stocked : own)
+      .map((v) => ({ price: v.sale_price ?? v.price, currency: v.currency }))
+      .filter((v): v is { price: number; currency: string | null } => v.price !== null)
+      .sort((a, b) => a.price - b.price);
+    return {
+      id: p.id,
+      title: p.title,
+      url: p.url,
+      productType: p.product_type,
+      brand: p.product_brand,
+      description: p.description,
+      image: imageOf.get(p.id)?.url ?? null,
+      category: categoryOf.get(p.id) ?? null,
+      price: priced[0] ? Number(priced[0].price) : null,
+      currency: priced[0]?.currency ?? null,
+      inStock: stocked.length > 0,
+      hasGtin: own.some((v) => !!v.gtin),
+    };
+  });
 }

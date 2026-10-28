@@ -7986,6 +7986,52 @@
       "trends": "Trends",
       "failed": "Couldn't read the shelves right now. The other tabs still work; try again in a moment."
     },
+    "products": {
+      "label": "Your products",
+      "viewsLabel": "Product views",
+      "views": {
+        "all": "All",
+        "never": "Never shown",
+        "notClicked": "Shown, not clicked",
+        "notBought": "Clicked, not bought",
+        "topSellers": "Top sellers from AI"
+      },
+      "columns": {
+        "product": "Product",
+        "shelves": "On shelf",
+        "winRate": "Win rate",
+        "avgRank": "Avg pos.",
+        "aiVisits": "AI clicks",
+        "orders": "AI orders",
+        "revenue": "AI revenue",
+        "readiness": "Readiness"
+      },
+      "readiness": {
+        "label": "Readiness {score} of 100",
+        "missing": "Missing: {check} (−{points})",
+        "complete": "Everything the catalog can tell is in place.",
+        "checks": {
+          "gtin": "a GTIN",
+          "image": "a photo",
+          "inStock": "in stock",
+          "price": "a price",
+          "description": "a description of 25 words or more",
+          "typeFirst": "what the product is, in the description's first 40 words",
+          "category": "a category",
+          "brand": "a brand"
+        }
+      },
+      "empty": {
+        "all": "No products in the catalog.",
+        "never": "Every product was on an AI shelf in this period.",
+        "notClicked": "No product was shown without an AI visit to its page.",
+        "notBought": "No product had AI visits without an order.",
+        "topSellers": "No orders from AI visits started on a product page in this period."
+      },
+      "capped": "Showing {shown} of {total} products: every one AI showed or sent visits to, then the rest.",
+      "more": "Show {count} more",
+      "failed": "Couldn't read your catalog's products right now. These are the products AI showed, by title."
+    },
     "sources": {
       "label": "Data sources",
       "catalog": "Product catalog",

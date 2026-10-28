@@ -1208,6 +1208,75 @@ export type Database = {
           },
         ]
       }
+      catalog_categories: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_categories_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_product_categories: {
+        Row: {
+          brand_id: string
+          category_id: string
+          product_id: string
+        }
+        Insert: {
+          brand_id: string
+          category_id: string
+          product_id: string
+        }
+        Update: {
+          brand_id?: string
+          category_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_product_categories_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_product_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_product_categories_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_variants: {
         Row: {
           attributes: Json
@@ -5724,6 +5793,21 @@ export type Database = {
         Returns: {
           platforms: string[]
           regions: string[]
+        }[]
+      }
+      catalog_product_ai_stats: {
+        Args: {
+          p_brand_id: string
+          p_from: string
+          p_product_id?: string
+          p_to?: string
+        }
+        Returns: {
+          ai_visits: number
+          currency: string | null
+          orders: number
+          product_id: string
+          revenue: number | null
         }[]
       }
       shopping_merchant_split: {
