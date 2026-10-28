@@ -172,22 +172,27 @@ export function improveRound(action, tasks, now = new Date()) {
 
 /**
  * The brand's last Improve rounds on a prompt, newest first: sent and not
- * dismissed, nor deleted. The brand's own actions only.
+ * dismissed, nor deleted. The brand's own actions only, sent from a set of
+ * the same region (an Improve set is kept per region): '' or null is all
+ * regions, which is how an action sent without a region is measured.
  *
  * @returns {Promise<ReturnType<typeof improveRound>[]>}
  */
 export async function loadImproveRounds({
   promptId,
   brandId,
+  region = null,
   limit = IMPROVE_PAST_ROUNDS,
   now = new Date(),
 }) {
-  const { data: actions, error } = await supabaseAdmin
+  let q = supabaseAdmin
     .from('actions')
     .select('id, status, created_at, position_outcome')
     .eq('brand_id', brandId)
     .eq('kind', IMPROVE_ACTION_KIND)
-    .eq('payload->>promptId', promptId)
+    .eq('payload->>promptId', promptId);
+  q = region ? q.eq('payload->>region', region) : q.is('payload->>region', null);
+  const { data: actions, error } = await q
     .neq('status', 'dismissed')
     .is('deleted_at', null)
     .order('created_at', { ascending: false })

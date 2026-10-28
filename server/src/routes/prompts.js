@@ -1162,7 +1162,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         // Without them the suggestions are still written, as before.
         let history = [];
         try {
-          history = await loadImproveRounds({ promptId, brandId });
+          history = await loadImproveRounds({ promptId, brandId, region: range.region });
         } catch (err) {
           logger.warn({ promptId, err: err.message }, '[improve] earlier rounds unavailable');
         }

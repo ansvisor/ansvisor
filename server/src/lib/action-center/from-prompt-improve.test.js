@@ -315,6 +315,7 @@ describe('loadImproveRounds', () => {
         ['eq', 'brand_id', 'b1'],
         ['eq', 'kind', 'prompt_improve'],
         ['eq', 'payload->>promptId', 'p1'],
+        ['is', 'payload->>region', null],
         ['neq', 'status', 'dismissed'],
         ['is', 'deleted_at', null],
       ],
@@ -322,6 +323,28 @@ describe('loadImproveRounds', () => {
     expect(rounds.map((round) => round.suggestions.map((s) => s.title))).toEqual([
       ['Add a table to /pricing'],
     ]);
+  });
+
+  /**
+   * An Improve set is kept per region, and the action keeps the region of
+   * the set it was sent from: a US set reads the US rounds, the all-regions
+   * set the rounds sent without one ('' and null alike).
+   */
+  it("reads only the rounds sent for the set's region", async () => {
+    tables.actions = [];
+    reads.length = 0;
+    await loadImproveRounds({ promptId: 'p1', brandId: 'b1', region: 'US' });
+    expect(reads[0].filters).toContainEqual(['eq', 'payload->>region', 'US']);
+    expect(reads[0].filters).not.toContainEqual(['is', 'payload->>region', null]);
+
+    for (const region of ['', null, undefined]) {
+      reads.length = 0;
+      await loadImproveRounds({ promptId: 'p1', brandId: 'b1', region });
+      expect(reads[0].filters).toContainEqual(['is', 'payload->>region', null]);
+      expect(
+        reads[0].filters.some(([op, column]) => op === 'eq' && column === 'payload->>region'),
+      ).toBe(false);
+    }
   });
 
   it('reads no tasks when there is no earlier round', async () => {
