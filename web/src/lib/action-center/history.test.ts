@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareHistory, summarize, type ActionHistoryItem } from './history';
+import { compareHistory, controlNetOf, summarize, type ActionHistoryItem } from './history';
 
 const item = (over: Partial<ActionHistoryItem> = {}): ActionHistoryItem =>
   ({
@@ -37,5 +37,50 @@ describe('summarize', () => {
         .topPriority,
     ).toBe('critical');
     expect(summarize([item()]).topPriority).toBeNull();
+  });
+});
+
+describe('controlNetOf', () => {
+  it('reads the net the validation sweep kept, the metrics it can name', () => {
+    expect(
+      controlNetOf({
+        control: {
+          basis: 'topics',
+          prompts: 12,
+          net: [
+            { metric: 'visibility', net: -1.5, unit: 'points' },
+            { metric: 'citations', net: Number.NaN, unit: 'percent' },
+            { metric: 'sessions', net: 4, unit: 'sessions' },
+          ],
+        },
+      }),
+    ).toEqual({
+      basis: 'topics',
+      prompts: 12,
+      net: [{ metric: 'visibility', net: -1.5, unit: 'points' }],
+    });
+  });
+
+  it('reads none without a control, a metric it can name or a basket size', () => {
+    expect(controlNetOf(null)).toBeNull();
+    expect(controlNetOf({})).toBeNull();
+    expect(
+      controlNetOf({ control: { prompts: 12, net: [{ metric: 'x', net: 1, unit: 'sessions' }] } }),
+    ).toBeNull();
+    expect(
+      controlNetOf({ control: { net: [{ metric: 'visibility', net: 1, unit: 'points' }] } }),
+    ).toBeNull();
+  });
+
+  it('reads any basis but topics as the brand', () => {
+    expect(
+      controlNetOf({
+        control: {
+          basis: 'other',
+          prompts: 3,
+          net: [{ metric: 'mentions', net: 1, unit: 'points' }],
+        },
+      })?.basis,
+    ).toBe('brand');
   });
 });

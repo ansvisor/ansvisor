@@ -387,10 +387,13 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
   const format = useFormatter();
   const when = format.dateTime(new Date(status.at), { dateStyle: 'medium', timeStyle: 'short' });
   const live = status.status === 'published' ? status.publishedUrl : null;
-  // A Webflow send (#1331, phase 2) says so: sent, it's a draft item there.
-  const label = t(status.target === 'webflow' ? `webflow.${status.status}` : status.status, {
-    when,
-  });
+  // A send to a CMS (#1331, phase 2) says so: sent, it's a draft item or post there.
+  const label = t(
+    status.target === 'webflow' || status.target === 'wordpress' || status.target === 'framer'
+      ? `${status.target}.${status.status}`
+      : status.status,
+    { when },
+  );
   const icon = {
     queued: <Clock className="h-3.5 w-3.5" />,
     sent: <Send className="h-3.5 w-3.5" />,

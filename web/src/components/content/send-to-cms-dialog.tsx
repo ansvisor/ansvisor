@@ -31,6 +31,7 @@ import {
   readDraftCms,
   sendPagesToCms,
   type CmsSendError,
+  type CmsTarget,
   type DraftCms,
 } from '@/lib/content/cms-send-client';
 import { exportPlaceholders, pageFields, titlePlaceholders } from '@/lib/content/ready-to-publish';
@@ -39,8 +40,9 @@ import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from './cms-target'
 
 /**
  * Send to CMS (#1331): the page to the brand's webhook, for the workspace's
- * CMS or automation to publish, or to its Webflow collection as a draft item
- * (phase 2, when Settings has Webflow ready). Its slug and meta are filled from the page,
+ * CMS or automation to publish, to its Webflow or Framer collection as a
+ * draft item, or to its WordPress site as a draft post (phase 2, when
+ * Settings has them ready). Its slug and meta are filled from the page,
  * or what the draft kept, and editable; they stay on the draft. The page
  * goes as Export makes it ready (CE-057): no placeholder goes, so they are
  * filled first. From the editor's header and a Library row; rendered only
@@ -101,14 +103,17 @@ export function SendDialog({
   const [sending, setSending] = useState(false);
   // Fill now: the editor selects the placeholder, so focus stays there.
   const filling = useRef(false);
+  // With the target it went to: picking another clears it, a read again may not.
   const [problem, setProblem] = useState<
-    | { code: CmsSendError; field: string | null }
+    | { code: CmsSendError; field: string | null; target: CmsTarget }
     | { status: number }
-    | { failed: string; webflow: boolean }
+    | { failed: string; target: CmsTarget }
     | null
   >(null);
   const {
     webflow,
+    wordpress,
+    framer,
     target,
     pick,
     sent: keepTarget,
@@ -117,6 +122,8 @@ export function SendDialog({
     retry: retryTarget,
   } = useCmsTarget(brandId);
   const collection = webflow?.ready ? webflow.collection || t('target.webflow.collection') : '';
+  const site = wordpress?.ready ? wordpress.site : '';
+  const framerCollection = framer?.ready ? framer.collection || t('target.framer.collection') : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -171,7 +178,7 @@ export function SendDialog({
     if (!result.ok) {
       // A read-only workspace: the upgrade dialog, with the reason kept here.
       if (result.code === 'subscription') openUpgrade();
-      setProblem({ code: result.code, field: result.field });
+      setProblem({ code: result.code, field: result.field, target });
       return;
     }
     const [delivery] = result.deliveries;
@@ -184,7 +191,7 @@ export function SendDialog({
       setProblem(
         refused
           ? { status: delivery.http_status! }
-          : { failed: delivery.error ?? t('errors.failed'), webflow: target === 'webflow' },
+          : { failed: delivery.error ?? t('errors.failed'), target },
       );
       // The header says it failed too, with why, as the page's last send.
       onSent?.({
@@ -212,8 +219,30 @@ export function SendDialog({
       toast.success(delivery?.updated ? t('sentWebflowUpdated') : t('sentWebflow'), {
         description:
           changed && (changed.tables || changed.images)
-            ? t('webflowChanged', { tables: changed.tables, images: changed.images })
+            ? t('webflowChanged', { tables: changed.tables ?? 0, images: changed.images ?? 0 })
             : undefined,
+      });
+    } else if (target === 'wordpress') {
+      // A live post isn't written to: the page went as a new draft. Its
+      // JSON-LD stays out (WordPress would keep it as text).
+      const notes = [
+        delivery?.live ? t('wordpressLive') : null,
+        delivery?.changed?.jsonLd ? t('wordpressJsonLd') : null,
+      ].filter((note) => note !== null);
+      toast.success(delivery?.updated ? t('sentWordPressUpdated') : t('sentWordPress'), {
+        description: notes.length ? notes.join(' ') : undefined,
+      });
+    } else if (target === 'framer') {
+      // Images don't go to Framer's formatted text yet. An item updated that
+      // isn't a draft is published there: the change goes live with the
+      // site's next publish.
+      const images = delivery?.changed?.images ?? 0;
+      const notes = [
+        images ? t('framerImages', { images }) : null,
+        delivery?.live ? t('framerLive') : null,
+      ].filter((note) => note !== null);
+      toast.success(delivery?.updated ? t('sentFramerUpdated') : t('sentFramer'), {
+        description: notes.length ? notes.join(' ') : undefined,
       });
     } else {
       toast.success(t('sent'));
@@ -224,16 +253,30 @@ export function SendDialog({
   const problemText = (shown: NonNullable<typeof problem>) => {
     if ('status' in shown) return t('errors.webhookStatus', { status: shown.status });
     if ('failed' in shown) {
-      return t(shown.webflow ? 'errors.webflowFailed' : 'errors.webhookFailed', {
-        reason: shown.failed,
-      });
+      const failed = {
+        webflow: 'errors.webflowFailed',
+        wordpress: 'errors.wordpressFailed',
+        framer: 'errors.framerFailed',
+        webhook: 'errors.webhookFailed',
+      } as const;
+      return t(failed[shown.target], { reason: shown.failed });
     }
     const { code, field } = shown;
     if (code === 'session' || code === 'workspace' || code === 'busy' || code === 'subscription') {
       return tFailure(code);
     }
-    // Webflow not ready sent the page to the webhook: what to fix is Webflow.
-    if (code === 'no_webhook' && webflow && !webflow.ready) return t('errors.no_webhookWebflow');
+    // No CMS ready sent the page to the webhook: what to fix is the one connected.
+    if (code === 'no_webhook' && !webflow?.ready && !wordpress?.ready && !framer?.ready) {
+      if (webflow) return t('errors.no_webhookWebflow');
+      if (wordpress) return t('errors.no_webhookWordPress');
+      if (framer) return t('errors.no_webhookFramer');
+    }
+    if (code === 'in_progress' && shown.target === 'wordpress') {
+      return t('errors.in_progressWordPress');
+    }
+    if (code === 'in_progress' && shown.target === 'framer') {
+      return t('errors.in_progressFramer');
+    }
     // The server names the path ("pages.0.slug"); the field is its last part.
     if (code === 'invalid' && field) {
       return t('errors.invalidField', { field: field.split('.').pop() ?? 'other' });
@@ -257,14 +300,20 @@ export function SendDialog({
               ? t('descriptionReading')
               : target === 'webflow'
                 ? t('descriptionWebflow', { collection })
-                : t('description')}
+                : target === 'wordpress'
+                  ? t('descriptionWordPress', { site })
+                  : target === 'framer'
+                    ? t('descriptionFramer', { collection: framerCollection })
+                    : t('description')}
           </DialogDescription>
         </DialogHeader>
 
-        {webflow && target && (
+        {(webflow || wordpress || framer) && target && (
           <CmsTargetPicker
             value={target}
             webflow={webflow}
+            wordpress={wordpress}
+            framer={framer}
             disabled={sending}
             onChange={(next) => {
               pick(next);
@@ -273,7 +322,12 @@ export function SendDialog({
           />
         )}
         {targetUnchecked && (
-          <CmsTargetUnchecked reading={targetReading} onRetry={retryTarget} disabled={sending} />
+          <CmsTargetUnchecked
+            target={targetUnchecked}
+            reading={targetReading}
+            onRetry={retryTarget}
+            disabled={sending}
+          />
         )}
 
         {pageProblem && (
@@ -370,12 +424,21 @@ export function SendDialog({
               </>
             ) : (
               last &&
-              t(last.target === 'webflow' ? `lastWebflow.${last.status}` : `last.${last.status}`, {
-                when: format.dateTime(new Date(last.at), {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                }),
-              })
+              t(
+                last.target === 'webflow'
+                  ? `lastWebflow.${last.status}`
+                  : last.target === 'wordpress'
+                    ? `lastWordPress.${last.status}`
+                    : last.target === 'framer'
+                      ? `lastFramer.${last.status}`
+                      : `last.${last.status}`,
+                {
+                  when: format.dateTime(new Date(last.at), {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  }),
+                },
+              )
             )}
           </p>
         )}
