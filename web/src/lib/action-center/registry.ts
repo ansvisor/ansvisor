@@ -119,6 +119,9 @@ export type ActionKind =
   | 'audit_page'
   // Sent by a person from the Content Editor's Start, as Team (CE-015).
   | 'content_draft'
+  // Sent by a person from Product Visibility: a product, or a catalog category (ECOM-013).
+  | 'shopping_product'
+  | 'shopping_category'
   // Raised by the catalog check for a live page linking products that no
   // longer sell (shopping path, part 7), and closed by it once fixed.
   | 'shopping_links';
@@ -273,8 +276,16 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'traffic_pages',
   'audit_page',
   'content_draft',
+  'shopping_product',
+  'shopping_category',
   'shopping_links',
 ];
+
+/**
+ * The kinds sent from Product Visibility (ECOM-013): a product or a
+ * category. The Actions page's "From Products" chip lists them.
+ */
+export const FROM_PRODUCTS_KINDS: readonly string[] = ['shopping_product', 'shopping_category'];
 
 /**
  * Is this one of the kinds we have copy for?

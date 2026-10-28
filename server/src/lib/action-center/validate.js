@@ -572,8 +572,10 @@ async function measureReading(
   // gap (VIS-010) or opportunity (VIS-011) sent from Insights on the topic's
   // prompts, answers sent from Mentions (MS-08) on their prompts, and pages
   // sent from AI Traffic (AT-006) on those pages. A draft sent from the
-  // Content Editor (CE-015) on its prompts and its page. A page sent from
-  // a Site Audit report (learning D2) on that page.
+  // Content Editor (CE-015) on its prompts and its page, and a product or
+  // category sent from Product Visibility (ECOM-013) on its shopping
+  // questions and the product's page. A page sent from a Site Audit report
+  // (learning D2) on that page.
   if (
     action.kind === 'content_opportunity' ||
     action.kind === 'content_draft' ||
@@ -582,6 +584,8 @@ async function measureReading(
     action.kind === 'topic_opportunity' ||
     action.kind === 'mention_review' ||
     action.kind === 'traffic_pages' ||
+    action.kind === 'shopping_product' ||
+    action.kind === 'shopping_category' ||
     action.kind === 'audit_page'
   ) {
     const scope = await basketScope(action);

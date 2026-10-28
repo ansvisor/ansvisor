@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { OpenAiIndexCard } from './openai_index_card';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /** #1281: ChatGPT in the US, OpenAI's product index and the verified seller flag. */
 
@@ -12,8 +13,10 @@ import { OpenAiIndexCard } from './openai_index_card';
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
+  openUpgrade.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -24,11 +27,15 @@ afterEach(() => {
   container.remove();
 });
 
-function render(node: React.ReactNode) {
+function render(node: React.ReactNode, isLocked = false) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        {node}
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          {node}
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -123,6 +130,27 @@ describe('OpenAiIndexCard', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(
       "Couldn't save. Try again.",
     );
+  });
+
+  it('saves nothing on a read-only workspace: the box opens the upgrade dialog', async () => {
+    const change = vi.fn();
+    render(
+      <OpenAiIndexCard
+        read={{ directFeed: false, ownCards: 0 }}
+        loading={false}
+        canManage
+        onDirectFeedChange={change}
+      />,
+      true,
+    );
+    await act(async () => {
+      box().click();
+    });
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith(
+      'Changing the product feed setting needs a plan',
+    );
+    expect(change).not.toHaveBeenCalled();
+    expect(box().getAttribute('aria-checked')).toBe('false');
   });
 
   it('says so when the read failed', () => {

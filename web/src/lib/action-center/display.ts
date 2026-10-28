@@ -92,6 +92,17 @@ export function actionTexts(
       description: t('content_draft.description'),
     };
   }
+  // A product or category sent from Product Visibility (ECOM-013) is named after it.
+  if (
+    (action.kind === 'shopping_product' || action.kind === 'shopping_category') &&
+    typeof p.title === 'string' &&
+    p.title
+  ) {
+    return {
+      title: t(`${action.kind}.namedTitle`, { name: p.title }),
+      description: t(`${action.kind}.description`),
+    };
+  }
   // A live page linking products that no longer sell (shopping path, part 7)
   // is named after the page and how many.
   if (action.kind === 'shopping_links' && Array.isArray(p.products) && p.products.length) {
@@ -298,6 +309,8 @@ const PERSON_SENT_KINDS: string[] = [
   'traffic_pages',
   'audit_page',
   'content_draft',
+  'shopping_product',
+  'shopping_category',
   'shopping_links',
 ];
 

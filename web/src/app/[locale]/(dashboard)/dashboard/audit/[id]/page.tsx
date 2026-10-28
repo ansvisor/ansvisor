@@ -28,6 +28,7 @@ import {
 import { AuditReport } from '@/components/audit/audit-report';
 import { failingChecks } from '@/lib/audit/failing-checks';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 export default function AuditDetailPage() {
   const params = useParams();
@@ -35,6 +36,10 @@ export default function AuditDetailPage() {
   const t = useTranslations('audit');
   const router = useRouter();
   const tFailed = t('failed');
+  // A read-only workspace (plan not active): Re-audit and Delete open the
+  // upgrade dialog instead (Delete without its confirm).
+  const { guard, isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const [audit, setAudit] = useState<AuditResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -239,7 +244,7 @@ export default function AuditDetailPage() {
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 disabled={rerunning}
-                onClick={handleRefresh}
+                onClick={guard(handleRefresh, { action: tActions('runAudit') })}
                 aria-label={t('reaudit')}
               >
                 {rerunning ? (
@@ -248,7 +253,13 @@ export default function AuditDetailPage() {
                   <RefreshCw className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <Dialog>
+              <Dialog
+                onOpenChange={(open, details) => {
+                  if (!open || !isLocked) return;
+                  details.cancel();
+                  openUpgrade(tActions('deleteAudits'));
+                }}
+              >
                 <DialogTrigger
                   render={
                     <Button

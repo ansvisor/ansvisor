@@ -70,6 +70,9 @@ describe('publishPage', () => {
     expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'no_route' });
     answer(403, { code: 'not_in_workspace' });
     expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'workspace' });
+    // A read-only workspace (plan not active): the upgrade dialog's.
+    answer(402, { error: 'plan_limit', code: 'subscription_inactive' });
+    expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'subscription' });
     answer(500, { code: 'failed' });
     expect(await publishPage('d1', 'x')).toEqual({ ok: false, code: 'failed' });
   });

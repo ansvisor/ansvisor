@@ -21,6 +21,7 @@ const connectSignInSource = vi.fn();
 const categoryPages = vi.fn();
 const setCategoryPage = vi.fn();
 const listSignInAccounts = vi.fn();
+const matchBrandLater = vi.fn();
 let configured;
 let googleConfigured;
 
@@ -65,6 +66,9 @@ vi.mock('../lib/access.js', () => ({
 }));
 vi.mock('../lib/catalog/sources.js', () => ({
   syncSource: (...args) => syncSource(...args),
+}));
+vi.mock('../lib/catalog/card-match.js', () => ({
+  matchBrandLater: (...args) => matchBrandLater(...args),
 }));
 // The limiters' buckets would end this file's run part way: each request
 // notes the bucket it took instead.
@@ -157,6 +161,7 @@ beforeEach(async () => {
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'org-1' });
   buckets.length = 0;
   syncSource.mockReset().mockResolvedValue({ status: 'ok', counts: { items: 4 } });
+  matchBrandLater.mockReset().mockResolvedValue(undefined);
   googleConfigured = true;
   categoryPages.mockReset().mockResolvedValue([
     {
@@ -266,6 +271,16 @@ describe('POST /api/catalog/sources/:id/sync', () => {
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('recent');
     expect(syncSource).not.toHaveBeenCalled();
+    expect(matchBrandLater).not.toHaveBeenCalled();
+  });
+
+  it("matches the brand's shopping cards to the catalog it read, not after a failed read", async () => {
+    expect((await sync()).status).toBe(200);
+    expect(matchBrandLater).toHaveBeenCalledExactlyOnceWith(BRAND);
+    matchBrandLater.mockClear();
+    syncSource.mockResolvedValueOnce({ status: 'failed', error: 'The feed took too long.' });
+    expect((await sync()).status).toBe(200);
+    expect(matchBrandLater).not.toHaveBeenCalled();
   });
 });
 
@@ -282,6 +297,15 @@ describe('POST /api/catalog/upload', () => {
     expect(syncSource).toHaveBeenCalledWith(expect.objectContaining({ kind: 'upload' }), {
       text: 'id,title\n1,Boot',
     });
+  });
+
+  it("matches the brand's shopping cards once the file is in the catalog", async () => {
+    await upload('id,title\n1,Boot');
+    expect(matchBrandLater).toHaveBeenCalledExactlyOnceWith(BRAND);
+    matchBrandLater.mockClear();
+    syncSource.mockResolvedValueOnce({ status: 'format_error', error: 'Not a feed.' });
+    await upload('name\nAda');
+    expect(matchBrandLater).not.toHaveBeenCalled();
   });
 
   it('keeps one upload source a brand, with the format asked for', async () => {
@@ -415,6 +439,8 @@ describe('POST /api/catalog/sources', () => {
       userId: 'user-1',
     });
     expect(syncSource).toHaveBeenCalledWith(expect.objectContaining({ id: 'store-1' }));
+    // Its cards are matched once its first read is in.
+    await vi.waitFor(() => expect(matchBrandLater).toHaveBeenCalledExactlyOnceWith(BRAND));
   });
 
   it("answers the store's refusal in the person's words, and connects nothing for an analyst", async () => {

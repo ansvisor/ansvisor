@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { AlertCircle, ListFilter, Plus, Settings2, Sparkles, Target, X } from 'lucide-react';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 import {
@@ -75,6 +76,11 @@ function KpisContent({ brand }: { brand: Brand }) {
   const tCategories = useTranslations('actionCenter.categories');
 
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): Edit, Add and Remove open the
+  // upgrade dialog instead, and a brand that never had a KPI is shown the
+  // ready-made set unsaved, as a member is.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [result, setResult] = useState<KpiSnapshotsResult | null>(null);
   // A brand that never had a KPI opens on the ready-made set: saved for an
   // admin or manager (and said so once), shown unsaved to everyone else.
@@ -94,10 +100,13 @@ function KpisContent({ brand }: { brand: Brand }) {
     return { dayFrom: utcDay(days - 1), dayTo: utcDay() };
   }, [datePreset]);
 
-  const openDrawer = (key: KpiKey | null = null) => {
-    setEditKey(key);
-    setIsDrawerOpen(true);
-  };
+  const openDrawer = guard(
+    (key: KpiKey | null = null) => {
+      setEditKey(key);
+      setIsDrawerOpen(true);
+    },
+    { action: tActions('editKpis') },
+  );
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -106,7 +115,7 @@ function KpisContent({ brand }: { brand: Brand }) {
       let next = await getKpiSnapshots(brand.id, window);
       let unsaved: KpiSnapshot[] | null = null;
       if (!next.configured && next.everSetUp === false) {
-        if (canManage) {
+        if (canManage && !isLocked) {
           // Once per brand (00163): a failed setup leaves the empty state.
           // Read again either way: a colleague may have set it up meanwhile.
           // Only a setup that happened says so: a second read racing it (as
@@ -125,7 +134,7 @@ function KpisContent({ brand }: { brand: Brand }) {
     } finally {
       setIsLoading(false);
     }
-  }, [brand.id, window, canManage]);
+  }, [brand.id, window, canManage, isLocked]);
 
   useEffect(() => {
     void load();
@@ -229,7 +238,11 @@ function KpisContent({ brand }: { brand: Brand }) {
       {(justSetUp || previewing) && (
         <div className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <p className="flex-1">{previewing ? t('presets.preview') : t('presets.setUp')}</p>
+          <p className="flex-1">
+            {previewing
+              ? t(isLocked ? 'presets.previewReadOnly' : 'presets.preview')
+              : t('presets.setUp')}
+          </p>
           {justSetUp && (
             <button
               type="button"
@@ -331,7 +344,11 @@ function KpisContent({ brand }: { brand: Brand }) {
         <KpiTable
           kpis={visible}
           onEdit={previewing ? undefined : (key) => openDrawer(key)}
-          onRemove={previewing ? undefined : (key) => void handleRemove(key)}
+          onRemove={
+            previewing
+              ? undefined
+              : guard((key: KpiKey) => void handleRemove(key), { action: tActions('removeKpis') })
+          }
           busyKey={busyKey}
         />
       ) : kpis.length > 0 ? (

@@ -54,8 +54,20 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions, the eight person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(71);
+  it("holds copy for all sixty-two definitions, the ten person-sent kinds and the catalog check's", () => {
+    expect(ACTION_KINDS).toHaveLength(73);
+  });
+
+  it('names a product or category sent from Product Visibility after it (ECOM-013)', () => {
+    expect(
+      actionTexts(action({ kind: 'shopping_product', payload: { title: 'Ridge 30L Backpack' } }), t)
+        .title,
+    ).toBe('Get Ridge 30L Backpack on the shelf');
+    expect(
+      actionTexts(action({ kind: 'shopping_category', payload: { title: 'Hiking backpacks' } }), t)
+        .title,
+    ).toBe('Win “Hiking backpacks” in AI answers');
+    expect(actionContextTags(action({ kind: 'shopping_product', payload: {} }), t)).toEqual([]);
   });
 
   it('names pages sent from AI Traffic after their list and page, or how many (AT-006)', () => {
