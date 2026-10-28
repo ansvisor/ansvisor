@@ -713,6 +713,8 @@ function shoppingRow(t: T, shopping: ShoppingLinks | 'reading' | 'failed'): Row 
     detail: t('shopping.okDetail', {
       count: shopping.linked.length,
       category: shopping.categoryLinked ? 'yes' : 'no',
+      // Accepted by Merchant Center is said only where it was read.
+      merchantCenter: shopping.merchantCenter ? 'yes' : 'no',
     }),
   };
 }

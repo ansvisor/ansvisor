@@ -4460,7 +4460,7 @@
       },
       "shopping": {
         "title": "Shopping path",
-        "description": "Where this page sends readers. Picked by topic, stock and Merchant Center status. Prices and specs come from the catalog only.",
+        "description": "Where this page sends readers. Picked by topic and stock, and by Merchant Center status once it's connected. Prices and specs come from the catalog only.",
         "empty": "Pick the category page and the products in stock this page links, from your catalog.",
         "build": "Pick from the catalog",
         "rebuild": "Pick again",
@@ -4475,7 +4475,7 @@
         "noPath": {
           "not_a_shop": "Shopping paths are for brands that sell online. Set the site type to E-commerce in Brand settings.",
           "page_type": "This page type doesn't link products. Buying guides, best-of lists, comparisons, guides and blog posts do.",
-          "no_catalog": "There's no catalog to pick from yet. Connect Google Merchant Center or a product feed in Settings › Integrations.",
+          "no_catalog": "There's no catalog to pick from yet. Add a product feed URL or upload a file in Settings › Integrations › Product catalog.",
           "no_match": "Nothing in your catalog matches this page's topic. Name what you sell in the title or the brief's keywords, then pick again.",
           "other": "No shopping path fits this page right now. Try again later."
         },
@@ -5075,7 +5075,7 @@
           "reading": "Reading your catalog for the linked products' stock…",
           "failed": "Couldn't read your catalog: check the products the page links are in stock before you publish.",
           "ok": "Shopping links work",
-          "okDetail": "{count, plural, =0 {{category, select, yes {No product linked yet; the category page is.} other {No product linked yet.}}} one {# product linked, in stock and accepted by Merchant Center.} other {# products linked, in stock and accepted by Merchant Center.}}",
+          "okDetail": "{count, plural, =0 {{category, select, yes {No product linked yet; the category page is.} other {No product linked yet.}}} one {# product linked, {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}.} other {# products linked, {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}.}}",
           "bad": "{count, plural, one {# product link to remove or replace} other {# product links to remove or replace}}",
           "badDetail": "{list}{more, plural, =0 {} other { +# more}}. Remove or replace these links on the page: Brief › Shopping path lists products that sell.",
           "item": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
@@ -5182,7 +5182,7 @@
         "confirmCaseFull": "This page keeps 50 confirmations already.",
         "feed": {
           "none": "Price and stock aren't checked: no product feed is connected for this brand yet.",
-          "connect": "Connect a feed",
+          "connect": "Add a feed URL or a file",
           "notFound": "Price and stock aren't checked: no product in your feed has this page's URL or title."
         },
         "weightsFor": {
@@ -5582,8 +5582,8 @@
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
           "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
           "shopCategoryLink": "A link to the category page in Brief › Shopping path, so readers and AI answers reach the products.",
-          "shopProductLinks": "Links to the products in Brief › Shopping path that are in stock and accepted by Merchant Center: this many, or all of them when fewer are. A product card or grid counts.",
-          "shopLinksLive": "Every product the page links from its shopping path, or removed from it, is in stock, accepted by Merchant Center for free listings, and still in the catalog. Remove or replace a link to one that isn't, on the page.",
+          "shopProductLinks": "Links to the products in Brief › Shopping path that are {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}: this many, or all of them when fewer are. A product card or grid counts.",
+          "shopLinksLive": "Every product the page links from its shopping path, or removed from it, is in stock{merchantCenter, select, yes {, accepted by Merchant Center for free listings,} other {}} and still in the catalog. Remove or replace a link to one that isn't, on the page.",
           "definitionFirst": "The paragraph under the H1 says what the term is (\"X is …\") in a few words: what answer engines quote for \"what is\" prompts.",
           "measureSteps": "The longest numbered list on the page counts as the steps."
         },
@@ -7480,7 +7480,7 @@
     "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
     "tabOverview": "Overview",
     "tabMyProducts": "My Products",
-    "connectCatalog": "These are your products as AI shopping cards showed them. Connect your product catalog (Google Merchant Center or a product feed) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
+    "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",
     "colProductTitle": "Product Title",
     "colPlatforms": "Platforms",
@@ -8159,6 +8159,7 @@
     },
     "merchantCenter": {
       "description": "Your products and the problems Merchant Center reports for them. Google AI Overviews and AI Mode show products from it.",
+      "comingSoon": "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
       "title": "Merchant Center account for {brand}",
       "hint": "Pick the account that sells this brand's products. They're read every day into the brand's product catalog below, with their issues.",
       "noBrand": "Pick a brand to add its Merchant Center account.",
@@ -8261,6 +8262,7 @@
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
+    "integrations_comingSoon": "Coming soon",
     "integrations_disconnect": "Disconnect",
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",
