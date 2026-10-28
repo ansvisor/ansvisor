@@ -724,6 +724,49 @@ describe('checkShoppingLinks', () => {
     expect(action.status).toBe('completed');
   });
 
+  it('keeps an action open while the page links its products, though a rebuilt path dropped them', async () => {
+    const fake = setup();
+    catalog(fake, [['p3', [['in_stock', 'c']]]]);
+    for (const row of fake.rows('catalog_products')) {
+      row.url = `https://shop.example/products/${row.id}`;
+    }
+    fake.rows('content_drafts').push(
+      draft('d1', {
+        status: 'published',
+        published_url: 'https://shop.example/blog/boots',
+      }),
+    );
+    const live = (html) => vi.fn(async (url) => ({ url, status: 200, html: livePageHtml(html) }));
+    const page = `${link('p1')} ${link('p2')}`;
+    await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage: live(page) });
+    const [action] = fake.rows('actions');
+    expect(action.payload.productIds).toEqual(['p2']);
+
+    // A rebuild keeps the products in stock: sold-out p2 drops out of the path.
+    fake.rows('content_drafts')[0].shopping_path = path([product('p1'), product('p3')]);
+    const synced = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage: live(page) });
+    expect(synced).toMatchObject({ attention: 1, closed: 0 });
+    expect(action.status).toBe('new');
+    expect(fake.rows('content_shopping_checks')[0].bad).toEqual([
+      { id: 'p2', title: 'Boot p2', state: 'sold_out' },
+    ]);
+    const now = await checkShoppingDraft(BRAND, 'd1', {
+      db: fake.db,
+      now: NOW,
+      readPage: live(page),
+    });
+    expect(now).toMatchObject({ action: 'kept' });
+    expect(action.status).toBe('new');
+
+    const fixed = await checkShoppingDraft(BRAND, 'd1', {
+      db: fake.db,
+      now: NOW,
+      readPage: live(link('p1')),
+    });
+    expect(fixed).toMatchObject({ bad: [], action: 'closed' });
+    expect(action.status).toBe('completed');
+  });
+
   it(`opens none from a draft, and at most ${MAX_NEW_ACTIONS} a run`, async () => {
     const fake = setup();
     fake
