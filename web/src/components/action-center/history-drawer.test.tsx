@@ -162,7 +162,7 @@ describe('HistoryDrawer', () => {
       before,
       after,
       delta: after - before,
-      unit: 'count' as const,
+      unit: 'number' as const,
       direction: 'higher_is_better' as const,
     });
     render(
