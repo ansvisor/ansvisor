@@ -223,7 +223,7 @@ describe('WebflowCard', () => {
     await render();
     await typeToken('wf-token');
     expect(toast.error).toHaveBeenCalledWith(
-      'The token needs Sites: Read and CMS: Read and write. Generate one with them.',
+      'The token needs CMS: Read and write and Sites: Read-only. Generate a new one with them.',
     );
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
   });

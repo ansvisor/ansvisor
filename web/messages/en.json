@@ -8227,7 +8227,7 @@
         "forbidden": "Only admins and managers can change the Webflow connection.",
         "not_connected": "Connect Webflow first.",
         "auth_failed": "Webflow refused this token. Check it and try again.",
-        "missing_scopes": "The token needs Sites: Read and CMS: Read and write. Generate one with them.",
+        "missing_scopes": "The token needs CMS: Read and write and Sites: Read-only. Generate a new one with them.",
         "no_access": "The token doesn't reach this site or collection.",
         "no_site": "This token reaches no Webflow site.",
         "not_found": "That site or collection is gone. Pick another.",

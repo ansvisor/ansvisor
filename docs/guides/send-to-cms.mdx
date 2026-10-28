@@ -12,7 +12,11 @@ Ansvisor never publishes on its own. When your workflow tells Ansvisor where the
 
 ## Connect Webflow
 
-1. In Webflow, open your site's **Site settings → Apps & integrations → API access** and generate an **API token** with **Sites: Read** and **CMS: Read and write**.
+1. Get a site token in Webflow, as the **Webflow** card's steps say:
+   1. Go to **Site settings › Apps & Integrations › API access** and click **Generate API token**.
+   2. Enter a token name (4–80 characters), for example "Ansvisor connector".
+   3. Under **Permissions**, set **CMS** to **Read and write** and **Sites** to **Read-only**. Leave everything else on **No access**.
+   4. Click **Generate token** and copy the token. Webflow shows it only once.
 2. In Ansvisor, open **Settings → Integrations** with the brand selected, and paste the token in the **Webflow** card. It's checked with Webflow and kept by our connector service. It's never shown again, and Ansvisor's database doesn't hold it. Only **admins and managers** can connect Webflow, pick the collection, replace the token or disconnect; members see where the brand's pages go.
 3. Pick the **collection** your pages go to (your blog's, for example), then which of its fields takes what:
 
