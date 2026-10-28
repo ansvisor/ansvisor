@@ -46,7 +46,9 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
   usePathname: () => '/dashboard/insights',
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand: vi.fn(), setDemoHidden: vi.fn() }));
 
 const pass = ({ children }: { children: ReactNode }) => <>{children}</>;
 const none = () => null;
@@ -67,7 +69,10 @@ vi.mock('@/components/providers/brand-loader', () => ({
 vi.mock('@/components/providers/brand-guard', () => ({ BrandGuard: pass }));
 vi.mock('@/components/getting-started/page-opened', () => ({ GettingStartedPageOpened: none }));
 let orgBrands: { id: string; isDemo?: boolean; demoHiddenAt?: string | null }[] = [];
-vi.mock('@/lib/actions/brand', () => ({ getBrands: async () => orgBrands }));
+vi.mock('@/lib/actions/brand', () => ({
+  getBrands: async () => orgBrands,
+  getBrandById: vi.fn(),
+}));
 
 const { default: DashboardLayout } = await import('./layout');
 
@@ -194,5 +199,19 @@ describe('the dashboard layout and the demo brand', () => {
     orgBrands = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: '2026-10-28T00:00:00Z' }];
     expect(await open()).toBeNull();
     expect(loaded.map((b) => b.id)).toEqual(['b1']);
+  });
+
+  it('lets an admin who never subscribed explore the demo brand instead of the plan step', async () => {
+    org = { ...org, subscription_status: null, stripe_subscription_id: null };
+    orgBrands = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: null }];
+    expect(await open()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Page content');
+    // Read-only on the own brand, with the way to the demo.
+    expect(band()?.textContent).toContain('Your workspace is read-only.');
+    expect([...band()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'See plans',
+      'See the demo',
+    ]);
   });
 });

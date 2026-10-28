@@ -289,6 +289,17 @@
       "hide": "Hide the demo brand",
       "failed": "Couldn't change the demo brand. Try again."
     },
+    "explore": {
+      "failed": "Couldn't open the demo brand. Try again."
+    },
+    "onboarding": {
+      "or": "or",
+      "title": "Not ready to add a card? Explore a demo brand",
+      "body": "See Ansvisor with sample data: prompts, AI answers, content and reports. No card needed. {brand} stays saved, and tracking starts when you pick a plan.",
+      "yourBrand": "Your brand",
+      "cta": "Explore the demo"
+    },
+    "seeTheDemo": "See the demo",
     "chat": {
       "soon": "Soon (next week)",
       "note": "Chat arrives next week. This is a preview of it.",

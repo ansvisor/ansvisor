@@ -12,18 +12,28 @@ import messages from '../../../../../../messages/en.json';
  */
 
 /** The brand's rows the resume reads; prompt sets decide step 3 or step 5. */
-const db = vi.hoisted(() => ({ promptSets: [] as { id: string }[] }));
+const db = vi.hoisted(() => ({
+  promptSets: [] as { id: string }[],
+  // Onboarded already, with no active plan: the resume opens the plan step.
+  onboarded: false,
+  // The filters each brands read was made with.
+  brandFilters: [] as [string, unknown][][],
+}));
 vi.mock('@/lib/supabase/client', () => {
   /** A query that answers `data` however it ends (single, limit, or awaited). */
-  const query = (data: unknown) => {
+  const query = (data: unknown, filters?: [string, unknown][]) => {
     const q: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'limit', 'order', 'update']) q[m] = () => q;
+    for (const m of ['select', 'limit', 'order', 'update']) q[m] = () => q;
+    q.eq = (column: string, value: unknown) => {
+      filters?.push([column, value]);
+      return q;
+    };
     q.single = async () => ({ data });
     q.then = (resolve: (v: unknown) => unknown) => resolve({ data });
     return q;
   };
   const rows: Record<string, () => unknown> = {
-    profiles: () => ({ organization_id: 'org-1', onboarding_completed: false }),
+    profiles: () => ({ organization_id: 'org-1', onboarding_completed: db.onboarded }),
     brands: () => [
       {
         id: 'b1',
@@ -38,7 +48,11 @@ vi.mock('@/lib/supabase/client', () => {
   return {
     createClient: () => ({
       auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
-      from: (table: string) => query(rows[table]?.() ?? null),
+      from: (table: string) => {
+        const filters: [string, unknown][] = [];
+        if (table === 'brands') db.brandFilters.push(filters);
+        return query(rows[table]?.() ?? null, filters);
+      },
     }),
   };
 });
@@ -93,6 +107,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   db.promptSets = [];
+  db.onboarded = false;
+  db.brandFilters = [];
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -151,5 +167,34 @@ describe('setup suggestions used up for the day', () => {
       'Setup suggestions are used up for today. Add your own prompts to each topic below to continue.',
     );
     expect(text()).not.toContain("Couldn't generate prompt suggestions");
+  });
+});
+
+describe('the plan step', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ trialAvailable: true, trialDays: 14 })),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('offers the demo brand under the plans, for someone not ready to add a card', async () => {
+    db.onboarded = true;
+    await render();
+    expect(text()).toContain('One last step');
+    const card = container.querySelector('[data-slot="explore-demo"]')!;
+    expect(card.textContent).toContain('Not ready to add a card? Explore a demo brand');
+    // The own brand, read without the demo brand.
+    expect(card.textContent).toContain('Acme stays saved');
+    expect(db.brandFilters).toContainEqual([
+      ['organization_id', 'org-1'],
+      ['is_demo', false],
+    ]);
+    expect(button('Explore the demo')).toBeDefined();
   });
 });

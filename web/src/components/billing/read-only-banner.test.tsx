@@ -16,7 +16,12 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
   usePathname: () => pathname,
+  useRouter: () => ({ push, refresh: vi.fn() }),
 }));
+const push = vi.hoisted(() => vi.fn());
+const ensureDemoBrand = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand, setDemoHidden: vi.fn() }));
+vi.mock('@/lib/actions/brand', () => ({ getBrandById: vi.fn() }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -107,6 +112,34 @@ describe('ReadOnlyBanner', () => {
   it('offers every member See plans once the plan ended', async () => {
     await render({ role: 'analyst' });
     expect(seePlans()).toBeDefined();
+  });
+
+  const seeTheDemo = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'See the demo');
+
+  it('offers an admin or a manager See the demo once the plan ended', async () => {
+    await render();
+    expect(seeTheDemo()).toBeDefined();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ role: 'manager' });
+    expect(seeTheDemo()).toBeDefined();
+  });
+
+  it('opens the demo brand from See the demo', async () => {
+    ensureDemoBrand.mockResolvedValue({ ok: false, status: 500 });
+    await render();
+    await act(async () => seeTheDemo()!.click());
+    expect(ensureDemoBrand).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no demo while a payment is being retried, nor to a member with none to see', async () => {
+    await render({ status: 'past_due' });
+    expect(seeTheDemo()).toBeUndefined();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ role: 'analyst' });
+    expect(seeTheDemo()).toBeUndefined();
   });
 
   it('shows nothing while the plan is active', async () => {

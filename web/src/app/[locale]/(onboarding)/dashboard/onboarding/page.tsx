@@ -78,6 +78,7 @@ import {
   type SuggestFailure,
 } from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
+import { ExploreDemoCard } from '@/components/onboarding/explore-demo-card';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { DASHBOARD_HOME } from '@/config/home';
 
@@ -1061,10 +1062,12 @@ export default function OnboardingPage() {
   async function loadResumedPreview(orgId: string) {
     try {
       const supabase = createClient();
+      // The person's own brand, not the demo brand they may have explored.
       const { data: brands } = await supabase
         .from('brands')
         .select('id, name, brand_domains(domain, is_primary)')
         .eq('organization_id', orgId)
+        .eq('is_demo', false)
         .limit(1);
       const b = brands?.[0];
       if (!b) return;
@@ -1870,6 +1873,11 @@ export default function OnboardingPage() {
                 ? `Your card is charged on day ${trialDays + 1}, unless you cancel in Settings before then.`
                 : 'Cancel anytime.'}
           </p>
+
+          {/* No card yet: the demo brand, with sample data. */}
+          <ExploreDemoCard
+            brandName={createdBrand?.name ?? resumedPreview?.brandName ?? (brandName || null)}
+          />
         </div>
 
         <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-8">

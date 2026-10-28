@@ -18,7 +18,10 @@ const ACTIVE_STATUSES = new Set(['active', 'trialing']);
  *   - active / trialing                 → 'ok'           (full access)
  *   - never subscribed + admin          → 'choose_plan'  (a new account that left
  *                                                         onboarding before its plan
- *                                                         step: back to that step)
+ *                                                         step: back to that step),
+ *                                                         unless the org has a demo
+ *                                                         brand: 'read_only', so the
+ *                                                         admin explores the demo
  *   - anything else                     → 'read_only'    (a trial that ended, a
  *                                                         canceled or unpaid plan:
  *                                                         every page opens, no
@@ -41,12 +44,24 @@ export async function evaluateSubscriptionAccess(
   role: TeamRole,
   subscriptionStatus: string | null,
   everSubscribed: boolean,
+  {
+    hasDemoBrand = false,
+  }: {
+    /**
+     * The organization has a demo brand (onboarding's "Explore the demo"): an
+     * admin who never subscribed browses it read-only instead of going back
+     * to the plan step.
+     */
+    hasDemoBrand?: boolean;
+  } = {},
 ): Promise<SubscriptionAccess> {
   if (subscriptionStatus && ACTIVE_STATUSES.has(subscriptionStatus)) {
     return { state: 'ok' };
   }
   if (role === 'admin') {
-    return everSubscribed ? { state: 'read_only', adminName: null } : { state: 'choose_plan' };
+    return everSubscribed || hasDemoBrand
+      ? { state: 'read_only', adminName: null }
+      : { state: 'choose_plan' };
   }
 
   const { data: owner } = await supabase

@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2, PlayCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { usePathname } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -10,15 +10,19 @@ import {
   useAskAdmin,
   useUpgradeDialog,
 } from '@/components/providers/upgrade-dialog-provider';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useExploreDemo } from '@/hooks/use-explore-demo';
 import type { ReadOnlyReason } from '@/lib/billing/subscription-access';
 
 /**
  * A thin band across the top of the dashboard while the workspace is
  * read-only: that it is, and the way out — See plans (the upgrade dialog; not
  * on Billing, which has them) or, for a payment being retried, Update payment
- * method for admins and an admin to ask for everyone else. Nothing while the
- * plan is active.
+ * method for admins and an admin to ask for everyone else. Once the plan
+ * ended, See the demo opens the demo brand (sample data) beside it, for an
+ * admin or a manager, or anyone once the demo brand is listed. Nothing while
+ * the plan is active.
  */
 export function ReadOnlyBanner() {
   const state = useUpgradeDialog();
@@ -37,10 +41,14 @@ function Band({
   openUpgrade: () => void;
 }) {
   const t = useTranslations('readOnly');
-  const { canAdmin } = useUserRole();
+  const tDemo = useTranslations('demo');
+  const { canAdmin, canManage } = useUserRole();
   const pathname = usePathname();
   const ask = useAskAdmin(reason, adminName);
   const payment = reason === 'payment_failed';
+  const { demoBrand } = useDemoBrand();
+  const { explore, opening } = useExploreDemo();
+  const seeTheDemo = !payment && (canManage || (demoBrand !== null && !demoBrand.hidden));
 
   return (
     <div
@@ -57,6 +65,12 @@ function Band({
       ) : pathname.startsWith(CHOOSE_PLAN_HREF) ? null : (
         <Button variant="outline" size="sm" onClick={() => openUpgrade()}>
           {t('banner.seePlans')}
+        </Button>
+      )}
+      {seeTheDemo && (
+        <Button variant="outline" size="sm" onClick={() => void explore()} disabled={opening}>
+          {opening ? <Loader2 className="animate-spin" aria-hidden /> : <PlayCircle aria-hidden />}
+          {tDemo('seeTheDemo')}
         </Button>
       )}
     </div>

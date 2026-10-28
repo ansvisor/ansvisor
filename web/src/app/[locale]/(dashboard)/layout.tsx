@@ -50,13 +50,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
     getBrands(profile.organization_id),
   ]);
 
+  // The organization's demo brand (sample data, 00380), shown or hidden: the
+  // dialog's offer reads whether the organization ever subscribed. Hidden
+  // (after a plan was bought), it is out of every brand list until it is
+  // shown again from the brand switcher.
+  const demoBrand = brands.find((b) => b.isDemo) ?? null;
+  const listedBrands = brands.filter((b) => !(b.isDemo && b.demoHiddenAt));
+
   // Cloud mode: when the subscription isn't active/trialing, the dashboard is
   // read-only — every page opens (Billing included, to choose a plan), and an
   // action opens the upgrade dialog instead of running. Only an admin of a
   // new account that never had a subscription goes back to onboarding's plan
-  // step, where its trial starts. An org row that couldn't be read decides
-  // nothing: no redirect and no lock (the API still refuses a lapsed plan's
-  // changes with 402).
+  // step, where its trial starts — unless the organization has a demo brand
+  // to explore (onboarding's "Explore the demo"). An org row that couldn't be
+  // read decides nothing: no redirect and no lock (the API still refuses a
+  // lapsed plan's changes with 402).
   const subscriptionStatus = (org?.subscription_status as string | null) ?? null;
   let subscriptionActive = true;
   let adminName: string | null = null;
@@ -67,6 +75,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       role,
       subscriptionStatus,
       Boolean(org?.stripe_subscription_id),
+      { hasDemoBrand: demoBrand !== null },
     );
     if (access.state === 'choose_plan') {
       redirect('/dashboard/onboarding');
@@ -78,13 +87,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const planId = (org?.plan ?? 'starter') as PlanId;
-
-  // The organization's demo brand (sample data, 00380), shown or hidden: the
-  // dialog's offer reads whether the organization ever subscribed. Hidden
-  // (after a plan was bought), it is out of every brand list until it is
-  // shown again from the brand switcher.
-  const demoBrand = brands.find((b) => b.isDemo) ?? null;
-  const listedBrands = brands.filter((b) => !(b.isDemo && b.demoHiddenAt));
 
   // Effective API-model allowlist for the client (null = all allowed).
   // Enterprise orgs can be switched on per customer via
