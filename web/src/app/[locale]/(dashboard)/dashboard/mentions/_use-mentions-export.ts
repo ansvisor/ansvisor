@@ -14,6 +14,7 @@ import { mentionsQuery, type MentionsFilters } from '@/lib/mentions-filters';
 import { mentionPlatformLabel, wholeNet } from '@/lib/mentions-headline';
 import { NO_COMPETITOR, type MentionsList, type MentionsTableState } from '@/lib/mentions-list';
 import {
+  changeBasis,
   isLowSample,
   LOW_SAMPLE_MENTIONS,
   mentionRate,
@@ -176,7 +177,10 @@ export function useMentionsExport({
 
   /** The Overview's figures as text: the summary line, the KPIs with their n, and the filters. */
   const summaryText = (overview: MentionsOverview): string => {
-    const { current: cur, previous: prev } = overview;
+    const { current: cur } = overview;
+    // The change as the Total mentions card takes it: on the prompts both
+    // windows answered (changeBasis), as Insights does, not all of each.
+    const { current: base, previous: prev } = changeBasis(overview);
     const plain = (key: string, values: Record<string, string | number>) =>
       tHeadline.markup(key, { ...values, b: (chunks) => chunks, tone: (chunks) => chunks });
     const line = (label: string, value: string, change?: string) =>
@@ -186,7 +190,7 @@ export function useMentionsExport({
 
     const values = filterValues();
     // As the Total mentions card counts them: every time a response names the brand.
-    const change = relativeChange(cur.occurrences, prev.occurrences);
+    const change = relativeChange(base.occurrences, prev.occurrences);
     const total = upIsGood(change === null ? null : Math.round(change), { percent: true, locale });
     const rate = mentionRate(cur);
     const net = wholeNet(cur);

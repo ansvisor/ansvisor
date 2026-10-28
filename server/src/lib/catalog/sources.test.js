@@ -119,6 +119,25 @@ describe('syncSource', () => {
     // A broken feed doesn't mark the catalog removed.
     expect(fake.rows('catalog_products').every((p) => p.removed_at === null)).toBe(true);
   });
+
+  it("checks the brand's pages' shopping links after a sync that read the catalog, only then", async () => {
+    const afterSync = vi.fn();
+    await syncSource(source, {
+      db: fake.db,
+      now: NOW,
+      fetch: async () => ({ html: fixture('google-feed.xml') }),
+      afterSync,
+    });
+    expect(afterSync).toHaveBeenCalledWith('brand-1', { db: fake.db });
+    afterSync.mockClear();
+    await syncSource(source, {
+      db: fake.db,
+      now: NOW,
+      fetch: async () => ({ html: 'name,email\nAda,ada@example.com' }),
+      afterSync,
+    });
+    expect(afterSync).not.toHaveBeenCalled();
+  });
 });
 
 describe('syncSource for a store (00282)', () => {

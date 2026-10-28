@@ -129,6 +129,7 @@ const OPTIONS = {
 
 let container: HTMLDivElement;
 let root: Root;
+const onOpenChange = vi.fn();
 
 async function render(siteType: SiteType = 'b2b', preset: DialogPreset | null = null) {
   await act(async () => {
@@ -136,7 +137,7 @@ async function render(siteType: SiteType = 'b2b', preset: DialogPreset | null = 
       <NextIntlClientProvider locale="en" messages={messages}>
         <NewContentDialog
           open
-          onOpenChange={vi.fn()}
+          onOpenChange={onOpenChange}
           brandId="b1"
           siteType={siteType}
           onSent={onSent}
@@ -181,6 +182,7 @@ beforeEach(() => {
   startAgentWriting.mockReset();
   agentWriteRequest.mockReset().mockResolvedValue({ sources: 'kept', rules: [] });
   onSent.mockReset();
+  onOpenChange.mockReset();
   toast.warning.mockReset();
   push.mockReset();
   toast.error.mockReset();
@@ -229,9 +231,13 @@ describe('New content', () => {
     await render();
     // A single column no wider than the dialog: content can't widen it. No
     // taller than the window either: it scrolls, its buttons kept in view.
+    // Held at the top: what lands later grows it downwards.
     const dialog = document.querySelector('[data-slot="dialog-content"]')!;
     expect(dialog.className).toContain('grid-cols-[minmax(0,1fr)]');
-    expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+    expect(dialog.className).toContain('max-h-[88dvh]');
+    expect(dialog.className).toContain('top-[6dvh]');
+    expect(dialog.className).toContain('translate-y-0');
+    expect(dialog.className).not.toContain('top-1/2');
     expect(dialog.className).toContain('overflow-y-auto');
     expect(document.querySelector('[data-slot="dialog-footer"]')!.className).toContain('sticky');
 
@@ -919,6 +925,15 @@ describe('New content', () => {
       expect(button('Open editor')).toBeDefined();
     });
 
+    it('asks who does it before the Overview, which grows as it lands', async () => {
+      await startNewPage();
+      const who = document.querySelector('[aria-labelledby="start-who"]')!;
+      const overview = [...document.querySelectorAll('label')].find(
+        (l) => l.textContent === 'Overview',
+      )!;
+      expect(who.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('hands the draft to the Content Agent, and opens the editor to watch it work', async () => {
       startAgentWriting.mockResolvedValue({ started: true });
       await startNewPage();
@@ -939,6 +954,8 @@ describe('New content', () => {
       // At once, no toast to click: the editor shows the agent at work.
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
       expect(toast.success).not.toHaveBeenCalled();
+      // The dialog stays until the editor opens: no page under it meanwhile.
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
     });
 
     it('aims the agent at a pasted page’s own length (F)', async () => {
@@ -982,6 +999,7 @@ describe('New content', () => {
       expect(onSent).toHaveBeenCalled();
       // Nothing to watch: the editor isn't opened, the toast offers the draft.
       expect(push).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
     it('says the draft is the person’s to write when the agent is busy with another', async () => {
