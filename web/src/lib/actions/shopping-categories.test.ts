@@ -6,6 +6,20 @@ const BRAND = '33333333-3333-3333-3333-333333333333';
 
 let tables: Record<string, Record<string, unknown>[]>;
 let stats: Record<string, unknown>[];
+// The pages of catalog_product_ai_stats read.
+let statsPages: [number, number][];
+
+/** An RPC's rows, a page of at most 1000 as PostgREST gives them. */
+function rpcRows() {
+  let range: [number, number] = [0, 999];
+  const q = {
+    order: () => q,
+    range: (from: number, to: number) => ((range = [from, to]), statsPages.push(range), q),
+    then: (resolve: (value: unknown) => void) =>
+      resolve({ data: stats.slice(range[0], Math.min(range[1], range[0] + 999) + 1), error: null }),
+  };
+  return q;
+}
 
 function query(table: string) {
   let range: [number, number] | undefined;
@@ -31,7 +45,7 @@ function query(table: string) {
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: query,
-    rpc: async () => ({ data: stats, error: null }),
+    rpc: () => rpcRows(),
   })),
 }));
 
@@ -40,6 +54,7 @@ const { getShoppingCategories } = await import('./shopping');
 beforeEach(() => {
   tables = {};
   stats = [];
+  statsPages = [];
 });
 
 describe('getShoppingCategories', () => {
@@ -89,5 +104,25 @@ describe('getShoppingCategories', () => {
         needsAttention: false,
       },
     ]);
+  });
+
+  it("reads every page of the products' AI revenue, past PostgREST's 1000 rows", async () => {
+    tables.catalog_categories = [{ id: 'packs', name: 'Hiking backpacks' }];
+    tables.catalog_products = [{ id: 'p1200' }];
+    tables.catalog_product_categories = [{ product_id: 'p1200', category_id: 'packs' }];
+    stats = Array.from({ length: 1201 }, (_, i) => ({
+      product_id: `p${i}`,
+      ai_visits: 1,
+      orders: 1,
+      revenue: '10.00',
+      currency: 'USD',
+    }));
+    const [packs] = (await getShoppingCategories(BRAND, { datePreset: '30d' }))!;
+    expect(statsPages).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    // The 1,201st product's revenue, past the first page.
+    expect(packs.revenue).toEqual({ value: 10, currency: 'USD' });
   });
 });

@@ -1588,13 +1588,9 @@ export async function getShoppingCategories(
       ),
     ),
     supabase.from('competitors').select('id, name, domain').eq('brand_id', brandId),
-    supabase.rpc('catalog_product_ai_stats', {
-      p_brand_id: brandId,
-      p_from: from ?? daysAgoIso(90),
-    }),
+    readProductAiStats(supabase, brandId, from ?? daysAgoIso(90)),
   ]);
   if (competitors.error) throw new Error(competitors.error.message);
-  if (stats.error) throw new Error(stats.error.message);
 
   const liveIds = new Set(live.map((row) => row.id));
   const productsOf = new Map<string, string[]>();
@@ -1630,7 +1626,7 @@ export async function getShoppingCategories(
         (competitors.data ?? []).map((c) => [c.id, { name: c.name, domain: c.domain }]),
       ),
       revenueOf: new Map(
-        (stats.data ?? []).flatMap((row) =>
+        stats.flatMap((row) =>
           row.orders && row.revenue !== null
             ? [[row.product_id, { value: Number(row.revenue), currency: row.currency }] as const]
             : [],
