@@ -15,6 +15,7 @@ import {
   parseGettingStartedFacts,
   type GettingStartedStatus,
 } from '@/lib/getting-started/steps';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /** The brand's steps, or null for a brand the caller can't see. */
 export async function getGettingStarted(brandId: string): Promise<GettingStartedStatus | null> {
@@ -28,7 +29,8 @@ export async function getGettingStarted(brandId: string): Promise<GettingStarted
 /**
  * One of the explore pages was opened. Recorded once the brand's first
  * answers are in, so a page opened while it had nothing to show doesn't
- * count. True when the step is recorded, now or before.
+ * count. True when the step is recorded, now or before. Open while the
+ * workspace is read-only: a trace of reading, which changes nothing.
  */
 export async function markGettingStartedPageOpened(
   brandId: string,
@@ -46,6 +48,7 @@ export async function markGettingStartedPageOpened(
 
 /** Skip an optional step (Search Console, Analytics). It counts as complete. */
 export async function skipGettingStartedStep(brandId: string, step: string): Promise<void> {
+  await assertWritable({ brandId });
   if (!GETTING_STARTED_STEPS.some((s) => s.key === step && s.optional)) {
     throw new Error('not an optional step');
   }
@@ -66,6 +69,7 @@ export async function skipGettingStartedStep(brandId: string, step: string): Pro
  * steps finished meanwhile still count.
  */
 export async function startGettingStarted(brandId: string): Promise<void> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('getting_started')
@@ -81,6 +85,7 @@ export async function startGettingStarted(brandId: string): Promise<void> {
  * already done stay done, and Start brings it back.
  */
 export async function skipGettingStarted(brandId: string): Promise<void> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('getting_started')

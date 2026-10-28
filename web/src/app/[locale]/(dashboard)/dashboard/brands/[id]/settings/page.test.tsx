@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Brand } from '@/types';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 (
   globalThis as typeof globalThis & {
@@ -68,9 +69,11 @@ vi.mock('@/hooks/use-feature-gate', () => ({
 
 const setBrandShoppingMode = vi.hoisted(() => vi.fn());
 const updateBrand = vi.hoisted(() => vi.fn());
+const deleteBrand = vi.hoisted(() => vi.fn());
+const setBrandActive = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({
-  deleteBrand: vi.fn(),
-  setBrandActive: vi.fn(),
+  deleteBrand,
+  setBrandActive,
   setBrandShoppingMode,
   updateBrand,
 }));
@@ -80,8 +83,9 @@ vi.mock('@/lib/actions/brand-domain', () => ({
 }));
 
 const getCompetitors = vi.hoisted(() => vi.fn());
+const addCompetitor = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/competitor', () => ({
-  addCompetitor: vi.fn(),
+  addCompetitor,
   deleteCompetitor: vi.fn(),
   getCompetitors: (...args: unknown[]) => getCompetitors(...args),
 }));
@@ -335,8 +339,32 @@ describe('brand settings role gates', () => {
     await openTab('settings.dangerTab');
     expect(fieldset().disabled).toBe(false);
     expect(container.textContent).not.toContain('settings.adminsOnlyDelete');
+    expect(container.textContent).not.toContain('settings.demoCantDelete');
 
     await act(async () => root.unmount());
+  });
+
+  it('never deletes the demo brand: it says to hide it instead', async () => {
+    brand.isDemo = true;
+    try {
+      const { container, root, openTab, fieldset } = await render();
+      await openTab('settings.dangerTab');
+      const panel = container.querySelector('[role="tabpanel"]:not([hidden])')!;
+      expect(panel.querySelector('[data-slot="demo-cant-delete"]')?.textContent).toBe(
+        'settings.demoCantDelete',
+      );
+      expect(panel.querySelector('input')).toBeNull();
+      expect(fieldset().disabled).toBe(true);
+      const remove = [...panel.querySelectorAll('button')].find(
+        (b) => b.textContent === 'settings.deleteButton',
+      )!;
+      expect(remove.disabled).toBe(true);
+      await act(async () => remove.click());
+      expect(deleteBrand).not.toHaveBeenCalled();
+      await act(async () => root.unmount());
+    } finally {
+      brand.isDemo = undefined;
+    }
   });
 });
 
@@ -383,5 +411,96 @@ describe('Brand facts tab (Quality CE-047)', () => {
     expect(labels).not.toContain('settings.facts.tab');
     expect(selected).toBe('settings.generalTab');
     expect(container.querySelector('[data-testid="brand-facts"]')).toBeNull();
+  });
+});
+
+// A read-only workspace (plan not active): the settings show; every change
+// opens the upgrade dialog, named (next-intl is mocked: the label's key).
+describe('brand settings on a read-only workspace', () => {
+  beforeEach(() => getCompetitors.mockResolvedValue([]));
+  const openUpgrade = vi.fn();
+
+  async function render(isLocked: boolean) {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <Suspense>
+            <BrandSettingsPage params={Promise.resolve({ id: brand.id })} />
+          </Suspense>
+        </UpgradeDialogContext.Provider>,
+      );
+    });
+    const button = (name: string) =>
+      [...container.querySelectorAll<HTMLElement>('button')].find(
+        (b) => b.textContent?.trim() === name,
+      )!;
+    const openTab = async (name: string) => {
+      const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+        (el) => el.textContent?.trim() === name,
+      )!;
+      await act(async () => {
+        tab.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        tab.click();
+      });
+    };
+    const type = async (input: HTMLInputElement, value: string) => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          value,
+        );
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+    const panel = () => container.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden])')!;
+    return { container, root, button, openTab, type, panel };
+  }
+
+  it('saves, pauses and adds nothing, each opening the upgrade dialog, but deletes', async () => {
+    openUpgrade.mockReset();
+    deleteBrand.mockResolvedValue({ deleted: true });
+    const { container, root, button, openTab, type, panel } = await render(true);
+
+    await act(async () => button('settings.saveChanges').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('saveBrandSettings');
+    await act(async () => (container.querySelector('#shopping-mode') as HTMLElement).click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('changeShoppingMode');
+    await act(async () => button('Pause tracking').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('pauseBrands');
+
+    await openTab('Competitors');
+    await type(
+      panel().querySelector<HTMLInputElement>('input[placeholder="Competitor name"]')!,
+      'Rival',
+    );
+    await act(async () => button('Add').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('addCompetitors');
+
+    await openTab('settings.dangerTab');
+    await type(panel().querySelector<HTMLInputElement>('input')!, 'Acme');
+    await act(async () => button('settings.deleteButton').click());
+    expect(deleteBrand).toHaveBeenCalledOnce();
+
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
+    expect(updateBrand).not.toHaveBeenCalled();
+    expect(setBrandShoppingMode).not.toHaveBeenCalled();
+    expect(setBrandActive).not.toHaveBeenCalled();
+    expect(addCompetitor).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it('pauses the brand on an active plan', async () => {
+    openUpgrade.mockReset();
+    setBrandActive.mockResolvedValue(undefined);
+    const { root, button } = await render(false);
+    await act(async () => button('Pause tracking').click());
+    expect(setBrandActive).toHaveBeenCalledWith(brand.id, false);
+    expect(openUpgrade).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
   });
 });

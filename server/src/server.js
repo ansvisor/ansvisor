@@ -12,6 +12,12 @@ import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import { requireActiveSubscription } from './middleware/subscription.js';
+import {
+  DEMO_BRAND,
+  isDemoBrand,
+  isDemoBrandRow,
+  refuseDemoBrandWrites,
+} from './middleware/demo-brand.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
@@ -32,6 +38,7 @@ import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
+import { sweepIdleDemoBrands } from './lib/demo/idle-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
@@ -295,6 +302,12 @@ async function runDailyTracking() {
     logger.error({ err }, '[content-history] daily prune failed');
   });
 
+  // Demo brands nobody opened for two weeks (00380): their sample rows go,
+  // the brand row stays, and the next visit builds them again.
+  sweepIdleDemoBrands().catch((err) => {
+    logger.error({ err }, '[demo] idle sweep failed');
+  });
+
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
   // Then the products removed from their source over 90 days ago are
   // deleted: after the sweep, so it isn't deleting while a sync brings one back.
@@ -384,7 +397,8 @@ app.post('/api/internal/daily-tracking', async (req, res) => {
 // key belongs to the same org as the opportunity. So this endpoint just
 // trusts the secret and runs the LLM. Always passes force=true to bypass
 // the cached-brief early-return (MCP callers want a fresh brief; for
-// cached reads they should use get_content_opportunity instead).
+// cached reads they should use get_content_opportunity instead). Never on
+// a demo brand (00380): 402 demo_brand, as the API answers.
 app.post('/api/internal/content/:id/brief', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -393,6 +407,9 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
 
   try {
     const { id } = req.params;
+    if (await isDemoBrandRow('content_opportunities', id)) {
+      return res.status(402).json(DEMO_BRAND);
+    }
     const { force, model } = req.body || {};
     const result = await generateBriefForOpportunity(id, {
       force: Boolean(force),
@@ -425,7 +442,7 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
 // before reaching here, so this endpoint just trusts the secret, resolves the
 // brand's org, enforces the monthly Site Audit quota, and starts the detached
 // audit job — returning the new `running` audit (the MCP caller then polls
-// get_site_audit for the result).
+// get_site_audit for the result). Never on a demo brand (00380).
 app.post('/api/internal/site-audits', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -437,6 +454,7 @@ app.post('/api/internal/site-audits', async (req, res) => {
     if (!brandId || !url) {
       return res.status(400).json({ success: false, message: 'brandId and url are required' });
     }
+    if (await isDemoBrand(brandId)) return res.status(402).json(DEMO_BRAND);
     const audit = await startSiteAuditForBrand(brandId, url);
     return res.status(202).json({ success: true, audit });
   } catch (err) {
@@ -493,6 +511,7 @@ app.get('/api/internal/site-audit-quota', async (req, res) => {
 // before reaching here and passes the key's user, so this endpoint trusts the
 // secret, checks the user's plan includes prompt_improve and creates the
 // Action Center action exactly as the Improve tab's "Send Actions" does.
+// Never on a demo brand's prompt (00380).
 app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -503,6 +522,9 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
     const { userId, ...body } = req.body || {};
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+    if (await isDemoBrandRow('prompts', req.params.promptId)) {
+      return res.status(402).json(DEMO_BRAND);
     }
     const result = await sendImproveActionForKeyUser({
       promptId: req.params.promptId,
@@ -617,10 +639,18 @@ app.use('/webhooks/content', webhookContentCallbackRoutes);
 app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 
 // --- Authenticated API routes ---
-// Read-only once the plan has ended (middleware/subscription.js): checked
-// once the person is known, before any route. The webhooks, callbacks and
-// internal endpoints above never reach it.
-app.use('/api', Middleware.decodeToken.bind(Middleware), requireActiveSubscription, routes);
+// The demo brand is read-only (middleware/demo-brand.js), and so is a
+// workspace whose plan has ended (middleware/subscription.js): both checked
+// once the person is known, before any route, the demo brand first so its
+// answer is the same with a plan or without one. The webhooks, callbacks and
+// internal endpoints above never reach them.
+app.use(
+  '/api',
+  Middleware.decodeToken.bind(Middleware),
+  refuseDemoBrandWrites,
+  requireActiveSubscription,
+  routes,
+);
 
 // Health check
 app.get('/', (req, res) => {

@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { authorInput, type AuthorInput, type AuthorsRead } from '@/lib/content/authors';
 import { createClient } from '@/lib/supabase/server';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * Settings › Authors (Content Editor Quality spec §9, CE-037): the real
@@ -99,6 +100,7 @@ export async function getContentAuthors(
 export async function saveContentAuthor(
   input: AuthorInput,
 ): Promise<{ id: string } | { error: 'already_author' }> {
+  await assertWritable();
   const parsed = authorInput.safeParse(input);
   if (!parsed.success) throw new Error('invalid');
   const { id, name, title, bio, photoUrl, sameAs, isMe } = parsed.data;
@@ -161,6 +163,7 @@ export async function saveContentAuthor(
 
 /** Deletes an author the member may delete: one they added or are, or any as an admin. */
 export async function deleteContentAuthor(id: string): Promise<void> {
+  await assertWritable();
   if (!z.guid().safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase.from('content_authors').delete().eq('id', id).select('id');
@@ -175,6 +178,7 @@ export async function deleteContentAuthor(id: string): Promise<void> {
  * is refused.
  */
 export async function setBrandByline(brandId: string, on: boolean): Promise<void> {
+  await assertWritable({ brandId });
   if (!z.guid().safeParse(brandId).success || typeof on !== 'boolean') throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -188,6 +192,7 @@ export async function setBrandByline(brandId: string, on: boolean): Promise<void
 
 /** A brand's default author, or none (the organization byline): admins and managers. */
 export async function setDefaultAuthor(brandId: string, authorId: string | null): Promise<void> {
+  await assertWritable({ brandId });
   if (!z.guid().safeParse(brandId).success || (authorId && !z.guid().safeParse(authorId).success)) {
     throw new Error('invalid');
   }

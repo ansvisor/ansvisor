@@ -27,6 +27,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { DEMO_WEBFLOW_COLLECTION, demoIntegration } from '@/lib/demo/integrations';
+import { SampleDataBadge } from './sample-data-badge';
 import {
   WEBFLOW_PARTS,
   WEBFLOW_PART_TYPES,
@@ -70,12 +74,23 @@ const STALE: readonly WebflowError[] = ['auth_failed', 'changed', 'not_connected
  * Admins and managers connect it with a site token, pick the collection
  * pages go to and which of its fields takes each part of a page, replace
  * the token and disconnect; members see where pages go.
+ *
+ * On the demo brand, connected with sample data (lib/demo/integrations):
+ * where its pages go, and Replace token and Disconnect opening the plan
+ * dialog. Nothing is read from Webflow.
  */
 export function WebflowCard() {
   const t = useTranslations('settings.webflow');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
+  // A read-only workspace's refusal opens the upgrade dialog, not a toast;
+  // while it is read-only, Replace token opens it at once. Disconnect stays
+  // open: it ends an access, it starts nothing.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
+  const { isDemo } = useDemoBrand();
+  const demo = isDemo && demoIntegration('webflow') === 'connected';
 
   // The connection as read for a brand: another brand's never shows.
   const [read, setRead] = useState<{
@@ -94,7 +109,7 @@ export function WebflowCard() {
   const [reads, setReads] = useState(0);
 
   useEffect(() => {
-    if (!activeBrandId) return;
+    if (!activeBrandId || demo) return;
     let cancelled = false;
     readWebflow(activeBrandId).then((result) => {
       if (cancelled) return;
@@ -112,9 +127,28 @@ export function WebflowCard() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, reads]);
+  }, [activeBrandId, reads, demo]);
 
-  const current = read?.brandId === activeBrandId ? read : null;
+  // The demo brand's sample connection, never read from the API.
+  const demoRead =
+    demo && activeBrandId
+      ? {
+          brandId: activeBrandId,
+          configured: true,
+          connection: {
+            status: 'connected' as const,
+            siteId: 'demo',
+            siteName: brand?.name ?? null,
+            collectionId: 'demo',
+            collectionName: DEMO_WEBFLOW_COLLECTION,
+            fieldMap: {},
+            connectedAt: '',
+            updatedAt: '',
+          },
+          failed: false,
+        }
+      : null;
+  const current = demoRead ?? (read?.brandId === activeBrandId ? read : null);
   const connection = current?.connection ?? null;
   const setConnection = (next: WebflowConnection | null) =>
     setRead((r) => (r && r.brandId === activeBrandId ? { ...r, connection: next } : r));
@@ -125,7 +159,8 @@ export function WebflowCard() {
     const result = await disconnectWebflow(activeBrandId);
     setDisconnecting(false);
     if (!result.ok) {
-      toast.error(t(`errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else toast.error(t(`errors.${result.code}`));
       return;
     }
     setConnection(null);
@@ -149,6 +184,7 @@ export function WebflowCard() {
                 {t('connected')}
               </Badge>
             )}
+            {demo && <SampleDataBadge />}
             {/* Connected, but nothing goes to Webflow until a collection is saved. */}
             {connection?.status === 'connected' && !connection.collectionId && (
               <Badge
@@ -178,41 +214,60 @@ export function WebflowCard() {
           {canManage && connection && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {!replacing && current?.configured && connection.status === 'connected' && (
-                <Button variant="outline" size="sm" onClick={() => setReplacingFor(activeBrandId)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={guard(() => setReplacingFor(activeBrandId), {
+                    action: tActions('connectCms'),
+                  })}
+                >
                   {t('replaceToken')}
                 </Button>
               )}
-              <Dialog>
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      disabled={disconnecting}
-                    />
-                  }
+              {demo ? (
+                // Sample data: there is nothing to disconnect.
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => openUpgrade(tActions('disconnectIntegrations'))}
                 >
-                  {disconnecting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Unplug className="h-3.5 w-3.5" />
-                  )}
+                  <Unplug className="h-3.5 w-3.5" />
                   {t('disconnect')}
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>{t('disconnectTitle')}</DialogTitle>
-                    <DialogDescription>{t('disconnectDescription')}</DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-                    <DialogClose render={<Button variant="destructive" onClick={disconnect} />}>
-                      {t('disconnect')}
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                </Button>
+              ) : (
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={disconnecting}
+                      />
+                    }
+                  >
+                    {disconnecting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Unplug className="h-3.5 w-3.5" />
+                    )}
+                    {t('disconnect')}
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle>{t('disconnectTitle')}</DialogTitle>
+                      <DialogDescription>{t('disconnectDescription')}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
+                      <DialogClose render={<Button variant="destructive" onClick={disconnect} />}>
+                        {t('disconnect')}
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           )}
         </div>
@@ -224,6 +279,10 @@ export function WebflowCard() {
         <p className="text-sm text-muted-foreground">{t('unavailable')}</p>
       ) : !current.configured ? (
         <p className="text-sm text-muted-foreground">{t('notConfigured')}</p>
+      ) : demo ? (
+        <p className="text-sm text-muted-foreground">
+          {t('pagesGoTo', { collection: DEMO_WEBFLOW_COLLECTION })}
+        </p>
       ) : !canManage ? (
         <p className="text-sm text-muted-foreground">
           {!connection
@@ -283,6 +342,9 @@ function TokenForm({
   onCancel?: () => void;
 }) {
   const t = useTranslations('settings.webflow');
+  // Read-only (plan not active): Connect opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [token, setToken] = useState('');
   const [connecting, setConnecting] = useState(false);
 
@@ -291,7 +353,9 @@ function TokenForm({
     const result = await connectWebflow(brandId, token.trim());
     setConnecting(false);
     if (!result.ok) {
-      toast.error(t(result.code === 'invalid' ? 'errors.invalidToken' : `errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else
+        toast.error(t(result.code === 'invalid' ? 'errors.invalidToken' : `errors.${result.code}`));
       return;
     }
     setToken('');
@@ -309,12 +373,14 @@ function TokenForm({
     onConnected(result.connection);
   };
 
+  const connectToken = guard(() => void connect(), { action: tActions('connectCms') });
+
   return (
     <form
       className="space-y-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (token.trim() && !connecting) void connect();
+        if (token.trim() && !connecting) connectToken();
       }}
     >
       <Label htmlFor={`webflow-token-${brandId}`}>{t('tokenLabel')}</Label>
@@ -379,6 +445,9 @@ function WebflowMapping({
   onStale: () => void;
 }) {
   const t = useTranslations('settings.webflow');
+  // Read-only (plan not active): Save opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The saved settings, for the fields read: a save doesn't read them again.
   const saved = useRef(connection);
   useEffect(() => {
@@ -390,6 +459,10 @@ function WebflowMapping({
   }, [onStale]);
   /** Says what went wrong, and reads the connection again when it changed. */
   const report = (code: WebflowError) => {
+    if (code === 'subscription') {
+      openUpgrade();
+      return;
+    }
     toast.error(t(`errors.${code}`));
     if (STALE.includes(code)) stale.current();
   };
@@ -625,7 +698,7 @@ function WebflowMapping({
           <Button
             size="sm"
             className="gap-2"
-            onClick={save}
+            onClick={guard(save, { action: tActions('saveCmsSettings') })}
             disabled={saving || !fields || fieldsNow?.failed || !fields.length || !map.body}
           >
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

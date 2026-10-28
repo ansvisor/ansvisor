@@ -4,8 +4,10 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionItem } from '@/lib/actions/action-center';
 import type { Signal } from '@/lib/signals/map';
+import { parseTaskDetails } from '@/lib/action-center/task-details';
 import { promptVolumeEstimate } from '@/lib/volume-estimate';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * Status, assignee and due date sit right under the drawer's header, ahead of
@@ -27,6 +29,7 @@ const server = vi.hoisted(() => ({
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 const push = vi.hoisted(() => vi.fn());
 const drafts = vi.hoisted(() => ({ getActionDrafts: vi.fn(), startDraftFromAction: vi.fn() }));
+const taskCheck = vi.hoisted(() => ({ checkActionTask: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -37,6 +40,7 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 vi.mock('@/lib/actions/action-center', () => server);
 vi.mock('@/lib/actions/content-drafts', () => drafts);
+vi.mock('@/lib/actions/action-task-check', () => taskCheck);
 vi.mock('sonner', () => ({ toast }));
 
 const { ActionDrawer } = await import('./action-drawer');
@@ -69,6 +73,7 @@ let container: HTMLDivElement;
 let root: Root;
 const onChanged = vi.fn();
 const onPatched = vi.fn();
+const openUpgrade = vi.fn();
 
 const emptyDetail = { tasks: [], signals: [], events: [], kpis: [], positionOutcome: null };
 
@@ -87,18 +92,22 @@ afterEach(() => {
   container.remove();
 });
 
-async function renderDrawer(shown: ActionItem = action) {
+async function renderDrawer(shown: ActionItem = action, isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ActionDrawer
-          brandId="b1"
-          action={shown}
-          members={[]}
-          onOpenChange={() => {}}
-          onChanged={onChanged}
-          onPatched={onPatched}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ActionDrawer
+            brandId="b1"
+            action={shown}
+            members={[]}
+            onOpenChange={() => {}}
+            onChanged={onChanged}
+            onPatched={onPatched}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -244,6 +253,25 @@ describe('ActionDrawer', () => {
       expect(onChanged).toHaveBeenCalledTimes(1);
     });
 
+    it('changes nothing on a read-only workspace: the due date and Add task open the upgrade dialog', async () => {
+      await renderDrawer(action, true);
+      enter('2026-11-18');
+      expect(openUpgrade).toHaveBeenLastCalledWith('Setting a due date needs a plan');
+      expect(dueDate().value).toBe('2026-11-01');
+      await settle();
+      expect(server.setActionDueDate).not.toHaveBeenCalled();
+
+      const button = (name: string) =>
+        [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+        )!;
+      await act(async () => button('Tasks').click());
+      await act(async () => button('Add task').click());
+      expect(openUpgrade).toHaveBeenLastCalledWith('Adding tasks needs a plan');
+      expect(document.querySelector('input[aria-label="Add task"]')).toBeNull();
+      expect(server.addTask).not.toHaveBeenCalled();
+    });
+
     it("passes a new task's count to the list without reading it again", async () => {
       await renderDrawer();
       const button = (name: string) =>
@@ -321,6 +349,19 @@ describe('ActionDrawer', () => {
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
     });
 
+    it('starts no draft on a read-only workspace: Optimize page opens the upgrade dialog', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'optimize_content', 'Optimize the page')],
+      });
+      await renderDrawer({ ...action, payload: { pages: [PRICING] } }, true);
+      await openTask('Optimize the page');
+      await act(async () => button('Optimize page')!.click());
+      expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Optimizing content needs a plan');
+      expect(drafts.startDraftFromAction).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+    });
+
     it('opens the draft already written, and lists each page when the action names several', async () => {
       server.getActionDetail.mockResolvedValue({
         ...emptyDetail,
@@ -376,5 +417,48 @@ describe('ActionDrawer', () => {
         [...document.querySelectorAll('button')].filter((b) => b.textContent === 'Create content'),
       ).toHaveLength(1);
     });
+  });
+});
+
+describe('ActionDrawer Check now (AC-010)', () => {
+  const checked = {
+    id: 't1',
+    position: 1,
+    status: 'todo',
+    taskKey: null,
+    title: 'Let AI crawlers in',
+    titleParams: {},
+    dependsOn: [],
+    details: parseTaskDetails({ url: 'https://acme.example/pricing', check: 'auto' }),
+  };
+  const button = (name: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+    );
+  const openTask = async () => {
+    await act(async () => button('Tasks')!.click());
+    await act(async () => button('1. Let AI crawlers in')!.click());
+  };
+
+  it('checks a task on its page now', async () => {
+    server.getActionDetail.mockResolvedValue({ ...emptyDetail, tasks: [checked] });
+    taskCheck.checkActionTask.mockResolvedValue({
+      checked: { at: '2026-10-27T12:00:00Z', passed: true, missing: [] },
+      reason: null,
+    });
+    await renderDrawer();
+    await openTask();
+    await act(async () => button('Check now')!.click());
+    expect(taskCheck.checkActionTask).toHaveBeenCalledExactlyOnceWith('t1');
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('checks nothing on a read-only workspace: Check now opens the upgrade dialog', async () => {
+    server.getActionDetail.mockResolvedValue({ ...emptyDetail, tasks: [checked] });
+    await renderDrawer(action, true);
+    await openTask();
+    await act(async () => button('Check now')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Checking a task needs a plan');
+    expect(taskCheck.checkActionTask).not.toHaveBeenCalled();
   });
 });

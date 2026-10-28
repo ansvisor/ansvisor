@@ -75,6 +75,7 @@ import {
   type MentionsFilterParams,
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
+import { gateWriteTools } from './subscription-gate';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -137,16 +138,21 @@ const MENTIONS_BASIS =
   'read no change into it. Sentiment is measured for the brand only, not competitors.';
 
 export function createMcpServer(auth: McpAuthContext): McpServer {
-  const server = new McpServer({
-    name: 'ansvisor',
-    version: '0.1.0',
-  });
+  // A read-only workspace (Cloud, plan not active) keeps its list_/get_ tools;
+  // every other tool answers subscription_inactive until a plan is chosen.
+  const server = gateWriteTools(
+    new McpServer({
+      name: 'ansvisor',
+      version: '0.1.0',
+    }),
+    auth.organizationId,
+  );
 
   server.registerTool(
     'list_brands',
     {
       description:
-        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, and creation date. Always call this first to resolve a brand id before using other tools.',
+        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, creation date and is_demo. A brand with is_demo true is the demo brand: sample data for exploring Ansvisor, read like any brand, but nothing on it can be changed, run or generated (those tools answer demo_brand); say so when you report on it. Always call this first to resolve a brand id before using other tools.',
       inputSchema: {},
     },
     async () => {

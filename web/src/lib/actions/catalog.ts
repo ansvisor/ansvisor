@@ -10,6 +10,7 @@ import {
   type CatalogSourceKind,
   type CatalogSyncStatus,
 } from '@/lib/catalog';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * A brand's catalog sources (#1263, 00279, 00282), read and changed through
@@ -67,6 +68,7 @@ export async function addFeedSource(
   url: string,
   format: CatalogFormat = 'auto',
 ): Promise<AddFeedResult> {
+  await assertWritable({ brandId });
   const address = typeof url === 'string' ? url.trim() : '';
   if (
     !z.guid().safeParse(brandId).success ||
@@ -99,6 +101,7 @@ export async function addFeedSource(
 
 /** Removes a feed or an upload, and with it its products: admins and managers. A store goes through the API. */
 export async function removeCatalogSource(id: string): Promise<void> {
+  await assertWritable();
   if (!z.guid().safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase.from('catalog_sources').delete().eq('id', id).select('id');

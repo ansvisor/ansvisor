@@ -3,6 +3,7 @@ import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
+import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
 import { API_BASE_URL } from '@/config/api';
 import { DASHBOARD_HOME } from '@/config/home';
 
@@ -73,6 +74,12 @@ export async function GET(req: NextRequest) {
           } catch (alignErr) {
             console.error('[stripe/success] Plan-engine alignment threw:', alignErr);
           }
+
+          // A plan bought: the demo brand steps aside before the dashboard
+          // opens, whether or not the webhook came first, so the person lands
+          // on their own brand (the layout lists no hidden brand, and the
+          // brand kept from before falls back to the first one listed).
+          await hideDemoBrandAfterPurchase(orgId, subscription?.status, 'stripe/success');
 
           // Find first brand (never the demo brand, 00380) and trigger tracking via aeo-server
           const { data: brand } = await supabaseAdmin

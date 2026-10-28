@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /** Providers that expose the shared connect / status / disconnect flow. */
 export type IntegrationProvider =
@@ -231,6 +232,7 @@ export async function getGscBrandMappings(): Promise<GscBrandMapping[]> {
 
 /** Persist a brand's property pick (null clears it). RLS: admin/manager. */
 export async function setBrandGscProperty(brandId: string, property: string | null): Promise<void> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('brands')
@@ -289,6 +291,7 @@ export async function setBrandGaProperty(
   brandId: string,
   propertyId: string | null,
 ): Promise<void> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('brands')

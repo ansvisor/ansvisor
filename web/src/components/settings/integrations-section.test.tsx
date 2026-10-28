@@ -3,6 +3,22 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import type { Brand } from '@/types';
+
+// An in-memory localStorage for the brand store, before it loads: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
 
 /** Each provider's status as the API answers it: an Error is a failed read. */
 const statuses: Record<string, string | Error> = {};
@@ -11,12 +27,8 @@ vi.mock('@/config/plans', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/config/plans')>()),
   isCloud: () => cloud.on,
 }));
-vi.mock('@/lib/actions/integrations', () => ({
-  getIntegrationStatus: async (provider: string) => {
-    const status = statuses[provider] ?? 'not_connected';
-    if (status instanceof Error) throw status;
-    return { status };
-  },
+const integrations = vi.hoisted(() => ({
+  getIntegrationStatus: vi.fn(),
   disconnectIntegration: vi.fn(),
   getGscProperties: vi.fn(),
   getGscBrandMappings: vi.fn(),
@@ -25,6 +37,7 @@ vi.mock('@/lib/actions/integrations', () => ({
   getGaBrandMappings: vi.fn(),
   setBrandGaProperty: vi.fn(),
 }));
+vi.mock('@/lib/actions/integrations', () => integrations);
 vi.mock('@/hooks/use-integration-connect', () => ({
   useIntegrationConnect: () => ({ connecting: false, connect: vi.fn() }),
 }));
@@ -49,6 +62,8 @@ vi.mock('./catalog-category-pages', () => ({
 vi.mock('./webflow-card', () => ({ WebflowCard: () => <div data-card="webflow">Webflow</div> }));
 
 const { IntegrationsSection } = await import('./integrations-section');
+const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
+const { useBrandStore } = await import('@/stores/use-brand-store');
 const { toast } = await import('sonner');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -58,10 +73,17 @@ const { toast } = await import('sonner');
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
+  vi.clearAllMocks();
   for (const key of Object.keys(statuses)) delete statuses[key];
   cloud.on = false;
+  integrations.getIntegrationStatus.mockImplementation(async (provider: string) => {
+    const status = statuses[provider] ?? 'not_connected';
+    if (status instanceof Error) throw status;
+    return { status };
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -69,13 +91,29 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  document.body.replaceChildren();
 });
 
-async function render() {
+/** `isLocked`: a read-only workspace (plan not active). `isDemo`: the demo brand on screen. */
+async function render(isLocked = false, isDemo = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <IntegrationsSection />
+        <DemoBrandContext.Provider
+          value={{ isDemo, demoBrand: null, offer: 'trial', neverSubscribed: false }}
+        >
+          <UpgradeDialogContext.Provider
+            value={{
+              isLocked: isLocked || isDemo,
+              isDemo,
+              reason: isDemo ? 'demo' : 'ended',
+              adminName: null,
+              openUpgrade,
+            }}
+          >
+            <IntegrationsSection />
+          </UpgradeDialogContext.Provider>
+        </DemoBrandContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -212,5 +250,141 @@ describe('IntegrationsSection', () => {
     expect(key()).toBe('1');
     await report({ brandId: 'b2', sources: [] });
     expect(key()).toBe('2');
+  });
+});
+
+/** Picks a property for the nth brand row's picker. */
+async function pick(row: number, label: string) {
+  await act(async () => {
+    container.querySelectorAll<HTMLElement>('[role="combobox"]')[row].click();
+  });
+  // A picker with a value keeps its list mounted: the one just opened is the last.
+  const option = [
+    ...[...document.querySelectorAll('[role="listbox"]')]
+      .at(-1)!
+      .querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((o) => o.textContent === label)!;
+  await act(async () => {
+    option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+  });
+  await act(async () => option.click());
+}
+
+/**
+ * A connected Search Console on a read-only workspace (plan not active): no
+ * brand is mapped to a property by itself, and picking one opens the upgrade
+ * dialog instead of saving it. On an active plan both save.
+ */
+describe('IntegrationsSection property mapping', () => {
+  beforeEach(() => {
+    integrations.getIntegrationStatus.mockImplementation(async (provider: string) => ({
+      configured: provider === 'google-search-console',
+      status: provider === 'google-search-console' ? 'connected' : 'not_configured',
+    }));
+    integrations.getGscProperties.mockResolvedValue([
+      { siteUrl: 'https://acme.com/', permissionLevel: 'siteOwner' },
+      { siteUrl: 'https://other.example/', permissionLevel: 'siteOwner' },
+    ]);
+    // Acme matches one property by its domain; Beta matches none.
+    integrations.getGscBrandMappings.mockResolvedValue([
+      { brandId: 'b1', brandName: 'Acme', gscProperty: null, domains: ['acme.com'] },
+      { brandId: 'b2', brandName: 'Beta', gscProperty: null, domains: ['beta.test'] },
+    ]);
+    integrations.setBrandGscProperty.mockResolvedValue(undefined);
+  });
+
+  it('maps nothing on a read-only workspace: no auto-match, and a pick opens the upgrade dialog', async () => {
+    await render(true);
+    expect(container.querySelectorAll('[role="combobox"]')).toHaveLength(2);
+    expect(integrations.setBrandGscProperty).not.toHaveBeenCalled();
+
+    await pick(1, 'https://other.example/');
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Choosing a property needs a plan');
+    expect(integrations.setBrandGscProperty).not.toHaveBeenCalled();
+  });
+
+  it('maps a matching brand by itself and saves a pick on an active plan', async () => {
+    await render(false);
+    expect(integrations.setBrandGscProperty).toHaveBeenCalledExactlyOnceWith(
+      'b1',
+      'https://acme.com/',
+    );
+
+    await pick(1, 'https://other.example/');
+    expect(integrations.setBrandGscProperty).toHaveBeenLastCalledWith(
+      'b2',
+      'https://other.example/',
+    );
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('IntegrationsSection on the demo brand', () => {
+  const demoBrand: Brand = {
+    id: 'demo',
+    organizationId: 'org1',
+    name: 'Brewline Coffee',
+    slug: 'brewline-coffee',
+    shoppingModeEnabled: true,
+    isActive: true,
+    isDemo: true,
+    domains: [{ id: 'd1', brandId: 'demo', domain: 'brewline.example', isPrimary: true }],
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+  };
+  const card = (label: string) => byText(label)?.closest('.space-y-4') ?? null;
+  const row = (id: string) => container.querySelector(`[data-integration="${id}"]`);
+
+  beforeEach(() => {
+    useBrandStore.setState({ brands: [demoBrand], activeBrandId: 'demo' });
+  });
+
+  it('shows Search Console and Analytics connected with sample data, read from nowhere', async () => {
+    await render(false, true);
+    for (const label of ['Google Search Console', 'Google Analytics']) {
+      expect(badges(card(label)!)).toEqual(['Connected', 'Sample data']);
+    }
+    expect(integrations.getIntegrationStatus).not.toHaveBeenCalled();
+    expect(integrations.getGscProperties).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain('Composio');
+    // Each is mapped to the demo brand's sample property.
+    await vi.waitFor(() =>
+      expect(card('Google Search Console')!.textContent).toContain('1 of 1 brand mapped'),
+    );
+    expect(card('Google Search Console')!.textContent).toContain('Brewline Coffee');
+    expect(card('Google Search Console')!.textContent).toContain('sc-domain:brewline.example');
+    expect(card('Google Analytics')!.textContent).toContain('Brewline Coffee · GA4 (100000000)');
+  });
+
+  it('opens the plan dialog from Disconnect, which ends nothing', async () => {
+    await render(false, true);
+    const disconnect = [...card('Google Analytics')!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Disconnect',
+    )!;
+    await act(async () => disconnect.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith(
+      'Disconnecting an integration needs a plan',
+    );
+    expect(integrations.disconnectIntegration).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('shows the integrations still to come as Coming soon, in their groups', async () => {
+    await render(false, true);
+    expect(badges(merchantCenter()!)).toEqual(['Coming soon']);
+    expect(groupOf(row('shopify'))).toBe('Stores and marketplaces');
+    for (const id of ['wordpress', 'framer', 'wix']) {
+      expect(groupOf(row(id))).toBe('Content management systems');
+    }
+    expect(row('shopify')!.textContent).toContain('Shopify');
+    expect(row('wordpress')!.textContent).toContain('WordPress');
+    expect(badges(row('wix')!)).toEqual(['Coming soon']);
+  });
+
+  it('shows none of those rows on another brand', async () => {
+    await render();
+    expect(row('shopify')).toBeNull();
+    expect(row('wordpress')).toBeNull();
+    expect(integrations.getIntegrationStatus).toHaveBeenCalled();
   });
 });

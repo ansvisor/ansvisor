@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { evaluateSubscriptionAccess } from './subscription-access';
+import { evaluateSubscriptionAccess, readOnlyReason } from './subscription-access';
 
 // Minimal Supabase stub: the chained query builder resolves to `ownerRow` at
-// `.maybeSingle()`. Only the blocked (non-admin, inactive) path touches it.
+// `.maybeSingle()`. Only the read-only path for non-admins touches it.
 function fakeSupabase(ownerRow: { full_name: string | null } | null) {
   const builder = {
     select: () => builder,
@@ -20,39 +20,84 @@ function fakeSupabase(ownerRow: { full_name: string | null } | null) {
 describe('evaluateSubscriptionAccess', () => {
   it('returns ok for active/trialing regardless of role (no owner lookup)', async () => {
     const { client, from } = fakeSupabase(null);
-    expect(await evaluateSubscriptionAccess(client, 'org', 'analyst', 'active')).toEqual({
+    expect(await evaluateSubscriptionAccess(client, 'org', 'analyst', 'active', true)).toEqual({
       state: 'ok',
     });
-    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', 'trialing')).toEqual({
+    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', 'trialing', true)).toEqual({
       state: 'ok',
     });
     expect(from).not.toHaveBeenCalled();
   });
 
-  it('routes admins to the payment flow when the subscription is inactive', async () => {
+  it("sends an admin who never subscribed back to onboarding's plan step", async () => {
     const { client, from } = fakeSupabase(null);
-    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', 'past_due')).toEqual({
-      state: 'needs_payment',
+    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', 'incomplete', false)).toEqual({
+      state: 'choose_plan',
     });
-    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', null)).toEqual({
-      state: 'needs_payment',
+    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', null, false)).toEqual({
+      state: 'choose_plan',
     });
     expect(from).not.toHaveBeenCalled();
   });
 
-  it('blocks non-admins when inactive and surfaces the owner name', async () => {
+  it('lets an admin who never subscribed explore the demo brand, read-only', async () => {
+    const { client, from } = fakeSupabase(null);
+    expect(
+      await evaluateSubscriptionAccess(client, 'org', 'admin', null, false, { hasDemoBrand: true }),
+    ).toEqual({ state: 'read_only', adminName: null });
+    expect(
+      await evaluateSubscriptionAccess(client, 'org', 'admin', 'incomplete', false, {
+        hasDemoBrand: false,
+      }),
+    ).toEqual({ state: 'choose_plan' });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('lets an admin whose plan ended into the dashboard, read-only', async () => {
+    const { client, from } = fakeSupabase(null);
+    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', 'canceled', true)).toEqual({
+      state: 'read_only',
+      adminName: null,
+    });
+    expect(await evaluateSubscriptionAccess(client, 'org', 'admin', 'past_due', true)).toEqual({
+      state: 'read_only',
+      adminName: null,
+    });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('lets other members in read-only and names the admin to ask', async () => {
     const { client } = fakeSupabase({ full_name: 'Jane Owner' });
-    expect(await evaluateSubscriptionAccess(client, 'org', 'manager', 'canceled')).toEqual({
-      state: 'blocked',
-      ownerName: 'Jane Owner',
+    expect(await evaluateSubscriptionAccess(client, 'org', 'manager', 'canceled', true)).toEqual({
+      state: 'read_only',
+      adminName: 'Jane Owner',
+    });
+    // Never subscribed: only an admin can take the plan step.
+    expect(await evaluateSubscriptionAccess(client, 'org', 'analyst', null, false)).toEqual({
+      state: 'read_only',
+      adminName: 'Jane Owner',
     });
   });
 
-  it('falls back to a null owner name when the lookup returns nothing', async () => {
+  it('falls back to no admin name when the lookup returns nothing', async () => {
     const { client } = fakeSupabase(null);
-    expect(await evaluateSubscriptionAccess(client, 'org', 'analyst', null)).toEqual({
-      state: 'blocked',
-      ownerName: null,
+    expect(await evaluateSubscriptionAccess(client, 'org', 'analyst', null, true)).toEqual({
+      state: 'read_only',
+      adminName: null,
     });
+  });
+});
+
+describe('readOnlyReason', () => {
+  it('reads a payment being retried as one to fix with the card', () => {
+    expect(readOnlyReason('past_due')).toBe('payment_failed');
+    expect(readOnlyReason('unpaid')).toBe('payment_failed');
+  });
+
+  it('reads anything else as ended, with no claim about a trial', () => {
+    for (const status of ['canceled', 'paused', 'incomplete', 'incomplete_expired', null]) {
+      expect(readOnlyReason(status)).toBe('ended');
+    }
+    expect(readOnlyReason(undefined)).toBe('ended');
   });
 });

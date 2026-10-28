@@ -1,11 +1,11 @@
 import { useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getBrands } from '@/lib/actions/brand';
 import { getPlan, isCloud as checkIsCloud } from '@/config/plans';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { BrandsClient } from './_brands-client';
 import { WorkspaceSettingsMenu } from '@/components/layout/workspace-settings-menu';
+import { AddBrandLink } from '@/components/dashboard/add-brand-link';
 import { Button } from '@/components/ui/button';
 import { Crown, Plus } from 'lucide-react';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
@@ -31,19 +31,19 @@ function BrandsHeader({
         <div className="flex items-center gap-2">
           <WorkspaceSettingsMenu />
           {!canManage ? null : canAddBrand ? (
-            <Link href="/dashboard/brands/new">
+            <AddBrandLink>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
                 {t('addBrand')}
               </Button>
-            </Link>
+            </AddBrandLink>
           ) : needsUpgrade ? (
-            <Link href="/dashboard/settings?tab=billing">
+            <AddBrandLink href="/dashboard/settings?tab=billing">
               <Button variant="outline" className="gap-2">
                 <Crown className="h-4 w-4" />
                 {t('addBrand')}
               </Button>
-            </Link>
+            </AddBrandLink>
           ) : null}
         </div>
       </div>
@@ -70,16 +70,18 @@ export default async function BrandsPage() {
     orgId ? getOrgPlan(orgId) : getPlan(null),
   ]);
 
+  // The demo brand (sample data) is none of the plan's brands: never counted,
+  // and not listed while hidden.
+  const listed = brands.filter((b) => !(b.isDemo && b.demoHiddenAt));
+  const counted = brands.filter((b) => !b.isDemo).length;
   const maxBrands = plan.limits.maxBrands;
-  // The demo brand (00380) never counts against the plan.
-  const ownBrands = brands.filter((b) => !b.isDemo).length;
-  const canAddBrand = maxBrands === -1 || ownBrands < maxBrands;
+  const canAddBrand = maxBrands === -1 || counted < maxBrands;
   const needsUpgrade = !canAddBrand && checkIsCloud();
 
   return (
     <div className="space-y-6">
       <BrandsHeader canManage={canManage} canAddBrand={canAddBrand} needsUpgrade={needsUpgrade} />
-      <BrandsClient brands={brands} />
+      <BrandsClient brands={listed} />
     </div>
   );
 }

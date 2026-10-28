@@ -1,0 +1,1430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat Governance · Ansvisor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0a0a0a;--mut:#737373;--mut2:#a3a3a3;--line:#ececec;--soft:#f7f7f6;--page:#fafaf9;--side:#f7f7f6;--act:#ecebe8;--pos:#16a34a;--posbg:#dcfce7;--pos2:#f0fdf4;--posbd:#bbf7d0;--amber:#b45309;--amberbg:#fef3c7;--ambd:#fde68a;--red:#dc2626;--redbg:#fee2e2;--gold:#D9B98A;--sh:0 1px 2px rgba(10,10,10,.04);--shh:0 4px 14px rgba(10,10,10,.06);--shp:0 12px 32px rgba(10,10,10,.12);--tick:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%2316a34a%27 stroke-width=%272.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M6 12.5l4 4 8-9%27/%3E%3C/svg%3E")}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:Inter,system-ui,sans-serif;font-size:14px;color:var(--ink);background:var(--page);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:8px}
+a{color:inherit}
+svg.i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;vertical-align:-2px}
+/* mockup chrome */
+.mk{height:36px;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--ink);color:#cfcac2;font-size:12px;overflow-x:auto;white-space:nowrap}
+.mk a,.mk button{color:#cfcac2;text-decoration:none;padding:4px 9px;border-radius:7px;font-size:12px}
+.mk a:hover,.mk button:hover{color:#fff}.mk .on{background:#fff;color:var(--ink);font-weight:500}
+.mk .sep{width:1px;height:16px;background:#4a4640;margin:0 6px;flex:none}
+.mk .lab{color:#8f897f;padding:0 4px}
+.app{display:flex;height:calc(100vh - 36px)}
+/* app sidebar */
+.side{width:228px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:10px 10px 10px;font-size:13px}
+.ws{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;margin-bottom:8px;width:100%}
+.ws:hover{background:var(--act)}.ws .lg{width:24px;height:24px;border-radius:7px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+.ws b{font-weight:600;display:block;font-size:13px}.ws em{font-style:normal;font-size:11.5px;color:var(--mut)}.ws .car{margin-left:auto;color:var(--mut2);font-size:11px}
+.nav{display:flex;flex-direction:column;gap:1px;flex:1;overflow:auto;min-height:0}
+.ni{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;color:#44403c;width:100%;min-height:30px}
+.ni:hover{background:#efeeec}.ni.on{background:var(--act);color:var(--ink);font-weight:500}
+.ni svg.i{width:15px;height:15px;color:#78716c}.ni.on svg.i{color:var(--ink)}
+.ni .b{margin-left:auto;font-size:11px;border-radius:6px;padding:0 6px;background:var(--act);color:#57534e;font-weight:400}
+.ni .b.am{background:var(--amberbg);color:var(--amber)}
+.ni .cv{margin-left:auto;color:var(--mut2);font-size:10px}
+.nsub{display:none;flex-direction:column;gap:1px}.nsub.open{display:flex}
+.nsub .ni{padding-left:32px;font-size:12.5px;min-height:28px}
+.ngrp{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);padding:12px 8px 4px}
+.nbot{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:1px}
+.me{display:flex;align-items:center;gap:8px;padding:8px;margin-top:4px;border-radius:10px;width:100%}.me:hover{background:#efeeec}
+.avt{width:24px;height:24px;border-radius:50%;background:#e4e2de;color:#44403c;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;flex:none}
+.me b{display:block;font-weight:500;font-size:12.5px}.me em{font-style:normal;font-size:11px;color:var(--mut)}
+/* chat sub-nav */
+.cnav{width:204px;flex:none;border-right:1px solid var(--line);background:#fcfcfb;padding:12px 10px;display:none;flex-direction:column;gap:2px;font-size:13px}
+.cnav.on{display:flex}
+.newc{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:10px;height:32px;padding:0 10px;font-weight:500;margin-bottom:8px;width:100%}
+.newc:hover{border-color:#d6d3cf}.newc kbd{margin-left:auto;font:11px Inter,system-ui,sans-serif;color:var(--mut2)}
+.cni{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;color:#44403c;width:100%}
+.cni:hover{background:#efeeec}.cni.on{background:var(--act);color:var(--ink);font-weight:500}
+.cni .b{margin-left:auto;font-size:11px;border-radius:6px;padding:0 6px;background:var(--act);color:#57534e;font-weight:400}.cni.on .b{background:#fff}
+.cni .b.am{background:var(--amberbg);color:var(--amber)}
+.newp{margin-left:auto;font-size:10.5px;font-weight:500;border:1px solid #d6d3cf;border-radius:20px;padding:0 7px;color:#57534e;background:#fff}
+.csec{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);padding:12px 8px 4px}
+/* main */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--line);height:52px;flex:none}
+.crumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mut)}.crumb b{color:var(--ink);font-weight:600}
+.top .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.runsbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:10px;font-size:12.5px;background:#fff}
+.runsbtn:hover{border-color:#d6d3cf}.runsbtn .n{background:var(--amberbg);color:var(--amber);border-radius:6px;font-size:11px;padding:0 5px}
+.tdots{display:inline-flex;gap:3px}.tdots i{width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.25;animation:dot 1.2s infinite}.tdots i:nth-child(2){animation-delay:.2s}.tdots i:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+.scr{display:none;flex:1;min-height:0}.scr.on{display:flex}
+.pg{flex:1;overflow:auto;padding:22px 28px 80px;min-width:0}
+.pgh{display:flex;align-items:center;gap:12px;margin-bottom:16px}.pgh h1{font-size:24px;font-weight:700;margin:0;letter-spacing:-.4px}
+.pgh .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.h2{display:flex;align-items:center;gap:8px;margin:22px 0 10px}.h2 h2{font-size:15px;font-weight:600;margin:0}.h2 .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.cnt{font-size:11.5px;background:#f1f0ee;color:#57534e;border-radius:6px;padding:0 6px;font-weight:500}
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 13px;font:500 14px Inter,system-ui,sans-serif;border:1px solid var(--line);background:#fff;border-radius:10px;color:var(--ink);white-space:nowrap}
+.btn:hover{border-color:#d6d3cf;background:#fcfcfb}
+.btn.pri{background:var(--ink);border-color:var(--ink);color:#fff}.btn.pri:hover{background:#000}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;border-radius:8px}
+.btn.ghost{border-color:transparent;background:none;color:var(--mut)}.btn.ghost:hover{background:var(--soft);color:var(--ink)}
+.btn[disabled],.btn.dis{opacity:.45;cursor:not-allowed}
+.btn.warn{color:var(--red)}
+/* settings tabs */
+.stabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:18px;font-size:13.5px;overflow-x:auto}
+.stabs button{padding:9px 0;color:var(--mut);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.stabs button:hover{color:var(--ink)}.stabs button.on{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--ink)}
+.stabs .newp{margin-left:0}
+.tabs2{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:14px;font-size:13.5px}
+.tabs2 button{padding:8px 0;color:var(--mut)}.tabs2 button.on{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--ink)}
+.tabs2 i{font-style:normal;font-size:11px;background:#f1f0ee;border-radius:6px;padding:0 5px;margin-left:4px;color:#57534e;font-weight:500}
+/* generic */
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;border:1px solid var(--line);border-radius:20px;padding:1px 9px;color:var(--mut);white-space:nowrap;background:#fff}
+.pill.ok{border-color:var(--posbd);color:var(--pos);background:var(--posbg)}
+.pill.am{border-color:var(--ambd);color:var(--amber);background:var(--amberbg)}
+.pill.ink{border-color:var(--ink);color:var(--ink)}
+.pill.red{border-color:#fecaca;color:var(--red);background:var(--redbg)}
+.dt{display:inline-block;width:7px;height:7px;border-radius:50%;background:#d6d3cf;flex:none}
+.dt.ok{background:var(--pos)}.dt.am{background:var(--amber)}.dt.run{background:var(--ink);box-shadow:0 0 0 3px rgba(28,26,23,.12)}.dt.red{background:var(--red)}
+.box{border:1px solid var(--line);border-radius:14px;background:#fff}
+.sw{width:30px;height:18px;border-radius:9px;background:#d6d3cf;position:relative;flex:none;display:inline-block}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s}
+.sw.on{background:var(--ink)}.sw.on::after{left:14px}.sw[disabled]{opacity:.4;cursor:not-allowed}
+.seg{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:2px;gap:1px}
+.seg button{font-size:12px;padding:3px 10px;border-radius:7px;color:var(--mut);white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.seg button:hover:not([disabled]){color:var(--ink)}
+.seg button.on{background:#fff;color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg button[disabled]{opacity:.4;cursor:not-allowed}
+.seg.big button{font-size:13px;padding:5px 12px}
+.cls{display:inline-flex;align-items:center;font:500 10.5px "Geist Mono",monospace;letter-spacing:.3px;border-radius:6px;padding:1px 6px;white-space:nowrap}
+.cls.R{background:#f1f0ee;color:#57534e}.cls.W{background:var(--amberbg);color:var(--amber)}.cls.E{background:var(--ink);color:#fff}.cls.N{background:#fff;color:var(--mut2);border:1px dashed #d6d3cf}
+.lock{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink);border:1px solid var(--line);border-radius:20px;padding:1px 8px;background:var(--soft);white-space:nowrap}
+.mono{font:12px "Geist Mono",monospace;color:var(--mut)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:10px;padding:8px 14px;font-size:13px;display:none;z-index:90;max-width:80%;align-items:center;gap:10px}
+.toast.on{display:flex;animation:rise .2s ease-out}.toast button{color:var(--gold);font-weight:500}
+/* table */
+.tbl{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+.tr{display:grid;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13px}
+.tr:first-child{border-top:0}.tr.th{background:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut);padding:8px 14px}
+.tr em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.tr b{font-weight:500}
+.tr.grp{background:#fcfcfb;padding:8px 14px}
+.tr.grp button{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;width:100%}
+.tr.grp .car{color:var(--mut2);font-size:10px;transition:transform .15s}.tr.grp.shut .car{transform:rotate(-90deg)}
+.tr.hide{display:none}
+/* menu / drawer */
+.menu{position:fixed;z-index:80;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.16);padding:5px;min-width:200px;display:none}
+.menu.on{display:block;animation:rise .15s ease-out}
+.menu button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border-radius:8px;font-size:13px}
+.menu button:hover{background:var(--soft)}.menu button em{font-style:normal;font-size:11.5px;color:var(--mut);margin-left:auto}
+.menu .ck{width:14px}
+.scrim{position:fixed;inset:0;background:rgba(28,26,23,.25);z-index:70;display:none}.scrim.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:94%;background:#fff;border-left:1px solid var(--line);box-shadow:-14px 0 40px rgba(0,0,0,.12);z-index:75;display:none;flex-direction:column}
+.drawer.on{display:flex;animation:rise .2s ease-out}
+.drawer .dh{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);min-height:52px}.drawer .dh b{font-size:15px}
+.drawer .db{flex:1;overflow:auto;padding:16px}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:8px 12px;font-size:13px;margin-bottom:14px}.kv span:nth-child(odd){color:var(--mut)}
+/* roles */
+.who{display:flex;align-items:center;gap:10px;min-width:0}.who>div{min-width:0}.who b{display:block}
+.rsel{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:#fff;width:138px}
+.rsel:hover{border-color:#d6d3cf}.rsel .car{margin-left:auto;color:var(--mut2);font-size:10px}
+.rsel[disabled]{background:var(--soft);color:var(--mut);cursor:not-allowed}
+.mx{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.mxr{display:grid;align-items:center;border-top:1px solid var(--line);font-size:13px}
+.mxr:first-child{border-top:0}.mxr>*{padding:8px 12px}.mxr>:not(:first-child){text-align:center;border-left:1px solid var(--line)}
+.mxr.th{background:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut)}
+.mxr.th .yo{color:var(--ink);font-weight:600}
+.mxr .yo{background:#fbfbfa}
+.y{color:var(--pos);font-weight:600}.n{color:#c9c5be}.q{font-size:11.5px;color:var(--mut)}
+.mxr .cls{margin-right:6px}
+.inl{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;font-size:12.5px;color:var(--mut)}
+.inl .pill{font-size:12px}
+.setrow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line);font-size:13px}
+.setrow:first-child{border-top:0}.setrow>div{flex:1}.setrow em{display:block;font-style:normal;font-size:12px;color:var(--mut)}
+/* policy */
+.pcols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start}
+.prec{display:flex;flex-direction:column;gap:0;padding:14px}
+.pst{display:grid;grid-template-columns:26px minmax(0,1fr) 164px;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;position:relative}
+.pst+.pst::before{content:"";position:absolute;left:22px;top:-6px;width:2px;height:12px;background:#e4e2de}
+.pst .no{width:24px;height:24px;border-radius:50%;background:var(--ink);color:#fff;font-size:11.5px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.pst b{display:block;font-weight:500;font-size:13px}.pst em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.pst .bar{height:6px;border-radius:4px;background:var(--ink)}
+.pst.on{background:var(--soft)}
+.pst>:last-child{justify-self:end}
+.prech{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}.prech b{font-size:13.5px}
+.funnel{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mut);padding:0 14px 12px}
+.tr.pol{grid-template-columns:minmax(0,1.9fr) 58px 214px 150px}
+.tr.pol.N,.tr.pol.hid{color:var(--mut2)}
+.tr.sub{display:block;padding:6px 14px 6px 32px;font-size:11.5px;font-weight:600;color:var(--mut);background:#fff;border-top:1px dashed var(--line)}
+.tr.grp button .lock{font-size:11px}.tr.sub.hide{display:none}
+.tr.pol .mono{font-size:11px;display:block;margin-top:1px}
+.fa{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut)}
+.modec{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mc{border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;background:#fff;position:relative}
+.mc:hover{border-color:#d6d3cf}.mc.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.mc b{display:block;font-weight:600;font-size:13px}.mc em{display:block;font-style:normal;font-size:11.5px;color:var(--mut);margin-top:2px}
+.mc .lk{position:absolute;top:8px;right:8px}
+.mc[aria-disabled=true],.mc.dis{background:var(--soft);cursor:not-allowed}.mc.dis.on{box-shadow:none}.mc[aria-disabled=true] b{color:var(--mut)}
+/* capabilities */
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--mut);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.fl{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;align-items:center}
+.fc{border:1px solid var(--line);border-radius:20px;padding:3px 11px;font-size:12.5px;background:#fff}
+.fc:hover{border-color:#d6d3cf}.fc.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.srch{border:1px solid var(--line);border-radius:10px;height:32px;padding:0 10px;font:13px Inter,system-ui,sans-serif;min-width:220px;outline:0}
+.srch:focus{border-color:var(--ink)}
+.tr.cap{grid-template-columns:170px minmax(0,1.15fr) minmax(0,1.35fr) minmax(0,.9fr) minmax(0,.95fr) 64px;align-items:start;padding:10px 14px}
+.tr.cap.th{align-items:center}
+.tr.cap .ar b{display:block;font-weight:600}.tr.cap .ar em{margin-top:1px}
+.cps{display:flex;flex-wrap:wrap;gap:4px}
+.cp{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;border-radius:7px;padding:2px 7px;border:1px solid var(--line);background:#fff;color:#44403c;line-height:1.35}
+.cp.R{background:#f7f7f6}
+.cp.W{border-color:var(--ambd);background:#fffaf0}
+.cp.E{border-color:var(--ink);background:#fff;color:var(--ink)}
+.cp.N{border-style:dashed;color:var(--mut);background:#fff}
+.cp.V{color:var(--mut)}
+.cp svg.i{width:12px;height:12px}
+.dash{color:#c9c5be;font-size:12px}
+.okb{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);color:var(--mut2)}
+.okb:hover{border-color:#d6d3cf}.okb.on{background:var(--posbg);border-color:var(--posbd);color:var(--pos)}
+.tr.cap.ok{background:var(--pos2)}
+.apbar{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+.apbar .prog{flex:1;max-width:220px;height:5px;border-radius:4px;background:#ecebe8;overflow:hidden}.apbar .prog i{display:block;height:100%;background:var(--pos);transition:width .3s}
+/* agents */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.agc{border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:9px;background:#fff;animation:rise .25s ease-out}
+.agc:hover{border-color:#d6d3cf;box-shadow:0 4px 14px rgba(28,26,23,.06)}
+.agt{display:flex;align-items:center;gap:10px}.agt>div{flex:1;min-width:0}.agt b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agt em{font-style:normal;font-size:11.5px;color:var(--mut)}
+.av{width:30px;height:30px;border-radius:10px;background:var(--ink);display:flex;align-items:center;justify-content:center;flex:none}
+.av svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.av.idle{background:#e4e2de}.av.idle svg{stroke:#57534e}
+.av.wait{box-shadow:0 0 0 3px var(--amberbg),0 0 0 4px var(--ambd)}
+.formula{display:flex;flex-wrap:wrap;gap:4px;font-size:11.5px}
+.formula>span{border:1px solid var(--line);border-radius:7px;padding:1px 7px;background:var(--soft);color:#44403c}
+.formula code{font:11.5px "Geist Mono",monospace}
+.agm{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;color:var(--mut)}.agm b{display:block;color:var(--ink);font-weight:500;font-size:12.5px}
+.agf{display:flex;gap:6px;align-items:center;border-top:1px solid var(--line);padding-top:10px;margin-top:2px}.agf .r{margin-left:auto;display:flex;gap:6px}
+.stl{display:block;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.stl .dt{margin-right:6px;vertical-align:1px}
+.stl.need{color:var(--amber)}.stl.run{color:var(--ink)}.stl.idle{color:var(--mut)}.stl.off{color:var(--mut2)}
+.kp{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:10px 12px}.kpi small{display:block;font-size:11.5px;color:var(--mut)}.kpi b{font-size:20px;letter-spacing:-.4px}
+/* agent detail */
+.dcols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.fgrid>div{padding:12px 14px;border-left:1px solid var(--line)}.fgrid>div:first-child{border-left:0}
+.fgrid small{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut2);margin-bottom:6px}
+.fgrid .v{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:13px}
+.trg{display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);font-size:13px}
+.trg:first-child{border-top:0}.trg>div{flex:1;min-width:0}.trg em{display:block;font-style:normal;font-size:12px;color:var(--mut)}
+.trg .ty{width:118px;flex:none;font-size:12px;color:var(--mut)}
+.trg.off{color:var(--mut)}
+.tr.run{grid-template-columns:44px minmax(0,1.8fr) minmax(0,1fr) 200px 52px;cursor:pointer}
+.tr.run:hover{background:#fcfcfb}
+.oc{display:inline-flex;align-items:center;gap:5px;font-size:12px;border-radius:7px;padding:1px 8px;border:1px solid var(--line);white-space:nowrap}
+.oc.imp{background:var(--posbg);border-color:var(--posbd);color:var(--pos)}.oc.pen{background:#fff;color:var(--ink)}.oc.nmc{background:var(--soft);color:#57534e}.oc.dec{background:var(--redbg);border-color:#fecaca;color:var(--red)}.oc.nm{background:#fff;color:var(--mut);border-style:dashed}
+.conf{display:block;font-size:11px;color:var(--mut);margin-top:2px}
+.perm{padding:12px 14px;border-top:1px solid var(--line);font-size:12.5px}.perm:first-of-type{border-top:0}
+.perm .hd{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:500}
+.perm ul{margin:0;padding:0;list-style:none;display:grid;gap:4px;color:#44403c}.perm li{display:flex;gap:6px;align-items:center}.perm li em{margin-left:auto;font-style:normal;font-size:11.5px;color:var(--mut)}
+.sidecard{border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:12px;overflow:hidden}
+.sidecard .sh{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-weight:600;font-size:13px}.sidecard .sh .r{margin-left:auto}
+/* create agent */
+.stepper{display:flex;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.stepper button{flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13px;color:var(--mut);border-left:1px solid var(--line);background:#fff}
+.stepper button:first-child{border-left:0}
+.stepper .sn{width:22px;height:22px;border-radius:50%;border:1.5px solid #d6d3cf;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:none;background:#fff}
+.stepper button.on{color:var(--ink);font-weight:500;background:var(--soft)}.stepper button.on .sn{border-color:var(--ink);color:var(--ink)}
+.stepper button.done .sn{background:var(--pos);border-color:var(--pos);color:#fff}
+.ncols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.pane{display:none}.pane.on{display:block;animation:rise .2s ease-out}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.opt{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;display:flex;flex-direction:column;gap:3px;font-size:13px;position:relative}
+.opt:hover{border-color:#d6d3cf}.opt.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.opt code{font:12px "Geist Mono",monospace;color:var(--mut)}.opt b{font-weight:600}.opt em{font-style:normal;font-size:11.5px;color:var(--mut)}
+.opt .lk{position:absolute;top:8px;right:8px}
+.opt[aria-disabled=true]{background:var(--soft);cursor:not-allowed}.opt[aria-disabled=true] b{color:var(--mut)}
+.rule{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px;display:grid;gap:8px;font-size:13px}
+.rule .rw{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.rule .kw{font:600 11px "Geist Mono",monospace;width:44px;color:var(--mut)}
+.tok{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:8px;height:28px;padding:0 9px;font-size:12.5px;background:#fff}
+.tok:hover{border-color:#d6d3cf}
+.sum{border:1px solid var(--line);border-radius:14px;padding:14px;position:sticky;top:0;background:#fff}
+.sum h3{margin:0 0 10px;font-size:13.5px}
+.sum .row{display:flex;gap:8px;padding:7px 0;border-top:1px dashed var(--line);font-size:12.5px}.sum .row:first-of-type{border-top:0}
+.sum .row>span:first-child{width:96px;color:var(--mut);flex:none}.sum .row>span:last-child{flex:1}
+.nfoot{display:flex;gap:8px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}.nfoot .r{margin-left:auto;display:flex;gap:8px}
+.planbar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut)}
+.gate{display:flex;gap:10px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12.5px;margin-top:10px}.gate .btn{margin-left:auto}
+/* action center + run */
+.acw{display:flex;flex:1;min-width:0;min-height:0}
+.acmain{flex:1;overflow:auto;padding:18px 24px 60px;min-width:0}
+.acl{display:grid;gap:6px;margin-bottom:14px}
+.acr{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:13px;background:#fff;width:100%}
+.acr:hover{border-color:#d6d3cf}.acr.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.acr .id{font:12px "Geist Mono",monospace;color:var(--mut);width:64px;flex:none}.acr>div{flex:1;min-width:0}.acr em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.acd{border:1px solid var(--line);border-radius:16px;background:#fff;overflow:hidden}
+.acd .hd{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.acd .hd h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.2px}.acd .hd em{display:block;font-style:normal;font-size:12px;color:var(--mut);margin-top:3px}
+.acd .hd .r{margin-left:auto;display:flex;gap:8px;flex:none}
+.acd .bd{padding:14px 16px;display:grid;gap:14px}
+.acd small{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut2);margin-bottom:6px}
+.tgt{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tgt div{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12.5px}.tgt b{display:block;font-size:16px}
+.task{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px dashed var(--line);font-size:13px}.task:first-child{border-top:0}
+.task .ck{width:16px;height:16px;border-radius:5px;border:1.5px solid #d6d3cf;flex:none}.task .ck.rv{border-color:var(--amber);background:var(--amberbg)}.task .ck.dn{background:var(--pos);border-color:var(--pos)}
+.task>div{flex:1}.task em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.att{display:flex;gap:10px;align-items:flex-start;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px}
+.att b{font-weight:600}.att em{display:block;font-style:normal;color:var(--mut);font-size:12px;margin-top:2px}
+.sp{width:440px;flex:none;border-left:1px solid var(--line);display:flex;flex-direction:column;background:#fff}
+.sp .hd{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);min-height:52px;font-weight:600}
+.sp .hd .r{margin-left:auto;display:flex;gap:2px}
+.sp .bd{flex:1;overflow:auto;padding:14px}
+.scope{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);margin-bottom:10px;flex-wrap:wrap}
+.card{border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(28,26,23,.04);margin-bottom:12px;overflow:hidden;animation:rise .3s ease-out}
+.card.need{border-color:var(--ambd);box-shadow:0 0 0 3px var(--amberbg)}
+.card.exec{border-color:var(--ink);box-shadow:0 0 0 3px rgba(28,26,23,.06)}
+.ch{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px}.ch b{font-size:13px}.ch .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.cb{padding:4px 12px 10px;font-size:13px}
+.step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line)}.step:last-child{border-bottom:0}
+.sn2{width:20px;height:20px;border-radius:50%;border:1.5px solid #d6d3cf;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:var(--mut);flex:none;background:#fff}
+.step.done .sn2{background:var(--pos);border-color:var(--pos);color:#fff}.step.now .sn2{border-color:var(--ink);color:var(--ink);box-shadow:0 0 0 3px rgba(28,26,23,.08)}.step.need .sn2{border-color:var(--amber);color:var(--amber);background:var(--amberbg)}
+.step .tx{flex:1}.step .tx em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.step .cls{align-self:center}
+.meta{display:flex;flex-wrap:wrap;gap:12px;padding:8px 12px;background:var(--soft);border-top:1px solid var(--line);font-size:11.5px;color:var(--mut)}.meta b{color:var(--ink);font-weight:500}
+.cf{display:flex;gap:8px;align-items:center;padding:9px 12px;border-top:1px solid var(--line)}.cf .l{font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center}.cf .r{margin-left:auto;display:flex;gap:6px}
+.diff{border:1px solid var(--line);border-radius:10px;margin:8px 0;font-size:12.5px;overflow:hidden}
+.diff div{padding:6px 10px}.diff .del{background:#fdf1f1;color:#7f1d1d;text-decoration:line-through;text-decoration-color:rgba(127,29,29,.4)}.diff .ins{background:var(--posbg);color:#14532d}
+.barl{height:3px;background:#ecebe8;overflow:hidden}.barl i{display:block;height:100%;width:30%;background:var(--ink);animation:slide 1.4s ease-in-out infinite}
+.prog2{height:4px;border-radius:4px;background:#ecebe8;overflow:hidden;width:90px}.prog2 i{display:block;height:100%;background:var(--ink);border-radius:4px}
+/* activity */
+.tr.act{grid-template-columns:60px minmax(0,1.5fr) minmax(0,1.8fr) 70px minmax(0,1fr) 128px;align-items:center}
+.tr.act.undone{color:var(--mut2)}.tr.act.undone .evt{text-decoration:line-through}
+.via{display:inline-flex;font-size:10.5px;border-radius:6px;padding:0 6px;background:#f1f0ee;color:#57534e;margin-left:4px;font-weight:500}
+.via.run{background:var(--ink);color:#fff}
+.ulock{font-size:11px;color:var(--mut);display:block;margin-top:2px;line-height:1.3}
+.fdd{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:#fff}
+.fdd:hover{border-color:#d6d3cf}.fdd b{font-weight:500}.fdd .car{color:var(--mut2);font-size:10px}
+.fdd.set{border-color:var(--ink)}
+.lay{display:flex;gap:8px;margin-bottom:12px}
+.lay button{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:left;background:#fff;font-size:13px}
+.lay button:hover{border-color:#d6d3cf}.lay button.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.lay b{display:block;font-weight:600}.lay em{display:block;font-style:normal;font-size:11.5px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lay button{min-width:0}
+.empty{padding:24px;text-align:center;color:var(--mut);font-size:13px}
+/* ---- layout rule (Addendum 2 · I): fixed tracks, no shifting ---- */
+.tr>*{min-width:0}
+.el,.tr em,.tr>div>b,.tr .who b,.tr.pol .mono,.ulock,.trg em,.trg b,.acr em,.acr .tt{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.setrow{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:12px}
+.setrow>:last-child{justify-self:end}
+.setrow.c3{grid-template-columns:10px minmax(0,1fr) 200px}
+.setrow b,.setrow em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.acr{display:grid;grid-template-columns:64px minmax(0,1fr) 150px;text-align:left}
+.acr>:last-child{justify-self:start}
+.agc .formula{flex-wrap:nowrap;overflow:hidden}.agc .formula>span{flex:none;white-space:nowrap}
+.agc .agf{margin-top:auto}
+.trg{display:grid;grid-template-columns:118px minmax(0,1fr) 30px}
+.mk .as{display:inline-flex;gap:1px;background:#2c2925;border-radius:8px;padding:2px}
+.mk .as button{padding:3px 8px;border-radius:6px}
+/* roles & access */
+.robar{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:4px}
+.robar b{font-weight:600}.robar em{font-style:normal;color:var(--mut);margin-left:6px}
+.tr.mem{grid-template-columns:minmax(0,1.6fr) 150px 130px minmax(0,1.5fr) 100px 40px}
+.you{font-size:10.5px;border:1px solid var(--ink);border-radius:20px;padding:0 6px;margin-left:6px;font-weight:500;color:var(--ink);vertical-align:1px}
+.mxr{grid-template-columns:minmax(0,1fr) repeat(4,150px)}
+.mxr>*{min-width:0}.mxr{align-items:stretch}.mxr>span{display:flex;align-items:center;justify-content:center;gap:4px}.mxr>span:first-child{justify-content:flex-start}.mxc{align-self:center}
+.mxr.sec{display:block;background:#fcfcfb;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut);font-weight:600;padding:7px 12px}
+.mxr.th>span:not(:first-child){display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.25}
+.mxr.th small{font-size:10px;text-transform:none;letter-spacing:0;color:var(--mut2);font-weight:400;white-space:nowrap}
+.mxr.th .yo small{color:var(--ink);font-weight:500}
+.mxc{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;align-items:center}
+.mxc .cls{justify-content:center;margin:0}
+.mxc b{font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mxc em{display:block;font-style:normal;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mxr .yo{background:#f6f6f4}
+.mxr.focus .yo,.mx.focus .yo{animation:pulse 1.6s ease-out 2}
+@keyframes pulse{0%{box-shadow:inset 0 0 0 2px var(--ink)}100%{box-shadow:inset 0 0 0 2px transparent}}
+.mxr .q{white-space:nowrap}
+/* your access */
+.acc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px;align-items:stretch}
+.acc .sidecard{margin:0;display:flex;flex-direction:column}
+.acc .sidecard .bd{padding:12px 14px;flex:1}
+.yar{display:grid;grid-template-columns:76px minmax(0,1fr) 150px;gap:10px;align-items:center;padding:9px 14px;border-top:1px solid var(--line);font-size:13px}
+.yar:first-child{border-top:0}.yar .cls{justify-content:center}.yar b{font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidecard .ft{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+/* plan tag on chips */
+.plg{font:500 10px "Geist Mono",monospace;border-radius:5px;padding:0 4px;background:#f1f0ee;color:#57534e;margin-left:2px}
+.tr.cap{grid-template-columns:140px minmax(0,1.2fr) minmax(0,1.3fr) minmax(0,.9fr) minmax(0,.9fr) 140px 52px}
+.rl b{display:block;font-weight:500;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rl em{font-size:11px}
+/* run history / impact */
+.tr.run{grid-template-columns:40px minmax(0,1.4fr) minmax(0,1fr) 176px 44px}
+.res.stop{color:var(--amber)}
+.ckl{display:grid;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:4px 0 12px}
+.ckl>div{display:grid;grid-template-columns:18px 92px minmax(0,1fr) 120px;gap:8px;align-items:center;padding:7px 10px;border-top:1px solid var(--line);font-size:12.5px}
+.ckl>div:first-child{border-top:0}.ckl .q{text-align:right}
+.ckl>div.d{background:var(--pos2)}.ckl>div.u{color:var(--mut)}
+.ckp{display:grid;grid-template-columns:repeat(4,40px);gap:4px}
+.ckp .k{display:flex;align-items:center;justify-content:center;height:20px;border-radius:6px;font:500 10.5px "Geist Mono",monospace;border:1px solid var(--line);color:var(--mut2);background:#fff}
+.ckp .k.d{background:var(--posbg);border-color:var(--posbd);color:var(--pos)}.ckp .k.n{border-color:var(--ink);color:var(--ink)}
+.tr.hist{grid-template-columns:minmax(0,1.6fr) 90px 180px 200px 64px;cursor:pointer}.tr.hist:hover{background:#fcfcfb}
+.tr.sig{grid-template-columns:minmax(0,1.8fr) 150px 110px 170px}
+.acp{display:none}.acp.on{display:block}
+.ckleg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);margin:-2px 0 10px}
+.agnote{margin:0 0 12px}
+.stl.stop{color:var(--mut)}
+/* preview plan control + actual-plan badge */
+.pseg{height:28px;border-radius:8px;padding:2px;background:#fff;align-items:center;margin-top:14px}
+.pseg button{height:22px;border-radius:6px;padding:0 10px;color:var(--mut)}
+.pseg button.on{background:var(--ink);color:#fff;box-shadow:none}
+.pseg button.actual{position:relative}
+.pgh .r:has(.pseg){align-items:flex-end}
+.pseg button.actual::after{content:"Your plan";position:absolute;bottom:100%;left:50%;transform:translate(-50%,-6px);font:600 10.5px Inter,system-ui,sans-serif;line-height:16px;padding:0 7px;border-radius:20px;color:#16a34a;background:#ecfdf3;white-space:nowrap;pointer-events:none}
+.planbar{color:var(--mut2)}.pgh .planbar{margin-top:14px}
+/* your plan strip */
+.planstrip{border:1px solid var(--line);border-radius:12px;margin:0 0 16px;overflow:hidden;background:#fff}
+.psr{display:grid;grid-template-columns:200px minmax(0,1fr) 130px 150px;gap:12px;align-items:center;padding:10px 14px}
+.psr.up{border-top:1px solid var(--line);background:#fcfcfb}
+.psr small{display:block;font-size:11px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psn b{font-size:15px;font-weight:600;margin-right:6px}.psn .q{white-space:nowrap}
+.psi,.psg{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.pi{display:inline-flex;align-items:center;gap:4px;font-size:12px;border:1px dashed #d6d3cf;border-radius:7px;padding:1px 8px;color:var(--mut);white-space:nowrap}
+.pi.ok{border:1px solid var(--posbd);background:var(--posbg);color:var(--pos)}
+.psg span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#44403c;white-space:nowrap}
+.psg svg.i{width:12px;height:12px;color:var(--pos)}
+.psa b{font-size:13px;font-weight:600;white-space:nowrap}
+.psb{justify-self:end}
+.backc{display:inline-flex;align-items:center;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font:500 12px Inter,system-ui,sans-serif;color:var(--ink);text-decoration:none;white-space:nowrap;flex:none}
+.backc:hover{border-color:#d6d3cf;background:var(--soft)}
+.bsep{width:1px;height:16px;background:var(--line);flex:none}
+.crl{color:var(--mut);text-decoration:none;font-size:13px}.crl:hover{color:var(--ink);text-decoration:underline}
+/* run panel: live avatar, status line, done chips, icon action bar, composer */
+.av.live{animation:breathe 2.4s ease-in-out infinite}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(28,26,23,.18)}50%{box-shadow:0 0 0 4px rgba(28,26,23,0)}}
+.rstat{display:grid;grid-template-columns:8px minmax(0,1fr);gap:8px;align-items:center;padding:8px 12px 0;font-size:12.5px;color:var(--mut)}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--ink);animation:dot 1.2s infinite}.sdot.wait{background:var(--amber);animation:none}.sdot.ok{background:var(--pos);animation:none}
+#runStatus{transition:opacity .2s}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px 0}.chips:empty{display:none}
+.okc{display:inline-flex;align-items:center;gap:4px;height:22px;max-width:100%;font-size:11.5px;border:1px solid var(--posbd);background:var(--posbg);color:var(--pos);border-radius:20px;padding:0 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb .step.done{display:none}
+.abar{display:flex;gap:4px;padding:6px 8px;border-top:1px solid var(--line)}
+.ibtn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:2px;width:28px;height:28px;border-radius:8px;color:var(--mut);flex:none}
+.ibtn .car{position:absolute;right:2px;bottom:1px;font-size:8px;color:var(--mut2)}
+.ibtn:hover,.ibtn:focus-visible{background:var(--soft);color:var(--ink)}
+.ibtn[data-tip]:hover::after,.ibtn[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font:500 11px Inter,system-ui,sans-serif;padding:3px 7px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:5}
+.spc{border-top:1px solid var(--line);padding:10px 12px}
+.cbox{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 28px;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 12px;min-height:44px}
+.cbox:focus-within{border-color:#c9c5be}
+.cin{outline:0;font-size:13.5px;min-height:20px;white-space:pre-wrap}
+.cghost{position:absolute;left:12px;right:44px;top:50%;transform:translateY(-50%);display:grid;grid-template-columns:minmax(0,auto) auto;gap:8px;align-items:center;justify-content:start;color:#b5b0a8;font-size:13.5px;pointer-events:none}
+.cghost kbd{font:500 10.5px Inter,system-ui,sans-serif;border:1px solid var(--line);border-radius:5px;padding:0 5px;color:var(--mut);background:#fff}
+.cghost.off{display:none}
+.ibtn.send{background:var(--ink);color:#fff}.ibtn.send:hover{background:#000;color:#fff}
+@media (prefers-reduced-motion:reduce){#runStatus{transition:none}}
+/* ===== design polish (DESIGN-POLISH-2026-10-26) ===== */
+.main{background:var(--page)}
+.box,.tbl,.sidecard,.agc,.card,.kpi,.planstrip,.mx,.acd,.sum,.apbar,.stepper,.fgrid{box-shadow:var(--sh);background:#fff}
+.acr,.opt,.mc,.lay button,.agc{transition:box-shadow .18s ease-out,transform .18s ease-out,border-color .18s ease-out}
+.acr:hover,.opt:hover:not([aria-disabled=true]),.mc:hover:not(.dis):not([aria-disabled=true]),.lay button:hover{box-shadow:var(--shh);transform:translateY(-1px)}
+.agc:hover{box-shadow:var(--shh);transform:none}
+.menu{box-shadow:var(--shp)}.drawer{box-shadow:-12px 0 32px rgba(10,10,10,.12)}
+.tr.run,.tr.hist{transition:background .15s ease-out}
+/* done tick (landing style) */
+.tick{display:inline-block;width:20px;height:20px;border-radius:50%;background:var(--posbg) var(--tick) center/13px no-repeat;flex:none;vertical-align:middle}
+.tick.sm{width:16px;height:16px;background-size:11px}
+.tick.pop{animation:tpop .42s ease-out 1}
+@keyframes tpop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
+.step.done .sn2,.stepper button.done .sn{background:var(--posbg) var(--tick) center/13px no-repeat;border-color:var(--posbg);color:transparent;font-size:0}
+.task .ck.dn{background:var(--posbg) var(--tick) center/12px no-repeat;border-color:var(--posbg);border-radius:50%;width:20px;height:20px}
+.task .ck{border-radius:50%;width:20px;height:20px}
+.task .ck.rv{background:#fff;border-color:var(--amber);box-shadow:0 0 0 3px var(--amberbg)}
+.step.now .sn2{border-color:var(--amber);color:var(--amber);box-shadow:0 0 0 3px var(--amberbg);animation:ring 2s ease-out infinite}
+@keyframes ring{0%,100%{box-shadow:0 0 0 3px var(--amberbg)}50%{box-shadow:0 0 0 6px rgba(254,243,199,.4)}}
+.step.need .sn2{border-color:var(--amber);color:var(--amber);background:#fff;box-shadow:0 0 0 3px var(--amberbg)}
+.step.fail .sn2{background:var(--redbg);border-color:var(--redbg);color:var(--red)}
+.y.tk{display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-weight:500}
+.okc{border:0;background:var(--pos2);color:#15803d;gap:6px;padding:0 9px 0 2px}
+.okc::before{content:"";width:18px;height:18px;border-radius:50%;background:var(--posbg) var(--tick) center/11px no-repeat;flex:none}
+.pi.ok{border:0;background:var(--pos2);color:#15803d;padding-left:3px}
+.pi.ok>span:first-child{display:none}
+.pi.ok::before{content:"";width:16px;height:16px;border-radius:50%;background:var(--posbg) var(--tick) center/10px no-repeat}
+.ckp .k.d{background:var(--posbg);border-color:var(--posbg);color:#15803d}
+.okb.on{background:var(--posbg) var(--tick) center/13px no-repeat;border-color:var(--posbg);color:transparent;border-radius:50%}
+/* soft pills · only "Needs your click" is dark */
+.pill{border-radius:999px;border-color:transparent;background:#f5f5f4;color:#57534e}
+.pill.ok{background:var(--posbg);color:#15803d;border-color:transparent}
+.pill.am{background:var(--amberbg);color:var(--amber);border-color:transparent}
+.pill.red{background:var(--redbg);color:var(--red);border-color:transparent}
+.pill.ink{background:#f5f5f4;color:#44403c;border-color:transparent}
+.pill.dot::before,.pill.ink::before{content:"";width:6px;height:6px;border-radius:50%;background:#a3a3a3;margin-right:2px}
+.pill.ink::before{display:none}
+.lock{border-radius:999px;border-color:transparent;background:#f5f5f4;color:#57534e}
+.nyc{display:inline-flex;align-items:center;gap:5px;height:22px;font-size:11.5px;font-weight:500;border-radius:999px;padding:0 10px;background:var(--ink);color:#fff;white-space:nowrap}
+.nyc svg.i{width:12px;height:12px}
+.cls{border-radius:999px;padding:1px 7px}
+.cls.R{background:#f5f5f4;color:#57534e}.cls.W{background:var(--amberbg);color:var(--amber)}.cls.E{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}.cls.N{background:#fff;color:var(--mut2);border:1px dashed #d4d4d4}
+.oc{border-radius:999px;border-color:transparent}.oc.pen{background:#f5f5f4;color:#44403c}.oc.nm{background:#fff;border:1px dashed #d4d4d4}
+.via.run{background:#f5f5f4;color:#44403c}
+.fc{border-radius:999px;transition:background .15s ease-out}.fc.on{background:#f5f5f4;color:var(--ink);border-color:var(--ink)}
+.cnt{border-radius:999px;padding:0 7px}
+/* engine logos */
+.eg{width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:5px;flex:none;object-fit:contain}
+.egs{display:inline-flex;align-items:center}.egs .eg{margin-right:-3px;border:1.5px solid #fff;border-radius:50%;background:#fff;width:16px;height:16px}.egs .eg:last-child{margin-right:5px}
+/* bars + deltas */
+.prog2,.apbar .prog{height:6px;border-radius:999px;background:#ececec}.prog2 i,.apbar .prog i{border-radius:999px}
+.apbar .prog i{background:var(--ink)}
+.dup{color:var(--pos);font-weight:500}.ddn{color:var(--red);font-weight:500}
+/* locked preview */
+.gate.lp{position:relative;display:block;padding:0;overflow:hidden;background:#fff;border-radius:12px}
+.lpv{filter:blur(3px);opacity:.55;padding:10px 12px;display:grid;gap:6px;pointer-events:none;user-select:none}
+.lpv i{display:block;height:10px;border-radius:6px;background:#e7e5e4}.lpv i:nth-child(2){width:72%}.lpv i:nth-child(3){width:48%}
+.lpt{position:absolute;inset:0;display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:10px;align-items:center;padding:0 12px;background:linear-gradient(90deg,rgba(255,255,255,.96),rgba(255,255,255,.8))}
+.lpt b{font-weight:600}.lpt span.el{font-size:12.5px}
+/* empty states */
+.empty{display:flex;align-items:center;justify-content:center;gap:10px;padding:22px}
+.empty svg.i{width:16px;height:16px;color:var(--mut2)}
+/* answer bar generated line */
+.abar .gen{margin-left:auto;align-self:center;font-size:11.5px;color:var(--mut2);white-space:nowrap}
+.ibtn.send[disabled]{background:#e7e5e4;color:#fff;cursor:not-allowed}
+.cghost{color:var(--mut2)}.cghost kbd{border-radius:4px;font-size:11px;border:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){.acr,.opt,.mc,.lay button,.agc{transition:none}.acr:hover,.opt:hover,.mc:hover,.lay button:hover{transform:none}}
+@media(max-width:1200px){.pcols,.dcols,.ncols{grid-template-columns:1fr}.sum{position:static}.sp{width:380px}}
+@media(max-width:900px){.cnav{display:none!important}.side{width:64px}.side .lbl,.side .ngrp,.side .b,.side .cv,.ws>div,.me>div{display:none}.sp{display:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <symbol id="bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V5"/><circle cx="12" cy="4" r="1"/><path d="M9 13v1.5M15 13v1.5" stroke-width="2.2"/><path d="M2 12.5v2M22 12.5v2"/></symbol>
+ <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+ <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 12l3 3 6-6"/></symbol>
+ <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+ <symbol id="i-free" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
+ <symbol id="i-nav" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></symbol>
+ <symbol id="i-auto" viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></symbol>
+ <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+ <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+ <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+ <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+ <symbol id="i-files" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></symbol>
+ <symbol id="i-retry" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+ <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+ <symbol id="i-brands" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+ <symbol id="i-ac" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".5"/></symbol>
+ <symbol id="i-vis" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+ <symbol id="i-prm" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+ <symbol id="i-top" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4L8 20M16 4l-2 16"/></symbol>
+ <symbol id="i-men" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+ <symbol id="i-cit" viewBox="0 0 24 24"><path d="M7 7h4v4c0 3-2 5-4 6M15 7h4v4c0 3-2 5-4 6"/></symbol>
+ <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6z"/><path d="M9 8a3 3 0 0 1 6 0"/></symbol>
+ <symbol id="i-trf" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></symbol>
+ <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></symbol>
+ <symbol id="i-aud" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.5 8-8 9-4.5-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+ <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7l-4 3v-3H6a2 2 0 0 1-2-2z"/><path d="M9 10h.01M15 10h.01"/></symbol>
+ <symbol id="i-rep" viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 16v-3M12 16V9M15 16v-5"/></symbol>
+ <symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+</svg>
+
+<!-- mockup chrome: files + screens -->
+<nav class="mk" aria-label="Mockup navigation">
+ <span class="lab">Chat v2</span>
+ <a data-action="demo.openIndex" href="index.html">Index</a>
+ <a data-action="demo.openFile" href="CHAT-mockup-v2.html">Core Chat</a>
+ <a data-action="demo.openFile" href="CHAT-mockup-v2-governance.html" class="on" aria-current="page">Governance</a>
+ <a data-action="demo.openFile" href="CHAT-mockup-v2-signature.html">Signature</a>
+ <span class="sep"></span>
+ <a data-action="demo.openScreen" href="#g-roles" data-scr="g-roles">Roles &amp; access</a>
+ <a data-action="demo.openScreen" href="#g-my-access" data-scr="g-my-access">Your access</a>
+ <a data-action="demo.openScreen" href="#g-policy" data-scr="g-policy">Tool policy</a>
+ <a data-action="demo.openScreen" href="#g-capabilities" data-scr="g-capabilities">What Chat can do</a>
+ <a data-action="demo.openScreen" href="#g-agents" data-scr="g-agents">Agents</a>
+ <a data-action="demo.openScreen" href="#g-agent" data-scr="g-agent">Agent detail</a>
+ <a data-action="demo.openScreen" href="#g-agent-new" data-scr="g-agent-new">New agent</a>
+ <a data-action="demo.openScreen" href="#g-run-agent" data-scr="g-run-agent">Run agent</a>
+ <a data-action="demo.openScreen" href="#g-activity" data-scr="g-activity">Activity log</a>
+ <span class="sep"></span>
+ <span class="lab">Signed in as</span>
+ <span class="as" role="group" aria-label="Preview signed-in role"><button data-action="demo.previewRole" data-as="Admin">Admin</button><button data-action="demo.previewRole" data-as="Manager" class="on">Manager</button><button data-action="demo.previewRole" data-as="Analyst">Analyst</button><button data-action="demo.previewRole" data-as="Agency partner">Agency partner</button></span>
+</nav>
+
+<div class="app">
+ <!-- APP SIDEBAR (real order) -->
+ <aside class="side" aria-label="App navigation">
+  <button data-action="appNav.switchBrand" class="ws" data-menu="brandMenu" aria-label="Switch brand"><span class="lg">A</span><div><b>ansvisor.com</b><em>Ansvisor · Growth</em></div><span class="car">▾</span></button>
+  <div class="nav">
+   <div class="ngrp">Execution</div>
+   <button data-action="appNav.navigate" class="ni" data-nav="ac" data-go="g-run-agent"><svg class="i"><use href="#i-ac"/></svg><span class="lbl">Action Center</span><span class="b">5</span></button>
+   <button data-action="appNav.navigate" class="ni" data-nav="chat" data-href="CHAT-mockup-v2.html#s-home" title="Chat Home"><svg class="i"><use href="#i-chat"/></svg><span class="lbl">Chat</span><span class="b am" title="1 needs you">1</span></button>
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens Content › Plan"><svg class="i"><use href="#i-doc"/></svg><span class="lbl">Content</span></button>
+   <div class="nsub open"><button data-action="appNav.navigate" class="ni" data-toast="Opens Plan"><span class="lbl">Plan</span></button><button data-action="appNav.navigate" class="ni" data-toast="Opens Editor"><span class="lbl">Editor</span></button><button data-action="appNav.navigate" class="ni" data-toast="Opens Opportunities"><span class="lbl">Opportunities</span></button><button data-action="appNav.navigate" class="ni" data-toast="Opens Library"><span class="lbl">Library</span></button></div>
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens Audit"><svg class="i"><use href="#i-aud"/></svg><span class="lbl">Audit</span></button>
+   <div class="ngrp">Analytics</div>
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens Visibility"><svg class="i"><use href="#i-vis"/></svg><span class="lbl">Visibility</span></button>
+   <button data-action="appNav.togglePrompts" class="ni" id="prmTog" aria-expanded="false" aria-controls="prmSub"><svg class="i"><use href="#i-prm"/></svg><span class="lbl">Prompts</span><span class="cv">▸</span></button>
+   <div class="nsub" id="prmSub">
+    <button data-action="appNav.navigate" class="ni" data-toast="Opens Tracked Prompts"><span class="lbl">Tracked Prompts</span></button>
+    <button data-action="appNav.navigate" class="ni" data-toast="Opens Prompt Suggestions"><span class="lbl">Prompt Suggestions</span></button>
+    <button data-action="appNav.navigate" class="ni" data-toast="Opens Topics"><span class="lbl">Topics</span></button>
+    <button data-action="appNav.navigate" class="ni" data-toast="Opens Query Fan-outs"><span class="lbl">Query Fan-outs</span></button>
+    <button data-action="appNav.navigate" class="ni" data-toast="Opens Insights"><span class="lbl">Insights</span></button>
+   </div>
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens Mentions"><svg class="i"><use href="#i-men"/></svg><span class="lbl">Mentions</span></button>
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens Citations"><svg class="i"><use href="#i-cit"/></svg><span class="lbl">Citations</span></button>
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens Product Visibility"><svg class="i"><use href="#i-bag"/></svg><span class="lbl">Product Visibility</span></button>
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens AI Referral Traffic"><svg class="i"><use href="#i-trf"/></svg><span class="lbl">AI Referral Traffic</span></button>
+  </div>
+  <div class="nbot">
+   <button data-action="appNav.navigate" class="ni" data-toast="Opens Reports"><svg class="i"><use href="#i-rep"/></svg><span class="lbl">Reports</span></button>
+   <button data-action="appNav.navigate" class="ni" data-nav="settings" data-go="g-roles"><svg class="i"><use href="#i-set"/></svg><span class="lbl">Settings</span></button>
+   <button data-action="account.openMenu" class="me" data-menu="meMenu" aria-label="Account menu"><span class="avt">AK</span><div><b>Alex Kim</b><em id="meRole">Manager</em></div></button>
+  </div>
+ </aside>
+
+ <!-- CHAT SUB-NAV -->
+ <nav class="cnav" id="cnav" aria-label="Chat">
+  <button data-action="chat.new" class="newc" data-toast="New chat opens in Chat"><svg class="i"><use href="#i-plus"/></svg>New chat<kbd>Ctrl ⇧ O</kbd></button>
+  <button data-action="chatMenu.openHome" class="cni" data-href="CHAT-mockup-v2.html#s-home">Home<span class="b am">1</span></button>
+  <button data-action="chatMenu.openAgents" class="cni" data-c="agents" data-go="g-agents">Agents<span class="newp">New</span></button>
+  <button data-action="chatMenu.openSkills" class="cni" data-toast="Opens Skills">Skills</button>
+  <button data-action="chatMenu.openScheduled" class="cni" data-toast="Opens Scheduled · 4 jobs">Scheduled<span class="b">4</span></button>
+  <button data-action="chatMenu.openFiles" class="cni" data-toast="Opens Files">Files</button>
+  <div class="csec">Governance</div>
+  <button data-action="chatMenu.openActivity" class="cni" data-c="activity" data-go="g-activity">Activity<span class="b" id="cnActN" title="Today">11</span></button>
+  <button data-action="chatMenu.openCapabilities" class="cni" data-c="capabilities" data-go="g-capabilities">What Chat can do</button>
+  <button data-action="chatMenu.openPolicy" class="cni" data-go="g-policy">Tool policy</button>
+  <div class="csec">Chats <span class="cnt">148</span></div>
+  <button data-action="chatMenu.openChat" class="cni" data-toast="Opens chat · Why did Perplexity citations drop?"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Why did Perplexity…</span></button>
+  <button data-action="chatMenu.openChat" class="cni" data-toast="Opens chat · Share of voice vs competitors"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Share of voice vs…</span></button>
+ </nav>
+
+ <div class="main">
+  <div class="top">
+   <a data-action="nav.backToChat" class="backc" id="backChat" href="CHAT-mockup-v2.html#s-home">← Back to Chat</a><span class="bsep"></span><div class="crumb" id="crumb"><b>Settings</b></div>
+   <div class="r">
+    <button data-action="runs.toggleTray" class="runsbtn" data-menu="runsMenu" aria-label="Agent runs: 1 running, 1 needs you"><span class="tdots"><i></i><i></i><i></i></span>1 running <span class="n">1 needs you</span></button>
+    <button data-action="panel.open" class="btn sm" id="askChat" data-toast="Chat opens on the right · it sees this page">Ask Chat <span class="mono" style="font-size:11px">Ctrl J</span></button>
+   </div>
+  </div>
+
+  <!-- ========== #g-roles ========== -->
+  <section class="scr" id="g-roles" aria-label="Settings Team">
+   <div class="pg">
+    <div class="pgh"><h1>Settings</h1></div>
+    <div class="stabs" role="tablist" data-stabs></div>
+    <div class="planstrip" data-planstrip></div>
+    <div class="h2" style="margin-top:0"><h2>Roles &amp; access</h2><div class="r"><span class="planbar">View as</span><div class="seg" role="group" aria-label="View this page as a role" id="viewAs"></div></div></div>
+    <div class="robar" id="roBar"></div>
+    <div class="h2"><h2>Members</h2><span class="cnt" id="memN">8</span><div class="r"><span class="pill">Unlimited seats</span><button data-action="roles.invite" class="btn sm pri" id="inviteBtn">Invite</button></div></div>
+    <div class="tbl" id="memTbl"></div>
+    <div class="h2" id="mxH"><h2>What each role can do</h2><span class="cnt">app and Chat</span><div class="r"><span class="legend"><span><span class="cls R">READ</span></span><span><span class="cls W">WRITE</span></span><span><span class="cls E">EXECUTE</span></span><span><span class="cls N">NEVER</span></span></span><span class="pill">Chat acts as the signed-in user</span></div></div>
+    <div class="mx" id="roleMx"></div>
+    <div class="h2"><h2>Admin switches</h2><div class="r"><span class="lock" id="admLock"><svg class="i"><use href="#i-lock"/></svg>Only Admins change these</span></div></div>
+    <div class="box">
+     <div class="setrow"><div><b>Managers can publish, open PRs and send external email after the click</b><em>EXECUTE always needs a click, whoever runs it</em></div><span><button data-action="roles.toggleManagerExecute" class="sw on" role="switch" aria-checked="true" aria-label="Managers can EXECUTE after the click" id="mgrExec"></button></span></div>
+     <div class="setrow"><div><b>Managers can request marketplace skills</b><em>Admins approve</em></div><span><button data-action="roles.toggleManagerSkillRequests" class="sw on" role="switch" aria-checked="true" aria-label="Managers can request marketplace skills" id="mgrSkill"></button></span></div>
+    </div>
+   </div>
+  </section>
+
+  <!-- ========== #g-my-access ========== -->
+  <section class="scr" id="g-my-access" aria-label="Settings Account · Your access">
+   <div class="pg">
+    <div class="pgh"><h1>Settings</h1></div>
+    <div class="stabs" role="tablist" data-stabs></div>
+    <div class="planstrip" data-planstrip></div>
+    <div class="acc">
+     <div class="sidecard"><div class="sh">Profile</div>
+      <div class="bd"><div class="kv" style="margin:0;grid-template-columns:110px 1fr"><span>Name</span><span>Alex Kim</span><span>Email</span><span>alex@ansvisor.com</span><span>Organization</span><span>Ansvisor</span><span>Plan</span><span>Growth</span></div></div>
+      <div class="ft"><button data-action="access.editProfile" class="btn sm" data-toast="Edit your first name">Edit profile</button></div>
+     </div>
+     <div class="sidecard" id="yaCard"><div class="sh">Your access<span class="r"><span class="pill ink" id="yaRole">Manager</span></span></div>
+      <div id="yaRows"></div>
+      <div class="ft"><button data-action="roles.open" class="btn sm pri" id="yaSee">See what each role can do</button><button data-action="access.askAdmin" class="btn sm" id="yaAsk">Ask your Admin</button></div>
+     </div>
+    </div>
+   </div>
+  </section>
+
+  <!-- ========== #g-policy ========== -->
+  <section class="scr" id="g-policy" aria-label="Settings Chat policy">
+   <div class="pg">
+    <div class="pgh"><h1>Settings</h1><div class="r"><span class="planbar">Preview plan</span><div class="seg pseg" role="group" aria-label="Preview plan · mockup control"><button data-action="demo.previewPlan" data-plan="trial">Trial</button><button data-action="demo.previewPlan" data-plan="starter">Starter</button><button data-action="demo.previewPlan" data-plan="growth" class="on actual" title="Your workspace’s actual plan">Growth</button><button data-action="demo.previewPlan" data-plan="ent">Enterprise</button></div></div></div>
+    <div class="stabs" role="tablist" data-stabs></div>
+    <div class="planstrip" data-planstrip></div>
+    <div class="robar" id="polRo" style="margin-bottom:14px"></div>
+    <div class="pcols">
+     <div>
+      <div class="h2" style="margin-top:0"><h2>Default run mode</h2><div class="r"><span class="pill" id="faPlanPill" data-gatep="Full auto"></span></div></div>
+      <div class="modec" id="modeCards">
+       <button data-action="policy.setMode" class="mc" data-mode="ask" aria-pressed="false"><b>Ask me first</b><em>Every WRITE shows a card</em></button>
+       <button data-action="policy.setMode" class="mc on" data-mode="auto" aria-pressed="true"><b>Auto, ask before changes</b><em>Reads run · each WRITE shows a card</em></button>
+       <button data-action="policy.setMode" class="mc" data-mode="full" aria-pressed="false" id="mcFull"><b>Full auto</b><em>Allowed WRITEs run, logged, undoable</em><span class="lk" id="mcFullLk" style="display:none"><span class="lock" data-gate="2"></span></span></button>
+      </div>
+      <div class="gate lp" id="faGate" style="display:none;margin-top:10px"><div class="lpv" aria-hidden="true"><i></i><i></i><i></i></div><div class="lpt"><svg class="i"><use href="#i-lock"/></svg><span class="el" data-gatet="Full auto">Full auto</span><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens Settings › Billing · upgrade to Growth">Upgrade</button></div></div>
+      <div class="box" style="margin-top:12px">
+       <div class="setrow"><div><b>Full auto available to Managers</b><em id="faAvailEm">Admins can always pick it</em></div><span><button data-action="policy.toggleFullAutoForManagers" class="sw on" role="switch" aria-checked="true" aria-label="Full auto available to Managers" id="faAvail"></button></span></div>
+       <div class="setrow"><div><b>Allow “Don’t ask again”</b><em>Per user, only inside this policy</em></div><span><button data-action="policy.toggleDontAskAgain" class="sw on" role="switch" aria-checked="true" aria-label="Allow Don't ask again" id="dnaSw"></button></span></div>
+       <div class="setrow"><div><b>Full auto over MCP <span class="pill" title="Off in v1 · every MCP WRITE shows an approval card or link in the assistant, even on Growth+">MCP writes always ask</span></b><em>Off in v1 · applies in Claude, ChatGPT and Cursor</em></div><span><button data-action="policy.mcpFullAuto" class="sw" role="switch" aria-checked="false" aria-disabled="true" disabled aria-label="Full auto over MCP, off in v1" title="Off in v1"></button></span></div>
+       <div class="setrow"><div><b>Untrusted content in a run</b><em>Web pages, uploads, AI answer text, mention snippets</em></div><span class="lock"><svg class="i"><use href="#i-card"/></svg>Every WRITE shows a card</span></div>
+      </div>
+     </div>
+     <div class="box">
+      <div class="prech"><b>Who decides</b><span class="pill" style="margin-left:auto">Most restrictive wins</span></div>
+      <div class="prec" id="prec">
+       <div data-action="policy.explainStep" class="pst" role="button" tabindex="0" data-p="1"><span class="no">1</span><div><b>Hard rules</b><em>NEVER tools don’t exist · EXECUTE needs a click</em></div><span class="lock"><svg class="i"><use href="#i-lock"/></svg>Fixed</span></div>
+       <div data-action="policy.explainStep" class="pst" role="button" tabindex="0" data-p="2"><span class="no">2</span><div><b>Plan gates</b><em id="pg2">Full auto, own keys, MCP writes: Growth+ · Claude tracking: Enterprise</em></div><span class="pill ok" id="pgPill">Your plan: Growth</span></div>
+       <div data-action="policy.explainStep" class="pst" role="button" tabindex="0" data-p="3"><span class="no">3</span><div><b>Role</b><em>Admin · Manager · Analyst · Agency partner</em><em class="wr">Triggered agents run with their creator’s role; only Admin and Manager can create them</em></div><button data-action="roles.open" class="btn sm" data-go="g-roles">Roles</button></div>
+       <div data-action="policy.explainStep" class="pst" role="button" tabindex="0" data-p="4"><span class="no">4</span><div><b>Tool policy</b><em>Never · Ask · Always per tool</em></div><span class="pill" id="polCount">31 tools</span></div>
+       <div data-action="policy.explainStep" class="pst" role="button" tabindex="0" data-p="5"><span class="no">5</span><div><b>Run mode</b><em>WRITE tools set to Ask or Always</em></div><span class="pill" id="modePill">Auto, ask before changes</span></div>
+       <div data-action="policy.explainStep" class="pst" role="button" tabindex="0" data-p="6"><span class="no">6</span><div><b>“Don’t ask again”</b><em>One user, inside steps 1–5</em></div><span class="pill ok" id="dnaPill">On</span></div>
+      </div>
+      <div class="funnel"><svg class="i"><use href="#i-lock"/></svg>Step 1 can’t be relaxed by any step below it</div>
+     </div>
+    </div>
+    <div class="h2"><h2>Tool policy</h2><span class="cnt">by area</span><div class="r"><span class="legend"><span><span class="cls R">READ</span></span><span><span class="cls W">WRITE</span></span><span><span class="cls E">EXECUTE</span></span><span><span class="cls N">NEVER</span></span></span><button data-action="policy.reset" class="btn sm" id="polReset">Reset to defaults</button></div></div>
+    <div class="tbl" id="polTbl"></div>
+   </div>
+  </section>
+
+  <!-- ========== #g-capabilities ========== -->
+  <section class="scr" id="g-capabilities" aria-label="What Chat can do">
+   <div class="pg">
+    <div class="pgh"><h1>What Chat can do</h1><span class="cnt" id="capN">34 areas</span><div class="r"><button data-action="capabilities.exportCsv" class="btn sm" data-toast="Exported access table · capability-map.csv saved to Files">Export CSV</button><button data-action="capabilities.approveAll" class="btn sm pri" id="apAll">Approve all</button></div></div>
+    <div class="planstrip" data-planstrip></div>
+    <div class="apbar"><span><b id="apN">0</b> of <b id="apT">34</b> rows approved</span><div class="prog"><i id="apBar" style="width:0"></i></div><span class="pill" id="apState">Draft · in review</span><div class="legend" style="margin-left:auto"><span><svg class="i"><use href="#i-free"/></svg>No approval</span><span><svg class="i"><use href="#i-card"/></svg>Approval card</span><span><svg class="i"><use href="#i-auto"/></svg>Can auto-run in Full auto</span><span><svg class="i"><use href="#i-lock"/></svg>Needs your click</span><span><svg class="i"><use href="#i-undo"/></svg>Undo</span></div></div>
+    <div class="fl">
+     <input data-action="capabilities.search" class="srch" id="capQ" placeholder="Search areas or actions" aria-label="Search areas or actions">
+     <button data-action="capabilities.filter" class="fc on" data-cf="all">All</button><button data-action="capabilities.filter" class="fc" data-cf="W">Has WRITE</button><button data-action="capabilities.filter" class="fc" data-cf="E">Has EXECUTE</button><button data-action="capabilities.filter" class="fc" data-cf="nav">Navigate only</button><button data-action="capabilities.filter" class="fc" data-cf="todo">Not approved</button>
+    </div>
+    <div class="tbl" id="capTbl"></div>
+   </div>
+  </section>
+
+  <!-- ========== #g-agents ========== -->
+  <section class="scr" id="g-agents" aria-label="Agents">
+   <div class="pg">
+    <div class="pgh"><h1>Agents</h1><span class="cnt" id="agN">6</span><div class="r"><div class="formula"><span>skill</span>+<span>mode</span>+<span>connections</span>+<span>model</span></div><button data-action="agents.new" class="btn pri" id="newAgBtn" data-go="g-agent-new"><svg class="i"><use href="#i-plus"/></svg>New agent</button></div></div>
+    <div class="kp">
+     <div class="kpi"><small>Running now</small><b id="kRun">1</b></div>
+     <div class="kpi"><small>Needs you</small><b id="kNeed" style="color:var(--amber)">1</b></div>
+     <div class="kpi"><small>Runs this month</small><b>118</b></div>
+     <div class="kpi"><small>Improved outcomes</small><b>23</b></div>
+    </div>
+    <div class="robar agnote" id="agNote" style="display:none"></div>
+    <div class="fl" id="agF"><button data-action="agents.filter" class="fc on" data-af="all">All</button><button data-action="agents.filter" class="fc" data-af="run">Running</button><button data-action="agents.filter" class="fc" data-af="need">Needs you</button><button data-action="agents.filter" class="fc" data-af="idle">Idle</button><button data-action="agents.filter" class="fc" data-af="stop">Stopped</button><button data-action="agents.filter" class="fc" data-af="off">Paused</button></div>
+    <div class="grid" id="agGrid"></div>
+   </div>
+  </section>
+
+  <!-- ========== #g-agent ========== -->
+  <section class="scr" id="g-agent" aria-label="Agent detail">
+   <div class="pg">
+    <div class="pgh">
+     <span class="av" id="adAv"><svg><use href="#bot"/></svg></span>
+     <div><h1 style="font-size:22px">Citation win-back</h1><span class="stl run" id="adSt"><span class="dt run"></span>Running · step 2 of 4 · AC-1258</span></div>
+     <div class="r"><button data-action="agent.pause" class="btn" id="adPause">Pause</button><button data-action="agent.openRun" class="btn" data-toast="Opens the run in Chat · step 2 of 4">Open run</button><button data-action="agent.runNow" class="btn pri" id="adRun">Run now</button><button data-action="agent.more" class="btn ghost" data-menu="agMore" aria-label="More agent options">⋯</button></div>
+    </div>
+    <div class="fgrid">
+     <div><small>Skills</small><div class="v"><span class="cp"><code class="mono">/winback</code></span><span class="cp"><code class="mono">/refresh</code></span></div></div>
+     <div><small>Mode</small><div class="v"><button data-action="agent.openMode" class="tok" data-menu="modeMenu" id="adMode">Auto, ask before changes <span style="color:var(--mut2);font-size:10px">▾</span></button></div></div>
+     <div><small>Connections</small><div class="v"><span class="cp"><span class="dt ok"></span>Google Search Console</span><span class="cp"><span class="dt ok"></span>Webflow</span></div></div>
+     <div><small>Model</small><div class="v"><button data-action="agent.openModel" class="tok" data-menu="modelMenu" id="adModel">Auto <span style="color:var(--mut2);font-size:10px">▾</span></button><span class="q">Ansvisor limit</span></div></div>
+    </div>
+    <div class="dcols" style="margin-top:4px">
+     <div>
+      <div class="h2"><h2>Triggers</h2><span class="cnt">4</span><div class="r"><button data-action="agent.addTrigger" class="btn sm" data-menu="trigMenu" id="addTrig"><svg class="i"><use href="#i-plus"/></svg>Add trigger</button></div></div>
+      <div class="box" id="trgBox">
+       <div class="trg"><span class="ty">Schedule</span><div><b>Mondays 07:00</b><em>Checks every page that lost citations last week</em></div><button data-action="agent.toggleTrigger" class="sw on" role="switch" aria-checked="true" aria-label="Schedule trigger" data-sw="Schedule trigger"></button></div>
+       <div class="trg"><span class="ty">Signal created</span><div><b>Citation lost · 5+ on one page</b><em>Attaches to the active action for that page</em></div><button data-action="agent.toggleTrigger" class="sw on" role="switch" aria-checked="true" aria-label="Signal trigger" data-sw="Signal trigger"></button></div>
+       <div class="trg"><span class="ty">KPI changed</span><div><b>Perplexity citations −10% week over week</b><em>Brand: ansvisor.com</em></div><button data-action="agent.toggleTrigger" class="sw on" role="switch" aria-checked="true" aria-label="KPI trigger" data-sw="KPI trigger"></button></div>
+       <div class="trg off"><span class="ty">Watch rule</span><div><b>WHEN /blog/* loses citations FOR any platform THEN run</b><em>Paused by Sam · Oct 21</em></div><button data-action="agent.toggleTrigger" class="sw" role="switch" aria-checked="false" aria-label="Watch rule trigger" data-sw="Watch rule trigger"></button></div>
+      </div>
+      <div class="h2"><h2>Run history</h2><span class="cnt">31</span><div class="r"><div class="seg" role="group" aria-label="Filter runs"><button data-action="agent.filterRuns" class="on" data-rf="all">All</button><button data-action="agent.filterRuns" data-rf="imp">Improved</button><button data-action="agent.filterRuns" data-rf="pen">Pending</button><button data-action="agent.filterRuns" data-rf="stop">Stopped</button></div></div></div>
+      <div class="tbl" id="runTbl"></div>
+     </div>
+     <div>
+      <div class="sidecard"><div class="sh">Permissions<span class="r"><button data-action="policy.open" class="btn sm ghost" data-go="g-policy">Policy</button></span></div>
+       <div class="perm"><div class="hd"><span class="cls R">READ</span>9 tools<span class="q" style="margin-left:auto">no approval</span></div><ul><li>Citations, prompts, fan-outs</li><li>Action Center actions, signals, history</li><li>Google Search Console</li></ul></div>
+       <div class="perm"><div class="hd"><span class="cls W">WRITE</span>5 tools</div><ul><li>Attach to an active action<em><svg class="i"><use href="#i-card"/></svg></em></li><li>Update a CMS draft<em><svg class="i"><use href="#i-card"/></svg></em></li><li>Refresh draft in Content<em><svg class="i"><use href="#i-card"/></svg></em></li><li>Follow-up check<em><svg class="i"><use href="#i-card"/> <svg class="i"><use href="#i-auto"/></svg></em></li><li>Set task Ready for review<em><svg class="i"><use href="#i-card"/></svg></em></li></ul></div>
+       <div class="perm"><div class="hd"><span class="cls E">EXECUTE</span>1 tool</div><ul><li>Publish to Webflow<em><span class="nyc">Needs your click</span></em></li></ul></div>
+       <div class="perm"><div class="hd"><span class="cls N">NEVER</span></div><ul><li style="color:var(--mut)">Mark a task done · delete an action</li></ul></div>
+      </div>
+      <div class="sidecard"><div class="sh">Access</div>
+       <div class="perm"><div class="kv" style="margin:0;grid-template-columns:96px 1fr"><span>Created by</span><span>Alex Kim · Manager</span><span>Runs as</span><span>Who starts it · triggers: Alex Kim</span><span>Shared</span><span><button data-action="agent.share" class="tok" data-menu="shareMenu" id="adShare">Team <span style="color:var(--mut2);font-size:10px">▾</span></button></span><span>Approvals</span><span>Wait 7 days, then the run stops</span><span>Cost</span><span>~1% of monthly limit per run</span></div></div>
+      </div>
+      <div class="sidecard"><div class="sh">Outcome checks<span class="r q" style="font-weight:400">run #27</span></div>
+       <div class="perm"><div class="ckp" style="grid-template-columns:repeat(4,1fr)"><span class="k d">Day 7</span><span class="k d">Day 14</span><span class="k d">Day 30</span><span class="k n">Day 90</span></div><div class="q" style="margin-top:8px">Baseline 14 days before ship · scheduled tracking data</div></div>
+      </div>
+     </div>
+    </div>
+   </div>
+  </section>
+
+  <!-- ========== #g-agent-new ========== -->
+  <section class="scr" id="g-agent-new" aria-label="New agent">
+   <div class="pg">
+    <div class="pgh"><h1>New agent</h1><div class="r"><span class="planbar">Preview plan</span><div class="seg pseg" role="group" aria-label="Preview plan · mockup control"><button data-action="demo.previewPlan" data-plan="trial">Trial</button><button data-action="demo.previewPlan" data-plan="starter">Starter</button><button data-action="demo.previewPlan" data-plan="growth" class="on actual" title="Your workspace’s actual plan">Growth</button><button data-action="demo.previewPlan" data-plan="ent">Enterprise</button></div><button data-action="agentNew.cancel" class="btn ghost" data-go="g-agents">Cancel</button></div></div>
+    <div class="stepper" id="stepper">
+     <button data-action="agentNew.step" data-st="0" class="on"><span class="sn">1</span>Skill</button>
+     <button data-action="agentNew.step" data-st="1"><span class="sn">2</span>Trigger</button>
+     <button data-action="agentNew.step" data-st="2"><span class="sn">3</span>Mode &amp; approvals</button>
+     <button data-action="agentNew.step" data-st="3"><span class="sn">4</span>Connections &amp; model</button>
+    </div>
+    <div class="ncols">
+     <div>
+      <div class="pane on" data-pane="0">
+       <div class="fl" style="margin-top:0"><button data-action="agentNew.skillSource" class="fc on" data-skf="ans">Ansvisor skills</button><button data-action="agentNew.skillSource" class="fc" data-skf="mine">My skills</button><button data-action="agentNew.skillSource" class="fc" data-skf="mkt">Marketplace</button></div>
+       <div class="opts" id="skOpts"></div>
+      </div>
+      <div class="pane" data-pane="1">
+       <div class="opts" id="trOpts">
+        <button data-action="agentNew.trigger" class="opt" data-tr="Manual"><b>Manual</b><em>Run from Chat or an action</em></button>
+        <button data-action="agentNew.trigger" class="opt on" data-tr="Schedule"><b>Schedule</b><em>Daily, weekly, monthly</em></button>
+        <button data-action="agentNew.trigger" class="opt" data-tr="Signal created"><b>Signal created</b><em>A new Action Center signal</em></button>
+        <button data-action="agentNew.trigger" class="opt" data-tr="KPI changed"><b>KPI changed</b><em>A KPI moves past a threshold</em></button>
+        <button data-action="agentNew.trigger" class="opt" data-tr="Watch rule"><b>Watch rule</b><em>WHEN · FOR · THEN</em></button>
+       </div>
+       <div class="gate lp" id="trGate" style="display:none"><div class="lpv" aria-hidden="true"><i></i><i></i><i></i></div><div class="lpt"><svg class="i"><use href="#i-lock"/></svg><span class="el"><b>Triggered agents</b> · run on a schedule or signal with their creator’s role · Admin or Manager</span><button data-action="access.askAdmin" class="btn sm" data-ask="admins">Ask your Admin</button></div></div>
+       <div class="rule" id="ruleBox">
+        <div class="rw"><span class="kw">EVERY</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="Monday,Weekday,1st of the month">Monday</button><span>at</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="07:00,08:00,09:00">07:00</button></div>
+        <div class="rw"><span class="kw">FOR</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="ansvisor.com,All brands">ansvisor.com</button><button data-action="agentNew.cycleToken" class="tok" data-cycle="All platforms,ChatGPT,Perplexity,Google AI Overviews">All platforms</button></div>
+        <div class="rw"><span class="kw">THEN</span><span class="tok" style="background:var(--soft)">Run agent</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="and attach to the action,and email me the result,only">and attach to the action</button></div>
+       </div>
+      </div>
+      <div class="pane" data-pane="2">
+       <div class="modec" id="nModes">
+        <button data-action="agentNew.mode" class="mc" data-nm="Ask me first"><b>Ask me first</b><em>Every WRITE shows a card</em></button>
+        <button data-action="agentNew.mode" class="mc on" data-nm="Auto, ask before changes"><b>Auto, ask before changes</b><em>Reads run · WRITEs show a card</em></button>
+        <button data-action="agentNew.mode" class="mc" data-nm="Full auto" id="nmFull"><b>Full auto</b><em>Allowed WRITEs run, logged, undoable</em><span class="lk" id="nmFullLk" style="display:none"><span class="lock" data-gate="2"></span></span></button>
+       </div>
+       <div class="gate lp" id="nGate" style="display:none"><div class="lpv" aria-hidden="true"><i></i><i></i><i></i></div><div class="lpt"><svg class="i"><use href="#i-lock"/></svg><span class="el" data-gatet="Full auto">Full auto</span><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens Settings › Billing · upgrade to Growth">Upgrade</button></div></div>
+       <div class="tbl" style="margin-top:12px" id="nAppr"></div>
+      </div>
+      <div class="pane" data-pane="3">
+       <div class="h2" style="margin-top:0"><h2>Connections</h2></div>
+       <div class="box" id="nConns"></div>
+       <div class="h2"><h2>Model</h2></div>
+       <div class="opts" id="nModel">
+        <button data-action="agentNew.model" class="opt on" data-md="Auto"><b>Auto</b><em>Picks per step · Ansvisor limit</em></button>
+        <button data-action="agentNew.model" class="opt" data-md="Fast"><b>Fast</b><em>Cheaper, for reads and checks</em></button>
+        <button data-action="agentNew.model" class="opt" data-md="Best writing"><b>Best writing</b><em>For drafts and rewrites</em></button>
+        <button data-action="agentNew.model" class="opt" data-md="Own key" id="mdOwn"><b>Own key</b><em>Your AI provider key</em><span class="lk" id="mdOwnLk" style="display:none"><span class="lock" data-gate="2"></span></span></button>
+       </div>
+       <div class="gate lp" id="nGate2" style="display:none"><div class="lpv" aria-hidden="true"><i></i><i></i><i></i></div><div class="lpt"><svg class="i"><use href="#i-lock"/></svg><span class="el" data-gatet="Own keys">Own keys</span><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens Settings › Billing · upgrade to Growth">Upgrade</button></div></div>
+      </div>
+      <div class="nfoot"><button data-action="agentNew.back" class="btn" id="nBack">Back</button><span class="q" id="nStepL">Step 1 of 4</span><div class="r"><button data-action="agentNew.next" class="btn pri" id="nNext">Next</button></div></div>
+     </div>
+     <aside class="sum" aria-label="Agent summary">
+      <h3>Agent</h3>
+      <div class="row"><span>Name</span><span id="sName">Citation win-back 2</span></div>
+      <div class="row"><span>Skill</span><span id="sSkill"><code class="mono">/winback</code></span></div>
+      <div class="row"><span>Trigger</span><span id="sTrig">Schedule · Monday 07:00</span></div>
+      <div class="row"><span>Mode</span><span id="sMode">Auto, ask before changes</span></div>
+      <div class="row"><span>Connections</span><span id="sConn">Google Search Console, Webflow</span></div>
+      <div class="row"><span>Model</span><span id="sModel">Auto</span></div>
+      <div class="row"><span>Runs as</span><span id="sRunsAs">Alex Kim · Manager</span></div>
+      <div class="row"><span>Approvals</span><span>Wait 7 days, then the run stops</span></div>
+      <div class="row"><span>Outcome</span><span>Checks on day 7 · 14 · 30 · 90</span></div>
+      <div class="row"><span>Publishing</span><span><span class="nyc">Needs your click</span></span></div>
+      <div class="row"><span>Cost</span><span>~1% of monthly limit per run</span></div>
+     </aside>
+    </div>
+   </div>
+  </section>
+
+  <!-- ========== #g-run-agent ========== -->
+  <section class="scr" id="g-run-agent" aria-label="Run agent from Action Center">
+   <div class="acw">
+    <div class="acmain">
+     <div class="pgh" style="margin-bottom:10px"><h1>Action Center</h1><div class="r"><span class="pill">Today 5 · Signals 12</span></div></div>
+     <div class="tabs2" role="tablist" id="acTabs"><button data-action="runAgent.acTab" class="on" role="tab" aria-selected="true" data-act="actions">Actions<i>5</i></button><button data-action="runAgent.acTab" role="tab" aria-selected="false" data-act="signals">Signals<i>12</i></button><button data-action="runAgent.acTab" role="tab" aria-selected="false" data-act="kpis">KPIs</button><button data-action="runAgent.acTab" role="tab" aria-selected="false" data-act="history">History</button></div>
+     <div class="acp" data-acp="signals">
+      <div class="tbl" id="sigTbl"></div>
+     </div>
+     <div class="acp" data-acp="kpis">
+      <div class="kp">
+       <div class="kpi"><small>Visibility score</small><b>41</b> <span class="q"><span class="dup">▲ 3 pts</span> · 30 days</span></div>
+       <div class="kpi"><small><img class="eg" alt="" src="https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/6adcadbdbe3ffb2602266865_ansvisor-app-perplexity.svg">Perplexity citations</small><b>17</b> <span class="q"><span class="ddn">▼ 14</span> · 7 days</span></div>
+       <div class="kpi"><small>Share of voice</small><b>22%</b> <span class="q"><span class="dup">▲ 2 pts</span> · 30 days</span></div>
+       <div class="kpi"><small>AI referral sessions</small><b>1,240</b> <span class="q"><span class="dup">▲ 8%</span> · 30 days</span></div>
+      </div>
+     </div>
+     <div class="acp" data-acp="history">
+      <div class="h2" style="margin-top:0"><h2>Impact</h2><span class="cnt">outcome per action</span><div class="r"><span class="pill">Same data as Reports › What Ansvisor did for you</span><button data-action="impact.openReport" class="btn sm" data-toast="Opens Reports › What Ansvisor did for you · monthly summary and export">Open in Reports</button></div></div>
+      <div class="ckleg"><span>Baseline: 14 days before ship</span><span>Day 7 early signal</span><span>Day 14 first verdict</span><span>Day 30 confirmed</span><span>Day 90 lasting effect</span><span>≥3 pts vs control prompts</span></div>
+      <div class="tbl" id="histTbl"></div>
+     </div>
+     <div class="acp on" data-acp="actions">
+     <div class="acl" id="acList">
+      <button data-action="runAgent.selectAction" class="acr on" data-ac="1258"><span class="id">AC-1258</span><div><span class="tt">Win back Perplexity citations for /blog/what-is-aeo</span><em>Recover · 2 pages · due Oct 30</em></div><span class="pill ink" id="acRunPill"><span class="tdots"><i></i><i></i><i></i></span>Agent running</span></button>
+      <button data-action="runAgent.selectAction" class="acr" data-ac="1261"><span class="id">AC-1261</span><div><span class="tt">Add FAQ to /pricing from top fan-outs</span><em>Grow · 1 page · due Oct 31</em></div><span class="pill am">Ready for review</span></button>
+      <button data-action="runAgent.selectAction" class="acr" data-ac="1263"><span class="id">AC-1263</span><div><span class="tt">Fix 2 broken links on /features</span><em>Fix · 1 page · due Nov 2</em></div><span class="pill">Open</span></button>
+     </div>
+     <div class="acd">
+      <div class="hd"><div><h2>Win back Perplexity citations for /blog/what-is-aeo</h2><em>AC-1258 · Recover · created by the engine Oct 24 · assignee Alex Kim + Citation win-back</em></div>
+       <div class="r"><button data-action="runAgent.markDone" class="btn" id="markDone">Mark done</button><button data-action="runAgent.run" class="btn pri" id="runAgent">Run agent</button></div></div>
+      <div class="bd">
+       <div class="att" id="attNote"><svg class="i" style="margin-top:2px"><use href="#i-card"/></svg><div><b>Attached to this active action · no duplicate created</b><em>Signal “/features lost 6 Perplexity citations” matched this definition. Added as evidence. Targets stay frozen.</em></div><button data-action="runAgent.viewSignal" class="btn sm" data-toast="Opens the signal in Signals">View signal</button></div>
+       <div><small>Why</small>/blog/what-is-aeo lost 14 Perplexity citations in 7 days. Perplexity now cites two newer 2026 guides for the same prompts.</div>
+       <div><small>Targets · frozen Oct 24</small><div class="tgt"><div>Perplexity citations<b>17 → 28</b></div><div>Prompts<b>6</b></div><div>Pages<b>2</b></div></div></div>
+       <div><small>Tasks</small>
+        <div class="task"><span class="ck dn"></span><div>Compare with the guides Perplexity cites<em>Agent · done</em></div></div>
+        <div class="task"><span class="ck rv" id="t2ck"></span><div>Refresh /blog/what-is-aeo<em id="t2em">Agent · draft waiting for your OK</em></div></div>
+        <div class="task"><span class="ck"></span><div>Publish the refreshed page<em>You · needs your click</em></div></div>
+        <div class="task"><span class="ck"></span><div>Outcome checks · day 7, 14, 30, 90<em>Agent · after publish · scheduled tracking data</em></div></div>
+       </div>
+      </div>
+     </div>
+     </div>
+    </div>
+    <aside class="sp" aria-label="Chat run panel">
+     <div class="hd"><span class="av" style="width:24px;height:24px;border-radius:8px"><svg style="width:14px;height:14px"><use href="#bot"/></svg></span>Chat<span class="pill" style="font-weight:400">AC-1258</span><div class="r"><button data-action="panel.openFullPage" class="btn sm ghost" aria-label="Open as full page" data-toast="Opens this run as a full Chat page">⤢</button><button data-action="panel.close" class="btn sm ghost" aria-label="Close panel" id="spClose">✕</button></div></div>
+     <div class="bd" id="spBody">
+      <div class="scope"><span class="pill">Scoped to AC-1258</span><span class="pill">Citation win-back</span><span class="pill">Auto, ask before changes</span></div>
+      <div class="card">
+       <div class="ch"><span class="av live" id="runAv" style="width:22px;height:22px;border-radius:7px"><svg style="width:13px;height:13px"><use href="#bot"/></svg></span><b>Run · <code class="mono">/winback</code></b><div class="r"><span id="runCount" class="q">2 of 4 steps</span><div class="prog2"><i id="runProg" style="width:50%"></i></div></div></div>
+       <div class="barl" id="runBar"><i></i></div>
+       <div class="rstat" role="status" aria-live="polite"><span class="sdot" id="runDot"></span><span class="el" id="runStatus">Reading AC-1258…</span></div>
+       <div class="chips" id="doneChips"></div>
+       <div class="cb">
+        <div class="step done"><span class="sn2">✓</span><div class="tx">Compare with the 2026 guides Perplexity cites<em>412 answers · 2 guides · 3 gaps</em></div><span class="cls R">READ</span></div>
+        <div class="step need" id="rs2"><span class="sn2">2</span><div class="tx">Update the Webflow CMS draft of /blog/what-is-aeo<em>Waiting for your OK</em></div><span class="cls W">WRITE</span></div>
+        <div class="step" id="rs3"><span class="sn2">3</span><div class="tx">Publish the refreshed page<em>Needs your click</em></div><span class="cls E">EXECUTE</span></div>
+        <div class="step" id="rs4"><span class="sn2">4</span><div class="tx">Set a follow-up check for Oct 30<em>Asks you · one click · scheduled tracking data</em></div><span class="cls W">WRITE</span></div>
+       </div>
+       <div class="meta"><span>AI usage <b>~1%</b></span><span><span class="dt ok"></span> <b>Google Search Console</b></span><span><span class="dt ok"></span> <b>Webflow</b></span></div>
+       <div class="abar" role="toolbar" aria-label="Answer actions"><button data-action="answer.copy" class="ibtn" data-tip="Copy" aria-label="Copy" data-toast="Copied the run summary"><svg class="i"><use href="#i-copy"/></svg></button><button data-action="answer.download" class="ibtn wide" data-tip="Download" aria-label="Download" data-menu="dlMenu"><svg class="i"><use href="#i-dl"/></svg><span class="car">▾</span></button><button data-action="answer.saveToFiles" class="ibtn" data-tip="Save to Files" aria-label="Save to Files" data-toast="Saved to Files · run-AC-1258.md"><svg class="i"><use href="#i-files"/></svg></button><button data-action="answer.retry" class="ibtn" data-tip="Retry" aria-label="Retry" data-toast="Retry asks first · the run is still waiting on your OK"><svg class="i"><use href="#i-retry"/></svg></button><span class="gen">Generated 10:41 · /winback</span></div>
+      </div>
+      <div class="card need" id="wCard">
+       <div class="ch"><span class="cls W">WRITE</span><b>Update CMS draft · /blog/what-is-aeo</b><div class="r"><span class="pill am">Needs your OK</span></div></div>
+       <div class="cb">
+        <div class="diff"><div class="del">AEO is a new idea that most teams haven’t tried yet.</div><div class="ins">Answer engine optimization (AEO) makes a page easy for AI engines to quote. In 2026, 3 of the top 5 guides add a one-line definition first.</div></div>
+        <div class="q">Draft only · the live page doesn’t change · Undo in Activity</div>
+       </div>
+       <div class="cf"><label class="l"><input data-action="approval.dontAskAgain" type="checkbox" id="dnaChk"> Don’t ask again for CMS drafts</label><div class="r"><button data-action="approval.skip" class="btn sm" id="wSkip">Skip</button><button data-action="approval.edit" class="btn sm" data-toast="Edit the new text, then approve">Edit</button><button data-action="approval.approve" class="btn sm pri" id="wOk">Approve</button></div></div>
+      </div>
+      <div class="card exec" id="eCard" style="opacity:.55">
+       <div class="ch"><span class="cls E">EXECUTE</span><b>Publish to Webflow · /blog/what-is-aeo</b><div class="r"><span class="nyc">Needs your click</span></div></div>
+       <div class="cb"><div class="q" style="margin-top:6px">Goes live on ansvisor.com · no mode skips this step</div></div>
+       <div class="cf"><span class="l" id="eNote">After the draft is approved</span><div class="r"><button data-action="exec.preview" class="btn sm" data-toast="Opens the Webflow draft preview">Preview</button><button data-action="exec.publish" class="btn sm pri" id="ePub" disabled>Publish</button></div></div>
+      </div>
+     </div>
+     <div class="spc"><div class="cbox"><div data-action="composer.input" class="cin" id="cin" contenteditable="true" role="textbox" aria-label="Message Chat" aria-describedby="ghost"></div><span class="cghost" id="ghost"><span class="el" id="ghostT">Approve the draft, then publish after review</span><kbd>Tab</kbd></span><button data-action="composer.send" class="ibtn send" id="cSend" data-tip="Send" aria-label="Send"><svg class="i"><use href="#i-send"/></svg></button></div></div>
+    </aside>
+   </div>
+  </section>
+
+  <!-- ========== #g-activity ========== -->
+  <section class="scr" id="g-activity" aria-label="Activity log">
+   <div class="pg">
+    <div class="pgh"><h1>Activity</h1><div class="r"><button data-action="activity.export" class="btn sm" data-toast="Exported activity.csv · last 30 days">Export</button></div></div>
+    <div class="lay" role="tablist">
+     <button data-action="activity.layer" class="on" data-lay="all" role="tab" aria-selected="true"><b>All writes</b><em><span id="lAll">17</span> events</em></button>
+     <button data-action="activity.layer" data-lay="ah" role="tab" aria-selected="false"><b>Action History</b><em>Events on actions, tagged chat or run · <span id="lAh">8</span></em></button>
+     <button data-action="activity.layer" data-lay="ws" role="tab" aria-selected="false"><b>Workspace log</b><em>Prompts, competitors, memory, CMS drafts, schedules, checks · <span id="lWs">9</span></em></button>
+    </div>
+    <div class="fl">
+     <button data-action="activity.filterMenu" class="fdd" data-menu="fUser"><span>User</span><b id="fUserV">All</b><span class="car">▾</span></button>
+     <button data-action="activity.filterMenu" class="fdd" data-menu="fAgent"><span>Agent</span><b id="fAgentV">All</b><span class="car">▾</span></button>
+     <button data-action="activity.filterMenu" class="fdd" data-menu="fArea"><span>Area</span><b id="fAreaV">All</b><span class="car">▾</span></button>
+     <button data-action="activity.filterMenu" class="fdd" data-menu="fCls"><span>Class</span><b id="fClsV">All</b><span class="car">▾</span></button>
+     <button data-action="activity.autoOnly" class="fc" id="fAutoOnly">Auto-run only</button>
+     <button data-action="activity.clearFilters" class="btn sm ghost" id="fClear">Clear</button>
+     <span class="q" style="margin-left:auto" id="actShown"></span>
+    </div>
+    <div class="tbl" id="actTbl"></div>
+   </div>
+  </section>
+ </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Details"><div class="dh"><b id="drT"></b><button data-action="drawer.close" class="btn sm ghost" style="margin-left:auto" aria-label="Close" id="drX">✕</button></div><div class="db" id="drB"></div></aside>
+<div class="menu" id="menu" role="menu"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastT"></span><button data-action="toast.undo" id="toastU" style="display:none">Undo</button></div>
+
+<script>
+function $(s,r){return (r||document).querySelector(s)}function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+function svg(id){return '<svg class="i"><use href="#'+id+'"/></svg>'}
+var tT;function toast(t,undo){$('#toastT').textContent=t;var u=$('#toastU');u.style.display=undo?'':'none';u.onclick=function(){$('#toast').classList.remove('on');undo()};var x=$('#toast');x.classList.add('on');clearTimeout(tT);tT=setTimeout(function(){x.classList.remove('on')},undo?4200:2200)}
+var PLAN='growth';
+/* ---------- current plan (Your plan strip + plan-relative gates) ---------- */
+var PNAME={trial:'Trial',starter:'Starter',growth:'Growth',ent:'Enterprise'};var PRANK={trial:0,starter:1,growth:2,ent:3};var RNAME=['Trial','Starter','Growth','Enterprise'];
+function lowPlan(){return PRANK[PLAN]<2}
+function planRank(){return PRANK[PLAN]}
+function gateTxt(rank){return planRank()>=rank?'Included in your plan':'Needs '+RNAME[rank]+' · you’re on '+PNAME[PLAN]}
+var GATEB={'Full auto':'agents run approved changes for you, logged and undoable','Own keys':'use your own AI provider key'};
+var PLANS={
+ trial:{price:'9 days left · $1 AI cap',inc:[[1,'Copy as agent task'],[0,'MCP · not in trial'],[0,'Full auto'],[0,'Own keys'],[0,'Open PR']],ai:'18% of $1',next:'Starter',diff:'$49/mo',get:['Keep ChatGPT and Copilot tracking after day 14','Use Ansvisor inside ChatGPT, Claude and Cursor (read)','AI limit of $5 a month on Starter, not a $1 cap']},
+ starter:{price:'$49/mo',inc:[[1,'ChatGPT + Copilot'],[1,'MCP read'],[1,'Copy as agent task'],[0,'Full auto'],[0,'Own keys'],[0,'Open PR']],ai:'18% used',next:'Growth',diff:'+$200/mo',get:['Track Perplexity, Gemini, Google AI Overviews and AI Mode','Full auto: agents run changes for you, logged and undoable','Open pull requests to your site','Use Ansvisor inside ChatGPT, Claude and Cursor with write actions']},
+ growth:{price:'$249/mo',inc:[[1,'6 engines'],[1,'Full auto'],[1,'Own keys'],[1,'MCP read + write'],[1,'Open PR'],[0,'Claude tracking']],ai:'18% used',next:'Enterprise',diff:'from +$250/mo',get:['Track Claude’s answers too · all 7 engines']},
+ ent:{price:'from $499/mo',inc:[[1,'All 7 engines incl. Claude'],[1,'Full auto'],[1,'Own keys'],[1,'MCP read + write'],[1,'Open PR']],ai:'18% used'}};
+function renderPlanStrip(){var P=PLANS[PLAN];var h='<div class="psr"><div class="psn"><small>Your plan</small><b>'+PNAME[PLAN]+'</b><span class="q">'+P.price+'</span></div><div class="psi">'+P.inc.map(function(x){return '<span class="pi'+(x[0]?' ok':'')+'">'+(x[0]?'<span>✓</span>':svg('i-lock'))+engLabel(x[1])+'</span>'}).join('')+'</div><div class="psa"><small>AI limit</small><b>'+P.ai+'</b></div><div class="psb">'+(P.next?'<button data-action="plan.compare" class="btn sm" data-toast="Opens Settings › Billing · compare plans">Compare plans</button>':'<button data-action="plan.openBilling" class="btn sm" data-toast="Opens Settings › Billing">Billing</button>')+'</div></div>';
+ if(P.next)h+='<div class="psr up"><div class="psn"><small>With '+P.next+' you’d also get</small></div><div class="psg">'+P.get.map(function(g){return '<span>'+svg('i-plus')+engLabel(g)+'</span>'}).join('')+'</div><div class="psa"><b>'+P.diff+'</b></div><div class="psb"><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens Settings › Billing · upgrade to '+P.next+'">Upgrade</button></div></div>';
+ $$('[data-planstrip]').forEach(function(s){s.innerHTML=h})}
+function updateGates(){$$('[data-gate]').forEach(function(e){var r=+e.dataset.gate;e.innerHTML=(planRank()>=r?'':svg('i-lock'))+gateTxt(r)});
+ $$('[data-gatep]').forEach(function(e){var ok=planRank()>=2;e.className='pill'+(ok?' ok':'');e.innerHTML=(ok?'':svg('i-lock')+' ')+e.dataset.gatep+' · '+gateTxt(2)});
+ $$('[data-gatet]').forEach(function(e){var k=e.dataset.gatet;e.textContent=k+' · '+gateTxt(2)+' — '+GATEB[k]})}
+var E6=['ChatGPT','Perplexity','Gemini','Google AI Overviews','Google AI Mode','Copilot'];function engLabel(t){return t=='ChatGPT + Copilot'?engs(['ChatGPT','Copilot'])+t:t=='6 engines'?engs(E6)+t:/^All 7 engines/.test(t)?engs(E6.concat(['Claude']))+t:/^Track Perplexity/.test(t)?engs(['Perplexity','Gemini','Google AI Overviews','Google AI Mode'])+t:/^Track Claude/.test(t)||t=='Claude tracking'?engs(['Claude'])+t:/ChatGPT and Copilot/.test(t)?engs(['ChatGPT','Copilot'])+t:t}
+function plgTxt(s){var r=s=='Growth+'?2:s=='Starter+'?1:0;if(s=='Starter+'&&PLAN=='trial')return 'Needs Starter · not in trial';return planRank()>=r?'In your plan':'Needs '+RNAME[r]}
+
+/* ---------- routing ---------- */
+var CRUMB={'g-roles':['Settings','Team','Roles & access'],'g-my-access':['Settings','Account','Your access'],'g-policy':['Settings','Chat'],'g-capabilities':['Chat','What Chat can do'],'g-agents':['Chat','Agents'],'g-agent':['Chat','Agents','Citation win-back'],'g-agent-new':['Chat','Agents','New agent'],'g-run-agent':['Action Center','Actions','AC-1258'],'g-activity':['Chat','Activity']};
+var NAV={'g-roles':'settings','g-my-access':'settings','g-policy':'settings','g-run-agent':'ac'};
+var CRT={'Chat':'CHAT-mockup-v2.html#s-home','Settings':'g-my-access','Team':'g-roles','Account':'g-my-access','Agents':'g-agents','Action Center':'g-run-agent','Actions':'g-run-agent'};
+// "← Back to Chat" goes to Chat Home; when the page was opened from a conversation (#…?from=s-ask) it returns to that chat
+var BACKFROM='';function setBack(qs){var m=/from=(?:[^&#]*?(?:%23|#))?(s-[a-z0-9-]+)/.exec(decodeURIComponent(qs||""));if(m)BACKFROM=m[1];var b=$('#backChat');if(BACKFROM){m=[0,BACKFROM];b.href='CHAT-mockup-v2.html#'+m[1];b.textContent='← Back to chat'}else{b.href='CHAT-mockup-v2.html#s-home';b.textContent='← Back to Chat'}}
+document.addEventListener('click',function(e){var h=e.target.closest('[data-href]');if(h){e.preventDefault();location.href=h.dataset.href}},true);
+document.addEventListener('keydown',function(e){if(e.key=='Escape'&&($('#drawer').classList.contains('on')||$('#menu').classList.contains('on'))){e.preventDefault();e.stopPropagation();closeAll()}},true);
+function go(id,opt){id=id||'';var q=id.split('?');id=q[0];if(q[1]){var m=/as=([a-z ]+)/i.exec(decodeURIComponent(q[1]));if(m){var rr=ROLES.filter(function(r){return r.toLowerCase()==m[1].toLowerCase()})[0];if(rr)setRole(rr,true)}}
+ if(!CRUMB[id])id='g-roles';$$('.scr').forEach(function(s){s.classList.toggle('on',s.id==id)});
+ var nav=NAV[id]||'chat';$$('.side .ni').forEach(function(n){n.classList.toggle('on',n.dataset.nav==nav)});
+ $('#cnav').classList.toggle('on',nav=='chat');
+ var cm={'g-agents':'agents','g-agent':'agents','g-agent-new':'agents','g-activity':'activity','g-capabilities':'capabilities'};
+ $$('#cnav .cni').forEach(function(c){c.classList.toggle('on',c.dataset.c==cm[id])});
+ var cr=CRUMB[id];$('#crumb').innerHTML=cr.map(function(c,i){if(i==cr.length-1)return '<b>'+c+'</b>';var t=CRT[c];return (t?(t.indexOf('.html')>0?'<a data-action="nav.breadcrumb" class="crl" href="'+t+'">'+c+'</a>':'<button data-action="nav.breadcrumb" class="crl" data-go="'+t+'">'+c+'</button>'):'<span>'+c+'</span>')+'<span>›</span>'}).join('');setBack(q[1]);
+ $('#askChat').style.display=(nav=='chat')?'none':'';
+ $$('.mk a[data-scr]').forEach(function(a){a.classList.toggle('on',a.dataset.scr==id)});
+ $$('[data-stabs]').forEach(function(t){$$('button',t).forEach(function(b){b.classList.toggle('on',(b.dataset.tab=='Team'&&id=='g-roles')||(b.dataset.tab=='Chat'&&id=='g-policy')||(b.dataset.tab=='Account'&&id=='g-my-access'));b.setAttribute('aria-selected',b.classList.contains('on'))})});
+ if(q[1]){var tb=/tab=([a-z]+)/.exec(q[1]);if(tb){var tbb=$('#acTabs [data-act="'+tb[1]+'"]');if(tbb)tbb.click()}var sp=/step=([0-9])/.exec(q[1]);if(sp&&typeof setStep=='function')setStep(+sp[1])}
+ setTimeout(function(){countUp($('#'+id))},30);
+ closeAll();if(location.hash.split('?')[0]!='#'+id)history.replaceState(null,'','#'+id);var p=$('#'+id+' .pg');if(p)p.scrollTop=0;
+ if(opt&&opt.focus&&id=='g-roles'){var mx=$('#roleMx');var pg=$('#g-roles .pg');pg.scrollTop=$('#mxH').offsetTop-20;mx.classList.remove('focus');void mx.offsetWidth;mx.classList.add('focus')}}
+window.addEventListener('hashchange',function(){go(location.hash.slice(1))});
+
+/* ---------- settings tabs ---------- */
+var STABS=['Account','Organization','Team','Authors','Notifications','Integrations','API Keys','AI Providers','Billing','Chat'];
+$$('[data-stabs]').forEach(function(t){t.innerHTML=STABS.map(function(s){return '<button data-action="settings.tab" role="tab" data-tab="'+s+'"'+(s=='Team'?' data-go="g-roles"':s=='Chat'?' data-go="g-policy"':s=='Account'?' data-go="g-my-access"':' data-toast="Opens Settings › '+s+'"')+'>'+s+(s=='Chat'?'<span class="newp">New</span>':'')+'</button>'}).join('')});
+
+/* ---------- roles ---------- */
+/* Live roles (web/src/components/providers/role-provider.tsx): admin · manager · analyst · agency_partner */
+var ROLES=['Admin','Manager','Analyst','Agency partner'];
+var ROLE='Manager';
+function isAdmin(){return ROLE=='Admin'}
+function canWrite(){return ROLE=='Admin'||ROLE=='Manager'}
+// [initials, name, email, role ('ME' = signed-in user), brands, last active]
+var MEM=[['SL','Sam Lee','sam@ansvisor.com','Admin','All brands','12 min ago'],['AK','Alex Kim','alex@ansvisor.com','ME','All brands','Now'],['PS','Priya Shah','priya@ansvisor.com','Manager','All brands','1 h ago'],['JD','Jordan Diaz','jordan@ansvisor.com','Manager','All brands','Yesterday'],['TB','Taylor Brooks','taylor@ansvisor.com','Analyst','All brands','2 days ago'],['MR','Morgan Reed','morgan@ansvisor.com','Analyst','All brands','Oct 20'],['CN','Chris Novak','chris@partner-agency.com','Agency partner','2 shared brands','Oct 22'],['RP','Riley Park','riley@ansvisor.com','Manager','All brands','Invite sent']];
+function mRole(m){return m[3]=='ME'?ROLE:m[3]}
+function mBrands(m){return m[3]=='ME'&&ROLE=='Agency partner'?'2 shared brands':m[4]}
+var mgrExec=true,mgrSkill=true;
+function chatLine(r){return r=='Admin'?'Everything, incl. policy, keys, connections':r=='Manager'?(mgrExec?'WRITE with approval · EXECUTE after click':'WRITE with approval · no EXECUTE'):r=='Analyst'?'Read-only composer · asks a Manager':'Read-only · shared brands only'}
+function roMsg(){return ROLE=='Admin'?['You’re an Admin','You can change roles and the switches below']:['You’re '+(ROLE=='Admin'||ROLE=='Analyst'||ROLE=='Agency partner'?'an ':'a ')+ROLE+' · read-only here','Only Admins change roles']}
+function renderRoBar(){var m=roMsg();$('#roBar').innerHTML=svg(isAdmin()?'i-card':'i-lock')+'<div class="el"><b>'+m[0]+'</b><em>'+m[1]+'</em></div>'+(isAdmin()?'<button data-action="activity.open" class="btn sm" data-go="g-activity">Role changes in Activity</button>':'<button data-action="access.askAdmin" class="btn sm" data-ask="admins">Ask your Admin</button>');
+ $('#viewAs').innerHTML=ROLES.map(function(r){return '<button data-action="demo.previewRole" data-as="'+r+'"'+(r==ROLE?' class="on" aria-pressed="true"':' aria-pressed="false"')+'>'+r+'</button>'}).join('')}
+function renderMem(){var h='<div class="tr th mem"><span>Member</span><span>Role</span><span>Brands</span><span>Through Chat</span><span>Last active</span><span></span></div>';
+ MEM.forEach(function(m,i){var r=mRole(m);var me=m[3]=='ME';var dis=!isAdmin()?' disabled title="Only Admins change roles"':me?' disabled title="Another Admin changes your role"':'';
+  h+='<div class="tr mem"><div class="who"><span class="avt">'+m[0]+'</span><div><b>'+m[1]+(me?'<span class="you">You</span>':'')+'</b><em>'+m[2]+'</em></div></div><span><button data-action="roles.setRole" class="rsel" data-role="'+i+'" aria-label="Role for '+m[1]+'"'+dis+'><span class="el">'+r+'</span><span class="car">▾</span></button></span><span class="q el">'+mBrands(m)+'</span><span class="q el">'+chatLine(r)+'</span><span class="q">'+(m[5]=='Invite sent'?'<span class="pill am">Invite sent</span>':m[5])+'</span><button data-action="roles.memberMore" class="btn sm ghost" aria-label="More for '+m[1]+'" data-mem="'+i+'">⋯</button></div>'});
+ $('#memTbl').innerHTML=h;$('#memN').textContent=MEM.length;var ib=$('#inviteBtn');ib.disabled=!isAdmin();ib.title=isAdmin()?'':'Only Admins invite'}
+// [class, capability, where, [Admin, Manager, Analyst, Agency partner]] · 'sec' rows are group headers
+var MX=[['sec','Everyone · app and Chat'],
+ ['R','See dashboards, prompts, citations and reports','App',['y','y','y','sh']],
+ ['R','Ask Chat, create files and downloads for yourself','Chat',['y','y','y','sh']],
+ ['W','Personal memory and personal in-app watch rules','Chat · only you',['y','y','y','y']],
+ ['sec','Workspace changes'],
+ ['W','Create or attach actions · prompts, topics, competitors','App and Chat',['y','y','n','n']],
+ ['W','Drafts, briefs, schedules, CMS drafts','App and Chat · approval card',['y','y','n','n']],
+ ['W','Create triggered agents','Run with the creator’s role',['y','y','n','n']],
+ ['W','Workspace memory, shared skills, marketplace skills','Chat',['ap','rq','n','n']],
+ ['E','Publish, open a PR, send external email','Always after a click',['ck','mg','n','n']],
+ ['sec','Admin only'],
+ ['W','Billing, plan, AI credit and storage packs','Settings › Billing',['y','n','n','n']],
+ ['W','Team: invite, change roles, remove','Settings › Team',['y','n','n','n']],
+ ['W','Chat tool policy, Full auto availability','Settings › Chat',['y','n','n','n']],
+ ['W','Connections, MCP server keys, API and AI provider keys','Settings › Integrations · Keys',['y','n','n','n']],
+ ['sec','Never through Chat'],
+ ['N','Mark a task done, change roles or billing, delete a brand, reveal keys','Not a Chat tool',['nt','nt','nt','nt']]];
+function cell(v){return v=='y'?'<span class="tick sm" role="img" aria-label="Yes"></span>':v=='n'?'<span class="n" aria-label="No">–</span>':v=='sh'?'<span class="q">Shared brands only</span>':v=='ap'?'<span class="tick sm" role="img" aria-label="Yes"></span> <span class="q">approves</span>':v=='rq'?(mgrSkill?'<span class="q">Request</span>':'<span class="n">–</span> <span class="q">off</span>'):v=='ck'?'<span class="tick sm" role="img" aria-label="Yes"></span> <span class="q">after click</span>':v=='mg'?(mgrExec?'<span class="tick sm" role="img" aria-label="Yes"></span> <span class="q">after click</span>':'<span class="n">–</span> <span class="q">off by Admin</span>'):v=='nt'?'<span class="q">Not a tool</span>':'<span class="q">'+v+'</span>'}
+function renderMx(){var h='<div class="mxr th"><span>Capability</span>'+ROLES.map(function(r){var you=r==ROLE;return '<span'+(you?' class="yo"':'')+'>'+r+'<small>'+(you?'You':r=='Agency partner'?'Shared brands only':r=='Admin'?'Changes roles':'&nbsp;')+'</small></span>'}).join('')+'</div>';
+ MX.forEach(function(r){if(r[0]=='sec'){h+='<div class="mxr sec">'+r[1]+'</div>';return}
+  h+='<div class="mxr"><div class="mxc"><span class="cls '+r[0]+'">'+({R:'READ',W:'WRITE',E:'EXECUTE',N:'NEVER'})[r[0]]+'</span><div><b>'+r[1]+'</b><em>'+r[2]+'</em></div></div>'+r[3].map(function(v,i){return '<span'+(ROLES[i]==ROLE?' class="yo"':'')+'>'+cell(v)+'</span>'}).join('')+'</div>'});
+ $('#roleMx').innerHTML=h}
+function renderAdmSw(){[['#mgrExec',mgrExec],['#mgrSkill',mgrSkill]].forEach(function(x){var b=$(x[0]);b.classList.toggle('on',x[1]);b.setAttribute('aria-checked',x[1]);b.disabled=!isAdmin();b.title=isAdmin()?'':'Only Admins change this'});$('#admLock').style.visibility=isAdmin()?'hidden':''}
+$('#mgrExec').onclick=function(){if(!isAdmin())return;mgrExec=!mgrExec;renderAdmSw();renderMem();renderMx();renderMyAccess();toast(mgrExec?'Managers can publish after the click':'Managers can’t publish · publish cards show “Ask an Admin”')};
+$('#mgrSkill').onclick=function(){if(!isAdmin())return;mgrSkill=!mgrSkill;renderAdmSw();renderMx();toast(mgrSkill?'Managers can request marketplace skills':'Skill requests from Managers are off')};
+$('#inviteBtn').onclick=function(){if(!isAdmin())return;MEM.push(['NE','New teammate','new@ansvisor.com','Analyst','All brands','Invite sent']);renderMem();toast('Invite sent as Analyst · change the role any time')};
+/* your access (Settings › Account) */
+function renderMyAccess(){var r=ROLE;$('#yaRole').textContent=r;var sh=r=='Agency partner';
+ var rows=[['R','Read data, ask Chat, files for yourself',sh?'Shared brands only':'Yes'],['W','Personal memory and in-app watch rules','Yes'],['W','Actions, prompts, drafts, schedules',canWrite()?'Yes · approval card':'Ask your Admin'],['W','Create triggered agents',canWrite()?'Yes':'Admin or Manager'],['E','Publish, open a PR, external email',r=='Admin'?'After your click':r=='Manager'?(mgrExec?'After your click':'Off · Admin switch'):'No'],['W','Billing, team, tool policy, connections, keys',r=='Admin'?'Yes':'Ask your Admin']];
+ $('#yaRows').innerHTML='<div class="yar" style="background:var(--soft)"><span class="q">Brands</span><b>'+(sh?'2 shared brands':'All brands')+'</b><span class="q">Chat acts as you</span></div>'+rows.map(function(x){var ok=/^Yes|After/.test(x[2]);return '<div class="yar"><span class="cls '+x[0]+'">'+({R:'READ',W:'WRITE',E:'EXECUTE'})[x[0]]+'</span><b>'+x[1]+'</b><span class="'+(ok?'y tk':'q')+' el">'+(ok?'<span class="tick sm"></span>':'')+x[2]+'</span></div>'}).join('');
+ $('#yaAsk').style.display=isAdmin()?'none':''}
+$('#yaSee').onclick=function(){go('g-roles',{focus:1})};
+$('#yaAsk').onclick=function(){toast('Sent to your Admins')};
+document.addEventListener('click',function(e){var a=e.target.closest('[data-ask]');if(a){toast('Sent to your Admins');return}});
+/* signed-in role preview */
+function setRole(r,silent){ROLE=r;$$('.mk [data-as]').forEach(function(b){b.classList.toggle('on',b.dataset.as==r)});$('#meRole').textContent=r;
+ renderRoBar();renderMem();renderMx();renderAdmSw();renderMyAccess();if(typeof renderPolRO=='function'){renderPolRO();renderPol()}if(typeof renderAgGate=='function')renderAgGate();
+ if(!silent)toast('Signed in as '+r+' · every screen follows this role')}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-as]');if(b){setRole(b.dataset.as)}});
+
+/* ---------- policy ---------- */
+// Grouped like the app sidebar: [group, [[area, rows]]] · row: [label, tool, class R|W|E|N|V, default policy, extra]
+// extra: fa = auto allowed in Full auto by default, na = Always not allowed · V = navigate only · N = never a tool
+// READ rows default to Always; an Admin can set them to Never, which hides that data from Chat for everyone
+var POL=[
+ ['Action Center',[
+  ['Actions',[['Read actions, objective, targets, evidence','list_actions · get_action','R','Always'],['Create an action','create_action · checks for an active one first','W','Ask',{fa:1}],['Attach to an active action','attach_to_action · targets stay frozen','W','Ask',{fa:1}],['Attach a file to a task','attach_file_to_task','W','Always'],['Set a task to Ready for review','set_task_ready','W','Ask'],['Mark a task done','user only · your click in Action Center','N']]],
+  ['Signals',[['Read signals and evidence','list_signals','R','Always']]],
+  ['KPIs',[['Read KPIs and trends','get_kpis','R','Always']]],
+  ['History · Impact',[['Read events and the outcome per action','get_action_history · get_impact','R','Always']]]]],
+ ['Analytics',[
+  ['Visibility',[['Read scores and trend by platform','get_visibility','R','Always']]],
+  ['Prompts › Tracked Prompts',[['Read performance and answers','list_prompts · get_prompt_answers','R','Always'],['Add tracked prompts','add_prompts · plan limit checked','W','Ask',{fa:1}],['Edit, pause or move prompts','update_prompt · pause_prompt · move_prompt','W','Ask']]],
+  ['Prompts › Prompt Suggestions',[['Read suggestions','list_prompt_suggestions','R','Always'],['Accept a suggestion (adds the prompt)','accept_suggestion → add_prompts','W','Ask',{fa:1}]]],
+  ['Prompts › Query Fan-outs',[['Read fan-outs, platform, frequency','get_fanouts','R','Always']]],
+  ['Prompts › Insights',[['Read insights','list_insights','R','Always']]],
+  ['Prompts › Prompt Generator',[['Generate a prompt list','generate_prompts · list only','R','Always'],['Read search volumes','get_volumes','R','Always']]],
+  ['Topics',[['Read topics and prompts per topic','list_topics','R','Always'],['Add or rename topics','add_topic · update_topic','W','Ask']]],
+  ['Mentions & Sentiment',[['Read mentions, sentiment, themes','list_mentions','R','Always'],['Draft a correction (/wrongclaim)','draft_correction','W','Always']]],
+  ['Citations',[['Read by platform, region, domain, URL','list_citations','R','Always'],['Export the table to Files','export_table','W','Always']]],
+  ['Product Visibility',[['Read shopping cards and products','get_shopping_visibility','R','Always'],['Push a Shopify or Google Merchant Center feed','push_product_feed','E']]],
+  ['AI Referral Traffic',[['Read Google Analytics and Google Search Console','get_ai_traffic · says “not connected” if missing','R','Always']]],
+  ['Competitors',[['Read share of voice and cited pages','get_competitor_comparison','R','Always'],['Add, edit or remove competitors','add_competitors · update_competitor · remove_competitor','W','Ask']]]]],
+ ['Optimization',[
+  ['Content › Opportunities',[['Read opportunities','list_content_opportunities','R','Always'],['Dismiss or mark reviewed','update_opportunity','W','Always'],['Generate a brief · AI credits','generate_brief','W','Ask']]],
+  ['Content › Plan & Workflows',[['Read plan and stages','get_content_plan','R','Always'],['Add to the plan','add_to_plan','W','Ask'],['Send to a workflow','send_to_workflow','W','Ask']]],
+  ['Content › Library',[['Read drafts and quality scores','list_drafts','R','Always'],['Create a draft','create_draft','W','Always'],['Update a draft','update_draft · diff card','W','Ask'],['Set a draft Ready','user only · your click','N']]],
+  ['Content › Agentic Content Editor',[['Suggest edits','suggest_edits · list only','R','Always'],['Apply a suggestion','user only · your click in the editor','N']]],
+  ['Content › Images',[['Generate an image · AI credits','generate_image','W','Ask'],['Set a cover image','set_cover','W','Ask']]],
+  ['Content › CMS',[['Update a CMS draft','push_to_cms · as draft','W','Ask'],['Publish to a CMS or site','publish_live','E']]],
+  ['Content › Webhooks',[['Webhook settings','navigate only','V']]],
+  ['Audit',[['Read audit issues','get_site_audit_summary · list_site_audit_issues','R','Always'],['Start an audit','run_site_audit · uses audit quota','W','Ask'],['Copy a fix as an agent task','copy_agent_task · all plans','W','Always'],['Open a pull request','open_pull_request · Growth+','E']]],
+  ['Chat',[['Save to memory','memory.save','W','Ask',{na:1}],['Delete from memory','memory.delete','W','Ask'],['Save a skill','skill.save','W','Ask'],['Add a marketplace skill','skill.add · Admin approves','W','Ask',{na:1}],['Create a follow-up check','create_check','W','Ask',{fa:1}],['Create a watch rule','watch_rule.create','W','Ask'],['Create a schedule','schedule','W','Ask'],['Save a file','save_file','W','Always']]]]],
+ ['Reports',[
+  ['Reports',[['Read reports and sections','list_reports','R','Always'],['Build and save a report','build_report','W','Always'],['Schedule a report','schedule_report','W','Ask'],['Email a report to workspace members','send_email · members only','W','Ask'],['Email people outside the workspace','send_email · external','E']]]]],
+ ['Settings',[
+  ['Workspace · Admin only',[['Billing, plan, packs','navigate only · Admin','V'],['Team and roles','navigate only · Admin','V'],['Connections','navigate only · Admin','V'],['API keys, AI provider keys','never revealed','N'],['Delete a brand or workspace','not a tool','N']]]]]
+];
+var DEF=JSON.stringify(POL);
+var CLN={R:'READ',W:'WRITE',E:'EXEC',N:'NEVER',V:'NAV'};
+function polRow(r,gi,si,ri){var c=r[2],p=r[3],x=r[4]||{};var id=gi+'-'+si+'-'+ri;
+ var seg='';if(c=='N'){seg='<span class="pill">Not a tool</span>'}
+ else if(c=='V'){seg='<span class="pill">Navigate only</span>'}
+ else if(c=='E'){seg='<div class="seg" role="group" aria-label="Policy for '+r[0]+'"><button data-action="policy.set" data-pol="'+id+'" data-v="Never"'+(p=='Never'?' class="on"':'')+'>Never</button><button data-action="policy.set" data-pol="'+id+'" data-v="Ask"'+(p!='Never'?' class="on"':'')+'>Ask</button><button data-action="policy.set" disabled title="EXECUTE can’t be Always">Always</button></div>'}
+ else if(c=='R'){seg='<div class="seg" role="group" aria-label="Policy for '+r[0]+'"><button data-action="policy.set" data-pol="'+id+'" data-v="Never"'+(p=='Never'?' class="on"':'')+'>Never</button><button data-action="policy.set" disabled title="READ never needs a card">Ask</button><button data-action="policy.set" data-pol="'+id+'" data-v="Always"'+(p!='Never'?' class="on"':'')+'>Always</button></div>'}
+ else{seg='<div class="seg" role="group" aria-label="Policy for '+r[0]+'">'+['Never','Ask','Always'].map(function(v){var dis=v=='Always'&&x.na;return '<button data-action="policy.set" data-pol="'+id+'" data-v="'+v+'"'+(p==v?' class="on"':'')+(dis?' disabled title="Always isn’t allowed for this tool"':'')+'>'+v+'</button>'}).join('')+'</div>'}
+ var fa='';var locked=lowPlan();
+ if(c=='E')fa='<span class="nyc">Needs your click</span>';
+ else if(c=='N'||c=='V')fa='<span class="dash">—</span>';
+ else if(c=='R')fa=p=='Never'?'<span class="q el">Hidden from Chat for everyone</span>':'<span class="q">Runs freely</span>';
+ else if(p=='Never')fa='<span class="dash">—</span>';
+ else if(x.na)fa='<span class="q">Always a card</span>';
+ else if(p=='Always')fa='<span class="fa">'+svg('i-auto')+'Auto in every mode</span>';
+ else fa='<label class="fa"><button data-action="policy.toggleAutoInFullAuto" class="sw'+(x.fa&&!locked?' on':'')+'" role="switch" aria-checked="'+(!!x.fa)+'" aria-label="Auto in Full auto for '+r[0]+'" data-fa="'+id+'"'+(locked?' disabled title="Full auto is Growth+"':'')+'></button>Auto in Full auto</label>';
+ if(!isAdmin()){var t=' disabled title="Only Admins change the tool policy"';seg=seg.replace(/<button data-pol/g,'<button'+t+' data-pol');fa=fa.replace(/ data-fa=/,t+' data-fa=').replace(/ disabled title="Full auto is Growth\+"/,'')}
+ var cc=(c=='V'?'N':c);
+ return '<div class="tr pol '+cc+(c=='R'&&p=='Never'?' hid':'')+'" data-g="'+gi+'"><div><b>'+r[0]+'</b><span class="mono">'+r[1]+'</span></div><span><span class="cls '+cc+'">'+CLN[c]+'</span></span><span>'+seg+'</span><span>'+fa+'</span></div>'}
+function renderPolRO(){var ro=!isAdmin();var b=$('#polRo');b.style.display=ro?'':'none';
+ b.innerHTML=svg('i-lock')+'<div class="el"><b>Read-only · only Admins change the Chat tool policy</b><em>You see the rules Chat follows for you</em></div><button data-action="access.askAdmin" class="btn sm" data-ask="admins">Ask your Admin</button>';
+ $('#g-policy').classList.toggle('ro',ro);$('#polReset').disabled=ro;$('#dnaSw').disabled=ro;$('#faAvail').disabled=ro||lowPlan();
+ $$('#modeCards .mc').forEach(function(m){m.classList.toggle('dis',ro)})}
+var POLSHUT={};
+function renderPol(){var h='<div class="tr th pol"><span>Tool</span><span>Class</span><span>Policy</span><span>In Full auto'+(lowPlan()?' '+svg('i-lock'):'')+'</span></div>';var n=0;
+ POL.forEach(function(g,gi){var cnt=0;g[1].forEach(function(a){cnt+=a[1].length});var shut=!!POLSHUT[gi];
+  h+='<div class="tr grp'+(shut?' shut':'')+'" data-gh="'+gi+'"><button data-action="policy.toggleGroup" aria-expanded="'+(!shut)+'" data-grp="'+gi+'"><span class="car">▾</span>'+g[0]+'<span class="cnt">'+cnt+'</span>'+(g[0]=='Settings'?'<span class="lock" style="margin-left:auto;font-weight:400">'+svg('i-lock')+'Admin only</span>':'')+'</button></div>';
+  g[1].forEach(function(a,si){h+='<div class="tr sub'+(shut?' hide':'')+'" data-g="'+gi+'">'+a[0]+'</div>';a[1].forEach(function(r,ri){if(r[2]!='N'&&r[2]!='V')n++;var row=polRow(r,gi,si,ri);if(shut)row=row.replace('class="tr pol ','class="tr pol hide ');h+=row})})});
+ $('#polTbl').innerHTML=h;$('#polCount').textContent=n+' tools'}
+function polAt(id){var a=id.split('-');return POL[a[0]][1][a[1]][1][a[2]]}
+document.addEventListener('click',function(e){
+ var b=e.target.closest('[data-pol]');if(b){var r=polAt(b.dataset.pol);var old=r[3];if(old==b.dataset.v)return;r[3]=b.dataset.v;renderPol();toast(r[0]+': '+old+' → '+b.dataset.v+(r[2]=='R'&&b.dataset.v=='Never'?' · hidden from Chat for everyone':''),function(){r[3]=old;renderPol()});return}
+ var f=e.target.closest('[data-fa]');if(f&&!f.disabled){var r2=polAt(f.dataset.fa);r2[4]=r2[4]||{};r2[4].fa=!r2[4].fa;renderPol();toast(r2[0]+(r2[4].fa?': runs without a card in Full auto · logged with Undo':': always shows a card'));return}
+ var g=e.target.closest('[data-grp]');if(g){var gi=g.dataset.grp;POLSHUT[gi]=!POLSHUT[gi];renderPol();return}
+});
+$('#polReset').onclick=function(){POL=JSON.parse(DEF);renderPol();toast('Tool policy reset to defaults')};
+var MODE='auto';var MN={ask:'Ask me first',auto:'Auto, ask before changes',full:'Full auto'};
+$$('#modeCards .mc').forEach(function(m){m.onclick=function(){if(!isAdmin()){toast('Only Admins set the default run mode · you pick your own per chat');return}if(m.getAttribute('aria-disabled')=='true'){toast('Full auto is on Growth and above · Starter sees it locked');return}MODE=m.dataset.mode;$$('#modeCards .mc').forEach(function(x){x.classList.toggle('on',x==m);x.setAttribute('aria-pressed',x==m)});$('#modePill').textContent=MN[MODE];flashP(5);toast('Default run mode: '+MN[MODE]+' · members can pick their own per chat')}});
+function flashP(n){$$('#prec .pst').forEach(function(p){p.classList.toggle('on',p.dataset.p==n)})}
+$$('#prec .pst').forEach(function(p){p.onclick=function(e){if(e.target.closest('[data-go]'))return;flashP(p.dataset.p);var t={1:'Hard rules: no setting can make EXECUTE run without a click',2:'Plan gates come from the workspace plan',3:'Chat never has more rights than the signed-in user',4:'Set per tool in the table below',5:'Only changes WRITE tools set to Ask or Always',6:'A user’s “Don’t ask again” never goes past steps 1–5'};toast(t[p.dataset.p])}});
+function swToggle(el,label){var on=!el.classList.contains('on');el.classList.toggle('on',on);el.setAttribute('aria-checked',on);return on}
+$('#faAvail').onclick=function(){if(this.disabled)return;var on=swToggle(this);toast(on?'Managers can pick Full auto':'Only Admins can pick Full auto')};
+$('#dnaSw').onclick=function(){if(this.disabled)return;var on=swToggle(this);$('#dnaPill').textContent=on?'On':'Off';$('#dnaPill').className='pill '+(on?'ok':'');flashP(6);toast(on?'Users can tick “Don’t ask again” on approval cards':'“Don’t ask again” hidden on approval cards for everyone')};
+function setPlan(p){PLAN=p;$$('[data-plan]').forEach(function(b){b.classList.toggle('on',b.dataset.plan==p)});var st=p=='starter'||p=='trial';
+ var full=$('#mcFull');full.setAttribute('aria-disabled',st);$('#mcFullLk').style.display=st?'':'none';if(st&&MODE=='full'){MODE='auto';$$('#modeCards .mc').forEach(function(x){x.classList.toggle('on',x.dataset.mode=='auto')});$('#modePill').textContent=MN.auto}
+ $('#faAvail').disabled=st||!isAdmin();$('#faAvail').classList.toggle('on',!st);$('#faAvailEm').textContent=st?'Locked on Starter':'Admins can always pick it';
+ $('#pgPill').textContent='Your plan: '+PNAME[p];$('#pgPill').className='pill ok';$('#faPlanPill').innerHTML=st?svg('i-lock')+' Full auto · Growth+':'Full auto · Growth+';
+ $('#nmFull').setAttribute('aria-disabled',st);$('#nmFullLk').style.display=st?'':'none';$('#mdOwn').setAttribute('aria-disabled',st);$('#mdOwnLk').style.display=st?'':'none';$('#nGate').style.display=st?'block':'none';$('#nGate2').style.display=st?'block':'none';$('#faGate').style.display=st?'block':'none';
+ if(st){if($('#nmFull').classList.contains('on'))pickMode($$('#nModes .mc')[1]);if($('#mdOwn').classList.contains('on'))pickModel($$('#nModel .opt')[0])}
+ renderPol();renderSk();renderCap();renderPlanStrip();updateGates();flashP(2)}
+$$('[data-plan]').forEach(function(b){b.onclick=function(){setPlan(b.dataset.plan);toast('Previewing '+b.textContent+' plan')}});
+
+/* ---------- capabilities ---------- */
+// item: [text, approval: f free | c card | a card+auto | k click, undo]
+var CAP=[
+ ['Action Center','Actions',[['Actions, objective, targets, evidence']],[['Create an action','a',1],['Attach to active action','a',1],['Attach file to task','f',1],['Set Ready for review','c',1]],[],['Mark done (your click)','Delete an action']],
+ ['Action Center','Signals',[['Signals and evidence']],[],[],['Edit or dismiss signals']],
+ ['Action Center','KPIs',[['KPIs and trends']],[],[],['Edit KPIs']],
+ ['Action Center','History',[['Events, before / after'],['Impact: outcome per action']],[],[],['Edit history or outcomes']],
+ ['Impact ledger','History · Reports',[['Outcome per action (Action Center › History)'],['Monthly summary (Reports › What Ansvisor did for you)']],[['Export summary to Files','f',1]],[],['Edit an outcome']],
+ ['Visibility','',[['Scores, trend by platform']],[],[],[],1],
+ ['Prompts','Tracked Prompts',[['Performance, answers']],[['Add prompts','a',1],['Edit, pause, move','c',1]],[],[]],
+ ['Prompts','Prompt Suggestions',[['Suggestions']],[['Track a suggestion','a',1],['Dismiss','c',1]],[],[]],
+ ['Prompts','Query Fan-outs',[['Fan-outs, platform, frequency']],[],[],[],1],
+ ['Prompts','Insights',[['Insights']],[],[],[],1],
+ ['Prompts','Prompt Generator',[['Generate ideas (list only)']],[['Add generated prompts','a',1]],[],[]],
+ ['Prompts','Volumes',[['Search volumes']],[],[],[],1],
+ ['Topics','',[['Topics, prompts per topic']],[['Add or rename topic','c',1]],[],['Delete a topic']],
+ ['Mentions','',[['Mentions, sentiment, themes']],[['Draft outreach note','f',1]],[['Send outreach','k']],[]],
+ ['Citations','',[['By platform, region, domain, URL']],[],[],[],1],
+ ['Product Visibility','',[['Shopping cards, my and competitor products']],[['Fix list','f',1]],[['Push Shopify / Google Merchant Center feed','k']],[]],
+ ['AI Referral Traffic','',[['Google Analytics, Google Search Console']],[],[],['Connect a source (Admin)'],1],
+ ['Audit','',[['Summary, issues by type and URL']],[['Start an audit (quota)','c'],['Code fix as a file','f',1]],[['Open a pull request','k',0,'Growth+']],[]],
+ ['Ship as PR','Code fixes',[['Audit issue and the fix']],[['Copy as agent task','f',0,'All plans']],[['Open pull request (GitHub)','k',0,'Growth+']],['Merge (on GitHub)']],
+ ['Content','Opportunities',[['Opportunities']],[['Dismiss, mark reviewed','f',1],['Generate brief','c',1],['Send to workflow','c',1]],[],[]],
+ ['Content','Plan & Workflows',[['Plan, stages']],[['Add to plan, move stage','c',1]],[],[]],
+ ['Content','Library',[['Drafts, quality scores']],[['Create draft','f',1],['Update draft','c',1],['Update CMS draft','c',1]],[['Publish to CMS','k']],['Set Ready (your click)']],
+ ['Content','Editor',[['Draft, cited pages, AEO score']],[['Suggestions (Apply is your click)','f',1],['Cover image','c',1]],[['Publish','k']],[]],
+ ['Reports','',[['Reports and sections']],[['Build and save report','f',1],['Schedule a report','c',1]],[['Email outside the workspace','k']],[]],
+ ['Brands','',[['Brands, brand facts']],[],[],['Create, edit, delete brand'],1],
+ ['Competitors','',[['Share of voice, cited pages']],[['Add, edit, remove','c',1]],[],[]],
+ ['Settings','Account · Organization',[['First name, organization name']],[],[],['Change settings'],1],
+ ['Settings','Team · Roles & access',[['Members, roles, what each role can do']],[],[],['Invite, change roles, remove (Admin)'],1,'Admin only'],
+ ['Settings','Authors · Notifications',[['Authors for drafts']],[],[],['Change settings'],1],
+ ['Settings','Integrations',[['Connection status']],[],[],['Connect, disconnect (Admin)'],1,'Admin only'],
+ ['Settings','API Keys · AI Providers',[['Masked status only']],[],[],['Reveal or add keys (Admin)'],1,'Admin only'],
+ ['Settings','Billing',[['Plan facts, AI usage %']],[],[],['Change plan, payment, buy packs (Admin)'],1,'Admin only'],
+ ['Settings','Chat',[['Tool policy, run mode']],[],[],['Change policy (Admin)'],1,'Admin only'],
+ ['MCP','Claude · ChatGPT · Cursor',[['Same read tools as Chat','','','Starter+']],[['Same WRITE tools · MCP writes always ask','c',1,'Growth+']],[['Click in Ansvisor','k',0,'Growth+']],['Not in the 14-day trial','Same NEVER list']],
+ ['Chat','Memory · Skills',[['Memory, skills']],[['Save memory','c',1],['Save skill','c',1],['Add marketplace skill','c']],[],[]],
+ ['Chat','Schedules · Watch rules · Checks',[['Own jobs and rules']],[['Create schedule','c',1],['Watch rule','c',1],['Follow-up check','a',1]],[],[]]
+];
+var CAPOK={};
+var AP={f:'i-free',c:'i-card',a:'i-card',k:'i-lock'};
+function chipW(w,cls){return '<span class="cp '+cls+'">'+(w[1]?svg(AP[w[1]]):'')+(w[1]=='a'?svg('i-auto'):'')+w[0]+(w[2]?' '+svg('i-undo'):'')+(w[3]?'<span class="plg">'+plgTxt(w[3])+'</span>':'')+'</span>'}
+function roleCell(c){var rd=c[0]=='Settings'?'Admin, Manager':'All roles';if(c[7])return '<div class="rl"><b>'+c[7]+'</b><em>Read: '+rd+'</em></div>';var w=c[3].length||c[4].length;return '<div class="rl"><b>'+(w?'Admin · Manager':'Read: all roles')+'</b><em>'+(w?'Others: read only':'Partners: shared only')+'</em></div>'}
+var capF='all';
+function renderCap(){var q=($('#capQ').value||'').toLowerCase();var h='<div class="tr th cap"><span>Area</span><span>Read</span><span>Write</span><span>Execute</span><span>Not through Chat</span><span>Who can write</span><span>OK</span></div>';var shown=0;
+ CAP.forEach(function(c,i){var txt=JSON.stringify(c).toLowerCase();if(q&&txt.indexOf(q)<0)return;
+  if(capF=='W'&&!c[3].length)return;if(capF=='E'&&!c[4].length)return;if(capF=='nav'&&(c[3].length||c[4].length))return;if(capF=='todo'&&CAPOK[i])return;shown++;
+  h+='<div class="tr cap'+(CAPOK[i]?' ok':'')+'"><div class="ar"><b>'+c[0]+'</b>'+(c[1]?'<em>'+c[1]+'</em>':'')+'</div>'
+  +'<div class="cps">'+c[2].map(function(r){return '<span class="cp R">'+svg('i-free')+r[0]+(r[3]?'<span class="plg">'+plgTxt(r[3])+'</span>':'')+'</span>'}).join('')+(c[6]?'<span class="cp V">'+svg('i-nav')+'Open page</span>':'')+'</div>'
+  +'<div class="cps">'+(c[3].length?c[3].map(function(w){return chipW(w,'W')}).join(''):'<span class="dash">—</span>')+'</div>'
+  +'<div class="cps">'+(c[4].length?c[4].map(function(w){return chipW(w,'E')}).join(''):'<span class="dash">—</span>')+'</div>'
+  +'<div class="cps">'+(c[5].length?c[5].map(function(n){return '<span class="cp N">'+n+'</span>'}).join(''):'<span class="dash">—</span>')+'</div>'
+  +roleCell(c)
+  +'<span><button data-action="capabilities.approveRow" class="okb'+(CAPOK[i]?' on':'')+'" data-capok="'+i+'" aria-pressed="'+(!!CAPOK[i])+'" aria-label="Approve row '+c[0]+' '+c[1]+'">✓</button></span></div>'});
+ if(!shown)h+='<div class="empty">'+svg('i-x')+'No rows match<button data-action="capabilities.showAll" class="btn sm" data-click="#capReset">Show all</button></div>';
+ $('#capTbl').innerHTML=h;var n=Object.keys(CAPOK).filter(function(k){return CAPOK[k]}).length;$('#apN').textContent=n;$('#apT').textContent=CAP.length;$('#capN').textContent=CAP.length+' areas';$('#apBar').style.width=(n/CAP.length*100)+'%';
+ var st=$('#apState');if(n==CAP.length){st.className='pill ok';st.textContent='Approved by Alex Kim · Oct 26';$('#apAll').textContent='Approved'}else{st.className='pill';st.textContent='Draft · in review';$('#apAll').textContent='Approve all'}}
+$('#capQ').oninput=renderCap;
+$$('[data-cf]').forEach(function(b){b.onclick=function(){capF=b.dataset.cf;$$('[data-cf]').forEach(function(x){x.classList.toggle('on',x==b)});renderCap()}});
+document.addEventListener('click',function(e){var b=e.target.closest('[data-capok]');if(!b)return;var i=b.dataset.capok;CAPOK[i]=!CAPOK[i];renderCap();var c=CAP[i];toast((CAPOK[i]?'Approved: ':'Back to review: ')+c[0]+(c[1]?' › '+c[1]:''))});
+$('#apAll').onclick=function(){var all=CAP.every(function(c,i){return CAPOK[i]});if(all){CAPOK={};renderCap();toast('Approvals cleared · back to draft');return}CAP.forEach(function(c,i){CAPOK[i]=true});renderCap();toast('Access table approved · CHAT-20 marked as approved',function(){CAPOK={};renderCap()})};
+
+/* ---------- agents ---------- */
+var AG=[
+ {n:'Citation win-back',sk:['/winback','/refresh'],mode:'Auto, ask before changes',con:['Google Search Console','Webflow'],model:'Auto',st:'run',line:'Step 2 of 4 · AC-1258',last:'Today 09:14',next:'Mon 07:00',runs:31,imp:9,trig:'Signal + schedule'},
+ {n:'Action Center tasks',sk:['/tasks'],mode:'Auto, ask before changes',con:['Webflow'],model:'Auto',st:'need',line:'Waiting 2 days · stops at 7 · /pricing',last:'Today 10:02',next:'Daily 08:00',runs:24,imp:6,trig:'Schedule'},
+ {n:'Weekly citations report',sk:['/report'],mode:'Auto',con:['Google Search Console'],model:'Fast',st:'idle',line:'Done 08:02 · 3 files',last:'Mon 08:02',next:'Mon 08:00',runs:42,imp:0,trig:'Schedule'},
+ {n:'Competitor watch',sk:['/beat'],mode:'Ask me first',con:[],model:'Auto',st:'stop',line:'Draft had no answer in 7 days',last:'Oct 19',next:'On watch rule',runs:9,imp:2,trig:'Watch rule'},
+ {n:'Quality pass on new drafts',sk:['/quality'],mode:'Full auto',con:[],model:'Best writing',st:'idle',line:'3 drafts · 11 fixes',last:'Yesterday',next:'Daily 18:00',runs:12,imp:4,trig:'Schedule'},
+ {n:'AI shopping readiness',sk:['/shopping'],mode:'Auto, ask before changes',con:['Shopify'],model:'Auto',st:'off',line:'Shopify not connected',last:'—',next:'—',runs:0,imp:0,trig:'Schedule',miss:1}
+];
+var SL={run:'Running',need:'Needs you',idle:'Idle',off:'Paused',stop:'Stopped'};var agF='all';
+function agCard(a,i){var dot=a.st=='run'?'<span class="dt run"></span>':a.st=='need'?'<span class="dt am"></span>':a.st=='off'?'<span class="dt"></span>':a.st=='stop'?'<span class="dt red"></span>':'<span class="dt ok"></span>';
+ var ft=[a.sk.join(' '),a.mode].concat(a.con).concat([a.model]).join(' · ');
+ return '<div class="agc" data-st="'+a.st+'"><div class="agt"><span class="av'+(a.st=='idle'||a.st=='off'||a.st=='stop'?' idle':'')+(a.st=='need'?' wait':'')+'"><svg><use href="#bot"/></svg></span><div><b title="'+a.n+'">'+a.n+'</b><span class="stl '+a.st+'" title="'+SL[a.st]+' · '+a.line+'">'+dot+SL[a.st]+' · <span style="font-weight:400;color:var(--mut)">'+a.line+'</span></span></div></div>'
+ +'<div class="formula" title="'+ft+'">'+a.sk.map(function(s){return '<span><code>'+s+'</code></span>'}).join('')+'<span>'+a.mode+'</span>'+(a.con.length?a.con.map(function(c){return '<span>'+(a.miss?'<span class="dt am" style="margin-right:4px"></span>':'')+c+'</span>'}).join(''):'<span style="color:var(--mut)">No connections</span>')+'<span>'+a.model+'</span></div>'
+ +'<div class="agm"><div>Trigger<b>'+a.trig+'</b></div><div>Next run<b>'+a.next+'</b></div><div>Last run<b>'+a.last+'</b></div><div>Runs<b>'+a.runs+(a.imp?' · '+a.imp+' improved':'')+'</b></div></div>'
+ +'<div class="agf">'+(a.st=='need'?'<button data-action="agents.review" class="btn sm pri" data-agrev="'+i+'">Review</button>':a.st=='stop'?'<button data-action="agents.run" class="btn sm" data-agrun="'+i+'">Run again</button>':a.miss?'<button data-action="integrations.connect" class="btn sm pri" data-agcon="'+i+'">Connect Shopify</button>':'<button data-action="agents.run" class="btn sm" data-agrun="'+i+'">Run now</button>')+'<div class="r"><button data-action="agents.pauseResume" class="btn sm ghost" data-agpause="'+i+'">'+(a.st=='off'?'Resume':'Pause')+'</button><button data-action="agents.open" class="btn sm" data-agopen="'+i+'">Open</button></div></div></div>'}
+function renderAg(){$('#agGrid').innerHTML=AG.map(function(a,i){return (agF=='all'||a.st==agF)?agCard(a,i):''}).join('')||'<div class="empty">'+svg('bot')+'No agents here<button data-action="agents.showAll" class="btn sm" data-click="[data-af=all]">Show all</button></div>';$('#agN').textContent=AG.length;
+ $('#kRun').textContent=AG.filter(function(a){return a.st=='run'}).length;$('#kNeed').textContent=AG.filter(function(a){return a.st=='need'}).length}
+$$('[data-af]').forEach(function(b){b.onclick=function(){agF=b.dataset.af;$$('[data-af]').forEach(function(x){x.classList.toggle('on',x==b)});renderAg()}});
+document.addEventListener('click',function(e){var t;
+ if(t=e.target.closest('[data-agrun]')){var a=AG[t.dataset.agrun];a.st='run';a.line='Step 1 of 4 · starting';a.runs++;renderAg();toast(a.n+' started · ~1% of monthly limit');return}
+ if(t=e.target.closest('[data-agpause]')){var a2=AG[t.dataset.agpause];if(a2.miss&&a2.st=='off'){toast('Connect Shopify first · the agent stays paused');return}var was=a2.st;a2.st=a2.st=='off'?'idle':'off';if(a2.st=='off')a2.line='Paused by Alex Kim';else a2.line='Resumed · next run '+a2.next;renderAg();toast(a2.n+(a2.st=='off'?' paused':' resumed'),function(){a2.st=was;renderAg()});return}
+ if(t=e.target.closest('[data-agopen]')){if(t.dataset.agopen=='0')go('g-agent');else toast('Opens '+AG[t.dataset.agopen].n+' · same layout as Citation win-back');return}
+ if(t=e.target.closest('[data-agrev]')){toast('Opens the approval card in Chat · 1 change on /pricing');return}
+ if(t=e.target.closest('[data-agcon]')){toast('Only Admins connect Shopify · Sent to your Admins');return}
+});
+function renderAgGate(){var w=canWrite();var n=$('#agNote');n.style.display=w?'none':'';
+ n.innerHTML=svg('i-lock')+'<div class="el"><b>You run shared agents with your role ('+ROLE+' · read-only)</b><em>Only Admins and Managers create triggered agents</em></div><button data-action="access.askAdmin" class="btn sm" data-ask="admins">Ask your Admin</button>';
+ $('#trGate').style.display=w?'none':'block';$('#sRunsAs').textContent='You · '+ROLE+(w?'':' · read-only');
+ $$('#trOpts .opt').forEach(function(o){var lockIt=!w&&o.dataset.tr!='Manual';o.setAttribute('aria-disabled',lockIt);var lk=o.querySelector('.lk');if(lockIt&&!lk)o.insertAdjacentHTML('beforeend','<span class="lk"><span class="lock">'+svg('i-lock')+'Admin · Manager</span></span>');if(!lockIt&&lk)lk.remove()});
+ if(!w){var cur=$('#trOpts .opt.on');if(cur&&cur.dataset.tr!='Manual')$('#trOpts .opt[data-tr="Manual"]').click()}
+ var at=$('#addTrig');at.disabled=!w;at.title=w?'':'Only Admins and Managers add triggers'}
+
+/* ---------- agent detail ---------- */
+// [run, trigger, action, result, outcome, checkpoint label, checkpoints reached 0-4, stopped, shipped]
+var RUNS=[[31,'Signal · citation lost','AC-1258 · /blog/what-is-aeo','Running · step 2/4','pen','Not shipped yet',0,0,''],[30,'Schedule · Mon 07:00','AC-1244 · /features','Published Oct 22','pen','Day 7 on Oct 29',0,0,'Oct 22'],[29,'KPI · Perplexity −10%','AC-1239 · /blog/llms-txt','Published Oct 8','nmc','Day 14 · Medium',2,0,'Oct 8'],[28,'Manual · Alex Kim','AC-1231 · /pricing','Draft declined','dec','',0,0,''],[27,'Schedule · Mon 07:00','AC-1220 · /blog/aeo-tools','Published Sep 22','imp','Day 30 confirmed · Medium',3,0,'Sep 22'],[26,'Schedule · Mon 07:00','AC-1209 · /blog/geo-guide','Run stopped','nm','No answer in 7 days',0,1,''],[25,'Signal · citation lost','AC-1214 · /docs/api','Page removed','nm','',1,0,'Oct 2'],[24,'Schedule · Mon 07:00','AC-1201 · /pricing FAQ','Published Jul 20','imp','Day 90 lasting · High',4,0,'Jul 20']];
+var OC={pen:'Pending',imp:'Improved',nmc:'No meaningful change',dec:'Declined',nm:'Not measurable'};var rF='all';
+function renderRuns(){var h='<div class="tr th run"><span>Run</span><span>Trigger · action</span><span>Result</span><span>Outcome</span><span>Cost</span></div>';
+ RUNS.forEach(function(r,i){if(rF=='stop'?!r[7]:(rF!='all'&&r[4]!=rF))return;h+='<div data-action="agent.openRunRow" class="tr run" role="button" tabindex="0" data-run="'+i+'"><span class="mono">#'+r[0]+'</span><div><b>'+r[2].split(' · ')[1]+'</b><em>'+r[2].split(' · ')[0]+' · '+r[1]+'</em></div><span class="q el res'+(r[7]?' stop':'')+'">'+r[3]+'</span><span><span class="oc '+r[4]+'">'+OC[r[4]]+'</span>'+(r[5]?'<span class="conf el">'+r[5]+'</span>':'')+'</span><span class="q">'+(i==0?'0.4%':'1.'+(i%3)+'%')+'</span></div>'});
+ $('#runTbl').innerHTML=h}
+$$('[data-rf]').forEach(function(b){b.onclick=function(){rF=b.dataset.rf;$$('[data-rf]').forEach(function(x){x.classList.toggle('on',x==b)});renderRuns()}});
+function ckList(n,shipped){var L=[['Baseline','14 days before ship','Frozen'],['Day 7','Pending · early signal','Too noisy for a verdict'],['Day 14','First verdict','Engines re-crawled'],['Day 30','Confirmed',''],['Day 90','Lasting effect','Holds or fades']];
+ return '<div class="ckl">'+L.map(function(x,i){var st=!shipped?'u':i==0||i<=n?'d':'u';return '<div class="'+st+'"><span>'+(st=='d'?'<span class="tick sm"></span>':'<span class="n">○</span>')+'</span><b style="font-weight:500">'+x[0]+'</b><span class="el">'+x[1]+'</span><span class="q el">'+(st=='d'?'Done':x[2]||'Scheduled')+'</span></div>'}).join('')+'</div><div class="q">Min. change 3 pts · compared with control prompts · scheduled tracking data, no extra cost · shows correlation, not cause</div>'}
+function openRun(i){var r=RUNS[i];drawer('Run #'+r[0],'<div class="kv"><span>Trigger</span><span>'+r[1]+'</span><span>Action</span><span>'+r[2]+'</span><span>Result</span><span>'+r[3]+'</span><span>Outcome</span><span><span class="oc '+r[4]+'">'+OC[r[4]]+'</span>'+(r[5]?' <span class="conf">'+r[5]+'</span>':'')+'</span><span>Shipped</span><span>'+(r[8]||'—')+'</span><span>Approvals</span><span>'+(r[7]?'CMS draft · no answer in 7 days · run stopped':'CMS draft · Alex Kim · Approved<br>Publish · Alex Kim · Clicked')+'</span></div><small class="q" style="display:block;margin-bottom:4px">Outcome checks</small>'+ckList(r[6],r[8])+'<div style="display:flex;gap:8px;margin-top:14px"><button data-action="agent.openInChat" class="btn sm" data-toast="Opens the run in Chat">Open in Chat</button><button data-action="activity.open" class="btn sm" data-go="g-activity">See in Activity</button></div>')}
+document.addEventListener('click',function(e){var r=e.target.closest('[data-run]');if(r)openRun(r.dataset.run)});
+document.addEventListener('keydown',function(e){var r=e.target.closest&&e.target.closest('[data-run]');if(r&&(e.key=='Enter'||e.key==' ')){e.preventDefault();openRun(r.dataset.run)}if(e.key=='Escape')closeAll()});
+$('#adPause').onclick=function(){var p=this.textContent=='Pause';this.textContent=p?'Resume':'Pause';$('#adSt').innerHTML=p?'<span class="dt"></span>Paused · the current run finishes step 2 first':'<span class="dt run"></span>Running · step 2 of 4 · AC-1258';$('#adSt').className='stl '+(p?'off':'run');AG[0].st=p?'off':'run';renderAg();toast(p?'Paused · triggers stop until you resume':'Resumed')};
+$('#adRun').onclick=function(){toast('Already running for AC-1258 · opened the current run instead of starting a second one')};
+
+/* ---------- new agent ---------- */
+var SK=[['/winback','Win back lost citations','Google Search Console, Webflow'],['/tasks','Complete this week’s tasks','Webflow'],['/quality','Quality pass',''],['/faq','FAQ from fan-outs',''],['/report','Weekly report','Google Search Console'],['/beat','Beat a competitor',''],['/refresh','Refresh for this year',''],['/publish','Ready to publish','Webflow'],['/shopping','AI shopping readiness','Shopify'],['/wrongclaim','Fix wrong claims about us','']];
+var skSel=0,stp=0;
+function renderSk(){$('#skOpts').innerHTML=SK.map(function(s,i){return '<button data-action="agentNew.pickSkill" class="opt'+(i==skSel?' on':'')+'" data-sk="'+i+'"><code>'+s[0]+'</code><b>'+s[1]+'</b><em>'+(s[2]?'Uses '+s[2]:'No connection needed')+'</em></button>'}).join('')}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-sk]');if(!b)return;skSel=+b.dataset.sk;renderSk();var s=SK[skSel];$('#sSkill').innerHTML='<code class="mono">'+s[0]+'</code>';$('#sName').textContent=s[1];$('#sConn').textContent=s[2]||'None';renderConns();renderAppr()});
+$$('[data-skf]').forEach(function(b){b.onclick=function(){$$('[data-skf]').forEach(function(x){x.classList.toggle('on',x==b)});if(b.dataset.skf!='ans')toast(b.dataset.skf=='mine'?'My skills: 3 saved · same picker':'Marketplace: 701 MIT skills · an admin approves adding one');}});
+$$('#trOpts .opt').forEach(function(o){o.onclick=function(){if(o.getAttribute('aria-disabled')=='true'){toast('Only Admins and Managers create triggered agents · they run with the creator’s role');return}$$('#trOpts .opt').forEach(function(x){x.classList.toggle('on',x==o)});var t=o.dataset.tr;var rb=$('#ruleBox');
+ var R={'Manual':'<div class="rw"><span class="kw">WHEN</span><span>You press Run, or Run agent on an action</span></div>','Schedule':'<div class="rw"><span class="kw">EVERY</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="Monday,Weekday,1st of the month">Monday</button><span>at</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="07:00,08:00,09:00">07:00</button></div>','Signal created':'<div class="rw"><span class="kw">WHEN</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="Citation lost,Mention sentiment drops,New competitor cited">Citation lost</button><button data-action="agentNew.cycleToken" class="tok" data-cycle="5+ on one page,10+ on one page">5+ on one page</button></div>','KPI changed':'<div class="rw"><span class="kw">WHEN</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="Perplexity citations,Share of voice,Visibility score">Perplexity citations</button><button data-action="agentNew.cycleToken" class="tok" data-cycle="−10% week over week,−5 pts">−10% week over week</button></div>','Watch rule':'<div class="rw"><span class="kw">WHEN</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="/blog/* loses citations,A competitor gains a citation,A wrong claim appears">/blog/* loses citations</button></div>'};
+ rb.innerHTML=R[t]+'<div class="rw"><span class="kw">FOR</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="ansvisor.com,All brands">ansvisor.com</button><button data-action="agentNew.cycleToken" class="tok" data-cycle="All platforms,ChatGPT,Perplexity,Google AI Overviews">All platforms</button></div><div class="rw"><span class="kw">THEN</span><span class="tok" style="background:var(--soft)">Run agent</span><button data-action="agentNew.cycleToken" class="tok" data-cycle="and attach to the action,and email me the result,only">and attach to the action</button></div>';
+ $('#sTrig').textContent=t+(t=='Schedule'?' · Monday 07:00':'')}});
+document.addEventListener('click',function(e){var b=e.target.closest('[data-cycle]');if(!b)return;var o=b.dataset.cycle.split(',');var i=(o.indexOf(b.textContent)+1)%o.length;b.textContent=o[i];var s=$('#sTrig');if(s&&b.closest('#ruleBox')){var tr=$('#trOpts .opt.on').dataset.tr;var first=$('#ruleBox .rw .tok');s.textContent=tr+(first?' · '+first.textContent:'')}});
+function pickMode(m){if(m.getAttribute('aria-disabled')=='true'){toast('Full auto is on Growth and above');return}$$('#nModes .mc').forEach(function(x){x.classList.toggle('on',x==m)});$('#sMode').textContent=m.dataset.nm;renderAppr()}
+$$('#nModes .mc').forEach(function(m){m.onclick=function(){pickMode(m)}});
+function renderAppr(){var full=$('#nmFull').classList.contains('on');var s=SK[skSel][0];
+ var rows=[['Read data the skill needs','R','Runs freely'],['Update a draft',"W",full?'Auto · logged with Undo':'Approval card'],['Update a CMS draft','W',full?'Approval card · policy is Ask':'Approval card'],['Follow-up check','W',full?'Auto · logged with Undo':'One-click card'],['Publish, push, send','E','Needs your click']];
+ $('#nAppr').innerHTML='<div class="tr th" style="grid-template-columns:1fr 70px 200px"><span>For '+s+'</span><span>Class</span><span>Approval</span></div>'+rows.map(function(r){return '<div class="tr" style="grid-template-columns:1fr 70px 200px"><b>'+r[0]+'</b><span><span class="cls '+r[1]+'">'+({R:'READ',W:'WRITE',E:'EXEC'})[r[1]]+'</span></span><span class="q">'+(r[1]=='E'?'<span class="nyc">Needs your click</span>':r[2])+'</span></div>'}).join('')}
+var CONOK={'Google Search Console':1,'Google Analytics':1,'Webflow':1};
+function renderConns(){var need=(SK[skSel][2]||'').split(', ').filter(Boolean);var opt=['Google Analytics','Slack'];var h='';
+ need.forEach(function(c){h+='<div class="setrow c3"><span class="dt '+(CONOK[c]?'ok':'am')+'"></span><div><b>'+c+'</b><em>Required by '+SK[skSel][0]+'</em></div>'+(CONOK[c]?'<span class="pill ok">Connected</span>':'<button data-action="access.askAdmin" class="btn sm" data-ask="admins">Ask your Admin</button>')+'</div>'});
+ opt.forEach(function(c){h+='<div class="setrow c3"><span class="dt '+(CONOK[c]?'ok':'')+'"></span><div><b>'+c+'</b><em>Optional</em></div><button data-action="agentNew.toggleConnection" class="sw'+(CONOK[c]?' on':'')+'" role="switch" aria-checked="'+(!!CONOK[c])+'" aria-label="Use '+c+'" data-optc="'+c+'"'+(CONOK[c]?'':' disabled title="Not connected"')+'></button></div>'});
+ $('#nConns').innerHTML=h}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-optc]');if(!b||b.disabled)return;swToggle(b);toast(b.classList.contains('on')?'Agent uses '+b.dataset.optc:'Agent won’t use '+b.dataset.optc)});
+function pickModel(o){if(o.getAttribute('aria-disabled')=='true'){toast('Own keys are on Growth and above');return}$$('#nModel .opt').forEach(function(x){x.classList.toggle('on',x==o)});$('#sModel').textContent=o.dataset.md}
+$$('#nModel .opt').forEach(function(o){o.onclick=function(){pickModel(o)}});
+function setStep(n){stp=n;$$('#stepper button').forEach(function(b,i){b.classList.toggle('on',i==n);b.classList.toggle('done',i<n);b.querySelector('.sn').textContent=i<n?'✓':i+1});$$('.pane').forEach(function(p){p.classList.toggle('on',p.dataset.pane==n)});
+ $('#nStepL').textContent='Step '+(n+1)+' of 4';$('#nNext').textContent=n==3?'Create agent':'Next';$('#nBack').disabled=n==0;$('#nBack').classList.toggle('dis',n==0)}
+$$('#stepper button').forEach(function(b){b.onclick=function(){setStep(+b.dataset.st)}});
+$('#nBack').onclick=function(){if(stp>0)setStep(stp-1)};
+$('#nNext').onclick=function(){if(stp<3){setStep(stp+1);return}var s=SK[skSel];
+ AG.unshift({n:$('#sName').textContent,sk:[s[0]],mode:$('#sMode').textContent,con:(s[2]||'').split(', ').filter(Boolean),model:$('#sModel').textContent,st:'idle',line:'Created just now',last:'—',next:$('#sTrig').textContent,runs:0,imp:0,trig:$('#sTrig').textContent.split(' · ')[0]});
+ renderAg();go('g-agents');setStep(0);toast(canWrite()?'Agent created · triggers run with your role ('+ROLE+')':'Personal agent saved · manual runs only, read-only')};
+
+/* ---------- run agent ---------- */
+var runState='w';
+/* ---------- polish: empty-state actions, count-up, success tick, engine logos ---------- */
+document.addEventListener('click',function(e){var c=e.target.closest('[data-click]');if(c){var t=$(c.dataset.click);if(t)t.click()}});
+var capResetBtn=document.createElement('button');capResetBtn.id='capReset';capResetBtn.dataset.action='capabilities.showAll';capResetBtn.hidden=true;capResetBtn.onclick=function(){$('#capQ').value='';$('[data-cf="all"]').click()};document.body.appendChild(capResetBtn);
+function countUp(scope){if(RM0)return;$$('[data-cu]',scope).forEach(function(el){if(el._cu)return;el._cu=1;var txt=el.textContent,m=/^([^0-9]*)([0-9][0-9,]*)(.*)$/.exec(txt);if(!m)return;var to=+m[2].replace(/,/g,''),t0=null,dur=520;function f(ts){if(!t0)t0=ts;var p=Math.min(1,(ts-t0)/dur),v=Math.round(to*(1-Math.pow(1-p,3)));el.textContent=m[1]+(to>=1000?v.toLocaleString('en-US'):v)+m[3];if(p<1)requestAnimationFrame(f);else el.textContent=txt}requestAnimationFrame(f)})}
+var RM0=matchMedia('(prefers-reduced-motion: reduce)').matches;
+$$('.kpi b,#apN,.psa b').forEach(function(b){b.setAttribute('data-cu','')});
+function okTick(card){var h=card.querySelector('.ch');if(!h)return;var t=document.createElement('span');t.className='tick pop';t.setAttribute('aria-hidden','true');h.insertBefore(t,h.firstChild)}
+var ENG={'ChatGPT':'6adcadbd744fdbb7b15f66a8_ansvisor-app-chatgpt.svg','Perplexity':'6adcadbdbe3ffb2602266865_ansvisor-app-perplexity.svg','Gemini':'6adcadbded4b75803cfc6b09_ansvisor-app-gemini.svg','Microsoft Copilot':'6adcadbdfc8e1a60a0e62d66_ansvisor-app-copilot.svg','Copilot':'6adcadbdfc8e1a60a0e62d66_ansvisor-app-copilot.svg','Claude':'6adcadbd0f63c1ef2d5386b1_ansvisor-app-claude.svg','Google AI Overviews':'6adcadbdf81d5f0a4a74b17d_ansvisor-app-ai_mode.svg','Google AI Mode':'6adcadbded4b75803cfc6b09_ansvisor-app-gemini.svg'};
+function egImg(n){return ENG[n]?'<img class="eg" alt="" src="https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/'+ENG[n]+'">':''}
+function eng(n){return egImg(n)+n}
+function engs(list){return '<span class="egs">'+list.map(egImg).join('')+'</span>'}
+/* run panel: in-place status, done steps as ✓ chips, composer ghost text */
+var RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function setStatus(t,st){var s=$('#runStatus');var d=$('#runDot');d.className='sdot'+(st?' '+st:'');$('#runAv').classList.toggle('live',!st);if(RM){s.textContent=t;return}s.style.opacity=0;setTimeout(function(){s.textContent=t;s.style.opacity=1},150)}
+function syncChips(){$('#doneChips').innerHTML=$$('.cb .step.done').map(function(s){var t=s.querySelector('.tx').firstChild.textContent.trim();return '<span class="okc" title="'+t+'">'+t+'</span>'}).join('')}
+new MutationObserver(syncChips).observe(document.querySelector('#spBody .card .cb'),{attributes:true,subtree:true,attributeFilter:['class']});syncChips();
+(function(){var seq=['Reading AC-1258…','Comparing the 2026 guides Perplexity cites…','Drafting the CMS change…'];if(RM){setStatus('Waiting for your OK on the CMS draft','wait');return}var i=0;var iv=setInterval(function(){i++;if(i<seq.length){setStatus(seq[i])}else{clearInterval(iv);if(runState=='w')setStatus('Waiting for your OK on the CMS draft','wait')}},1100)})();
+var GHOST='Approve the draft, then publish after review';
+function ghostSync(){var empty=!$('#cin').textContent.trim();$('#ghost').classList.toggle('off',!empty);var sb=$('#cSend');sb.disabled=empty;sb.title=empty?'Press Tab to use the suggestion, or type':''}
+$('#cin').addEventListener('input',ghostSync);
+$('#cin').addEventListener('keydown',function(e){if(e.key=='Tab'&&!this.textContent.trim()){e.preventDefault();this.textContent=$('#ghostT').textContent;ghostSync();var r=document.createRange();r.selectNodeContents(this);r.collapse(false);var s=getSelection();s.removeAllRanges();s.addRange(r)}else if(e.key=='Enter'&&!e.shiftKey){e.preventDefault();if(this.textContent.trim())sendMsg()}});
+function sendMsg(){var t=$('#cin').textContent.trim();if(!t)return;$('#cin').textContent='';ghostSync();toast('Sent: “'+t+'” · Chat continues the run')}
+$('#cSend').onclick=sendMsg;ghostSync();
+$('#runAgent').onclick=function(){if(done){toast('AC-1258 is done · reopen it to run the agent again');return}toast('Already running for AC-1258 · opened the run (no duplicate)');$('.sp').style.display='';var w=$('#wCard');w.scrollIntoView({behavior:'smooth',block:'nearest'})};
+$('#spClose').onclick=function(){$('.sp').style.display='none';toast('Panel closed · the run keeps going')};
+function approveW(){if(runState!='w')return;runState='e';var w=$('#wCard');w.classList.remove('need');w.querySelector('.r').innerHTML='<span class="pill ok">Approved by Alex Kim</span>';w.querySelector('.cf').innerHTML='<span class="l">'+($('#dnaChk').checked?'Won’t ask again for CMS drafts · you':'Logged in Activity')+'</span><div class="r"><button data-action="run.undoStep" class="btn sm" id="wUndo">'+svg('i-undo')+'Undo</button></div>';
+ $('#rs2').className='step done';$('#rs2 .sn2').textContent='✓';$('#rs2 em').textContent='CMS draft updated · Undo in Activity';$('#rs3').className='step need';$('#runCount').textContent='3 of 4 steps';$('#runProg').style.width='75%';$('#runBar').style.display='none';
+ $('#eCard').style.opacity='1';$('#ePub').disabled=false;$('#eNote').textContent='Draft approved · ready to go live';$('#t2ck').className='ck dn';$('#t2em').textContent='Agent · CMS draft approved';
+ ACT.unshift(['ws','Now','Citation win-back','agent','run','Alex Kim','Citation win-back','Content','W','Updated CMS draft','Webflow · /blog/what-is-aeo · run #31','Approved by Alex Kim',true]);renderAct();$('#cnActN').textContent=+$('#cnActN').textContent+1;
+ $('#wUndo').onclick=function(){toast('Draft change undone · the step is back to Needs your OK');ACT.shift();renderAct();$('#cnActN').textContent=+$('#cnActN').textContent-1;resetRun()};setStatus('Draft approved · publishing needs your click','wait');okTick($('#wCard'));toast('Approved · CMS draft updated · publish still needs your click')}
+$('#wOk').onclick=approveW;
+$('#wSkip').onclick=function(){if(runState!='w')return;setStatus('Draft skipped · run paused','wait');toast('Skipped · noted in the run and in Action History');$('#rs2').className='step';$('#rs2 em').textContent='Skipped by Alex Kim';$('#wCard').style.opacity='.55';$('#wCard').classList.remove('need');runState='s'};
+$('#ePub').onclick=function(){if(this.disabled)return;runState='p';this.disabled=true;this.textContent='Published';$('#eCard .r').innerHTML='<span class="pill ok">Published by Alex Kim</span>';$('#eNote').textContent='Live on ansvisor.com · undo in Webflow';$('#rs3').className='step done';$('#rs3 .sn2').textContent='✓';$('#rs4').className='step need';$('#runCount').textContent='3 of 4 steps';
+ $('#spBody').insertAdjacentHTML('beforeend','<div class="card need"><div class="ch"><span class="cls W">WRITE</span><b>Follow-up check · Oct 30</b><div class="r"><span class="pill am">One click</span></div></div><div class="cf"><span class="l">Scheduled tracking data · no extra cost</span><div class="r"><button data-action="followup.notNow" class="btn sm" data-toast="No check set · you can add one later">Not now</button><button data-action="followup.set" class="btn sm pri" id="chkOk">Set check</button></div></div></div>');
+ $('#chkOk').onclick=function(){this.closest('.cf').innerHTML='<span class="l">Check set for Oct 30 · in Scheduled</span>';$('#rs4').className='step done';$('#rs4 .sn2').textContent='✓';$('#runCount').textContent='4 of 4 steps';$('#runProg').style.width='100%';$('#acRunPill').className='pill am';$('#acRunPill').textContent='Ready for review';setStatus('Done · 4 of 4 steps','ok');toast('Run done · AC-1258 is Ready for review · you close it with Mark done')};
+ okTick($('#eCard'));setStatus('Published · confirm the follow-up check','wait');toast('Published to Webflow · outcome Pending · early signal on day 7, first verdict on day 14')};
+function resetRun(){runState='w';setStatus('Waiting for your OK on the CMS draft','wait');var w=$('#wCard');w.classList.add('need');w.style.opacity='1';w.querySelector('.r').innerHTML='<span class="pill am">Needs your OK</span>';w.querySelector('.cf').innerHTML='<label class="l"><input data-action="approval.dontAskAgain" type="checkbox" id="dnaChk"> Don’t ask again for CMS drafts</label><div class="r"><button data-action="approval.skip" class="btn sm" id="wSkip2">Skip</button><button data-action="approval.approve" class="btn sm pri" id="wOk2">Approve</button></div>';
+ $('#wOk2').onclick=approveW;$('#wSkip2').onclick=function(){toast('Skipped · noted in the run')};
+ $('#rs2').className='step need';$('#rs2 .sn2').textContent='2';$('#rs2 em').textContent='Waiting for your OK';$('#rs3').className='step';$('#runCount').textContent='2 of 4 steps';$('#runProg').style.width='50%';$('#runBar').style.display='';$('#eCard').style.opacity='.55';$('#ePub').disabled=true;$('#eNote').textContent='After the draft is approved';$('#t2ck').className='ck rv';$('#t2em').textContent='Agent · draft waiting for your OK'}
+var done=false;$('#markDone').onclick=function(){if(done)return;done=true;var b=this;b.textContent='Done';b.disabled=true;$('#acRunPill').className='pill ok';$('#acRunPill').textContent='Done';toast('AC-1258 marked done by you · outcome stays Pending until measured',function(){done=false;b.textContent='Mark done';b.disabled=false;$('#acRunPill').className='pill ink';$('#acRunPill').innerHTML='<span class="tdots"><i></i><i></i><i></i></span>Agent running'})};
+/* Action Center tabs: Signals · KPIs · History (Impact) */
+$$('#acTabs [data-act]').forEach(function(b){b.onclick=function(){$$('#acTabs [data-act]').forEach(function(x){x.classList.toggle('on',x==b);x.setAttribute('aria-selected',x==b)});$$('.acp').forEach(function(p){p.classList.toggle('on',p.dataset.acp==b.dataset.act)})}});
+var SIG=[['/features lost 6 Perplexity citations','Perplexity','Today 10:40','Attached to AC-1258'],['/blog/what-is-aeo lost 14 citations','Perplexity','Oct 24','Created AC-1258'],['New competitor cited on 4 AEO prompts','ChatGPT','Oct 24','New'],['/pricing FAQ gaps in fan-outs','Google AI Overviews','Oct 23','Created AC-1261'],['2 broken links on /features','Audit','Oct 23','Created AC-1263']];
+$('#sigTbl').innerHTML='<div class="tr th sig"><span>Signal</span><span>Source</span><span>When</span><span>Action</span></div>'+SIG.map(function(s){return '<div class="tr sig"><b class="el">'+s[0]+'</b><span class="q el">'+eng(s[1])+'</span><span class="q">'+s[2]+'</span><span>'+(s[3]=='New'?'<span class="pill am">New</span>':'<span class="pill">'+s[3]+'</span>')+'</span></div>'}).join('');
+// [id, title, shipped, checkpoints reached, outcome, label, change]
+var HIST=[['AC-1244','Refresh /features','Oct 22',0,'pen','Day 7 on Oct 29',''],['AC-1239','llms.txt guide · /blog/llms-txt','Oct 8',2,'nmc','Day 14 · Medium','+1 pt'],['AC-1220','Refresh /blog/aeo-tools','Sep 22',3,'imp','Day 30 confirmed · Medium','+9'],['AC-1201','FAQ on /pricing','Jul 20',4,'imp','Day 90 lasting · High','+12'],['AC-1214','Update /docs/api','Oct 2',1,'nm','Page removed',''],['AC-1231','Rewrite /pricing hero','—',0,'dec','Draft declined','']];
+$('#histTbl').innerHTML='<div class="tr th hist"><span>Action</span><span>Shipped</span><span>Checkpoints</span><span>Outcome</span><span>Change</span></div>'+HIST.map(function(h,i){var ck=[7,14,30,90].map(function(d,j){var cls=h[2]=='—'?'':j<h[3]?' d':j==h[3]&&h[4]!='nm'?' n':'';return '<span class="k'+cls+'">'+d+'</span>'}).join('');
+ return '<div data-action="runAgent.openHistory" class="tr hist" role="button" tabindex="0" data-hist="'+i+'"><div><b>'+h[1]+'</b><em>'+h[0]+'</em></div><span class="q">'+h[2]+'</span><div class="ckp">'+ck+'</div><span><span class="oc '+h[4]+'">'+OC[h[4]]+'</span><span class="conf el">'+h[5]+'</span></span><span class="'+(h[6]?'dup':'q')+'">'+(h[6]?'▲ '+h[6].replace('+',''):'—')+'</span></div>'}).join('');
+function openHist(i){var h=HIST[i];drawer(h[0]+' · Impact','<div class="kv"><span>Action</span><span>'+h[1]+'</span><span>Shipped</span><span>'+h[2]+'</span><span>Outcome</span><span><span class="oc '+h[4]+'">'+OC[h[4]]+'</span> <span class="conf">'+h[5]+'</span></span><span>Change</span><span>'+(h[6]||'—')+' Perplexity citations</span></div>'+ckList(h[3],h[2]!='—')+'<div style="display:flex;gap:8px;margin-top:14px"><button data-action="impact.openReport" class="btn sm" data-toast="Opens Reports › What Ansvisor did for you">Open in Reports</button></div>')}
+document.addEventListener('click',function(e){var r=e.target.closest('[data-hist]');if(r)openHist(r.dataset.hist)});
+document.addEventListener('keydown',function(e){var r=e.target.closest&&e.target.closest('[data-hist]');if(r&&(e.key=='Enter'||e.key==' ')){e.preventDefault();openHist(r.dataset.hist)}});
+$$('#acList .acr').forEach(function(r){r.onclick=function(){if(r.dataset.ac=='1258')return;toast('Opens AC-'+r.dataset.ac+' · same detail layout with Run agent')}});
+
+/* ---------- activity ---------- */
+// layer ah|ws, time, actor, kind user|agent, via chat|run, user, agent, area, cls, event, target, mode, undo:true|'reason'
+var ACT=[
+ ['ah','10:41','Citation win-back','agent','run','Alex Kim','Citation win-back','Action Center','W','Attached signal as evidence','AC-1258 · /features −6','Auto · policy Always',true],
+ ['ws','10:38','Citation win-back','agent','run','Alex Kim','Citation win-back','Content','W','Created refresh draft','Content › Library · /blog/what-is-aeo','Auto · policy Always',true],
+ ['ah','10:36','Citation win-back','agent','run','Alex Kim','Citation win-back','Action Center','R','Agent run started','AC-1258 · Run agent by Alex Kim','—','n/a'],
+ ['ws','10:20','Priya Shah','user','chat','Priya Shah','','Audit','W','Started an audit','ansvisor.com/features','Approved by Priya','Audit ran · quota used'],
+ ['ws','10:12','Sam Lee','user','chat','Sam Lee','','Prompts','W','Added 3 tracked prompts','Topic: AEO tools','Full auto',true],
+ ['ws','10:05','Quality pass on new drafts','agent','run','Jordan Diaz','Quality pass on new drafts','Content','W','Applied 11 suggestions to 3 drafts','Content › Library','Full auto',true],
+ ['ah','09:58','Action Center tasks','agent','run','Alex Kim','Action Center tasks','Action Center','W','Set task Ready for review','AC-1261 · FAQ for /pricing','Approved by Alex Kim',true],
+ ['ws','09:40','Alex Kim','user','chat','Alex Kim','','Competitors','W','Added competitor','example-seo.io','Approved by Alex Kim',true],
+ ['ws','09:31','Priya Shah','user','chat','Priya Shah','','Memory','W','Saved to workspace memory','“Pricing page owner: Priya”','Approved by Sam',true],
+ ['ah','09:20','Citation win-back','agent','run','Alex Kim','Citation win-back','Action Center','W','Created follow-up check','AC-1244 · citations Oct 28','Full auto',true],
+ ['ws','09:12','Taylor Brooks','user','chat','Taylor Brooks','','Requests','W','Asked your Admin: add 2 tracked prompts','Analyst · role allows read only','Sent to Admins','n/a'],
+ ['ws','09:02','Alex Kim','user','chat','Alex Kim','','Reports','W','Created schedule','Weekly citations report · Mon 08:00','Approved by Alex Kim',true],
+ ['ah','Yesterday','Citation win-back','agent','run','Alex Kim','Citation win-back','Content','E','Published to Webflow','AC-1244 · /features','Clicked by Alex Kim','Published · undo in Webflow'],
+ ['ah','Yesterday','Action Center tasks','agent','run','Alex Kim','Action Center tasks','Action Center','W','Created action','AC-1263 · Fix 2 broken links','Approved by Alex Kim',true],
+ ['ws','Yesterday','Sam Lee','user','chat','Sam Lee','','Reports','E','Emailed report outside the workspace','board@ansvisor-investors.com','Clicked by Sam','Email sent · can’t unsend'],
+ ['ah','Oct 24','Citation win-back','agent','run','Alex Kim','Citation win-back','Action Center','R','Outcome measured','AC-1220 · Improved · Medium','—','n/a'],
+ ['ws','Oct 24','Competitor watch','agent','run','Alex Kim','Competitor watch','Prompts','W','Created watch rule','Share of voice −5 pts','Approved by Alex Kim',true],
+ ['ah','Oct 24','Alex Kim','user','chat','Alex Kim','','Action Center','W','Attached to active action (no duplicate)','AC-1239 · 2 prompts added as evidence','Approved by Alex Kim',true]
+];
+var RP={'Alex Kim':'Manager','Sam Lee':'Admin','Priya Shah':'Manager','Jordan Diaz':'Manager','Taylor Brooks':'Analyst'};function roleOfP(n){return RP[n]||'Manager'}
+var FIL={lay:'all',user:'All',agent:'All',area:'All',cls:'All',auto:false};var UNDONE={};
+function renderAct(){var h='<div class="tr th act"><span>When</span><span>Who</span><span>Event</span><span>Class</span><span>Approval</span><span></span></div>';var n=0;
+ ACT.forEach(function(a,i){if(FIL.lay!='all'&&a[0]!=FIL.lay)return;if(FIL.user!='All'&&a[5]!=FIL.user)return;if(FIL.agent!='All'&&a[6]!=FIL.agent)return;if(FIL.area!='All'&&a[7]!=FIL.area)return;if(FIL.cls!='All'&&a[8]!=FIL.cls)return;if(FIL.auto&&!/Full auto|Auto ·/.test(a[11]))return;n++;
+  var u=UNDONE[i];var undo=a[12]===true?(u?'<button data-action="activity.redo" class="btn sm" data-redo="'+i+'">Redo</button>':'<button data-action="activity.undo" class="btn sm" data-undo="'+i+'">'+svg('i-undo')+'Undo</button>'):a[12]=='n/a'?'<span class="dash">—</span>':'<span><button data-action="activity.undo" class="btn sm" disabled aria-disabled="true">'+svg('i-undo')+'Undo</button><span class="ulock">'+a[12]+'</span></span>';
+  h+='<div class="tr act'+(u?' undone':'')+'"><span class="q">'+a[1]+'</span><div class="who"><span class="avt"'+(a[3]=='agent'?' style="background:var(--ink);color:#fff;border-radius:7px"':'')+'>'+(a[3]=='agent'?'<svg style="width:13px;height:13px;stroke:#fff;fill:none;stroke-width:1.8"><use href="#bot"/></svg>':(a[2]=='Alex Kim'?'AK':a[2].split(' ').map(function(w){return w[0]}).join('').slice(0,2)))+'</span><div><b>'+a[2]+'</b><em>'+(a[3]=='agent'?'as '+a[5]+' ('+roleOfP(a[5])+')':roleOfP(a[2]))+'<span class="via '+a[4]+'">'+a[4]+'</span></em></div></div><div><b class="evt">'+a[9]+'</b><em>'+a[7]+' · '+a[10]+(u?' · undone by Alex Kim':'')+'</em></div><span><span class="cls '+a[8]+'">'+({R:'READ',W:'WRITE',E:'EXEC'})[a[8]]+'</span></span><span class="q">'+(/Full auto|Auto ·/.test(a[11])?svg('i-auto')+' ':'')+a[11]+'</span><span>'+undo+'</span></div>'});
+ if(!n)h+='<div class="empty">'+svg('i-undo')+'No events match<button data-action="activity.clearFilters" class="btn sm" data-click="#fClear">Clear filters</button></div>';
+ $('#actTbl').innerHTML=h;$('#actShown').textContent=n+' shown';
+ $('#lAll').textContent=ACT.length;$('#lAh').textContent=ACT.filter(function(a){return a[0]=='ah'}).length;$('#lWs').textContent=ACT.filter(function(a){return a[0]=='ws'}).length}
+$$('[data-lay]').forEach(function(b){b.onclick=function(){FIL.lay=b.dataset.lay;$$('[data-lay]').forEach(function(x){x.classList.toggle('on',x==b);x.setAttribute('aria-selected',x==b)});renderAct()}});
+$('#fAutoOnly').onclick=function(){FIL.auto=!FIL.auto;this.classList.toggle('on',FIL.auto);renderAct()};
+$('#fClear').onclick=function(){FIL={lay:FIL.lay,user:'All',agent:'All',area:'All',cls:'All',auto:false};$('#fAutoOnly').classList.remove('on');['fUser','fAgent','fArea','fCls'].forEach(function(k){$('#'+k+'V').textContent='All';$('[data-menu="'+k+'"]').classList.remove('set')});renderAct()};
+document.addEventListener('click',function(e){var b=e.target.closest('[data-undo]');if(b){var i=b.dataset.undo;UNDONE[i]=1;renderAct();toast('Undone: '+ACT[i][9]+' · logged as a new event',function(){delete UNDONE[i];renderAct()});return}
+ var r=e.target.closest('[data-redo]');if(r){delete UNDONE[r.dataset.redo];renderAct();toast('Redone: '+ACT[r.dataset.redo][9])}});
+
+/* ---------- menus ---------- */
+function uniq(k){var s=[];ACT.forEach(function(a){if(a[k]&&s.indexOf(a[k])<0)s.push(a[k])});return s}
+var MENUS={
+ brandMenu:function(){return [['ansvisor.com','Current',function(){toast('Already on ansvisor.com')}],['docs.ansvisor.com','',function(){toast('Switched brand · Chat scope follows the brand')}],['Add a brand','',function(){toast('Opens Brands › Add brand')}]]},
+ meMenu:function(){return [['Your role: '+ROLE+' · See what you can do','',function(){go('g-roles',{focus:1})}],['Settings','',function(){go('g-my-access')}],['Your plan: '+PNAME[PLAN],'',function(){go('g-my-access');toast('Your plan is at the top of Settings')}],['Sign out','',function(){toast('Signs out')}]]},
+ runsMenu:function(){return [['Citation win-back','Step 2 of 4',function(){go('g-run-agent')}],['Action Center tasks','Needs you',function(){toast('Opens the approval card · 1 change on /pricing')}],['All agents','',function(){go('g-agents')}]]},
+ modeMenu:function(){return ['Ask me first','Auto, ask before changes','Full auto'].map(function(m){return [m,lowPlan()&&m=='Full auto'?'Growth+':'',function(){if(lowPlan()&&m=='Full auto'){toast('Full auto is on Growth and above');return}$('#adMode').firstChild.textContent=m+' ';toast('Mode: '+m+(m=='Full auto'?' · allowed WRITEs run and are logged with Undo · publishing still needs a click':''))}]})},
+ modelMenu:function(){return ['Auto','Fast','Best writing','Own key'].map(function(m){return [m,m=='Own key'?'Growth+':'',function(){if(lowPlan()&&m=='Own key'){toast('Own keys are on Growth and above');return}$('#adModel').firstChild.textContent=m+' ';toast('Model: '+m)}]})},
+ shareMenu:function(){return ['Private','Team'].map(function(m){return [m,'',function(){$('#adShare').firstChild.textContent=m+' ';toast(m=='Team'?'Everyone can run it with their own role':'Only you see and run it')}]})},
+ trigMenu:function(){return ['Schedule','Signal created','KPI changed','Watch rule'].map(function(m){return [m,'',function(){$('#trgBox').insertAdjacentHTML('beforeend','<div class="trg"><span class="ty">'+m+'</span><div><b>New '+m.toLowerCase()+' trigger</b><em>Set the condition</em></div><button data-action="agent.toggleTrigger" class="sw on" role="switch" aria-checked="true" aria-label="'+m+' trigger" data-sw="'+m+' trigger"></button></div>');toast(m+' trigger added')}]})},
+ dlMenu:function(){return [['Markdown (.md)','',function(){toast('Downloaded run-AC-1258.md')}],['PDF','',function(){toast('Downloaded run-AC-1258.pdf')}],['CSV · steps and approvals','',function(){toast('Downloaded run-AC-1258.csv')}]]},
+ agMore:function(){return [['Duplicate','',function(){toast('Duplicated as Citation win-back (copy)')}],['Copy as agent task','',function(){toast('Copied · paste into Claude, ChatGPT or Cursor via MCP')}],['Delete agent','',function(){toast('Asks first · past runs stay in Activity')}]]},
+ fUser:function(){return ['All'].concat(uniq(5)).map(function(v){return [v,'',function(){setF('user','fUser',v)}]})},
+ fAgent:function(){return ['All'].concat(uniq(6)).map(function(v){return [v,'',function(){setF('agent','fAgent',v)}]})},
+ fArea:function(){return ['All'].concat(uniq(7)).map(function(v){return [v,'',function(){setF('area','fArea',v)}]})},
+ fCls:function(){return [['All','All'],['READ','R'],['WRITE','W'],['EXECUTE','E']].map(function(v){return [v[0],'',function(){FIL.cls=v[1];$('#fClsV').textContent=v[0];$('[data-menu="fCls"]').classList.toggle('set',v[1]!='All');renderAct()}]})}
+};
+function setF(k,id,v){FIL[k]=v;$('#'+id+'V').textContent=v;$('[data-menu="'+id+'"]').classList.toggle('set',v!='All');renderAct()}
+var menuFns=[];
+function openMenu(items,el){var m=$('#menu');menuFns=items.map(function(x){return x[2]});var ds=(el&&el.dataset)||{},MK=ds.menu=='dlMenu'?'downloadMenu.pickFormat':ds.menu?ds.menu.replace(/Menu$/,'')+'Menu.pick':ds.role!=null?'roleMenu.pick':'menu.pick';m.innerHTML=items.map(function(x,i){return '<button data-action="'+MK+'" role="menuitem" data-mi="'+i+'">'+x[0]+(x[1]?'<em>'+x[1]+'</em>':'')+'</button>'}).join('');m.classList.add('on');var r=el.getBoundingClientRect();var mh=m.offsetHeight,mw=m.offsetWidth;var top=r.bottom+4;if(top+mh>innerHeight-8)top=Math.max(8,r.top-mh-4);m.style.top=top+'px';m.style.left=Math.max(8,Math.min(r.left,innerWidth-mw-8))+'px';var f=m.querySelector('button');if(f)f.focus()}
+function closeAll(){$('#menu').classList.remove('on');$('#drawer').classList.remove('on');$('#scrim').classList.remove('on')}
+function drawer(t,html){$('#drT').textContent=t;$('#drB').innerHTML=html;$('#drawer').classList.add('on');$('#scrim').classList.add('on');$('#drX').focus()}
+$('#drX').onclick=closeAll;$('#scrim').onclick=closeAll;
+document.addEventListener('click',function(e){
+ var mi=e.target.closest('[data-mi]');if(mi){var f=menuFns[mi.dataset.mi];$('#menu').classList.remove('on');f&&f();return}
+ var mb=e.target.closest('[data-menu]');if(mb){e.stopPropagation();var m=$('#menu');if(m.classList.contains('on')&&m._src==mb){m.classList.remove('on');return}m._src=mb;openMenu(MENUS[mb.dataset.menu](),mb);return}
+ var rs=e.target.closest('[data-role]');if(rs&&!rs.disabled){var i=+rs.dataset.role;m=$('#menu');m._src=rs;openMenu(ROLES.map(function(r){return [r,r==MEM[i][3]?'Current':'',function(){var old=MEM[i][3];if(old==r)return;MEM[i][3]=r;renderMem();toast(MEM[i][1]+': '+old+' → '+r+' · Chat follows the new role right away',function(){MEM[i][3]=old;renderMem()})}]}),rs);return}
+ var md=e.target.closest('[data-mem]');if(md){var mm=MEM[md.dataset.mem];drawer(mm[1],'<div class="kv"><span>Email</span><span>'+mm[2]+'</span><span>Role</span><span>'+mRole(mm)+'</span><span>Brands</span><span>'+mBrands(mm)+'</span><span>Through Chat</span><span>'+chatLine(mRole(mm))+'</span><span>Agents created</span><span>'+(mm[1]=='Alex Kim'?'4':mm[1]=='Jordan Diaz'?'1':'0')+'</span><span>Chat writes, 30 days</span><span>'+(canW(mRole(mm))?'14':'0')+'</span></div><div style="display:flex;gap:8px"><button data-action="activity.open" class="btn sm" data-go="g-activity">See activity</button>'+(isAdmin()?'<button data-action="roles.removeMember" class="btn sm warn" data-toast="Asks first · their triggered agents pause until an Admin or Manager takes them over">Remove</button>':'')+'</div>');return}
+ if(!e.target.closest('#menu'))$('#menu').classList.remove('on');
+ var g=e.target.closest('[data-go]');if(g){e.preventDefault();go(g.dataset.go);return}
+ var sw=e.target.closest('[data-sw]');if(sw&&!sw.disabled){var on=swToggle(sw);var tr=sw.closest('.trg');if(tr)tr.classList.toggle('off',!on);toast(sw.dataset.sw+(on?' on':' off'));return}
+ var t=e.target.closest('[data-toast]');if(t){toast(t.dataset.toast);return}
+});
+$('#prmTog').onclick=function(){var o=$('#prmSub').classList.toggle('open');this.setAttribute('aria-expanded',o);this.querySelector('.cv').textContent=o?'▾':'▸'};
+$$('.mk a[data-scr]').forEach(function(a){a.onclick=function(e){e.preventDefault();go(a.dataset.scr)}});
+
+document.addEventListener('keydown',function(e){var d=e.target;if(d.tagName=='DIV'&&d.getAttribute('role')=='button'&&(e.key=='Enter'||e.key==' ')){e.preventDefault();d.click()}});
+function canW(r){return r=='Admin'||r=='Manager'}
+/* truncated text gets its full text as a tooltip */
+document.addEventListener('mouseover',function(e){var el=e.target;if(el&&el.nodeType==1&&!el.title&&el.scrollWidth>el.clientWidth+1&&getComputedStyle(el).textOverflow=='ellipsis')el.title=el.textContent});
+renderPlanStrip();updateGates();renderCap();renderAg();renderRuns();renderSk();renderConns();renderAppr();renderAct();setStep(0);setRole(ROLE,true);
+go((location.hash||'#g-roles').slice(1));
+</script>
+</body>
+</html>

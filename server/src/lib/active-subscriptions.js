@@ -61,6 +61,44 @@ export async function activeOrgFilter(orgIds) {
   return (orgId) => active.has(orgId);
 }
 
+/** Why no work may start for a brand: a demo brand's sample data (00380). */
+export const DEMO_BRAND_REASON = 'demo_brand';
+/** Why no work may start for a brand: its organization has no active plan. */
+export const SUBSCRIPTION_INACTIVE_REASON = 'subscription_inactive';
+
+/**
+ * For the ids among `brandIds`, why no work may start for the brand, or null
+ * when it may: DEMO_BRAND_REASON for a demo brand (on the cloud or
+ * self-hosted), SUBSCRIPTION_INACTIVE_REASON for a brand whose organization
+ * has no active or trialing subscription (on the cloud), or that wasn't
+ * found. Throws when the brands can't be read.
+ *
+ * @param {string[]} brandIds
+ * @returns {Promise<(brandId: string) => string|null>}
+ */
+export async function brandStopReasons(brandIds) {
+  const ids = uniqueIds(brandIds);
+  if (ids.length === 0) return () => SUBSCRIPTION_INACTIVE_REASON;
+  const cloud = isCloud();
+  const { data, error } = await selectInChunks(ids, (chunk) =>
+    supabaseAdmin
+      .from('brands')
+      .select(cloud ? 'id, is_demo, organizations(subscription_status)' : 'id, is_demo')
+      .in('id', chunk),
+  );
+  if (error) throw new Error(`brands read: ${error.message}`);
+  const reasons = new Map(
+    (data ?? []).map((brand) => {
+      if (brand.is_demo) return [brand.id, DEMO_BRAND_REASON];
+      if (cloud && !isSubscriptionActive(brand.organizations?.subscription_status)) {
+        return [brand.id, SUBSCRIPTION_INACTIVE_REASON];
+      }
+      return [brand.id, null];
+    }),
+  );
+  return (brandId) => (reasons.has(brandId) ? reasons.get(brandId) : SUBSCRIPTION_INACTIVE_REASON);
+}
+
 /**
  * A test for the ids among `brandIds`: whether the brand is a real one (not
  * a demo brand) whose organization has an active or trialing subscription
@@ -70,26 +108,19 @@ export async function activeOrgFilter(orgIds) {
  * @returns {Promise<(brandId: string) => boolean>}
  */
 export async function activeBrandFilter(brandIds) {
-  const ids = uniqueIds(brandIds);
-  if (ids.length === 0) return () => false;
-  const cloud = isCloud();
-  const { data, error } = await selectInChunks(ids, (chunk) =>
-    supabaseAdmin
-      .from('brands')
-      .select(cloud ? 'id, is_demo, organizations(subscription_status)' : 'id, is_demo')
-      .in('id', chunk),
-  );
-  if (error) throw new Error(`brands read: ${error.message}`);
-  const active = new Set(
-    (data ?? [])
-      .filter(
-        (brand) =>
-          !brand.is_demo &&
-          (!cloud || isSubscriptionActive(brand.organizations?.subscription_status)),
-      )
-      .map((brand) => brand.id),
-  );
-  return (brandId) => active.has(brandId);
+  const reasonFor = await brandStopReasons(brandIds);
+  return (brandId) => reasonFor(brandId) === null;
+}
+
+/**
+ * Why no work may start for one brand, or null when it may (brandStopReasons):
+ * for a job that starts work for one brand, and says why it didn't.
+ *
+ * @param {string} brandId
+ * @returns {Promise<string|null>}
+ */
+export async function brandStopReason(brandId) {
+  return (await brandStopReasons([brandId]))(brandId);
 }
 
 /**

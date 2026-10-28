@@ -3,6 +3,7 @@ import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
+import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
 import type Stripe from 'stripe';
 
 /**
@@ -89,6 +90,9 @@ export async function POST(req: NextRequest) {
               // ahead of the redirect (or that happen out-of-band entirely)
               // still get prompts in sync. Idempotent.
               await alignPromptsSafe(orgId, planId || 'starter', 'checkout');
+              // A plan bought: the demo brand steps aside. Here only, at the
+              // start of a subscription; never on its updates.
+              await hideDemoBrandAfterPurchase(orgId, subscription.status, 'webhook:checkout');
             }
           }
         } else {

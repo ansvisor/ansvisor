@@ -14,25 +14,62 @@ vi.mock('@/lib/stripe', () => ({
   },
 }));
 
+/** The demo brand's update: what it set, the filters it was made with, and its answer. */
+const brands = vi.hoisted(() => ({
+  update: vi.fn(),
+  filters: [] as [string, string, unknown][],
+  answer: { error: null } as { error: { message: string } | null },
+}));
 const db = vi.hoisted(() => ({ update: vi.fn(), eq: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    from: () => ({
-      update: (values: unknown) => {
-        db.update(values);
-        return { eq: db.eq };
-      },
-      // No brand yet: nothing to start tracking for.
-      select: () => {
-        const query = {
-          eq: () => query,
-          order: () => query,
-          limit: () => query,
-          single: async () => ({ data: null }),
+    from: (table: string) => {
+      if (table === 'brands') {
+        return {
+          update: (values: unknown) => {
+            brands.update(values);
+            const chain = {
+              eq: (column: string, value: unknown) => {
+                brands.filters.push(['eq', column, value]);
+                return chain;
+              },
+              is: (column: string, value: unknown) => {
+                brands.filters.push(['is', column, value]);
+                return chain;
+              },
+              then: (resolve: (value: unknown) => unknown) => resolve(brands.answer),
+            };
+            return chain;
+          },
+          // No brand yet: nothing to start tracking for.
+          select: () => {
+            const query = {
+              eq: () => query,
+              order: () => query,
+              limit: () => query,
+              single: async () => ({ data: null }),
+            };
+            return query;
+          },
         };
-        return query;
-      },
-    }),
+      }
+      return {
+        update: (values: unknown) => {
+          db.update(values);
+          return { eq: db.eq };
+        },
+        // No brand yet: nothing to start tracking for.
+        select: () => {
+          const query = {
+            eq: () => query,
+            order: () => query,
+            limit: () => query,
+            single: async () => ({ data: null }),
+          };
+          return query;
+        },
+      };
+    },
   },
 }));
 
@@ -58,6 +95,8 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
   db.eq.mockResolvedValue({ error: null });
+  brands.filters = [];
+  brands.answer = { error: null };
 });
 
 describe('GET /api/stripe/success', () => {
@@ -98,5 +137,36 @@ describe('GET /api/stripe/success', () => {
     expect(stripeApi.retrieve).toHaveBeenCalledWith('sub1');
     expect(db.update).toHaveBeenCalledTimes(1);
     expect(db.update.mock.calls[0][0]).not.toHaveProperty('subscription_ends_at');
+  });
+});
+
+describe('GET /api/stripe/success and the demo brand', () => {
+  it('hides a shown demo brand before the dashboard opens, so the own brand is the one open', async () => {
+    stripeApi.retrieveSession.mockResolvedValue({
+      payment_status: 'no_payment_required',
+      status: 'complete',
+      customer: 'cus1',
+      subscription: subscription(1_800_000_000),
+    });
+    const res = await back();
+    expect(brands.update).toHaveBeenCalledTimes(1);
+    expect(brands.filters).toEqual([
+      ['eq', 'organization_id', 'org1'],
+      ['eq', 'is_demo', true],
+      ['is', 'demo_hidden_at', null],
+    ]);
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+  });
+
+  it('opens the dashboard all the same when the demo brand could not be hidden', async () => {
+    brands.answer = { error: { message: 'timeout' } };
+    stripeApi.retrieveSession.mockResolvedValue({
+      payment_status: 'paid',
+      status: 'complete',
+      customer: 'cus1',
+      subscription: subscription(),
+    });
+    const res = await back();
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
   });
 });

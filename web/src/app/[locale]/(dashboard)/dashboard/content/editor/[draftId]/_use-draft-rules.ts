@@ -32,6 +32,7 @@ import {
 } from '@/lib/content/rules';
 import { buildSourceGroups } from '@/lib/content/sources';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { DraftReads } from './_use-draft-reads';
 
 export interface DraftRulesState {
@@ -129,6 +130,14 @@ export function useDraftRules({
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
+  // A read-only workspace (plan not active): a rule changed, a set picked or
+  // saved as My rules opens the upgrade dialog instead, and nothing changes.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const locked = () => {
+    if (isLocked) openUpgrade(tActions('editRules'));
+    return isLocked;
+  };
   const [choices, setChoices] = useState<DraftRules>(draft.rules);
   // My rules as read, and for which site type: they are kept per type
   // (00227), so after a switch they count as unread until read again.
@@ -256,6 +265,7 @@ export function useDraftRules({
       });
   };
   const save = (next: DraftRules, message: string) => {
+    if (locked()) return;
     // Before My rules are read, the draft would save Ansvisor's set over the workspace's.
     if (!mineRead) return;
     // Past the database's size check the save would fail: the change stays out.
@@ -335,7 +345,7 @@ export function useDraftRules({
       );
     },
     saveAsMine: () => {
-      if (!setType) return;
+      if (!setType || locked()) return;
       const set = setToSave(effective, mine[setType]);
       if (!ruleSetFits(set)) {
         toast.error(t('tooLongMine'));

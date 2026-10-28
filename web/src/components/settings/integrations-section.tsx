@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { BarChart3, Loader2, Search, ShoppingBag, Unplug } from 'lucide-react';
+import { BarChart3, Globe, Loader2, Search, ShoppingBag, Unplug } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   getIntegrationStatus,
@@ -44,7 +44,18 @@ import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-c
 import { CatalogCategoryPages } from './catalog-category-pages';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
+import { SampleDataBadge } from './sample-data-badge';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { useBrandStore } from '@/stores/use-brand-store';
+import type { Brand } from '@/types';
+import {
+  DEMO_ANALYTICS_PROPERTY_ID,
+  demoIntegration,
+  demoSearchConsoleProperty,
+  upcomingDemoIntegrations,
+} from '@/lib/demo/integrations';
 
 /**
  * Settings → Integrations (#577, Google Analytics added in #658).
@@ -58,9 +69,14 @@ import { useIntegrationConnect } from '@/hooks/use-integration-connect';
  * way, then each brand picks its account, whose products land in the
  * product catalog card below it. Content management systems: where Send to
  * CMS puts a brand's pages.
+ *
+ * On the demo brand, the cards show the demo's states (lib/demo/integrations):
+ * the live ones connected with sample data, the ones still to come as Coming
+ * soon, those without a card of their own as a row in their group.
  */
 export function IntegrationsSection() {
   const t = useTranslations('settings');
+  const { isDemo } = useDemoBrand();
   // Bumped when a brand adds a Merchant Center account, so the catalog card lists it.
   const [catalogReads, setCatalogReads] = useState(0);
   // The catalog's sources as its card read them, for the picker to mark the accounts added.
@@ -120,6 +136,11 @@ export function IntegrationsSection() {
             />
           </IntegrationCard>
 
+          {isDemo &&
+            upcomingDemoIntegrations('stores').map((id) => (
+              <UpcomingIntegrationCard key={id} id={id} />
+            ))}
+
           <CatalogSourcesCard refreshKey={catalogReads} onSources={onCatalogSources} />
 
           <CatalogCategoryPages refreshKey={categoryReads} />
@@ -128,6 +149,10 @@ export function IntegrationsSection() {
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}
         <IntegrationGroup title={t('integrations_cms')}>
           <WebflowCard />
+          {isDemo &&
+            upcomingDemoIntegrations('cms').map((id) => (
+              <UpcomingIntegrationCard key={id} id={id} />
+            ))}
         </IntegrationGroup>
       </CardContent>
     </Card>
@@ -150,6 +175,42 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
   );
 }
 
+/** The icons of the integrations without a card of their own yet. */
+const UPCOMING_ICONS: Record<string, ReactNode> = {
+  shopify: <ShoppingBag className="h-5 w-5 text-muted-foreground" />,
+};
+
+/**
+ * An integration still to come, on the demo brand: its row as an
+ * integration card has it, saying Coming soon, with nothing to connect.
+ */
+function UpcomingIntegrationCard({ id }: { id: string }) {
+  const t = useTranslations('settings');
+  return (
+    <div
+      data-integration={id}
+      className="flex items-center justify-between gap-4 rounded-lg border p-4"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
+          {UPCOMING_ICONS[id] ?? <Globe className="h-5 w-5 text-muted-foreground" />}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">{t(`demoIntegrations.${id}.label`)}</p>
+            <Badge variant="secondary" className="bg-muted text-muted-foreground">
+              {t('integrations_comingSoon')}
+            </Badge>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {t(`demoIntegrations.${id}.description`)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * One integration row: status badge, Connect / Disconnect, and whatever the
  * provider wants to render once connected (`children`).
@@ -163,6 +224,10 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
  * Center, until Google approves the connection); a self-hosted server keeps
  * the set-up line. Sources a brand added before stay in Product catalog,
  * where they're removed.
+ *
+ * On the demo brand, its state comes from the demo's list instead of the
+ * API: connected (with "Sample data"; Disconnect opens the plan dialog), or
+ * Coming soon. No set-up line there.
  */
 function IntegrationCard({
   provider,
@@ -184,8 +249,15 @@ function IntegrationCard({
   children?: ReactNode;
 }) {
   const t = useTranslations('settings');
-  const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const { isDemo } = useDemoBrand();
+  const demo = isDemo ? demoIntegration(provider) : null;
+  const { openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const [readStatus, setStatus] = useState<IntegrationStatus | null>(null);
   const [unreadable, setUnreadable] = useState(false);
+  // The demo's state, else the API's.
+  const status: IntegrationStatus | null =
+    demo === 'connected' ? 'connected' : demo === 'soon' ? 'not_configured' : readStatus;
   const [disconnecting, setDisconnecting] = useState(false);
   const { connecting, connect: handleConnect } = useIntegrationConnect(provider, {
     label,
@@ -209,8 +281,9 @@ function IntegrationCard({
   }, [provider, hideUnavailable]);
 
   useEffect(() => {
+    if (demo) return;
     load();
-  }, [load]);
+  }, [load, demo]);
 
   const handleDisconnect = async () => {
     setDisconnecting(true);
@@ -225,8 +298,14 @@ function IntegrationCard({
     }
   };
 
-  const soon = comingSoon !== undefined && status === 'not_configured' && isCloud();
-  if (hideUnavailable && (unreadable || (status === 'not_configured' && isCloud() && !soon))) {
+  const soon = demo
+    ? demo === 'soon'
+    : comingSoon !== undefined && status === 'not_configured' && isCloud();
+  if (
+    !demo &&
+    hideUnavailable &&
+    (unreadable || (status === 'not_configured' && isCloud() && !soon))
+  ) {
     return null;
   }
 
@@ -248,6 +327,7 @@ function IntegrationCard({
                   {t('integrations_connected')}
                 </Badge>
               )}
+              {demo === 'connected' && <SampleDataBadge />}
               {soon && (
                 <Badge variant="secondary" className="bg-muted text-muted-foreground">
                   {t('integrations_comingSoon')}
@@ -264,6 +344,17 @@ function IntegrationCard({
           <Badge variant="outline" className="text-muted-foreground shrink-0">
             {t('integrations_notConfigured')}
           </Badge>
+        ) : status === 'connected' && demo ? (
+          // Sample data: there is nothing to disconnect.
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 shrink-0"
+            onClick={() => openUpgrade(tActions('disconnectIntegrations'))}
+          >
+            <Unplug className="h-3.5 w-3.5" />
+            {t('integrations_disconnect')}
+          </Button>
         ) : status === 'connected' ? (
           <Dialog>
             <DialogTrigger
@@ -310,7 +401,7 @@ function IntegrationCard({
         )}
       </div>
 
-      {soon && <p className="text-xs text-muted-foreground">{comingSoon}</p>}
+      {soon && comingSoon && <p className="text-xs text-muted-foreground">{comingSoon}</p>}
 
       {status === 'not_configured' && !soon && (
         <p className="text-xs text-muted-foreground">
@@ -375,6 +466,10 @@ function PropertyMapping({
   const [loadFailed, setLoadFailed] = useState<string | null>(null);
   const [savingBrandId, setSavingBrandId] = useState<string | null>(null);
   const autoMatched = useRef(false);
+  // A read-only workspace (plan not active): picking a property opens the
+  // upgrade dialog instead, and nothing is matched by itself.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(async () => {
     setLoadFailed(null);
@@ -395,7 +490,7 @@ function PropertyMapping({
   // property. Runs once per mount; a failed save (e.g. member role) just
   // leaves the brand unmapped for a manual pick by an admin.
   useEffect(() => {
-    if (!options || !rows || autoMatched.current) return;
+    if (!options || !rows || autoMatched.current || isLocked) return;
     autoMatched.current = true;
     (async () => {
       for (const row of rows) {
@@ -413,7 +508,7 @@ function PropertyMapping({
         }
       }
     })();
-  }, [options, rows, save, sourceName]);
+  }, [options, rows, save, sourceName, isLocked]);
 
   const handlePick = async (brandId: string, picked: string) => {
     const value = picked === NONE_VALUE ? null : picked;
@@ -475,7 +570,10 @@ function PropertyMapping({
               <Select
                 items={selectItems}
                 value={row.value ?? null}
-                onValueChange={(v) => handlePick(row.brandId, v ?? NONE_VALUE)}
+                onValueChange={guard(
+                  (v: string | null) => void handlePick(row.brandId, v ?? NONE_VALUE),
+                  { action: tActions('mapProperties') },
+                )}
               >
                 <SelectTrigger className="h-8 w-64 text-xs">
                   <SelectValue placeholder={t('integrations_selectProperty')} />
@@ -516,15 +614,68 @@ async function loadGscRows(): Promise<BrandPropertyRow[]> {
   }));
 }
 
+/**
+ * The demo brand's mapping: its own row, mapped to its sample property. Its
+ * picker opens the plan dialog, as the workspace is locked on the demo brand.
+ */
+function useDemoMapping(property: (brand: Brand) => PropertyOption) {
+  const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
+  const option = brand ? property(brand) : null;
+  const row: BrandPropertyRow | null =
+    brand && option
+      ? {
+          brandId: brand.id,
+          brandName: brand.name,
+          value: option.value,
+          domains: brand.domains.map((d) => d.domain),
+        }
+      : null;
+  // Stable while the sample property is: the mapping reads again when its loaders change.
+  const key = row ? `${row.brandId}|${row.brandName}|${option?.label}` : '';
+  const [loaders, setLoaders] = useState({ key: '', loadOptions: noOptions, loadRows: noRows });
+  if (loaders.key !== key) {
+    setLoaders({
+      key,
+      loadOptions: async () => (option ? [option] : []),
+      loadRows: async () => (row ? [row] : []),
+    });
+  }
+  return loaders;
+}
+
+const noOptions = async (): Promise<PropertyOption[]> => [];
+const noRows = async (): Promise<BrandPropertyRow[]> => [];
+const saveNothing = async () => {};
+
+function primaryDomain(brand: Brand): string {
+  return (brand.domains.find((d) => d.isPrimary) ?? brand.domains[0])?.domain ?? brand.slug;
+}
+
+function demoGscProperty(brand: Brand): PropertyOption {
+  const url = demoSearchConsoleProperty(primaryDomain(brand));
+  return { value: url, label: url, siteUrls: [url] };
+}
+
+function demoGaProperty(brand: Brand): PropertyOption {
+  return {
+    value: DEMO_ANALYTICS_PROPERTY_ID,
+    label: `${brand.name} · GA4 (${DEMO_ANALYTICS_PROPERTY_ID})`,
+    siteUrls: [`https://${primaryDomain(brand)}`],
+  };
+}
+
 function GscPropertyMapping() {
+  const { isDemo } = useDemoBrand();
+  const demo = useDemoMapping(demoGscProperty);
   return (
     <PropertyMapping
+      key={isDemo ? 'demo' : 'live'}
       sourceName="Search Console"
       description="Pick which Search Console property each brand's data comes from. Brands matching a property by domain are mapped automatically."
       emptyMessage="The connected account has no Search Console properties. Add your site in Search Console first, then retry."
-      loadOptions={loadGscOptions}
-      loadRows={loadGscRows}
-      save={setBrandGscProperty}
+      loadOptions={isDemo ? demo.loadOptions : loadGscOptions}
+      loadRows={isDemo ? demo.loadRows : loadGscRows}
+      save={isDemo ? saveNothing : setBrandGscProperty}
     />
   );
 }
@@ -552,14 +703,17 @@ async function loadGaRows(): Promise<BrandPropertyRow[]> {
 }
 
 function GaPropertyMapping() {
+  const { isDemo } = useDemoBrand();
+  const demo = useDemoMapping(demoGaProperty);
   return (
     <PropertyMapping
+      key={isDemo ? 'demo' : 'live'}
       sourceName="Analytics"
       description="Pick which GA4 property each brand's data comes from. Brands whose domain matches a property's web data stream are mapped automatically."
       emptyMessage="The connected account has no GA4 properties. Create one in Google Analytics first, then retry."
-      loadOptions={loadGaOptions}
-      loadRows={loadGaRows}
-      save={setBrandGaProperty}
+      loadOptions={isDemo ? demo.loadOptions : loadGaOptions}
+      loadRows={isDemo ? demo.loadRows : loadGaRows}
+      save={isDemo ? saveNothing : setBrandGaProperty}
     />
   );
 }

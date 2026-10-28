@@ -4,7 +4,9 @@
  *
  * Each function owns session lookup, Authorization header construction, and
  * the POST itself. On success it returns typed data; on failure it throws so
- * the caller can decide what to show the user.
+ * the caller can decide what to show the user: a SetupDailyLimitError once a
+ * workspace that never subscribed has used the day's setup suggestions (429),
+ * a plain Error otherwise.
  *
  * These are plain async functions, not server actions — they run in the browser
  * and reach the API via the proxy at BROWSER_API_BASE_URL.
@@ -22,6 +24,35 @@ async function getAuthHeader(): Promise<string> {
     data: { session },
   } = await supabase.auth.getSession();
   return `Bearer ${session?.access_token}`;
+}
+
+/**
+ * The day's setup suggestions are used up: a workspace that never subscribed
+ * gets a few a day (429 `onboarding_daily_limit`), and adds its own until
+ * tomorrow. Its message is the call's usual one, so a caller that only shows
+ * the message says what it said before.
+ */
+export class SetupDailyLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SetupDailyLimitError';
+  }
+}
+
+/** How a suggestion call failed, as the onboarding steps tell it. */
+export type SuggestFailure = 'failed' | 'dailyLimit';
+
+export function suggestFailure(err: unknown): SuggestFailure {
+  return err instanceof SetupDailyLimitError ? 'dailyLimit' : 'failed';
+}
+
+/** The error a failed call throws: SetupDailyLimitError past the day's limit, else an Error. */
+async function failure(res: Response, message: string): Promise<Error> {
+  if (res.status === 429) {
+    const body = (await res.json().catch(() => null)) as { code?: unknown } | null;
+    if (body?.code === 'onboarding_daily_limit') return new SetupDailyLimitError(message);
+  }
+  return new Error(message);
 }
 
 // ── Shared request body shape ──────────────────────────────────────────────────
@@ -88,7 +119,7 @@ export async function suggestTopics(params: BrandSetupParams): Promise<SuggestTo
     }),
   });
 
-  if (!res.ok) throw new Error('Failed to suggest topics');
+  if (!res.ok) throw await failure(res, 'Failed to suggest topics');
   const data = await res.json();
   const topics = (data.topics || []).map((t: { name: string }) => t.name);
   return { topics };
@@ -139,7 +170,7 @@ export async function generatePromptsFromTopics(
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to generate prompts');
+      if (!res.ok) throw await failure(res, 'Failed to generate prompts');
       const data = await res.json();
       return (data.topicPrompts || []).map((tp: { topic: string; prompts: string[] }) => ({
         topic: tp.topic,
@@ -191,7 +222,7 @@ export async function suggestCompetitors(
     }),
   });
 
-  if (!res.ok) throw new Error('Failed to suggest competitors');
+  if (!res.ok) throw await failure(res, 'Failed to suggest competitors');
   const data = await res.json();
   const competitors = (data.competitors || []).map((c: { name: string; domain: string }) => ({
     name: c.name,

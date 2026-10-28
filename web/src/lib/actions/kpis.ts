@@ -37,6 +37,7 @@ import {
 import { presetKpiKeys, presetTarget } from '@/lib/kpis/presets';
 import { getInsightsSummary, getShareOfVoiceData, getVisibilityRateTrend } from './tracking';
 import { getTrafficSummary, getTrafficTrend } from './traffic';
+import { assertWritable } from '@/lib/subscription-guard';
 
 const TREND_DAYS = 7;
 
@@ -417,6 +418,7 @@ export async function saveKpiFramework(
   timeframe: KpiTimeframe,
   entries: KpiFrameworkEntry[],
 ): Promise<void> {
+  await assertWritable({ brandId });
   if (entries.length === 0) throw new Error('empty framework');
   if (!(timeframe in TIMEFRAME_DAYS)) throw new Error('unknown timeframe');
   for (const entry of entries) {
@@ -467,6 +469,7 @@ export async function saveKpiFramework(
  * would make a row vanish with no way back.
  */
 export async function removeKpi(brandId: string, kpiKey: KpiKey): Promise<void> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('kpi_definitions')
@@ -508,6 +511,7 @@ async function readPresets(brandId: string) {
  * without the function.
  */
 export async function seedKpiPresets(brandId: string): Promise<boolean> {
+  await assertWritable({ brandId });
   const { entries } = await readPresets(brandId);
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('seed_kpi_presets', {

@@ -82,6 +82,7 @@ import {
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 type SourceKind = 'opportunity' | 'prompt' | 'topic';
 const SOURCE_KINDS: SourceKind[] = ['opportunity', 'prompt', 'topic'];
@@ -202,6 +203,11 @@ export function NewContentDialog({
   const tTypes = useTranslations('contentEditor.pageTypes');
   const router = useRouter();
   const describeRule = useRuleDescriber();
+  // A read-only workspace (plan not active): what opens this dialog opens the
+  // upgrade dialog instead; should it be open, reading a page by its URL and
+  // Open editor do too.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const [options, setOptions] = useState<DraftStartOptions | null>(null);
   const [optionsFailed, setOptionsFailed] = useState(false);
@@ -758,7 +764,14 @@ export function NewContentDialog({
                 <ArrowLeft className="h-4 w-4" />
                 {t('back')}
               </Button>
-              <Button onClick={() => void openEditor()} disabled={opening}>
+              <Button
+                onClick={guard(() => void openEditor(), {
+                  action: tActions(
+                    startMethod === 'optimize' ? 'optimizeContent' : 'createContent',
+                  ),
+                })}
+                disabled={opening}
+              >
                 {opening && <LoadingDots />}
                 {t(
                   who === 'team'
@@ -939,7 +952,7 @@ export function NewContentDialog({
                       className="flex gap-2"
                       onSubmit={(e) => {
                         e.preventDefault();
-                        void readPage();
+                        guard(() => void readPage(), { action: tActions('importPage') })();
                       }}
                     >
                       <Input

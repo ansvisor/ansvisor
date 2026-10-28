@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createBrand, markBrandAsEcommerce, updateBrand } from '@/lib/actions/brand';
@@ -13,6 +14,7 @@ import { addCompetitorChoice, mergeCompetitorSuggestions } from '@/lib/competito
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
@@ -24,7 +26,7 @@ import {
   LANGUAGE_ITEMS,
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
-import { getPlan, type PlanId } from '@/config/plans';
+import { getPlan, toPlanId, type PlanId } from '@/config/plans';
 import type { Brand } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -234,6 +236,10 @@ const TOTAL_STEPS = 5;
 export default function NewBrandPage() {
   const router = useRouter();
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
+  // A read-only workspace (plan not active), also when this page is opened
+  // directly: the brand isn't created, the upgrade dialog opens instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -373,7 +379,7 @@ export default function NewBrandPage() {
             .select('plan')
             .eq('id', profile.organization_id)
             .single();
-          if (org?.plan) setCurrentPlanId(org.plan as PlanId);
+          if (org?.plan) setCurrentPlanId(toPlanId(org.plan));
         }
       } catch {
         // Non-critical
@@ -908,7 +914,11 @@ export default function NewBrandPage() {
               </Select>
             </div>
 
-            <Button className="w-full" onClick={handleCreateBrand} disabled={isLoading}>
+            <Button
+              className="w-full"
+              onClick={guard(handleCreateBrand, { action: tActions('addBrands') })}
+              disabled={isLoading}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

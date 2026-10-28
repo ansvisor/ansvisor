@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import type { BrandDomain } from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * `prompt_results.citation_count` is computed at tracking time against the
@@ -47,6 +48,7 @@ export async function addDomain(
   brandId: string,
   data: { domain: string; country?: string; isPrimary: boolean },
 ): Promise<BrandDomain> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   const { data: domain, error } = await supabase
@@ -71,6 +73,7 @@ export async function updateDomain(
   id: string,
   data: { domain?: string; country?: string | null; isPrimary?: boolean },
 ): Promise<BrandDomain> {
+  await assertWritable();
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -96,6 +99,7 @@ export async function updateDomain(
 }
 
 export async function removeDomain(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { data: removed, error } = await supabase
@@ -118,6 +122,7 @@ export async function syncDomains(
   brandId: string,
   domains: { domain: string; country?: string; isPrimary: boolean }[],
 ): Promise<BrandDomain[]> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   await supabase.from('brand_domains').delete().eq('brand_id', brandId);

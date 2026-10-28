@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { enforceFeature, enforceLimit } from '@/lib/guards/plan-guard';
 import type { AIPlatform, BrandPlatform, CheckFrequency } from '@/types';
+import { assertWritable } from '@/lib/subscription-guard';
 
 function mapRow(row: Record<string, unknown>): BrandPlatform {
   return {
@@ -41,6 +42,7 @@ export async function syncBrandPlatforms(
     apiModel?: string;
   }[],
 ): Promise<BrandPlatform[]> {
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   const { data: brand } = await supabase
@@ -94,6 +96,7 @@ export async function updateBrandPlatform(
   id: string,
   updates: { isEnabled?: boolean; checkFrequency?: CheckFrequency; apiModel?: string },
 ): Promise<BrandPlatform> {
+  await assertWritable();
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};

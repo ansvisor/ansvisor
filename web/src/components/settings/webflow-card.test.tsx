@@ -22,8 +22,26 @@ vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: () => ({ activeBrandId: 'b1', brands: [{ id: 'b1', name: 'Acme' }] }),
 }));
+// The demo brand on screen, when a test says.
+const demo = vi.hoisted(() => ({ on: false }));
+vi.mock('@/components/providers/demo-brand-provider', () => ({
+  useDemoBrand: () => ({ isDemo: demo.on }),
+}));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// The read-only workspace's upgrade dialog.
+const openUpgrade = vi.hoisted(() => vi.fn());
+const gate = vi.hoisted(() => ({ isLocked: false }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade,
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options: { action?: string } = {}) =>
+      (...args: Args) =>
+        gate.isLocked ? openUpgrade(options.action) : fn(...args),
+  }),
+}));
 
 const { WebflowCard } = await import('./webflow-card');
 
@@ -100,6 +118,8 @@ async function typeToken(value: string) {
 
 beforeEach(() => {
   role.canManage = true;
+  gate.isLocked = false;
+  openUpgrade.mockClear();
   client.readWebflow
     .mockReset()
     .mockResolvedValue({ ok: true, configured: true, connection: null });
@@ -421,6 +441,55 @@ describe('WebflowCard', () => {
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
   });
 
+  it('opens the upgrade dialog, not an error, for a read-only workspace', async () => {
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.disconnectWebflow.mockResolvedValue({ ok: false, code: 'subscription' });
+    openUpgrade.mockClear();
+    await render();
+    await act(async () => {
+      button('Disconnect')!.click();
+    });
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await act(async () => {
+      confirm[confirm.length - 1].click();
+    });
+    expect(openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('on a read-only workspace, connects and saves nothing, and still disconnects', async () => {
+    gate.isLocked = true;
+    await render();
+    await typeToken('wf-token-123');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(client.connectWebflow).not.toHaveBeenCalled();
+
+    client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Save'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Saving the CMS settings needs a plan');
+    expect(client.saveWebflowSettings).not.toHaveBeenCalled();
+    await click(button('Replace token'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+
+    await act(async () => {
+      button('Disconnect')!.click();
+    });
+    const confirm = [...document.body.querySelectorAll('button')].filter(
+      (b) => b.textContent === 'Disconnect',
+    );
+    await act(async () => {
+      confirm[confirm.length - 1].click();
+    });
+    expect(client.disconnectWebflow).toHaveBeenCalledWith('b1');
+    expect(openUpgrade).toHaveBeenCalledTimes(3);
+  });
+
   it('gives another collection its own suggested map, not the saved one', async () => {
     client.readWebflow.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
     client.listWebflowCollections.mockResolvedValue({
@@ -542,5 +611,36 @@ describe('WebflowCard', () => {
       "Webflow refused the token. Pages can't go there until an admin or manager pastes a new one.",
     );
     expect(container.textContent).not.toContain('Pages go to Blog Posts.');
+  });
+});
+
+describe('WebflowCard on the demo brand', () => {
+  beforeEach(() => {
+    demo.on = true;
+    gate.isLocked = true;
+  });
+  afterEach(() => {
+    demo.on = false;
+    gate.isLocked = false;
+  });
+
+  it('shows the site connected with sample data, and where pages go, read from nowhere', async () => {
+    await render();
+    expect(badges()).toEqual(['Connected', 'Sample data']);
+    expect(container.textContent).toContain('Acme');
+    expect(container.textContent).toContain('Blog Posts');
+    expect(client.readWebflow).not.toHaveBeenCalled();
+    expect(client.listWebflowCollections).not.toHaveBeenCalled();
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('opens the plan dialog from Replace token and Disconnect', async () => {
+    await render();
+    await click(button('Replace token'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    await click(button('Disconnect'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Disconnecting an integration needs a plan');
+    expect(client.disconnectWebflow).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

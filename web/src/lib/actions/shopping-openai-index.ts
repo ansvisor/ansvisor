@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import type { OpenAiIndexRead } from '@/lib/shopping/openai-index';
 import { getShoppingMerchantSplit, type ShoppingDatePreset } from './shopping';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * What "Catalog in OpenAI's product index" reads (#1281): the brand's word
@@ -40,6 +41,7 @@ export async function getOpenAiIndexRead(
  * change is refused.
  */
 export async function setOpenAiProductFeed(brandId: string, on: boolean): Promise<void> {
+  await assertWritable({ brandId });
   if (!z.guid().safeParse(brandId).success || typeof on !== 'boolean') throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase

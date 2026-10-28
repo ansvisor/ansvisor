@@ -1,11 +1,18 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { brandPagePath } from '@/lib/brand-path';
 import type { Brand } from '@/types';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { usePlanContext } from '@/components/providers/plan-provider';
+import { getBrandById } from '@/lib/actions/brand';
+import { setDemoHidden } from '@/lib/demo/demo-client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +25,7 @@ import {
 import { BrandAvatar } from '@/components/brand-avatar';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Check, ChevronsUpDown, LayoutGrid, Plus, Settings } from 'lucide-react';
+import { Check, ChevronsUpDown, Eye, EyeOff, LayoutGrid, Plus, Settings } from 'lucide-react';
 
 interface BrandSwitcherProps {
   collapsed?: boolean;
@@ -32,12 +39,20 @@ interface BrandSwitcherProps {
  * settings (a separate button, so the switcher still opens on the name and
  * the chevron); in the list, every brand to switch to, then all brands and a
  * new one. The brands page has no menu item of its own: this is its way in.
+ * The demo brand (sample data) is listed as one; once an admin or a manager
+ * hides it (after buying a plan), the menu's last item shows it again.
  */
 export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: BrandSwitcherProps) {
   const t = useTranslations('brands');
   const router = useRouter();
   const pathname = usePathname();
-  const { brands, activeBrandId, setActiveBrand } = useBrandStore();
+  const {
+    brands,
+    activeBrandId,
+    setActiveBrand,
+    addBrand: addToList,
+    removeBrand: removeFromList,
+  } = useBrandStore();
   // Only admins and managers add a brand (brands: admin/manager insert).
   const { canManage } = useUserRole();
 
@@ -46,6 +61,43 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
   const go = (href: string) => {
     onNavigate?.();
     router.push(href);
+  };
+  // A read-only workspace (plan not active): Add brand opens the upgrade
+  // dialog instead of the new brand's page, the mobile menu closed first so
+  // the dialog isn't left behind it.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const addBrand = () => {
+    if (isLocked) {
+      onNavigate?.();
+      openUpgrade(tActions('addBrands'));
+    } else {
+      go('/dashboard/brands/new');
+    }
+  };
+  // The demo brand, hidden from the list or shown in it again: never deleted.
+  const tDemo = useTranslations('demo.switcher');
+  const { demoBrand } = useDemoBrand();
+  const [togglingDemo, setTogglingDemo] = useState(false);
+  const toggleDemo = async () => {
+    if (!demoBrand || togglingDemo) return;
+    const hide = !demoBrand.hidden;
+    setTogglingDemo(true);
+    const result = await setDemoHidden(hide);
+    // Shown again: into the list now, and on screen, before the layout reads the brands.
+    const shown = result.ok && !hide ? await getBrandById(demoBrand.id).catch(() => null) : null;
+    setTogglingDemo(false);
+    if (!result.ok) {
+      toast.error(tDemo('failed'));
+      return;
+    }
+    if (hide) {
+      removeFromList(demoBrand.id);
+    } else if (shown) {
+      if (!brands.some((b) => b.id === shown.id)) addToList(shown);
+      setActiveBrand(shown.id);
+    }
+    router.refresh();
   };
   // On a brand's own page (its settings, prompts or topics), the same page
   // of the brand picked; elsewhere the page stays.
@@ -59,7 +111,7 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
     if (!canManage) return null;
     return (
       <button
-        onClick={() => go('/dashboard/brands/new')}
+        onClick={addBrand}
         className={cn(
           'flex w-full items-center gap-2 rounded-md border border-dashed px-2 py-2 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary',
           collapsed && 'justify-center px-0',
@@ -128,13 +180,25 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
           </DropdownMenuItem>
           {canManage && (
             <DropdownMenuItem
-              onClick={() => go('/dashboard/brands/new')}
+              onClick={addBrand}
               className="flex items-center gap-2 text-muted-foreground"
             >
               <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">
                 <Plus className="h-3 w-3" />
               </div>
               <span className="text-sm">{t('addBrand')}</span>
+            </DropdownMenuItem>
+          )}
+          {canManage && demoBrand && (
+            <DropdownMenuItem
+              onClick={() => void toggleDemo()}
+              disabled={togglingDemo}
+              className="flex items-center gap-2 text-muted-foreground"
+            >
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">
+                {demoBrand.hidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+              </div>
+              <span className="text-sm">{demoBrand.hidden ? tDemo('show') : tDemo('hide')}</span>
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
@@ -161,7 +225,11 @@ export function BrandSwitcher({ collapsed = false, onOpenChange, onNavigate }: B
   );
 }
 
-/** The brands to switch to, the current one checked. */
+/**
+ * The brands to switch to, the current one checked; under each its domain,
+ * or what it is: the demo brand's sample data, or a brand of a workspace that
+ * never had a plan, not tracked yet.
+ */
 export function BrandSwitchItems({
   brands,
   currentId,
@@ -171,9 +239,17 @@ export function BrandSwitchItems({
   currentId: string | null;
   onSelect: (brandId: string) => void;
 }) {
+  const tDemo = useTranslations('demo.switcher');
+  const { neverSubscribed } = useDemoBrand();
+  const { subscriptionActive } = usePlanContext();
+  const untracked = neverSubscribed && !subscriptionActive;
   return brands.map((brand) => {
     const isActive = brand.id === currentId;
-    const primaryDomain = brand.domains.find((d) => d.isPrimary);
+    const subline = brand.isDemo
+      ? tDemo('sampleData')
+      : untracked
+        ? tDemo('notTracked')
+        : brand.domains.find((d) => d.isPrimary)?.domain;
 
     return (
       <DropdownMenuItem
@@ -197,9 +273,7 @@ export function BrandSwitchItems({
               </span>
             )}
           </p>
-          {primaryDomain && (
-            <p className="truncate text-xs text-muted-foreground">{primaryDomain.domain}</p>
-          )}
+          {subline && <p className="truncate text-xs text-muted-foreground">{subline}</p>}
         </div>
         {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
       </DropdownMenuItem>

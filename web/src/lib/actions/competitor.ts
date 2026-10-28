@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { Competitor } from '@/types';
+import { assertWritable } from '@/lib/subscription-guard';
 
 function mapRow(row: Record<string, unknown>): Competitor {
   return {
@@ -30,6 +31,7 @@ export async function addCompetitor(
   brandId: string,
   input: { name: string; domain: string },
 ): Promise<Competitor> {
+  await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -52,6 +54,7 @@ export async function addCompetitor(
 }
 
 export async function deleteCompetitor(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { error } = await supabase.from('competitors').delete().eq('id', id);
