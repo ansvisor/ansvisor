@@ -1,4 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import type { McpAuthContext } from '@/lib/mcp-auth';
+import { API_BASE_URL } from '@/config/api';
 import { lastSend } from '@/lib/content/cms-status';
 import { draftShopping } from '@/lib/content/shopping-check';
 import { shoppingPathSchema } from '@/lib/content/shopping-path';
@@ -7,7 +9,8 @@ import { shoppingPathSchema } from '@/lib/content/shopping-path';
  * Where a draft went and whether its shopping links still sell, for the MCP's
  * draft tools (B5), as the Content Library shows them: its last Send to CMS
  * (00262, 00284) and its shopping path's check after each catalog sync
- * (00351, 00352). Ansvisor's MCP never sends a page itself.
+ * (00351, 00352). Ansvisor's MCP never sends a page itself: the user's AI
+ * tool does, with its own CMS connector, and marks it published here.
  */
 
 /** A draft's last Send to CMS. */
@@ -134,5 +137,69 @@ export function mcpShoppingPath(stored: unknown): McpShoppingPath | null {
       availability: p.availability,
     })),
     left_out: path.leftOut.map((p) => ({ id: p.id, title: p.title, reason: p.reason })),
+  };
+}
+
+/** Where a page was marked live, as the editor's Mark published answers. */
+export interface McpPublished {
+  published_url: string;
+  published_at: string;
+  /** The linked action's Publish task done: every page it names is live. */
+  task_completed: boolean;
+  /** Off the brand's domains the address is kept, but the Live page tab can't measure it. */
+  on_brand_domain: boolean;
+}
+
+export type McpPublishError = { error: 'invalid_url' | 'not_found'; message: string };
+
+/**
+ * A page marked Published at the address it went live at, as the editor's
+ * Mark published does (CE-013), for a page the user's own AI tool put on a
+ * CMS: Ansvisor then measures that address (the Live page tab, its
+ * citations and AI visits) and a linked action's Publish task completes
+ * once all its pages are live. The API's publishDraft runs it for the key's
+ * user through the CRON_SECRET internal endpoint; the draft must be the
+ * key's organization's.
+ *
+ * TODO(demo-brand-mcp): add mark_content_draft_published to WRITE_TOOL_BRANDS
+ * (lib/mcp/demo-gate.ts), its brand through content_drafts.brand_id, when
+ * feature/demo-brand-mcp merges.
+ */
+export async function markContentDraftPublishedFor(
+  auth: McpAuthContext,
+  draftId: string,
+  url: string,
+): Promise<McpPublished | McpPublishError> {
+  const notFound: McpPublishError = { error: 'not_found', message: 'Draft not found' };
+  if (!auth.organizationId) return notFound;
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) throw new Error('CRON_SECRET must be configured for MCP publishing');
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/internal/content-drafts/${encodeURIComponent(draftId)}/publish`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${cronSecret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, userId: auth.userId, orgId: auth.organizationId }),
+    },
+  );
+  const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!res.ok) {
+    if (body?.code === 'invalid_url' || body?.code === 'invalid') {
+      return {
+        error: 'invalid_url',
+        message: 'Give the http(s) address the page is live at, with no sign-in details.',
+      };
+    }
+    if (res.status === 404) return notFound;
+    throw new Error(
+      (body?.message as string | undefined) ?? `Internal publish endpoint returned ${res.status}`,
+    );
+  }
+  return {
+    published_url: String(body?.publishedUrl ?? url),
+    published_at: String(body?.publishedAt ?? new Date().toISOString()),
+    task_completed: body?.taskCompleted === true,
+    on_brand_domain: body?.onBrandDomain !== false,
   };
 }

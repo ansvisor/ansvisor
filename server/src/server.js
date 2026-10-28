@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { z } from 'zod';
 import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -38,6 +39,7 @@ import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
+import { liveAddress, publishDraftForKeyUser } from './lib/content-published.js';
 import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
 import { getSiteAuditQuotaStatus } from './lib/plan-guard.js';
@@ -561,6 +563,57 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
     }
     req.log.error({ err }, 'internal improve send error');
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal publish endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// A page marked Published at its live address for an MCP API key
+// (`mark_content_draft_published`), as the editor's Mark published does
+// (POST /api/content-drafts/:draftId/publish). The web MCP layer passes the
+// key's organization and user; the draft must be that organization's.
+const internalPublishBody = z.object({
+  url: z.string().max(8192),
+  userId: z.guid(),
+  orgId: z.guid(),
+});
+
+app.post('/api/internal/content-drafts/:draftId/publish', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const body = internalPublishBody.safeParse(req.body ?? {});
+  if (!draftId.success || !body.success) {
+    return res.status(400).json({ success: false, code: 'invalid', message: 'Invalid request' });
+  }
+  const url = liveAddress(body.data.url);
+  if (!url) {
+    return res.status(400).json({
+      success: false,
+      code: 'invalid_url',
+      message: 'Give the http(s) address the page is live at, with no sign-in details.',
+    });
+  }
+  try {
+    const result = await publishDraftForKeyUser({
+      draftId: draftId.data,
+      url,
+      userId: body.data.userId,
+      orgId: body.data.orgId,
+    });
+    if (!result) {
+      return res
+        .status(404)
+        .json({ success: false, code: 'not_found', message: 'Draft not found' });
+    }
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    req.log.error({ err: { name: err?.name } }, 'internal content draft publish error');
+    return res
+      .status(500)
+      .json({ success: false, message: 'The page could not be marked published' });
   }
 });
 

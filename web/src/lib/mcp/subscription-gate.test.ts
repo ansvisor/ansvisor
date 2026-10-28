@@ -88,6 +88,7 @@ describe('the MCP tools on a read-only workspace', () => {
       'dismiss_prompt_suggestion',
       'dismiss_topic_suggestion',
       'generate_content_brief',
+      'mark_content_draft_published',
       'override_mention_sentiment',
       'run_site_audit',
       'set_content_draft_ready',
@@ -111,7 +112,7 @@ describe('the MCP tools on a read-only workspace', () => {
       }
     )._registeredTools;
     const gated = Object.keys(registered).filter((name) => !isReadTool(name));
-    expect(gated).toHaveLength(14);
+    expect(gated).toHaveLength(15);
     for (const name of gated) {
       const result = (await registered[name].handler({}, {})) as {
         isError?: boolean;

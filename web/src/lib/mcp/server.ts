@@ -77,6 +77,7 @@ import {
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
 import { getContentPlanFor } from './content-plan';
+import { markContentDraftPublishedFor } from './content-delivery';
 import { PLAN_CARDS, PLAN_PERIODS } from '@/lib/content/plan';
 
 /**
@@ -1799,6 +1800,31 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         card: args.card,
       });
       return plan ? json(plan) : notFound('Brand');
+    },
+  );
+
+  server.registerTool(
+    'mark_content_draft_published',
+    {
+      title: 'Mark a draft published',
+      description:
+        "Mark a Content Editor draft Published at the address it went live at, as the editor's Mark published does: for a page you (the user's AI tool) put on their CMS with its own connector — Ansvisor never sends it. Ansvisor then measures that address (get_content_impact, the Live page tab: citations, AI visits, Google clicks) and a linked Action Center action's Publish task completes once every page it names is live. The address must be http(s), with no sign-in details; one off the brand's domains is kept but can't be measured (on_brand_domain false). Marking it again at a new address moves it. It is a write — only once the page is really live, on the user's say.",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
+        url: z.string().max(2048).describe('The http(s) address the page is live at.'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args) => {
+      const result = await markContentDraftPublishedFor(auth, args.draft_id, args.url);
+      return 'error' in result
+        ? { content: [{ type: 'text' as const, text: result.message }], isError: true }
+        : json(result);
     },
   );
 

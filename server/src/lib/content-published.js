@@ -327,3 +327,28 @@ export async function publishDraft(draft, url, actorId) {
   const { taskCompleted } = await markDraftPublished(draft.id, url, { at, actorId, onDomain });
   return { publishedUrl: url, publishedAt: at, taskCompleted, onBrandDomain: onDomain };
 }
+
+/**
+ * The same mark for an MCP API key (`mark_content_draft_published`): the key
+ * carries no session, so the web MCP layer passes the key's organization and
+ * user. As the route, the draft must be the organization's and not archived;
+ * null when it isn't (another's reads as not there).
+ *
+ * @param {{ draftId: string, url: string, userId: string, orgId: string }} input
+ * @returns {Promise<{ publishedUrl: string, publishedAt: string, taskCompleted: boolean, onBrandDomain: boolean } | null>}
+ */
+export async function publishDraftForKeyUser({ draftId, url, userId, orgId }) {
+  const { data: draft, error } = await supabaseAdmin
+    .from('content_drafts')
+    .select('id, brand_id, action_id, archived_at, brands!inner(organization_id)')
+    .eq('id', draftId)
+    .eq('brands.organization_id', orgId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!draft || draft.archived_at) return null;
+  return publishDraft(
+    { id: draft.id, brand_id: draft.brand_id, action_id: draft.action_id },
+    url,
+    userId,
+  );
+}
