@@ -3357,7 +3357,8 @@ function AllPromptsTab({
   if (!loading && positionsId && !openPositions) setPositionsId(null);
 
   // The panel opens on the table's window; changing it there only moves the panel.
-  // Track in more locations (PROMPT-015c): from the Locations view, or a cell's + Track.
+  // Track in more locations (PROMPT-015c), or stop tracking in some: from the
+  // Locations view, a cell, a column's menu or the bulk bar.
   const [addLocations, setAddLocations] = useState<{
     open: boolean;
     preset: AddLocationsPreset | null;
@@ -3931,6 +3932,13 @@ function AllPromptsTab({
             onSuggestContent={guard(() => void suggestFor(selectedPrompts), {
               action: tActions('suggestContent'),
             })}
+            onAddLocations={guard(() => setAddLocations({ open: true, preset: { mode: 'add' } }), {
+              action: tActions('changeLocations'),
+            })}
+            onRemoveLocations={guard(
+              () => setAddLocations({ open: true, preset: { mode: 'remove' } }),
+              { action: tActions('removeLocations') },
+            )}
             onDelete={guard(() => setConfirmDelete(selectedPrompts), {
               action: tActions('deletePrompts'),
             })}
@@ -3951,6 +3959,18 @@ function AllPromptsTab({
                       open: true,
                       preset: { promptId: prompt.id, locations: [region] },
                     })
+                : undefined
+            }
+            onStopTracking={
+              onEditPrompt
+                ? guard(
+                    (prompt: Prompt | null, region: string) =>
+                      setAddLocations({
+                        open: true,
+                        preset: { mode: 'remove', promptId: prompt?.id, locations: [region] },
+                      }),
+                    { action: tActions('removeLocations') },
+                  )
                 : undefined
             }
             onAddLocations={

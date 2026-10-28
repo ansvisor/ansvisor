@@ -61,7 +61,7 @@ Click a cell to open the prompt's Positions panel for that location. A location 
 
 ### Adding locations
 
-**+ Add location** in the Locations view, or **+ Track** in a cell, opens **Track in more locations**:
+**+ Add location** in the Locations view, **+ Track** in a cell, or **Locations › Add locations** in the bar that shows when you select prompts opens **Track in more locations**:
 
 1. Pick one or more countries, US states or cities (50 major cities). The countries are the ones the AI engines answer from, read from the tracking provider every day: a country one engine doesn't answer from says so ("not on Copilot"), and that engine is skipped there while the others run.
 2. Choose which prompts to ask there: the one you clicked, the selected ones, a topic, or every prompt shown.
@@ -79,11 +79,26 @@ A location you just added has no answers yet. Until the next daily run asks it, 
 
 - **Within 24h**: it's tracked there, and the first results come with the next daily run;
 - **Paused**: the prompt is paused, so it isn't asked anywhere until you resume it;
-- **No engine here**: none of the prompt's engines answers from that place; add an engine that does, or remove the location.
+- **No engine here**: none of the prompt's engines answers from that place; add an engine that does, or [remove the location](#removing-locations).
 
 **Within 24h** shows while the prompt is new (added in the last two days) or has answers in another location in the range. An older prompt with no answers anywhere in the range, such as days without a run, shows a dash.
 
 When your plan's prompt locations are used up, **+ Track** reads **Limit reached**. It still opens the dialog, which shows your plan's way to track more.
+
+### Removing locations
+
+To stop asking prompts from a place, open the same dialog in **Remove** mode:
+
+- in the Locations view, the **…** menu on a location's column › **Stop tracking in** *location*, for the prompts shown (or the selected ones);
+- the **×** that shows when you point at a tracked cell (**Stop tracking here**), for that one prompt;
+- **Locations › Remove locations** in the bar that shows when you select prompts;
+- or **Remove** at the top of **Track in more locations**.
+
+Pick the locations to stop (the ones the prompts shown track, with how many track each) and the prompts, as when adding. The dialog shows how many tracked locations it removes and how many it frees on your plan; a paused prompt's locations go too, but free nothing, because paused prompts don't count.
+
+A prompt needs at least one location, so one tracked only in the locations you stop keeps them, and the dialog says how many do. The rest change.
+
+Past results stay: the prompt is no longer asked there from the next daily run, and the answers already collected there aren't deleted. When no prompt shown is tracked in a location any more, its column leaves the Locations view.
 
 ## Performance
 
