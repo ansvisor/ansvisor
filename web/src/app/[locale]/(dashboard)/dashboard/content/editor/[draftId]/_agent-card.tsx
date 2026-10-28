@@ -199,6 +199,8 @@ export function RunSteps({
   const careful = (run.steps[0]?.careful ?? [])
     .filter((key) => tRules.has(key))
     .map((key) => tRules(key));
+  // What the live page earns, kept in mind on its sources step (learning B5).
+  const live = run.steps.find((step) => step.key === 'gather_sources')?.live;
   return (
     <>
       <ol className="mt-1 flex flex-wrap items-center gap-1 text-[12px]">
@@ -236,6 +238,8 @@ export function RunSteps({
           {tCard('careful', { rules: format.list(careful, { type: 'conjunction' }) })}
         </p>
       )}
+      {/* The live page it kept in mind (learning B5). */}
+      {live && <p className="mt-1 text-[11px] text-muted-foreground">{tCard('live', live)}</p>}
     </>
   );
 }

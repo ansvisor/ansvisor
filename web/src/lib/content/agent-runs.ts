@@ -30,6 +30,11 @@ export interface RunStep {
    * kept small (learning B6), as rule keys.
    */
   careful?: string[];
+  /**
+   * Its sources step's live page (learning B5): how often tracked AI answers
+   * cited it in its last `days` and the days before, and the prompts it lost.
+   */
+  live?: { days: number; citations: number; before: number; lost: number };
 }
 
 export type AgentRunKind = 'fix' | 'rewrite' | 'write' | 'brief' | 'handoff';
@@ -53,6 +58,25 @@ export interface AgentRun {
  */
 export const RUN_STALE_MS = 10 * 60_000;
 
+/** A step's live page as stored, when every number is one. */
+function liveOf(value: unknown): { live?: RunStep['live'] } {
+  if (!value || typeof value !== 'object') return {};
+  const { days, citations, before, lost } = value as Record<string, unknown>;
+  const whole = [days, citations, before, lost].every(
+    (n) => Number.isInteger(n) && (n as number) >= 0,
+  );
+  return whole
+    ? {
+        live: {
+          days: days as number,
+          citations: citations as number,
+          before: before as number,
+          lost: lost as number,
+        },
+      }
+    : {};
+}
+
 /** A run as stored, or null when it isn't one the editor can show. */
 export function agentRunFrom(row: Record<string, unknown> | null): AgentRun | null {
   if (!row || typeof row.id !== 'string' || !Array.isArray(row.steps)) return null;
@@ -69,6 +93,7 @@ export function agentRunFrom(row: Record<string, unknown> | null): AgentRun | nu
             ...(Array.isArray(s.careful) && s.careful.some((k) => typeof k === 'string' && k)
               ? { careful: s.careful.filter((k) => typeof k === 'string' && k).slice(0, 5) }
               : {}),
+            ...liveOf(s.live),
           },
         ]
       : [],

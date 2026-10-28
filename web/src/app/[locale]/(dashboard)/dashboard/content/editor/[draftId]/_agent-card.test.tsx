@@ -473,6 +473,26 @@ describe('AgentCard', () => {
     expect(container.textContent).toContain(
       'Keeping its changes small for rules people here mostly reject: Price, GTIN and stock match the feed and FAQ block.',
     );
+
+    // What the live page earns, which it keeps (learning B5).
+    run.steps[1] = {
+      ...run.steps[1],
+      key: 'gather_sources',
+      live: { days: 30, citations: 12, before: 20, lost: 2 },
+    };
+    await show(false);
+    expect(container.textContent).toContain(
+      'Keeping what the live page earns: cited 12 times in 30 days (20 before), 2 prompts lost.',
+    );
+    // Thousands as the citations are, before as now.
+    run.steps[1] = {
+      ...run.steps[1],
+      live: { days: 30, citations: 1500, before: 1200, lost: 1 },
+    };
+    await show(false);
+    expect(container.textContent).toContain(
+      'Keeping what the live page earns: cited 1,500 times in 30 days (1,200 before), 1 prompt lost.',
+    );
   });
 
   it('stops all of its motion with reduced motion, in every state', async () => {

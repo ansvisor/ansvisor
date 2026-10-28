@@ -45,6 +45,17 @@ describe('agent runs', () => {
     expect(agentRunFrom(row())!.steps[0]).not.toHaveProperty('careful');
   });
 
+  it('reads the live page its sources step kept in mind, whole numbers only (learning B5)', () => {
+    const live = { days: 30, citations: 12, before: 20, lost: 1 };
+    const steps = [
+      { key: 'read_rules', count: 2 },
+      { key: 'gather_sources', count: 0, live },
+    ];
+    expect(agentRunFrom(row({ steps }))!.steps[1].live).toEqual(live);
+    const broken = [{ key: 'gather_sources', count: 0, live: { ...live, lost: -1 } }];
+    expect(agentRunFrom(row({ steps: broken }))!.steps[0]).not.toHaveProperty('live');
+  });
+
   it('is under way until it ends, or until a stopped server’s run goes stale', () => {
     const run = agentRunFrom(row())!;
     const started = Date.parse('2026-10-23T10:00:00Z');

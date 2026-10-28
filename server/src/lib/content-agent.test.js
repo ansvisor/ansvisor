@@ -13,11 +13,12 @@ let rows;
 let writes;
 const generateObject = vi.fn();
 const reserveAiBudget = vi.fn();
+/** The functions called, with what they were sent. */
+const rpc = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
-    // A function's rows, by its name (content_suggestion_decisions, 00367).
-    rpc: async (name) => ({ data: rows[name] ?? [], error: null }),
+    rpc: (...args) => rpc(...args),
     from: (table) => {
       const result = () => ({ data: rows[table] ?? null, error: null });
       const chain = {
@@ -103,6 +104,7 @@ const { knownNumbers, numberSources } = await import('./content-sources.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, guardPeople, knownPeople } =
   await import('./content-people.js');
 const { PlanLimitError } = await import('./plan-guard.js');
+const { logger } = await import('./logger.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
 
@@ -147,6 +149,8 @@ const sourcing = { numbered: numberSources(SOURCES) };
 beforeEach(() => {
   stopIfStopped.mockReset().mockResolvedValue(undefined);
   writes = [];
+  // A function's rows, by its name (content_suggestion_decisions, 00367).
+  rpc.mockReset().mockImplementation(async (name) => ({ data: rows[name] ?? [], error: null }));
   rows = {
     content_drafts: {
       id: DRAFT,
@@ -1757,6 +1761,155 @@ describe('fixDraftRules', () => {
     expect(run.steps[0]).toMatchObject({ key: 'read_rules', careful: ['faq'] });
   });
 
+  it('tells the agent how the live page does now, and names it on the run (learning B5)', async () => {
+    rows.content_drafts = { ...rows.content_drafts, source_url: 'https://acme.example/guide' };
+    rows.content_page_impact = {
+      citations: { cur: 12, prev: 20 },
+      aiVisits: { cur: 35, prev: 40 },
+      promptCounts: { cur: 4, prev: 6, lost: 1 },
+      prompts: [{ text: 'pour over vs french press', cur: 0, prev: 4 }],
+    };
+    const run = {
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 2 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    };
+    runs.startRun = async () => run;
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_page_impact;
+    }
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      'How the live page does now (last 30 days, against the 30 before): tracked AI answers cited it 12 times (20 before)',
+    );
+    expect(run.steps[1]).toMatchObject({
+      key: 'gather_sources',
+      live: { days: 30, citations: 12, before: 20, lost: 1 },
+    });
+    // The brand's own page, at the address it optimizes, over the tab's 30 days.
+    expect(rpc).toHaveBeenCalledWith('content_page_impact', {
+      p_brand_id: BRAND,
+      p_page: 'https://acme.example/guide',
+      p_days: 30,
+    });
+  });
+
+  it('reads the live page where it was published, as the Live page tab does', async () => {
+    // Published at another address, then back to Draft: the tab reads that one.
+    rows.content_drafts = {
+      ...rows.content_drafts,
+      source_url: 'https://acme.example/guide',
+      published_url: 'https://acme.example/brew-guide',
+    };
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(rpc).toHaveBeenCalledWith(
+      'content_page_impact',
+      expect.objectContaining({ p_page: 'https://acme.example/brew-guide' }),
+    );
+    expect(rpc).not.toHaveBeenCalledWith(
+      'content_page_impact',
+      expect.objectContaining({ p_page: 'https://acme.example/guide' }),
+    );
+  });
+
+  it('names a live page on the run only when AI answers cited it, and still tells the agent of its visits', async () => {
+    rows.content_drafts = { ...rows.content_drafts, source_url: 'https://acme.example/guide' };
+    rows.content_page_impact = {
+      citations: { cur: 0, prev: 0 },
+      aiVisits: { cur: 35, prev: 40 },
+      promptCounts: { cur: 0, prev: 0, lost: 0 },
+      prompts: [],
+    };
+    const run = {
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 2 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    };
+    runs.startRun = async () => run;
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_page_impact;
+    }
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      'tracked AI answers cited it 0 times (0 before), for 0 prompts, and it had 35 AI visits (40 before).',
+    );
+    expect(run.steps[1]).not.toHaveProperty('live');
+  });
+
+  it('tells nothing of a live page for a new page', async () => {
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('How the live page does now');
+  });
+
+  it('runs on when the live page cannot be read, telling nothing of it', async () => {
+    rows.content_drafts = { ...rows.content_drafts, source_url: 'https://acme.example/guide' };
+    rpc.mockImplementation(async (name) =>
+      name === 'content_page_impact'
+        ? { data: null, error: { message: 'canceling statement due to statement timeout' } }
+        : { data: rows[name] ?? [], error: null },
+    );
+    const run = {
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 2 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    };
+    runs.startRun = async () => run;
+    generateObject.mockResolvedValue({
+      object: { suggestions: [suggestion()] },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    vi.mocked(logger.warn).mockClear();
+    try {
+      await fixDraftRules({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: input({ sources: SOURCES }),
+      });
+    } finally {
+      runs.startRun = null;
+    }
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('How the live page does now');
+    expect(run.steps[1]).not.toHaveProperty('live');
+    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeDefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: DRAFT }),
+      '[content-agent] live page not read',
+    );
+  });
+
   it("knows the shopping path's prices and names, a product's number only beside its name, and links its pages", async () => {
     rows.content_drafts = {
       ...rows.content_drafts,
@@ -2300,6 +2453,52 @@ describe('Quality’s hand-off (CE-051)', () => {
       'People at this brand reject most of the changes suggested for these rules: trust:claimsSourced (9 of 9 rejected).',
     );
     expect(fixed.steps[0]).toMatchObject({ careful: ['trust:claimsSourced'] });
+  });
+
+  it('runs as it was on a live page: Apply rules with Agent only is told how it does (learning B5)', async () => {
+    rows.content_drafts = { ...rows.content_drafts, source_url: 'https://acme.example/guide' };
+    rows.content_page_impact = {
+      citations: { cur: 12, prev: 20 },
+      aiVisits: { cur: 35, prev: 40 },
+      promptCounts: { cur: 4, prev: 6, lost: 1 },
+      prompts: [{ text: 'pour over vs french press', cur: 0, prev: 4 }],
+    };
+    const run = () => ({
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 1 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    });
+    const handedOff = run();
+    const fixed = run();
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      runs.startRun = async () => handedOff;
+      await fixDraftRules({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: handoff(),
+        handoff: { origin: 'person' },
+      });
+      // The hand-off doesn't even read it.
+      expect(rpc).not.toHaveBeenCalledWith('content_page_impact', expect.anything());
+      // The same page in Apply rules with Agent is told how it does.
+      runs.startRun = async () => fixed;
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: handoff() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_page_impact;
+    }
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('How the live page does now');
+    expect(handedOff.steps[1]).not.toHaveProperty('live');
+    expect(generateObject.mock.calls[1][0].prompt).toContain('How the live page does now');
+    expect(fixed.steps[1]).toMatchObject({ live: { citations: 12, before: 20, lost: 1 } });
   });
 
   it('runs an automatic one only on a draft its brand hands off', async () => {
