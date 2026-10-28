@@ -17,7 +17,12 @@ const syncSource = vi.fn();
 const connectStore = vi.fn();
 const reconnectStore = vi.fn();
 const disconnectStore = vi.fn();
+const connectSignInSource = vi.fn();
+const categoryPages = vi.fn();
+const setCategoryPage = vi.fn();
+const listSignInAccounts = vi.fn();
 let configured;
+let googleConfigured;
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -61,8 +66,19 @@ vi.mock('../lib/access.js', () => ({
 vi.mock('../lib/catalog/sources.js', () => ({
   syncSource: (...args) => syncSource(...args),
 }));
-// The limiter's 20 a quarter-hour would end this file's run part way.
-vi.mock('../middleware/rate-limiter.js', () => ({ catalogLimiter: (_req, _res, next) => next() }));
+// The limiters' buckets would end this file's run part way: each request
+// notes the bucket it took instead.
+const buckets = [];
+vi.mock('../middleware/rate-limiter.js', () => ({
+  catalogLimiter: (_req, _res, next) => {
+    buckets.push('catalog');
+    next();
+  },
+  catalogCategoryLimiter: (_req, _res, next) => {
+    buckets.push('categories');
+    next();
+  },
+}));
 vi.mock('../lib/catalog/credentials.js', () => ({
   credentialsConfigured: () => configured,
 }));
@@ -79,6 +95,8 @@ vi.mock('../lib/catalog/stores.js', async () => {
     connectStore: (...args) => connectStore(...args),
     reconnectStore: (...args) => reconnectStore(...args),
     disconnectStore: (...args) => disconnectStore(...args),
+    connectSignInSource: (...args) => connectSignInSource(...args),
+    listSignInAccounts: (...args) => listSignInAccounts(...args),
   };
 });
 vi.mock('../connectors/index.js', () => ({
@@ -89,6 +107,33 @@ vi.mock('../connectors/index.js', () => ({
       fields: [{ name: 'apiKey', label: 'API key', secret: true }],
     },
   ],
+  signInConnectors: () => [
+    {
+      kind: 'merchant_center',
+      label: 'Google Merchant Center',
+      provider: 'google-merchant-center',
+    },
+  ],
+  connectorFor: (kind) =>
+    kind === 'merchant_center' ? { kind, signIn: 'google-merchant-center' } : { kind },
+  isSignIn: (connector) => typeof connector?.signIn === 'string',
+}));
+vi.mock('../lib/catalog/category-pages.js', () => {
+  class CategoryPageError extends Error {
+    constructor(code, message, status = 400) {
+      super(message);
+      this.code = code;
+      this.status = status;
+    }
+  }
+  return {
+    CategoryPageError,
+    categoryPages: (...args) => categoryPages(...args),
+    setCategoryPage: (...args) => setCategoryPage(...args),
+  };
+});
+vi.mock('../lib/composio.js', () => ({
+  isComposioConfigured: (provider) => provider === 'google-merchant-center' && googleConfigured,
 }));
 
 const { default: router } = await import('./catalog.js');
@@ -110,7 +155,26 @@ beforeEach(async () => {
     },
   ];
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'org-1' });
+  buckets.length = 0;
   syncSource.mockReset().mockResolvedValue({ status: 'ok', counts: { items: 4 } });
+  googleConfigured = true;
+  categoryPages.mockReset().mockResolvedValue([
+    {
+      name: 'Hiking Boots',
+      products: 24,
+      inStock: 18,
+      page: { url: 'https://shop.example/collections/hiking-boots', title: 'Hiking boots' },
+      how: 'address',
+    },
+  ]);
+  setCategoryPage.mockReset().mockResolvedValue(undefined);
+  connectSignInSource.mockReset().mockResolvedValue({
+    id: 'gmc-1',
+    brand_id: BRAND,
+    kind: 'merchant_center',
+    account: '123456789',
+  });
+  listSignInAccounts.mockReset().mockResolvedValue([{ id: '123456789', name: 'Acme' }]);
   connectStore.mockReset().mockResolvedValue({
     id: 'store-1',
     brand_id: BRAND,
@@ -258,12 +322,85 @@ describe('GET /api/catalog/connectors', () => {
         },
       ],
       ready: false,
+      signIns: [
+        {
+          kind: 'merchant_center',
+          label: 'Google Merchant Center',
+          provider: 'google-merchant-center',
+          configured: true,
+        },
+      ],
+    });
+  });
+});
+
+describe('GET /api/catalog/accounts (#1270)', () => {
+  const query = `brandId=${BRAND}&kind=merchant_center`;
+
+  it("lists the accounts the workspace's sign-in opens, for an admin or a manager", async () => {
+    const res = await fetch(`${base}/accounts?${query}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ accounts: [{ id: '123456789', name: 'Acme' }] });
+    expect(listSignInAccounts).toHaveBeenCalledWith({ brandId: BRAND, kind: 'merchant_center' });
+
+    role = 'analyst';
+    expect((await fetch(`${base}/accounts?${query}`)).status).toBe(403);
+    expect((await fetch(`${base}/accounts?brandId=nope&kind=merchant_center`)).status).toBe(400);
+  });
+
+  it("refuses a brand of another workspace, or one that doesn't exist, and lists nothing", async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("This brand isn't in your workspace"), {
+        status: 403,
+        code: 'not_in_workspace',
+      }),
+    );
+    const other = await fetch(`${base}/accounts?${query}`);
+    expect(other.status).toBe(403);
+    expect((await other.json()).code).toBe('not_in_workspace');
+
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    const missing = await fetch(`${base}/accounts?${query}`);
+    expect(missing.status).toBe(404);
+    expect((await missing.json()).code).toBe('not_found');
+    expect(listSignInAccounts).not.toHaveBeenCalled();
+  });
+
+  it('says when the workspace must connect Google first', async () => {
+    listSignInAccounts.mockRejectedValueOnce(
+      new StoreError(409, 'not_connected', 'Connect Google Merchant Center with Google first.'),
+    );
+    const res = await fetch(`${base}/accounts?${query}`);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'Connect Google Merchant Center with Google first.',
+      code: 'not_connected',
     });
   });
 });
 
 describe('POST /api/catalog/sources', () => {
   const body = { brandId: BRAND, kind: 'acme_store', input: { apiKey: 'sk_secret' } };
+
+  it("connects a sign-in platform's account the person picked, then reads it", async () => {
+    const res = await send('POST', '/sources', {
+      brandId: BRAND,
+      kind: 'merchant_center',
+      input: { account: '123456789' },
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ id: 'gmc-1', account: '123456789' });
+    expect(connectSignInSource).toHaveBeenCalledWith({
+      brandId: BRAND,
+      kind: 'merchant_center',
+      input: { account: '123456789' },
+      userId: 'user-1',
+    });
+    expect(connectStore).not.toHaveBeenCalled();
+    expect(syncSource).toHaveBeenCalledWith(expect.objectContaining({ id: 'gmc-1' }));
+  });
 
   it('connects a store for an admin or a manager, then reads it without waiting', async () => {
     role = 'manager';
@@ -335,5 +472,131 @@ describe('DELETE /api/catalog/sources/:id', () => {
     expect((await send('DELETE', `/sources/${STORE}`)).status).toBe(403);
     expect((await send('DELETE', '/sources/nope')).status).toBe(404);
     expect(disconnectStore).not.toHaveBeenCalled();
+  });
+});
+
+describe('category pages (shopping path)', () => {
+  it("lists the brand's categories and their pages to any member", async () => {
+    role = 'analyst';
+    const res = await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).categories[0]).toMatchObject({
+      name: 'Hiking Boots',
+      how: 'address',
+    });
+    expect(assertBrandAccess).toHaveBeenCalledWith(BRAND, 'user-1');
+    expect(categoryPages).toHaveBeenCalledWith(BRAND);
+    expect((await fetch(`${base}/categories?brandId=nope`)).status).toBe(400);
+  });
+
+  it("sets a category's page, or none, for an admin or a manager only", async () => {
+    role = 'manager';
+    const body = { brandId: BRAND, category: 'Socks', url: 'https://shop.example/c/socks' };
+    expect((await send('PUT', '/categories', body)).status).toBe(200);
+    expect(setCategoryPage).toHaveBeenCalledWith({ ...body, userId: 'user-1' });
+    expect((await send('PUT', '/categories', { ...body, url: null })).status).toBe(200);
+    expect(setCategoryPage).toHaveBeenLastCalledWith({ ...body, url: null, userId: 'user-1' });
+
+    role = 'analyst';
+    expect((await send('PUT', '/categories', body)).status).toBe(403);
+    expect(setCategoryPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("says why a page can't be set, and puts a category back to its match", async () => {
+    setCategoryPage.mockRejectedValueOnce(
+      new (await import('../lib/catalog/category-pages.js')).CategoryPageError(
+        'off_site',
+        "The page must be on the brand's own site.",
+      ),
+    );
+    const refused = await send('PUT', '/categories', {
+      brandId: BRAND,
+      category: 'Socks',
+      url: 'https://elsewhere.example/socks',
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({
+      error: "The page must be on the brand's own site.",
+      code: 'off_site',
+    });
+
+    const back = await fetch(`${base}/categories?brandId=${BRAND}&category=Socks`, {
+      method: 'DELETE',
+    });
+    expect(back.status).toBe(200);
+    expect(setCategoryPage).toHaveBeenLastCalledWith({
+      brandId: BRAND,
+      category: 'Socks',
+      url: undefined,
+      userId: 'user-1',
+    });
+  });
+
+  it("reads under the API's limit, and writes from a bucket apart from the syncs'", async () => {
+    await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(buckets).toEqual([]);
+    await send('PUT', '/categories', { brandId: BRAND, category: 'Socks', url: null });
+    await fetch(`${base}/categories?brandId=${BRAND}&category=Socks`, { method: 'DELETE' });
+    expect(buckets).toEqual(['categories', 'categories']);
+  });
+
+  it("refuses another workspace's brand, and a body without its address", async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error("This brand isn't in your workspace"), {
+        status: 403,
+        code: 'not_in_workspace',
+      }),
+    );
+    const other = await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(other.status).toBe(403);
+    expect((await other.json()).code).toBe('not_in_workspace');
+    expect(categoryPages).not.toHaveBeenCalled();
+
+    const missing = await send('PUT', '/categories', { brandId: BRAND, category: 'Socks' });
+    expect(missing.status).toBe(400);
+    expect(setCategoryPage).not.toHaveBeenCalled();
+  });
+
+  it('lets only an admin or a manager put a category back to its match', async () => {
+    role = 'analyst';
+    const refused = await fetch(`${base}/categories?brandId=${BRAND}&category=Socks`, {
+      method: 'DELETE',
+    });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({
+      error: "Only admins and managers can change the catalog's category pages.",
+      code: 'forbidden',
+    });
+    expect(setCategoryPage).not.toHaveBeenCalled();
+  });
+
+  it("says a category isn't in the catalog, and what failed in these routes' words", async () => {
+    setCategoryPage.mockRejectedValueOnce(
+      new (await import('../lib/catalog/category-pages.js')).CategoryPageError(
+        'not_found',
+        "That category isn't in the brand's catalog.",
+        404,
+      ),
+    );
+    const gone = await send('PUT', '/categories', { brandId: BRAND, category: 'Tents', url: null });
+    expect(gone.status).toBe(404);
+    expect((await gone.json()).code).toBe('not_found');
+
+    setCategoryPage.mockRejectedValueOnce(new Error('catalog_category_pages write: down'));
+    const failed = await send('PUT', '/categories', {
+      brandId: BRAND,
+      category: 'Socks',
+      url: null,
+    });
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({
+      error: "Failed to change the catalog's category pages",
+      code: 'failed',
+    });
+
+    categoryPages.mockRejectedValueOnce(new Error('site pages read: down'));
+    const unread = await fetch(`${base}/categories?brandId=${BRAND}`);
+    expect(unread.status).toBe(500);
+    expect((await unread.json()).error).toBe("Failed to read the catalog's category pages");
   });
 });

@@ -126,6 +126,18 @@ describe('ownPageOf', () => {
     );
     expect(ownPageOf('g2.com/categories/ai-rank-tracking', ['acme.example'])).toBeNull();
   });
+
+  it('reads a long Where in bounded time, up to the length the drawer keeps', () => {
+    ownPageOf('acme.example/pricing', ['acme.example']);
+    const started = Date.now();
+    expect(ownPageOf(`${'.'.repeat(100_000)}x`, ['acme.example'])).toBeNull();
+    expect(ownPageOf(`"${'“'.repeat(100_000)}`, ['acme.example'])).toBeNull();
+    expect(Date.now() - started).toBeLessThan(200);
+    // What the drawer keeps is read as before.
+    expect(ownPageOf(`${'a '.repeat(240)}acme.example/pricing`, ['acme.example'])).toBe(
+      'https://acme.example/pricing',
+    );
+  });
 });
 
 describe('opportunityFromTask', () => {

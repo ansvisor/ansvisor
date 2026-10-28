@@ -41599,6 +41599,195 @@ comment on function public.approve_action_task_review(uuid, text, jsonb) is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00296_catalog_item_issues.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00296: item issues from Google Merchant Center (#1270)
+-- ============================================================================
+-- The Merchant Center connector reads a brand's Merchant Center account into
+-- its catalog (00278), and with each product the problems Merchant Center
+-- reports for it: a missing GTIN, a price that doesn't match the landing
+-- page, an image too small. Those decide whether the product can show in
+-- Google's shopping results, AI Overviews and AI Mode among them, so we keep
+-- them to tell the brand what to fix ("Feed fields complete", the readiness
+-- cards, later).
+--
+--   * One row per issue per item (an offer, the catalog's variant), as
+--     Merchant Center lists it: its code, severity (not_impacted, demoted,
+--     disapproved), the attribute it concerns, the destination it affects
+--     (reporting context) and its description. An item with no issues has
+--     no rows.
+--   * A sync replaces its source's rows; they go with their source.
+--   * Members read their brands' rows; the server writes them.
+--
+-- A Merchant Center source has no credentials row (00282): it reads through
+-- the workspace's Google sign-in, which Composio keeps
+-- (integration_connections, 00045).
+
+create table if not exists public.catalog_item_issues (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  source_id uuid not null references public.catalog_sources(id) on delete cascade,
+  -- The item's id in the catalog (catalog_variants.external_id): Merchant Center's offer id.
+  external_id text not null check (char_length(external_id) between 1 and 200),
+  code text not null check (char_length(code) between 1 and 200),
+  severity text not null check (severity in ('not_impacted', 'demoted', 'disapproved')),
+  attribute text check (attribute is null or char_length(attribute) <= 200),
+  reporting_context text check (reporting_context is null or char_length(reporting_context) <= 100),
+  description text check (description is null or char_length(description) <= 1000),
+  detail text check (detail is null or char_length(detail) <= 2000),
+  documentation text check (documentation is null or char_length(documentation) <= 2048),
+  resolution text check (resolution is null or char_length(resolution) <= 100),
+  countries text[] not null default '{}' check (cardinality(countries) <= 300),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists catalog_item_issues_source_idx
+  on public.catalog_item_issues (source_id);
+create index if not exists catalog_item_issues_brand_item_idx
+  on public.catalog_item_issues (brand_id, external_id);
+
+alter table public.catalog_item_issues enable row level security;
+revoke all on table public.catalog_item_issues from anon, authenticated;
+grant select on table public.catalog_item_issues to authenticated;
+grant all on table public.catalog_item_issues to service_role;
+
+drop policy if exists "catalog_item_issues: member select" on public.catalog_item_issues;
+create policy "catalog_item_issues: member select"
+  on public.catalog_item_issues
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.catalog_item_issues is
+  'Catalog (#1270, 00296): the issues Google Merchant Center reports per item (offer) of a Merchant Center source: code, severity, attribute, destination (reporting context), description. Replaced by each sync, removed with the source. Server writes, members read.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00350_catalog_category_pages.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00350: each catalog category's page on the brand's site (shopping path, 1)
+-- ============================================================================
+-- A brand's catalog names its categories (00278, from the products'
+-- product_type: "Shoes > Hiking Boots"), but not where each one lives on the
+-- site. The shopping path links a buying guide or a comparison to that page
+-- (/collections/hiking-boots), so the API matches each category to one of
+-- the brand's own pages that reads as a category (site_pages, 00104), every
+-- time it's asked: nothing here keeps those matches.
+--
+--   * `catalog_category_pages` keeps what a person decided instead: the
+--     page for a category (`url`), or that it has none (`url` null). A
+--     category with no row is matched automatically. Keyed by the
+--     category's name, as the catalog keeps it, so a decision outlives a
+--     sync that writes the category again.
+--   * Members read their brands' rows; the API writes them, for admins
+--     and managers, after checking the page is on the brand's domains.
+--   * `catalog_category_counts`: each category's live products and how
+--     many of them have a variant in stock, for the Settings table and the
+--     shopping path. In stock as the editor's feed match reads a variant
+--     (web/src/lib/content/feed-match.ts, feedStock): in_stock, instock,
+--     available or limited_availability, whatever its case, spaces or
+--     hyphens. The service role calls it.
+
+create table if not exists public.catalog_category_pages (
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  category text not null check (char_length(category) between 1 and 750),
+  url text check (url is null or (char_length(url) <= 2048 and url ~* '^https?://')),
+  set_by uuid references public.profiles(id) on delete set null,
+  set_at timestamptz not null default now(),
+  primary key (brand_id, category)
+);
+
+alter table public.catalog_category_pages enable row level security;
+revoke all on table public.catalog_category_pages from anon, authenticated;
+grant select on table public.catalog_category_pages to authenticated;
+grant all on table public.catalog_category_pages to service_role;
+
+drop policy if exists "catalog_category_pages: member select" on public.catalog_category_pages;
+create policy "catalog_category_pages: member select"
+  on public.catalog_category_pages
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.catalog_category_pages is
+  'Shopping path (00350): the page a person set for a catalog category (url), or that it has none (url null). Categories with no row are matched to the brand''s site pages by the API on each read. Server writes, members read.';
+
+create or replace function public.catalog_category_counts(p_brand_id uuid)
+returns table (category text, products integer, in_stock integer)
+language sql
+stable
+set search_path = public
+as $$
+  select c.name,
+         count(distinct p.id)::integer,
+         count(distinct p.id) filter (where exists (
+           select 1 from public.catalog_variants v
+           where v.product_id = p.id
+             and v.removed_at is null
+             and lower(regexp_replace(v.availability, '[\s-]+', '_', 'g'))
+               in ('in_stock', 'instock', 'available', 'limited_availability')
+         ))::integer
+  from public.catalog_categories c
+  join public.catalog_product_categories pc on pc.category_id = c.id
+  join public.catalog_products p on p.id = pc.product_id and p.removed_at is null
+  where c.brand_id = p_brand_id
+  group by c.name
+$$;
+
+revoke all on function public.catalog_category_counts(uuid) from public, anon, authenticated;
+grant execute on function public.catalog_category_counts(uuid) to service_role;
+
+comment on function public.catalog_category_counts(uuid) is
+  'Shopping path (00350): each catalog category of a brand with its live products and how many have a variant in stock (in_stock, instock, available or limited_availability, as feed-match.ts reads it). Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00351_content_draft_shopping_path.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00351: a draft's shopping path (shopping path, part 2)
+-- ============================================================================
+-- On an online shop, a buying guide, a best-of list or a comparison should
+-- send its readers, and the AI answers that quote it, to the right category
+-- page and to products that are in stock and that Google Merchant Center
+-- accepts. The API picks them from the brand's catalog (00278, 00296, 00350)
+-- for the draft's topic; the Brief tab shows them, the person swaps, removes,
+-- locks or adds, and the Content Agent writes with them.
+--
+--   * content_drafts.shopping_path: the path as jsonb — {version, builtAt,
+--     pageType, categories: [{name, url, title}], products: [{id, title,
+--     url, price, salePrice, currency, availability, image, issues, score}],
+--     leftOut: [{id, title, reason}], locked, removed, added}. Null until
+--     built, and for a page or a brand it doesn't fit. A member changes it
+--     like the brief, so it isn't a server column.
+
+alter table public.content_drafts
+  add column if not exists shopping_path jsonb
+    check (
+      shopping_path is null
+      or (jsonb_typeof(shopping_path) = 'object' and octet_length(shopping_path::text) <= 65536)
+    );
+
+comment on column public.content_drafts.shopping_path is
+  'The draft''s shopping path (shopping path, part 2): the category pages and catalog products the page links, the products left out and why, and the person''s locks, removals and additions. Null until built.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00360_shopping_card_catalog_match.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -41632,6 +41821,12 @@ alter table public.prompt_result_shopping_cards
 
 create index if not exists prompt_result_shopping_cards_catalog_product_idx
   on public.prompt_result_shopping_cards (brand_id, catalog_product_id)
+  where catalog_product_id is not null;
+
+-- A catalog product's cards by the product alone: what `on delete set null`
+-- looks up when a product is deleted, which the index above can't serve.
+create index if not exists prompt_result_shopping_cards_catalog_product_id_idx
+  on public.prompt_result_shopping_cards (catalog_product_id)
   where catalog_product_id is not null;
 
 comment on column public.prompt_result_shopping_cards.catalog_product_id is

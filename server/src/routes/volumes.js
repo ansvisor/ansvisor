@@ -328,7 +328,9 @@ router.post('/bootstrap', requireFeature('prompt_volumes'), async (req, res) => 
  * what actually landed, which is the honest reading — the counts come from the
  * table either way.
  */
-router.get('/status/:brandId', requireFeature('prompt_volumes'), async (req, res) => {
+// Reads only: a workspace whose plan ended still sees what was analyzed.
+const readVolumes = requireFeature('prompt_volumes', { readOnly: true });
+router.get('/status/:brandId', readVolumes, async (req, res) => {
   try {
     const { brandId } = req.params;
     await assertBrandAccess(brandId, req.user.id);
@@ -480,10 +482,19 @@ router.get('/brand/:brandId', async (req, res) => {
       promptCategory: promptMap[v.prompt_id]?.category || '',
     }));
 
-    const quota = await getVolumeQuotaStatus(req.user.id);
+    // Read-only once the plan has ended (2026-10-27): the volumes still come
+    // back, with a quota of nothing left.
+    const quota = await getVolumeQuotaStatus(req.user.id, { readOnly: true });
 
     return res.json({ volumes: enriched, quota });
   } catch (error) {
+    if (error instanceof PlanLimitError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        error: 'plan_limit',
+        message: error.message,
+      });
+    }
     req.log.error({ err: error }, 'fetch volumes error');
     return res.status(error.status || 500).json({
       error: 'Failed to fetch volume data',
