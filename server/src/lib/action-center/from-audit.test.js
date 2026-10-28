@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * sendAuditToActionCenter (learning D2): a Site Audit report's page and the
  * checks it fails as one Fix action. These pin that the audit is read again
- * on the server within the brand, that only failing checks go, that the same
- * page sent again returns the open action, and that the action names its
- * page and checks as its target.
+ * on the server within the brand, that only failing checks go (not one that
+ * isn't applicable), that an older report of a page audited since is
+ * refused, that the same page sent again (or twice at once) returns the open
+ * action, and that the action names its page and checks as its target and
+ * takes F01's plan, its audit tasks included.
  */
 
 let db;
@@ -61,8 +63,9 @@ const rpc = vi.fn();
 vi.mock('../../config/supabase.js', () => ({
   default: { from: (name) => table(name), rpc: (...args) => rpc(...args) },
 }));
+// A brand sending from a Site Audit report has its audits: F01's audit tasks plan.
 vi.mock('./sources.js', () => ({
-  resolveBrandSources: async () => new Set(['tracking', 'analytics', 'ai_traffic']),
+  resolveBrandSources: async () => new Set(['tracking', 'analytics', 'ai_traffic', 'site_audits']),
 }));
 vi.mock('./priority-data.js', () => ({
   priorityOnCreate: async () => ({ priority_score: 61, priority_level: 'medium' }),
@@ -70,7 +73,6 @@ vi.mock('./priority-data.js', () => ({
 
 const { AUDIT_PAGE_ACTION_KIND, auditDedupKey, auditImpact, failing, sendAuditToActionCenter } =
   await import('./from-audit.js');
-const { default: fixLowScores } = await import('./definitions/f01-fix-low-scores.js');
 
 const AUDIT = '11111111-2222-4333-8444-555555555555';
 const URL_ = 'https://acme.example/blog/espresso';
@@ -117,6 +119,9 @@ describe('failing', () => {
     expect(failing('tables', 'warn')).toBe(false);
     expect(failing('json-ld-validity', 'warn')).toBe(true);
     expect(failing('h1-quality', 'pass')).toBe(false);
+    // Not applicable to the page: nothing to fix.
+    expect(failing('faq-schema', 'na')).toBe(false);
+    expect(failing('json-ld-validity', 'na')).toBe(false);
   });
 });
 
@@ -156,14 +161,74 @@ describe('sendAuditToActionCenter', () => {
     });
     expect(action.payload.checks.map((c) => c.key)).toEqual(['faq-schema', 'json-ld-validity']);
     expect(action.payload.checks[0].label).toEqual(expect.any(String));
+    // F01's plan, its audit tasks included: the page's audit read first, the fix checked by the next.
     const tasks = db.inserts.find((i) => i.table === 'action_tasks').row;
-    expect(tasks.length).toBeGreaterThan(0);
-    expect(fixLowScores.tasks).toContain('analyze_site_audit');
+    expect(tasks.map((task) => task.task_key)).toEqual([
+      'analyze_site_audit',
+      'prioritize_targets',
+      'fix_technical_issue',
+      'validate_technical_fix',
+      'measure_action_outcome',
+    ]);
+    expect(tasks.map((task) => task.position)).toEqual([1, 2, 3, 4, 5]);
+    expect(tasks.every((task) => task.action_id === 'act-1' && task.status === 'todo')).toBe(true);
     expect(db.inserts.find((i) => i.table === 'action_events').row).toMatchObject({
       event: 'created',
       actor_id: 'u1',
-      data: { source: AUDIT_PAGE_ACTION_KIND, checks: 2 },
+      data: { source: AUDIT_PAGE_ACTION_KIND, checks: 2, taskCount: 5 },
     });
+  });
+
+  it('leaves out a check that is not applicable to the page', async () => {
+    db.rows.audit_signal_results = () => [
+      { signal_key: 'faq-schema', status: 'na' },
+      { signal_key: 'json-ld-validity', status: 'na' },
+      { signal_key: 'tables', status: 'fail' },
+    ];
+    await sendAuditToActionCenter('b1', { auditId: AUDIT, userId: 'u1' });
+    const action = db.inserts.find((i) => i.table === 'actions').row;
+    expect(action.payload.checks.map((c) => c.key)).toEqual(['tables']);
+    expect(action.baseline).toEqual({ score: 0.42, failing: 1 });
+
+    db.inserts = [];
+    db.rows.audit_signal_results = () => [
+      { signal_key: 'faq-schema', status: 'na' },
+      { signal_key: 'h1-quality', status: 'pass' },
+    ];
+    await expect(
+      sendAuditToActionCenter('b1', { auditId: AUDIT, userId: 'u1' }),
+    ).rejects.toMatchObject({ status: 409, code: 'nothing_to_fix' });
+    expect(db.inserts).toEqual([]);
+  });
+
+  it('returns the action the other of two sends at once opened', async () => {
+    // Not open when read, open once the insert hits the open-action dedup index.
+    let reads = 0;
+    db.rows.actions = () => (reads++ === 0 ? null : { id: 'act-0', action_no: 70 });
+    db.insertError = { code: '23505', message: 'duplicate key value' };
+    expect(await sendAuditToActionCenter('b1', { auditId: AUDIT, userId: 'u1' })).toEqual({
+      actionId: 'act-0',
+      actionNo: 70,
+      created: false,
+    });
+    expect(reads).toBe(2);
+    // Its plan and trail are the other send's.
+    expect(db.inserts.map((i) => i.table)).toEqual(['actions']);
+  });
+
+  it('fails when the insert is refused for another reason, or no action is open after all', async () => {
+    db.insertError = { code: '23505', message: 'duplicate key value' };
+    await expect(sendAuditToActionCenter('b1', { auditId: AUDIT, userId: 'u1' })).rejects.toThrow(
+      'duplicate key value',
+    );
+    // Another refusal isn't a send racing this one: no second read.
+    db.insertError = { code: '23502', message: 'null value' };
+    let reads = 0;
+    db.rows.actions = () => (reads++ === 0 ? null : { id: 'act-0', action_no: 70 });
+    await expect(sendAuditToActionCenter('b1', { auditId: AUDIT, userId: 'u1' })).rejects.toThrow(
+      'null value',
+    );
+    expect(reads).toBe(1);
   });
 
   it('returns the action open for the page', async () => {
