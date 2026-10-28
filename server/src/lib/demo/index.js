@@ -15,11 +15,18 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
+import { actionCenter } from './action-center.js';
 import { BRAND } from './brewline.js';
+import { content } from './content.js';
 import { core } from './core.js';
+import { reports } from './reports.js';
+import { suggestions } from './suggestions.js';
 
-/** Bump to rebuild every demo brand on its next visit. */
-export const DEMO_VERSION = 1;
+/**
+ * Bump to rebuild every demo brand on its next visit.
+ * 2: Action Center, Content, suggestions and reports (demo-workflows).
+ */
+export const DEMO_VERSION = 2;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -40,10 +47,11 @@ const WAIT_POLL_MS = 1000;
  * The modules that build the demo, in order. Each is `{ name, tables,
  * build(ctx) }`: `tables` are the brand-scoped tables it owns (written, or
  * rebuilt by what it calls), cleared in reverse order before a rebuild.
- * Action Center, Content, reports, Site Audit, traffic and Product
- * Visibility follow as modules of their own.
+ * Content comes after the Action Center: a draft points at the action its
+ * opportunity was sent as. Site Audit, traffic and Product Visibility follow
+ * as modules of their own.
  */
-export const DEMO_MODULES = [core];
+export const DEMO_MODULES = [core, suggestions, actionCenter, content, reports];
 
 const COLUMNS = 'id, demo_version, demo_built_at, demo_hidden_at';
 
