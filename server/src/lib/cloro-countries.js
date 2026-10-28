@@ -36,9 +36,31 @@ const MODELS = [...new Set(Object.values(CLORO_COUNTRY_MODELS))];
 const READ_MS = 15_000;
 
 /**
+ * The codes in an answer, in the shapes a list of countries may come in:
+ * `["US", …]`, `{ countries: [...] }`, or entries `{ code }` / `{ country }`.
+ * Null for any other shape. Codes are read as two capital letters; anything
+ * else is dropped.
+ */
+export function countryCodesIn(body) {
+  const list = Array.isArray(body) ? body : Array.isArray(body?.countries) ? body.countries : null;
+  if (!list) return null;
+  const code = (entry) =>
+    typeof entry === 'string' ? entry : (entry?.code ?? entry?.country ?? null);
+  return [
+    ...new Set(
+      list
+        .map(code)
+        .filter((c) => typeof c === 'string')
+        .map((c) => c.trim().toUpperCase())
+        .filter((c) => /^[A-Z]{2}$/.test(c)),
+    ),
+  ];
+}
+
+/**
  * One engine's countries, as ISO codes; null when there's no key, the read
- * failed, or the answer isn't a list of codes (an empty list included, so
- * a bad answer never empties the table).
+ * failed, or the answer holds no codes (an empty list included, so a bad
+ * answer never empties the table). An answer in no known shape is logged.
  */
 export async function fetchCloroCountries(
   model,
@@ -51,22 +73,27 @@ export async function fetchCloroCountries(
   });
   if (!res.ok) throw new Error(`countries ${model}: HTTP ${res.status}`);
   const body = await res.json();
-  if (!Array.isArray(body)) return null;
-  const codes = [
-    ...new Set(
-      body
-        .filter((c) => typeof c === 'string')
-        .map((c) => c.trim().toUpperCase())
-        .filter((c) => /^[A-Z]{2}$/.test(c)),
-    ),
-  ];
-  return codes.length ? codes : null;
+  const codes = countryCodesIn(body);
+  if (!codes?.length) {
+    logger.warn(
+      {
+        model,
+        shape: Array.isArray(body) ? `array of ${body.length}` : typeof body,
+        keys: body && typeof body === 'object' && !Array.isArray(body) ? Object.keys(body) : [],
+      },
+      '[cloro-countries] answer holds no country codes; last list kept',
+    );
+    return null;
+  }
+  return codes;
 }
 
 /**
  * Reads every engine's list and writes it: the codes it lists, and the ones
  * it no longer lists removed. An engine whose read fails keeps its last
- * list. Returns, per engine, how many countries it answers from, or why not.
+ * list, and so does one whose new list is under half its last: an answer
+ * cut short would otherwise stop tracking in most countries at once.
+ * Returns, per engine, how many countries it answers from, or why not.
  */
 export async function refreshCloroCountries({
   db = supabaseAdmin,
@@ -77,6 +104,11 @@ export async function refreshCloroCountries({
   if (!apiKey) return { skipped: 'no provider key' };
   const at = now.toISOString();
   const outcome = {};
+  // The lists as kept, to tell a list that shrank from one that changed.
+  const last = await loadSupportedCountries({ db }).catch((err) => {
+    logger.warn({ err: { message: err?.message } }, '[cloro-countries] last lists unreadable');
+    return null;
+  });
   await Promise.all(
     MODELS.map(async (model) => {
       let codes;
@@ -88,6 +120,15 @@ export async function refreshCloroCountries({
         return;
       }
       if (!codes) {
+        outcome[model] = 'kept';
+        return;
+      }
+      const before = last?.get(model)?.size ?? 0;
+      if (codes.length < before / 2) {
+        logger.warn(
+          { model, before, now: codes.length },
+          '[cloro-countries] list shrank by more than half; last list kept',
+        );
         outcome[model] = 'kept';
         return;
       }

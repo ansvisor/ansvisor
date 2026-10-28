@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 import { fakeDb } from './catalog/__fixtures__/fake-db.js';
+import { logger } from './logger.js';
 import {
+  countryCodesIn,
   fetchCloroCountries,
   loadSupportedCountries,
   refreshCloroCountries,
@@ -49,7 +51,86 @@ describe('fetchCloroCountries', () => {
   });
 });
 
+describe('countryCodesIn', () => {
+  it('reads the codes in each shape a list may come in', () => {
+    expect(countryCodesIn(['us', ' GB ', 'GB', 'USA', 7, null])).toEqual(['US', 'GB']);
+    expect(countryCodesIn({ countries: ['US', 'TR'] })).toEqual(['US', 'TR']);
+    expect(countryCodesIn([{ code: 'us' }, { code: 'XYZ' }, { name: 'Peru' }])).toEqual(['US']);
+    expect(countryCodesIn([{ country: 'TR', name: 'Türkiye' }, { country: 'de' }])).toEqual([
+      'TR',
+      'DE',
+    ]);
+    expect(countryCodesIn({ countries: [{ code: 'KE' }] })).toEqual(['KE']);
+  });
+
+  it('reads any other shape as no list', () => {
+    for (const body of [null, 'US', 42, { codes: ['US'] }, { countries: 'US' }]) {
+      expect(countryCodesIn(body)).toBeNull();
+    }
+  });
+});
+
+describe('fetchCloroCountries, in any shape', () => {
+  it('reads a wrapped list and listed entries alike', async () => {
+    const fetchImpl = answer({
+      chatgpt: { countries: ['US', 'GB'] },
+      gemini: [{ code: 'US' }, { code: 'KE' }],
+      copilot: [{ country: 'TR' }],
+    });
+    expect(await fetchCloroCountries('chatgpt', { fetchImpl, apiKey: 'k' })).toEqual(['US', 'GB']);
+    expect(await fetchCloroCountries('gemini', { fetchImpl, apiKey: 'k' })).toEqual(['US', 'KE']);
+    expect(await fetchCloroCountries('copilot', { fetchImpl, apiKey: 'k' })).toEqual(['TR']);
+  });
+
+  it('says so, and keeps the last list, when an answer is in no known shape', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      const fetchImpl = answer({ gemini: { data: { list: ['US'] } } });
+      expect(await fetchCloroCountries('gemini', { fetchImpl, apiKey: 'k' })).toBeNull();
+      expect(warn).toHaveBeenCalledWith(
+        { model: 'gemini', shape: 'object', keys: ['data'] },
+        '[cloro-countries] answer holds no country codes; last list kept',
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('refreshCloroCountries', () => {
+  it('keeps a list that shrank by more than half, and takes one that shrank less', async () => {
+    const fake = fakeDb();
+    await refreshCloroCountries({
+      db: fake.db,
+      apiKey: 'k',
+      now: new Date('2026-10-27T06:00:00Z'),
+      fetchImpl: answer({
+        chatgpt: ['US', 'GB', 'DE', 'FR', 'TR', 'JP'],
+        aimode: ['US', 'GB', 'DE', 'FR'],
+      }),
+    });
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      const outcome = await refreshCloroCountries({
+        db: fake.db,
+        apiKey: 'k',
+        now: new Date('2026-10-28T06:00:00Z'),
+        // ChatGPT down to two of six: cut short. AI Mode two of four: half, taken.
+        fetchImpl: answer({ chatgpt: ['US', 'GB'], aimode: ['US', 'GB'] }),
+      });
+      expect(outcome).toMatchObject({ chatgpt: 'kept', aimode: 2 });
+      expect(warn).toHaveBeenCalledWith(
+        { model: 'chatgpt', before: 6, now: 2 },
+        '[cloro-countries] list shrank by more than half; last list kept',
+      );
+    } finally {
+      warn.mockRestore();
+    }
+    const supported = await loadSupportedCountries({ db: fake.db });
+    expect(supported.get('chatgpt').size).toBe(6);
+    expect([...supported.get('aimode')].sort()).toEqual(['GB', 'US']);
+  });
+
   it('writes each engine’s list, drops what it no longer lists, and keeps a list it could not read', async () => {
     const fake = fakeDb();
     const day1 = new Date('2026-10-27T06:00:00Z');
