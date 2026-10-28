@@ -21,3 +21,5 @@ alter table public.actions
     'declined',
     'not_measurable'
   ));
+
+notify pgrst, 'reload schema';

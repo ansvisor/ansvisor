@@ -372,8 +372,10 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     /**
      * Days of a window with no stamped tracking run beyond which its counts
      * can't be compared (learning A6): a missed night reads as fewer
-     * mentions and citations, a decline nobody caused. Up to this many is
-     * read and flagged; more reads not measurable.
+     * mentions and citations, a decline nobody caused. Up to this many, the
+     * counts are read at a full window's worth from the nights that ran, and
+     * flagged; more, and they're left out of the verdict (not measurable when
+     * the main metric is one).
      */
     maxGapDays: 2,
 
