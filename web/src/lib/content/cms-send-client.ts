@@ -30,10 +30,12 @@ export type CmsSendError =
   | 'failed'
   // More than the API's proxy takes in one request (413).
   | 'too_large'
-  // Not a send's own: the session, another workspace's brand, the rate limiter.
+  // Not a send's own: the session, another workspace's brand, the rate limiter,
+  // a read-only workspace (the upgrade dialog, not a message).
   | 'session'
   | 'workspace'
-  | 'busy';
+  | 'busy'
+  | 'subscription';
 
 export interface CmsDelivery {
   id: string;
@@ -69,7 +71,7 @@ const KNOWN: readonly CmsSendError[] = [
 ];
 
 /** The reasons any call can fail for, as the other calls read them (BUG-001). */
-const GENERAL: readonly CmsSendError[] = ['session', 'workspace', 'busy'];
+const GENERAL: readonly CmsSendError[] = ['session', 'workspace', 'busy', 'subscription'];
 
 /**
  * Sends pages of one brand to its webhook, or its Webflow collection: one is

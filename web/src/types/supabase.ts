@@ -474,6 +474,73 @@ export type Database = {
           },
         ]
       }
+      ai_traffic_events: {
+        Row: {
+          brand_id: string
+          currency: string | null
+          first_at: string
+          first_key: string | null
+          first_source: string
+          first_url: string
+          goal: string | null
+          id: string
+          kind: string
+          label: string | null
+          occurred_at: string
+          order_ref: string | null
+          origin: string | null
+          page_key: string | null
+          units: number | null
+          url: string
+          value: number | null
+          visitor_id: string
+        }
+        Insert: {
+          brand_id: string
+          currency?: string | null
+          first_at: string
+          first_source: string
+          first_url: string
+          goal?: string | null
+          id?: string
+          kind: string
+          label?: string | null
+          occurred_at?: string
+          order_ref?: string | null
+          origin?: string | null
+          units?: number | null
+          url: string
+          value?: number | null
+          visitor_id: string
+        }
+        Update: {
+          brand_id?: string
+          currency?: string | null
+          first_at?: string
+          first_source?: string
+          first_url?: string
+          goal?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          occurred_at?: string
+          order_ref?: string | null
+          origin?: string | null
+          units?: number | null
+          url?: string
+          value?: number | null
+          visitor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_traffic_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_traffic_logs: {
         Row: {
           brand_id: string
@@ -1137,6 +1204,75 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_categories: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_categories_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_product_categories: {
+        Row: {
+          brand_id: string
+          category_id: string
+          product_id: string
+        }
+        Insert: {
+          brand_id: string
+          category_id: string
+          product_id: string
+        }
+        Update: {
+          brand_id?: string
+          category_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_product_categories_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_product_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_product_categories_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
             referencedColumns: ["id"]
           },
         ]
@@ -3424,6 +3560,8 @@ export type Database = {
       prompt_result_shopping_cards: {
         Row: {
           brand_id: string
+          catalog_match: string | null
+          catalog_product_id: string | null
           created_at: string
           id: string
           image_url: string | null
@@ -3448,6 +3586,8 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          catalog_match?: string | null
+          catalog_product_id?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -3472,6 +3612,8 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          catalog_match?: string | null
+          catalog_product_id?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -3495,6 +3637,13 @@ export type Database = {
           review_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "prompt_result_shopping_cards_catalog_product_id_fkey"
+            columns: ["catalog_product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "prompt_result_shopping_cards_brand_id_fkey"
             columns: ["brand_id"]
@@ -5679,6 +5828,21 @@ export type Database = {
         Returns: {
           platforms: string[]
           regions: string[]
+        }[]
+      }
+      catalog_product_ai_stats: {
+        Args: {
+          p_brand_id: string
+          p_from: string
+          p_product_id?: string
+          p_to?: string
+        }
+        Returns: {
+          ai_visits: number
+          currency: string | null
+          orders: number
+          product_id: string
+          revenue: number | null
         }[]
       }
       shopping_merchant_split: {

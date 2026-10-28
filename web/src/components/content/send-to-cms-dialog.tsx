@@ -34,6 +34,7 @@ import {
   type DraftCms,
 } from '@/lib/content/cms-send-client';
 import { exportPlaceholders, pageFields, titlePlaceholders } from '@/lib/content/ready-to-publish';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from './cms-target';
 
 /**
@@ -77,6 +78,7 @@ export function SendDialog({
 }) {
   const t = useTranslations('contentEditor.editor.send');
   const tFailure = useTranslations('apiFailure');
+  const { openUpgrade } = useUpgradeGate();
   const format = useFormatter();
   const page = useMemo(
     () => pageFields({ title, html, sourceUrl, author, teamByline }),
@@ -167,6 +169,8 @@ export function SendDialog({
     );
     setSending(false);
     if (!result.ok) {
+      // A read-only workspace: the upgrade dialog, with the reason kept here.
+      if (result.code === 'subscription') openUpgrade();
       setProblem({ code: result.code, field: result.field });
       return;
     }
@@ -225,7 +229,9 @@ export function SendDialog({
       });
     }
     const { code, field } = shown;
-    if (code === 'session' || code === 'workspace' || code === 'busy') return tFailure(code);
+    if (code === 'session' || code === 'workspace' || code === 'busy' || code === 'subscription') {
+      return tFailure(code);
+    }
     // Webflow not ready sent the page to the webhook: what to fix is Webflow.
     if (code === 'no_webhook' && webflow && !webflow.ready) return t('errors.no_webhookWebflow');
     // The server names the path ("pages.0.slug"); the field is its last part.

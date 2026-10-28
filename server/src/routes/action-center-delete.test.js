@@ -49,7 +49,10 @@ vi.mock('../config/supabase.js', () => ({
 const assertBrandAccess = vi.fn();
 vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
 vi.mock('../lib/action-center/priority-data.js', () => ({ rescoreActionsForSignal: vi.fn() }));
-vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError: class extends Error {} }));
+vi.mock('../lib/plan-guard.js', () => ({
+  PlanLimitError: class extends Error {},
+  requireFeature: () => (_req, _res, next) => next(),
+}));
 vi.mock('../lib/action-center/task-writer/index.js', () => ({
   TaskWriterError: class extends Error {},
   isTaskWriterEnabled: () => false,
