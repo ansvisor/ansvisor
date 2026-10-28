@@ -526,6 +526,8 @@ async function insertRows(db, table, rows) {
  */
 export const content = {
   name: 'content',
+  // A draft points at the action its opportunity was sent as.
+  after: 'actionCenter',
   tables: [
     'prompt_cluster_scopes',
     'prompt_clusters',

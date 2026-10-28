@@ -205,6 +205,47 @@ describe('ensureDemoBrand', () => {
   });
 });
 
+describe('the build order', () => {
+  it('builds the first module alone, the others together, each after the one it names', async () => {
+    const order = [];
+    const step = (name, ms) =>
+      vi.fn(async () => {
+        order.push(`${name}:start`);
+        await new Promise((resolve) => setTimeout(resolve, ms));
+        order.push(`${name}:end`);
+        return { rows: 1 };
+      });
+    const staged = [
+      { name: 'core', tables: ['a'], build: step('core', 5) },
+      { name: 'slow', tables: ['b'], build: step('slow', 20) },
+      { name: 'actions', tables: ['c'], build: step('actions', 5) },
+      { name: 'drafts', tables: ['d'], after: 'actions', build: step('drafts', 1) },
+    ];
+    await ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: staged });
+
+    expect(order.slice(0, 2)).toEqual(['core:start', 'core:end']);
+    // The others start together; drafts waits for actions only, not the slow one.
+    expect(order.indexOf('slow:start')).toBeLessThan(order.indexOf('actions:end'));
+    expect(order.indexOf('actions:end')).toBeLessThan(order.indexOf('drafts:start'));
+    expect(order.indexOf('drafts:end')).toBeLessThan(order.indexOf('slow:end'));
+  });
+
+  it('fails the build when any module fails, after the others settle', async () => {
+    const fails = vi.fn(async () => {
+      throw new Error('boom');
+    });
+    const staged = [
+      { name: 'core', tables: ['a'], build },
+      { name: 'bad', tables: ['b'], build: fails },
+      { name: 'good', tables: ['c'], build },
+    ];
+    await expect(
+      ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: staged }),
+    ).rejects.toThrow('boom');
+    expect(build).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('demoState', () => {
   it('reads fresh, building or stale from the version and when it was built', () => {
     expect(demoState(demo(), NOW)).toBe('fresh');
