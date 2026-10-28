@@ -40,6 +40,51 @@ vi.mock('@/lib/webflow-client', () => ({
         : null,
   }),
 }));
+// And its WordPress site (00294): none unless a test gives one.
+const wordpress = vi.hoisted(() => ({ ready: false, refused: false, failed: false }));
+vi.mock('@/lib/wordpress-client', () => ({
+  readWordPress: async () => ({
+    ok: !wordpress.failed,
+    code: 'failed',
+    configured: true,
+    connection:
+      wordpress.ready || wordpress.refused
+        ? {
+            status: wordpress.refused ? 'auth_failed' : 'connected',
+            siteUrl: 'https://blog.acme.example',
+            siteName: 'Acme Blog',
+            account: 'ansvisor',
+            connectedAt: '2026-10-26T10:00:00Z',
+            updatedAt: '2026-10-26T10:00:00Z',
+          }
+        : null,
+  }),
+}));
+// And its Framer collection (00295): none unless a test gives one. Not
+// ready: connected, but no field for the page's title picked yet.
+const framer = vi.hoisted(() => ({ ready: false, notReady: false, failed: false }));
+vi.mock('@/lib/framer-client', () => ({
+  readFramer: async () => ({
+    ok: !framer.failed,
+    code: 'failed',
+    configured: true,
+    connection:
+      framer.ready || framer.notReady
+        ? {
+            status: 'connected',
+            projectId: 'p1',
+            projectName: 'Acme Site',
+            siteUrl: 'https://acme.framer.website',
+            account: 'Ada Lovelace',
+            collectionId: 'fc1',
+            collectionName: 'Articles',
+            fieldMap: framer.ready ? { title: 'f-title', body: 'f-body' } : { body: 'f-body' },
+            connectedAt: '2026-10-27T10:00:00Z',
+            updatedAt: '2026-10-27T10:00:00Z',
+          }
+        : null,
+  }),
+}));
 // One request a page, so a test can refuse the second.
 const oneByOne = vi.hoisted(() => ({ on: false }));
 vi.mock('@/lib/content/cms-send', async (importOriginal) => {
@@ -111,6 +156,8 @@ const lines = () => [...dialog().querySelectorAll('li')].map((li) => li.textCont
 beforeEach(() => {
   oneByOne.on = false;
   Object.assign(webflow, { ready: false, refused: false, failed: false });
+  Object.assign(wordpress, { ready: false, refused: false, failed: false });
+  Object.assign(framer, { ready: false, notReady: false, failed: false });
   // The send target remembered per brand, in this browser.
   const kept = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -266,6 +313,208 @@ describe('BulkSendDialog', () => {
     expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
       "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
     );
+  });
+
+  it('sends the pages to the brand’s WordPress site as draft posts', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    wordpress.ready = true;
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'queued' },
+        { id: 'x3', draftId: 'd3', status: 'queued' },
+      ],
+    });
+    readDeliveries.mockResolvedValue([
+      { id: 'x1', draftId: 'd1', status: 'sent', http_status: null, error: null },
+      { id: 'x3', draftId: 'd3', status: 'sent', http_status: null, error: null },
+    ]);
+    await render();
+    expect(dialog().textContent).toContain(
+      'Each page goes to Acme Blog in WordPress as a draft post, as it is ready to publish',
+    );
+    expect(dialog().textContent).toContain(
+      "A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
+    );
+    const radios = [...dialog().querySelectorAll('[role="radio"]')];
+    expect(radios.map((r) => r.textContent)).toEqual([
+      'WordPressA draft post on Acme Blog',
+      "Your workflowThe brand's webhook (Zapier, Make, n8n)",
+    ]);
+    expect(radios[0].getAttribute('aria-checked')).toBe('true');
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('wordpress');
+    expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('wordpress');
+    await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe('2 pages sent.');
+  });
+
+  it('offers all three with Webflow and WordPress, starting from the remembered WordPress', async () => {
+    webflow.ready = true;
+    wordpress.ready = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'wordpress');
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'in_progress', field: null });
+    await render();
+    const radios = [...dialog().querySelectorAll('[role="radio"]')];
+    expect(radios.map((r) => r.querySelector('span')?.textContent)).toEqual([
+      'Webflow',
+      'WordPress',
+      'Your workflow',
+    ]);
+    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('wordpress');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      'A page is already on its way to WordPress. Wait for it, then send again.',
+    );
+  });
+
+  it('says WordPress refused the sign-in when the brand has no webhook either', async () => {
+    wordpress.refused = true;
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'no_webhook', field: null });
+    await render();
+    const choice = [...dialog().querySelectorAll<HTMLButtonElement>('[role="radio"]')][0];
+    expect(choice.disabled).toBe(true);
+    expect(choice.textContent).toContain('Sign-in refused');
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations.",
+    );
+  });
+
+  it('says only that the webhook is missing when a CMS is ready to pick instead', async () => {
+    webflow.refused = true;
+    wordpress.ready = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'webhook');
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'no_webhook', field: null });
+    await render();
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      'This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.',
+    );
+  });
+
+  it('sends to the webhook when WordPress can’t be read, saying so to a person who sent there', async () => {
+    wordpress.failed = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'wordpress');
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'sent' },
+        { id: 'x3', draftId: 'd3', status: 'sent' },
+      ],
+    });
+    await render();
+    expect(dialog().querySelector('[role="radio"]')).toBeNull();
+    expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
+      "Couldn't check WordPress just now, so this send goes to your workflow.",
+    );
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
+  });
+
+  it('sends the pages to the brand’s Framer collection as draft items', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    framer.ready = true;
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'queued' },
+        { id: 'x3', draftId: 'd3', status: 'queued' },
+      ],
+    });
+    readDeliveries.mockResolvedValue([
+      { id: 'x1', draftId: 'd1', status: 'sent', http_status: null, error: null },
+      { id: 'x3', draftId: 'd3', status: 'sent', http_status: null, error: null },
+    ]);
+    await render();
+    expect(dialog().textContent).toContain(
+      "Each page goes to Articles in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
+    );
+    expect(dialog().textContent).toContain(
+      "A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
+    );
+    const radios = [...dialog().querySelectorAll('[role="radio"]')];
+    expect(radios.map((r) => r.textContent)).toEqual([
+      'FramerA draft item in Articles',
+      "Your workflowThe brand's webhook (Zapier, Make, n8n)",
+    ]);
+    expect(radios[0].getAttribute('aria-checked')).toBe('true');
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('framer');
+    expect(localStorage.getItem('aeo:cms-target:brand-1')).toBe('framer');
+    await act(async () => void (await vi.advanceTimersByTimeAsync(2_000)));
+    expect(dialog().querySelector('[role="status"]')!.textContent).toBe('2 pages sent.');
+  });
+
+  it('offers all four, two by two, starting from the remembered Framer', async () => {
+    webflow.ready = true;
+    wordpress.ready = true;
+    framer.ready = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'framer');
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'in_progress', field: null });
+    await render();
+    const radios = [...dialog().querySelectorAll('[role="radio"]')];
+    expect(radios.map((r) => r.querySelector('span')?.textContent)).toEqual([
+      'Webflow',
+      'WordPress',
+      'Framer',
+      'Your workflow',
+    ]);
+    expect(dialog().querySelector('[role="radiogroup"]')!.className).toContain(
+      'grid-cols-1 sm:grid-cols-2',
+    );
+    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'false',
+      'true',
+      'false',
+    ]);
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('framer');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      'A page is already on its way to Framer. Wait for it, then send again.',
+    );
+  });
+
+  it('says Framer isn’t ready when the brand has no webhook either', async () => {
+    framer.notReady = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'framer');
+    sendPagesToCms.mockResolvedValue({ ok: false, code: 'no_webhook', field: null });
+    await render();
+    const choice = [...dialog().querySelectorAll<HTMLButtonElement>('[role="radio"]')][0];
+    expect(choice.disabled).toBe(true);
+    expect(choice.textContent).toContain('Not ready: connect it again or pick its collection');
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      "This brand's Framer isn't ready, and it has no webhook. Connect Framer again or pick its collection and fields in Settings › Integrations.",
+    );
+  });
+
+  it('sends to the webhook when Framer can’t be read, saying so to a person who sent there', async () => {
+    framer.failed = true;
+    localStorage.setItem('aeo:cms-target:brand-1', 'framer');
+    sendPagesToCms.mockResolvedValue({
+      ok: true,
+      skipped: 0,
+      deliveries: [
+        { id: 'x1', draftId: 'd1', status: 'sent' },
+        { id: 'x3', draftId: 'd3', status: 'sent' },
+      ],
+    });
+    await render();
+    expect(dialog().querySelector('[role="radio"]')).toBeNull();
+    expect(dialog().querySelector('[role="status"]')!.textContent).toContain(
+      "Couldn't check Framer just now, so this send goes to your workflow.",
+    );
+    await act(async () => button('Send 2 pages').click());
+    expect(sendPagesToCms.mock.calls[0]?.[2]).toBe('webhook');
   });
 
   it('says why nothing went, and keeps the pages to send again', async () => {

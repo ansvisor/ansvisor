@@ -203,6 +203,14 @@ vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }
 vi.mock('@/lib/webflow-client', () => ({
   readWebflow: async () => ({ ok: true, configured: false, connection: null }),
 }));
+// Nor its WordPress site (00294).
+vi.mock('@/lib/wordpress-client', () => ({
+  readWordPress: async () => ({ ok: true, configured: false, connection: null }),
+}));
+// Nor its Framer collection (00295).
+vi.mock('@/lib/framer-client', () => ({
+  readFramer: async () => ({ ok: true, configured: false, connection: null }),
+}));
 
 (
   globalThis as typeof globalThis & {
