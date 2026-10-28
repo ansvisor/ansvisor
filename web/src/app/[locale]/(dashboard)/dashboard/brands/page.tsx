@@ -71,7 +71,9 @@ export default async function BrandsPage() {
   ]);
 
   const maxBrands = plan.limits.maxBrands;
-  const canAddBrand = maxBrands === -1 || brands.length < maxBrands;
+  // The demo brand (00380) never counts against the plan.
+  const ownBrands = brands.filter((b) => !b.isDemo).length;
+  const canAddBrand = maxBrands === -1 || ownBrands < maxBrands;
   const needsUpgrade = !canAddBrand && checkIsCloud();
 
   return (

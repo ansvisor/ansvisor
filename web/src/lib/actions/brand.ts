@@ -39,6 +39,7 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     conversionsEnabled: brand.conversions_enabled === true,
     conversionsConsent: brand.conversions_consent === 'always' ? 'always' : 'wait',
     isActive: brand.is_active === undefined ? true : !!brand.is_active,
+    isDemo: brand.is_demo === true,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
     updatedAt: brand.updated_at as string,
@@ -100,10 +101,12 @@ export type CreateBrandResult = { brand: Brand } | { error: string; code: 'plan_
 export async function createBrand(input: CreateBrandInput): Promise<CreateBrandResult> {
   const supabase = await createClient();
 
+  // The demo brand (00380) never counts against the plan.
   const { count } = await supabase
     .from('brands')
     .select('id', { count: 'exact', head: true })
-    .eq('organization_id', input.organizationId);
+    .eq('organization_id', input.organizationId)
+    .eq('is_demo', false);
 
   const plan = await getOrgPlan(input.organizationId);
   if (!isWithinLimit(plan, 'maxBrands', count ?? 0)) {

@@ -74,11 +74,12 @@ export async function GET(req: NextRequest) {
             console.error('[stripe/success] Plan-engine alignment threw:', alignErr);
           }
 
-          // Find first brand and trigger tracking via aeo-server
+          // Find first brand (never the demo brand, 00380) and trigger tracking via aeo-server
           const { data: brand } = await supabaseAdmin
             .from('brands')
             .select('id')
             .eq('organization_id', orgId)
+            .eq('is_demo', false)
             .order('created_at', { ascending: true })
             .limit(1)
             .single();

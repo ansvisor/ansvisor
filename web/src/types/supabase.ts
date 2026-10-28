@@ -691,6 +691,9 @@ export type Database = {
           conversions_consent: string
           conversions_enabled: boolean
           created_at: string
+          demo_built_at: string | null
+          demo_hidden_at: string | null
+          demo_version: number | null
           description: string | null
           ga_property_id: string | null
           gsc_pages_backfill_from: string | null
@@ -700,6 +703,7 @@ export type Database = {
           industry: string | null
           insights_pinned_competitors: string[]
           is_active: boolean
+          is_demo: boolean
           kpi_setup_at: string | null
           language: string | null
           logo_url: string | null
@@ -720,6 +724,9 @@ export type Database = {
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string
+          demo_built_at?: string | null
+          demo_hidden_at?: string | null
+          demo_version?: number | null
           description?: string | null
           ga_property_id?: string | null
           gsc_pages_backfill_from?: string | null
@@ -729,6 +736,7 @@ export type Database = {
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          is_demo?: boolean
           kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
@@ -749,6 +757,9 @@ export type Database = {
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string
+          demo_built_at?: string | null
+          demo_hidden_at?: string | null
+          demo_version?: number | null
           description?: string | null
           ga_property_id?: string | null
           gsc_pages_backfill_from?: string | null
@@ -758,6 +769,7 @@ export type Database = {
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          is_demo?: boolean
           kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
