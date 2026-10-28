@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * /api/settings/ai-providers: an organization's own keys for Chat, one per
@@ -7,12 +7,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 let user: { id: string } | null;
 let profile: { id: string; role: string; organization_id: string } | null;
+/** The organization's plan, read on the cloud before a change. */
+let org: { subscription_status: string; stripe_subscription_id: string };
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user } }) },
     from: () => ({
-      select: () => ({ eq: () => ({ single: async () => ({ data: profile }) }) }),
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: profile }),
+          // The plan check: the profile with its organization.
+          maybeSingle: async () => ({
+            data: profile && { ...profile, organizations: org },
+            error: null,
+          }),
+        }),
+      }),
     }),
   }),
 }));
@@ -67,6 +78,7 @@ const send = (method: string, body?: unknown) =>
 beforeEach(() => {
   user = { id: 'u1' };
   profile = { id: 'u1', role: 'admin', organization_id: 'org1' };
+  org = { subscription_status: 'active', stripe_subscription_id: 'sub_1' };
   queries.length = 0;
   results = [];
   rpc.mockReset().mockResolvedValue({ data: true, error: null });
@@ -254,5 +266,46 @@ describe('DELETE', () => {
 
   it('refuses an unknown provider', async () => {
     expect((await remove('copilot')).status).toBe(400);
+  });
+});
+
+describe('a read-only workspace (cloud, plan not active)', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    org = { subscription_status: 'canceled', stripe_subscription_id: 'sub_1' };
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('answers 402 subscription_inactive to saving or switching a key, and writes nothing', async () => {
+    for (const res of [
+      await PUT(send('PUT', { provider: 'openai', apiKey: KEY })),
+      await PATCH(send('PATCH', { provider: 'google' })),
+    ]) {
+      expect(res.status).toBe(402);
+      expect(await res.json()).toMatchObject({ code: 'subscription_inactive' });
+    }
+    expect(queries).toHaveLength(0);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('still removes a key: that takes back access', async () => {
+    const res = await DELETE(
+      new Request('http://localhost/api/settings/ai-providers?provider=openai', {
+        method: 'DELETE',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('remove_ai_provider_key', {
+      p_organization_id: 'org1',
+      p_provider: 'openai',
+    });
+  });
+
+  it('saves once the plan is active', async () => {
+    org = { subscription_status: 'trialing', stripe_subscription_id: 'sub_1' };
+    results = [{ error: null }];
+    expect((await PUT(send('PUT', { provider: 'openai', apiKey: KEY }))).status).toBe(200);
   });
 });
