@@ -474,6 +474,73 @@ export type Database = {
           },
         ]
       }
+      ai_traffic_events: {
+        Row: {
+          brand_id: string
+          currency: string | null
+          first_at: string
+          first_key: string | null
+          first_source: string
+          first_url: string
+          goal: string | null
+          id: string
+          kind: string
+          label: string | null
+          occurred_at: string
+          order_ref: string | null
+          origin: string | null
+          page_key: string | null
+          units: number | null
+          url: string
+          value: number | null
+          visitor_id: string
+        }
+        Insert: {
+          brand_id: string
+          currency?: string | null
+          first_at: string
+          first_source: string
+          first_url: string
+          goal?: string | null
+          id?: string
+          kind: string
+          label?: string | null
+          occurred_at?: string
+          order_ref?: string | null
+          origin?: string | null
+          units?: number | null
+          url: string
+          value?: number | null
+          visitor_id: string
+        }
+        Update: {
+          brand_id?: string
+          currency?: string | null
+          first_at?: string
+          first_source?: string
+          first_url?: string
+          goal?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          occurred_at?: string
+          order_ref?: string | null
+          origin?: string | null
+          units?: number | null
+          url?: string
+          value?: number | null
+          visitor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_traffic_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_traffic_logs: {
         Row: {
           brand_id: string

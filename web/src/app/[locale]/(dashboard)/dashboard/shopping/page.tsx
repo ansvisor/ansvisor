@@ -20,17 +20,10 @@ const DynamicShoppingTrendChart = dynamic(
 );
 import {
   ShoppingBag,
-  Store,
-  ArrowUpRight,
   Crown,
-  Lock,
   Download,
   ExternalLink,
   Layers,
-  Target,
-  Search,
-  Calendar,
-  Globe,
   AlertTriangle,
   HelpCircle,
 } from 'lucide-react';
@@ -44,15 +37,16 @@ import {
   getOwnProducts,
   getCompetitorProducts,
   getCompetitorSummary,
-  getCardEligiblePrompts,
+  getShoppingAiOrders,
+  getShoppingShelf,
   type ShoppingChartData,
   type ShoppingDatePreset,
   type ShoppingFilters,
   type ShoppingKpis,
   type ShoppingProduct,
   type CompetitorShoppingSummary,
-  type CardEligiblePromptRow,
-  type CardEligiblePromptsResponse,
+  type ShoppingAiOrders,
+  type ShoppingShelf,
 } from '@/lib/actions/shopping';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -66,7 +60,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Link } from '@/i18n/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -99,6 +92,7 @@ import { googleSourceStatus } from '@/lib/traffic-sources';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { CatalogNote } from './_catalog-note';
 import { ProductDataStrip, useProductSources } from './_data-strip';
+import { ShelfKpis, ShelfRows } from './_shelf';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { WhyDialog } from './_why-dialog';
 import { MerchantSplitCard } from './merchant_split_card';
@@ -111,20 +105,13 @@ import { useOpenAiIndex } from './use_openai_index';
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
 /** The page's tabs, the one open in the URL (?tab=products). */
-const SHOPPING_TABS = ['shelf', 'prompts', 'products', 'competitors'] as const;
+const SHOPPING_TABS = ['shelf', 'products', 'competitors'] as const;
 type ShoppingTab = (typeof SHOPPING_TABS)[number];
 
 // Theme tokens in globals.css ship as full oklch values; reference them
 // directly with var(--…). Wrapping in hsl() yields invalid CSS, so chart
 // text turns black on dark mode (lesson learned from #138).
 
-function getDomainName(url: string): string {
-  try {
-    return new URL(url).hostname.replace('www.', '');
-  } catch {
-    return url;
-  }
-}
 export default function ShoppingPage() {
   const t = useTranslations('shopping');
   const tCommon = useTranslations('common');
@@ -155,7 +142,8 @@ export default function ShoppingPage() {
   const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
   const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
   const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
-  const [promptsData, setPromptsData] = useState<CardEligiblePromptsResponse | null>(null);
+  const [shelf, setShelf] = useState<ShoppingShelf | 'failed' | null>(null);
+  const [orders, setOrders] = useState<ShoppingAiOrders | null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
   const [activeTab, setActiveTab] = useState<ShoppingTab>('shelf');
@@ -163,6 +151,10 @@ export default function ShoppingPage() {
   const sources = useProductSources(activeBrandId);
   const primaryDomain =
     activeBrand?.domains?.find((d) => d.isPrimary)?.domain ?? activeBrand?.domains?.[0]?.domain;
+  // Sales come from the tracking snippet (with the Shopify pixel) or GA.
+  const salesConnected =
+    !!sources.google &&
+    (!!sources.google.snippetLastVisitAt || googleSourceStatus(sources.google.ga) === 'connected');
   // Connect Google Analytics in the Why popup: while GA isn't connected.
   const offerGa =
     canManage && !!sources.google && googleSourceStatus(sources.google.ga) === 'not_connected';
@@ -233,7 +225,11 @@ export default function ShoppingPage() {
           getOwnProducts(activeBrandId, filters),
           getCompetitorProducts(activeBrandId, filters),
           getCompetitorSummary(activeBrandId, filters),
-          getCardEligiblePrompts(activeBrandId, filters),
+          // The Shelf reads on its own: a failure there leaves the rest.
+          getShoppingShelf(activeBrandId, filters).catch((err) => {
+            console.error('Failed to read the shelves:', err);
+            return 'failed' as const;
+          }),
         );
       }
 
@@ -247,7 +243,7 @@ export default function ShoppingPage() {
           setOwnProducts(results[1] as ShoppingProduct[]);
           setCompetitorProducts(results[2] as ShoppingProduct[]);
           setCompetitorSummary(results[3] as CompetitorShoppingSummary[]);
-          setPromptsData(results[4] as CardEligiblePromptsResponse);
+          setShelf(results[4] as ShoppingShelf | 'failed');
         }
       }
     } finally {
@@ -262,6 +258,22 @@ export default function ShoppingPage() {
     if (!shoppingMarket.ready) return;
     void loadData();
   }, [loadData, shoppingMarket.ready]);
+
+  // Orders from AI visits, the last 30 days whatever the filters (ECOM-006).
+  useEffect(() => {
+    if (!activeBrandId || !hasFullAccess) return;
+    let cancelled = false;
+    getShoppingAiOrders(activeBrandId)
+      .then((read) => {
+        if (!cancelled) setOrders(read);
+      })
+      .catch(() => {
+        if (!cancelled) setOrders(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, hasFullAccess]);
 
   // This alert always evaluates five consecutive rolling seven-day windows
   // ending at query time, independently of display/platform/region filters.
@@ -358,13 +370,6 @@ export default function ShoppingPage() {
         <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
       ) : (
         <>
-          <KpiGrid
-            t={t}
-            kpis={kpis}
-            loading={loading}
-            hasFullAccess={hasFullAccess}
-            triggerRate={promptsData?.triggerRate}
-          />
           <Tabs
             value={activeTab}
             onValueChange={(value) => changeTab(value as ShoppingTab)}
@@ -372,7 +377,6 @@ export default function ShoppingPage() {
           >
             <TabsList>
               <TabsTrigger value="shelf">{t('tabShelf')}</TabsTrigger>
-              <TabsTrigger value="prompts">{t('tabPrompts')}</TabsTrigger>
               <TabsTrigger value="products">{t('tabProducts')}</TabsTrigger>
               <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
             </TabsList>
@@ -380,6 +384,33 @@ export default function ShoppingPage() {
             <TabsContent value="shelf" className="space-y-6">
               {hasFullAccess ? (
                 <>
+                  {shelf === 'failed' && (
+                    <p
+                      role="alert"
+                      className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+                    >
+                      {t('shelf.failed')}
+                    </p>
+                  )}
+                  <ShelfKpis
+                    shelf={shelf === 'failed' ? null : shelf}
+                    orders={orders}
+                    salesConnected={salesConnected}
+                  />
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <MerchantSplitCard split={destinations.split} loading={destinationsLoading} />
+                    <ResellerPriceAlerts
+                      alerts={destinations.priceAlerts}
+                      loading={destinationsLoading}
+                    />
+                  </div>
+                  <ShelfRows
+                    shelf={tableLoading || shelf === 'failed' ? null : shelf}
+                    platforms={filterOpts.platforms}
+                    platform={platform}
+                    onPlatform={setPlatform}
+                  />
+                  <h2 className="pt-2 text-sm font-semibold">{t('shelf.trends')}</h2>
                   <div className="grid gap-4 lg:grid-cols-2">
                     <PlatformCardRateChart
                       t={t}
@@ -392,13 +423,6 @@ export default function ShoppingPage() {
                       loading={loading}
                     />
                   </div>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <MerchantSplitCard split={destinations.split} loading={destinationsLoading} />
-                    <ResellerPriceAlerts
-                      alerts={destinations.priceAlerts}
-                      loading={destinationsLoading}
-                    />
-                  </div>
                   {showOpenAiIndex && (
                     <OpenAiIndexCard
                       read={openAiIndex.read}
@@ -408,19 +432,6 @@ export default function ShoppingPage() {
                     />
                   )}
                 </>
-              ) : (
-                <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
-              )}
-            </TabsContent>
-
-            <TabsContent value="prompts" className="space-y-6">
-              {hasFullAccess ? (
-                <PromptsTabContent
-                  t={t}
-                  brandId={activeBrandId}
-                  promptsData={promptsData}
-                  loading={tableLoading}
-                />
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}
@@ -572,311 +583,6 @@ export default function ShoppingPage() {
   );
 }
 
-function PromptsTabContent({
-  t,
-  brandId,
-  promptsData,
-  loading,
-}: {
-  t: ReturnType<typeof useTranslations<'shopping'>>;
-  brandId: string;
-  promptsData: CardEligiblePromptsResponse | null;
-  loading: boolean;
-}) {
-  const tCommon = useTranslations('common');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPrompt, setSelectedPrompt] = useState<CardEligiblePromptRow | null>(null);
-
-  const brand = useBrandStore((s) => s.brands.find((b) => b.id === brandId) ?? null);
-  const brandSlug = brand?.slug || brandId;
-
-  const filteredPrompts = useMemo(() => {
-    if (!promptsData?.prompts) return [];
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return promptsData.prompts;
-    return promptsData.prompts.filter(
-      (p) => p.promptText.toLowerCase().includes(q) || p.topic.toLowerCase().includes(q),
-    );
-  }, [promptsData, searchQuery]);
-
-  const handleExportCsv = useCallback(() => {
-    if (!promptsData?.prompts.length) return;
-    const exportRows = promptsData.prompts.map((p) => ({
-      prompt: p.promptText,
-      topic: p.topic,
-      platforms: p.platforms.join('; '),
-      total_cards: p.totalCards,
-      own_cards: p.ownCardsCount,
-      competitor_cards: p.competitorCardsCount,
-      other_cards: p.otherCardsCount,
-      last_seen: p.lastTriggered ? p.lastTriggered.slice(0, 10) : '—',
-    }));
-    const headers = [
-      'prompt',
-      'topic',
-      'platforms',
-      'total_cards',
-      'own_cards',
-      'competitor_cards',
-      'other_cards',
-      'last_seen',
-    ];
-    const csv = toCsv(exportRows, headers);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    const date = new Date().toISOString().slice(0, 10);
-    link.setAttribute('download', `ansvisor_${brandSlug}_shopping_prompts_${date}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [promptsData, brandSlug]);
-
-  if (loading && !promptsData) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <Skeleton className="h-9 w-64" />
-          <Skeleton className="h-9 w-32" />
-        </div>
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={t('searchPrompts')}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExportCsv}
-          disabled={!promptsData?.prompts.length}
-          className="gap-1.5"
-        >
-          <Download className="h-3.5 w-3.5" />
-          {tCommon('exportCsv')}
-        </Button>
-      </div>
-
-      <div className="rounded-md border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('tablePrompt')}</TableHead>
-              <TableHead>{t('tableTopic')}</TableHead>
-              <TableHead>{t('tablePlatforms')}</TableHead>
-              <TableHead className="text-right">{t('tableTotalCards')}</TableHead>
-              <TableHead className="w-[120px]">{t('tableSplitBar')}</TableHead>
-              <TableHead className="text-right">{t('tableLastSeen')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  {t('common.loading')}
-                </TableCell>
-              </TableRow>
-            ) : filteredPrompts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
-                  <div className="flex flex-col items-center justify-center text-muted-foreground">
-                    <ShoppingBag className="h-8 w-8 opacity-40 mb-2" />
-                    <p className="font-medium text-sm">{t('noPromptsFound')}</p>
-                    <p className="text-xs mt-1">{t('noPromptsFoundSub')}</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredPrompts.map((row) => {
-                const ownPct = row.totalCards > 0 ? (row.ownCardsCount / row.totalCards) * 100 : 0;
-                const compPct =
-                  row.totalCards > 0 ? (row.competitorCardsCount / row.totalCards) * 100 : 0;
-                const otherPct =
-                  row.totalCards > 0 ? (row.otherCardsCount / row.totalCards) * 100 : 0;
-
-                return (
-                  <TableRow
-                    key={row.promptId}
-                    className="cursor-pointer transition-colors hover:bg-muted/50"
-                    onClick={() => setSelectedPrompt(row)}
-                  >
-                    <TableCell className="max-w-[320px]">
-                      <Link
-                        href={`/dashboard/prompts/${row.promptId}`}
-                        className="font-medium text-primary hover:underline block truncate"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {row.promptText}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {row.topic}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {row.platforms.map((p) => (
-                          <AIProviderAvatar
-                            key={p}
-                            provider={resolveAIProvider(p)}
-                            className="h-5 w-5 border"
-                          />
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {formatNumber(row.totalCards)}
-                    </TableCell>
-                    <TableCell>
-                      <div
-                        className="flex h-2 w-24 overflow-hidden rounded-full bg-muted-foreground/10"
-                        title={`Own: ${row.ownCardsCount}, Competitors: ${row.competitorCardsCount}, Other: ${row.otherCardsCount}`}
-                      >
-                        {ownPct > 0 && (
-                          <div className="h-full bg-primary" style={{ width: `${ownPct}%` }} />
-                        )}
-                        {compPct > 0 && (
-                          <div className="h-full bg-orange-500" style={{ width: `${compPct}%` }} />
-                        )}
-                        {otherPct > 0 && (
-                          <div
-                            className="h-full bg-muted-foreground/40"
-                            style={{ width: `${otherPct}%` }}
-                          />
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
-                      {row.lastTriggered ? row.lastTriggered.slice(0, 10) : '—'}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <Sheet open={!!selectedPrompt} onOpenChange={(open) => !open && setSelectedPrompt(null)}>
-        <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-md overflow-y-auto px-4">
-          <SheetHeader className="pb-4 border-b">
-            <SheetTitle>{t('drawerTitle')}</SheetTitle>
-            <SheetDescription>{t('drawerSubtitle')}</SheetDescription>
-          </SheetHeader>
-          {selectedPrompt && (
-            <div className="space-y-6 py-4">
-              <div>
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                  {t('tablePrompt')}
-                </h4>
-                <p className="text-sm font-medium text-foreground bg-muted/30 rounded-lg p-3 border">
-                  {selectedPrompt.promptText}
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {selectedPrompt.appearances.map((app) => (
-                  <div key={app.promptResultId} className="rounded-lg border bg-card p-4 space-y-3">
-                    <div className="flex items-center justify-between border-b pb-2 text-xs">
-                      <div className="flex items-center gap-1.5 font-medium text-foreground">
-                        <AIProviderAvatar
-                          provider={resolveAIProvider(app.platform)}
-                          className="h-4.5 w-4.5"
-                        />
-                        <span>{getAIProviderDisplayName(resolveAIProvider(app.platform))}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-muted-foreground">
-                        {app.region && (
-                          <span className="flex items-center gap-1">
-                            <Globe className="h-3 w-3" />
-                            {app.region}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(app.timestamp).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                        {t('drawerCardsTitle')} ({app.cards.length})
-                      </h5>
-                      <div className="grid gap-2">
-                        {app.cards.map((card) => (
-                          <div
-                            key={card.id}
-                            className="flex gap-3 rounded-md border bg-muted/10 p-2 text-xs"
-                          >
-                            {card.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element -- product images come from arbitrary merchant domains; next/image remotePatterns would need an open-ended wildcard
-                              <img
-                                src={card.imageUrl}
-                                alt=""
-                                className="h-12 w-12 rounded border object-contain bg-white shrink-0"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                              />
-                            ) : null}
-                            <div className="flex flex-1 flex-col justify-between min-w-0">
-                              <span className="font-medium text-foreground line-clamp-1">
-                                {card.title}
-                              </span>
-                              <div className="flex items-center justify-between mt-1 text-muted-foreground">
-                                <span className="font-semibold text-foreground">{card.price}</span>
-                                {card.merchantUrl && (
-                                  <a
-                                    href={card.merchantUrl}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    className="inline-flex items-center gap-0.5 hover:text-primary transition-colors"
-                                  >
-                                    <span>{getDomainName(card.merchantUrl)}</span>
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-    </div>
-  );
-}
-
 // ── Header ────────────────────────────────────────────────────────────────────
 
 /** The title, with "Why Ansvisor Product Visibility?" beside it (ECOM-010). */
@@ -1001,111 +707,6 @@ function FilterField({ label, children }: { label: string; children: React.React
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
-  );
-}
-
-// ── KPI grid ──────────────────────────────────────────────────────────────────
-
-function KpiGrid({
-  t,
-  kpis,
-  loading,
-  hasFullAccess,
-  triggerRate,
-}: {
-  t: ReturnType<typeof useTranslations<'shopping'>>;
-  kpis: ShoppingKpis | null;
-  loading: boolean;
-  hasFullAccess: boolean;
-  triggerRate?: number;
-}) {
-  if (loading && !kpis) {
-    return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-[104px]" />
-        ))}
-      </div>
-    );
-  }
-
-  const cardRate = kpis?.shoppingCardRate ?? 0;
-  const productsSurfaced = kpis?.productsSurfaced ?? 0;
-  const sov = kpis?.shoppingSov ?? 0;
-  const merchant = kpis?.topMerchant;
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      <KpiCard
-        title={t('kpiCardRate')}
-        value={formatPercent(cardRate)}
-        subtitle={t('kpiCardRateSub')}
-        icon={ShoppingBag}
-      />
-      <KpiCard
-        title={t('kpiTriggerRate')}
-        value={triggerRate !== undefined ? formatPercent(triggerRate) : '—'}
-        subtitle={t('kpiTriggerRateSub')}
-        icon={Target}
-        locked={!hasFullAccess}
-      />
-      <KpiCard
-        title={t('kpiOwnProducts')}
-        value={formatNumber(productsSurfaced)}
-        subtitle={t('kpiOwnProductsSub')}
-        icon={ArrowUpRight}
-        locked={!hasFullAccess}
-      />
-      <KpiCard
-        title={t('kpiSov')}
-        value={formatPercent(sov)}
-        subtitle={t('kpiSovSub')}
-        icon={Crown}
-        locked={!hasFullAccess}
-      />
-      <KpiCard
-        title={t('kpiTopMerchant')}
-        value={merchant?.domain ?? '—'}
-        subtitle={
-          merchant
-            ? `${merchant.cardCount} card${merchant.cardCount === 1 ? '' : 's'}`
-            : t('kpiTopMerchantSub')
-        }
-        icon={Store}
-        locked={!hasFullAccess}
-      />
-    </div>
-  );
-}
-
-function KpiCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  locked = false,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: React.ComponentType<{ className?: string }>;
-  locked?: boolean;
-}) {
-  return (
-    <Card className={locked ? 'opacity-70' : ''}>
-      <CardContent className="space-y-2 p-4">
-        <div className="flex items-start justify-between">
-          <span className="text-xs font-medium text-muted-foreground">{title}</span>
-          {locked ? (
-            <Lock className="h-4 w-4 text-muted-foreground/60" />
-          ) : (
-            <Icon className="h-4 w-4 text-muted-foreground" />
-          )}
-        </div>
-        <p className="truncate text-2xl font-bold">{locked ? '—' : value}</p>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-      </CardContent>
-    </Card>
   );
 }
 

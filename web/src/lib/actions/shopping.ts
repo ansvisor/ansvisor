@@ -10,6 +10,13 @@ import { z } from 'zod';
 import { marketRegionCodes, type ShoppingMarket } from '@/lib/shopping/markets';
 import { matchScores, missingWords, queryTerms, sameProduct } from '@/lib/shopping/match-score';
 import {
+  buildShelf,
+  shelfStats,
+  type ShelfCardRow,
+  type ShelfRow,
+  type ShelfStats,
+} from '@/lib/shopping/shelf';
+import {
   toMerchantSplit,
   type MerchantSplitRow,
   type ShoppingMerchantSplit,
@@ -1070,5 +1077,147 @@ export async function getCardEligiblePrompts(
     prompts: promptsList,
     triggerRate,
     totalTrackedPrompts: totalTracked,
+  };
+}
+
+// ── Shelf (Product Visibility, ECOM-006) ──────────────────────────────────────
+
+const SHELF_CARD_COLUMNS = `
+      prompt_result_id,
+      position,
+      created_at,
+      platform,
+      product_title,
+      price_amount,
+      price_currency,
+      image_url,
+      merchant_domain,
+      rating,
+      review_count,
+      matched_brand_role,
+      merchant_kind,
+      marketplace,
+      catalog_product_id,
+      prompt_results:prompt_result_id (
+        prompt:prompt_id (
+          id,
+          text
+        )
+      )
+    `;
+
+export interface ShoppingShelf {
+  rows: ShelfRow[];
+  stats: ShelfStats;
+  /** The brand's live catalog products, or null when it has no catalog. */
+  catalogProducts: number | null;
+}
+
+/**
+ * The Shelf over the filter window: each question's latest shelf per
+ * channel, the brand's share of the product slots and its products on them,
+ * against the catalog's count.
+ */
+export async function getShoppingShelf(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<ShoppingShelf> {
+  const supabase = await createClient();
+  const [rows, catalog] = await Promise.all([
+    fetchAllCards<
+      Omit<ShelfCardRow, 'prompt_id' | 'prompt_text'> & {
+        prompt_results: { prompt: { id: string; text: string } | null } | null;
+      }
+    >(() => cardsInWindow(supabase, brandId, filters, SHELF_CARD_COLUMNS)),
+    supabase
+      .from('catalog_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .is('removed_at', null),
+  ]);
+  if (catalog.error) throw new Error(catalog.error.message);
+  const cards: ShelfCardRow[] = rows.map(({ prompt_results, ...card }) => ({
+    ...card,
+    prompt_id: prompt_results?.prompt?.id ?? null,
+    prompt_text: prompt_results?.prompt?.text ?? null,
+  }));
+  return {
+    rows: buildShelf(cards),
+    stats: shelfStats(cards),
+    catalogProducts: catalog.count ? catalog.count : null,
+  };
+}
+
+/** Orders from AI visits (CE-017): the last 30 days, the 30 before, and by AI channel. */
+export interface ShoppingAiOrders {
+  orders: number;
+  previousOrders: number;
+  /** The month's order value in its main currency, or null with no value. */
+  revenue: { value: number; currency: string | null } | null;
+  /** The 30 days before's, in the same currency. */
+  previousRevenue: number | null;
+  /** Orders by the AI source that first brought the visitor, most first. */
+  channels: { source: string; orders: number }[];
+}
+
+const ORDERS_DAYS = 30;
+const ORDER_PAGE = 1000;
+const ORDER_MAX_ROWS = 50_000;
+
+/**
+ * The brand's orders from AI visits, as the tracking snippet and the Shopify
+ * pixel record them (ai_traffic_events, 00286): a conversion with goal
+ * 'order', credited to the AI source that first brought the visitor.
+ */
+export async function getShoppingAiOrders(brandId: string): Promise<ShoppingAiOrders> {
+  const supabase = await createClient();
+  const now = Date.now();
+  const since = new Date(now - 2 * ORDERS_DAYS * 86_400_000).toISOString();
+  const split = new Date(now - ORDERS_DAYS * 86_400_000).toISOString();
+  const rows: {
+    value: number | null;
+    currency: string | null;
+    first_source: string;
+    occurred_at: string;
+  }[] = [];
+  for (let start = 0; start < ORDER_MAX_ROWS; start += ORDER_PAGE) {
+    const { data, error } = await supabase
+      .from('ai_traffic_events')
+      .select('value, currency, first_source, occurred_at')
+      .eq('brand_id', brandId)
+      .eq('kind', 'conversion')
+      .eq('goal', 'order')
+      .gte('occurred_at', since)
+      .order('occurred_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(start, start + ORDER_PAGE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as typeof rows));
+    if ((data ?? []).length < ORDER_PAGE) break;
+  }
+  const current = rows.filter((row) => row.occurred_at >= split);
+  const previous = rows.filter((row) => row.occurred_at < split);
+  // The currency most of the month's valued orders are in.
+  const counts = new Map<string, number>();
+  for (const row of current) {
+    if (row.value !== null)
+      counts.set(row.currency ?? '', (counts.get(row.currency ?? '') ?? 0) + 1);
+  }
+  const main = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const sum = (list: typeof rows) =>
+    list
+      .filter((row) => row.value !== null && (row.currency ?? '') === main)
+      .reduce((total, row) => total + Number(row.value), 0);
+  const channels = new Map<string, number>();
+  for (const row of current)
+    channels.set(row.first_source, (channels.get(row.first_source) ?? 0) + 1);
+  return {
+    orders: current.length,
+    previousOrders: previous.length,
+    revenue: main === undefined ? null : { value: sum(current), currency: main || null },
+    previousRevenue: main === undefined ? null : sum(previous),
+    channels: [...channels]
+      .map(([source, orders]) => ({ source, orders }))
+      .sort((a, b) => b.orders - a.orders || a.source.localeCompare(b.source)),
   };
 }
