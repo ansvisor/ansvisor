@@ -23,6 +23,15 @@ function compareBy(orders) {
   };
 }
 
+/** The rows deleted with a row of these tables (on delete cascade, 00278): table, column. */
+const CASCADES = {
+  catalog_products: [
+    ['catalog_variants', 'product_id'],
+    ['catalog_images', 'product_id'],
+    ['catalog_product_categories', 'product_id'],
+  ],
+};
+
 /**
  * An in-memory stand-in for the tables the catalog writes, with PostgREST's
  * calls as the sync and the sources make them, counting every write.
@@ -69,6 +78,8 @@ export function fakeDb({ maxRows = Infinity } = {}) {
           if (kind === 'neq') return at !== value;
           if (kind === 'is') return value === null ? at == null : at === value;
           if (kind === 'not_is') return value === null ? at != null : at !== value;
+          // SQL's: a null is never less.
+          if (kind === 'lt') return at != null && at < value;
           return value.includes(at);
         });
       if (state.op === 'select') {
@@ -109,11 +120,19 @@ export function fakeDb({ maxRows = Infinity } = {}) {
         return { data: state.returning ? changed : null, error: null };
       }
       if (state.op === 'delete') {
+        const deleted = all.filter(match);
         tables.set(
           table,
           all.filter((row) => !match(row)),
         );
-        return { data: null, error: null };
+        const ids = new Set(deleted.map((row) => row.id));
+        for (const [child, column] of CASCADES[table] ?? []) {
+          tables.set(
+            child,
+            rows(child).filter((row) => !ids.has(row[column])),
+          );
+        }
+        return { data: state.returning ? deleted : null, error: null };
       }
       throw new Error(`unexpected ${state.op}`);
     };
@@ -139,6 +158,10 @@ export function fakeDb({ maxRows = Infinity } = {}) {
       not: (column, operator, value) => {
         if (operator !== 'is') throw new Error(`unexpected not.${operator}`);
         state.filters.push(['not_is', column, value]);
+        return builder;
+      },
+      lt: (column, value) => {
+        state.filters.push(['lt', column, value]);
         return builder;
       },
       single: () => {
