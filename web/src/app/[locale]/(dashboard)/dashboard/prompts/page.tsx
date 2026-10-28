@@ -141,6 +141,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import {
   MODEL_GROUPS,
   ALL_MODELS,
@@ -1307,6 +1309,13 @@ export default function PromptsPage() {
   const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(null);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): adding, editing and the volume
+  // runs open the upgrade dialog instead.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
+  const failureToast = useFailureToast();
+  const openAddPrompt = guard(() => setAddPromptOpen(true), { action: tActions('addPrompts') });
 
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const tCommon = useTranslations('common');
@@ -1519,7 +1528,9 @@ export default function PromptsPage() {
         setAllPrompts(prompts);
         setVisibility(page.visibility);
         setPositions(page.positions);
-        if (page.volumesDegraded) {
+        // A read-only workspace's volumes are refused (402): their columns
+        // stay empty, without a warning that something broke.
+        if (page.volumesDegraded && !isLocked) {
           toast.warning('Volume data is temporarily unavailable — showing prompts without it.');
         }
         if (page.visibilityDegraded) toast.warning(tPrompts('visibilityDegraded'));
@@ -1532,7 +1543,7 @@ export default function PromptsPage() {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter, tPrompts],
+    [activeBrandId, range, regionFilter, tPrompts, isLocked],
   );
 
   useEffect(() => {
@@ -1691,12 +1702,17 @@ export default function PromptsPage() {
       const started = await startPromptVolumeAnalysis(activeBrandId, force);
 
       if (!started.ok) {
-        toast.error(
-          volumeErrorMessage(
-            started.code,
-            'Volume analysis could not be started. Please try again.',
-          ),
-        );
+        // The plan ended meanwhile: the upgrade dialog, not "not in your plan".
+        if (started.code === 'subscription_inactive') {
+          failureToast('subscription');
+        } else {
+          toast.error(
+            volumeErrorMessage(
+              started.code,
+              'Volume analysis could not be started. Please try again.',
+            ),
+          );
+        }
         return;
       }
 
@@ -1741,7 +1757,9 @@ export default function PromptsPage() {
     }
   };
 
-  const handleAnalyzeNew = () => runVolumeAnalysis(false);
+  const handleAnalyzeNew = guard(() => runVolumeAnalysis(false), {
+    action: tActions('analyzePrompts'),
+  });
 
   const handleRefreshVolumes = async () => {
     if (!activeBrandId || volumes.length === 0) return;
@@ -1750,9 +1768,13 @@ export default function PromptsPage() {
     try {
       const result = await refreshVolumes(activeBrandId);
       if (!result.ok) {
-        toast.error(
-          volumeErrorMessage(result.code, 'Volumes could not be refreshed. Please try again.'),
-        );
+        if (result.code === 'subscription_inactive') {
+          failureToast('subscription');
+        } else {
+          toast.error(
+            volumeErrorMessage(result.code, 'Volumes could not be refreshed. Please try again.'),
+          );
+        }
         return;
       }
       if (result.remaining !== undefined && quota) {
@@ -1772,7 +1794,9 @@ export default function PromptsPage() {
     }
   };
 
-  const handleReanalyzeAll = () => runVolumeAnalysis(true);
+  const handleReanalyzeAll = guard(() => runVolumeAnalysis(true), {
+    action: tActions('analyzePrompts'),
+  });
 
   // Each volume as an estimate: a range and how sure it is (PROMPT-013).
   const estimateByPromptId = useMemo(() => {
@@ -1800,7 +1824,10 @@ export default function PromptsPage() {
       v.intent.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
+  // Without an active plan the quota reads 0 of 0: not used up. The analyses
+  // stay clickable, and open the plan dialog.
+  const noPlan = isNoPlan(quota, isLocked);
+  const quotaExhausted = !noPlan && quota !== null && quota.limit !== -1 && quota.remaining <= 0;
 
   // Reads "Analyzing 32/100..." once the first poll lands, so a run measured in
   // minutes shows movement instead of an indefinite spinner. A count is only
@@ -1915,12 +1942,7 @@ export default function PromptsPage() {
                 them in this row's flex and gap. */}
             <div ref={setHeaderActions} className="contents" />
             {tab === 'all' && canManage && (
-              <Button
-                type="button"
-                size="sm"
-                className="gap-2"
-                onClick={() => setAddPromptOpen(true)}
-              >
+              <Button type="button" size="sm" className="gap-2" onClick={openAddPrompt}>
                 <Plus className="h-4 w-4" />
                 Add prompt
               </Button>
@@ -2124,8 +2146,14 @@ export default function PromptsPage() {
                 regionFilter={regionFilter}
                 statusFilter={statusFilter}
                 onStatusFilterChange={setStatusFilter}
-                onAddPrompt={canManage ? () => setAddPromptOpen(true) : undefined}
-                onEditPrompt={canManage ? setEditingPrompt : undefined}
+                onAddPrompt={canManage ? openAddPrompt : undefined}
+                onEditPrompt={
+                  canManage
+                    ? guard((prompt: Prompt) => setEditingPrompt(prompt), {
+                        action: tActions('editPrompts'),
+                      })
+                    : undefined
+                }
                 onChanged={reloadAfterChange}
               />
             </>
@@ -2169,13 +2197,13 @@ export default function PromptsPage() {
                   quotaExhausted ? 'text-red-500' : 'text-muted-foreground',
                 )}
               >
-                {quota.remaining}/{quota.limit} analyses left
+                {noPlan ? tReadOnly('noPlan') : `${quota.remaining}/${quota.limit} analyses left`}
               </span>
             )}
             {volumes.length > 0 && (
               <>
                 <Button
-                  onClick={handleRefreshVolumes}
+                  onClick={guard(handleRefreshVolumes, { action: tActions('refreshVolumes') })}
                   disabled={refreshing || analyzing || loading || quotaExhausted}
                   size="sm"
                   variant="outline"
@@ -2261,7 +2289,9 @@ export default function PromptsPage() {
                     )}
                     {quota && quota.limit !== -1 && !quotaExhausted && (
                       <p className="text-xs text-muted-foreground">
-                        {quota.remaining}/{quota.limit} analyses remaining this month
+                        {noPlan
+                          ? tReadOnly('noPlan')
+                          : `${quota.remaining}/${quota.limit} analyses remaining this month`}
                       </p>
                     )}
                   </>
@@ -2637,6 +2667,7 @@ function RowActionsMenu({
   onSuggestContent,
   onOpenSuggestion,
   suggesting,
+  noPlan,
   suggestDisabledReason,
   onCreateContent,
   onDelete,
@@ -2652,6 +2683,8 @@ function RowActionsMenu({
   onOpenSuggestion: (opportunityId: string) => void;
   /** A suggestion for this prompt is being written. */
   suggesting: boolean;
+  /** No active plan (read-only): Suggest content opens the plan dialog; a written suggestion still opens. */
+  noPlan: boolean;
   /** Why Suggest content can't run now (the month's quota is used up, or a bulk run is going). */
   suggestDisabledReason: string | null;
   /** Opens New content › Start for a new page for this prompt. */
@@ -2660,9 +2693,11 @@ function RowActionsMenu({
 }) {
   const t = useTranslations('prompts.content');
   const router = useRouter();
-  // With the month's quota used up, a prompt that already has a suggestion
-  // can still open it, which costs nothing; the menu asks as it opens.
+  // With the month's quota used up, or without an active plan, a prompt that
+  // already has a suggestion can still open it, which costs nothing; the menu
+  // asks as it opens.
   const [openSuggestionId, setOpenSuggestionId] = useState<string | null>(null);
+  const canOpenSuggestion = suggestDisabledReason !== null || noPlan;
   // A draft already being written for the prompt opens instead of a second
   // one; undefined while the menu asks.
   const [draftId, setDraftId] = useState<string | null | undefined>(undefined);
@@ -2670,7 +2705,7 @@ function RowActionsMenu({
     if (!open) return;
     setDraftId(undefined);
     getDraftForPrompt(brandId, prompt.id).then(setDraftId, () => setDraftId(null));
-    if (suggestDisabledReason === null) return;
+    if (!canOpenSuggestion) return;
     getOpenSuggestionForPrompt(prompt.id).then(setOpenSuggestionId, () =>
       setOpenSuggestionId(null),
     );
@@ -2697,7 +2732,7 @@ function RowActionsMenu({
           <TrendingUp className="h-3.5 w-3.5" />
           Improve position…
         </DropdownMenuItem>
-        {suggestDisabledReason !== null && openSuggestionId ? (
+        {canOpenSuggestion && openSuggestionId ? (
           <DropdownMenuItem className="gap-2" onClick={() => onOpenSuggestion(openSuggestionId)}>
             <Lightbulb className="h-3.5 w-3.5" />
             Open content suggestion
@@ -2845,6 +2880,10 @@ function AllPromptsTab({
   const tColumns = useTranslations('prompts.columns');
   const tTips = useTranslations('prompts.columns.tips');
   const now = useNow({ updateInterval: 60_000 }).getTime();
+  // A read-only workspace (plan not active): the row menu's and the bulk
+  // bar's actions open the upgrade dialog instead.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const { canManage } = useUserRole();
   const brandName = useBrandStore(
     (st) => st.brands.find((b) => b.id === activeBrandId)?.name ?? '',
@@ -3089,8 +3128,11 @@ function AllPromptsTab({
   }, [activeBrandId, usageVersion]);
   const hasOpportunityLimit =
     hasContentQuota(contentUsage) && contentUsage.opportunities.limit !== -1;
+  // Without an active plan the quota reads 0 of 0: Suggest content stays
+  // clickable, and opens the plan dialog.
+  const contentNoPlan = isNoPlan(contentUsage, isLocked);
   const suggestDisabledReason =
-    hasOpportunityLimit && contentUsage.opportunities.remaining <= 0
+    hasOpportunityLimit && !contentNoPlan && contentUsage.opportunities.remaining <= 0
       ? contentUsage.periodEnd
         ? `Limit reached · resets ${new Date(contentUsage.periodEnd).toLocaleDateString('en-US', {
             month: 'short',
@@ -3798,13 +3840,22 @@ function AllPromptsTab({
                 ? 'Wait for the suggestion being written'
                 : bulkSuggestBlock(selectedPrompts.length, contentUsage, {
                     unavailable: contentUsageFailed,
+                    isLocked,
                   }))
             }
             deleting={showDeleteProgress ? deleteProgress : null}
-            onPause={() => void setActiveFor(selectedPrompts, false)}
-            onResume={() => void setActiveFor(selectedPrompts, true)}
-            onSuggestContent={() => void suggestFor(selectedPrompts)}
-            onDelete={() => setConfirmDelete(selectedPrompts)}
+            onPause={guard(() => void setActiveFor(selectedPrompts, false), {
+              action: tActions('pausePrompts'),
+            })}
+            onResume={guard(() => void setActiveFor(selectedPrompts, true), {
+              action: tActions('resumePrompts'),
+            })}
+            onSuggestContent={guard(() => void suggestFor(selectedPrompts), {
+              action: tActions('suggestContent'),
+            })}
+            onDelete={guard(() => setConfirmDelete(selectedPrompts), {
+              action: tActions('deletePrompts'),
+            })}
             onClear={() => setSelectedIds(new Set())}
           />
         )}
@@ -3875,7 +3926,13 @@ function AllPromptsTab({
                     <div className="inline-flex flex-col items-center gap-0.5">
                       <WorkStatusBadge
                         status={statusOf(p)}
-                        onChange={onEditPrompt ? (s) => handleStatusChange(p, s) : undefined}
+                        onChange={
+                          onEditPrompt
+                            ? guard((s: PromptWorkStatus | null) => handleStatusChange(p, s), {
+                                action: tActions('setWorkStatus'),
+                              })
+                            : undefined
+                        }
                       />
                       {p.targetUrlCount > 0 && (
                         <span
@@ -4053,24 +4110,33 @@ function AllPromptsTab({
                         prompt={p}
                         brandId={activeBrandId}
                         onEdit={() => onEditPrompt(p)}
-                        onToggleActive={() => void toggleActive(p)}
+                        onToggleActive={guard(() => void toggleActive(p), {
+                          action: tActions(p.isActive ? 'pausePrompts' : 'resumePrompts'),
+                        })}
                         onImprove={() => openPositionsPanel(p.id, 'improve')}
-                        onSuggestContent={() => void suggestContent(p)}
+                        onSuggestContent={guard(() => void suggestContent(p), {
+                          action: tActions('suggestContent'),
+                        })}
                         onOpenSuggestion={openOpportunity}
                         suggesting={suggestingIds.has(p.id)}
+                        noPlan={contentNoPlan}
                         suggestDisabledReason={
                           suggestDisabledReason ??
                           (bulkSuggesting ? 'Wait for the selected prompts' : null)
                         }
-                        onCreateContent={() =>
-                          setContentPreset({
-                            kind: 'prompt',
-                            id: p.id,
-                            text: p.text,
-                            method: 'create',
-                          })
-                        }
-                        onDelete={() => setConfirmDelete([p])}
+                        onCreateContent={guard(
+                          () =>
+                            setContentPreset({
+                              kind: 'prompt',
+                              id: p.id,
+                              text: p.text,
+                              method: 'create',
+                            }),
+                          { action: tActions('createContent') },
+                        )}
+                        onDelete={guard(() => setConfirmDelete([p]), {
+                          action: tActions('deletePrompts'),
+                        })}
                       />
                     </TableCell>
                   )}

@@ -9,6 +9,7 @@ import {
   categoryPages,
   setCategoryPage,
 } from '../lib/catalog/category-pages.js';
+import { matchBrandLater } from '../lib/catalog/card-match.js';
 import { credentialsConfigured } from '../lib/catalog/credentials.js';
 import { syncSource } from '../lib/catalog/sources.js';
 import {
@@ -47,6 +48,9 @@ import { catalogCategoryLimiter, catalogLimiter } from '../middleware/rate-limit
  *     ?brandId=…&category=… puts it back to the automatic match;
  *   - DELETE /api/catalog/sources/:id: a store removed, with its sign-in and
  *     its products.
+ *
+ * A sync here that reads the catalog has the brand's AI shopping cards
+ * matched to it right after, without waiting (matchAfter).
  */
 
 const router = Router();
@@ -117,11 +121,23 @@ async function sourceById(id) {
   return data ?? null;
 }
 
+/**
+ * After a sync that read the catalog, the brand's recent AI shopping cards
+ * matched to it in the background (card-match.js): the daily sweep would
+ * match them only the next day, and the Shelf would count none of the
+ * brand's products until then.
+ */
+function matchAfter(source, outcome) {
+  if (outcome?.status === 'ok') matchBrandLater(source.brand_id);
+}
+
 /** A store's first read, or its read after a new sign-in: not waited on, recorded on its row. */
 function syncLater(req, source) {
-  syncSource(source).catch((err) =>
-    req.log.error({ err: { name: err?.name }, sourceId: source.id }, 'catalog store sync error'),
-  );
+  syncSource(source)
+    .then((outcome) => matchAfter(source, outcome))
+    .catch((err) =>
+      req.log.error({ err: { name: err?.name }, sourceId: source.id }, 'catalog store sync error'),
+    );
 }
 
 // GET /api/catalog/connectors — the stores a person can connect, and the sign-in platforms.
@@ -218,7 +234,9 @@ router.post('/sources/:id/sync', catalogLimiter, async (req, res) => {
     if (source.last_synced_at && Date.now() - Date.parse(source.last_synced_at) < RESYNC_AFTER_MS) {
       return res.status(409).json({ error: 'Synced a moment ago', code: 'recent' });
     }
-    return res.json(outcomeBody(await syncSource(source)));
+    const outcome = await syncSource(source);
+    matchAfter(source, outcome);
+    return res.json(outcomeBody(outcome));
   } catch (err) {
     return fail(req, res, err, 'catalog sync error');
   }
@@ -317,7 +335,9 @@ router.post(
         await supabaseAdmin.from('catalog_sources').update({ format }).eq('id', source.id);
         source = { ...source, format };
       }
-      return res.json(outcomeBody(await syncSource(source, { text: req.body })));
+      const outcome = await syncSource(source, { text: req.body });
+      matchAfter(source, outcome);
+      return res.json(outcomeBody(outcome));
     } catch (err) {
       return fail(req, res, err, 'catalog upload error');
     }
