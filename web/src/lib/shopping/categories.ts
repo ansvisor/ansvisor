@@ -81,6 +81,26 @@ export function categoryLeaf(name: string): string {
   ).trim();
 }
 
+/** A rival on a question's shelves: its slots, and the card that named it first (`at`). */
+interface RivalSlots {
+  name: string;
+  domain: string | null;
+  slots: number;
+  at: number;
+}
+
+/** A question's shelves, counted once for every category it's in. */
+interface PromptShelves {
+  /** Its first card's place among the cards: a category lists its questions in that order. */
+  at: number;
+  words: Set<string>;
+  /** The catalog products on its shelves. */
+  products: Set<string>;
+  slots: number;
+  ownSlots: number;
+  rivals: Map<string, RivalSlots>;
+}
+
 export function categoryRows(
   categories: readonly CategoryInput[],
   cards: readonly CategoryCardRow[],
@@ -92,56 +112,84 @@ export function categoryRows(
     revenueOf: ReadonlyMap<string, { value: number; currency: string | null }>;
   },
 ): CategoryRow[] {
-  // Each question's words, and the products of the brand's on its shelves.
-  const prompts = new Map<string, { words: Set<string>; products: Set<string> }>();
-  for (const card of cards) {
+  // Each question's words and shelves, and the questions each product was on:
+  // a category adds up its questions' counts rather than reading every card
+  // again, so a big catalog's categories don't each walk all the cards.
+  const prompts = new Map<string, PromptShelves>();
+  const promptsOf = new Map<string, Set<string>>();
+  cards.forEach((card, at) => {
     let prompt = prompts.get(card.promptId);
     if (!prompt) {
-      prompt = { words: new Set(categoryWords(card.promptText)), products: new Set() };
+      prompt = {
+        at,
+        words: new Set(categoryWords(card.promptText)),
+        products: new Set(),
+        slots: 0,
+        ownSlots: 0,
+        rivals: new Map(),
+      };
       prompts.set(card.promptId, prompt);
     }
-    if (card.productId) prompt.products.add(card.productId);
-  }
+    prompt.slots += 1;
+    if (card.productId) {
+      prompt.products.add(card.productId);
+      if (!promptsOf.has(card.productId)) promptsOf.set(card.productId, new Set());
+      promptsOf.get(card.productId)!.add(card.promptId);
+    }
+    if (card.role === 'own') {
+      prompt.ownSlots += 1;
+      return;
+    }
+    const competitor = card.competitorId ? competitors.get(card.competitorId) : undefined;
+    const name = competitor?.name ?? card.productBrand?.trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+    const rival = prompt.rivals.get(key) ?? {
+      name,
+      domain: competitor?.domain ?? card.merchant,
+      slots: 0,
+      at,
+    };
+    rival.slots += 1;
+    prompt.rivals.set(key, rival);
+  });
 
   return categories
+    .filter((category) => category.productIds.length > 0)
     .map((category): CategoryRow => {
       const leaf = categoryLeaf(category.name);
       const words = categoryWords(leaf);
       const own = new Set(category.productIds);
-      const mine = new Set(
-        [...prompts]
-          .filter(
-            ([, prompt]) =>
-              (words.length > 0 && words.every((word) => prompt.words.has(word))) ||
-              [...prompt.products].some((id) => own.has(id)),
-          )
-          .map(([id]) => id),
-      );
-      const onShelves = cards.filter((card) => mine.has(card.promptId));
-      const ownSlots = onShelves.filter((card) => card.role === 'own').length;
-      const rivals = new Map<string, { name: string; domain: string | null; slots: number }>();
-      for (const card of onShelves) {
-        if (card.role === 'own') continue;
-        const competitor = card.competitorId ? competitors.get(card.competitorId) : undefined;
-        const name = competitor?.name ?? card.productBrand?.trim();
-        if (!name) continue;
-        const key = name.toLowerCase();
-        const rival = rivals.get(key) ?? {
-          name,
-          domain: competitor?.domain ?? card.merchant,
-          slots: 0,
-        };
-        rival.slots += 1;
-        rivals.set(key, rival);
+      const mine = new Set<string>();
+      if (words.length > 0) {
+        for (const [id, prompt] of prompts) {
+          if (words.every((word) => prompt.words.has(word))) mine.add(id);
+        }
+      }
+      for (const id of own) for (const promptId of promptsOf.get(id) ?? []) mine.add(promptId);
+
+      let slots = 0;
+      let ownSlots = 0;
+      // A rival's name and domain as the first card naming it gave them.
+      const rivals = new Map<string, RivalSlots>();
+      const shown = new Set<string>();
+      for (const id of mine) {
+        const prompt = prompts.get(id)!;
+        slots += prompt.slots;
+        ownSlots += prompt.ownSlots;
+        for (const [key, rival] of prompt.rivals) {
+          const kept = rivals.get(key);
+          if (!kept) rivals.set(key, { ...rival });
+          else {
+            kept.slots += rival.slots;
+            if (rival.at < kept.at) Object.assign(kept, { ...rival, slots: kept.slots });
+          }
+        }
+        for (const productId of prompt.products) if (own.has(productId)) shown.add(productId);
       }
       const top = [...rivals.values()].sort(
         (a, b) => b.slots - a.slots || a.name.localeCompare(b.name),
       )[0];
-      const shown = new Set(
-        onShelves.flatMap((card) =>
-          card.productId && own.has(card.productId) ? [card.productId] : [],
-        ),
-      );
       // Its products' AI revenue, in their main currency.
       const sales = category.productIds.flatMap((id) => {
         const sale = revenueOf.get(id);
@@ -152,13 +200,15 @@ export function categoryRows(
         currencies.set(sale.currency ?? '', (currencies.get(sale.currency ?? '') ?? 0) + 1);
       }
       const main = [...currencies].sort((a, b) => b[1] - a[1])[0]?.[0];
-      const shelfShare = onShelves.length ? ownSlots / onShelves.length : null;
+      const shelfShare = slots ? ownSlots / slots : null;
       return {
         id: category.id,
         name: category.name,
         leaf,
         prompts: mine.size,
-        promptIds: [...mine],
+        // In the cards' order, as before counting once per question: the
+        // Action Center takes a category's first 50.
+        promptIds: [...mine].sort((a, b) => prompts.get(a)!.at - prompts.get(b)!.at),
         shelfShare,
         productsOnShelf: shown.size,
         products: category.productIds.length,
@@ -176,7 +226,6 @@ export function categoryRows(
           mine.size >= ATTENTION_PROMPTS && shelfShare !== null && shelfShare < ATTENTION_SHARE,
       };
     })
-    .filter((row) => row.products > 0)
     .sort(
       (a, b) => b.prompts - a.prompts || b.products - a.products || a.leaf.localeCompare(b.leaf),
     );
