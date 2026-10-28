@@ -1459,7 +1459,7 @@
         "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
-        "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page's audit and the checks it fails.",
+        "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
         "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
         "topicOpportunity": {
           "source": "Source",
@@ -1495,6 +1495,13 @@
           },
           "swaps": "In stock, from its shopping path",
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
+        },
+        "auditPage": {
+          "source": "Source",
+          "sourceValue": "Site Audit report",
+          "openReport": "Open the report",
+          "page": "Page",
+          "checks": "{count, plural, one {The check it failed when sent} other {The # checks it failed when sent}}"
         },
         "mentionReview": {
           "source": "Source",

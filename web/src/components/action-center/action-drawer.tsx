@@ -75,6 +75,7 @@ import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
 import { ShoppingLinksContext } from './shopping-links-context';
+import { AuditPageContext } from './audit-page-context';
 import {
   TaskDetailForm,
   TaskDetailView,
@@ -678,6 +679,11 @@ export function ActionDrawer({
                 <>
                   <Separator />
                   <ShoppingLinksContext payload={action.payload ?? {}} />
+                </>
+              ) : action.kind === 'audit_page' ? (
+                <>
+                  <Separator />
+                  <AuditPageContext payload={action.payload ?? {}} />
                 </>
               ) : opportunityId ? (
                 <>
