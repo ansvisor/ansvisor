@@ -153,7 +153,8 @@ export async function sendToWix({ delivery, page, html, jsonLd = [], connection,
     written ??= await createDraftPost(siteId, apiKey, post, opts);
     return {
       taken: true,
-      externalId: written.id,
+      // Wix's answer to an update may leave out the post's id: it's the one updated, still.
+      externalId: written.id ?? current?.id,
       collectionId: siteId,
       updated,
       // A live post's draft was written: nothing new was made beside it.

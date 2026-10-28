@@ -163,6 +163,15 @@ describe('sendToWix', () => {
     expect(wix.createDraftPost).not.toHaveBeenCalled();
   });
 
+  it('keeps the post’s id when Wix’s answer to the update leaves it out', async () => {
+    previous = POST;
+    wix.readDraftPost.mockResolvedValue({ id: POST, status: 'UNPUBLISHED', url: null });
+    wix.updateDraftPost.mockResolvedValue({ id: null, status: null, url: null });
+    // Kept on the delivery, the page's next send updates this post rather than making a second.
+    expect(await send()).toMatchObject({ taken: true, updated: true, externalId: POST });
+    expect(wix.createDraftPost).not.toHaveBeenCalled();
+  });
+
   it('writes a scheduled post as a draft, not as a live post’s draft version', async () => {
     previous = POST;
     wix.readDraftPost.mockResolvedValue({ id: POST, status: 'SCHEDULED', url: null });
