@@ -161,13 +161,13 @@ export async function rescoreAction(action, now = new Date()) {
  * for no fresh results) and for the one-off backfill of actions opened
  * before scores existed (scripts/rescore-actions.js).
  *
- * @param {string} brandId
- * @param {{ now?: Date, statuses?: string[] | null, unscored?: boolean }} [options]
- *   statuses: the actions' statuses, null for all. unscored: only actions with no score yet.
  * An action whose score, level and reason come out as they're stored is
  * left as it is: a brand is often scored twice a night (the signal pass,
  * then the demand sweep), and the second has nothing new to write.
  *
+ * @param {string} brandId
+ * @param {{ now?: Date, statuses?: string[] | null, unscored?: boolean }} [options]
+ *   statuses: the actions' statuses, null for all. unscored: only actions with no score yet.
  * @returns {Promise<number>} how many actions' scores changed and were saved
  */
 export async function rescoreBrandActions(
