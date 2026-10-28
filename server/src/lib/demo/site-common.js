@@ -1,6 +1,6 @@
 /**
- * What the demo-site modules (traffic, site, catalog) share: writing rows,
- * the days they count back over, and the citations of Brewline's own pages
+ * What the demo-site modules (traffic, site, catalog) share: the days they
+ * count back over, and the citations of Brewline's own pages
  * in the core module's answers, so a page's citations, its AI visits and its
  * audit read the same month.
  */
@@ -9,16 +9,6 @@ import { BRAND } from './brewline.js';
 import { coreRows } from './core.js';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Rows inserted per statement. */
-const CHUNK = 250;
-
-export async function insertRows(db, table, rows, chunk = CHUNK) {
-  for (let i = 0; i < rows.length; i += chunk) {
-    const { error } = await db.from(table).insert(rows.slice(i, i + chunk));
-    if (error) throw new Error(`demo ${table} insert: ${error.message}`);
-  }
-}
 
 /** The UTC day (YYYY-MM-DD) `days` before `now`. */
 export function dayBefore(now, days) {
