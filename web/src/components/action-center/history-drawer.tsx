@@ -208,6 +208,23 @@ export function HistoryDrawer({
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.result')}</p>
+            {item.measuredOn && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('drawer.measuredOn', { ...item.measuredOn })}
+              </p>
+            )}
+            {item.auditAfter && (
+              // A fix's own aim: does the page pass when audited again?
+              <p className="mt-1 text-xs">
+                {item.auditAfter.audited
+                  ? t('drawer.auditAfter', { ...item.auditAfter })
+                  : t('drawer.auditNotYet', { pages: item.auditAfter.pages })}
+              </p>
+            )}
+            {item.signalsAfter && (
+              // The closest measure to the action's own aim: did what raised it end?
+              <p className="mt-1 text-xs">{t('drawer.signalsAfter', { ...item.signalsAfter })}</p>
+            )}
             {!measured && (
               // The honest state, and the reason for it. Everything above this
               // line is recorded; the effect is not, because nothing re-reads
@@ -237,6 +254,16 @@ export function HistoryDrawer({
                 <p className="text-[11px] text-muted-foreground">{t('drawer.fromStart')}</p>
               </div>
             </div>
+            {!!item.brandWideResults?.length && (
+              // The second line: the whole brand over the same windows.
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t('drawer.brandWide', {
+                  list: item.brandWideResults
+                    .map((m) => `${tRegistry(`${m.metric}.name`)} ${m.before} → ${m.after}`)
+                    .join(' · '),
+                })}
+              </p>
+            )}
           </section>
 
           <Separator />

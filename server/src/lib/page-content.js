@@ -479,16 +479,108 @@ function commonAncestor($, a, b) {
   return el;
 }
 
+/*
+ * The tag passes below read each '<' once, left to right, and give what the
+ * regex each names would, in time near the text's length however its tags
+ * are left open.
+ */
+
+/** ASCII letters lower-cased, nothing else: every index stays where it was. */
+const asciiLower = (text) => text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
+
+/** A letter, digit or _, as \b reads a word. */
+const isWordChar = (code) =>
+  (code >= 48 && code <= 57) ||
+  (code >= 65 && code <= 90) ||
+  (code >= 97 && code <= 122) ||
+  code === 95;
+
+/** Each script and style element as a space: /<(script|style)\b[\s\S]*?<\/\1>/gi. */
+function withoutScripts(text) {
+  const lower = asciiLower(text);
+  // A name with no closing tag left closes nowhere after it either.
+  const open = new Set(['script', 'style']);
+  let out = '';
+  let kept = 0;
+  for (let at = lower.indexOf('<'); at !== -1 && open.size; ) {
+    const name = [...open].find((tag) => lower.startsWith(tag, at + 1));
+    const after = name ? at + 1 + name.length : 0;
+    if (name && !isWordChar(lower.charCodeAt(after))) {
+      const close = lower.indexOf(`</${name}>`, after);
+      if (close !== -1) {
+        out += `${text.slice(kept, at)} `;
+        kept = close + name.length + 3;
+        at = lower.indexOf('<', kept);
+        continue;
+      }
+      open.delete(name);
+    }
+    at = lower.indexOf('<', at + 1);
+  }
+  return out + text.slice(kept);
+}
+
+const SPACED_TAGS = new Set([
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'li',
+  'td',
+  'th',
+  'blockquote',
+  'br',
+  'div',
+]);
+
+/** Each block tag, opening or closing, as a space: /<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi. */
+function withoutBlockTags(text) {
+  const lower = asciiLower(text);
+  let out = '';
+  let kept = 0;
+  for (let at = lower.indexOf('<'); at !== -1; ) {
+    const from = lower[at + 1] === '/' ? at + 2 : at + 1;
+    let end = from;
+    while (isWordChar(lower.charCodeAt(end))) end += 1;
+    if (SPACED_TAGS.has(lower.slice(from, end))) {
+      const close = lower.indexOf('>', end);
+      // No '>' left: no tag after this one ends either.
+      if (close === -1) break;
+      out += `${text.slice(kept, at)} `;
+      kept = close + 1;
+      at = lower.indexOf('<', kept);
+      continue;
+    }
+    // The word holds no '<': the next tag starts after it.
+    at = lower.indexOf('<', Math.max(at + 1, end));
+  }
+  return out + text.slice(kept);
+}
+
+/** Every other tag dropped: /<[^>]*>/g. */
+function withoutTags(text) {
+  let out = '';
+  let kept = 0;
+  for (let at = text.indexOf('<'); at !== -1; ) {
+    const close = text.indexOf('>', at + 1);
+    if (close === -1) break;
+    out += text.slice(kept, at);
+    kept = close + 1;
+    at = text.indexOf('<', kept);
+  }
+  return out + text.slice(kept);
+}
+
 /**
  * The page's text length as the Rules tab counts it (pageTextLength in
  * web/src/lib/content/rules.ts): a space between blocks, an entity as one
  * character, runs of spaces as one.
  */
 export function textLength(html) {
-  return String(html ?? '')
-    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
+  return withoutTags(withoutBlockTags(withoutScripts(String(html ?? ''))))
     .replace(/&nbsp;/g, ' ')
     .replace(/&[#a-z0-9]+;/gi, 'x')
     .replace(/\s+/g, ' ')

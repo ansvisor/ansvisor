@@ -5,7 +5,12 @@ import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getAiUsage } from '@/lib/actions/ai-usage';
-import { aiUsageTone, percentLabel, type AiUsage } from '@/lib/billing/ai-usage';
+import {
+  aiUsageTone,
+  featurePercentLabel,
+  percentLabel,
+  type AiUsage,
+} from '@/lib/billing/ai-usage';
 import type { UsageTone } from '@/lib/content-usage';
 import { cn } from '@/lib/utils';
 
@@ -117,16 +122,21 @@ export function AiUsageCard() {
                 </p>
               )}
             </div>
-            <ul className="divide-y rounded-lg border text-sm">
-              {usage.features.map(({ feature, percent }) => (
-                <li key={feature} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span>{t(`features.${feature}`)}</span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {percentLabel(percent)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {/* Only what used some is listed: none yet, a line says so. */}
+            {usage.features.length > 0 ? (
+              <ul className="divide-y rounded-lg border text-sm">
+                {usage.features.map(({ feature, percent }) => (
+                  <li key={feature} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <span>{t(`features.${feature}`)}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {featurePercentLabel(percent)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('none')}</p>
+            )}
             <p className="text-xs text-muted-foreground">{t('chat')}</p>
           </>
         )}

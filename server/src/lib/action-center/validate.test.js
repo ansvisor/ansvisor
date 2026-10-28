@@ -20,8 +20,8 @@ import {
 const NOW = new Date('2026-09-20T04:00:00Z');
 const daysAgo = (n) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
 
-/** Records every write so a test can assert what was stored. */
-function mockWrites() {
+/** Records every write so a test can assert what was stored; `rows` answers a table's reads. */
+function mockWrites(rows = {}) {
   const writes = { updated: [], inserted: [] };
   from.mockImplementation((table) => {
     const builder = {
@@ -32,6 +32,10 @@ function mockWrites() {
       lte: () => builder,
       not: () => builder,
       limit: () => builder,
+      order: () => builder,
+      gt: () => builder,
+      in: () => builder,
+      maybeSingle: async () => ({ data: (rows[table] ?? [])[0] ?? null, error: null }),
       update: (patch) => {
         writes.updated.push({ table, patch });
         return builder;
@@ -41,7 +45,7 @@ function mockWrites() {
         return builder;
       },
       then: (resolve, reject) =>
-        Promise.resolve({ data: [], error: null, count: 0 }).then(resolve, reject),
+        Promise.resolve({ data: rows[table] ?? [], error: null, count: 0 }).then(resolve, reject),
     };
     return builder;
   });
@@ -334,6 +338,163 @@ describe('validateAction', () => {
     expect(rpc).not.toHaveBeenCalled();
     const patch = writes.updated.find((w) => w.table === 'actions').patch;
     expect(patch.validation).toBeNull();
+  });
+
+  it('keeps what became of the signals that raised it beside the metrics (learning A3)', async () => {
+    const signal = (status, payload = {}) => ({ signals: { status, payload } });
+    const writes = mockWrites({
+      action_signals: [
+        signal('resolved'),
+        signal('resolved'),
+        signal('resolved', { supersededBy: 'topic_dropped' }),
+        signal('dismissed'),
+        signal('acknowledged'),
+        signal('new'),
+      ],
+    });
+    rpc.mockResolvedValue({ data: { total_citations: 10 }, error: null });
+
+    await validateAction(action(), { now: NOW });
+
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.signals).toEqual({
+      total: 6,
+      ended: 2,
+      replaced: 1,
+      dismissed: 1,
+      open: 2,
+    });
+    expect(patch.validation.metrics).toHaveLength(1);
+  });
+
+  it('keeps the signals of an action with nothing else to measure', async () => {
+    const writes = mockWrites({ action_signals: [{ signals: { status: 'resolved' } }] });
+
+    expect(await validateAction(action({ kpi_keys: [] }), { now: NOW })).toBe('not_measurable');
+
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation).toEqual({
+      measuredAt: NOW.toISOString(),
+      signals: { total: 1, ended: 1, replaced: 0, dismissed: 0, open: 0 },
+    });
+  });
+
+  describe('on its targets (learning A1)', () => {
+    const P1 = '11111111-1111-4111-8111-111111111111';
+    const P2 = '22222222-2222-4222-8222-222222222222';
+    /** The basket answers `before` for the window before, `after` for the one after; the brand 100 citations. */
+    const answers = (before, after) =>
+      rpc.mockImplementation(async (name, args) =>
+        name === 'opportunity_basket_metrics'
+          ? { data: args.p_from < daysAgo(20).slice(0, 10) ? before : after, error: null }
+          : { data: { total_citations: 100 }, error: null },
+      );
+
+    it('measures a night-engine action on the prompts it names, the brand-wide figures beside', async () => {
+      const writes = mockWrites();
+      answers({ cells: 10, visible: 2 }, { cells: 10, visible: 6 });
+
+      const outcome = await validateAction(
+        action({
+          kind: 'recover_lost_visibility',
+          kpi_keys: ['ai_visibility', 'citations'],
+          payload: {
+            targetEntity: 'prompts',
+            targetCount: 2,
+            targets: [{ id: P1, label: 'best beans' }],
+            targetIds: [P1, P2, 'not-a-prompt-id'],
+          },
+        }),
+        { now: NOW },
+      );
+
+      expect(outcome).toBe('improved');
+      const basketCall = rpc.mock.calls.find(([name]) => name === 'opportunity_basket_metrics');
+      expect(basketCall[1].p_prompt_ids).toEqual([P1, P2]);
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.scope).toEqual({
+        kind: 'targets',
+        entity: 'prompts',
+        prompts: 2,
+        pages: 0,
+      });
+      expect(validation.metrics).toEqual([
+        { metric: 'ai_visibility', unit: 'percent', before: 20, after: 60 },
+        // A prompt basket has no pages to count citations on.
+        { metric: 'citations', unit: 'count', before: null, after: null },
+      ]);
+      expect(validation.brandWide.map((m) => m.metric)).toEqual(['ai_visibility', 'citations']);
+    });
+
+    it('reads a page written as a path on the brand’s primary domain', async () => {
+      mockWrites({ brand_domains: [{ domain: 'https://www.acme.example/' }] });
+      answers({}, {});
+
+      await validateAction(
+        action({
+          kind: 'fix_underperforming_pages',
+          kpi_keys: ['citations'],
+          payload: { targetEntity: 'pages', targetCount: 1, targets: [{ id: '/pricing' }] },
+        }),
+        { now: NOW },
+      );
+
+      const basketCall = rpc.mock.calls.find(([name]) => name === 'opportunity_basket_metrics');
+      expect(basketCall[1].p_page_keys).toEqual(['acme.example/pricing']);
+    });
+
+    it('measures brand-wide when the targets measured nothing, or are of another kind', async () => {
+      let writes = mockWrites();
+      answers({}, {});
+      await validateAction(
+        action({ payload: { targetEntity: 'prompts', targets: [{ id: P1 }] } }),
+        { now: NOW },
+      );
+      let { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.scope).toBeUndefined();
+      expect(validation.metrics.map((m) => m.metric)).toEqual(['citations']);
+
+      rpc.mockReset();
+      writes = mockWrites();
+      rpc.mockResolvedValue({ data: { total_citations: 10 }, error: null });
+      await validateAction(
+        action({ payload: { targetEntity: 'competitors', targets: [{ id: 'Rival' }] } }),
+        { now: NOW },
+      );
+      expect(rpc.mock.calls.some(([name]) => name === 'opportunity_basket_metrics')).toBe(false);
+      ({ validation } = writes.updated.find((w) => w.table === 'actions').patch);
+      expect(validation.scope).toBeUndefined();
+    });
+  });
+
+  it('judges a Site Audit fix by its pages audited again since it closed (learning A2)', async () => {
+    const writes = mockWrites({
+      site_audits: [{ id: 'au1', url: 'https://acme.example/pricing', total_score: 0.7 }],
+      audit_signal_results: [{ audit_id: 'au1', signal_key: 'json-ld-validity', status: 'pass' }],
+    });
+    // The page's citations didn't move over the week.
+    rpc.mockResolvedValue({ data: { page_citations: 3 }, error: null });
+
+    const outcome = await validateAction(
+      action({
+        kind: 'fix_structured_data',
+        kpi_keys: [],
+        payload: {
+          targetEntity: 'pages',
+          targets: [{ id: 'https://acme.example/pricing', checks: ['json-ld-validity'] }],
+        },
+      }),
+      { now: NOW },
+    );
+
+    expect(outcome).toBe('improved');
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.outcome).toBe('improved');
+    expect(patch.validation.audit).toEqual({ pages: 1, audited: 1, passed: 1 });
+    expect(patch.validation.metrics.find((m) => m.metric === 'citations')).toMatchObject({
+      before: 3,
+      after: 3,
+    });
   });
 
   it('does nothing for an action that never closed', async () => {
