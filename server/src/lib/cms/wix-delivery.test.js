@@ -115,6 +115,13 @@ describe('seoTags', () => {
       },
     ]);
   });
+
+  it('escapes every "<" in the JSON-LD, so it can’t end the script it goes in', () => {
+    const [tag] = seoTags({}, [{ '@type': 'Article', headline: 'Cold brew </script><b>x' }]);
+    expect(tag.children).not.toContain('<');
+    expect(tag.children).toContain('\\u003c/script>\\u003cb>x');
+    expect(JSON.parse(tag.children).headline).toBe('Cold brew </script><b>x');
+  });
 });
 
 describe('sendToWix', () => {

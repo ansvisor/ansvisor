@@ -90,7 +90,8 @@ export function seoTags(page, jsonLd = []) {
     tags.push({
       type: 'script',
       props: { type: 'application/ld+json' },
-      children: JSON.stringify(block),
+      // Every "<" escaped: nothing in it can end or open a tag in the post's script.
+      children: JSON.stringify(block).replace(/</g, '\\u003c'),
       custom: false,
       disabled: false,
     });
