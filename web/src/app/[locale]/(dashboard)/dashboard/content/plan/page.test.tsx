@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 import type { PlanOpportunity, PlanPage } from '@/lib/content/plan';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import ContentPlanPage from './page';
 
 const getContentPlan = vi.fn();
@@ -791,5 +792,78 @@ describe('Getting started’s content steps (00234)', () => {
     expect(button('Optimize').getAttribute('aria-pressed')).toBe('true');
     expect(dialog.props).toMatchObject({ open: false });
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Content plan on a read-only workspace (plan not active)', () => {
+  const openUpgrade = vi.fn();
+  const render = async (isLocked: boolean) => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <ContentPlanPage />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  };
+  const clickItem = async (title: string, item: string) => {
+    const trigger = container.querySelector<HTMLElement>(`[aria-label="Actions for ${title}"]`)!;
+    await act(async () => trigger.click());
+    const found = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === item,
+    )!;
+    await act(async () => found.click());
+  };
+
+  beforeEach(() => openUpgrade.mockReset());
+
+  it('opens the upgrade dialog from New content, Start and the row menu, and runs nothing', async () => {
+    await render(true);
+    await act(async () => button('New content').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Creating content needs a plan');
+    const rows = container.querySelectorAll('tbody tr');
+    await act(async () => rows[1].querySelector<HTMLButtonElement>(START)!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Optimizing content needs a plan');
+    expect(dialog.props).toMatchObject({ open: false, preset: null });
+
+    await clickItem('Espresso guide', 'Mark as priority');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Marking priorities needs a plan');
+    await clickItem('Espresso guide', 'Hide from the plan');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Hiding rows needs a plan');
+    await clickItem('Espresso guide', 'Assign to…');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Assigning content needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(5);
+    expect(setPlanRowPriority).not.toHaveBeenCalled();
+    expect(hidePlanRow).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="assign-dialog"]')).toBeNull();
+    // Browsing stays open: a card still filters the list.
+    await act(async () => button('Protect').click());
+    expect(rowTexts().map((r) => r[1])).toEqual(['Protect']);
+  });
+
+  it('opens on Getting started’s card and starts nothing by itself', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/plan?start=create');
+    await render(true);
+    expect(button('Create').getAttribute('aria-pressed')).toBe('true');
+    expect(dialog.props).toMatchObject({ open: false });
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('starts a row on an active plan', async () => {
+    await render(false);
+    const rows = container.querySelectorAll('tbody tr');
+    await act(async () => rows[0].querySelector<HTMLButtonElement>(START)!.click());
+    expect(dialog.props).toMatchObject({ open: true, preset: { kind: 'opportunity', id: 'o1' } });
+    await clickItem('Espresso guide', 'Mark as priority');
+    expect(setPlanRowPriority).toHaveBeenCalledWith(
+      'brand-1',
+      'page:acme.example/guides/espresso',
+      true,
+    );
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 });

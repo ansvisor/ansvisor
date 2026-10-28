@@ -35,6 +35,7 @@ import {
   type DraftCms,
 } from '@/lib/content/cms-send-client';
 import { exportPlaceholders, pageFields, titlePlaceholders } from '@/lib/content/ready-to-publish';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from './cms-target';
 
 /**
@@ -79,6 +80,7 @@ export function SendDialog({
 }) {
   const t = useTranslations('contentEditor.editor.send');
   const tFailure = useTranslations('apiFailure');
+  const { openUpgrade } = useUpgradeGate();
   const format = useFormatter();
   const page = useMemo(
     () => pageFields({ title, html, sourceUrl, author, teamByline }),
@@ -174,6 +176,8 @@ export function SendDialog({
     );
     setSending(false);
     if (!result.ok) {
+      // A read-only workspace: the upgrade dialog, with the reason kept here.
+      if (result.code === 'subscription') openUpgrade();
       setProblem({ code: result.code, field: result.field, target });
       return;
     }
@@ -258,7 +262,9 @@ export function SendDialog({
       return t(failed[shown.target], { reason: shown.failed });
     }
     const { code, field } = shown;
-    if (code === 'session' || code === 'workspace' || code === 'busy') return tFailure(code);
+    if (code === 'session' || code === 'workspace' || code === 'busy' || code === 'subscription') {
+      return tFailure(code);
+    }
     // No CMS ready sent the page to the webhook: what to fix is the one connected.
     if (code === 'no_webhook' && !webflow?.ready && !wordpress?.ready && !framer?.ready) {
       if (webflow) return t('errors.no_webhookWebflow');

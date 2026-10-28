@@ -32,6 +32,11 @@ function namesRegex(terms: string[]): RegExp | null {
   return unique.length > 0 ? new RegExp(unique.map(namePattern).join('|'), 'giu') : null;
 }
 
+/** Whether a text names one of the terms, as tracking finds a name. */
+export function namesAny(text: string, terms: string[]): boolean {
+  return namesRegex(terms)?.test(text) ?? false;
+}
+
 /** "[label](https://…)" → "label"; bare URLs dropped. */
 function stripUrls(text: string): string {
   return text.replace(/\[([^\]]*)\]\([^)]+\)/g, '$1').replace(/https?:\/\/[^\s)>\]]+/g, '');
