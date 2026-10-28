@@ -9,6 +9,7 @@ vi.mock('../../config/supabase.js', () => ({
 const {
   BASKET_KPIS,
   CONTROL_MIN_COUNT,
+  SENTIMENT_MIN_ANSWERS,
   basketScope,
   basketValues,
   controlScope,
@@ -94,6 +95,19 @@ describe('basketValues', () => {
     expect(basketValues({ ...raw, named_answers: 0 }, { pageCount: 1 }).positive_sentiment).toBe(
       null,
     );
+  });
+
+  it('reads no sentiment from fewer than five answers naming the brand', () => {
+    expect(SENTIMENT_MIN_ANSWERS).toBe(5);
+    // 3 of 4 is 75%, but one answer turning either way would move it 25 points.
+    expect(
+      basketValues({ ...raw, named_answers: 4, positive_answers: 3 }, { pageCount: 1 })
+        .positive_sentiment,
+    ).toBe(null);
+    expect(
+      basketValues({ ...raw, named_answers: 5, positive_answers: 3 }, { pageCount: 1 })
+        .positive_sentiment,
+    ).toBe(60);
   });
 
   /** As Insights' Positive Sentiment card (00191): an answer only citing the brand is always neutral. */

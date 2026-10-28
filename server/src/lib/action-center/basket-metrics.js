@@ -29,6 +29,13 @@ export const BASKET_KPIS = {
 const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
+ * Fewest answers naming the brand a basket's positive sentiment is read
+ * from, as CONTROL_MIN_COUNT: from 2, one answer turning positive reads
+ * +50 points.
+ */
+export const SENTIMENT_MIN_ANSWERS = 5;
+
+/**
  * The pages as the three keys the metrics function matches on: URL without
  * scheme, www., query, fragment or trailing slash; host without www.; and
  * the GA landing-page path.
@@ -74,9 +81,10 @@ export function basketValues(raw, { pageCount }) {
     mentions: cells ? Number(raw.mention_answers) || 0 : null,
     citations: pageCount ? Number(raw.page_citations) || 0 : null,
     ai_referral_traffic: pageCount && raw.ga_connected ? Number(raw.page_ai_sessions) || 0 : null,
-    // Null when no answer named the brand, or the window's sentiment isn't counted yet.
+    // Null from fewer than SENTIMENT_MIN_ANSWERS answers naming the brand,
+    // or while the window's sentiment isn't counted yet.
     positive_sentiment:
-      raw.named_answers != null && Number(raw.named_answers) > 0
+      raw.named_answers != null && Number(raw.named_answers) >= SENTIMENT_MIN_ANSWERS
         ? round1(((Number(raw.positive_answers) || 0) / Number(raw.named_answers)) * 100)
         : null,
   };
