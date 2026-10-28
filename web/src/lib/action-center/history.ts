@@ -78,8 +78,6 @@ export interface ActionHistoryTask {
   completedAt?: string;
 }
 
-/** A signal that opened the action. Several signals consolidate into one
- *  action, so this is a list rather than a field. */
 /**
  * The day after closing an action's final reading is taken on (learning
  * B1): the API's validation.finalReadingDay (server config/action-engine.js).
@@ -92,6 +90,8 @@ export interface OutcomeReading {
   outcome: ActionOutcome;
 }
 
+/** A signal that opened the action. Several signals consolidate into one
+ *  action, so this is a list rather than a field. */
 export interface TriggerSignal {
   signalId: string;
   kind: string;
