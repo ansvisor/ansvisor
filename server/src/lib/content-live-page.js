@@ -15,11 +15,22 @@ export const LIVE_PAGE_DAYS = 30;
 
 /** Lost prompts it is told, by name. */
 const LOST_SHOWN = 3;
+/**
+ * A lost prompt's text at most, as it is quoted: a prompt has no length
+ * limit where it is kept, and one long one mustn't make the line as long as
+ * the page (the CSV import stops at 500).
+ */
+export const LOST_PROMPT_CHARS = 300;
 
 const n = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
 const pair = (value) => ({ cur: n(value?.cur), prev: n(value?.prev) });
 /** "1 time", "12 times". */
 const counted = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+/** A prompt's text on one line, cut to LOST_PROMPT_CHARS. */
+const promptText = (text) => {
+  const line = text.replace(/\s+/g, ' ').trim();
+  return line.length > LOST_PROMPT_CHARS ? `${line.slice(0, LOST_PROMPT_CHARS).trimEnd()}…` : line;
+};
 
 /**
  * The numbers the agent is told, from content_page_impact's answer; null
@@ -31,10 +42,10 @@ export function livePageSummary(impact, days = LIVE_PAGE_DAYS) {
   const aiVisits = pair(impact.aiVisits);
   if (!citations.cur && !citations.prev && !aiVisits.cur && !aiVisits.prev) return null;
   const lostPrompts = (Array.isArray(impact.prompts) ? impact.prompts : [])
-    .filter((p) => n(p?.cur) === 0 && n(p?.prev) > 0 && typeof p.text === 'string' && p.text)
+    .filter((p) => n(p?.cur) === 0 && n(p?.prev) > 0 && typeof p.text === 'string' && p.text.trim())
     .sort((a, b) => n(b.prev) - n(a.prev))
     .slice(0, LOST_SHOWN)
-    .map((p) => p.text);
+    .map((p) => promptText(p.text));
   return {
     days,
     citations,

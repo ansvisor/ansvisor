@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 const rpc = vi.fn();
 vi.mock('../config/supabase.js', () => ({ default: { rpc: (...args) => rpc(...args) } }));
 
-const { livePageLine, livePageSummary, readLivePage } = await import('./content-live-page.js');
+const { LOST_PROMPT_CHARS, livePageLine, livePageSummary, readLivePage } =
+  await import('./content-live-page.js');
 
 /**
  * How the live page does now, as the Content Agent is told (learning B5):
@@ -29,6 +30,23 @@ describe('livePageSummary', () => {
       lostPrompts: ['pour over vs french press', 'how long to brew pour over'],
       aiVisits: { cur: 35, prev: 40 },
     });
+  });
+
+  it('quotes a lost prompt on one line, cut when it is long', () => {
+    const long = `pour over\n\n  kettle ${'x'.repeat(5000)}`;
+    const { lostPrompts } = livePageSummary({
+      ...impact,
+      prompts: [{ text: long, cur: 0, prev: 3 }],
+    });
+    expect(LOST_PROMPT_CHARS).toBe(300);
+    expect(lostPrompts).toHaveLength(1);
+    expect(lostPrompts[0].startsWith('pour over kettle x')).toBe(true);
+    expect(lostPrompts[0]).toHaveLength(LOST_PROMPT_CHARS + 1);
+    expect(lostPrompts[0].endsWith('…')).toBe(true);
+    expect(
+      livePageLine(livePageSummary({ ...impact, prompts: [{ text: long, cur: 0, prev: 3 }] }))
+        .length,
+    ).toBeLessThan(1000);
   });
 
   it('tells nothing of a page neither cited nor visited from AI', () => {
