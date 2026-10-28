@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseLocation, locationsForScraper, userLocationFor } from './locations.js';
+import {
+  isUnknownCity,
+  locationsForModels,
+  locationsForScraper,
+  parseLocation,
+  userLocationFor,
+} from './locations.js';
 
 describe('parseLocation', () => {
   it('splits a US state code into country and state', () => {
@@ -94,6 +100,20 @@ describe('cities (PROMPT-015d)', () => {
     ]);
     // A prompt tracked only in cities: nothing for the engines that can't ask from one.
     expect(locationsForScraper(['TR~ISTANBUL'], 'perplexity-web')).toEqual([]);
+  });
+
+  it('runs a city no list names on no engine, rather than country-wide under its name', () => {
+    expect(isUnknownCity('TR~NOWHERE')).toBe(true);
+    expect(isUnknownCity('TR~ISTANBUL')).toBe(false);
+    expect(isUnknownCity('TR')).toBe(false);
+    const codes = ['TR~NOWHERE', 'TR~ISTANBUL'];
+    expect(locationsForScraper(codes, 'google-aimode')).toEqual(['TR~ISTANBUL']);
+    expect(locationsForScraper(['TR~NOWHERE'], 'google-aio')).toEqual([]);
+    expect(locationsForModels(codes)).toEqual(['TR~ISTANBUL']);
+    expect(locationsForModels(['TR~NOWHERE'])).toEqual([]);
+    // No locations at all is still one untargeted run.
+    expect(locationsForModels([])).toEqual([null]);
+    expect(locationsForModels(['DE', 'US-CA'])).toEqual(['DE', 'US-CA']);
   });
 
   it('gives the API models the city and its region', () => {

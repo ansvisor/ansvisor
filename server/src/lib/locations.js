@@ -120,6 +120,15 @@ export function isCityCode(code) {
 }
 
 /**
+ * True for a city code no city in cities.js names (PROMPT-015d): there is
+ * nothing to ask from, and asking country-wide instead would record the
+ * country's answers as the city's, so no engine runs it.
+ */
+export function isUnknownCity(code) {
+  return isCityCode(code) && !cityFor(code);
+}
+
+/**
  * The locations one scraper should actually be run for.
  *
  * A city code (PROMPT-015d) is kept only for the engines that can ask from
@@ -135,7 +144,7 @@ export function isCityCode(code) {
  * Order is preserved so task submission stays deterministic.
  */
 export function locationsForScraper(locations, scraperId) {
-  const given = Array.isArray(locations) && locations.length > 0 ? locations : [null];
+  const given = locationsForModels(locations);
   // A city is run only by the engines that can ask from one (PROMPT-015d).
   const list = CITY_SCRAPERS.has(scraperId) ? given : given.filter((code) => !isCityCode(code));
   if (!COUNTRY_ONLY_SCRAPERS.has(scraperId)) return list;
@@ -156,6 +165,16 @@ export function locationsForScraper(locations, scraperId) {
     collapsed.push(country);
   }
   return collapsed;
+}
+
+/**
+ * The locations the API models are run for: every code, each read by
+ * userLocationFor, but a city no list names (isUnknownCity). No locations
+ * means one untargeted run; only unknown cities means none.
+ */
+export function locationsForModels(locations) {
+  const given = Array.isArray(locations) && locations.length > 0 ? locations : [null];
+  return given.filter((code) => !isUnknownCity(code));
 }
 
 /**
