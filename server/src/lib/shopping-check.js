@@ -1,5 +1,9 @@
 import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
+import {
+  openActionProducts,
+  syncShoppingLinksAction,
+} from './action-center/from-shopping-check.js';
 import { isBrandActive } from './active-subscriptions.js';
 import { onBrandDomain } from './audit/host.js';
 import { brandSite } from './catalog/category-pages.js';
@@ -22,6 +26,9 @@ import { readIn, readShoppingPath, refuses } from './shopping-path.js';
  * stock), refused (Merchant Center refuses every variant in stock in its free
  * listings) or gone from the catalog. What it finds is kept per draft in
  * content_shopping_checks, for the Content Library's Shopping path column.
+ * A live page that links one that no longer sells gets a Fix action in the
+ * Action Center, closed by the check that finds it fixed
+ * (action-center/from-shopping-check.js).
  *
  * A live page is read only on the brand's site (brandSite), and only when
  * it reads as the page: one with fewer than MIN_WORDS words (an empty
@@ -48,12 +55,16 @@ const PAGE_BYTES = 1024 * 1024;
 export const MIN_WORDS = 20;
 /** A check stops reading live pages after this, and reads the rest from their drafts. */
 export const LIVE_PAGES_DEADLINE_MS = 3 * 60 * 1000;
+/** New Action Center actions one check opens at most: the rest wait for the next sync. */
+export const MAX_NEW_ACTIONS = 5;
 
 /** A link longer than this isn't read: no page's address is (as content_drafts caps its own). */
 export const MAX_HREF_CHARS = 2048;
 
 const TITLE_CHARS = 200;
 const MAX_BAD = 40;
+/** The path's products that sell and the page doesn't link, named to swap in. */
+const MAX_SWAPS = 5;
 
 /**
  * Every link's address in a page's HTML, and in the HTML blocks the editor
@@ -179,7 +190,8 @@ export function pathProductIds(path) {
  * (web lib/content/shopping-check.ts): how many of its category pages and
  * of its products that sell it links, and the products it links that no
  * longer sell. A product the person removed or the path left out counts
- * only when it no longer sells: the page may still link it.
+ * only when it no longer sells: the page may still link it. `swaps`: the
+ * path's products that sell and the page doesn't link, in its order.
  *
  * @param {{ states: Map<string, string>, pages: Map<string, string>,
  *   titles?: Map<string, string> }} catalog
@@ -226,6 +238,10 @@ export function linkCheck(hrefs, path, { states, pages, titles = new Map() }) {
       .filter((p) => p.state !== 'ok')
       .map(({ inPath: _inPath, ...p }) => p)
       .slice(0, MAX_BAD),
+    swaps: path.products
+      .filter((p) => p.url && (states.get(p.id) ?? 'gone') === 'ok' && !keys.has(linkKey(p.url)))
+      .slice(0, MAX_SWAPS)
+      .map((p) => ({ id: p.id, title: String(p.title ?? '').slice(0, TITLE_CHARS) })),
   };
 }
 
@@ -283,11 +299,15 @@ async function primarySite(db, brandId) {
   return /^https?:\/\//i.test(data.domain) ? data.domain : `https://${data.domain}`;
 }
 
+/** What a draft's check reads of it. */
+const DRAFT_COLUMNS =
+  'id, title, status, method, source_url, published_url, body_html, shopping_path';
+
 /** The brand's drafts with a shopping path, a batch at a time, in id order. */
 async function draftBatch(db, brandId, from) {
   const { data, error } = await db
     .from('content_drafts')
-    .select('id, status, method, source_url, published_url, body_html, shopping_path')
+    .select(DRAFT_COLUMNS)
     .eq('brand_id', brandId)
     .is('archived_at', null)
     .not('shopping_path', 'is', null)
@@ -317,12 +337,83 @@ async function dropStale(db, brandId, kept) {
 }
 
 /**
- * Checks a brand's pages' shopping links and keeps what it finds.
+ * The products each draft's open action names (openActionProducts), or the
+ * read's error: then no action of these drafts is synced.
+ */
+async function heldProducts(db, brandId, draftIds) {
+  try {
+    return { held: await openActionProducts(db, brandId, draftIds), heldErr: null };
+  } catch (err) {
+    return { held: new Map(), heldErr: err };
+  }
+}
+
+/**
+ * A path with its open action's products counted as ones the person
+ * removed: on its page only while they still don't sell. So a rebuild that
+ * dropped them doesn't close the action while the page links them.
+ */
+function withHeld(path, ids = []) {
+  const extra = ids.filter((id) => !path.removed.includes(id));
+  return extra.length ? { ...path, removed: [...path.removed, ...extra] } : path;
+}
+
+/** Whether a draft's live page may be read: it has one, on the brand's site. */
+function readable(draft, domains) {
+  const url = livePage(draft);
+  return Boolean(url) && onBrandDomain(url, domains);
+}
+
+/**
+ * A draft's links checked against its path: its live page's when `readLive`
+ * and it reads as the page, else the draft's; with its
+ * content_shopping_checks row.
+ */
+async function checkDraft(
+  draft,
+  path,
+  { brandId, catalog, site, domains, readPage, readLive, now },
+) {
+  const url = livePage(draft);
+  const read = readLive ? await liveHrefs(url, readPage, domains) : null;
+  // A draft's relative link ("/products/x") is read against its page, else the brand's site.
+  const base = url ?? draft.source_url ?? site;
+  const inDraft = linkCheck(pageHrefs(draft.body_html, base), path, catalog);
+  const onPage = read ? linkCheck(read, path, catalog) : null;
+  // A live page that links none of the path while its draft does wasn't
+  // read as it is (a shell its script fills, a page served to bots): its
+  // draft is read.
+  const fromPage = Boolean(onPage) && (linksPath(onPage) || !linksPath(inDraft));
+  const check = fromPage ? onPage : inDraft;
+  return {
+    url,
+    fromPage,
+    check,
+    row: {
+      draft_id: draft.id,
+      brand_id: brandId,
+      read_from: fromPage ? 'page' : 'draft',
+      page_url: fromPage ? url : null,
+      categories: check.categories,
+      categories_linked: check.categoriesLinked,
+      products: check.products,
+      products_linked: check.productsLinked,
+      bad: check.bad,
+      checked_at: now.toISOString(),
+    },
+  };
+}
+
+/**
+ * Checks a brand's pages' shopping links and keeps what it finds; a live
+ * page's Action Center action is opened or closed by what it found. A
+ * failure there is logged and the check goes on.
  *
  * @param {string} brandId
  * @param {{ db?: object, now?: Date, readPage?: Function, livePages?: number }} [opts]
  *   `readPage` reads a live page (safe-fetch's fetchPage); tests pass their own.
- * @returns {Promise<{ drafts: number, live: number, attention: number, dropped: number }>}
+ * @returns {Promise<{ drafts: number, live: number, attention: number, dropped: number,
+ *   opened: number, closed: number }>}
  */
 export async function checkShoppingLinks(
   brandId,
@@ -334,52 +425,48 @@ export async function checkShoppingLinks(
   const kept = new Set();
   let live = 0;
   let attention = 0;
+  let opened = 0;
+  let closed = 0;
   // Whether every draft with a path was read: only then is a row no draft
   // was read for a stale one.
   let complete = false;
   for (let from = 0; from < MAX_DRAFTS; from += DRAFT_BATCH) {
     const drafts = await draftBatch(db, brandId, from);
-    const paths = drafts
+    const read = drafts
       .map((d) => ({ draft: d, path: readShoppingPath(d.shopping_path, { draftId: d.id }) }))
       .filter((d) => d.path);
+    const { held, heldErr } = await heldProducts(
+      db,
+      brandId,
+      read.map((d) => d.draft.id),
+    );
+    const paths = read.map((d) => ({ ...d, path: withHeld(d.path, held.get(d.draft.id)) }));
     const catalog = await productStates(
       db,
       brandId,
       paths.flatMap((d) => pathProductIds(d.path)),
     );
     const rows = [];
+    const livePagesRead = [];
     for (const { draft, path } of paths) {
-      const url = livePage(draft);
       const canRead =
-        url &&
-        onBrandDomain(url, domains) &&
+        readable(draft, domains) &&
         live < livePages &&
         Date.now() - started < LIVE_PAGES_DEADLINE_MS;
-      const read = canRead ? await liveHrefs(url, readPage, domains) : null;
       if (canRead) live += 1;
-      // A draft's relative link ("/products/x") is read against its page, else the brand's site.
-      const base = url ?? draft.source_url ?? site;
-      const inDraft = linkCheck(pageHrefs(draft.body_html, base), path, catalog);
-      const onPage = read ? linkCheck(read, path, catalog) : null;
-      // A live page that links none of the path while its draft does wasn't
-      // read as it is (a shell its script fills, a page served to bots): its
-      // draft is read.
-      const fromPage = Boolean(onPage) && (linksPath(onPage) || !linksPath(inDraft));
-      const check = fromPage ? onPage : inDraft;
-      if (check.bad.length) attention += 1;
-      kept.add(draft.id);
-      rows.push({
-        draft_id: draft.id,
-        brand_id: brandId,
-        read_from: fromPage ? 'page' : 'draft',
-        page_url: fromPage ? url : null,
-        categories: check.categories,
-        categories_linked: check.categoriesLinked,
-        products: check.products,
-        products_linked: check.productsLinked,
-        bad: check.bad,
-        checked_at: now.toISOString(),
+      const { url, fromPage, check, row } = await checkDraft(draft, path, {
+        brandId,
+        catalog,
+        site,
+        domains,
+        readPage,
+        readLive: canRead,
+        now,
       });
+      if (check.bad.length) attention += 1;
+      if (fromPage) livePagesRead.push({ draft, pageUrl: url, check });
+      kept.add(draft.id);
+      rows.push(row);
     }
     if (rows.length) {
       const { error } = await db
@@ -387,13 +474,87 @@ export async function checkShoppingLinks(
         .upsert(rows, { onConflict: 'draft_id' });
       if (error) throw new Error(`content_shopping_checks write: ${error.message}`);
     }
+    // Only a live page read now opens or closes its action: a draft isn't
+    // what readers see, and a page that couldn't be read says nothing.
+    for (const page of livePagesRead) {
+      try {
+        // Without its open action's products, a check can't tell it's fixed.
+        if (heldErr) throw heldErr;
+        const done = await syncShoppingLinksAction(brandId, page, {
+          db,
+          now,
+          open: opened < MAX_NEW_ACTIONS,
+        });
+        if (done === 'opened') opened += 1;
+        if (done === 'closed') closed += 1;
+      } catch (err) {
+        logger.warn(
+          { err: { name: err?.name, message: err?.message }, brandId, draftId: page.draft.id },
+          '[shopping-check] Action Center action not synced',
+        );
+      }
+    }
     if (drafts.length < DRAFT_BATCH) {
       complete = true;
       break;
     }
   }
   const dropped = complete ? await dropStale(db, brandId, kept) : 0;
-  return { drafts: kept.size, live, attention, dropped };
+  return { drafts: kept.size, live, attention, dropped, opened, closed };
+}
+
+/**
+ * Checks one draft's page now, as the catalog sync does (Check now on its
+ * Action Center task, action-center/task-checks.js): keeps what it finds,
+ * and from a live page read opens, keeps or closes its action. A failure
+ * there is thrown, for the person who asked. Null when the draft has no
+ * shopping path to check (none, archived, or not the brand's).
+ *
+ * @param {string} brandId
+ * @param {string} draftId
+ * @param {{ db?: object, now?: Date, readPage?: Function }} [opts]
+ * @returns {Promise<null | { readFrom: 'page'|'draft', pageUrl: string|null,
+ *   bad: Array<{ id: string, title: string, state: string }>, action: string|null }>}
+ *   `action`: what syncShoppingLinksAction did; null for a draft read.
+ */
+export async function checkShoppingDraft(
+  brandId,
+  draftId,
+  { db = supabaseAdmin, now = new Date(), readPage = fetchPage } = {},
+) {
+  const { data: draft, error } = await db
+    .from('content_drafts')
+    .select(DRAFT_COLUMNS)
+    .eq('brand_id', brandId)
+    .eq('id', draftId)
+    .is('archived_at', null)
+    .maybeSingle();
+  if (error) throw new Error(`content_drafts read: ${error.message}`);
+  const own = draft ? readShoppingPath(draft.shopping_path, { draftId: draft.id }) : null;
+  if (!own) return null;
+  const { held, heldErr } = await heldProducts(db, brandId, [draft.id]);
+  const path = withHeld(own, held.get(draft.id));
+  const site = await primarySite(db, brandId);
+  const domains = await siteDomains(db, brandId);
+  const catalog = await productStates(db, brandId, pathProductIds(path));
+  const { url, fromPage, check, row } = await checkDraft(draft, path, {
+    brandId,
+    catalog,
+    site,
+    domains,
+    readPage,
+    readLive: readable(draft, domains),
+    now,
+  });
+  const { error: writeErr } = await db
+    .from('content_shopping_checks')
+    .upsert([row], { onConflict: 'draft_id' });
+  if (writeErr) throw new Error(`content_shopping_checks write: ${writeErr.message}`);
+  if (fromPage && heldErr) throw heldErr;
+  const action = fromPage
+    ? await syncShoppingLinksAction(brandId, { draft, pageUrl: url, check }, { db, now })
+    : null;
+  return { readFrom: row.read_from, pageUrl: row.page_url, bad: check.bad, action };
 }
 
 /** Brands waiting for their check, with the check's options. */
