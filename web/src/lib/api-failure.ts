@@ -48,7 +48,9 @@ export function apiFailure(status: number, body: Record<string, unknown> = {}): 
 /**
  * Whether a response body is the server's subscription_inactive (a read-only
  * workspace), also when it comes as text: the AI SDK's chat transport throws
- * an error whose message is the response body.
+ * an error whose message is the response body. A server action refused by
+ * assertWritable (lib/subscription-guard.ts) throws an error whose digest is
+ * the code, the one thing production keeps of it.
  */
 export function isSubscriptionInactive(body: unknown): boolean {
   let value = body;
@@ -59,9 +61,7 @@ export function isSubscriptionInactive(body: unknown): boolean {
       return false;
     }
   }
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { code?: unknown }).code === 'subscription_inactive'
-  );
+  if (typeof value !== 'object' || value === null) return false;
+  const { code, digest } = value as { code?: unknown; digest?: unknown };
+  return code === 'subscription_inactive' || digest === 'subscription_inactive';
 }

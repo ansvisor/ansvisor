@@ -35,6 +35,7 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
+import { aiUsageMultiple, usePlanFeatures, type PlanFeature } from './plan-features';
 
 interface SubscriptionData {
   planId: string;
@@ -55,6 +56,7 @@ interface PlanSwitcherProps {
 export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: PlanSwitcherProps) {
   const t = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
+  const planFeatures = usePlanFeatures();
   // Buying or changing the plan charges the organization's card: admins only,
   // as the subscription route checks.
   const { canAdmin } = useUserRole();
@@ -207,47 +209,12 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
     }
   }
 
-  /** A plan's AI budget as a multiple of Starter's, as the cards say it; none when unlimited. */
-  function aiMultiple(budget: number): number | null {
-    const starterAi = PLANS.starter.limits.improveMonthlyBudgetUsd;
-    return starterAi > 0 && budget > 0 ? Math.round(budget / starterAi) : null;
-  }
-
-  /**
-   * A plan card's list, as the pricing page puts it: brands, seats, prompts,
-   * the answer engines it tracks, content briefs and site audits a month,
-   * AI usage as a multiple of Starter's, then what the plan adds.
-   */
-  function planFeatures(planId: PlanId): { text: string; hint?: string }[] {
-    const { limits } = PLANS[planId];
-    const aiUsage = aiMultiple(limits.improveMonthlyBudgetUsd);
-    const items = [
-      limits.maxBrands === -1
-        ? tCards('unlimitedBrands')
-        : tCards('brands', { count: limits.maxBrands }),
-      limits.maxTeamMembers === -1
-        ? tCards('unlimitedSeats')
-        : tCards('seats', { count: limits.maxTeamMembers }),
-      tCards('prompts', { count: limits.maxPrompts }),
-      tCards(`${planId}.engines`),
-      tCards('briefs', { count: limits.maxBriefGenerations }),
-      tCards('audits', { count: limits.maxSiteAudits }),
-    ].map((text) => ({ text }));
-    return [
-      ...items,
-      ...(aiUsage
-        ? [{ text: tCards('aiUsage', { count: aiUsage }), hint: tCards('aiUsageHint') }]
-        : []),
-      ...(tCards.raw(`${planId}.extras`) as string[]).map((text) => ({ text })),
-    ];
-  }
-
   /**
    * The custom plan's points: its AI usage first, set per customer above
    * Enterprise's floor (2026-10-27), then the pricing page's points.
    */
-  function customPlanPoints(): { text: string; hint?: string }[] {
-    const aiUsage = aiMultiple(PLANS.enterprise.limits.improveMonthlyBudgetUsd);
+  function customPlanPoints(): PlanFeature[] {
+    const aiUsage = aiUsageMultiple('enterprise');
     return [
       ...(aiUsage
         ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards('aiUsageCustomHint') }]
