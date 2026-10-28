@@ -664,8 +664,8 @@ function WebflowMapping({
   );
 }
 
-/** A labelled select, one row. */
-function Picker({
+/** A labelled select, one row: the Framer card's too. */
+export function Picker({
   label,
   items,
   value,
