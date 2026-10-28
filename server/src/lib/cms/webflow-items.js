@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { foldLetters } from '../letters.js';
 
 /**
  * A page as a Webflow CMS item (Send to CMS #1331, phase 2): its rich text
@@ -131,6 +132,27 @@ export function tableAsList($, table) {
   );
 }
 
+/**
+ * A product card or grid (the editor's product-block.ts, shopping-blocks.js)
+ * as a list: a product an item, its name linked, its price after it.
+ */
+export function productsAsList($) {
+  $('.ansvisor-products').each((_, grid) => {
+    const items = $(grid)
+      .find('a.ansvisor-product')
+      .toArray()
+      .flatMap((card) => {
+        const name = squash($(card).find('strong').text());
+        if (!name) return [];
+        const price = squash($(card).find('span').text());
+        const $item = $('<li></li>').append($(card).text(name));
+        if (price) $item.append(` ${escape(price)}`);
+        return [$item];
+      });
+    $(grid).replaceWith(items.length ? $('<ul></ul>').append(items) : '');
+  });
+}
+
 /** Media goes; a figure of media with its caption, a figure of words (a table's) keeps them. */
 export function dropMedia($) {
   $('figure').each((_, figure) => {
@@ -181,6 +203,7 @@ export function settleRichText($, { keep, blocks, attrs = {} }) {
  * A page's publishable HTML as Webflow's rich text keeps it:
  *   - a table becomes a list, a row an item ("Header: cell · …"), a table in
  *     a cell first: rich text has no tables (#1331);
+ *   - a product card or grid becomes a list, a product an item ("Name $189.00");
  *   - images and media are left out until workspace files (CHAT-06, #1331),
  *     a figure of one with its caption; scripts (the JSON-LD has its own
  *     field), embeds, forms and rules go too;
@@ -201,6 +224,7 @@ export function toWebflowRichText(html) {
   dropUnkept($);
   // Inner tables first: a cell holding one reads it as its list.
   for (const table of $('table').toArray().reverse()) tableAsList($, table);
+  productsAsList($);
   dropMedia($);
   $('h1').each((_, el) => {
     el.tagName = 'h2';
@@ -215,20 +239,13 @@ export function toWebflowRichText(html) {
   return { html: $.html().trim(), changed };
 }
 
-/** Letters Unicode doesn't take apart into a base letter and its mark. */
-const LETTERS = { ı: 'i', ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', đ: 'd', ł: 'l', þ: 'th' };
-
 /**
  * A slug Webflow takes: lowercase letters, digits, '-' and '_', starting
  * with a letter, digit or '_' (marks taken off, "ç" → "c"). Null when
  * nothing of it is left (a slug in another script).
  */
 export function webflowSlug(value) {
-  const slug = String(value ?? '')
-    .toLowerCase()
-    .replace(/[ıßæœøđłþ]/g, (c) => LETTERS[c])
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
+  const slug = foldLetters(value)
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -256,9 +273,11 @@ export function openingWords(html) {
  * field the brand's map gives it. The meta title falls back to the title,
  * the meta description to the page's opening words. JSON-LD goes as its
  * JSON (for an embed in the collection's template), empty when the page has
- * none, so an item sent again loses what the page no longer says.
+ * none, so an item sent again loses what the page no longer says. The date
+ * is `sentAt` as Webflow takes it (ISO 8601), only for a new item: one sent
+ * again keeps its own (a blog template's publish date).
  */
-export function fieldDataFor({ page, slug, body, jsonLd }, fieldMap) {
+export function fieldDataFor({ page, slug, body, jsonLd, sentAt }, fieldMap) {
   const data = { name: squash(page.title).slice(0, NAME_CHARS), slug };
   if (fieldMap.body) data[fieldMap.body] = body;
   if (fieldMap.metaTitle) {
@@ -268,6 +287,7 @@ export function fieldDataFor({ page, slug, body, jsonLd }, fieldMap) {
     data[fieldMap.metaDescription] = squash(page.metaDescription) || openingWords(body);
   }
   if (fieldMap.jsonLd) data[fieldMap.jsonLd] = jsonLd?.length ? jsonLdText(jsonLd) : '';
+  if (fieldMap.date && sentAt) data[fieldMap.date] = sentAt.toISOString();
   return data;
 }
 

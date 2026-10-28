@@ -8,6 +8,7 @@ import {
   jsonLdText,
   openingWords,
   ownRows,
+  productsAsList,
   settleRichText,
   squash,
   tableAsList,
@@ -125,6 +126,8 @@ function framerTable($, table) {
  * A page's publishable HTML as Framer's formatted text keeps it:
  *   - tables stay, a cell's colspan and rowspan with them (a table in a
  *     cell first reads as a line of it, as Webflow's lists read it);
+ *   - a product card or grid becomes a list, a product an item ("Name
+ *     $189.00"), as for Webflow: formatted text has no grid;
  *   - images and media are left out until workspace files (CHAT-06, #1331),
  *     a figure of one with its caption; scripts (the JSON-LD has its own
  *     field), embeds, forms and rules go too;
@@ -145,6 +148,7 @@ export function toFramerHtml(html) {
     if ($(table).parents('table').length) tableAsList($, table);
     else framerTable($, table);
   }
+  productsAsList($);
   dropMedia($);
   $('h1').each((_, el) => {
     el.tagName = 'h2';

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { framerFieldData, framerSlug, toFramerHtml } from './framer-items.js';
 
@@ -82,6 +83,23 @@ describe('toFramerHtml', () => {
     ).toBe(
       '<h2>Title again</h2><p>Hi there <code>npm</code></p><pre><code>npm i &lt;x&gt;\n  --save</code></pre><p>Term</p><p>Meaning</p><p>Loose <strong>words</strong></p><p>Orphan</p>',
     );
+  });
+
+  it('reads a product grid as a list, a product a line: its name linked, its price after it', () => {
+    // The editor's and the agent's grid (web/src/lib/content/product-block.ts, shopping-blocks.js).
+    const grid = JSON.parse(
+      readFileSync(
+        new URL('../../../../web/src/lib/content/__fixtures__/product-block.json', import.meta.url),
+        'utf8',
+      ),
+    ).html;
+    const { html, changed } = toFramerHtml(
+      `<p>Our picks:</p><!-- html-block -->\n${grid}\n<!-- /html-block --><p>More below.</p>`,
+    );
+    expect(html).toBe(
+      '<p>Our picks:</p><ul><li><a href="https://shop.example/products/p1?variant=2">Summit "GTX" Boot</a> $189.00</li><li><a href="https://shop.example/products/p2">Trail Mid</a></li></ul><p>More below.</p>',
+    );
+    expect(changed.images).toBe(1);
   });
 });
 

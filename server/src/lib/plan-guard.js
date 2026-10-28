@@ -9,7 +9,6 @@ import {
 } from '../config/plans.js';
 import { anchoredPeriodStart, shiftMonthClamped } from './quota-period.js';
 import {
-  IMPROVE_BUDGET_SHARE,
   estimateGenerationsLeft,
   generationCostUsd,
   medianCost,
@@ -38,12 +37,13 @@ export class PlanLimitError extends Error {
  * Enterprise orgs can have per-customer limit overrides stored in
  * organizations.plan_overrides (jsonb) — mirrors web getOrgPlan().
  *
- * `contractMonthlyUsd` is the contract's monthly value, entered when the deal
- * is signed. It sets the Improve budget to 1% of the contract (never below
- * the plan default), unless `improveMonthlyBudgetUsd` is set explicitly,
- * which wins. The relevance
- * budget (VIS-011) follows the same rule at 0.1%, rounded down so it never
- * passes the share.
+ * The AI budget is the plan's $50 unless Ansvisor sets a customer's own in
+ * `improveMonthlyBudgetUsd` (2026-10-27: $50 or more, a finite number, set per customer); the
+ * contract's value doesn't raise it. `contractMonthlyUsd` is the contract's
+ * monthly value, entered when the deal is signed. It sets the relevance
+ * budget (VIS-011) to 0.1% of the contract (never below the plan default),
+ * rounded down so it never passes the share, unless
+ * `relevanceMonthlyBudgetUsd` is set explicitly, which wins.
  */
 export function applyPlanOverrides(plan, org) {
   if (
@@ -54,13 +54,14 @@ export function applyPlanOverrides(plan, org) {
   ) {
     const overrides = org.plan_overrides;
     const limits = { ...plan.limits, ...overrides };
-    const usd = Number(overrides.contractMonthlyUsd);
-    if (overrides.improveMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
-      limits.improveMonthlyBudgetUsd = Math.max(
-        plan.limits.improveMonthlyBudgetUsd ?? 0,
-        Math.round(usd * IMPROVE_BUDGET_SHARE * 100) / 100,
-      );
+    // A budget set by hand is used only as a number: null would read as
+    // unlimited, and "80$" would fail every AI call. Anything else keeps
+    // the plan's.
+    const own = overrides.improveMonthlyBudgetUsd;
+    if (own !== undefined && !(typeof own === 'number' && Number.isFinite(own))) {
+      limits.improveMonthlyBudgetUsd = plan.limits.improveMonthlyBudgetUsd;
     }
+    const usd = Number(overrides.contractMonthlyUsd);
     if (overrides.relevanceMonthlyBudgetUsd === undefined && Number.isFinite(usd) && usd > 0) {
       limits.relevanceMonthlyBudgetUsd = Math.max(
         plan.limits.relevanceMonthlyBudgetUsd ?? 0,
@@ -73,10 +74,33 @@ export function applyPlanOverrides(plan, org) {
 }
 
 /**
+ * An organization without an active plan, as a read that costs nothing sees
+ * it (read-only once the plan has ended, 2026-10-27): the plan it was on (or,
+ * never subscribed, the one it would start on) with every allowance 0, marked
+ * `noPlan`. Its stored data still comes back, with nothing left to spend; its
+ * features stay, naming what that data covers. Lists (features, the allowed
+ * scrapers and models) are kept; every other value, a number or one an
+ * override set as text, is 0.
+ */
+function noPlanOf(org) {
+  const plan = applyPlanOverrides(getPlan(org.plan), org);
+  const limits = Object.fromEntries(
+    Object.entries(plan.limits).map(([key, value]) => [key, Array.isArray(value) ? value : 0]),
+  );
+  return { ...plan, noPlan: true, limits };
+}
+
+/** What an answer read from noPlanOf's plan adds: `noPlan: true`, and nothing on a plan. */
+const noPlanMark = (plan) => (plan.noPlan ? { noPlan: true } : {});
+
+/**
  * Resolve an organization's plan directly by org id.
  * Self-hosted → returns self_hosted plan (unlimited).
+ *
+ * Without an active subscription it throws PlanLimitError (402), unless
+ * `readOnly`, for a read that costs nothing: then the plan is noPlanOf's.
  */
-async function resolveOrgPlanByOrgId(orgId) {
+async function resolveOrgPlanByOrgId(orgId, { readOnly = false } = {}) {
   if (!isCloud()) return getPlan('self_hosted');
 
   const { data: org } = await supabaseAdmin
@@ -90,6 +114,8 @@ async function resolveOrgPlanByOrgId(orgId) {
   // granted billed features (volume fetch, content generation, etc.) to
   // unsubscribed signups.
   if (!isSubscriptionActive(org?.subscription_status)) {
+    // Without the organization's row there is nothing kept to read.
+    if (readOnly && org) return noPlanOf(org);
     throw new PlanLimitError(
       'An active subscription or free trial is required. Please choose a plan to continue.',
       402,
@@ -103,7 +129,7 @@ async function resolveOrgPlanByOrgId(orgId) {
  * The free trial's AI budget: while the subscription is trialing, the plan's
  * AI budget is TRIAL_AI_BUDGET_USD at most, and the plan's own comes once it
  * is paid; `trial` marks the plan so what reads it can say so. Enterprise
- * keeps its own: its trials are a deal's, with its budget or contract.
+ * keeps its own: its trials are a deal's, with its budget.
  */
 export function applyTrialAiBudget(plan, org) {
   if (org?.subscription_status !== 'trialing' || org.plan === 'enterprise') return plan;
@@ -131,8 +157,9 @@ export async function getOrgIdForUser(userId) {
 /**
  * Resolve the user's organization plan from the database.
  * Self-hosted → returns self_hosted plan (unlimited).
+ * `readOnly` as resolveOrgPlanByOrgId.
  */
-async function resolveOrgPlan(userId) {
+async function resolveOrgPlan(userId, options) {
   if (!isCloud()) return getPlan('self_hosted');
 
   const orgId = await getOrgIdForUser(userId);
@@ -140,15 +167,16 @@ async function resolveOrgPlan(userId) {
     throw new PlanLimitError('No organization found for user.', 400);
   }
 
-  return resolveOrgPlanByOrgId(orgId);
+  return resolveOrgPlanByOrgId(orgId, options);
 }
 
 /**
  * Enforce that the user's plan includes a specific feature.
- * Throws PlanLimitError if not.
+ * Throws PlanLimitError if not. `readOnly` as resolveOrgPlanByOrgId: without
+ * an active plan, the features of the plan it was on.
  */
-export async function enforceFeature(userId, feature) {
-  const plan = await resolveOrgPlan(userId);
+export async function enforceFeature(userId, feature, options) {
+  const plan = await resolveOrgPlan(userId, options);
   if (!hasFeature(plan, feature)) {
     throw new PlanLimitError(
       `Your ${plan.name} plan does not include "${feature}". Please upgrade.`,
@@ -218,10 +246,11 @@ export async function enforceVolumeQuota(userId) {
 
 /**
  * Get current volume quota status without enforcing.
- * Returns { used, limit, remaining }.
+ * Returns { used, limit, remaining }. `readOnly`: without an active plan,
+ * limit and remaining 0 and `noPlan: true`, rather than a 402.
  */
-export async function getVolumeQuotaStatus(userId) {
-  const plan = await resolveOrgPlan(userId);
+export async function getVolumeQuotaStatus(userId, { readOnly = false } = {}) {
+  const plan = await resolveOrgPlan(userId, { readOnly });
   const maxAnalyses = plan.limits.maxVolumeAnalyses;
   if (maxAnalyses === -1) return { used: 0, limit: -1, remaining: -1 };
 
@@ -242,6 +271,7 @@ export async function getVolumeQuotaStatus(userId) {
     .gte('used_at', periodStart.toISOString());
 
   const used = count || 0;
+  if (plan.noPlan) return { used, limit: 0, remaining: 0, noPlan: true };
   return { used, limit: maxAnalyses, remaining: maxAnalyses - used };
 }
 
@@ -313,15 +343,16 @@ export async function enforceBriefQuota(orgId) {
 
 /**
  * Get current brief quota status without enforcing.
- * Returns { used, limit, remaining }.
+ * Returns { used, limit, remaining }. `readOnly` as resolveOrgPlanByOrgId:
+ * without an active plan, limit 0 and `noPlan: true`.
  */
-export async function getBriefQuotaStatus(orgId) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
+export async function getBriefQuotaStatus(orgId, { readOnly = false } = {}) {
+  const plan = await resolveOrgPlanByOrgId(orgId, { readOnly });
   const max = plan.limits.maxBriefGenerations;
   if (max === -1) return { used: 0, limit: -1, remaining: -1 };
 
   const used = await countBriefUsageThisMonth(orgId);
-  return { used, limit: max, remaining: Math.max(0, max - used) };
+  return { used, limit: max, remaining: Math.max(0, max - used), ...noPlanMark(plan) };
 }
 
 /** How many of the org's latest calls its typical cost is the median of. */
@@ -346,12 +377,14 @@ async function improveSpendThisPeriod(orgId) {
 /**
  * Improve-tab budget (PROMPT-003): a monthly USD budget per organization
  * (plan.limits.improveMonthlyBudgetUsd: Starter $5, Growth $25, Enterprise
- * $50 or 1% of its contract, the free trial $1), charged with each
+ * $50 or a customer's own set by Ansvisor, the free trial $1), charged with each
  * generation's real token cost so the budget holds for any model. Users see
- * an estimate of generations left, not dollars. -1 is unlimited.
+ * an estimate of generations left, not dollars. -1 is unlimited. `readOnly`
+ * as resolveOrgPlanByOrgId: without an active plan, a budget of 0 and
+ * `noPlan: true`.
  */
-export async function getImproveQuotaStatus(orgId, modelId) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
+export async function getImproveQuotaStatus(orgId, modelId, { readOnly = false } = {}) {
+  const plan = await resolveOrgPlanByOrgId(orgId, { readOnly });
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
   if (budget === -1) return { unlimited: true, planName: plan.name };
   const { spent, typical } = await improveSpendThisPeriod(orgId);
@@ -365,6 +398,7 @@ export async function getImproveQuotaStatus(orgId, modelId) {
     remainingUsd: remaining,
     generationsLeft: estimateGenerationsLeft(remaining, typical ?? typicalCostUsd(modelId)),
     percentLeft: budget > 0 ? Math.round((remaining / budget) * 100) : 0,
+    ...noPlanMark(plan),
   };
 }
 
@@ -655,15 +689,16 @@ async function countOpportunityUsage(orgId, since) {
 
 /**
  * Get the monthly content opportunity quota without enforcing (CONTENT-001).
- * Returns { used, limit, remaining }; limit -1 is unlimited.
+ * Returns { used, limit, remaining }; limit -1 is unlimited. `readOnly` as
+ * resolveOrgPlanByOrgId: without an active plan, limit 0 and `noPlan: true`.
  */
-export async function getOpportunityQuotaStatus(orgId) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
+export async function getOpportunityQuotaStatus(orgId, { readOnly = false } = {}) {
+  const plan = await resolveOrgPlanByOrgId(orgId, { readOnly });
   const max = plan.limits.maxOpportunitiesPerMonth ?? -1;
   if (max === -1) return { used: 0, limit: -1, remaining: -1 };
 
   const used = await countOpportunityUsage(orgId, await quotaPeriodStart(orgId));
-  return { used, limit: max, remaining: Math.max(0, max - used) };
+  return { used, limit: max, remaining: Math.max(0, max - used), ...noPlanMark(plan) };
 }
 
 /**
@@ -730,18 +765,21 @@ export async function releaseOpportunitySlots(ids) {
 /**
  * Both monthly content counters with the period they belong to, for the
  * Content page and GET /content/usage (CONTENT-001). Opportunities and briefs
- * are separate pools that renew together with the subscription.
+ * are separate pools that renew together with the subscription. `readOnly`
+ * as resolveOrgPlanByOrgId: without an active plan, every count's limit 0
+ * and `noPlan: true`.
  */
-export async function getContentUsage(orgId) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
+export async function getContentUsage(orgId, { readOnly = false } = {}) {
+  const plan = await resolveOrgPlanByOrgId(orgId, { readOnly });
   const periodStart = await quotaPeriodStart(orgId);
   const [opportunities, briefs] = await Promise.all([
-    getOpportunityQuotaStatus(orgId),
-    getBriefQuotaStatus(orgId),
+    getOpportunityQuotaStatus(orgId, { readOnly }),
+    getBriefQuotaStatus(orgId, { readOnly }),
   ]);
   return {
     plan: plan.id,
     planName: plan.name,
+    ...noPlanMark(plan),
     periodStart: periodStart.toISOString(),
     periodEnd: shiftMonthClamped(periodStart, 1).toISOString(),
     opportunities: {
@@ -813,7 +851,7 @@ async function readSiteAuditSettings(orgId) {
  * each run's share, the five runs and which are recorded, the share the runs
  * still to come keep out of the user's pool, and the run whose turn it is.
  */
-async function siteAuditAutoStatus(orgId, limit, periodStart, now) {
+async function siteAuditAutoStatus(orgId, limit, periodStart, now, { noPlan = false } = {}) {
   const [settings, { data: runRows, error }] = await Promise.all([
     readSiteAuditSettings(orgId),
     supabaseAdmin
@@ -824,7 +862,8 @@ async function siteAuditAutoStatus(orgId, limit, periodStart, now) {
   ]);
   if (error) throw new Error(error.message);
 
-  const enabled = autoAuditEnabled(settings.autoAudit, limit);
+  // No plan, no runs: the morning sweep skips an organization without one.
+  const enabled = !noPlan && autoAuditEnabled(settings.autoAudit, limit);
   const perRun = perRunSlots(limit);
   const periodEnd = shiftMonthClamped(periodStart, 1);
   const schedule = runSchedule(periodStart, periodEnd);
@@ -859,17 +898,18 @@ async function siteAuditAutoStatus(orgId, limit, periodStart, now) {
 /**
  * The org's Site Audit quota this period: completed and running audits
  * against plan.limits.maxSiteAudits (Starter 100, Growth 500,
- * Enterprise/Self-hosted unlimited), and the auto-audit share.
+ * Enterprise/Self-hosted unlimited), and the auto-audit share. `readOnly` as
+ * resolveOrgPlanByOrgId: without an active plan, a limit of 0 and no runs.
  */
-async function siteAuditQuota(orgId, now) {
-  const plan = await resolveOrgPlanByOrgId(orgId);
+async function siteAuditQuota(orgId, now, { readOnly = false } = {}) {
+  const plan = await resolveOrgPlanByOrgId(orgId, { readOnly });
   const limit = plan.limits.maxSiteAudits;
   const periodStart = await quotaPeriodStart(orgId, now);
   const [{ used, autoUsed }, running, autoRunning, auto] = await Promise.all([
     limit === -1 ? { used: 0, autoUsed: 0 } : countSiteAuditUsage(orgId, periodStart),
     limit === -1 ? 0 : countRunningSiteAudits(orgId),
     limit === -1 ? 0 : countRunningSiteAudits(orgId, 'auto'),
-    siteAuditAutoStatus(orgId, limit, periodStart, now),
+    siteAuditAutoStatus(orgId, limit, periodStart, now, { noPlan: plan.noPlan === true }),
   ]);
   // The quota card tells the runs' audits (done and running) from the user's.
   return { plan, limit, used, running, auto: { ...auto, used: autoUsed, running: autoRunning } };
@@ -928,10 +968,11 @@ export async function enforceSiteAuditQuota(
  * Returns { used, running, limit, remaining, auto }: remaining is the user's
  * pool, with running audits and the auto-audit runs still to come taken out;
  * auto is where auto-audit stands (siteAuditAutoStatus, plus what its runs
- * used this period and have running).
+ * used this period and have running). `readOnly` as siteAuditQuota, with
+ * `noPlan: true`.
  */
-export async function getSiteAuditQuotaStatus(orgId, { now = new Date() } = {}) {
-  const { limit, used, running, auto } = await siteAuditQuota(orgId, now);
+export async function getSiteAuditQuotaStatus(orgId, { now = new Date(), readOnly = false } = {}) {
+  const { plan, limit, used, running, auto } = await siteAuditQuota(orgId, now, { readOnly });
   if (limit === -1) return { used: 0, running: 0, limit: -1, remaining: -1, auto };
   return {
     used,
@@ -939,6 +980,7 @@ export async function getSiteAuditQuotaStatus(orgId, { now = new Date() } = {}) 
     limit,
     remaining: Math.max(0, limit - used - running - auto.reserved),
     auto,
+    ...noPlanMark(plan),
   };
 }
 
@@ -960,6 +1002,21 @@ export async function getBotEventCap(orgId) {
 export async function getBotRawCap(orgId) {
   const plan = await resolveOrgPlanByOrgId(orgId);
   return plan.limits.maxBotRawRecordsPerMonth ?? 0;
+}
+
+/**
+ * Both AI-bot caps, from one plan read, for the connections page:
+ * { cap, rawCap } as getBotEventCap and getBotRawCap. `readOnly` as
+ * resolveOrgPlanByOrgId: without an active plan, 0 and 0 with `noPlan: true`,
+ * so the connections and this month's use still come back.
+ */
+export async function getBotCaps(orgId, { readOnly = false } = {}) {
+  const plan = await resolveOrgPlanByOrgId(orgId, { readOnly });
+  return {
+    cap: plan.limits.maxBotEventsPerMonth ?? 0,
+    rawCap: plan.limits.maxBotRawRecordsPerMonth ?? 0,
+    ...noPlanMark(plan),
+  };
 }
 
 /**
@@ -987,11 +1044,17 @@ export function attachPlan() {
 /**
  * Express middleware factory — blocks the request if the plan lacks a feature.
  * Usage: router.post('/suggest', requireFeature('prompt_suggestions'), handler)
+ *
+ * `readOnly`, named route by route (as the middleware's open routes are, so
+ * none is let through by its method alone): a route that only reads what is
+ * kept. An organization without an active plan is then checked against the
+ * features of the plan it was on (read-only once the plan has ended,
+ * 2026-10-27), so what it stored still comes back; without it, a 402.
  */
-export function requireFeature(feature) {
+export function requireFeature(feature, { readOnly = false } = {}) {
   return async (req, res, next) => {
     try {
-      await enforceFeature(req.user.id, feature);
+      await enforceFeature(req.user.id, feature, { readOnly });
       next();
     } catch (err) {
       if (err instanceof PlanLimitError) {

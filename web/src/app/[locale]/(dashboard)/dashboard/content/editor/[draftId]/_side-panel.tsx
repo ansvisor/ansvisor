@@ -8,11 +8,13 @@ import { rulesForBrief, useRuleDescriber } from '@/lib/content/agent-write';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import type { SiteType } from '@/lib/content/page-types';
 import { inputsGiven } from '@/lib/content/draft-inputs';
+import { shoppingPathFits } from '@/lib/content/shopping-path';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
 import { BAND_CLASSES, qualityBand, qualityPhase } from '@/lib/content/quality';
 import type { ClaimMark } from '@/lib/content/quality-checks';
 import { cn } from '@/lib/utils';
+import { ShoppingPathSection } from './_shopping-path';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
@@ -148,6 +150,7 @@ export function EditorSidePanel({
   onConfirmIntro,
   onChangeType,
   handOff = null,
+  onShoppingPathChange,
 }: {
   draft: ContentDraft;
   /**
@@ -233,6 +236,8 @@ export function EditorSidePanel({
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
   handOff?: HandOff | null;
+  /** Brief › Shopping path changed: the Shopping rules read it again (shopping path, part 6). */
+  onShoppingPathChange?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -458,6 +463,14 @@ export function EditorSidePanel({
                     {tEditor('yourInput.retry')}
                   </button>
                 </p>
+              )}
+              {shoppingPathFits(siteType, pageType) && (
+                <ShoppingPathSection
+                  draftId={draft.id}
+                  brandId={draft.brandId}
+                  pageType={pageType}
+                  onPathChange={onShoppingPathChange}
+                />
               )}
               <BriefTab
                 draftId={draft.id}

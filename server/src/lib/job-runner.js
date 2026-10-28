@@ -6,6 +6,8 @@
 
 import {
   getJob,
+  cancelClaimedJob,
+  cancelWaitingJob,
   claimWaitingJob,
   listWaitingJobs,
   completeJob,
@@ -14,6 +16,7 @@ import {
   registerActiveJob,
   unregisterActiveJob,
 } from './job-manager.js';
+import { activeBrandFilter, isBrandActive } from './active-subscriptions.js';
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
@@ -42,6 +45,7 @@ const queuedJobs = new Set();
 // either started or is about to.
 const RECOVERY_IDLE_MS = 2 * 60_000;
 const RECOVERY_MAX_AGE_MS = 20 * 60 * 60_000;
+const RECOVERABLE_TYPES = new Set(['tracking', 'content']);
 
 /**
  * Create a mock job object that mirrors the Bull job interface
@@ -52,6 +56,27 @@ function createJobProxy(jobId, signal) {
     progress: (data) => updateJobProgress(jobId, data),
     signal,
   };
+}
+
+/**
+ * Whether a claimed job's organization has no active plan, cancelling the
+ * job if so (2026-10-27): every way a job starts (the nightly run, the
+ * internal trigger, a retry, the recovery) ends in a claim, so this is where
+ * an ended plan stops tracking and content generation, with no Cloro, AI or
+ * scraping spent. A read that fails throws, and the job retries as after any
+ * failure.
+ */
+async function skipUnpaid(jobId, brandId) {
+  if (await isBrandActive(brandId)) return false;
+  if (await cancelClaimedJob(jobId, 'subscription_inactive')) {
+    logger.info({ jobId, brandId }, 'cancelled a job of an organization without an active plan');
+  } else {
+    // Not cancelled (the write failed, or the row moved on): never left
+    // 'active', where nothing would end it.
+    logger.warn({ jobId, brandId }, 'could not cancel a job without an active plan; failing it');
+    await failJob(jobId, 'subscription_inactive');
+  }
+  return true;
 }
 
 /**
@@ -87,6 +112,7 @@ async function attemptTrackingJob(jobId, io) {
 
   try {
     const { brandId, promptId, promptIds, immediate } = jobRow.data;
+    if (await skipUnpaid(jobId, brandId)) return;
     const proxy = createJobProxy(jobId, abortController.signal);
 
     const result = await processTrackingJob({
@@ -234,6 +260,7 @@ async function attemptContentJob(jobId, io) {
 
   try {
     const { brandId, model, request } = jobRow.data;
+    if (await skipUnpaid(jobId, brandId)) return;
     const proxy = createJobProxy(jobId, abortController.signal);
 
     const result = await processContentJob({ brandId, model, job: proxy, request });
@@ -284,22 +311,36 @@ async function attemptContentJob(jobId, io) {
 /**
  * Restart waiting jobs that have no run chain in this process. Runs at
  * startup and every minute (server.js). Returns how many it restarted.
+ *
+ * A job whose organization's plan has ended is cancelled instead: it would
+ * track, scrape or write for an organization that no longer pays for it, and
+ * left waiting it would only be found again the next minute.
  */
 export async function recoverWaitingJobs(io) {
-  const jobs = await listWaitingJobs({
-    idleMs: RECOVERY_IDLE_MS,
-    maxAgeMs: RECOVERY_MAX_AGE_MS,
-  });
+  const jobs = (
+    await listWaitingJobs({
+      idleMs: RECOVERY_IDLE_MS,
+      maxAgeMs: RECOVERY_MAX_AGE_MS,
+    })
+  ).filter((job) => !queuedJobs.has(job.id) && RECOVERABLE_TYPES.has(job.type));
+  if (jobs.length === 0) return 0;
+  const isActive = await activeBrandFilter(jobs.map((job) => job.brand_id));
 
   let recovered = 0;
+  let cancelled = 0;
   for (const job of jobs) {
-    if (queuedJobs.has(job.id)) continue;
+    if (!isActive(job.brand_id)) {
+      if (await cancelWaitingJob(job.id, 'subscription_inactive')) cancelled++;
+      continue;
+    }
     if (job.type === 'tracking') runTrackingJob(job.id, io);
-    else if (job.type === 'content') runContentJob(job.id, io);
-    else continue;
+    else runContentJob(job.id, io);
     recovered++;
   }
 
+  if (cancelled > 0) {
+    logger.info({ cancelled }, 'cancelled waiting jobs of organizations without an active plan');
+  }
   if (recovered > 0) logger.warn({ recovered }, 'restarted waiting jobs that had no run chain');
   return recovered;
 }

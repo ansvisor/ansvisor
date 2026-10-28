@@ -129,6 +129,47 @@ describe('TaskDetailView', () => {
     expect(container.textContent).not.toContain('Before:');
   });
 
+  it('shows the last automatic check, and checks now on a click (AC-010)', () => {
+    const onCheck = vi.fn();
+    render(
+      <TaskDetailView
+        details={parseTaskDetails({
+          url: '/pricing',
+          check: 'auto',
+          autoCheck: {
+            at: '2026-10-22T03:00:00Z',
+            passed: false,
+            missing: ['crawlers_blocked', 'noindex'],
+          },
+        })}
+        disabled={false}
+        onEdit={() => {}}
+        check={{ onCheck, busy: false }}
+      />,
+    );
+    expect(container.textContent).toContain(
+      'Checked Oct 22 · robots.txt blocks AI crawlers, the page asks not to be indexed',
+    );
+    act(() => button('Check now').click());
+    expect(onCheck).toHaveBeenCalled();
+  });
+
+  it('says a passed check, and offers no Check now for a task checked otherwise', () => {
+    render(
+      <TaskDetailView
+        details={parseTaskDetails({
+          check: 'rerun',
+          autoCheck: { at: '2026-10-22T03:00:00Z', passed: true, missing: [] },
+        })}
+        disabled={false}
+        onEdit={() => {}}
+        check={{ onCheck: () => {}, busy: false }}
+      />,
+    );
+    expect(container.textContent).toContain('Checked Oct 22 · passed');
+    expect(button('Check now')).toBeUndefined();
+  });
+
   it('asks for details when a task has none, and opens the editor', () => {
     const onEdit = vi.fn();
     render(<TaskDetailView details={null} disabled={false} onEdit={onEdit} />);
