@@ -3,7 +3,7 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { assertBrandAccess } from '../lib/access.js';
 import { rescoreActionsForSignal } from '../lib/action-center/priority-data.js';
-import { PlanLimitError } from '../lib/plan-guard.js';
+import { PlanLimitError, requireFeature } from '../lib/plan-guard.js';
 import {
   TaskSendError,
   loadTask,
@@ -375,9 +375,10 @@ const productActionsSchema = z.object({
  *
  * "Send to Action Center" on Product Visibility (ECOM-013): a product, or a
  * category, with the work that gets it on the AI shelf. Sending the same
- * product or category again returns the action already open.
+ * product or category again returns the action already open. Product
+ * Visibility's plans only (shopping_analytics), as its page.
  */
-router.post('/products', async (req, res) => {
+router.post('/products', requireFeature('shopping_analytics'), async (req, res) => {
   try {
     const parsed = productActionsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {

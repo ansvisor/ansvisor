@@ -39,7 +39,10 @@ class PlanLimitError extends Error {
     this.statusCode = statusCode;
   }
 }
-vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
+vi.mock('../lib/plan-guard.js', () => ({
+  PlanLimitError,
+  requireFeature: () => (_req, _res, next) => next(),
+}));
 vi.mock('../lib/action-center/task-writer/index.js', () => ({
   TaskWriterError,
   isTaskWriterEnabled: () => enabled,
