@@ -219,4 +219,31 @@ describe('controlScope', () => {
     await controlScope('b1', ['p1'], SINCE);
     expect(calls).toContainEqual(['lt', 'created_at', '2026-09-01T00:00:00Z']);
   });
+
+  it("reads only the brand's own active prompts, in its topics and when it falls back", async () => {
+    // Each query's filters; its topic has two others, so it falls back to the brand.
+    const queries = [];
+    tables.prompts = () => {
+      const calls = [];
+      queries.push(calls);
+      return recordingChain(
+        {
+          data: queries.length < 3 ? [{ id: 'p1', topic_id: 't1' }, ...others(2)] : others(6),
+          error: null,
+        },
+        calls,
+      );
+    };
+    expect((await controlScope('b1', ['p1'], SINCE)).basis).toBe('brand');
+
+    // The first query reads its own prompts' topics; the others, the control.
+    const [targets, inTopics, inBrand] = queries;
+    expect(targets).toEqual([['in', 'id', ['p1']]]);
+    for (const calls of [inTopics, inBrand]) {
+      expect(calls).toContainEqual(['eq', 'prompt_sets.brand_id', 'b1']);
+      expect(calls).toContainEqual(['eq', 'is_active', true]);
+    }
+    expect(inTopics).toContainEqual(['in', 'topic_id', ['t1']]);
+    expect(inBrand.some(([method]) => method === 'in')).toBe(false);
+  });
 });

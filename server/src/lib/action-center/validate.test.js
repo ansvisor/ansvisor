@@ -321,6 +321,40 @@ describe('validateAction', () => {
     });
   });
 
+  it('keeps the result as it was, no control beside, when the control fails to read', async () => {
+    const run = async (prompts, controlFails) => {
+      const writes = mockWrites({
+        prompts: [
+          { id: 'p1', topic_id: 't1' },
+          ...Array.from({ length: prompts }, (_, i) => ({ id: `c${i + 1}`, topic_id: 't1' })),
+        ],
+      });
+      rpc.mockImplementation(async (name, args) => {
+        if (name !== 'opportunity_basket_metrics') return { data: {}, error: null };
+        if (!args.p_prompt_ids.includes('p1') && controlFails) {
+          return { data: null, error: { message: 'statement timeout' } };
+        }
+        const before = args.p_from < daysAgo(20).slice(0, 10);
+        return { data: { cells: 100, visible: before ? 20 : 30 }, error: null };
+      });
+      await validateAction(
+        action({
+          kind: 'mention_review',
+          kpi_keys: ['ai_visibility'],
+          payload: { promptIds: ['p1'] },
+        }),
+        { now: NOW },
+      );
+      return writes.updated.find((w) => w.table === 'actions').patch;
+    };
+
+    const failed = await run(6, true);
+    expect(failed.validation.control).toBeUndefined();
+    expect(failed.outcome).toBe('improved');
+    // The same as an action with no control to read.
+    expect(failed).toEqual(await run(0, false));
+  });
+
   it('measures before and after over equal windows and stores both', async () => {
     const writes = mockWrites();
     rpc
@@ -542,6 +576,41 @@ describe('validateAction', () => {
         { metric: 'citations', unit: 'count', before: null, after: null },
       ]);
       expect(validation.brandWide.map((m) => m.metric)).toEqual(['ai_visibility', 'citations']);
+    });
+
+    it("keeps the prompts it names net of the brand's others beside (learning B2)", async () => {
+      const writes = mockWrites({
+        prompts: [
+          { id: P1, topic_id: 't1' },
+          ...Array.from({ length: 6 }, (_, i) => ({ id: `c${i + 1}`, topic_id: 't1' })),
+        ],
+      });
+      // Its prompt 20% → 60% visible; the others 40% → 44%.
+      rpc.mockImplementation(async (name, args) => {
+        if (name !== 'opportunity_basket_metrics') return { data: {}, error: null };
+        const before = args.p_from < daysAgo(20).slice(0, 10);
+        const visible = args.p_prompt_ids.includes(P1) ? (before ? 2 : 6) : before ? 40 : 44;
+        return { data: { cells: args.p_prompt_ids.includes(P1) ? 10 : 100, visible }, error: null };
+      });
+
+      await validateAction(
+        action({
+          kind: 'recover_lost_visibility',
+          kpi_keys: ['ai_visibility'],
+          payload: { targetEntity: 'prompts', targets: [{ id: P1 }] },
+        }),
+        { now: NOW },
+      );
+
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.scope.kind).toBe('targets');
+      expect(validation.control).toEqual({
+        basis: 'topics',
+        prompts: 6,
+        net: [
+          { metric: 'ai_visibility', net: 36, unit: 'points', control: { before: 40, after: 44 } },
+        ],
+      });
     });
 
     it('measures brand-wide when the basket can’t read its main metric', async () => {
