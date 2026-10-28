@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { variantStock } from '@/lib/content/feed-match';
 import type { SiteType } from '@/lib/content/page-types';
 
 /**
@@ -38,6 +39,79 @@ export const TITLE_CHARS = 200;
 /** Whether a page of this type on this kind of site takes a shopping path. */
 export function shoppingPathFits(siteType: SiteType, pageType: string | null): boolean {
   return siteType === 'ecommerce' && pageType != null && Object.hasOwn(PRODUCTS_FOR, pageType);
+}
+
+/** An amount above 0, or null: a price of 0 is none given. */
+const positive = (value: number | null | undefined) =>
+  value != null && Number.isFinite(value) && value > 0 ? value : null;
+
+/**
+ * A price as a card reads it: the sale price when it's under the price, or
+ * when there's no price; else the price; null without either. The API's
+ * rule (server/src/lib/catalog/offer.js priceAmount): change both together.
+ */
+export function priceAmount({
+  price,
+  salePrice,
+}: {
+  price: number | null | undefined;
+  salePrice: number | null | undefined;
+}): number | null {
+  const regular = positive(price);
+  const sale = positive(salePrice);
+  if (regular == null) return sale;
+  return sale != null && sale < regular ? sale : regular;
+}
+
+/**
+ * A price as a product card shows it ("$189.00", priceAmount's), in its
+ * currency; null without one. Before you publish compares a card's with
+ * the catalog's now (shopping-check.ts).
+ */
+export function priceText(product: {
+  price: number | null;
+  salePrice: number | null;
+  currency: string | null;
+}): string | null {
+  const amount = priceAmount(product);
+  if (amount == null) return null;
+  try {
+    return product.currency
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: product.currency }).format(
+          amount,
+        )
+      : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(amount);
+  } catch {
+    // A currency code Intl doesn't know: the amount and the code as the catalog has them.
+    return `${amount} ${product.currency}`;
+  }
+}
+
+/** In stock before low stock (limited availability): the better stock, the lower. */
+function inStockRank(availability: string | null): number {
+  return (availability ?? '').toLowerCase().replace(/[\s-]+/g, '_') === 'limited_availability'
+    ? 1
+    : 0;
+}
+
+/**
+ * The variant in stock a product is shown with: the best stock, then the
+ * lowest price at it, one with no price last; null with none in stock. The
+ * API's rule (server/src/lib/catalog/offer.js bestInStock), so a card put in
+ * by hand shows the price the agent's grid would.
+ */
+export function bestInStock<
+  V extends { availability: string | null; price: number | null; sale_price: number | null },
+>(variants: readonly V[]): V | null {
+  const amount = (v: V) => priceAmount({ price: v.price, salePrice: v.sale_price }) ?? Infinity;
+  return (
+    variants
+      .filter((v) => variantStock(v.availability) === 'in')
+      .sort(
+        (a, b) =>
+          inStockRank(a.availability) - inStockRank(b.availability) || amount(a) - amount(b),
+      )[0] ?? null
+  );
 }
 
 /** Why a product is left out, as the API says it: sold out, refused, no link, gone from the catalog. */
