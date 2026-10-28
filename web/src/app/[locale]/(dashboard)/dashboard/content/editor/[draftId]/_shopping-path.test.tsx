@@ -128,12 +128,12 @@ describe('priceText', () => {
     expect(priceText({ price: 149, salePrice: 129, currency: 'EUR' })).toBe('€129.00');
     expect(priceText({ price: null, salePrice: null, currency: 'USD' })).toBeNull();
     expect(priceText({ price: 10, salePrice: null, currency: 'XX1' })).toBe('10 XX1');
-    // A price of 0 is none; a sale price is one only under the price.
+    // A price of 0 is none; a sale price is one only under the price, or alone.
     expect(priceText({ price: 0, salePrice: null, currency: 'USD' })).toBeNull();
     expect(priceText({ price: 149, salePrice: 0, currency: 'USD' })).toBe('$149.00');
     expect(priceText({ price: 149, salePrice: 149, currency: 'USD' })).toBe('$149.00');
     expect(priceText({ price: 149, salePrice: 159, currency: 'USD' })).toBe('$149.00');
-    expect(priceText({ price: null, salePrice: 129, currency: 'USD' })).toBeNull();
+    expect(priceText({ price: null, salePrice: 129, currency: 'USD' })).toBe('$129.00');
   });
 });
 
@@ -153,7 +153,7 @@ describe('ShoppingPathSection', () => {
     expect(text).toContain('1 Merchant Center issue: gtin');
     expect(text).toContain('Top picks #1');
     expect(text).toContain('Top picks #2');
-    expect(text).toContain('Canyon Low WP · sold out');
+    expect(text).toContain('Canyon Low WP · not in stock');
   });
 
   it('picks from the catalog the first time, and says when a draft takes none', async () => {
