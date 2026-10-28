@@ -483,7 +483,7 @@ export function ChoosePlanDialog({
                         </>
                       ) : trial ? (
                         tPlans('startTrial')
-                      ) : firstPrice != null && !demo ? (
+                      ) : firstPrice != null ? (
                         tPlans('chooseToday', { plan: plan.name, price: money(firstPrice) })
                       ) : (
                         tSettings('choosePlanFor', { plan: plan.name })

@@ -357,15 +357,22 @@ describe('ChoosePlanDialog from the demo brand', () => {
     });
   });
 
-  it('gives a workspace whose plan ended 50% off its first month, with Choose', async () => {
+  it('gives a workspace whose plan ended 50% off its first month, with what is paid today', async () => {
     await render({ demo: 'first_month' });
     expect(dialog().textContent).toContain('Use Ansvisor for your brand: 50% off your first month');
     expect(dialog().textContent).toContain(demoBody);
     await vi.waitFor(() =>
       expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
     );
+    expect(button('Choose Starter · $24.50 today')).toBeDefined();
+    expect(button('Choose Growth · $124.50 today')).toBeDefined();
+  });
+
+  it('says Choose alone when the code did not apply', async () => {
+    answer({ valid: false });
+    await render({ demo: 'first_month' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(button('Choose Starter')).toBeDefined();
-    expect(button('Choose Growth')).toBeDefined();
   });
 
   it('leaves the field empty, with no error, when the code does not apply', async () => {
