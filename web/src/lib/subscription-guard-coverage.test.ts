@@ -61,6 +61,7 @@ const OPEN_ROUTES: Record<string, string> = {
   'settings/ai-providers:DELETE': 'removing a key takes back access',
   'stripe/checkout:POST': 'billing: choosing a plan',
   'stripe/portal:POST': 'billing: the payment method',
+  'stripe/promo-code:POST': 'billing: checking a promo code',
   'stripe/subscription:PATCH': 'billing: changing the plan',
   'stripe/subscription:DELETE': 'billing: canceling the plan',
   'stripe/webhook:POST': "Stripe's own calls",

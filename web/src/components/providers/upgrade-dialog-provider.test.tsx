@@ -120,15 +120,17 @@ describe('useUpgradeGate', () => {
     expect(dialog()?.textContent).toContain(
       "Your workspace has no active plan, so it\'s read-only. Everything you set up is still here: pick a plan to track, write and run your agents again.",
     );
-    // No label when the button didn't say what it does.
-    expect(document.querySelector('[data-slot="upgrade-action"]')).toBeNull();
+    // The workspace's state when the button didn't say what it does.
+    expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
+      'Your workspace is read-only',
+    );
   });
 
-  it('closes with Not now, and opens again on the next action', async () => {
+  it('closes with its ×, and opens again on the next action', async () => {
     await render({ active: false });
     await runAll();
     await act(async () => {
-      button('Not now')!.click();
+      button('Close')!.click();
     });
     await vi.waitFor(() => expect(dialog()).toBeNull());
 
@@ -146,11 +148,12 @@ describe('useUpgradeGate', () => {
     );
   });
 
-  it('takes an admin to Billing to choose a plan', async () => {
+  it('offers an admin the plans, to choose one right there', async () => {
     await render({ active: false, status: 'canceled' });
     await runAll();
-    const link = [...document.querySelectorAll('a')].find((a) => a.textContent === 'Choose a plan');
-    expect(link?.getAttribute('href')).toBe('/dashboard/settings/billing');
+    expect(button('Choose Starter')).toBeDefined();
+    expect(button('Choose Growth')).toBeDefined();
+    expect(dialog()?.textContent).toContain("You'll pay by card on Stripe's checkout.");
     expect(button('Update payment method')).toBeUndefined();
   });
 
@@ -182,9 +185,9 @@ describe('useUpgradeGate', () => {
     await runAll();
     expect(dialog()?.textContent).toContain('Your workspace has no active plan');
     expect(dialog()?.textContent).toContain(
-      'Ask Jane Owner, your workspace admin, to choose a plan.',
+      'Only an admin can choose a plan for your workspace. Ask Jane Owner, your workspace admin, to choose a plan.',
     );
-    expect(document.querySelector('a')).toBeNull();
+    expect(button('Choose Starter')).toBeUndefined();
   });
 
   it('asks another member to have the admin update the payment method', async () => {
@@ -199,7 +202,9 @@ describe('useUpgradeGate', () => {
   it('asks for the workspace admin without a name', async () => {
     await render({ active: false, role: 'analyst' });
     await runAll();
-    expect(dialog()?.textContent).toContain('Ask your workspace admin to choose a plan.');
+    expect(dialog()?.textContent).toContain(
+      'Only an admin can choose a plan for your workspace. Ask your admin to choose a plan.',
+    );
   });
 
   it('never locks self-hosted', async () => {

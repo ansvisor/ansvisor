@@ -115,7 +115,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionStatus={subscriptionStatus}
       >
         <RoleProvider role={role}>
-          <UpgradeDialogProvider adminName={adminName}>
+          <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
             <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
               <AiUsageProvider>
                 <div className="flex h-screen overflow-hidden">
