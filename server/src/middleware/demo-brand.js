@@ -361,6 +361,20 @@ async function brandsOfRows(table, ids) {
   return (data ?? []).map(owner.brand).filter(Boolean);
 }
 
+/**
+ * Whether any of the rows of `table` whose ids are `ids` belongs to a demo
+ * brand: for a caller that names a row rather than a brand (the internal
+ * endpoints the MCP calls). Rows that aren't found answer false.
+ *
+ * @param {string} table
+ * @param {string|string[]} ids
+ * @returns {Promise<boolean>}
+ */
+export async function isDemoBrandRow(table, ids) {
+  const brands = await brandsOfRows(table, guids(ids));
+  return brands.length > 0 && isDemoBrand(brands);
+}
+
 function valueAt(req, match, { where, key }) {
   if (where === 'path') return match.groups?.[key];
   if (where === 'body') return req.body?.[key];

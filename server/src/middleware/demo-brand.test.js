@@ -50,6 +50,7 @@ const {
   clearDemoBrandCache,
   demoRouteFor,
   isDemoBrand,
+  isDemoBrandRow,
   refuseDemoBrandWrites,
 } = await import('./demo-brand.js');
 
@@ -258,6 +259,50 @@ describe('isDemoBrand', () => {
     expect(reads).toHaveLength(0);
     await isDemoBrand(DEMO);
     expect(reads).toHaveLength(1);
+  });
+});
+
+describe('isDemoBrandRow', () => {
+  it('tells whether a row belongs to a demo brand, through its brand', async () => {
+    expect(await isDemoBrandRow('content_opportunities', DEMO_OPP)).toBe(true);
+    expect(await isDemoBrandRow('content_opportunities', REAL_OPP)).toBe(false);
+    expect(await isDemoBrandRow('prompts', DEMO_PROMPT)).toBe(true);
+    expect(await isDemoBrandRow('content_opportunities', MISSING)).toBe(false);
+  });
+});
+
+/**
+ * The internal endpoints the MCP calls trust CRON_SECRET and never meet the
+ * middleware (server.js mounts them before /api). server.js can't be
+ * imported here, so each one is read: it answers a demo brand with 402
+ * demo_brand before it starts its work.
+ */
+describe("the MCP's internal endpoints", () => {
+  it('refuse a demo brand before the work starts', async () => {
+    const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
+    const handler = (route) => {
+      const start = source.indexOf(`app.post('${route}'`);
+      expect(start, route).toBeGreaterThan(0);
+      return source.slice(start, source.indexOf('\n});\n', start));
+    };
+    for (const [route, check, work] of [
+      [
+        '/api/internal/content/:id/brief',
+        "isDemoBrandRow('content_opportunities', id)",
+        'generateBriefForOpportunity(',
+      ],
+      ['/api/internal/site-audits', 'isDemoBrand(brandId)', 'startSiteAuditForBrand('],
+      [
+        '/api/internal/prompts/:promptId/improve/action',
+        "isDemoBrandRow('prompts', req.params.promptId)",
+        'sendImproveActionForKeyUser(',
+      ],
+    ]) {
+      const body = handler(route);
+      expect(body.indexOf(check), route).toBeGreaterThan(0);
+      expect(body.indexOf(check), route).toBeLessThan(body.indexOf(work));
+      expect(body, route).toMatch(/res\.status\(402\)\.json\(DEMO_BRAND\)/);
+    }
   });
 });
 

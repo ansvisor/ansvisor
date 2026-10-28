@@ -539,7 +539,7 @@ describe("server.js's mount", () => {
       "app.use('/api', Middleware.decodeToken.bind(Middleware), refuseDemoBrandWrites, requireActiveSubscription, routes);",
     ]);
     expect(source).toMatch(
-      /import \{ refuseDemoBrandWrites \} from '\.\/middleware\/demo-brand\.js';/,
+      /import \{[^}]*\brefuseDemoBrandWrites\b[^}]*\} from '\.\/middleware\/demo-brand\.js';/,
     );
     expect(source).toMatch(
       /import \{ requireActiveSubscription \} from '\.\/middleware\/subscription\.js';/,
