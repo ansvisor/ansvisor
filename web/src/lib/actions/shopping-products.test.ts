@@ -171,6 +171,12 @@ describe('getShoppingProducts', () => {
       inStock: true,
       hasGtin: true,
     });
+    // Every variant's prices, for an answer's price to be checked against (ECOM-016).
+    expect(p1.product.prices).toEqual([
+      { price: 149, currency: 'USD' },
+      { price: 129, currency: 'USD' },
+      { price: 99, currency: 'USD' },
+    ]);
     expect(p1).toMatchObject({
       shelves: 2,
       winRate: 0.5,
