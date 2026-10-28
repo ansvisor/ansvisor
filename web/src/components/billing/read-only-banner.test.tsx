@@ -21,7 +21,10 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const push = vi.hoisted(() => vi.fn());
 const ensureDemoBrand = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand, setDemoHidden: vi.fn() }));
+vi.mock('@/lib/demo/demo-client', () => ({
+  prepareDemoBrand: ensureDemoBrand,
+  setDemoHidden: vi.fn(),
+}));
 vi.mock('@/lib/actions/brand', () => ({ getBrandById: vi.fn() }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -36,12 +39,14 @@ async function render({
   role = 'admin',
   adminName = null,
   neverSubscribed = false,
+  demoBrand = null,
 }: {
   active?: boolean;
   status?: string | null;
   role?: TeamRole;
   adminName?: string | null;
   neverSubscribed?: boolean;
+  demoBrand?: { id: string; hidden: boolean } | null;
 } = {}) {
   await act(async () => {
     root.render(
@@ -49,7 +54,7 @@ async function render({
         <PlanProvider planId="starter" subscriptionActive={active} subscriptionStatus={status}>
           <RoleProvider role={role}>
             <DemoBrandContext.Provider
-              value={{ isDemo: false, demoBrand: null, offer: 'trial', neverSubscribed }}
+              value={{ isDemo: false, demoBrand, offer: 'trial', neverSubscribed }}
             >
               <UpgradeDialogProvider adminName={adminName}>
                 <ReadOnlyBanner />
@@ -65,6 +70,7 @@ async function render({
 const link = () => container.querySelector('a');
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   pathname = '/dashboard/insights';
   container = document.createElement('div');
@@ -141,8 +147,34 @@ describe('ReadOnlyBanner', () => {
   it('opens the demo brand from See the demo', async () => {
     ensureDemoBrand.mockResolvedValue({ ok: false, status: 500 });
     await render();
-    await act(async () => seeTheDemo()!.click());
+    // Once ahead, as the band shows, and once more for the click.
     expect(ensureDemoBrand).toHaveBeenCalledTimes(1);
+    await act(async () => seeTheDemo()!.click());
+    expect(ensureDemoBrand).toHaveBeenCalledTimes(2);
+  });
+
+  it('says the demo is being set up while it opens', async () => {
+    ensureDemoBrand.mockReturnValue(new Promise(() => {}));
+    await render();
+    await act(async () => seeTheDemo()!.click());
+    expect(seeTheDemo()).toBeUndefined();
+    const setting = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Setting up the demo…',
+    );
+    expect(setting?.disabled).toBe(true);
+  });
+
+  it('starts the setup ahead only for an admin or a manager with no demo brand yet', async () => {
+    await render({ role: 'analyst', demoBrand: { id: 'demo', hidden: false } });
+    expect(ensureDemoBrand).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ demoBrand: { id: 'demo', hidden: true } });
+    expect(ensureDemoBrand).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ status: 'past_due' });
+    expect(ensureDemoBrand).not.toHaveBeenCalled();
   });
 
   it('offers no demo while a payment is being retried, nor to a member with none to see', async () => {
@@ -161,18 +193,22 @@ describe('ReadOnlyBanner', () => {
     );
     await render({ status: null, neverSubscribed: true });
     expect(container.textContent).toContain(
-      "Your brand isn't tracked yet. Start your 14-day free trial, then get 50% off your first month.",
+      "Your brand isn't tracked yet. Start a 14-day free trial, or get 50% off your first month.",
     );
-    expect(seePlans()).toBeUndefined();
-    const start = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Start free trial',
-    )!;
+    const start = seePlans()!;
     expect(seeTheDemo()).toBeDefined();
     await act(async () => start.click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      'Start your 14-day free trial: then 50% off your first month',
-    );
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Choose how to start');
     vi.unstubAllGlobals();
+  });
+
+  it('says only the trial with the first-month offer off', async () => {
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+    await render({ status: null, neverSubscribed: true });
+    expect(container.textContent).toContain(
+      "Your brand isn't tracked yet. Start a 14-day free trial.",
+    );
+    expect(container.textContent).not.toContain('50%');
   });
 
   it('offers another member of such a workspace See plans', async () => {

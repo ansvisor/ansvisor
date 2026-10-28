@@ -335,6 +335,7 @@ describe('choosing a plan once the old one has ended', () => {
         organizationId: 'org1',
         interval: 'year',
         returnTo: 'billing',
+        mode: 'buy',
       }),
     });
     expect(window.location.hash).toBe('#checkout');

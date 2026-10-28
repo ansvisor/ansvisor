@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FIRST_MONTH_OFFER, firstMonthOfferOn } from '@/config/plans';
 import {
+  FIRST_MONTH_CODE,
   annualSaving,
+  firstMonthPrice,
+  offerChoice,
   periodPrice,
   planChange,
   planRequestSchema,
@@ -104,5 +108,33 @@ describe('takesPromoCode', () => {
   it('takes a code with a monthly plan only: a year has its own discount', () => {
     expect(takesPromoCode('month')).toBe(true);
     expect(takesPromoCode('year')).toBe(false);
+  });
+});
+
+describe('the first-month offer', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('is SAVE50, half off the first month of a monthly plan', () => {
+    expect(FIRST_MONTH_OFFER).toEqual({ code: 'SAVE50', percentOff: 50, period: 'monthly' });
+    expect(FIRST_MONTH_CODE).toBe('SAVE50');
+    expect(firstMonthPrice(49)).toBe(24.5);
+    expect(firstMonthPrice(249)).toBe(124.5);
+  });
+
+  it('is on until NEXT_PUBLIC_FIRST_MONTH_OFFER says off', () => {
+    expect(firstMonthOfferOn()).toBe(true);
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+    expect(firstMonthOfferOn()).toBe(false);
+  });
+
+  it('words what a workspace is offered: the trial only before a first subscription', () => {
+    expect(offerChoice(true, true)).toBe('both');
+    expect(offerChoice(true, false)).toBe('trial');
+    expect(offerChoice(false, true)).toBe('discount');
+    expect(offerChoice(false, false)).toBe('none');
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+    expect(offerChoice(true)).toBe('trial');
   });
 });

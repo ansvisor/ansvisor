@@ -48,7 +48,11 @@ vi.mock('@/i18n/navigation', () => ({
   usePathname: () => '/dashboard/insights',
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand: vi.fn(), setDemoHidden: vi.fn() }));
+vi.mock('@/lib/demo/demo-client', () => ({
+  ensureDemoBrand: vi.fn(),
+  prepareDemoBrand: vi.fn(async () => ({ ok: false, status: 0 })),
+  setDemoHidden: vi.fn(),
+}));
 
 const pass = ({ children }: { children: ReactNode }) => <>{children}</>;
 const none = () => null;
@@ -209,10 +213,10 @@ describe('the dashboard layout and the demo brand', () => {
     expect(container.textContent).toContain('Page content');
     // Read-only on the own brand, with its free trial and the way to the demo.
     expect(band()?.textContent).toContain(
-      "Your brand isn't tracked yet. Start your 14-day free trial, then get 50% off your first month.",
+      "Your brand isn't tracked yet. Start a 14-day free trial, or get 50% off your first month.",
     );
     expect([...band()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
-      'Start free trial',
+      'See plans',
       'See the demo',
     ]);
   });

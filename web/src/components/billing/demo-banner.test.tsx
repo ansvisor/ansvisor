@@ -33,7 +33,10 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh }),
 }));
 const ensureDemoBrand = vi.fn();
-vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand: () => ensureDemoBrand() }));
+vi.mock('@/lib/demo/demo-client', () => ({
+  ensureDemoBrand: () => ensureDemoBrand(),
+  prepareDemoBrand: vi.fn(async () => ({ ok: false, status: 0 })),
+}));
 
 const { PlanProvider } = await import('@/components/providers/plan-provider');
 const { RoleProvider } = await import('@/components/providers/role-provider');
@@ -124,22 +127,36 @@ describe('DemoBanner', () => {
     await render();
     expect(bands()).toHaveLength(1);
     expect(band()?.textContent).toContain(
-      "You're exploring Brewline Coffee, a demo brand with sample data. Look around: anything that would run or use AI shows you the plans.",
+      "You're exploring Brewline Coffee, a demo brand with sample data. Start a 14-day free trial, or get 50% off your first month.",
     );
+    expect(band()?.textContent).not.toContain('then 50% off');
     expect(band()?.querySelector('strong')?.textContent).toBe('Brewline Coffee');
-    expect(bandButton()?.textContent).toBe('Try it on your brand · 50% off');
+    expect(bandButton()?.textContent).toBe('See plans');
     await act(async () => {
       bandButton()!.click();
     });
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      'Start with your brand: 14 days free, then 50% off',
+      'Use Ansvisor for your own brand',
     );
   });
 
-  it('offers 50% off the first month once the plan ended', async () => {
+  it('offers 50% off the first month once the plan ended, and no trial', async () => {
     await render({ status: 'canceled', everSubscribed: true });
     expect(bands()).toHaveLength(1);
-    expect(bandButton()?.textContent).toBe('Use it for your brand · 50% off');
+    expect(band()?.textContent).toContain(
+      'a demo brand with sample data. Get 50% off your first month.',
+    );
+    expect(band()?.textContent).not.toContain('trial');
+    expect(bandButton()?.textContent).toBe('See plans');
+  });
+
+  it('says only the trial, or neither, with the first-month offer off', async () => {
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+    await render();
+    expect(band()?.textContent).toContain('sample data. Start a 14-day free trial.');
+    expect(band()?.textContent).not.toContain('50%');
+    await render({ status: 'canceled', everSubscribed: true });
+    expect(band()?.textContent).toContain('sample data. Pick a plan to use it for your own brand.');
   });
 
   it('points back to the own brand while the plan is active', async () => {

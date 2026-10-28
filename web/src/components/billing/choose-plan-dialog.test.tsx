@@ -70,6 +70,16 @@ const price = (plan: string) =>
 const button = (label: string) =>
   [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
 const codeInput = () => document.querySelector<HTMLInputElement>('#upgrade-promo-code');
+/** A plan card's Buy now (or Choose) button, and its free trial's. */
+const buy = (plan: string) => card(plan).querySelector<HTMLButtonElement>('[data-mode="buy"]')!;
+const trial = (plan: string) => card(plan).querySelector<HTMLButtonElement>('[data-mode="trial"]');
+const terms = (plan: string, slot: 'buy-terms' | 'trial-terms') =>
+  card(plan).querySelector(`[data-slot="${slot}"]`)?.textContent ?? null;
+async function press(el: HTMLElement) {
+  await act(async () => {
+    el.click();
+  });
+}
 const note = () => document.querySelector('#upgrade-promo-note')!.textContent;
 
 async function click(label: string) {
@@ -115,7 +125,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// A promotion code typed by hand: the first-month offer off, so nothing is applied first.
 describe('ChoosePlanDialog', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('shows what was clicked, the title and the read-only word', async () => {
     await render();
     expect(dialog().querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
@@ -145,7 +163,12 @@ describe('ChoosePlanDialog', () => {
     expect(card('growth').textContent).toContain('White-label reports & Looker Studio');
     expect(button('Choose Starter')).toBeDefined();
     expect(button('Choose Growth')).toBeDefined();
-    expect(card('starter').textContent).toContain("You'll pay by card on Stripe's checkout.");
+    // No trial for a plan that ended, and no offer while it's off.
+    expect(trial('starter')).toBeNull();
+    expect(terms('starter', 'buy-terms')).toBeNull();
+    expect(dialog().querySelector('[data-slot="card-note"]')?.textContent).toBe(
+      'Card required. Cancel any time.',
+    );
 
     const custom = card('custom').textContent;
     expect(custom).toContain('Starting at$499/mo');
@@ -184,8 +207,9 @@ describe('ChoosePlanDialog', () => {
       'SAVE50: first month 50% offRegular price $49$24.50first monththen $49/mo',
     );
     expect(price('growth')).toContain('$124.50first month');
-    expect(button('Choose Growth · $124.50 today')).toBeDefined();
-    expect(button('Choose Starter · $24.50 today')).toBeDefined();
+    expect(buy('growth').textContent).toBe('Buy now');
+    expect(buy('starter').textContent).toBe('Buy now');
+    expect(terms('starter', 'buy-terms')).toBe('$24.50 first month, then $49/month');
     expect(note()).toContain('Code applied. You pay 50% less for the first month');
   });
 
@@ -218,7 +242,7 @@ describe('ChoosePlanDialog', () => {
 
     await click('Switch to Monthly');
     expect(button('Monthly')?.getAttribute('aria-pressed')).toBe('true');
-    expect(button('Choose Starter · $24.50 today')).toBeDefined();
+    expect(buy('starter').textContent).toBe('Buy now');
   });
 
   it('takes the code off with ×', async () => {
@@ -235,12 +259,13 @@ describe('ChoosePlanDialog', () => {
   it('opens Checkout for the plan and period, with the code on a monthly plan', async () => {
     await render();
     await apply('SAVE50');
-    await click('Choose Growth · $124.50 today');
+    await press(buy('growth'));
     expect(sent('/api/stripe/checkout')).toEqual({
       planId: 'growth',
       organizationId: 'org1',
       interval: 'month',
       returnTo: 'billing',
+      mode: 'buy',
       promotionCode: 'SAVE50',
     });
     await vi.waitFor(() => expect(window.location.hash).toBe('#checkout'));
@@ -256,6 +281,7 @@ describe('ChoosePlanDialog', () => {
       organizationId: 'org1',
       interval: 'year',
       returnTo: 'billing',
+      mode: 'buy',
     });
   });
 
@@ -267,6 +293,7 @@ describe('ChoosePlanDialog', () => {
       organizationId: 'org1',
       interval: 'month',
       returnTo: 'billing',
+      mode: 'buy',
     });
   });
 
@@ -279,7 +306,7 @@ describe('ChoosePlanDialog', () => {
         { status: 400 },
       ),
     );
-    await click('Choose Starter · $24.50 today');
+    await press(buy('starter'));
     expect(note()).toBe('“SAVE50” isn’t a valid code.');
     expect(button('Choose Starter')).toBeDefined();
     expect(toast.error).not.toHaveBeenCalled();
@@ -315,112 +342,197 @@ describe('ChoosePlanDialog', () => {
   });
 });
 
-describe('ChoosePlanDialog from the demo brand', () => {
-  const demoBody =
-    'This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.';
-
-  it('starts a workspace that never subscribed with the free trial, SAVE50 applied', async () => {
-    await render({ demo: 'trial', action: 'Adding prompts works on your own brand' });
-    expect(dialog().querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
-      'Adding prompts works on your own brand',
-    );
-    expect(dialog().textContent).toContain('Start with your brand: 14 days free, then 50% off');
-    expect(dialog().textContent).toContain(demoBody);
-    expect(dialog().textContent).not.toContain('Choose a plan to keep going');
-    // The first-month code, tried as the dialog opens.
+describe('ChoosePlanDialog with the first-month offer on', () => {
+  it('applies the offer in the read-only dialog too: Buy now, its first month and a Limited offer mark', async () => {
+    await render();
     await vi.waitFor(() =>
       expect(dialog().querySelector('[data-slot="promo-applied"]')?.textContent).toContain(
         'SAVE50 · 50% off your first month',
       ),
     );
     expect(sent('/api/stripe/promo-code')).toEqual({ code: 'SAVE50' });
-    expect(price('starter')).toContain('$24.50');
-    expect(button('Choose Starter')).toBeUndefined();
-    expect(card('starter').querySelector('button')?.textContent).toBe('Start free trial');
-    expect(card('growth').querySelector('button')?.textContent).toBe('Start free trial');
+    expect(buy('starter').textContent).toBe('Buy now');
+    expect(terms('starter', 'buy-terms')).toBe('$24.50 first month, then $49/month');
+    expect(card('starter').querySelector('[data-slot="limited-offer"]')?.textContent).toBe(
+      'Limited offer',
+    );
+    // A plan that ended: no trial.
+    expect(trial('starter')).toBeNull();
+    expect(dialog().textContent).not.toContain('14 days free, then');
   });
 
-  it('opens Checkout with the code from Start free trial', async () => {
+  it('buys a year at its price: Choose, no offer', async () => {
+    await render();
+    await vi.waitFor(() =>
+      expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
+    );
+    await click('AnnualSave 20%');
+    expect(buy('starter').textContent).toBe('Choose Starter');
+    expect(terms('starter', 'buy-terms')).toBeNull();
+    await press(buy('starter'));
+    expect(sent('/api/stripe/checkout')).toEqual({
+      planId: 'starter',
+      organizationId: 'org1',
+      interval: 'year',
+      returnTo: 'billing',
+      mode: 'buy',
+    });
+  });
+
+  it('leaves the field empty, with no error, when the offer does not apply', async () => {
+    answer({ valid: false });
+    await render();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(dialog().querySelector('[data-slot="promo-applied"]')).toBeNull();
+    expect(codeInput()?.value).toBe('');
+    expect(note()).toBe('');
+    expect(buy('starter').textContent).toBe('Choose Starter');
+  });
+
+  it("doesn't try the offer for a member, who can't buy", async () => {
+    await render({ role: 'analyst' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(card('starter').querySelector('[data-mode]')).toBeNull();
+    expect(dialog().querySelector('[data-slot="card-note"]')).toBeNull();
+  });
+});
+
+describe('ChoosePlanDialog from the demo brand', () => {
+  const demoBody =
+    'This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.';
+
+  it('offers a workspace that never subscribed both ways to start', async () => {
+    await render({ demo: 'trial', action: 'Adding prompts works on your own brand' });
+    expect(dialog().querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
+      'Adding prompts works on your own brand',
+    );
+    expect(dialog().querySelector('h2')?.textContent).toBe('Use Ansvisor for your own brand');
+    expect(dialog().textContent).toContain(demoBody);
+    expect(dialog().textContent).not.toContain('then 50% off');
+    await vi.waitFor(() =>
+      expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
+    );
+    // Buy now: the first month at half price, the full plan today.
+    expect(buy('starter').textContent).toBe('Buy now');
+    expect(terms('starter', 'buy-terms')).toBe(
+      '$24.50 first month, then $49/monthFull plan from day one',
+    );
+    // The trial: no offer, limited AI usage.
+    expect(trial('starter')?.textContent).toBe('Start 14-day free trial');
+    expect(terms('starter', 'trial-terms')).toBe(
+      'Free for 14 days, then $49/monthLimited AI usage for 14 days',
+    );
+    expect(trial('growth')?.textContent).toBe('Start 14-day free trial');
+    expect(dialog().querySelector('[data-slot="card-note"]')?.textContent).toBe(
+      'Card required for both. Cancel any time.',
+    );
+  });
+
+  it('opens Checkout for buying now with the offer, and for the trial without it', async () => {
     await render({ demo: 'trial' });
     await vi.waitFor(() =>
       expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
     );
-    await act(async () => {
-      card('growth').querySelector('button')!.click();
-    });
+    await press(trial('growth')!);
     expect(sent('/api/stripe/checkout')).toEqual({
       planId: 'growth',
       organizationId: 'org1',
       interval: 'month',
       returnTo: 'billing',
+      mode: 'trial',
+    });
+  });
+
+  it('opens Checkout for Buy now with the code', async () => {
+    await render({ demo: 'trial' });
+    await vi.waitFor(() =>
+      expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
+    );
+    await press(buy('starter'));
+    expect(sent('/api/stripe/checkout')).toEqual({
+      planId: 'starter',
+      organizationId: 'org1',
+      interval: 'month',
+      returnTo: 'billing',
+      mode: 'buy',
       promotionCode: 'SAVE50',
     });
   });
 
-  it('gives a workspace whose plan ended 50% off its first month, with what is paid today', async () => {
+  it('says so when the trial was used after all', async () => {
+    await render({ demo: 'trial' });
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/api/stripe/checkout'
+        ? Response.json(
+            { error: 'The free trial has been used', code: 'trial_unavailable' },
+            { status: 409 },
+          )
+        : Response.json(save50),
+    );
+    await press(trial('starter')!);
+    expect(toast.error).toHaveBeenCalledWith(
+      "This workspace's free trial has been used. Buy now to start the plan.",
+    );
+  });
+
+  it('starts a trial on a year at its price', async () => {
+    await render({ demo: 'trial' });
+    await click('AnnualSave 20%');
+    expect(buy('starter').textContent).toBe('Choose Starter');
+    expect(terms('starter', 'trial-terms')).toBe(
+      'Free for 14 days, then $470/yearLimited AI usage for 14 days',
+    );
+  });
+
+  it('offers a workspace whose plan ended only Buy now', async () => {
     await render({ demo: 'first_month' });
-    expect(dialog().textContent).toContain('Use Ansvisor for your brand: 50% off your first month');
-    expect(dialog().textContent).toContain(demoBody);
+    expect(dialog().querySelector('h2')?.textContent).toBe('Use Ansvisor for your own brand');
     await vi.waitFor(() =>
       expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
     );
-    expect(button('Choose Starter · $24.50 today')).toBeDefined();
-    expect(button('Choose Growth · $124.50 today')).toBeDefined();
+    expect(buy('starter').textContent).toBe('Buy now');
+    expect(trial('starter')).toBeNull();
+    expect(dialog().querySelector('[data-slot="card-note"]')?.textContent).toBe(
+      'Card required. Cancel any time.',
+    );
   });
 
-  it('says Choose alone when the code did not apply', async () => {
-    answer({ valid: false });
-    await render({ demo: 'first_month' });
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(button('Choose Starter')).toBeDefined();
+  it('shows the plain price and Choose with the offer off, the trial still there', async () => {
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+    try {
+      await render({ demo: 'trial' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(buy('starter').textContent).toBe('Choose Starter');
+      expect(terms('starter', 'buy-terms')).toBe('Full plan from day one');
+      expect(trial('starter')?.textContent).toBe('Start 14-day free trial');
+      expect(dialog().textContent).not.toContain('50%');
+      expect(dialog().querySelector('[data-slot="limited-offer"]')).toBeNull();
+      await press(buy('starter'));
+      expect(sent('/api/stripe/checkout')).not.toHaveProperty('promotionCode');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
-  it('leaves the field empty, with no error, when the code does not apply', async () => {
-    answer({ valid: false });
-    await render({ demo: 'first_month' });
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(dialog().querySelector('[data-slot="promo-applied"]')).toBeNull();
-    expect(codeInput()?.value).toBe('');
-    expect(note()).toBe('');
-  });
-
-  it('leaves the field empty when the code could not be checked', async () => {
-    fetchMock.mockImplementation(async () => {
-      throw new Error('offline');
-    });
-    await render({ demo: 'trial' });
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(codeInput()?.value).toBe('');
-    expect(note()).toBe('');
-  });
-
-  it("doesn't try a code for a member, who can't buy", async () => {
+  it('asks a member to turn to an admin, with no way to start', async () => {
     await render({ demo: 'trial', role: 'analyst' });
-    expect(dialog().textContent).toContain('Start with your brand: 14 days free, then 50% off');
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(button('Start free trial')).toBeUndefined();
-  });
-
-  it('tries no code when opened from read-only, outside the demo', async () => {
-    await render();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(trial('starter')).toBeNull();
+    expect(card('starter').textContent).toContain('Ask your admin to choose a plan');
   });
 });
 
 describe("ChoosePlanDialog for a brand that isn't tracked yet", () => {
-  it('offers the free trial, SAVE50 applied, with Start free trial', async () => {
+  it('asks how to start: the trial or Buy now', async () => {
     await render({ pitch: { from: 'own_brand', offer: 'trial' }, action: null });
+    expect(dialog().querySelector('h2')?.textContent).toBe('Choose how to start');
     expect(dialog().textContent).toContain(
-      'Start your 14-day free trial: then 50% off your first month',
-    );
-    expect(dialog().textContent).toContain(
-      'Everything you set up is here. Start your free trial and Ansvisor starts tracking, writing and fixing for your brand.',
+      'Everything you set up is here. Pick a plan and Ansvisor starts tracking, writing and fixing for your brand.',
     );
     expect(dialog().textContent).not.toContain('demo brand');
     await vi.waitFor(() =>
       expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
     );
-    expect(card('starter').querySelector('button')?.textContent).toBe('Start free trial');
-    expect(card('growth').querySelector('button')?.textContent).toBe('Start free trial');
+    expect(buy('starter').textContent).toBe('Buy now');
+    expect(trial('starter')?.textContent).toBe('Start 14-day free trial');
   });
 });
