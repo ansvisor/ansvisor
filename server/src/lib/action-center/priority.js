@@ -333,7 +333,8 @@ function confidenceOf(signals) {
 /**
  * What an action sent by a person rests on, without detection signals: an
  * Improve action names its platforms and their state, a content opportunity
- * its prompts. Read from the action's own payload.
+ * its prompts. Read from the action's own payload. The shopping check's
+ * actions (from-shopping-check.js) have no signals either.
  */
 function sentByHand(action) {
   const p = action.payload ?? {};
@@ -366,6 +367,17 @@ function sentByHand(action) {
       confidence: 0.6,
       recoverability: 0.5,
       subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
+    };
+  }
+  // A live page linking products that no longer sell (shopping path, part 7):
+  // the catalog says so, and swapping the links is quick work.
+  if (action.kind === 'shopping_links') {
+    return {
+      change: 'issue',
+      severity: 0.6,
+      confidence: 0.9,
+      recoverability: 0.9,
+      subject: { entity: 'pages', count: 1 },
     };
   }
   // Pages sent from AI Traffic (AT-006). Answers citing a page nobody clicks

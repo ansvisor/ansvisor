@@ -27,6 +27,20 @@ vi.mock('./_assign-dialog', () => ({
   AssignDialog: ({ row }: { row: { title: string } | null }) =>
     row ? <div data-testid="assign-dialog">{row.title}</div> : null,
 }));
+// Shopping opportunities are _shopping-opportunities.test.tsx's; here, for
+// which brands, and that a new period's read keeps them (each mount reads).
+const shopping = vi.hoisted(() => ({ mounts: 0 }));
+vi.mock('./_shopping-opportunities', async () => {
+  const { useEffect } = await import('react');
+  return {
+    ShoppingOpportunities: ({ brandId, hidden }: { brandId: string; hidden?: boolean }) => {
+      useEffect(() => {
+        shopping.mounts += 1;
+      }, []);
+      return hidden ? null : <div data-testid="shopping-opportunities">{brandId}</div>;
+    },
+  };
+});
 const role = vi.hoisted(() => ({ canManage: true }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
@@ -50,7 +64,10 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'brand-1' as string | null,
-  brands: [{ id: 'brand-1', siteType: 'b2b' }],
+  brands: [
+    { id: 'brand-1', siteType: 'b2b' },
+    { id: 'shop-1', siteType: 'ecommerce' },
+  ],
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
@@ -553,6 +570,39 @@ describe('the Content plan', () => {
     await act(async () => (dialog.props!.onSent as () => void)());
     expect(getContentPlan).toHaveBeenCalledTimes(2);
     expect(getContentPlanInsights).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a shop its Shopping opportunities above the list, and no other brand (shopping path, part 7)', async () => {
+    await renderPage();
+    expect(container.querySelector('[data-testid="shopping-opportunities"]')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    brandState.activeBrandId = 'shop-1';
+    await renderPage();
+    const section = container.querySelector('[data-testid="shopping-opportunities"]');
+    expect(section?.textContent).toBe('shop-1');
+    // Above the ranked list.
+    const list = [...container.querySelectorAll('h2')].find(
+      (h) => h.textContent === 'Priority list',
+    );
+    expect(section!.compareDocumentPosition(list!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the Shopping opportunities through another period’s read, hidden while it loads', async () => {
+    brandState.activeBrandId = 'shop-1';
+    await renderPage();
+    const section = () => container.querySelector('[data-testid="shopping-opportunities"]');
+    expect(section()).not.toBeNull();
+    const mounts = shopping.mounts;
+    let resolve: (plan: typeof PLAN) => void = () => {};
+    getContentPlan.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+    await act(async () => button('Last 7 days').click());
+    // The list loads: one spinner, the section kept but not shown.
+    expect(section()).toBeNull();
+    await act(async () => resolve(PLAN));
+    expect(section()?.textContent).toBe('shop-1');
+    // Not read again: the same section, never mounted anew.
+    expect(shopping.mounts).toBe(mounts);
   });
 
   it('says so when the plan can’t be read, and tries again', async () => {
