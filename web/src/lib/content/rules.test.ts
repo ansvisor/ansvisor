@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import messages from '../../../messages/en.json';
 import { htmlBlockElement } from './html-allowlist';
 import type { ShoppingCheck, ShoppingLinkState } from './shopping-check';
 import {
@@ -604,14 +605,26 @@ describe('shopping path rules (shopping path, part 6)', () => {
     });
   });
 
-  it('says what to do instead when only a sold-out link is open: not the feed’s message', () => {
+  it('says what to do instead when only a sold-out link is open, and both when the feed’s is too', () => {
     expect(notForAgentMessage([{ rule: { key: 'shopLinksLive' } }])).toBe('notForAgentShopping');
     expect(
       notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'feedMatch' } }]),
-    ).toBe('notForAgentFeed');
+    ).toBe('notForAgentFeedShopping');
     expect(
       notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'oneH1' } }]),
     ).toBe('notForAgent');
+  });
+
+  it('has a message in the editor for each of its answers', () => {
+    const answers = [
+      [{ rule: { key: 'oneH1' } }],
+      [{ rule: { key: 'feedMatch' } }],
+      [{ rule: { key: 'shopLinksLive' } }],
+      [{ rule: { key: 'feedMatch' } }, { rule: { key: 'shopLinksLive' } }],
+    ].map(notForAgentMessage);
+    expect(new Set(answers).size).toBe(4);
+    const suggestions: Record<string, unknown> = messages.contentEditor.editor.suggestions;
+    for (const key of answers) expect(suggestions[key]).toEqual(expect.any(String));
   });
 });
 

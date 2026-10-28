@@ -4078,6 +4078,7 @@
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "breaks": "Would break {names}",
         "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+        "notForAgentFeedShopping": "Content Agent doesn't change a price, GTIN or stock, or which products the page links: check which is right, the page or your product feed, and fix that one; then remove or replace the links to products that are out of stock, refused or gone.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
         "notForAgentShopping": "Content Agent doesn't change which products the page links: remove or replace the links to sold-out, refused or gone products yourself.",
