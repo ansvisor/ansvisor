@@ -197,6 +197,26 @@ export function usedIn(
 }
 
 /**
+ * Where a fan-out an engine joined splits: at a semicolon, not one that ends
+ * an HTML entity ("what&#39;s", "&amp;"). The same rule as the tracker's
+ * (server/src/lib/cloro-scraper.js, SEARCH_SEPARATOR).
+ */
+const FANOUT_SEPARATOR = /(?<!&#?\w+);/u;
+
+/**
+ * A fan-out as the searches it holds: an engine can send several as one,
+ * joined by semicolons ("chatgpt subscription;gemini subscription"), and a
+ * page's heading or FAQ question needs one search, not the list. Each is
+ * trimmed, and an empty one dropped, as the tracker stores them.
+ */
+export function fanoutQueries(query: string): string[] {
+  return query
+    .split(FANOUT_SEPARATOR)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+/**
  * The tab's groups — Prompts · Fan-outs · Cited pages · Search Console — from
  * the brand's data and a person's choices: a source left out stays listed,
  * unchecked; a page or query added by hand joins its group.
@@ -229,18 +249,45 @@ export function buildSourceGroups(
     citesPage: p.citesPage && !p.inDraft,
   }));
 
-  const fanouts: DraftSourceRow[] = data.fanouts.map((f) => {
-    const ref = normalizeQuery(f.query);
-    return {
+  // An engine's searches sent as one ("a;b;c") are read as each search, and
+  // one met twice as one row: its platforms together, its searches added up.
+  // A search with no choice of its own keeps the one made for the row it was
+  // in (stored under the joined query): left out only when every row it was
+  // in was. The most searched first again, as the brief keeps the first ones.
+  const fanoutRows = new Map<
+    string,
+    { name: string; platforms: Set<string>; searched: number; shown: boolean }
+  >();
+  for (const f of data.fanouts) {
+    const shown = included('fanout', normalizeQuery(f.query));
+    for (const query of fanoutQueries(f.query)) {
+      const ref = normalizeQuery(query);
+      const row = fanoutRows.get(ref);
+      if (row) {
+        for (const platform of f.platforms) row.platforms.add(platform);
+        row.searched += f.searched;
+        row.shown ||= shown;
+      } else {
+        fanoutRows.set(ref, {
+          name: query,
+          platforms: new Set(f.platforms),
+          searched: f.searched,
+          shown,
+        });
+      }
+    }
+  }
+  const fanouts: DraftSourceRow[] = [...fanoutRows]
+    .sort(([, a], [, b]) => b.searched - a.searched)
+    .map(([ref, f]) => ({
       kind: 'fanout',
       ref,
-      name: f.query,
-      included: included('fanout', ref),
+      name: f.name,
+      included: choice.get(`fanout:${ref}`)?.included ?? f.shown,
       added: false,
-      platforms: f.platforms,
+      platforms: [...f.platforms],
       searched: f.searched,
-    };
-  });
+    }));
 
   const pages: DraftSourceRow[] = data.citedPages.map((c) => ({
     kind: 'cited_page',

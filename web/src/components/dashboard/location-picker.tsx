@@ -173,7 +173,7 @@ export function LocationPicker({
 
       {showCountryOnlyNote && (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Google AI Overview and AI Mode have no state-level targeting — they run once per country,
+          Google AI Overviews and AI Mode have no state-level targeting — they run once per country,
           so your state picks cost one location each but are answered country-wide there.
         </p>
       )}
