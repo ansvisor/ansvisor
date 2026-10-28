@@ -3,7 +3,7 @@ import { linkKey } from './content-links.js';
 import { logger } from './logger.js';
 import { MAX_CONTENT_LENGTH, extractPageContent, textLength } from './page-content.js';
 import { fetchPage } from './safe-fetch.js';
-import { FEATURE_CHECKS, pageFeatures } from './action-center/competitor-pages.js';
+import { FEATURE_CHECKS, pageFeatures } from './action-center/page-features.js';
 import { describeSignal } from './audit/rubric.js';
 
 /**
@@ -128,9 +128,17 @@ export async function citedPagesLength(
 async function measure({ brandId, pages, ownUrl, signal }, read) {
   try {
     const own = ownUrl ? linkKey(ownUrl) : null;
-    const urls = [...new Set(pages.map((p) => p.url))].filter(
-      (url) => !own || linkKey(url) !== own,
-    );
+    // One page cited under two addresses (www, tracking parameters) is read
+    // once, at the first: twice, it would count as two of the cited pages.
+    const seen = new Set();
+    const urls = pages
+      .map((p) => p.url)
+      .filter((url) => {
+        const key = linkKey(url) ?? url;
+        if ((own && key === own) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     if (!urls.length) return null;
     const picked = await brandCited(brandId, urls);
     const reads = (await Promise.all(picked.map((url) => read(url, signal).catch(() => null))))

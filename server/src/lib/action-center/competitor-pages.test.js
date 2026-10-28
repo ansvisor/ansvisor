@@ -51,7 +51,7 @@ const {
   scopePromptIds,
   storedFeatures,
 } = await import('./competitor-pages.js');
-const { signalRegistry } = await import('../audit/signals/index.js');
+const pure = await import('./page-features.js');
 
 const NOW = new Date('2026-10-28T03:00:00Z');
 
@@ -100,29 +100,13 @@ beforeEach(() => {
   };
 });
 
-describe('FEATURE_CHECKS', () => {
-  it("are Site Audit checks, none of them reading the site's robots.txt or llms.txt", () => {
-    const keys = new Set(signalRegistry.map((signal) => signal.key));
-    expect(FEATURE_CHECKS.filter((key) => !keys.has(key))).toEqual([]);
-    expect(FEATURE_CHECKS).not.toContain('ai-bot-access');
-    expect(FEATURE_CHECKS).not.toContain('llms-txt-presence');
-  });
-});
-
-describe('pageFeatures', () => {
-  it("runs Site Audit's checks over a page read here", async () => {
-    const { words, checks } = await pageFeatures('https://rival.com/kettles', FAQ_PAGE);
-    expect(words).toBeGreaterThan(0);
-    expect(checks['faq-schema']).toBe('pass');
-    expect(checks.tables).toBe('pass');
-    expect(Object.keys(checks).sort()).toEqual([...FEATURE_CHECKS].sort());
-  });
-
-  it('reads a consent wall or an empty page as no page at all', async () => {
-    expect(await pageFeatures('https://rival.com/kettles', WALL_PAGE)).toBeNull();
-    expect(
-      await pageFeatures('https://rival.com/kettles', '<html><body></body></html>'),
-    ).toBeNull();
+describe('page checks', () => {
+  // page-features.js (tested there) reads no database, so the brief and
+  // Improve load it without Supabase; they stay importable from here.
+  it('are the ones page-features.js gives', () => {
+    expect(FEATURE_CHECKS).toBe(pure.FEATURE_CHECKS);
+    expect(featureGaps).toBe(pure.featureGaps);
+    expect(pageFeatures).toBe(pure.pageFeatures);
   });
 });
 
@@ -149,35 +133,6 @@ describe('citedPages', () => {
         perAction: 1,
       }).competitors,
     ).toHaveLength(1);
-  });
-});
-
-describe('featureGaps', () => {
-  const page = (passing) => ({
-    checks: Object.fromEntries(
-      FEATURE_CHECKS.map((key) => [key, passing.includes(key) ? 'pass' : 'fail']),
-    ),
-  });
-
-  it("names the checks at least half the competitor pages pass that the brand's page doesn't", () => {
-    const gaps = featureGaps(
-      [page(['faq-schema', 'tables']), page(['faq-schema']), page(['lists'])],
-      page(['tables']),
-    );
-    expect(gaps.map((gap) => [gap.key, gap.competitors, gap.of])).toEqual([['faq-schema', 2, 3]]);
-    expect(gaps[0].label).toEqual(expect.any(String));
-  });
-
-  it('names every such check when no page of the brand was read', () => {
-    expect(
-      featureGaps([page(['tables']), page(['tables', 'lists'])], null).map((gap) => gap.key),
-    ).toEqual(['tables', 'lists']);
-  });
-
-  it('compares nothing from fewer than two competitor pages', () => {
-    expect(featureGaps([page(['tables'])], null)).toEqual([]);
-    expect(featureGaps([page(['tables'])], page([]))).toEqual([]);
-    expect(featureGaps([], null)).toEqual([]);
   });
 });
 
