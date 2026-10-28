@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { getAiUsage } from '@/lib/actions/ai-usage';
 import {
+  aiUsageFromApi,
   aiUsageTone,
   featurePercentLabel,
   percentLabel,
@@ -106,6 +107,22 @@ describe('AiUsageCard', () => {
     await render();
     expect(container.textContent).toContain('0% used');
     expect(container.textContent).toContain('No AI usage yet this period.');
+    expect(container.querySelector('ul')).toBeNull();
+  });
+
+  it('reads an older API’s answer of every feature at 0 as no usage, not as slivers', async () => {
+    const zero = (feature: string) => ({ feature, percent: 0 }) as AiUsage['features'][number];
+    vi.mocked(getAiUsage).mockResolvedValue(
+      aiUsageFromApi(
+        usage({
+          percentUsed: 0,
+          features: ['improve', 'content', 'action_center', 'quality'].map(zero),
+        }),
+      ),
+    );
+    await render();
+    expect(container.textContent).toContain('No AI usage yet this period.');
+    expect(container.textContent).not.toContain('<0.1%');
     expect(container.querySelector('ul')).toBeNull();
   });
 

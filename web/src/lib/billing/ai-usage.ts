@@ -68,6 +68,30 @@ export function featurePercentLabel(percent: number): string {
   return percent > 0 ? percentLabel(percent) : '<0.1%';
 }
 
+/**
+ * The usage as the API answers it, read the same from an API older than
+ * the web: that one lists every feature, unused ones at 0, and the quality
+ * checks in a row of their own. Those fold into the Content Editor's row
+ * and the unused rows drop, so none reads as "<0.1%" and a workspace that
+ * used nothing reads as such. Drop it once every API answers the new way.
+ */
+export function aiUsageFromApi(raw: AiUsage): AiUsage {
+  const rows = raw?.features as { feature: string; percent: number }[] | undefined;
+  if (!Array.isArray(rows) || !rows.some((f) => f.feature === 'quality')) return raw;
+  const by = new Map<string, number>();
+  for (const { feature, percent } of rows) {
+    const key = feature === 'quality' ? 'content' : feature;
+    by.set(key, (by.get(key) ?? 0) + percent);
+  }
+  return {
+    ...raw,
+    features: AI_USAGE_FEATURES.flatMap((feature) => {
+      const percent = Math.round((by.get(feature) ?? 0) * 10) / 10;
+      return percent > 0 ? [{ feature, percent }] : [];
+    }),
+  };
+}
+
 /** Warning from 80% of the allowance, used up at 100%. */
 export function aiUsageTone(usage: AiUsage): UsageTone {
   if (usage.unlimited || usage.percentUsed === null) return 'unlimited';
