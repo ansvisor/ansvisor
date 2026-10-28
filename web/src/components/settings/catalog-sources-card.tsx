@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { addFeedSource, listCatalogSources, removeCatalogSource } from '@/lib/actions/catalog';
 import { isStoreSource, SIGN_IN_PLATFORM_LABELS, type CatalogSource } from '@/lib/catalog';
 import {
@@ -58,6 +59,12 @@ export function CatalogSourcesCard({
   const format = useFormatter();
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
+  // A read-only workspace's refusal opens the upgrade dialog, not a toast;
+  // while it is read-only, adding, syncing, uploading, connecting a store or
+  // its sign-in, and removing a feed or upload open it before anything is
+  // sent. Removing a store stays open: it disconnects the store.
+  const { guard, isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
 
   // The sources as read for a brand, and when ("synced 3 hours ago"): another
@@ -123,7 +130,8 @@ export function CatalogSourcesCard({
 
   /** Says how a sync went, then reads the sources again. */
   const report = (result: CatalogSyncResult) => {
-    if (!result.ok) toast.error(t(`errors.${result.code}`));
+    if (!result.ok && result.code === 'subscription') openUpgrade();
+    else if (!result.ok) toast.error(t(`errors.${result.code}`));
     else if (result.status === 'ok') {
       toast.success(t('synced', { count: result.counts?.items ?? 0 }));
     } else toast.error(result.error ?? t('errors.failed'));
@@ -145,6 +153,8 @@ export function CatalogSourcesCard({
     setBusy(null);
   };
 
+  const addFeed = guard(() => void add(), { action: tActions('addCatalogSources') });
+
   const sync = async (id: string) => {
     setBusy(id);
     report(await syncCatalogSource(id));
@@ -157,7 +167,8 @@ export function CatalogSourcesCard({
     if (isStoreSource(source.kind)) {
       // A store goes through the API, which holds its sign-in.
       const removed = await removeStore(source.id);
-      if (!removed.ok) toast.error(t(`stores.errors.${removed.code}`));
+      if (!removed.ok && removed.code === 'subscription') openUpgrade();
+      else if (!removed.ok) toast.error(t(`stores.errors.${removed.code}`));
       load();
     } else {
       try {
@@ -172,7 +183,8 @@ export function CatalogSourcesCard({
 
   /** Says how a store call went, then reads the sources again. */
   const reportStore = (result: StoreResult, success: string) => {
-    if (!result.ok) toast.error(result.message ?? t(`stores.errors.${result.code}`));
+    if (!result.ok && result.code === 'subscription') openUpgrade();
+    else if (!result.ok) toast.error(result.message ?? t(`stores.errors.${result.code}`));
     else toast.success(success);
     load();
     return result.ok;
@@ -263,7 +275,10 @@ export function CatalogSourcesCard({
                             size="sm"
                             variant="ghost"
                             disabled={busy !== null}
-                            onClick={() => setSigningIn(signingIn === source.id ? null : source.id)}
+                            onClick={guard(
+                              () => setSigningIn(signingIn === source.id ? null : source.id),
+                              { action: tActions('updateStoreSignIn') },
+                            )}
                             aria-label={t('stores.update')}
                             aria-expanded={signingIn === source.id}
                           >
@@ -275,7 +290,9 @@ export function CatalogSourcesCard({
                             size="sm"
                             variant="ghost"
                             disabled={busy !== null}
-                            onClick={() => sync(source.id)}
+                            onClick={guard(() => void sync(source.id), {
+                              action: tActions('syncCatalog'),
+                            })}
                             aria-label={t('syncNow')}
                           >
                             {busy === source.id ? (
@@ -290,7 +307,13 @@ export function CatalogSourcesCard({
                             size="sm"
                             variant="ghost"
                             disabled={busy !== null}
-                            onClick={() => remove(source)}
+                            onClick={
+                              isStoreSource(source.kind)
+                                ? () => void remove(source)
+                                : guard(() => void remove(source), {
+                                    action: tActions('removeCatalogSources'),
+                                  })
+                            }
                             aria-label={t('remove')}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -361,7 +384,7 @@ export function CatalogSourcesCard({
                   className="flex flex-col gap-2 sm:flex-row"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void add();
+                    addFeed();
                   }}
                 >
                   <Input
@@ -391,7 +414,10 @@ export function CatalogSourcesCard({
                     variant="outline"
                     size="sm"
                     disabled={busy !== null}
-                    onClick={() => fileInput.current?.click()}
+                    onClick={() => {
+                      if (isLocked) openUpgrade(tActions('addCatalogSources'));
+                      else fileInput.current?.click();
+                    }}
                   >
                     {busy === 'upload' ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -416,9 +442,13 @@ export function CatalogSourcesCard({
                               size="sm"
                               disabled={busy !== null}
                               aria-expanded={connecting === connector.kind}
-                              onClick={() =>
-                                setConnecting(connecting === connector.kind ? null : connector.kind)
-                              }
+                              onClick={guard(
+                                () =>
+                                  setConnecting(
+                                    connecting === connector.kind ? null : connector.kind,
+                                  ),
+                                { action: tActions('connectStores') },
+                              )}
                             >
                               <Store className="mr-2 h-4 w-4" />
                               {t('stores.connect', { store: connector.label })}

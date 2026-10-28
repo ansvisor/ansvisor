@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { subscriptionActiveFor, subscriptionInactiveResponse } from '@/lib/mcp/subscription-gate';
 
 export const API_KEY_PREFIX = 'ans_';
 export const API_KEY_DISPLAY_PREFIX_LEN = 12;
@@ -23,14 +24,25 @@ export interface McpAuthContext {
   apiKeyId: string;
 }
 
+/** The methods that change something: a read-only workspace's REST routes refuse them. */
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 /**
  * Resolve the bearer token on a request into a user/org context.
  *
  * Accepts only Ansvisor API keys (prefix `ans_`) — not Supabase session JWTs.
  * MCP endpoints are intended to be hit by long-lived external clients, so we
  * intentionally don't fall back to the dashboard's session cookie.
+ *
+ * On Ansvisor Cloud, a write (POST, PUT, PATCH, DELETE) for an organization
+ * whose plan isn't active answers 402 subscription_inactive, so a new write
+ * route is gated without asking. The MCP endpoint, where every call is a
+ * POST, passes `gateWrites: false` and gates its tools instead.
  */
-export async function authenticateMcpRequest(req: Request): Promise<McpAuthContext | NextResponse> {
+export async function authenticateMcpRequest(
+  req: Request,
+  { gateWrites = true }: { gateWrites?: boolean } = {},
+): Promise<McpAuthContext | NextResponse> {
   const auth = req.headers.get('authorization') ?? '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
 
@@ -57,6 +69,15 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthConte
     .eq('id', key.user_id)
     .maybeSingle();
 
+  const organizationId = (profile?.organization_id as string | null | undefined) ?? null;
+  if (
+    gateWrites &&
+    WRITE_METHODS.has(req.method.toUpperCase()) &&
+    !(await subscriptionActiveFor(organizationId))
+  ) {
+    return subscriptionInactiveResponse();
+  }
+
   // Best-effort touch — failing here shouldn't block the request.
   supabaseAdmin
     .from('api_keys')
@@ -71,7 +92,7 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthConte
   return {
     userId: key.user_id,
     email: user?.email ?? null,
-    organizationId: profile?.organization_id ?? null,
+    organizationId,
     apiKeyId: key.id,
   };
 }
