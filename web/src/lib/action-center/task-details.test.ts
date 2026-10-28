@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  MANUAL_TASKS,
   PAGE_CHECKED_TASKS,
   pageCheckable,
   type ActionTaskDetails,
@@ -9,6 +10,7 @@ import {
   cleanTaskDetailsEdit,
   isTaskDetailsEdit,
   parseTaskDetails,
+  withTemplateCheck,
   withTemplateDoneWhen,
   withoutTemplateDoneWhen,
 } from './task-details';
@@ -340,5 +342,39 @@ describe('pageCheckable', () => {
     const block = server.match(/export const CHECKS = Object\.freeze\(\{([^}]*)\}\)/)![1];
     const keys = [...block.matchAll(/^\s*([a-z_]+):/gm)].map((m) => m[1]);
     expect([...PAGE_CHECKED_TASKS].sort()).toEqual(keys.sort());
+  });
+});
+
+describe('withTemplateCheck', () => {
+  const auto = parseTaskDetails({
+    url: '/pricing',
+    check: 'auto',
+    autoCheck: { at: '2026-10-20T00:00:00Z', passed: false, missing: ['not_changed'] },
+  });
+
+  it('reads a task planned while its template was Automatic as Manual', () => {
+    expect(withTemplateCheck(auto, 'improve_cta_path')).toMatchObject({
+      check: 'manual',
+      url: '/pricing',
+      lastCheck: null,
+    });
+  });
+
+  it("keeps a page-checked task's, a Site Audit fix's and a written task's check", () => {
+    expect(withTemplateCheck(auto, 'refresh_content')).toBe(auto);
+    expect(withTemplateCheck(auto, 'fix_technical_issue')).toBe(auto);
+    expect(withTemplateCheck(auto, null)).toBe(auto);
+    expect(withTemplateCheck(null, 'improve_cta_path')).toBeNull();
+  });
+
+  it("lists the templates' Manual tasks, no more and no fewer", () => {
+    const server = readFileSync(
+      join(__dirname, '../../../../server/src/lib/action-center/tasks/templates.js'),
+      'utf8',
+    );
+    const block = server.match(/const TEMPLATES = Object\.freeze\(\{([\s\S]*?)\n\}\);/)![1];
+    const keys = [...block.matchAll(/^\s*([a-z_]+): \{ check: 'manual'/gm)].map((m) => m[1]);
+    expect(keys).toContain('improve_cta_path');
+    expect([...MANUAL_TASKS].sort()).toEqual(keys.sort());
   });
 });

@@ -11,9 +11,10 @@
  *  - robots.txt lets the AI crawlers in, and the page isn't noindex
  *    (fix_crawler_access raised by the audit's ai-bot-access);
  *  - it changed since the first look, by more than a date, a price or a
- *    rotating quote moving (optimize, refresh, strengthen, the call to
- *    action): the first look keeps a sketch of the page's words, and
- *    enough of them must have changed;
+ *    rotating quote moving (optimize, refresh, strengthen): the first look
+ *    keeps a sketch of the page's words, and enough of them must have
+ *    changed. A call to action is confirmed by hand: a re-fetch can't tell
+ *    (tasks/templates.js);
  *  - a written task's new text is on it, and the text it replaces gone;
  *  - a shopping links task's page links no product that no longer sells,
  *    read as the catalog sync's shopping check reads it (shopping-check.js;
@@ -53,7 +54,6 @@ export const CHECKS = Object.freeze({
   refresh_content: 'changed',
   strengthen_reference_asset: 'changed',
   strengthen_entity_content: 'changed',
-  improve_cta_path: 'changed',
 });
 
 /** The most open tasks one nightly sweep checks: pages are fetched one at a time. */

@@ -31,7 +31,11 @@ import {
   withEntityCounts,
   withoutTargetIds,
 } from '@/lib/action-center/entity-counts';
-import { parseTaskDetails, withTemplateDoneWhen } from '@/lib/action-center/task-details';
+import {
+  parseTaskDetails,
+  withTemplateCheck,
+  withTemplateDoneWhen,
+} from '@/lib/action-center/task-details';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
@@ -3001,7 +3005,10 @@ const templateDoneWhen = (taskKey: string) =>
 
 /** A task's details in the snake_case the rest of the MCP output uses. */
 function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
-  const d = withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen);
+  const d = withTemplateCheck(
+    withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen),
+    taskKey,
+  );
   if (!d) return null;
   return {
     // The exact page, the change to make there and how we check it (AC-010).
