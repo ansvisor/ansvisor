@@ -1,6 +1,6 @@
-import { ELEMENT_NODE, TEXT_NODE, contentDom } from './dom';
 import { slugify } from '@/lib/slug';
 import type { ContentAuthor } from './authors';
+import { ELEMENT_NODE, TEXT_NODE, contentDom } from './dom';
 import { cleanHref, jsonLdText } from './html-allowlist';
 import { firstImage } from './page-schema';
 import { AGENT_PLACEHOLDER, PLACEHOLDER, placeholderIn } from './placeholders';

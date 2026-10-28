@@ -1,5 +1,5 @@
-import { contentDom, parseHtml } from './dom';
 import DOMPurify from 'dompurify';
+import { contentDom, parseHtml } from './dom';
 import {
   ALLOWED_ATTRIBUTES,
   ALLOWED_TAGS,

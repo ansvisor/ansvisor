@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { bulkCmsItems, cmsSource } from '@/lib/content/cms-send';
-import { setContentDom, type ContentWindow } from '@/lib/content/dom';
+import { setContentDom } from '@/lib/content/dom';
 import {
   AUTHORS,
   BRAND_ID,
@@ -55,9 +55,7 @@ describe("the editor's Send to CMS page", () => {
 
   it('is the same made with a window of its own, as the server gives jsdom’s', () => {
     const browser = sendPage();
-    setContentDom(
-      new JSDOM('<!doctype html><html><head></head><body></body></html>').window as ContentWindow,
-    );
+    setContentDom(new JSDOM('<!doctype html><html><head></head><body></body></html>').window);
     expect(sendPage()).toEqual(browser);
   });
 });

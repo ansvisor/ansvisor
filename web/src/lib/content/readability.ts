@@ -1,5 +1,5 @@
-import { parseHtml } from './dom';
 import { LANGUAGES } from '@/config/prompt-options';
+import { parseHtml } from './dom';
 
 /**
  * Readability, one of the Quality scores (Content Editor Quality spec §2.3,

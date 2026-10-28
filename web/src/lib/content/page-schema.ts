@@ -1,7 +1,7 @@
-import { TEXT_NODE, parseHtml } from './dom';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { factValueText, pagePrices, priceRanges } from './brand-facts';
+import { TEXT_NODE, parseHtml } from './dom';
 import type { PageType } from './drafts';
 import { PLACEHOLDER } from './placeholders';
 import { cleanHref, decodeHtmlBlock } from './html-allowlist';

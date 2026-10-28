@@ -2,7 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { readContentAuthors } from '@/lib/content/authors-read';
 import { bulkCmsItems, cmsSource, type BulkProblem } from '@/lib/content/cms-send';
-import { setContentDom, type ContentWindow } from '@/lib/content/dom';
+import { setContentDom } from '@/lib/content/dom';
 import { qualityPhase } from '@/lib/content/quality';
 import { fragment } from '@/lib/content/ready-to-publish';
 import { draftLanguage } from '@/lib/content/rules';
@@ -27,7 +27,7 @@ function withContentDom(): Promise<void> {
   dom ??= import('jsdom')
     .then(({ JSDOM }) => {
       const { window } = new JSDOM('<!doctype html><html><head></head><body></body></html>');
-      setContentDom(window as ContentWindow);
+      setContentDom(window);
     })
     .catch((err: unknown) => {
       dom = null;
@@ -121,6 +121,7 @@ export async function getContentDraftPackageFor(
   const [authors] = await Promise.all([
     qualityPhase() >= 1
       ? readContentAuthors(supabaseAdmin, auth.organizationId, {
+          // Who reads them: cmsSource doesn't use it, so the key's role isn't looked up.
           me: { id: auth.userId, role: 'analyst' },
         })
       : Promise.resolve(null),

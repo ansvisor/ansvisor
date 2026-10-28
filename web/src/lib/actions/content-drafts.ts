@@ -51,8 +51,8 @@ import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class
 import { draftShopping } from '@/lib/content/shopping-check';
 import {
   NO_DRAFT_RULES,
-  draftRulesFit,
   draftLanguage,
+  draftRulesFit,
   draftRulesSchema,
   ruleSetFits,
   savedRuleSetSchema,
