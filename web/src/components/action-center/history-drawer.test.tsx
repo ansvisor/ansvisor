@@ -129,6 +129,85 @@ describe('HistoryDrawer', () => {
     expect(under('What was the goal?')).toContain('Nov 9');
   });
 
+  it('says what became of the signals that raised it, beside the result (learning A3)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          signalsAfter: { total: 4, ended: 2, replaced: 1, dismissed: 0, open: 1 },
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Of the 4 signals that raised it, when measured: 2 ended, 1 turned into another, 1 still open.',
+    );
+
+    render(
+      <HistoryDrawer brandId="b1" item={{ ...item, signalsAfter: null }} onOpenChange={() => {}} />,
+    );
+    await act(async () => {});
+    expect(under('Result')).not.toContain('that raised it');
+  });
+
+  it('says it was measured on the prompts it named, the brand-wide figures beside (learning A1)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    const metric = (id: string, before: number, after: number) => ({
+      id,
+      label: id,
+      metric: id as never,
+      before,
+      after,
+      delta: after - before,
+      unit: 'number' as const,
+      direction: 'higher_is_better' as const,
+    });
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          results: [metric('mentions', 2, 6)],
+          measuredOn: { entity: 'prompts', count: 2 },
+          brandWideResults: [metric('citations', 100, 104)],
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    const result = under('Result');
+    expect(result).toContain('Measured on the 2 prompts it named.');
+    expect(result).toMatch(/Brand-wide over the same days: \S.* 100 → 104/);
+  });
+
+  it('says how a Site Audit fix’s pages read when audited again, or that none was yet (learning A2)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, auditAfter: { pages: 3, audited: 2, passed: 1 } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain('Audited again since it closed: 1 of 2 pages pass.');
+
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, auditAfter: { pages: 3, audited: 0, passed: 0 } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'None of its 3 pages was audited again since it closed: the result is from the metrics.',
+    );
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);

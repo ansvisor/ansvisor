@@ -33,6 +33,8 @@ import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-b
 import { PublishDialog } from '@/components/content/publish-dialog';
 import { readLiveUrl } from '@/lib/content/publish-client';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
+import { CmsSentChip } from '@/components/content/cms-sent-chip';
+import { readDraftCms, type DraftCms } from '@/lib/content/cms-send-client';
 import { updateBrand } from '@/lib/actions/brand';
 import {
   decideDraftSuggestions,
@@ -107,7 +109,7 @@ import {
   listedProducts,
   MIN_LISTED,
 } from '@/lib/content/page-schema';
-import { PLACEHOLDER, pagePlaceholders, placeholderIn } from '@/lib/content/placeholders';
+import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
 import { HANDOFF_KEYS, handOffItems } from '@/lib/content/hand-off';
 import {
   blankCode,
@@ -203,6 +205,7 @@ import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
 import { ReviewerMenu } from './_reviewer-menu';
 import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
 import { FlashBlock, findBlock, flashKey } from './_flash-block';
+import { PlaceholderMarks, placeholderRanges, selectPlaceholder } from './_placeholder-marks';
 import { useAgentRun } from './_use-agent-run';
 import { useAutoHandOff } from './_use-auto-hand-off';
 import { useLinkChecks } from './_use-link-checks';
@@ -611,6 +614,7 @@ export function DraftEditor({
       OneH1,
       AgentDrafting,
       FlashBlock,
+      PlaceholderMarks,
       PageInfoStrip,
       WeakSourcesMarks,
       ClaimMarksExtension,
@@ -1435,6 +1439,18 @@ export function DraftEditor({
   );
   const [hadPlaceholders, setHadPlaceholders] = useState(false);
   if (placeholderCount > 0 && !hadPlaceholders) setHadPlaceholders(true);
+  // The placeholders a send or an export finds that the page's text doesn't
+  // show: in an image's alt text, the JSON-LD, an HTML block, or a title the
+  // page doesn't hold. The toolbar counts them with the page's (a code
+  // block's too, which the marks hold and pagePlaceholders doesn't read).
+  const hiddenPlaceholders = useMemo(() => {
+    const html = publishableHtml(pageHtml);
+    const found = exportPlaceholders(html) + titlePlaceholders(title, html);
+    const code = Array.from(
+      new DOMParser().parseFromString(pageHtml, 'text/html').querySelectorAll('pre'),
+    ).reduce((sum, pre) => sum + (pre.textContent?.match(PLACEHOLDER)?.length ?? 0), 0);
+    return Math.max(0, found - pagePlaceholders(pageHtml).count - code);
+  }, [pageHtml, title]);
   // Who may edit the page's author: only they get Edit author (CE-037's rule).
   const canEditPageAuthor =
     !!pageAuthor && !!authorsRead && canEditAuthor(pageAuthor, authorsRead.me);
@@ -2154,40 +2170,10 @@ export function DraftEditor({
    */
   const showFirstPlaceholder = (): boolean => {
     if (!editor) return false;
-    let found: { from: number; to: number; block: { from: number; to: number } } | null = null;
-    editor.state.doc.descendants((block, pos) => {
-      if (found) return false;
-      if (!block.isTextblock) return true;
-      // The line's text, with where each piece of it starts in the page.
-      let text = '';
-      const pieces: { at: number; pos: number }[] = [];
-      block.forEach((child, offset) => {
-        if (!child.isText) return;
-        pieces.push({ at: text.length, pos: pos + 1 + offset });
-        text += child.text;
-      });
-      const m = new RegExp(placeholderIn(block.type.name === 'heading').source, 'iu').exec(text);
-      if (!m) return false;
-      const posOf = (i: number) => {
-        const piece = pieces.findLast((p) => p.at <= i)!;
-        return piece.pos + (i - piece.at);
-      };
-      found = {
-        from: posOf(m.index),
-        to: posOf(m.index + m[0].length - 1) + 1,
-        block: { from: pos, to: pos + block.nodeSize },
-      };
-      return false;
-    });
-    if (!found) return false;
-    const { from, to, block } = found;
-    editor
-      .chain()
-      .setTextSelection({ from, to })
-      .scrollIntoView()
-      .focus(undefined, { scrollIntoView: false })
-      .run();
-    editor.view.dispatch(editor.state.tr.setMeta(flashKey, block));
+    const [first] = placeholderRanges(editor.state.doc);
+    if (!first) return false;
+    selectPlaceholder(editor, first);
+    editor.view.dispatch(editor.state.tr.setMeta(flashKey, first.block));
     setTimeout(() => {
       if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(flashKey, null));
     }, 1200);
@@ -2195,10 +2181,11 @@ export function DraftEditor({
   };
 
   /**
-   * Fill now (Export, CE-057): the first placeholder, in the HTML view's
-   * text while it is open (where exportPlaceholders reads: not in tags,
-   * styles or scripts), else in the page; one only an HTML block holds is
-   * said to be there.
+   * Fill now (Export, CE-057; Send to CMS; Before you publish): the first
+   * placeholder, in the HTML view's text while it is open (where
+   * exportPlaceholders reads: not in tags, styles or scripts), else in the
+   * page. One the page's text doesn't show (an image's alt text, the
+   * JSON-LD, an HTML block) is selected in the HTML view, opened for it.
    */
   const htmlSourceRef = useRef<HTMLTextAreaElement>(null);
   // The disclosure line Before you publish offers (CE-050), and whether the
@@ -2269,17 +2256,33 @@ export function DraftEditor({
       )
       .run();
   };
+  // Fill now for a placeholder the page's text doesn't show, and the
+  // toolbar's Show in HTML: once the HTML view is open (Show in HTML's, the
+  // first the page's text doesn't show).
+  const [fillInHtml, setFillInHtml] = useState<null | { hidden: boolean }>(null);
+  useEffect(() => {
+    if (!fillInHtml || htmlSource === null) return;
+    setFillInHtml(null);
+    selectHtmlPlaceholder(htmlSourceRef.current, htmlSource, fillInHtml);
+  }, [fillInHtml, htmlSource]);
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
-      const m = new RegExp(PLACEHOLDER.source, 'iu').exec(blankCode(htmlSource, { words: true }));
-      const area = htmlSourceRef.current;
-      if (m && area) {
-        area.focus();
-        area.setSelectionRange(m.index, m.index + m[0].length);
-      }
+      selectHtmlPlaceholder(htmlSourceRef.current, htmlSource);
       return;
     }
-    if (!showFirstPlaceholder()) toast(t('exportDialog.inHtmlBlock', { html: '</>' }));
+    if (showFirstPlaceholder()) return;
+    if (openHtmlView()) {
+      setFillInHtml({ hidden: false });
+      toast(t('placeholders.inHtmlView', { html: '</>' }));
+    }
+  };
+  // Show in HTML: straight to the HTML view, past the page's own placeholders.
+  const showHiddenPlaceholder = () => {
+    if (htmlSource !== null) {
+      selectHtmlPlaceholder(htmlSourceRef.current, htmlSource, { hidden: true });
+      return;
+    }
+    if (openHtmlView()) setFillInHtml({ hidden: true });
   };
 
   /**
@@ -2831,15 +2834,17 @@ export function DraftEditor({
     },
   };
 
-  const openHtmlView = () => {
-    if (!editor) return;
+  /** Opens the HTML view; whether it opened. */
+  const openHtmlView = (): boolean => {
+    if (!editor) return false;
     // The cards aren't in the HTML: decide them first.
     if (openSuggestions > 0) {
       toast(t('suggestions.htmlBlocked', { count: openSuggestions }));
-      return;
+      return false;
     }
     setHtmlSource(formatHtmlSource(editor.getHTML()));
     setHtmlEdited(false);
+    return true;
   };
   const applyHtmlView = () => {
     if (!editor || htmlSource === null) return;
@@ -3106,6 +3111,19 @@ export function DraftEditor({
   // Quality is live.
   const { canManage } = useUserRole();
   const [sendOpen, setSendOpen] = useState<{ html: string } | null>(null);
+  // The page's last send to a CMS, for the header (#1331): read once, then as sent.
+  const [cmsLast, setCmsLast] = useState<DraftCms['last']>(null);
+  useEffect(() => {
+    let cancelled = false;
+    readDraftCms(draft.id)
+      .then((read) => {
+        if (!cancelled && read?.last) setCmsLast(read.last);
+      })
+      .catch((err) => console.error('Failed to read the page’s last send:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.id]);
   const [preparing, setPreparing] = useState(false);
   // HTML edited in the HTML view and not applied isn't in the page to save.
   const htmlUnapplied = htmlSource !== null && htmlEdited;
@@ -3171,7 +3189,8 @@ export function DraftEditor({
   };
   // The page to publish's shopping links against the catalog (shopping path,
   // part 6), as the Shopping rules read them: every link, a product grid's
-  // too, and the products the rule asks for (none with it off). Read fresh:
+  // too, and the products the rule asks for (none with it off); and its
+  // product cards' prices against the catalog's now. Read fresh:
   // 'reading' meanwhile, for a draft known to have a path. No row while
   // none is known to, so a draft without one never shows it.
   const shopRule = rules.rules.find(({ rule }) => rule.key === 'shopProductLinks')?.rule;
@@ -3181,7 +3200,8 @@ export function DraftEditor({
     if (!publishOpen || shopping === null || shopping === 'reading') return null;
     if (shoppingRefreshing) return 'reading';
     if (shopping === 'failed') return 'failed';
-    return shoppingLinks(readPage(publishOpen.html, 0).links ?? [], shopping, shopWant);
+    const page = readPage(publishOpen.html, 0);
+    return shoppingLinks(page.links ?? [], shopping, shopWant, page.cards ?? []);
   }, [publishOpen, shopping, shoppingRefreshing, shopWant]);
   // Read once per change (a link read landing, the title), not on every render.
   const readyToPaste = useMemo((): ReadyToPaste | null => {
@@ -3915,6 +3935,7 @@ export function DraftEditor({
           )}
           <DraftMethodBadge method={draft.method} />
           <DraftStatusBadge status={status} />
+          {cmsLast && <CmsSentChip last={cmsLast} />}
           <button
             type="button"
             onClick={() => openPanelTab('rules')}
@@ -4123,6 +4144,7 @@ export function DraftEditor({
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
               onAttach={attachments.open}
               linkRequest={linkRequest}
+              placeholders={{ hidden: hiddenPlaceholders, onShowHidden: showHiddenPlaceholder }}
               // + Insert › Products, from an online shop's catalog (shopping path, part 5).
               productsBrandId={siteType === 'ecommerce' ? draft.brandId : null}
             />
@@ -4318,6 +4340,7 @@ export function DraftEditor({
             fillFirstPlaceholder();
           }}
           onClose={() => setSendOpen(null)}
+          onSent={setCmsLast}
         />
       )}
 
@@ -4402,6 +4425,45 @@ export function DraftEditor({
       </Dialog>
     </div>
   );
+}
+
+/**
+ * Where the page's text shows a placeholder in the HTML view's source: in
+ * its words, not an alt or title value, the JSON-LD, or an HTML block's code
+ * (between its markers).
+ */
+function shownPlaceholderAt(source: string): Set<number> {
+  const blocks = [...source.matchAll(/<!-- html-block -->[\s\S]*?<!-- \/html-block -->/g)];
+  const inBlock = (i: number) => blocks.some((b) => i > b.index && i < b.index + b[0].length);
+  const words = blankCode(source, { words: true, fields: false });
+  return new Set(
+    [...words.matchAll(new RegExp(PLACEHOLDER.source, 'giu'))]
+      .map((m) => m.index)
+      .filter((i) => !inBlock(i)),
+  );
+}
+
+/**
+ * The HTML view's first placeholder, selected and scrolled to. With
+ * `hidden`, the first the page's text doesn't show (an image's alt text,
+ * the JSON-LD, an HTML block), when there is one.
+ */
+function selectHtmlPlaceholder(
+  area: HTMLTextAreaElement | null,
+  source: string,
+  { hidden = false } = {},
+) {
+  const found = [
+    ...blankCode(source, { words: true }).matchAll(new RegExp(PLACEHOLDER.source, 'giu')),
+  ];
+  const shown = hidden ? shownPlaceholderAt(source) : null;
+  const m = found.find((f) => !shown?.has(f.index)) ?? found[0];
+  if (!m || !area) return;
+  area.focus();
+  area.setSelectionRange(m.index, m.index + m[0].length);
+  // A textarea scrolls to its selection on focus, not on a new range.
+  area.blur();
+  area.focus();
 }
 
 function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
