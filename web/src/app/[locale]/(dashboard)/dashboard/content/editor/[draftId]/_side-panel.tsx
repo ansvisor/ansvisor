@@ -4,13 +4,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { rulesForBrief, useRuleDescriber } from '@/lib/content/agent-write';
 import { isPageType, type ContentDraft } from '@/lib/content/drafts';
 import type { SiteType } from '@/lib/content/page-types';
+import { inputsGiven } from '@/lib/content/draft-inputs';
+import { shoppingPathFits } from '@/lib/content/shopping-path';
 import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
 import { formatNumber } from '@/lib/format';
 import { BAND_CLASSES, qualityBand, qualityPhase } from '@/lib/content/quality';
 import type { ClaimMark } from '@/lib/content/quality-checks';
 import { cn } from '@/lib/utils';
+import { ShoppingPathSection } from './_shopping-path';
 import { BriefTab, type AgentRewrite } from './_brief-tab';
 import { DataNote, UsesYourData } from './_data-note';
 import { ImpactTab } from './_impact-tab';
@@ -110,6 +114,8 @@ export function EditorPanelRail({ onOpen }: { onOpen: (tab: PanelTab) => void })
  */
 export function EditorSidePanel({
   draft,
+  liveUrl = null,
+  published = false,
   siteType,
   title,
   bodyHtml,
@@ -141,10 +147,19 @@ export function EditorSidePanel({
   onPickReviewer,
   onAddCheckDate,
   onConfirmCase,
+  onConfirmIntro,
   onChangeType,
   handOff = null,
+  onShoppingPathChange,
 }: {
   draft: ContentDraft;
+  /**
+   * Where the page is live, as the editor holds it (CE-013: marked published
+   * since it opened): the Live page tab measures it, else the page it optimizes.
+   */
+  liveUrl?: string | null;
+  /** Published, as the editor holds it: without an address, the Live page tab asks for it. */
+  published?: boolean;
   /** The brand's business type as the editor holds it (Quality CE-056). */
   siteType: SiteType;
   /** The draft's title, page and type as written now: Sources and Brief read them. */
@@ -215,20 +230,26 @@ export function EditorSidePanel({
   onAddCheckDate?: () => void;
   /** Quality's Confirm on a customer case (CE-052). */
   onConfirmCase?: (key: string) => void;
+  /** Quality's Confirm on a category intro's facts (CE-054). */
+  onConfirmIntro?: () => void;
   /** Quality's Change: the header's page type menu (CE-052). */
   onChangeType?: () => void;
   /** Hand it off to Content Agent, Quality's (CE-051). */
   handOff?: HandOff | null;
+  /** Brief › Shopping path changed: the Shopping rules read it again (shopping path, part 6). */
+  onShoppingPathChange?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
   const [tab, setTab] = useState<PanelTab>('instructions');
   const [segment, setSegment] = useState<InstructionSegment>('rules');
   const [opened, setOpened] = useState<Set<PanelTarget>>(() => new Set(['instructions', 'rules']));
-  const page = useRef<PageNow>({ title, html: bodyHtml, length: rules.length });
+  const describeRule = useRuleDescriber();
+  // The rules as checked; described only when a rebuild asks for them, not on every keystroke.
+  const page = useRef({ title, html: bodyHtml, length: rules.length, checks: rules.rules });
   const sourcesNow = useRef(reads.sources);
   useEffect(() => {
-    page.current = { title, html: bodyHtml, length: rules.length };
+    page.current = { title, html: bodyHtml, length: rules.length, checks: rules.rules };
     sourcesNow.current = reads.sources;
   });
 
@@ -240,7 +261,8 @@ export function EditorSidePanel({
       prev.has(next) && prev.has(nextTab) ? prev : new Set([...prev, next, nextTab]),
     );
   };
-  const rulesOpen = Math.max(0, rules.total - rules.met);
+  // None said while the count is still read (the header's chip says so).
+  const rulesOpen = rules.settled === false ? 0 : Math.max(0, rules.total - rules.met);
   // Quality shows once its first phase is live (NEXT_PUBLIC_CONTENT_QUALITY_PHASE).
   const segments = SEGMENTS.filter((value) => value !== 'quality' || qualityPhase() >= 1);
 
@@ -295,7 +317,10 @@ export function EditorSidePanel({
 
   const { rebuilding, rebuild } = useBriefRebuild({
     draft,
-    pageNow: () => page.current,
+    pageNow: (): PageNow => {
+      const { checks, ...now } = page.current;
+      return { ...now, rules: rulesForBrief(checks, describeRule) };
+    },
     sourcesNow: () => sourcesNow.current,
     onSourcesRead: (read) => reads.setSources(read),
     onRebuilt: (next) => {
@@ -439,6 +464,14 @@ export function EditorSidePanel({
                   </button>
                 </p>
               )}
+              {shoppingPathFits(siteType, pageType) && (
+                <ShoppingPathSection
+                  draftId={draft.id}
+                  brandId={draft.brandId}
+                  pageType={pageType}
+                  onPathChange={onShoppingPathChange}
+                />
+              )}
               <BriefTab
                 draftId={draft.id}
                 state={reads.brief}
@@ -453,6 +486,8 @@ export function EditorSidePanel({
                 rewrite={agentRewrite}
                 dataLine={dataLine}
                 blocked={briefBlocked}
+                given={yourInput?.status === 'ready' ? inputsGiven(yourInput.inputs) : null}
+                onAddInput={onAddInput}
               />
             </div>
           )}
@@ -473,6 +508,7 @@ export function EditorSidePanel({
                 onPickReviewer={onPickReviewer}
                 onAddCheckDate={onAddCheckDate}
                 onConfirmCase={onConfirmCase}
+                onConfirmIntro={onConfirmIntro}
                 onChangeType={onChangeType}
                 handOff={handOff}
               />
@@ -525,8 +561,11 @@ export function EditorSidePanel({
         {opened.has('impact') && (
           <div hidden={tab !== 'impact'}>
             <ImpactTab
+              // Another address (marked published at it) reads anew, not the last one's numbers.
+              key={liveUrl ?? draft.sourceUrl ?? 'none'}
               brandId={draft.brandId}
-              pageUrl={draft.sourceUrl}
+              pageUrl={liveUrl ?? draft.sourceUrl}
+              published={published}
               rebuilding={rebuilding}
               blocked={briefBlocked}
               onUseLostPrompts={(promptIds) => void rebuild({ addPrompts: promptIds })}

@@ -39877,3 +39877,2067 @@ create trigger content_draft_confirmations_cap
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00281_catalog_variants_brand_live.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00281: Quality phase 3, CE-053 — a brand's live variants, by its brand
+-- ============================================================================
+-- The Content Editor finds a product page's product in the brand's catalog
+-- (00278) by the page's URL: the product's own (catalog_products_brand_live_idx
+-- serves that read), else a variant's, when a feed gives a variant its own
+-- page. This index serves the variants' read the same way, so it reads the
+-- brand's live variants only, not every brand's.
+
+create index if not exists catalog_variants_brand_live_idx
+  on public.catalog_variants (brand_id)
+  where removed_at is null;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00282_catalog_store_connections.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00282: store connections for the catalog (#1263, part 3)
+-- ============================================================================
+-- A catalog source (00279) can now be a store or marketplace a connector
+-- reads with the brand's own sign-in (WooCommerce, Etsy, …), next to a feed
+-- URL and an upload.
+--
+--   * A source's kind is its connector's: any short slug. The server only
+--     syncs kinds it has a connector for.
+--   * Members still add only feed URLs and uploads themselves. A store is
+--     connected through the API, which checks the sign-in with the store,
+--     makes the source and keeps its credentials, so a store source never
+--     exists without them.
+--   * `account` names the store's account to the person: a shop's domain,
+--     a seller id. A store's `url` is optional; a feed's is required, and an
+--     upload has none.
+--   * A brand connects each store account once.
+--   * Members remove feed URLs and uploads themselves. A store is removed
+--     through the API, which revokes its sign-in at the store first.
+--   * `auth_failed`: the store refused the saved sign-in.
+--   * The daily run reads every kind but uploads.
+--
+-- Credentials live in `catalog_source_credentials`, one row per source,
+-- encrypted by the API with a key only it holds (AES-256-GCM, bound to the
+-- source's id). Only the service role reads or writes them: members can't
+-- even see that a row exists. They go with their source.
+
+alter table public.catalog_sources drop constraint if exists catalog_sources_kind_check;
+alter table public.catalog_sources
+  add constraint catalog_sources_kind_check check (kind ~ '^[a-z][a-z0-9_]{1,39}$');
+
+alter table public.catalog_sources drop constraint if exists catalog_sources_url_kind;
+alter table public.catalog_sources
+  add constraint catalog_sources_url_kind check (
+    (kind <> 'feed_url' or url is not null) and (kind <> 'upload' or url is null)
+  );
+
+alter table public.catalog_sources
+  add column if not exists account text
+    check (account is null or char_length(account) between 1 and 200);
+
+alter table public.catalog_sources drop constraint if exists catalog_sources_last_status_check;
+alter table public.catalog_sources
+  add constraint catalog_sources_last_status_check check (
+    last_status is null or last_status in ('ok', 'failed', 'format_error', 'auth_failed')
+  );
+
+-- Members add feed URLs and uploads; stores come through the API.
+drop policy if exists "catalog_sources: admin/manager insert" on public.catalog_sources;
+create policy "catalog_sources: admin/manager insert"
+  on public.catalog_sources
+  for insert
+  with check (
+    kind in ('feed_url', 'upload')
+    and brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+    and created_by = auth.uid()
+  );
+
+-- Members remove feed URLs and uploads; stores go through the API.
+drop policy if exists "catalog_sources: admin/manager delete" on public.catalog_sources;
+create policy "catalog_sources: admin/manager delete"
+  on public.catalog_sources
+  for delete
+  using (
+    kind in ('feed_url', 'upload')
+    and brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+  );
+
+create unique index if not exists catalog_sources_one_account
+  on public.catalog_sources (brand_id, kind, account)
+  where account is not null;
+
+drop index if exists public.catalog_sources_feed_due_idx;
+create index if not exists catalog_sources_due_idx
+  on public.catalog_sources (last_synced_at nulls first)
+  where kind <> 'upload';
+
+create table if not exists public.catalog_source_credentials (
+  source_id uuid primary key references public.catalog_sources(id) on delete cascade,
+  secret text not null check (char_length(secret) between 1 and 16384),
+  set_at timestamptz not null default now(),
+  set_by uuid references public.profiles(id) on delete set null
+);
+
+alter table public.catalog_source_credentials enable row level security;
+revoke all on table public.catalog_source_credentials from public, anon, authenticated;
+grant all on table public.catalog_source_credentials to service_role;
+
+comment on table public.catalog_source_credentials is
+  'Catalog (#1263, 00282): a store source''s sign-in, encrypted by the API (AES-256-GCM, bound to the source id). Service role only; removed with its source.';
+comment on column public.catalog_sources.account is
+  'The store''s account as the person knows it (a shop domain, a seller id), set by the API when the store is connected.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00283_brand_cms_connections.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00283: a brand's CMS connection for Send to CMS (#1331, phase 2)
+-- ============================================================================
+-- Phase 1 sends pages to the brand's webhook. Phase 2 sends them to the CMS
+-- itself, Webflow first: a brand connects its Webflow site with a site token,
+-- picks the collection its pages go to and which of the collection's fields
+-- takes what.
+--
+--   * One connection a brand and CMS. A Webflow site token is one site's, so
+--     the connection is the brand's, not the workspace's.
+--   * The token never touches this table: Composio keeps it (an API-key
+--     connected account, as Search Console's OAuth tokens are kept, 00045).
+--     We keep the connected account's id and its Composio user.
+--   * `field_map`: which of the collection's fields takes each part of a page
+--     ({ body, metaTitle, metaDescription, jsonLd } → a field's slug). The
+--     item's name and slug always go to Webflow's own `name` and `slug`.
+--   * `auth_failed`: Webflow refused the saved token; the person connects again.
+--   * Members read their brands' connections (the Send dialog and Settings
+--     show them); only the server writes them, for admins and managers.
+
+create table if not exists public.brand_cms_connections (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  provider text not null check (provider in ('webflow')),
+  composio_account_id text not null check (char_length(composio_account_id) between 1 and 200),
+  composio_entity_id text not null check (char_length(composio_entity_id) between 1 and 200),
+  status text not null default 'connected' check (status in ('connected', 'auth_failed')),
+  site_id text check (site_id is null or char_length(site_id) between 1 and 100),
+  site_name text check (site_name is null or char_length(site_name) <= 300),
+  collection_id text check (collection_id is null or char_length(collection_id) between 1 and 100),
+  collection_name text check (collection_name is null or char_length(collection_name) <= 300),
+  field_map jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(field_map) = 'object' and octet_length(field_map::text) <= 2048
+  ),
+  connected_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- A collection is picked on its site.
+  constraint brand_cms_connections_collection_site check (collection_id is null or site_id is not null),
+  unique (brand_id, provider)
+);
+
+alter table public.brand_cms_connections enable row level security;
+revoke all on table public.brand_cms_connections from anon, authenticated;
+grant select on table public.brand_cms_connections to authenticated;
+grant all on table public.brand_cms_connections to service_role;
+
+drop policy if exists "brand_cms_connections: member select" on public.brand_cms_connections;
+create policy "brand_cms_connections: member select"
+  on public.brand_cms_connections
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.brand_cms_connections is
+  'Send to CMS, phase 2 (#1331, 00283): a brand''s CMS connection (Webflow first): its Composio connected account (the token stays at Composio), the site and collection pages go to, and field_map (body, metaTitle, metaDescription, jsonLd → the collection''s field slugs). Members read; the server writes for admins and managers.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00284_content_delivery_targets.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00284: where a page was sent (Send to CMS #1331, phase 2)
+-- ============================================================================
+-- Phase 1 sent every page to the brand's webhook (00262). A page now goes to
+-- the webhook or to the brand's Webflow collection (00283), so a delivery
+-- says which:
+--
+--   * `target`: 'webhook' (every delivery so far) or 'webflow'.
+--   * `target_collection`: the Webflow collection the item was written to.
+--     The item's id is the delivery's external_id, as a CMS's own id is for
+--     the webhook. A page sent again updates its item while the brand still
+--     sends to that collection, and makes a new one after it changes.
+--
+-- reserve_content_deliveries takes the target, 'webhook' when it's left out:
+-- the API before this change calls it with six arguments and still works,
+-- so the migration goes first. For Webflow it refuses (delivery_in_progress)
+-- pages a send still has queued: two sends of one page at once would both
+-- make an item, the second refused on its slug.
+--
+-- Adding the columns checks content_draft_deliveries' rows once (the check
+-- constraints), under its lock: a few hundred rows at most so far.
+
+alter table public.content_draft_deliveries
+  add column if not exists target text not null default 'webhook'
+    check (target in ('webhook', 'webflow')),
+  add column if not exists target_collection text
+    check (target_collection is null or char_length(target_collection) between 1 and 100);
+
+comment on column public.content_draft_deliveries.target is
+  'Where the page was sent (00284): the brand''s webhook, or its Webflow collection (00283).';
+comment on column public.content_draft_deliveries.target_collection is
+  'The Webflow collection the page''s item was written to (00284); the item''s id is external_id.';
+
+drop function if exists public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer);
+
+-- ----------------------------------------------------------------------------
+-- As 00262, with the target each queued row goes to, and no second Webflow
+-- send of a page while one is queued.
+-- ----------------------------------------------------------------------------
+create or replace function public.reserve_content_deliveries(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_sent_by uuid,
+  p_batch_id uuid,
+  p_items jsonb,
+  p_limit integer,
+  p_target text default 'webhook'
+)
+returns setof public.content_draft_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used integer;
+  room integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
+
+  -- sent_at stays empty: it was never sent, and its time stays its own.
+  update public.content_draft_deliveries
+  set status = 'failed', error = 'Not sent: interrupted'
+  where organization_id = p_organization_id
+    and status = 'queued'
+    and created_at < now() - interval '30 minutes';
+
+  select count(*) into used
+  from public.content_draft_deliveries
+  where organization_id = p_organization_id
+    and created_at > now() - interval '24 hours';
+
+  room := greatest(0, p_limit - used);
+  if room = 0 or jsonb_typeof(p_items) <> 'array' then
+    return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass.
+  if p_target = 'webflow' and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = 'webflow'
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
+  end if;
+
+  return query
+  insert into public.content_draft_deliveries
+    (organization_id, brand_id, draft_id, sent_by, batch_id, title, slug, target)
+  select p_organization_id, p_brand_id, (item ->> 'draft_id')::uuid, p_sent_by, p_batch_id,
+         left(item ->> 'title', 300), nullif(left(item ->> 'slug', 200), ''),
+         coalesce(p_target, 'webhook')
+  from jsonb_array_elements(p_items) with ordinality as items(item, position)
+  order by position
+  limit room
+  returning *;
+end;
+$$;
+
+revoke all on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00285_content_page_rewrite_reach.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00285: what a page rewrite was asked for and came to (Length's reach)
+-- ============================================================================
+-- In the live editor test of 2026-10-25, a page kept 78% of its Length in
+-- passages AI answers quote and tables, and the editor kept recommending
+-- Rewrite page: three rewrites came to 5,468, 6,843 and 7,335 characters for
+-- a Length of 4,000. A rewrite that missed isn't offered again for the same
+-- Length, so a page rewrite (kind 'page', 00247) now says:
+--
+--   * `length_target`: the Length it was written to; null with Length off
+--     (the page kept its own length, which says nothing about a Length).
+--   * `kept_chars`: the characters it kept word for word (quoted passages,
+--     tables…): a passage unlocked since lets a rewrite go shorter.
+--   * `after_chars`: the characters it came to, counted once here, so the
+--     editor reads a number, not the rewritten page.
+--
+-- All three are written by the API (content-writer.js) and are null on other
+-- suggestions and on page rewrites made before this. Adding nullable columns
+-- with no default rewrites nothing.
+
+alter table public.content_draft_suggestions
+  add column if not exists length_target integer
+    check (length_target is null or length_target > 0),
+  add column if not exists kept_chars integer
+    check (kept_chars is null or kept_chars >= 0),
+  add column if not exists after_chars integer
+    check (after_chars is null or after_chars >= 0);
+
+comment on column public.content_draft_suggestions.length_target is
+  'A page rewrite''s Length target (00285); null with Length off and on other suggestions.';
+comment on column public.content_draft_suggestions.kept_chars is
+  'The characters a page rewrite kept word for word (00285).';
+comment on column public.content_draft_suggestions.after_chars is
+  'The characters a page rewrite came to (00285).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00286_ai_traffic_conversions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00286: conversions from AI visits, as the AI Traffic snippet sees them (CE-017)
+-- ============================================================================
+-- The snippet counts AI-referred landings (ai_traffic_logs). With conversions
+-- on, it also follows a visitor who came from an AI assistant through the
+-- site to a goal (a signup, a demo form, an order…), so the Content Editor
+-- can show what a page earns from AI visits, and the journeys that got there.
+--
+--   * Off by default, per brand (`conversions_enabled`). A brand that leaves
+--     it off sends nothing new: the snippet keeps nothing in the browser, as
+--     it always has.
+--   * `conversions_consent`: 'wait' (default) keeps the visitor's id only once
+--     the site says the visitor agreed (its consent banner, or Google Consent
+--     Mode); 'always' keeps it at once, for sites whose own banner covers it.
+--     The snippet reads it from its install tag; the server keeps it for the
+--     Settings page.
+--   * `ai_traffic_events`: a journey's pageviews and its conversions. One
+--     visitor id per browser, random and first-party: never the IP address,
+--     never a name or an email. Each row carries the first AI visit it is
+--     credited to (first touch, within 30 days), so a journey reads without
+--     joining the landing logs.
+--   * `url` is the page without its query string or fragment: a thank-you
+--     page's ?email=… never gets in, nor a path segment holding an email
+--     (stored as "[email]").
+--   * `order_ref`: a hash of the brand and an order's own id at the shop
+--     (Shopify's pixel, a site's call), once per visitor, so an order sent
+--     twice counts once; only ever compared, so the id itself isn't kept.
+--     Per visitor, not per brand: the tracking code is public, and an order
+--     id sent first by anyone else must not shut the real one out.
+--   * The server stores at most a few hundred pageviews per visitor id in
+--     the window and a few conversions a day, so a journey's reads stay
+--     bounded (routes/traffic.js).
+--   * `page_key` and `first_key`: the pages' keys, made once on insert, for
+--     the journeys' reads.
+--   * Members read their brands' events; only the server writes them.
+
+alter table public.brands
+  add column if not exists conversions_enabled boolean not null default false,
+  add column if not exists conversions_consent text not null default 'wait'
+    check (conversions_consent in ('wait', 'always'));
+
+comment on column public.brands.conversions_enabled is
+  'CE-017 (00286): the AI Traffic snippet follows AI visitors to conversions (ai_traffic_events). Off by default.';
+comment on column public.brands.conversions_consent is
+  'CE-017 (00286): ''wait'' keeps the snippet''s visitor id only after the site''s consent, ''always'' at once.';
+
+create table if not exists public.ai_traffic_events (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  visitor_id text not null check (visitor_id ~ '^[A-Za-z0-9_-]{16,64}$'),
+  kind text not null check (kind in ('page', 'conversion')),
+  url text not null check (char_length(url) between 1 and 2048),
+  goal text check (goal in ('signup', 'demo', 'order', 'booking', 'newsletter', 'custom')),
+  -- The form's or the call's own name ("pricing-demo"), never what was typed in it.
+  label text check (label is null or char_length(label) between 1 and 80),
+  origin text check (origin in ('call', 'form', 'shopify')),
+  value numeric(14, 2) check (value is null or value >= 0),
+  currency text check (currency is null or currency ~ '^[A-Z]{3}$'),
+  units integer check (units is null or units between 0 and 100000),
+  order_ref text check (order_ref is null or char_length(order_ref) between 1 and 128),
+  first_source text not null check (char_length(first_source) between 1 and 64),
+  first_url text not null check (char_length(first_url) between 1 and 2048),
+  first_at timestamptz not null,
+  occurred_at timestamptz not null default now(),
+  -- The pages' keys as journeys read them (lower(normalize_page_path), as in
+  -- 00209 / 00210): made once when the row is stored, so a journey's reads
+  -- (00287, 00288) compare keys rather than work each address out again.
+  page_key text generated always as (lower(public.normalize_page_path(url))) stored,
+  first_key text generated always as (lower(public.normalize_page_path(first_url))) stored,
+  -- A conversion says what it was and where it came from; a pageview neither.
+  constraint ai_traffic_events_kind check (
+    (kind = 'conversion' and goal is not null and origin is not null)
+    or (kind = 'page' and goal is null and origin is null and order_ref is null)
+  )
+);
+
+-- A database that ran this file before the keys were added gets them, and
+-- loses the brand-time index nothing reads.
+alter table public.ai_traffic_events
+  add column if not exists page_key text
+    generated always as (lower(public.normalize_page_path(url))) stored,
+  add column if not exists first_key text
+    generated always as (lower(public.normalize_page_path(first_url))) stored;
+drop index if exists public.ai_traffic_events_brand_time;
+
+-- An order counts once however often its visitor's browser sends it.
+create unique index if not exists ai_traffic_events_order
+  on public.ai_traffic_events (brand_id, visitor_id, order_ref)
+  where order_ref is not null;
+
+create index if not exists ai_traffic_events_journey
+  on public.ai_traffic_events (brand_id, visitor_id, occurred_at);
+
+alter table public.ai_traffic_events enable row level security;
+revoke all on table public.ai_traffic_events from anon, authenticated;
+grant select on table public.ai_traffic_events to authenticated;
+grant all on table public.ai_traffic_events to service_role;
+
+drop policy if exists "ai_traffic_events: member select" on public.ai_traffic_events;
+create policy "ai_traffic_events: member select"
+  on public.ai_traffic_events
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.ai_traffic_events is
+  'CE-017 (00286): journeys of visitors who came from an AI assistant, as the AI Traffic snippet sends them with conversions on: pageviews and conversions (goal, value, units; an order once by the hash of its id, order_ref), each credited to the first AI visit (first_source, first_url, first_at). A random first-party visitor id; no IP, name or email. Members read; the server writes.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00287_content_page_conversions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00287: conversions from AI journeys through a page, for the editor's Live page tab
+-- ============================================================================
+-- With conversions on (00286), the AI Traffic snippet follows a visitor who
+-- came from an AI assistant to a goal. The Live page tab (CE-016) shows what
+-- the page a draft optimizes took part in (Content Editor spec v2 §7, CE-017).
+--
+-- content_page_conversions(brand, page, days) returns one jsonb over the last
+-- N whole UTC days, ending yesterday, as content_page_results (00210):
+--   * enabled: whether the brand has conversions on;
+--   * page: the page's key, for the tab to find it in the journeys;
+--   * goals: per goal, the conversions and their units, of journeys through
+--     the page: a conversion whose journey (its visitor id: the snippet
+--     makes a new one for each journey) landed on the page, went through it
+--     before, or converted on it;
+--   * revenue: the value of their orders and bookings per currency (a value
+--     without one isn't summed);
+--   * sources: per AI source the journey started from (first touch), its
+--     conversions;
+--   * journeys: the five most frequent (the latest first among as many), each
+--     its source, its pages in order (the landing page, the pages after
+--     without repeats in a row, the page it converted on, as
+--     lower(normalize_page_path) keys), its goal and how many.
+-- The journey's first AI visit isn't its key: the server keeps a browser's
+-- clock from dating it after the event, so first_at may differ within one.
+-- Conversions are read through their own partial index: most events are
+-- pageviews. Pages are compared by the keys stored with each event
+-- (page_key, first_key, 00286). The reads are bounded whatever a sender
+-- stored: a visitor id's pageviews are read once for the page, from a day
+-- before its first AI visit; a journey's steps are the latest 100 pageviews
+-- before its conversion; and the journeys are the latest 2,000
+-- conversions' (the counts take all).
+-- A page is one lower(normalize_page_path) key, as in 00209 / 00210.
+--
+-- Security definer with an organization check, as content_page_results, and
+-- planned for each call's own values (plan_cache_mode).
+
+create index if not exists ai_traffic_events_conversions
+  on public.ai_traffic_events (brand_id, occurred_at desc)
+  where kind = 'conversion';
+
+create or replace function public.content_page_conversions(
+  p_brand_id uuid,
+  p_page text,
+  p_days integer
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_key text := lower(public.normalize_page_path(p_page));
+  -- The last whole day.
+  v_last_day date := (now() at time zone 'utc')::date - 1;
+  v_from timestamptz;
+  v_until timestamptz;
+  v_result jsonb;
+begin
+  if not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) and auth.role() is distinct from 'service_role' then
+    return null;
+  end if;
+  if p_days is null or p_days < 1 or p_days > 366 or p_page is null then
+    raise exception 'content_page_conversions: a page and 1 to 366 days are needed'
+      using errcode = '22023';
+  end if;
+
+  v_from := (v_last_day - p_days + 1)::timestamp at time zone 'utc';
+  v_until := (v_last_day + 1)::timestamp at time zone 'utc';
+
+  with conversions as (
+    select c.*
+    from public.ai_traffic_events c
+    where c.brand_id = p_brand_id
+      and c.kind = 'conversion'
+      and c.occurred_at >= v_from
+      and c.occurred_at < v_until
+  ),
+  -- When each visitor id first saw the page in its journey: read once per
+  -- visitor id however many conversions it has, from a day before its first
+  -- AI visit (first_at is clamped per event, within the server's clock
+  -- allowance) to its last conversion, by the stored keys.
+  seen as (
+    select v.visitor_id, (
+      select min(e.occurred_at)
+      from public.ai_traffic_events e
+      where e.brand_id = p_brand_id
+        and e.visitor_id = v.visitor_id
+        and e.kind = 'page'
+        and e.page_key = v_key
+        and e.occurred_at >= v.since
+        and e.occurred_at <= v.last_at
+    ) as at
+    from (
+      select visitor_id, min(first_at) - interval '1 day' as since, max(occurred_at) as last_at
+      from conversions
+      group by visitor_id
+    ) v
+  ),
+  -- A conversion whose journey landed on the page, went through it, or converted on it.
+  through as (
+    select c.*
+    from conversions c
+    left join seen s on s.visitor_id = c.visitor_id
+    where c.first_key = v_key
+      or c.page_key = v_key
+      or (s.at is not null and s.at <= c.occurred_at and s.at >= c.first_at - interval '1 day')
+  ),
+  -- The paths of the latest 2,000 (the counts above take all): the landing
+  -- page, the latest 100 pageviews before the conversion, the page it
+  -- converted on.
+  paths as (
+    select t.first_source, t.goal, t.occurred_at, (
+      select array_agg(s.page order by s.ord <> 0, s.at, s.ord)
+      from (
+        select steps.page, steps.at, steps.ord,
+          lag(steps.page) over (order by steps.ord <> 0, steps.at, steps.ord) as before
+        from (
+          select t.first_key as page, t.first_at as at, 0 as ord
+          union all
+          select p.page_key, p.occurred_at, 1
+          from (
+            select e.page_key, e.occurred_at
+            from public.ai_traffic_events e
+            where e.brand_id = p_brand_id
+              and e.visitor_id = t.visitor_id
+              and e.kind = 'page'
+              and e.occurred_at >= t.first_at - interval '1 day'
+              and e.occurred_at <= t.occurred_at
+            order by e.occurred_at desc
+            limit 100
+          ) p
+          union all
+          select t.page_key, t.occurred_at, 2
+        ) steps
+      ) s
+      where s.before is distinct from s.page
+    ) as pages
+    from (select * from through order by occurred_at desc limit 2000) t
+  )
+  select jsonb_build_object(
+    'page', v_key,
+    'enabled', coalesce((select b.conversions_enabled from public.brands b where b.id = p_brand_id), false),
+    'goals', coalesce((
+      select jsonb_agg(jsonb_build_object('goal', g.goal, 'count', g.n, 'units', g.units)
+        order by g.n desc, g.goal)
+      from (
+        select goal, count(*)::bigint as n, coalesce(sum(units), 0)::bigint as units
+        from through group by goal
+      ) g
+    ), '[]'::jsonb),
+    'revenue', coalesce((
+      select jsonb_agg(jsonb_build_object('currency', r.currency, 'value', r.value)
+        order by r.value desc, r.currency)
+      from (
+        select currency, sum(value)::numeric as value
+        from through
+        where goal in ('order', 'booking') and value is not null and currency is not null
+        group by currency
+      ) r
+    ), '[]'::jsonb),
+    'sources', coalesce((
+      select jsonb_agg(jsonb_build_object('platform', s.first_source, 'conversions', s.n)
+        order by s.n desc, s.first_source)
+      from (select first_source, count(*)::bigint as n from through group by first_source) s
+    ), '[]'::jsonb),
+    'journeys', coalesce((
+      select jsonb_agg(jsonb_build_object('source', j.first_source, 'pages', to_jsonb(j.pages),
+          'goal', j.goal, 'count', j.n)
+        order by j.n desc, j.latest desc, j.first_source, j.goal)
+      from (
+        select first_source, pages, goal, count(*)::bigint as n, max(occurred_at) as latest
+        from paths
+        group by first_source, pages, goal
+        order by count(*) desc, max(occurred_at) desc, first_source, goal
+        limit 5
+      ) j
+    ), '[]'::jsonb)
+  ) into v_result;
+  return v_result;
+end;
+$$;
+
+revoke all on function public.content_page_conversions(uuid, text, integer) from public, anon;
+grant execute on function public.content_page_conversions(uuid, text, integer)
+  to authenticated, service_role;
+
+comment on function public.content_page_conversions(uuid, text, integer) is
+  'Content Editor (CE-017, 00287): conversions of AI journeys through one page over the last N whole UTC days (ending yesterday), from the AI Traffic snippet (ai_traffic_events, 00286): per goal with units, value per currency, per first AI source, and the five most frequent journeys (source, pages, goal). Security definer with an organization check.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00288_brand_ai_conversions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00288: the brand's conversions from AI journeys, for the Content plan's strip
+-- ============================================================================
+-- The Content plan's AI results strip (spec v2 §4 point 8, CE-014) says what
+-- AI visits brought in: "48 signups · 20 demo forms · 10 orders", and the top
+-- journey. With conversions on (00286), the AI Traffic snippet's journeys
+-- give it the goals (CE-017), beside Google Analytics' key events.
+--
+-- brand_ai_conversions(brand, days) returns one jsonb over the last 7, 30 or
+-- 90 whole UTC days, ending yesterday, as content_plan_insights (00226):
+--   * enabled: whether the brand has conversions on;
+--   * goals: per goal, its conversions, the most first;
+--   * journey: the most frequent journey to a conversion among the period's
+--     latest 2,000 (the latest first among as many), its source, pages and
+--     goal, as content_page_conversions (00287) builds them (the latest 100
+--     pageviews before the conversion), and how many; null without one. The
+--     bounds keep a big brand's 90 days, or a visitor id with a long
+--     history, from holding the Plan page up: the goals still count every
+--     conversion.
+--
+-- Security definer with an organization check, as content_plan_insights.
+
+create or replace function public.brand_ai_conversions(
+  p_brand_id uuid,
+  p_days integer default 30
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_last date := (now() at time zone 'utc')::date - 1;
+  v_from timestamptz;
+  v_until timestamptz;
+  v_result jsonb;
+begin
+  if not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) and auth.role() is distinct from 'service_role' then
+    return null;
+  end if;
+  if p_days not in (7, 30, 90) then
+    raise exception 'p_days must be 7, 30 or 90';
+  end if;
+
+  v_from := (v_last - p_days + 1)::timestamp at time zone 'utc';
+  v_until := (v_last + 1)::timestamp at time zone 'utc';
+
+  with conversions as (
+    select c.*
+    from public.ai_traffic_events c
+    where c.brand_id = p_brand_id
+      and c.kind = 'conversion'
+      and c.occurred_at >= v_from
+      and c.occurred_at < v_until
+  ),
+  -- The latest 2,000's paths (the goals take all): the landing page, the
+  -- latest 100 pageviews before the conversion, from a day before its first
+  -- AI visit (first_at is clamped per event, within the server's clock
+  -- allowance), the page it converted on; by the keys stored with each
+  -- event (00286).
+  paths as (
+    select t.first_source, t.goal, t.occurred_at, (
+      select array_agg(s.page order by s.ord <> 0, s.at, s.ord)
+      from (
+        select steps.page, steps.at, steps.ord,
+          lag(steps.page) over (order by steps.ord <> 0, steps.at, steps.ord) as before
+        from (
+          select t.first_key as page, t.first_at as at, 0 as ord
+          union all
+          select p.page_key, p.occurred_at, 1
+          from (
+            select e.page_key, e.occurred_at
+            from public.ai_traffic_events e
+            where e.brand_id = p_brand_id
+              and e.visitor_id = t.visitor_id
+              and e.kind = 'page'
+              and e.occurred_at >= t.first_at - interval '1 day'
+              and e.occurred_at <= t.occurred_at
+            order by e.occurred_at desc
+            limit 100
+          ) p
+          union all
+          select t.page_key, t.occurred_at, 2
+        ) steps
+      ) s
+      where s.before is distinct from s.page
+    ) as pages
+    from (select * from conversions order by occurred_at desc limit 2000) t
+  )
+  select jsonb_build_object(
+    'enabled', coalesce((select b.conversions_enabled from public.brands b where b.id = p_brand_id), false),
+    'goals', coalesce((
+      select jsonb_agg(jsonb_build_object('goal', g.goal, 'count', g.n) order by g.n desc, g.goal)
+      from (select goal, count(*)::bigint as n from conversions group by goal) g
+    ), '[]'::jsonb),
+    'journey', (
+      select jsonb_build_object('source', j.first_source, 'pages', to_jsonb(j.pages),
+        'goal', j.goal, 'count', j.n)
+      from (
+        select first_source, pages, goal, count(*)::bigint as n
+        from paths
+        group by first_source, pages, goal
+        order by count(*) desc, max(occurred_at) desc, first_source, goal
+        limit 1
+      ) j
+    )
+  ) into v_result;
+  return v_result;
+end;
+$$;
+
+revoke all on function public.brand_ai_conversions(uuid, integer) from public, anon;
+grant execute on function public.brand_ai_conversions(uuid, integer)
+  to authenticated, service_role;
+
+comment on function public.brand_ai_conversions(uuid, integer) is
+  'Content plan (CE-017, 00288): the brand''s conversions from AI journeys over the last 7, 30 or 90 whole UTC days (ending yesterday), from the AI Traffic snippet (ai_traffic_events, 00286): per goal, and the most frequent journey (source, pages, goal, count). Security definer with an organization check.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00289_content_draft_restored_at.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00289: when a draft's page was last restored from History
+-- ============================================================================
+-- The editor opens the agent's card closed when its latest batch is from
+-- before the page was last restored: that batch was for the page before
+-- (#1522's follow-up, #1536). The "restore" version can't say when: it is
+-- kept only when the page differs from the draft's latest version (00215,
+-- content_draft_keep_version), so a restore right after Mark ready, or after
+-- an Undo all, leaves none.
+--
+-- content_drafts.restored_at is set by content_draft_restore (00215) each
+-- time it changes the page; a restore of the page the draft already is
+-- leaves it as it was, and says so ('restored': false), so the editor sets
+-- nothing aside for it. Null for a draft never restored, and for one
+-- restored before this: no backfill, as an update to content_drafts moves
+-- its updated_at (the Library's order, an open editor's save base), and
+-- #1522 hasn't shipped. It is the server's to write:
+-- guard_content_draft_server_columns (00262) refuses a member's.
+
+alter table public.content_drafts
+  add column if not exists restored_at timestamptz;
+
+comment on column public.content_drafts.restored_at is
+  'When content_draft_restore last changed the page to a History version (00289): the agent''s batch from before it was for the page before. Null when never restored.';
+
+-- As 00215's, with restored_at set when the page changes, and whether it did.
+create or replace function public.content_draft_restore(p_version_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_version public.content_draft_versions%rowtype;
+  v_draft public.content_drafts%rowtype;
+  v_changed boolean;
+begin
+  select * into v_version
+  from public.content_draft_versions v
+  where v.id = p_version_id and v.created_at >= now() - interval '90 days';
+  if v_version.id is null or not public.content_draft_member(v_version.draft_id) then
+    return null;
+  end if;
+
+  select * into v_draft from public.content_drafts d where d.id = v_version.draft_id;
+  -- Already this page: nothing to keep or change.
+  v_changed := v_draft.title is distinct from v_version.title
+    or v_draft.body_html is distinct from v_version.body_html;
+  if v_changed then
+    perform public.content_draft_keep_version(v_version.draft_id, 'restore');
+
+    update public.content_drafts d
+    set title = v_version.title, body_html = v_version.body_html, restored_at = now()
+    where d.id = v_version.draft_id
+    returning * into v_draft;
+  end if;
+
+  return jsonb_build_object(
+    'title', v_draft.title,
+    'bodyHtml', v_draft.body_html,
+    'updatedAt', v_draft.updated_at,
+    'restored', v_changed
+  );
+end;
+$$;
+
+revoke all on function public.content_draft_restore(uuid) from public, anon;
+grant execute on function public.content_draft_restore(uuid) to authenticated, service_role;
+
+-- ----------------------------------------------------------------------------
+-- When the page was restored is the server's: as 00262's, with restored_at.
+-- ----------------------------------------------------------------------------
+create or replace function public.guard_content_draft_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.score_before is not null or new.score_after is not null then
+      raise exception 'content draft scores are set server-side'
+        using errcode = '42501';
+    end if;
+    if new.action_id is not null then
+      raise exception 'content draft action is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.agent_state is not null or new.agent_state_at is not null
+       or new.agent_run is not null then
+      raise exception 'content draft agent state is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.published_url is not null or new.published_at is not null then
+      raise exception 'content draft live address is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.restored_at is not null then
+      raise exception 'content draft restore time is set server-side'
+        using errcode = '42501';
+    end if;
+  elsif new.brand_id is distinct from old.brand_id
+     or new.author is distinct from old.author
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.score_before is distinct from old.score_before
+     or new.score_after is distinct from old.score_after
+     or new.action_id is distinct from old.action_id
+     or new.agent_state is distinct from old.agent_state
+     or new.agent_state_at is distinct from old.agent_state_at
+     or new.agent_run is distinct from old.agent_run
+     or new.published_url is distinct from old.published_url
+     or new.published_at is distinct from old.published_at
+     or new.restored_at is distinct from old.restored_at
+  then
+    raise exception 'content draft column is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00290_mentions_perception_live_narrower.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00290: the Perception tab's filtered views, read faster (Mentions & Sentiment, MS-09)
+-- ============================================================================
+-- 00241 computes the default view ahead; a filtered one (a platform, a
+-- country, a topic or a search) still reads mentions_perception_live. On
+-- production (2026-10-26, the Ansvisor brand, read-only):
+--   * ChatGPT only took 6.3 s at 30 days, and failed at 90 days (8.7 s twice,
+--     past the 8 s statement timeout: "Couldn't load");
+--   * a search failed at 30 days the same way;
+--   * the morning report's 'mentions_perception_live' probe took 10.9 s at
+--     30 days and 8.9 s at 90.
+-- The default view opened in 1.1–1.2 s from its snapshot. The target is 3 s
+-- for every view.
+--
+-- The same output for every window and filter, with less read:
+--   1. The window before is read only for what the tab shows of it: each
+--      entity's mentions and co-mentions (mentions_entities_daily, small)
+--      and the previous answers of the brand's 15 terms shown. 00237 summed
+--      every shown entity's every term over both windows for those 15
+--      numbers.
+--      * The rollups (whole days, no topic or search) now read the shown
+--        entities' terms for the window and only the brand's for the window
+--        before: about 6 entity-windows of rows instead of 10.
+--      * A topic or a search (and a window under two days) still reads both
+--        windows' answers, which the mentions and co-mentions need, but
+--        unnests only the brand's from the window before.
+--      A platform or a country is checked inside the key (after the day), so
+--      a filtered view reads as many index entries as the default one.
+--   2. mentions_terms_daily's key carries the count (include answers), so
+--      the terms' sums come from the index alone. It replaces 00231's
+--      mentions_terms_daily_key: the same key, still unique, nulls not
+--      distinct.
+--   3. Autovacuum runs on both rollups about daily, as 00236 does for the
+--      Insights rollups: each refresh deletes and rewrites a range of days,
+--      and an index-only scan still goes to the table for a page that isn't
+--      all-visible yet. mentions_entities_daily has no covering index; it
+--      gets the dead rows cleared and its statistics kept current.
+--
+-- On a large mentions_terms_daily, build the index by hand first, which
+-- doesn't hold back the refreshes, with no statement timeout; this migration
+-- then finds it in place:
+--   set statement_timeout = 0;
+--   create unique index concurrently if not exists mentions_terms_daily_key_cover
+--     on public.mentions_terms_daily (brand_id, entity, day, platform, region, term)
+--     include (answers) nulls not distinct;
+--   -- indisvalid must be true before the old key goes:
+--   select indisvalid from pg_index
+--     where indexrelid = 'public.mentions_terms_daily_key_cover'::regclass;
+--   drop index concurrently if exists public.mentions_terms_daily_key;
+-- A build that stopped part way leaves an invalid index under that name;
+-- drop it and build again. This migration refuses to drop the old key while
+-- the new one is invalid.
+
+create unique index if not exists mentions_terms_daily_key_cover
+  on public.mentions_terms_daily (brand_id, entity, day, platform, region, term)
+  include (answers)
+  nulls not distinct;
+
+do $$
+begin
+  if exists (
+    select 1 from pg_index
+    where indexrelid = 'public.mentions_terms_daily_key_cover'::regclass
+      and not indisvalid
+  ) then
+    raise exception 'mentions_terms_daily_key_cover is invalid (a concurrent build stopped part way): drop it and build it again';
+  end if;
+end;
+$$;
+
+-- The Perception reads and the refreshes don't queue behind the drop for
+-- long: it gives up after 3 s instead (run it again).
+set lock_timeout = '3s';
+
+drop index if exists public.mentions_terms_daily_key;
+
+reset lock_timeout;
+
+alter table public.mentions_terms_daily set (
+  autovacuum_vacuum_scale_factor = 0.01,
+  autovacuum_vacuum_insert_scale_factor = 0.01,
+  autovacuum_analyze_scale_factor = 0.02
+);
+
+alter table public.mentions_entities_daily set (
+  autovacuum_vacuum_scale_factor = 0.01,
+  autovacuum_vacuum_insert_scale_factor = 0.01,
+  autovacuum_analyze_scale_factor = 0.02
+);
+
+-- 00241's read, the window before narrowed to the brand's terms shown.
+create or replace function public.mentions_perception_live(
+  p_brand_id  uuid,
+  p_date_from timestamptz,
+  p_date_to   timestamptz default null,
+  p_platform  text default null,
+  p_region    text default null,
+  p_topic_id  uuid default null,
+  p_search    text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+set work_mem to '64MB'
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_to         timestamptz := coalesce(p_date_to, now());
+  v_from       timestamptz := least(p_date_from, coalesce(p_date_to, now()));
+  v_days       integer;
+  v_day_to     date;
+  v_start      timestamptz;
+  v_end        timestamptz;
+  v_prev_start timestamptz;
+  v_search     text := nullif(btrim(lower(coalesce(p_search, ''))), '');
+  v_rollup     boolean;
+  v_start_day  date;
+  v_end_day    date;
+  v_prev_day   date;
+  v_result     jsonb;
+begin
+  v_days := greatest(1, ceil(extract(epoch from v_to - v_from) / 86400.0 - 1.0 / 24)::integer);
+  if v_days < 2 then
+    v_start := v_from;
+    v_end   := v_to + interval '1 microsecond';
+  else
+    v_day_to := (v_to at time zone 'utc')::date;
+    v_start  := (v_day_to - (v_days - 1))::timestamp at time zone 'utc';
+    v_end    := (v_day_to + 1)::timestamp at time zone 'utc';
+  end if;
+  v_prev_start := v_start - (v_end - v_start);
+  -- Whole UTC days with no topic or search read the daily rollups (00231);
+  -- a window under two days, or a filter on the prompts, reads the answers'
+  -- terms as before. The branch not taken is pruned (plan_cache_mode).
+  v_rollup    := v_days >= 2 and p_topic_id is null and v_search is null;
+  v_start_day := (v_start at time zone 'utc')::date;
+  v_end_day   := (v_end at time zone 'utc')::date;
+  v_prev_day  := (v_prev_start at time zone 'utc')::date;
+
+  with
+  prompts_in as (
+    select p.id
+    from public.prompts p
+    join public.prompt_sets ps on ps.id = p.prompt_set_id
+    where ps.brand_id = p_brand_id
+      and (p_topic_id is null or p.topic_id = p_topic_id)
+      and (v_search is null or position(v_search in lower(p.text)) > 0)
+  ),
+  rows_in as (
+    select t.result_id, t.entity, t.terms, (t.created_at >= v_start) as cur
+    from public.mentions_answer_terms t
+    join prompts_in pi on pi.id = t.prompt_id
+    where not v_rollup
+      and t.brand_id = p_brand_id
+      and t.created_at >= v_prev_start
+      and t.created_at < v_end
+      and (p_platform is null or t.platform = p_platform)
+      and (p_region is null or t.region = p_region)
+  ),
+  entity_counts as (
+    select entity,
+           count(*) filter (where cur)     as mentions,
+           count(*) filter (where not cur) as prev_mentions
+    from rows_in
+    group by entity
+    union all
+    select d.entity,
+           coalesce(sum(d.answers) filter (where d.day >= v_start_day), 0),
+           coalesce(sum(d.answers) filter (where d.day < v_start_day), 0)
+    from public.mentions_entities_daily d
+    where v_rollup
+      and d.brand_id = p_brand_id
+      and d.day >= v_prev_day
+      and d.day < v_end_day
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.entity
+  ),
+  shown as (
+    select 'brand'::text as entity, 0 as rank
+    union all
+    select * from (
+      select ec.entity, row_number() over (order by ec.mentions desc, ec.entity)::int
+      from entity_counts ec
+      join public.competitors co on co.id::text = ec.entity and co.brand_id = p_brand_id
+      where ec.mentions > 0
+      order by ec.mentions desc, ec.entity
+      limit 4
+    ) top_competitors
+  ),
+  -- The shown entities' terms in the window. The window before is read
+  -- only for the brand's terms shown (brand_prev).
+  term_counts_all as (
+    select r.entity, term, count(*) as answers
+    from rows_in r
+    join shown s on s.entity = r.entity
+    cross join lateral unnest(r.terms) as term
+    where r.cur
+    group by r.entity, term
+    union all
+    select d.entity, d.term, sum(d.answers)
+    from public.mentions_terms_daily d
+    join shown s on s.entity = d.entity
+    where v_rollup
+      and d.brand_id = p_brand_id
+      and d.day >= v_start_day
+      and d.day < v_end_day
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.entity, d.term
+  ),
+  -- Each entity's 60 most frequent terms are the candidates.
+  candidates as (
+    select entity, term, answers
+    from (
+      select t.*, row_number() over (partition by t.entity order by t.answers desc, t.term) as rn
+      from term_counts_all t
+      where t.answers > 0
+    ) ranked
+    where rn <= 60
+  ),
+  -- A word that nearly always comes in one phrase is that phrase: "fresh" and
+  -- "roast" give way to "fresh roast" when it has 80% of their answers.
+  term_counts as (
+    select c.*
+    from candidates c
+    where position(' ' in c.term) > 0
+       or not exists (
+         select 1 from candidates p
+         where p.entity = c.entity
+           and position(' ' in p.term) > 0
+           and (p.term like c.term || ' %' or p.term like '% ' || c.term)
+           and p.answers >= 0.8 * c.answers)
+  ),
+  brand_terms as (
+    select term, answers
+    from term_counts
+    where entity = 'brand' and answers > 0
+    order by answers desc, term
+    limit 15
+  ),
+  -- Those terms' answers in the window before, for their trend.
+  brand_prev as (
+    select term, count(*) as prev_answers
+    from rows_in r
+    cross join lateral unnest(r.terms) as term
+    where not r.cur
+      and r.entity = 'brand'
+      and term in (select bt.term from brand_terms bt)
+    group by term
+    union all
+    select d.term, sum(d.answers)
+    from public.mentions_terms_daily d
+    where v_rollup
+      and d.brand_id = p_brand_id
+      and d.entity = 'brand'
+      and d.day >= v_prev_day
+      and d.day < v_start_day
+      and d.term in (select bt.term from brand_terms bt)
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.term
+  ),
+  -- The terms that tell the brands apart most: the widest spread between the
+  -- highest and lowest share of mentions, then the highest shares.
+  attributes as (
+    select u.term
+    from (select distinct term from term_counts) u
+    cross join shown s
+    left join term_counts_all tc on tc.entity = s.entity and tc.term = u.term
+    left join entity_counts ec on ec.entity = s.entity
+    group by u.term
+    order by
+      max(coalesce(tc.answers, 0)::numeric / nullif(ec.mentions, 0))
+        - min(coalesce(tc.answers, 0)::numeric / nullif(ec.mentions, 0)) desc nulls last,
+      sum(coalesce(tc.answers, 0)::numeric / nullif(ec.mentions, 0)) desc nulls last,
+      u.term
+    limit 8
+  ),
+  -- A competitor's rows in answers that name the brand too, in one pass.
+  co as (
+    select x.entity,
+           count(*) filter (where x.cur)     as co_mentions,
+           count(*) filter (where not x.cur) as prev_co_mentions
+    from (
+      select r.entity, r.cur,
+             bool_or(r.entity = 'brand') over (partition by r.result_id) as with_brand
+      from rows_in r
+    ) x
+    where x.entity <> 'brand' and x.with_brand
+    group by x.entity
+    union all
+    select d.entity,
+           coalesce(sum(d.with_brand) filter (where d.day >= v_start_day), 0),
+           coalesce(sum(d.with_brand) filter (where d.day < v_start_day), 0)
+    from public.mentions_entities_daily d
+    where v_rollup
+      and d.entity <> 'brand'
+      and d.brand_id = p_brand_id
+      and d.day >= v_prev_day
+      and d.day < v_end_day
+      and (p_platform is null or d.platform = p_platform)
+      and (p_region is null or d.region = p_region)
+    group by d.entity
+    having sum(d.with_brand) > 0
+  )
+  select jsonb_build_object(
+    'window', jsonb_build_object('from', v_start, 'to', v_end, 'days', v_days),
+    'entities', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'entity', s.entity,
+               'name', case when s.entity = 'brand' then b.name else co.name end,
+               'is_brand', s.entity = 'brand',
+               'mentions', coalesce(ec.mentions, 0),
+               'prev_mentions', coalesce(ec.prev_mentions, 0))
+             order by s.rank)
+      from shown s
+      left join entity_counts ec on ec.entity = s.entity
+      left join public.brands b on s.entity = 'brand' and b.id = p_brand_id
+      left join public.competitors co on co.id::text = s.entity and co.brand_id = p_brand_id
+    ), '[]'::jsonb),
+    'brand_terms', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'term', bt.term, 'answers', bt.answers,
+               'prev_answers', coalesce(bp.prev_answers, 0))
+             order by bt.answers desc, bt.term)
+      from brand_terms bt
+      left join brand_prev bp on bp.term = bt.term
+    ), '[]'::jsonb),
+    'attributes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'term', a.term,
+               'values', (
+                 select jsonb_agg(jsonb_build_object(
+                          'entity', s.entity, 'answers', coalesce(tc.answers, 0))
+                        order by s.rank)
+                 from shown s
+                 left join term_counts_all tc on tc.entity = s.entity and tc.term = a.term)))
+      from attributes a
+    ), '[]'::jsonb),
+    'co_mentions', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'competitor_id', c.entity,
+               'name', comp.name,
+               'co_mentions', c.co_mentions,
+               'prev_co_mentions', c.prev_co_mentions)
+             order by c.co_mentions desc, comp.name)
+      from co c
+      join public.competitors comp on comp.id::text = c.entity and comp.brand_id = p_brand_id
+    ), '[]'::jsonb)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.mentions_perception_live(uuid, timestamptz, timestamptz, text, text, uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.mentions_perception_live(uuid, timestamptz, timestamptz, text, text, uuid, text)
+  to service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00291_content_plan_pages_conversions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00291: content_plan_pages with each page's conversions from AI journeys
+-- ============================================================================
+-- The Content Plan's Priority Score weighs a page's value by its AI visits
+-- (#1356). With conversions on (CE-017, 00286), it weighs the conversions
+-- the page took part in too, as the editor's Live page tab counts them
+-- (00287): a conversion whose AI journey landed on the page, went through
+-- it, or converted on it, in the window, of the latest 2,000.
+--
+-- Each page of the list gets 'conversions': that count, or null for a brand
+-- with conversions off (unknown, never zero). Everything else is 00238's,
+-- with the same signature, so its grants carry over (create or replace); its
+-- comment is brought up to date below. The conversions are read only with
+-- conversions on: through 00287's partial index, then, as 00287 reads them,
+-- when each visitor id first saw each listed page, once per visitor and page
+-- on the journey index (00286), so a sender's many pageviews can't multiply
+-- the rows.
+
+create or replace function public.content_plan_pages(
+  p_brand_id uuid,
+  p_days integer default 30
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+-- A cached generic plan can't see the brand's size (00207).
+set plan_cache_mode to 'force_custom_plan'
+as $$
+declare
+  v_last date := (now() at time zone 'utc')::date - 1;
+  v_cur_day date;
+  v_prev_day date;
+  v_cur timestamptz;
+  v_until timestamptz;
+  v_conversions_on boolean;
+  v_result jsonb;
+begin
+  if not exists (
+    select 1 from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id and pf.id = auth.uid()
+  ) and auth.role() is distinct from 'service_role' then
+    return null;
+  end if;
+  if p_days not in (7, 30, 90) then
+    raise exception 'p_days must be 7, 30 or 90';
+  end if;
+
+  v_cur_day := v_last - p_days + 1;
+  v_prev_day := v_cur_day - p_days;
+  v_cur := v_cur_day::timestamp at time zone 'utc';
+  v_until := (v_last + 1)::timestamp at time zone 'utc';
+  v_conversions_on := coalesce(
+    (select b.conversions_enabled from public.brands b where b.id = p_brand_id), false);
+
+  with own_domains as (
+    select lower(regexp_replace(bd.domain, '^www\.', '')) as domain
+    from public.brand_domains bd
+    where bd.brand_id = p_brand_id
+  ),
+  own_urls as materialized (
+    select cu.id, cu.url, cu.title, lower(public.normalize_page_path(cu.url)) as page_key
+    from public.citation_urls cu
+    where cu.domain in (select domain from own_domains)
+  ),
+  url_counts as materialized (
+    select d.url_id, d.platform, d.day >= v_cur_day as is_cur, sum(d.citations)::bigint as n
+    from public.citation_url_daily d
+    where d.brand_id = p_brand_id
+      and d.day >= v_prev_day
+      and d.day <= v_last
+      and d.url_id in (select id from own_urls)
+      and d.platform is distinct from 'chatgpt-shopping'
+    group by d.url_id, d.platform, d.day >= v_cur_day
+  ),
+  url_totals as (
+    select
+      u.page_key,
+      u.url,
+      u.title,
+      coalesce(sum(c.n) filter (where c.is_cur), 0) as cur,
+      coalesce(sum(c.n) filter (where not c.is_cur), 0) as prev
+    from url_counts c
+    join own_urls u on u.id = c.url_id
+    group by u.page_key, u.url, u.title
+  ),
+  pages as materialized (
+    select
+      t.page_key,
+      -- The address cited most often stands for the page.
+      (array_agg(t.url order by t.cur + t.prev desc, t.url))[1] as page,
+      max(t.title) as title,
+      sum(t.cur)::bigint as cur,
+      sum(t.prev)::bigint as prev
+    from url_totals t
+    group by t.page_key
+    order by sum(t.cur + t.prev) desc, t.page_key
+    limit 100
+  ),
+  answers as (
+    select
+      r.platform,
+      coalesce(sum(r.answers) filter (where r.day >= v_cur_day), 0)::bigint as cur,
+      coalesce(sum(r.answers) filter (where r.day < v_cur_day), 0)::bigint as prev
+    from public.citation_result_daily r
+    where r.brand_id = p_brand_id
+      and r.day >= v_prev_day
+      and r.day <= v_last
+      and r.platform is distinct from 'chatgpt-shopping'
+    group by r.platform
+  ),
+  per_platform as (
+    select
+      u.page_key,
+      c.platform,
+      coalesce(sum(c.n) filter (where c.is_cur), 0) as cur,
+      coalesce(sum(c.n) filter (where not c.is_cur), 0) as prev
+    from url_counts c
+    join own_urls u on u.id = c.url_id
+    where u.page_key in (select p.page_key from pages p)
+      and c.platform is not null
+    group by u.page_key, c.platform
+  ),
+  down as (
+    -- A platform tracked in both windows, citing the page at a lower rate.
+    select
+      pp.page_key,
+      array_agg(
+        pp.platform
+        order by pp.prev::numeric / a.prev - pp.cur::numeric / a.cur desc, pp.platform
+      ) as platforms
+    from per_platform pp
+    join answers a on a.platform = pp.platform
+    where a.prev > 0
+      and a.cur > 0
+      and pp.prev::numeric / a.prev > pp.cur::numeric / a.cur
+    group by pp.page_key
+  ),
+  snippet_days as (
+    select distinct (l.created_at at time zone 'utc')::date as day
+    from public.ai_traffic_logs l
+    where l.brand_id = p_brand_id
+      and l.visit_of is null
+      and l.created_at >= v_cur
+      and l.created_at < v_until
+  ),
+  visits as (
+    select lower(public.normalize_page_path(l.url)) as page_key, 1::bigint as n
+    from public.ai_traffic_logs l
+    where l.brand_id = p_brand_id
+      and l.visit_of is null
+      and l.created_at >= v_cur
+      and l.created_at < v_until
+    union all
+    select lower(public.normalize_page_path(g.landing_page)), g.sessions::bigint
+    from public.ga_ai_traffic_stats g
+    where g.brand_id = p_brand_id
+      and g.sessions > 0
+      -- A session without a landing page would read as the home page.
+      and g.landing_page <> ''
+      and g.date >= v_cur_day
+      and g.date <= v_last
+      and not exists (select 1 from snippet_days s where s.day = g.date)
+  ),
+  page_visits as (
+    select v.page_key, sum(v.n) as visits
+    from visits v
+    where v.page_key in (select p.page_key from pages p)
+    group by v.page_key
+  ),
+  -- Conversions from AI journeys in the window, with conversions on (00286):
+  -- the latest 2,000, as 00287 and 00288 bound their journeys, through 00287's
+  -- partial index (brand_id, occurred_at desc), so the read stops there. The
+  -- score counts 20 in full; past 2,000, a page's count is of the latest.
+  conversions as materialized (
+    select c.id, c.visitor_id, c.first_key, c.page_key, c.first_at, c.occurred_at
+    from public.ai_traffic_events c
+    where v_conversions_on
+      and c.brand_id = p_brand_id
+      and c.kind = 'conversion'
+      and c.occurred_at >= v_cur
+      and c.occurred_at < v_until
+    order by c.occurred_at desc
+    limit 2000
+  ),
+  -- When each visitor id first saw each listed page, from a day before its
+  -- first AI visit to its last conversion: 00287's `seen`, for every listed
+  -- page at once (the journey index), one row per visitor and page.
+  seen as (
+    select e.visitor_id, e.page_key, min(e.occurred_at) as at
+    from (
+      select visitor_id, min(first_at) - interval '1 day' as since, max(occurred_at) as last_at
+      from conversions
+      group by visitor_id
+    ) v
+    join public.ai_traffic_events e
+      on e.brand_id = p_brand_id
+     and e.visitor_id = v.visitor_id
+     and e.kind = 'page'
+     and e.occurred_at >= v.since
+     and e.occurred_at <= v.last_at
+    where e.page_key in (select p.page_key from pages p)
+    group by e.visitor_id, e.page_key
+  ),
+  -- A conversion counts for each page its journey landed on, went through
+  -- or converted on: the Live page tab's count (00287), once per page.
+  touched as (
+    select c.id, c.first_key as page_key from conversions c
+    union
+    select c.id, c.page_key from conversions c
+    union
+    select c.id, s.page_key
+    from conversions c
+    join seen s
+      on s.visitor_id = c.visitor_id
+     and s.at <= c.occurred_at
+     and s.at >= c.first_at - interval '1 day'
+  ),
+  page_conversions as (
+    select t.page_key, count(*)::bigint as n
+    from touched t
+    where t.page_key in (select p.page_key from pages p)
+    group by t.page_key
+  )
+  select jsonb_build_object(
+    'days', p_days,
+    -- The earlier window's first day, and the brand's first tracked day: a
+    -- window before it is only partly tracked, or not at all.
+    'prevFrom', v_prev_day,
+    'trackedSince', (
+      select min(r.day) from public.citation_result_daily r where r.brand_id = p_brand_id
+    ),
+    'answers', (
+      select jsonb_build_object(
+        'cur', coalesce(sum(a.cur), 0),
+        'prev', coalesce(sum(a.prev), 0)
+      )
+      from answers a
+    ),
+    'pages', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'page', p.page,
+          'title', p.title,
+          'citations', jsonb_build_object('cur', p.cur, 'prev', p.prev),
+          'platformsDown', coalesce(to_jsonb(d.platforms[1:3]), '[]'::jsonb),
+          'aiVisits', coalesce(pv.visits, 0),
+          -- Null with conversions off: unknown, never zero.
+          'conversions', case when v_conversions_on then coalesce(pc.n, 0) end
+        )
+        order by p.cur + p.prev desc, p.page
+      )
+      from pages p
+      left join down d on d.page_key = p.page_key
+      left join page_visits pv on pv.page_key = p.page_key
+      left join page_conversions pc on pc.page_key = p.page_key
+    ), '[]'::jsonb)
+  )
+  into v_result;
+
+  return v_result;
+end;
+$$;
+
+comment on function public.content_plan_pages(uuid, integer) is
+  'Content Editor (CE-014): the brand''s 100 most cited pages over the last N (7, 30 or 90) whole UTC days to yesterday and the N before, from the daily rollups: citations, the brand''s answers in each window, platforms citing at a lower rate, AI visits and, with conversions on (00291), the conversions from AI journeys that landed on, went through or converted on each page, of the latest 2,000 (null with conversions off); with the earlier window''s first day and the brand''s first tracked day. Security definer with an organization check.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00293_action_task_reviews.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00293: tasks waiting for review (AC-010)
+-- ============================================================================
+-- Every task an agent writes says the exact page, the change, when it is
+-- done and how that is checked (AC-010; the fields live in
+-- action_tasks.details). A task the AI task writer gives without one of
+-- them doesn't reach the people doing the work: it waits here, for an
+-- admin or a manager of the brand's organization to fill what it misses.
+--
+--   * action_task_reviews: one row per task waiting, with the task as it was
+--     written (title and details) and the fields it misses ('url', 'change',
+--     'doneWhen', 'check'). Not a task yet, so nothing that reads
+--     action_tasks (the lists, counts, exports, the runner) sees it.
+--   * approve_action_task_review: the reviewed task, its four fields filled,
+--     goes onto the action's task list, after its last task, and the review
+--     row goes, in one transaction. The trail says a task was added. It is
+--     the reviewer's task now (source 'reviewed'): Regenerate tasks keeps
+--     it, as it keeps a task someone added. Not on an action that is
+--     deleted or closed.
+--   * Admins and managers read and dismiss (delete) the rows; the server
+--     writes them (service role). Edits go into the task on approval.
+
+create table if not exists public.action_task_reviews (
+  id uuid primary key default gen_random_uuid(),
+  action_id uuid not null references public.actions(id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 200),
+  details jsonb not null default '{}'::jsonb,
+  missing text[] not null default '{}'
+    check (missing <@ array['url', 'change', 'doneWhen', 'check']::text[]),
+  source text not null default 'ai' check (source in ('ai', 'agent')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists action_task_reviews_action_idx
+  on public.action_task_reviews (action_id);
+
+-- Read and dismissed by admins and managers (the policies below); written by the server.
+alter table public.action_task_reviews enable row level security;
+revoke all on table public.action_task_reviews from anon, authenticated;
+grant select, delete on table public.action_task_reviews to authenticated;
+grant all on table public.action_task_reviews to service_role;
+
+drop policy if exists "action_task_reviews: manager select" on public.action_task_reviews;
+create policy "action_task_reviews: manager select"
+  on public.action_task_reviews
+  for select
+  using (
+    action_id in (
+      select a.id from public.actions a
+      join public.brands b on b.id = a.brand_id
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+drop policy if exists "action_task_reviews: manager delete" on public.action_task_reviews;
+create policy "action_task_reviews: manager delete"
+  on public.action_task_reviews
+  for delete
+  using (
+    action_id in (
+      select a.id from public.actions a
+      join public.brands b on b.id = a.brand_id
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+comment on table public.action_task_reviews is
+  'Action Center (AC-010): tasks an agent wrote without the exact page, the change, Done when or how it is checked (missing), waiting for an admin or a manager. Not tasks yet: approve_action_task_review puts one on its action''s list. The server writes them.';
+
+-- The reviewed task onto its action's list, its four fields filled, and the
+-- review row gone. Null when the row isn't there (approved or dismissed
+-- meanwhile, or another organization's); an error when the caller isn't an
+-- admin or a manager, the action is deleted or closed, or a field is still
+-- missing.
+create or replace function public.approve_action_task_review(
+  p_review_id uuid,
+  p_title text,
+  p_details jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_review public.action_task_reviews%rowtype;
+  v_title text := btrim(coalesce(p_title, ''));
+  v_task_id uuid;
+begin
+  -- The caller's role first, before any row is read or locked.
+  if not exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role in ('admin', 'manager')
+  ) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+
+  -- Only a row of the caller's own organization: another's reads as not there.
+  select r.* into v_review
+  from public.action_task_reviews r
+  join public.actions a on a.id = r.action_id
+  join public.brands b on b.id = a.brand_id
+  join public.profiles p on p.organization_id = b.organization_id
+  where r.id = p_review_id
+    and p.id = auth.uid()
+  for update of r;
+  if not found then
+    return null;
+  end if;
+
+  if exists (
+    select 1 from public.actions a
+    where a.id = v_review.action_id
+      and (a.deleted_at is not null or a.status in ('completed', 'dismissed'))
+  ) then
+    raise exception 'action closed' using errcode = '55000';
+  end if;
+
+  if char_length(v_title) not between 1 and 200
+    or jsonb_typeof(p_details) is distinct from 'object'
+    or nullif(btrim(coalesce(p_details->>'url', '')), '') is null
+    or nullif(btrim(coalesce(p_details->'change'->>'after', '')), '') is null
+    or nullif(btrim(coalesce(p_details->>'doneWhen', '')), '') is null
+    or coalesce(p_details->>'check', '') not in ('auto', 'rerun', 'manual')
+  then
+    raise exception 'incomplete task' using errcode = '22023';
+  end if;
+
+  insert into public.action_tasks (action_id, position, title, status, mode, permission, details)
+  select
+    v_review.action_id,
+    coalesce(max(t.position), 0) + 1,
+    v_title,
+    'todo',
+    'human',
+    'read',
+    -- The reviewer's task now: Regenerate keeps it (task-writer keepsTask).
+    p_details || jsonb_build_object('source', 'reviewed')
+  from public.action_tasks t
+  where t.action_id = v_review.action_id
+  returning id into v_task_id;
+
+  delete from public.action_task_reviews where id = v_review.id;
+
+  insert into public.action_events (action_id, event, data, actor_id)
+  values (v_review.action_id, 'task_added', jsonb_build_object('title', v_title), auth.uid());
+
+  update public.actions set updated_at = now() where id = v_review.action_id;
+
+  return v_task_id;
+end;
+$$;
+
+revoke all on function public.approve_action_task_review(uuid, text, jsonb) from public, anon;
+grant execute on function public.approve_action_task_review(uuid, text, jsonb) to authenticated;
+
+comment on function public.approve_action_task_review(uuid, text, jsonb) is
+  'Action Center (AC-010): a task waiting for review (action_task_reviews) onto its action''s task list, after its last task, with the exact page, the change, Done when and how it is checked filled, as the reviewer''s (source reviewed); the review row goes and the trail says a task was added. Admins and managers of the brand''s organization only, on an action neither deleted nor closed. Null when the row is gone or another organization''s.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00294_cms_wordpress.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00294: WordPress for Send to CMS (#1331, phase 2)
+-- ============================================================================
+-- After Webflow (00283, 00284), a brand connects its WordPress site: the
+-- site's address, a user and an Application Password (WordPress 5.6+, made
+-- under Users › Profile). Pages go to it through the REST API as draft posts.
+--
+--   * brand_cms_connections takes provider 'wordpress'. Composio's ids are
+--     Webflow's only (Composio keeps its token); a WordPress connection has
+--     the site's address (`site_url`), its name (`site_name`) and the user
+--     it signs in as (`account`).
+--   * brand_cms_credentials: the connection's sign-in (the user and the
+--     Application Password), encrypted by the API as a store's is
+--     (catalog_source_credentials, 00282): AES-256-GCM under
+--     CONNECTOR_CREDENTIALS_KEY, bound to the connection's id. Service role
+--     only; removed with its connection.
+--   * content_draft_deliveries.target takes 'wordpress'. `target_collection`
+--     keeps the site's address the post was written to, as it keeps
+--     Webflow's collection: a page sent again updates its post on that site
+--     only (two sites in folders of one domain number their posts each from
+--     1), so it takes an address's length now.
+--   * reserve_content_deliveries: as 00284, a page already queued for the
+--     same CMS (Webflow or WordPress) isn't sent there again meanwhile.
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_check,
+  add constraint brand_cms_connections_provider_check
+    check (provider in ('webflow', 'wordpress')),
+  alter column composio_account_id drop not null,
+  alter column composio_entity_id drop not null,
+  add column if not exists site_url text
+    check (site_url is null or (char_length(site_url) <= 2048 and site_url ~* '^https://')),
+  add column if not exists account text
+    check (account is null or char_length(account) between 1 and 200);
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_fields,
+  add constraint brand_cms_connections_provider_fields check (
+    case provider
+      when 'webflow' then composio_account_id is not null and composio_entity_id is not null
+      when 'wordpress' then site_url is not null and account is not null
+      else false
+    end
+  );
+
+comment on column public.brand_cms_connections.site_url is
+  'WordPress (00294): the site''s address, its REST API at /wp-json/.';
+comment on column public.brand_cms_connections.account is
+  'WordPress (00294): the user the connection signs in as, with an Application Password (kept in brand_cms_credentials).';
+
+create table if not exists public.brand_cms_credentials (
+  connection_id uuid primary key references public.brand_cms_connections(id) on delete cascade,
+  secret text not null check (char_length(secret) between 1 and 16384),
+  set_at timestamptz not null default now(),
+  set_by uuid references public.profiles(id) on delete set null
+);
+
+alter table public.brand_cms_credentials enable row level security;
+revoke all on table public.brand_cms_credentials from public, anon, authenticated;
+grant all on table public.brand_cms_credentials to service_role;
+
+comment on table public.brand_cms_credentials is
+  'Send to CMS (#1331, 00294): a CMS connection''s sign-in (WordPress: the user and the Application Password), encrypted by the API (AES-256-GCM, bound to the connection id). Service role only; removed with its connection.';
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_target_check,
+  add constraint content_draft_deliveries_target_check
+    check (target in ('webhook', 'webflow', 'wordpress')),
+  drop constraint if exists content_draft_deliveries_target_collection_check,
+  add constraint content_draft_deliveries_target_collection_check
+    check (target_collection is null or char_length(target_collection) between 1 and 2048);
+
+comment on column public.content_draft_deliveries.target is
+  'Where the page was sent (00284, 00294): the brand''s webhook, its Webflow collection or its WordPress site (00283).';
+comment on column public.content_draft_deliveries.target_collection is
+  'The Webflow collection (00284), or the WordPress site''s address (00294), the page''s item or post was written to; its id is external_id.';
+
+-- ----------------------------------------------------------------------------
+-- As 00284, with no second send of a page to the same CMS while one is queued.
+-- ----------------------------------------------------------------------------
+create or replace function public.reserve_content_deliveries(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_sent_by uuid,
+  p_batch_id uuid,
+  p_items jsonb,
+  p_limit integer,
+  p_target text default 'webhook'
+)
+returns setof public.content_draft_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used integer;
+  room integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
+
+  -- sent_at stays empty: it was never sent, and its time stays its own.
+  update public.content_draft_deliveries
+  set status = 'failed', error = 'Not sent: interrupted'
+  where organization_id = p_organization_id
+    and status = 'queued'
+    and created_at < now() - interval '30 minutes';
+
+  select count(*) into used
+  from public.content_draft_deliveries
+  where organization_id = p_organization_id
+    and created_at > now() - interval '24 hours';
+
+  room := greatest(0, p_limit - used);
+  if room = 0 or jsonb_typeof(p_items) <> 'array' then
+    return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass: both would
+  -- make an item (Webflow refuses the second on its slug) or a post.
+  if p_target in ('webflow', 'wordpress') and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = p_target
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
+  end if;
+
+  return query
+  insert into public.content_draft_deliveries
+    (organization_id, brand_id, draft_id, sent_by, batch_id, title, slug, target)
+  select p_organization_id, p_brand_id, (item ->> 'draft_id')::uuid, p_sent_by, p_batch_id,
+         left(item ->> 'title', 300), nullif(left(item ->> 'slug', 200), ''),
+         coalesce(p_target, 'webhook')
+  from jsonb_array_elements(p_items) with ordinality as items(item, position)
+  order by position
+  limit room
+  returning *;
+end;
+$$;
+
+revoke all on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00296_catalog_item_issues.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00296: item issues from Google Merchant Center (#1270)
+-- ============================================================================
+-- The Merchant Center connector reads a brand's Merchant Center account into
+-- its catalog (00278), and with each product the problems Merchant Center
+-- reports for it: a missing GTIN, a price that doesn't match the landing
+-- page, an image too small. Those decide whether the product can show in
+-- Google's shopping results, AI Overviews and AI Mode among them, so we keep
+-- them to tell the brand what to fix ("Feed fields complete", the readiness
+-- cards, later).
+--
+--   * One row per issue per item (an offer, the catalog's variant), as
+--     Merchant Center lists it: its code, severity (not_impacted, demoted,
+--     disapproved), the attribute it concerns, the destination it affects
+--     (reporting context) and its description. An item with no issues has
+--     no rows.
+--   * A sync replaces its source's rows; they go with their source.
+--   * Members read their brands' rows; the server writes them.
+--
+-- A Merchant Center source has no credentials row (00282): it reads through
+-- the workspace's Google sign-in, which Composio keeps
+-- (integration_connections, 00045).
+
+create table if not exists public.catalog_item_issues (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  source_id uuid not null references public.catalog_sources(id) on delete cascade,
+  -- The item's id in the catalog (catalog_variants.external_id): Merchant Center's offer id.
+  external_id text not null check (char_length(external_id) between 1 and 200),
+  code text not null check (char_length(code) between 1 and 200),
+  severity text not null check (severity in ('not_impacted', 'demoted', 'disapproved')),
+  attribute text check (attribute is null or char_length(attribute) <= 200),
+  reporting_context text check (reporting_context is null or char_length(reporting_context) <= 100),
+  description text check (description is null or char_length(description) <= 1000),
+  detail text check (detail is null or char_length(detail) <= 2000),
+  documentation text check (documentation is null or char_length(documentation) <= 2048),
+  resolution text check (resolution is null or char_length(resolution) <= 100),
+  countries text[] not null default '{}' check (cardinality(countries) <= 300),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists catalog_item_issues_source_idx
+  on public.catalog_item_issues (source_id);
+create index if not exists catalog_item_issues_brand_item_idx
+  on public.catalog_item_issues (brand_id, external_id);
+
+alter table public.catalog_item_issues enable row level security;
+revoke all on table public.catalog_item_issues from anon, authenticated;
+grant select on table public.catalog_item_issues to authenticated;
+grant all on table public.catalog_item_issues to service_role;
+
+drop policy if exists "catalog_item_issues: member select" on public.catalog_item_issues;
+create policy "catalog_item_issues: member select"
+  on public.catalog_item_issues
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.catalog_item_issues is
+  'Catalog (#1270, 00296): the issues Google Merchant Center reports per item (offer) of a Merchant Center source: code, severity, attribute, destination (reporting context), description. Replaced by each sync, removed with the source. Server writes, members read.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00350_catalog_category_pages.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00350: each catalog category's page on the brand's site (shopping path, 1)
+-- ============================================================================
+-- A brand's catalog names its categories (00278, from the products'
+-- product_type: "Shoes > Hiking Boots"), but not where each one lives on the
+-- site. The shopping path links a buying guide or a comparison to that page
+-- (/collections/hiking-boots), so the API matches each category to one of
+-- the brand's own pages that reads as a category (site_pages, 00104), every
+-- time it's asked: nothing here keeps those matches.
+--
+--   * `catalog_category_pages` keeps what a person decided instead: the
+--     page for a category (`url`), or that it has none (`url` null). A
+--     category with no row is matched automatically. Keyed by the
+--     category's name, as the catalog keeps it, so a decision outlives a
+--     sync that writes the category again.
+--   * Members read their brands' rows; the API writes them, for admins
+--     and managers, after checking the page is on the brand's domains.
+--   * `catalog_category_counts`: each category's live products and how
+--     many of them have a variant in stock, for the Settings table and the
+--     shopping path. In stock as the editor's feed match reads a variant
+--     (web/src/lib/content/feed-match.ts, feedStock): in_stock, instock,
+--     available or limited_availability, whatever its case, spaces or
+--     hyphens. The service role calls it.
+
+create table if not exists public.catalog_category_pages (
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  category text not null check (char_length(category) between 1 and 750),
+  url text check (url is null or (char_length(url) <= 2048 and url ~* '^https?://')),
+  set_by uuid references public.profiles(id) on delete set null,
+  set_at timestamptz not null default now(),
+  primary key (brand_id, category)
+);
+
+alter table public.catalog_category_pages enable row level security;
+revoke all on table public.catalog_category_pages from anon, authenticated;
+grant select on table public.catalog_category_pages to authenticated;
+grant all on table public.catalog_category_pages to service_role;
+
+drop policy if exists "catalog_category_pages: member select" on public.catalog_category_pages;
+create policy "catalog_category_pages: member select"
+  on public.catalog_category_pages
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.catalog_category_pages is
+  'Shopping path (00350): the page a person set for a catalog category (url), or that it has none (url null). Categories with no row are matched to the brand''s site pages by the API on each read. Server writes, members read.';
+
+create or replace function public.catalog_category_counts(p_brand_id uuid)
+returns table (category text, products integer, in_stock integer)
+language sql
+stable
+set search_path = public
+as $$
+  select c.name,
+         count(distinct p.id)::integer,
+         count(distinct p.id) filter (where exists (
+           select 1 from public.catalog_variants v
+           where v.product_id = p.id
+             and v.removed_at is null
+             and lower(regexp_replace(v.availability, '[\s-]+', '_', 'g'))
+               in ('in_stock', 'instock', 'available', 'limited_availability')
+         ))::integer
+  from public.catalog_categories c
+  join public.catalog_product_categories pc on pc.category_id = c.id
+  join public.catalog_products p on p.id = pc.product_id and p.removed_at is null
+  where c.brand_id = p_brand_id
+  group by c.name
+$$;
+
+revoke all on function public.catalog_category_counts(uuid) from public, anon, authenticated;
+grant execute on function public.catalog_category_counts(uuid) to service_role;
+
+comment on function public.catalog_category_counts(uuid) is
+  'Shopping path (00350): each catalog category of a brand with its live products and how many have a variant in stock (in_stock, instock, available or limited_availability, as feed-match.ts reads it). Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00351_content_draft_shopping_path.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00351: a draft's shopping path (shopping path, part 2)
+-- ============================================================================
+-- On an online shop, a buying guide, a best-of list or a comparison should
+-- send its readers, and the AI answers that quote it, to the right category
+-- page and to products that are in stock and that Google Merchant Center
+-- accepts. The API picks them from the brand's catalog (00278, 00296, 00350)
+-- for the draft's topic; the Brief tab shows them, the person swaps, removes,
+-- locks or adds, and the Content Agent writes with them.
+--
+--   * content_drafts.shopping_path: the path as jsonb — {version, builtAt,
+--     pageType, categories: [{name, url, title}], products: [{id, title,
+--     url, price, salePrice, currency, availability, image, issues, score}],
+--     leftOut: [{id, title, reason}], locked, removed, added}. Null until
+--     built, and for a page or a brand it doesn't fit. A member changes it
+--     like the brief, so it isn't a server column.
+
+alter table public.content_drafts
+  add column if not exists shopping_path jsonb
+    check (
+      shopping_path is null
+      or (jsonb_typeof(shopping_path) = 'object' and octet_length(shopping_path::text) <= 65536)
+    );
+
+comment on column public.content_drafts.shopping_path is
+  'The draft''s shopping path (shopping path, part 2): the category pages and catalog products the page links, the products left out and why, and the person''s locks, removals and additions. Null until built.';
+
+notify pgrst, 'reload schema';
+

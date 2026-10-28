@@ -12,6 +12,7 @@ const db = vi.hoisted(() => ({
   rows: {} as Record<string, unknown>,
   rpc: {} as Record<string, unknown>,
   rpcCalls: [] as [string, unknown][],
+  selects: [] as [string, string][],
   writes: [] as { table: string; op: string; value: unknown }[],
   filters: [] as [string, string, unknown][],
 }));
@@ -25,7 +26,7 @@ vi.mock('@/lib/supabase/admin', () => ({
     from: (table: string) => {
       const read = () => ({ data: db.rows[table] ?? null, error: null });
       const chain: Record<string, unknown> = {
-        select: () => chain,
+        select: (columns?: string) => (db.selects.push([table, columns ?? '']), chain),
         eq: (col: string, v: unknown) => (db.filters.push([table, col, v]), chain),
         in: () => chain,
         is: (col: string, v: unknown) => (db.filters.push([table, col, v]), chain),
@@ -76,6 +77,8 @@ const draftRow = (over = {}) => ({
   page_type: 'feature_page',
   author: 'user',
   source_url: 'https://acme.example/forecasting',
+  published_url: null,
+  published_at: null,
   body_html: `<h1>Pipeline forecasting</h1><p>${QUOTED}</p><p>Our forecasting is very accurate.</p>`,
   action_id: 'act-1',
   prompt_ids: [],
@@ -88,6 +91,7 @@ beforeEach(() => {
   db.rows = {};
   db.rpc = {};
   db.rpcCalls = [];
+  db.selects = [];
   db.writes = [];
   db.filters = [];
   brandInOrg.mockReset().mockResolvedValue(true);
@@ -118,6 +122,24 @@ describe('getContentDraftFor', () => {
         { n: 3, tag: 'p', text: 'Our forecasting is very accurate.', locked: false },
       ],
       open_suggestions: [{ id: 's2', kind: 'insert', reason: 'add FAQ' }],
+    });
+  });
+
+  it('says where and since when the page is live, null until then (#1554 review)', async () => {
+    db.rows.content_drafts = draftRow();
+    expect(await getContentDraftFor(auth, 'd1')).toMatchObject({
+      published_url: null,
+      published_at: null,
+    });
+    db.rows.content_drafts = draftRow({
+      status: 'published',
+      published_url: 'https://acme.example/forecasting',
+      published_at: '2026-10-20T09:30:00Z',
+    });
+    expect(db.selects.find(([table]) => table === 'content_drafts')?.[1]).toContain('published_at');
+    expect(await getContentDraftFor(auth, 'd1')).toMatchObject({
+      published_url: 'https://acme.example/forecasting',
+      published_at: '2026-10-20T09:30:00Z',
     });
   });
 
@@ -362,5 +384,29 @@ describe('getContentImpactFor', () => {
     db.rows.content_drafts = draftRow({ source_url: null });
     await expect(getContentImpactFor(auth, 'd1', 30)).resolves.toBe('no_page');
     expect(db.rpcCalls).toEqual([]);
+  });
+
+  it('reads a new page at the address it was published at, as the Live page tab does (#1548 review)', async () => {
+    db.rows.content_drafts = draftRow({
+      method: 'create',
+      source_url: null,
+      published_url: 'https://acme.example/new-guide',
+    });
+    await getContentImpactFor(auth, 'd1', 30);
+    // The draft is read with its published address.
+    expect(db.selects.find(([table]) => table === 'content_drafts')?.[1]).toContain(
+      'published_url',
+    );
+    expect(db.rpcCalls).toEqual([
+      [
+        'content_page_impact',
+        { p_brand_id: expect.any(String), p_page: 'https://acme.example/new-guide', p_days: 30 },
+      ],
+    ]);
+    // An optimized page that went live elsewhere: its published address too.
+    db.rpcCalls.length = 0;
+    db.rows.content_drafts = draftRow({ published_url: 'https://acme.example/moved' });
+    await getContentImpactFor(auth, 'd1', 30);
+    expect(db.rpcCalls[0][1]).toMatchObject({ p_page: 'https://acme.example/moved' });
   });
 });

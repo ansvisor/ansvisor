@@ -101,7 +101,7 @@
     "overview": "Overview",
     "chat": "Chat",
     "actionCenter": "Action Center",
-    "insights": "Visibility",
+    "insights": "Brand Visibility",
     "traffic": "AI Referral Traffic",
     "prompts": "Prompts",
     "content": "Content",
@@ -134,6 +134,7 @@
   "actionCenter": {
     "tabs": {
       "label": "Action Center sections",
+      "review": "Needs review",
       "kpis": "KPIs",
       "actions": "Actions",
       "signals": "Signals",
@@ -145,7 +146,7 @@
       "progress": "{current} of {total} answers",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
-      "link": "Follow it on Visibility"
+      "link": "Follow it on Brand Visibility"
     },
     "pages": {
       "actions": "What should you do now, ranked by your KPI goals.",
@@ -1077,10 +1078,15 @@
         "link": "Link",
         "task": "Task",
         "details": "Details",
+        "taskUrl": "URL",
         "taskWhere": "Where",
         "taskWhy": "Why",
+        "taskChange": "Change",
+        "taskChangeLine": "Before: {before} → After: {after}",
+        "taskChangeAdd": "Add: {after}",
         "taskHow": "How",
         "taskDoneWhen": "Done when",
+        "taskCheck": "How we check",
         "taskEffort": "Effort",
         "sentToContent": "Sent to Content",
         "sentToWebhook": "Sent to the webhook",
@@ -1272,8 +1278,9 @@
           "task_renamed": "Task renamed to “{title}”",
           "task_deleted": "Task deleted",
           "task_edited": "Task edited",
-          "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence",
+          "tasks_generated": "{count, plural, one {# task} other {# tasks}} written from the action's evidence{reviews, plural, =0 {} one {; # waits for review} other {; # wait for review}}",
           "task_sent": "{to, select, content {Sent to Content} webhook {Sent to the webhook} other {Sent}}: {title}",
+          "task_checked": "Checked automatically and done: {task}{title}",
           "task_ran": "{task} — carried out automatically ({tool})",
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
@@ -1312,6 +1319,8 @@
           "cancel": "Cancel",
           "busy": "Writing tasks…",
           "done": "{count, plural, one {# task written} other {# tasks written}}",
+          "doneWithReviews": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} in Needs review for the page, the change or the check",
+          "doneWithReviewsMember": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} for an admin or a manager to review",
           "timeout": "Writing the tasks took too long. Please try again.",
           "unreachable": "Couldn't reach the server. Please try again.",
           "unauthenticated": "Your session has ended. Please sign in again.",
@@ -1330,11 +1339,35 @@
           "showDetails": "Show details",
           "hideDetails": "Hide details",
           "what": "What",
+          "url": "URL",
+          "urlPlaceholder": "e.g. /blog/ai-search-tracking",
           "where": "Where",
           "why": "Why",
+          "change": "Change",
+          "changeBefore": "Before",
+          "changeBeforeHint": "Leave empty to add new text",
+          "changeAfter": "After",
+          "changeAdd": "Add",
           "how": "How",
           "howHint": "One step per line, up to {max}",
           "doneWhen": "Done when",
+          "check": "How we check",
+          "noCheck": "Not set",
+          "lastCheck": "Last check",
+          "checkedPassed": "Checked {date} · passed",
+          "checkedMissing": "Checked {date} · {missing}",
+          "checkNow": "Check now",
+          "checking": "Checking…",
+          "checkPassed": "Checked: done. The task is completed.",
+          "checkMissing": "Checked: {missing}",
+          "checkNot": {
+            "not_checkable": "This task isn't checked on its page: a Site Audit fix is checked by your next audit.",
+            "not_open": "This task is already done or skipped.",
+            "no_answer": "Couldn't read the page. Try again later.",
+            "changed": "The task changed while it was checked. Try again.",
+            "closed": "This action is closed."
+          },
+          "checkFailed": "Couldn't check the task. Try again.",
           "type": "Type",
           "noType": "No type",
           "effort": "Effort",
@@ -1607,12 +1640,16 @@
           ]
         },
         "visibility": {
-          "title": "See where you stand in Visibility",
+          "title": "See where you stand in Brand Visibility",
           "summary": "Your share of AI answers vs competitors.",
-          "open": "Open Visibility",
+          "open": "Open Brand Visibility",
           "doneWhen": "Page opened",
           "why": ["Your share of AI answers vs competitors.", "The starting point for every goal."],
-          "how": ["Open Visibility", "Check your rank and the leader", "Note your weakest platform"]
+          "how": [
+            "Open Brand Visibility",
+            "Check your rank and the leader",
+            "Note your weakest platform"
+          ]
         },
         "answers": {
           "title": "Read your first AI answers",
@@ -2363,6 +2400,86 @@
         "competitors": "{count, plural, one {# competitor} other {# competitors}}"
       }
     },
+    "reviewPage": {
+      "title": "Needs review",
+      "subtitle": "Tasks an agent wrote without the exact page, the change, Done when or how we check it. Fill what's missing and approve them onto their action, or dismiss them.",
+      "noBrand": "Pick a brand to see its tasks waiting for review.",
+      "managersOnly": "Only admins and managers review tasks.",
+      "empty": "Nothing waits for review. Tasks an agent writes without the page, the change, Done when or how we check it show up here.",
+      "loadFailed": "Couldn't load the tasks waiting for review.",
+      "missing": "Missing",
+      "fields": {
+        "url": "URL",
+        "change": "Change",
+        "doneWhen": "Done when",
+        "check": "How we check"
+      },
+      "openAction": "Open {ref}",
+      "approve": "Approve",
+      "dismiss": "Dismiss",
+      "confirmDismiss": "Dismiss this task? It won't reach the action.",
+      "confirmDismissButton": "Dismiss",
+      "cancel": "Cancel",
+      "approved": "Task added to {ref}",
+      "dismissed": "Task dismissed",
+      "incomplete": "Fill the URL, the change, Done when and How we check first.",
+      "closed": "This task's action is closed or deleted, so it can't take the task.",
+      "gone": "This task was already approved or dismissed.",
+      "notAllowed": "Only admins and managers review tasks.",
+      "failed": "Couldn't save. Try again."
+    },
+    "taskDoneWhen": {
+      "optimize_content": "The changes are on the page, or its draft is marked ready in the Content Editor",
+      "refresh_content": "The page has its new facts and date, or its draft is marked ready in the Content Editor",
+      "strengthen_reference_asset": "The page is live with the facts, sources or tables added, and fetched again it has them",
+      "strengthen_entity_content": "The page describes the brand as its profile does, fetched again",
+      "add_internal_links": "The pages that should link to it do, fetched again",
+      "improve_cta_path": "The call to action is live on the page, fetched again",
+      "publish_content": "The page is published at its address and answers when fetched",
+      "fix_crawler_access": "robots.txt and the page let the AI crawlers in, fetched again",
+      "fix_structured_data": "The page has valid structured data (JSON-LD), fetched again",
+      "fix_broken_target": "The page, or its redirect, answers when fetched again",
+      "fix_technical_issue": "A new Site Audit no longer finds the issue",
+      "validate_technical_fix": "A new Site Audit passes the checks that failed",
+      "validate_ai_visibility": "Run again, the prompts show the brand above its baseline",
+      "validate_mentions": "Run again, the prompts mention the brand more than at its baseline",
+      "validate_citations": "Run again, the prompts cite the brand’s pages more than at their baseline",
+      "validate_topic_sov": "Run again, the topic’s prompts give the brand more share of voice than at its baseline",
+      "validate_platform_visibility": "Run again on the platform, the prompts show the brand above its baseline",
+      "validate_country_visibility": "Run again in the country, the prompts show the brand above its baseline",
+      "validate_competitive_gap": "Run again, the prompts show the gap to the competitor narrower than at its baseline",
+      "validate_third_party_citation": "Run again, the prompts cite the third-party page that names the brand",
+      "measure_action_outcome": "Run again after the work, the prompts are measured against the action’s baseline",
+      "create_content_brief": "The brief is written and saved",
+      "create_content_draft": "The draft is written and marked ready in the Content Editor",
+      "prepare_outreach": "The outreach messages are written and approved",
+      "execute_outreach": "The approved messages are sent to every contact",
+      "prepare_contribution": "The contribution is written and approved",
+      "track_third_party_status": "Each placement is marked live, pending or declined",
+      "validate_third_party_presence": "The brand is named on the third-party page",
+      "validate_ai_traffic": "AI-referred visits in the window are above their baseline",
+      "validate_gsc": "Search Console clicks in the window are above their baseline",
+      "validate_ga4": "Key events in the window are above their baseline"
+    },
+    "taskCheckMissing": {
+      "page_error": "the page didn't open",
+      "no_structured_data": "no structured data on the page",
+      "structured_data_invalid": "the structured data isn't valid schema.org JSON-LD",
+      "structured_data_irrelevant": "the structured data has no type that describes the page",
+      "no_faq_schema": "no FAQ schema with at least two questions",
+      "crawlers_blocked": "robots.txt blocks AI crawlers",
+      "noindex": "the page asks not to be indexed",
+      "first_look": "first look kept: it passes once the page changes",
+      "not_changed": "the page hasn't changed since the first look",
+      "change_not_found": "the new text isn't on the page",
+      "old_text_still_there": "the text it replaces is still on the page",
+      "off_site": "the page isn't on the brand's site"
+    },
+    "taskChecks": {
+      "auto": "Automatic: we fetch the page again",
+      "rerun": "Re-run: the prompts run again",
+      "manual": "Manual: you confirm it"
+    },
     "taskTypes": {
       "content": "Content",
       "on_page": "On-page",
@@ -2793,6 +2910,7 @@
     "failed": "Audit failed. Please try again.",
     "takingLongerThanExpected": "This audit is taking longer than expected.",
     "checkAgain": "Check again",
+    "scoreChange": "{change} since {date}",
     "grade": {
       "good": "Good",
       "needsWork": "Needs work",
@@ -3203,6 +3321,22 @@
     "openDetails": "Open topic details"
   },
   "contentEditor": {
+    "publish": {
+      "title": "Mark published",
+      "description": "Where is the page live? Its Live page tab measures this address, and an action it came from counts its results from there.",
+      "label": "Live address",
+      "hint": "The page's full address on your site, as people open it.",
+      "invalidUrl": "Give the page's full address, starting with https:// or http://.",
+      "notFound": "This page isn't in the Library anymore.",
+      "failed": "Couldn't mark the page published. Try again.",
+      "done": "Published. The Live page tab measures it from now on.",
+      "offDomain": "Published. The address isn't on the brand's domains, so its numbers won't show.",
+      "addressNotKept": "Published. The address couldn't be saved yet, so the Live page tab can't measure it.",
+      "unsaved": "The page has changes that aren't saved, so its live address can't be set yet.",
+      "archived": "This page is archived. Restore it in the Library first.",
+      "cancel": "Cancel",
+      "save": "Mark published"
+    },
     "plan": {
       "title": "Content plan",
       "description": "What to create, optimize or protect next.",
@@ -3222,7 +3356,27 @@
         "keyEvents": "{count, plural, one {{value} key event} other {{value} key events}}",
         "orders": "{count, plural, one {{value} order} other {{value} orders}}",
         "revenue": "{value} revenue",
-        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next."
+        "needsAnalytics": "<link>Connect Google Analytics</link> to see what they did next.",
+        "needsAnalyticsMore": "<link>Connect Google Analytics</link> for key events and revenue.",
+        "goals": {
+          "signup": "{count, plural, one {{value} signup} other {{value} signups}}",
+          "demo": "{count, plural, one {{value} demo form} other {{value} demo forms}}",
+          "order": "{count, plural, one {{value} order from a journey} other {{value} orders from journeys}}",
+          "booking": "{count, plural, one {{value} booking} other {{value} bookings}}",
+          "newsletter": "{count, plural, one {{value} newsletter signup} other {{value} newsletter signups}}",
+          "custom": "{count, plural, one {{value} other conversion} other {{value} other conversions}}"
+        },
+        "topJourney": "Top journey:",
+        "journeyCount": "{count, plural, one {{value} conversion} other {{value} conversions}}",
+        "otherSource": "Other",
+        "journeyGoals": {
+          "signup": "Signup",
+          "demo": "Demo form",
+          "order": "Purchase",
+          "booking": "Booking",
+          "newsletter": "Newsletter",
+          "custom": "Conversion"
+        }
       },
       "mix": {
         "title": "What AI cites in your topics",
@@ -3291,6 +3445,7 @@
         "opportunityNone": "No content opportunity behind it (neutral)",
         "pageValue": {
           "visits": "{visits, plural, one {# AI visit} other {# AI visits}} this period",
+          "visitsConversions": "{visits, plural, one {# AI visit} other {# AI visits}} and {conversions, plural, one {# conversion} other {# conversions}} this period",
           "newPage": "A new page, no visits yet (neutral)",
           "unknown": "No AI traffic data (neutral)"
         },
@@ -3346,6 +3501,16 @@
         "90d": "Last 90 days",
         "empty": "Nothing in this tab was created in this period."
       },
+      "lastSend": {
+        "label": "Last send",
+        "all": "Any",
+        "never": "Never sent",
+        "queued": "Sending",
+        "sent": "Sent",
+        "failed": "Failed",
+        "published": "Published",
+        "empty": "No page in this tab matches the Last send filter."
+      },
       "title": "Library",
       "description": "Everything you and the agents wrote or changed.",
       "selectBrand": "Select a brand to see its content.",
@@ -3390,7 +3555,19 @@
         "failed": "The last send to your CMS failed, {when}",
         "published": "Published {when}",
         "openLive": "Published {when}: open the live page in a new tab",
-        "answered": "The webhook answered {status}."
+        "answered": "The webhook answered {status}.",
+        "webflow": {
+          "queued": "Sending to Webflow since {when}",
+          "sent": "In Webflow as a draft item since {when}",
+          "failed": "The last send to Webflow failed, {when}",
+          "published": "Published {when}"
+        },
+        "wordpress": {
+          "queued": "Sending to WordPress since {when}",
+          "sent": "In WordPress as a draft post since {when}",
+          "failed": "The last send to WordPress failed, {when}",
+          "published": "Published {when}"
+        }
       },
       "bulk": {
         "selected": "{count, plural, one {# page selected} other {# pages selected}}",
@@ -3401,6 +3578,8 @@
         "selectRow": "Select {title}",
         "title": "{count, plural, one {Send # page to your CMS} other {Send # pages to your CMS}}",
         "description": "Each page goes to the brand's webhook as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
+        "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
+        "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
         "notFound": "A page was archived or deleted since you picked it. Close this, pick the pages again and send.",
@@ -3430,6 +3609,8 @@
         "waitedOut": "The pages before {count, plural, one {it} other {them}} were still going after 30 minutes, so {count, plural, one {# page wasn't} other {# pages weren't}} sent. Send {count, plural, one {it} other {them}} again once they have gone.",
         "closedUnsent": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the dialog closed while the pages before {count, plural, one {it} other {them}} were still going. Send {count, plural, one {it} other {them}} again from the Library.",
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
+        "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
+        "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
         "send": "{count, plural, one {Send # page} other {Send # pages}}",
@@ -3565,6 +3746,7 @@
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts, so it didn't start. The draft is in the Library for you to write.",
           "open_suggestions": "This page has suggestions waiting for review, so the agent didn't start. Accept or reject them in the editor first.",
+          "running": "The agent is already working on this page, so it didn't start. The draft is in the Library for you to write.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "failed": "The agent couldn't start. The draft is in the Library for you to write."
         }
@@ -3661,7 +3843,8 @@
         "runningHint": "The Content Agent is working on this page. Click to follow its steps or stop it.",
         "readyLabel": "Ready: click to move it back to review",
         "readyHint": "Marked ready. Click to move it back to review.",
-        "publishedHint": "Published. Change its status in the Library.",
+        "publishedHint": "Published. Click to give the address it's live at.",
+        "publishedHintAt": "Live at {url}. Click to change the address.",
         "backInReview": "Back in review.",
         "backInReviewAction": "Back in review, and {count, plural, one {its task} other {its # tasks}} in Action AC-{no} {count, plural, one {is} other {are}} open again.",
         "backInReviewFailed": "Couldn't move it back to review.",
@@ -3743,6 +3926,20 @@
             "write": "Rewriting the page",
             "review": "Opens here beside your page to compare"
           }
+        },
+        "doing": {
+          "answerFirst": "Answering the page's main question first",
+          "outline": "Giving each section one question to answer",
+          "missing": "Answering questions the page misses",
+          "quoted": "Leaving passages AI quotes as they are",
+          "length": "Keeping the page near its target length",
+          "kept": "Keeping quoted passages, tables and images",
+          "voice": "Keeping the page's facts and voice",
+          "rules": "Keeping to {count, plural, one {# rule} other {# rules}}",
+          "rulesAny": "Keeping to the rules",
+          "sources": "Drawing on {count, plural, one {# source} other {# sources}}",
+          "sourcesAny": "Drawing on your sources",
+          "placeholders": "Adding a [placeholder] for facts it lacks"
         }
       },
       "agentFailed": {
@@ -3756,6 +3953,7 @@
           "writing": "The agent is already working on this draft.",
           "org_writing": "The agent is writing another of your team's drafts. Try again in a minute or two.",
           "open_suggestions": "Accept or reject the open suggestions first, then try again.",
+          "running": "Content Agent is fixing this page, maybe from another tab. Try again once it has finished.",
           "not_draft": "This draft is no longer a draft, so the agent didn't start.",
           "empty": "The page has no text to rewrite yet.",
           "too_long": "The page is too long to rewrite whole. Use Fix open rules, or shorten it first.",
@@ -3775,6 +3973,10 @@
         }
       },
       "agentCard": {
+        "breaks": "would break {names}",
+        "runFailed": "Content Agent couldn't finish",
+        "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
+        "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
         "gain": "Rules {met, number} → {after, number} of {total, number}",
         "review": "Review",
@@ -3825,6 +4027,7 @@
         "ready": "Content Agent rewrote the page to its rules",
         "characters": "{before, number} → {after, number} characters",
         "lengthMissed": "Length {target, number} not reached",
+        "longer": "longer than the page before",
         "lengthKept": "({kept, number} characters are passages AI answers quote, tables and other blocks a rewrite keeps as they are)",
         "accepted": "Rewrite accepted",
         "rejected": "Rewrite rejected",
@@ -3881,7 +4084,11 @@
         "fixed": "{count, plural, one {Content Agent suggested # change} other {Content Agent suggested # changes}} · review them in the page",
         "fixedMax": "Content Agent suggested {count} changes, the most one run makes · review them, then run it again for the rules still open",
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
+        "breaks": "Would break {names}",
+        "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
+        "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
+        "notForAgentShopping": "Content Agent doesn't change which products the page links: remove or replace the links to sold-out, refused or gone products yourself.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
@@ -3950,10 +4157,13 @@
         "restore": "Restore",
         "restoreLabel": "Restore {version}, {when}",
         "footer": "Restoring makes a new version. Nothing is lost.",
-        "restored": "Restored “{version}”. The page before it is in History.",
+        "restoredSame": "“{version}” is the page as it is: nothing changed.",
+        "restored": "Restored “{version}”. {count, plural, =0 {The page before it is in History.} one {The agent’s open change was for the page before, so it was set aside.} other {The agent’s # open changes were for the page before, so they were set aside.}}",
         "restoreFailed": "Couldn't restore it. Try again.",
         "htmlOpen": "Go back to the page to use History",
-        "restoring": "Restoring…"
+        "restoring": "Restoring…",
+        "agentWorking": "Content Agent is working on the page. History opens once it's done.",
+        "deciding": "Saving your decision on the agent's changes…"
       },
       "markReadyFailed": "Couldn't mark it ready. Try again.",
       "markReadyUnsaved": "The page has changes that aren't saved, so it wasn't marked ready.",
@@ -3998,9 +4208,12 @@
           "table": "Table",
           "tableHint": "Insert a table on this line",
           "image": "Image",
-          "imageHint": "Insert an image on this line"
+          "imageHint": "Insert an image on this line",
+          "products": "Products",
+          "productsHint": "Insert products from your catalog on this line"
         },
         "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
+        "products": "Insert products from your catalog",
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
@@ -4068,7 +4281,8 @@
         }
       },
       "impact": {
-        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. This tab shows the live page's numbers when a draft optimizes one.",
+        "newPage": "This draft is a new page, not live yet, so there's nothing to measure. Mark it published with its live address, and this tab measures it from then.",
+        "publishedNoAddress": "This page is marked published without its live address, so there's nothing to measure. Give the address with the header's Published button, and this tab measures it from then.",
         "thisPage": "The live page today",
         "notForecast": "How the live page does now, not a forecast of what this draft will get.",
         "periodLabel": "Period",
@@ -4124,6 +4338,41 @@
           },
           "legend": "Visits come from the tracking snippet, or from Google Analytics on days without it. Key events, orders and revenue are Google Analytics' sessions that started on this page from an AI assistant.",
           "legendVisits": "Visits come from the tracking snippet."
+        },
+        "conversions": {
+          "title": "Conversions from AI journeys",
+          "subtitle": "through this page, from the AI Traffic snippet",
+          "off": "Conversions aren't on for this brand, so the snippet doesn't follow AI visitors to them.",
+          "turnOn": "Turn them on in Brand settings",
+          "none": "No conversions from AI journeys through this page in this period.",
+          "bySource": "Conversions by AI source",
+          "columns": {
+            "source": "AI source",
+            "conversions": "Conversions"
+          },
+          "other": "Other",
+          "journeys": "Top journeys",
+          "thisPage": "This page",
+          "journeyCount": "{count, plural, one {# conversion} other {# conversions}}",
+          "cards": {
+            "signup": "Signups",
+            "demo": "Demo forms",
+            "order": "Orders",
+            "booking": "Bookings",
+            "newsletter": "Newsletter signups",
+            "custom": "Other conversions",
+            "revenue": "Revenue",
+            "units": "Units sold"
+          },
+          "goals": {
+            "signup": "Signup",
+            "demo": "Demo form",
+            "order": "Purchase",
+            "booking": "Booking",
+            "newsletter": "Newsletter",
+            "custom": "Conversion"
+          },
+          "legend": "A conversion counts here when its journey landed on this page, went through it, or ended on it, credited to the AI assistant of its first visit (30 days). Visitors who refuse cookies and AI visits without a referrer aren't seen."
         },
         "overlap": {
           "title": "Your other pages for these prompts",
@@ -4215,6 +4464,84 @@
         },
         "rebuild": "Rebuild with selection"
       },
+      "shopping": {
+        "title": "Shopping path",
+        "description": "Where this page sends readers. Picked by topic, stock and Merchant Center status. Prices and specs come from the catalog only.",
+        "empty": "Pick the category page and the products in stock this page links, from your catalog.",
+        "build": "Pick from the catalog",
+        "rebuild": "Pick again",
+        "building": "Picking…",
+        "loadError": "Couldn't read the shopping path.",
+        "retry": "Try again",
+        "buildFailed": "Couldn't pick from the catalog. Try again in a moment.",
+        "rateLimited": "Too many picks in a short time. Try again in a few minutes.",
+        "saveFailed": "Couldn't save the change. Try again.",
+        "changed": "The shopping path changed meanwhile. It's shown as it is now: make your change again.",
+        "unreadable": "The saved shopping path can't be read. Pick from the catalog to start it again.",
+        "noPath": {
+          "not_a_shop": "Shopping paths are for brands that sell online. Set the site type to E-commerce in Brand settings.",
+          "page_type": "This page type doesn't link products. Buying guides, best-of lists, comparisons, guides and blog posts do.",
+          "no_catalog": "There's no catalog to pick from yet. Connect Google Merchant Center or a product feed in Settings › Integrations.",
+          "no_match": "Nothing in your catalog matches this page's topic. Name what you sell in the title or the brief's keywords, then pick again.",
+          "other": "No shopping path fits this page right now. Try again later."
+        },
+        "category": "Category page",
+        "categoryPlace": "In the intro, and again at the end",
+        "noCategory": "No category page matches this topic. Check the category pages in Settings › Integrations.",
+        "products": "{count, plural, =0 {No products} one {# product in the page} other {# products in the page}}",
+        "noProducts": "No product in stock matches this page's topic yet.",
+        "place": {
+          "pick": "Top picks #{n}",
+          "compared": "Compared #{n}",
+          "linked": "Linked in the text"
+        },
+        "stock": {
+          "in_stock": "In stock",
+          "limited_availability": "Low stock"
+        },
+        "issues": "{count, plural, one {# Merchant Center issue: {first}} other {# Merchant Center issues: {first} and more}}",
+        "locked": "Locked",
+        "lock": "Lock {title}",
+        "unlock": "Unlock {title}",
+        "swap": "Swap",
+        "swapLabel": "Swap {title} for another product",
+        "remove": "Remove",
+        "removeLabel": "Remove {title} from the page",
+        "lockHint": "Locked products stay when the products are picked again or the agent rewrites.",
+        "add": "Add product",
+        "searchLabel": "Search the catalog",
+        "searchPlaceholder": "Product name…",
+        "searchEmpty": "No product with that name.",
+        "searchFailed": "Couldn't search the catalog. Try again.",
+        "addThis": "Add {title}",
+        "leftOut": "Left out",
+        "reason": {
+          "sold_out": "sold out",
+          "refused": "Merchant Center refuses it",
+          "no_link": "no page to link",
+          "gone": "no longer in the catalog",
+          "other": "can't be linked"
+        },
+        "untitled": "Untitled product"
+      },
+      "productBlock": {
+        "title": "Add products",
+        "description": "Pick 1 to {max} products in stock from your catalog. One shows as a card, more as a grid, each with its picture, name and price, linked to its page.",
+        "searchLabel": "Search the catalog",
+        "placeholder": "Product name…",
+        "empty": "No product with that name.",
+        "searchFailed": "Couldn't search the catalog. Try again.",
+        "soldOut": "Sold out",
+        "noPage": "No page to link",
+        "picked": "{count} of {max} picked",
+        "unpick": "Remove {title}",
+        "insert": "Insert",
+        "inserting": "Inserting…",
+        "cancel": "Cancel",
+        "leftOut": "Left out, not in stock now: {titles}",
+        "noLink": "These products have no page to link.",
+        "failed": "Couldn't read the products. Try again."
+      },
       "brief": {
         "loadError": "Couldn't load the brief.",
         "retry": "Retry",
@@ -4268,6 +4595,58 @@
           "no_sources": "Keep at least one prompt, fan-out or Search Console query to build from.",
           "failed": "Couldn't rebuild the brief. Try again."
         },
+        "tldr": "TL;DR",
+        "angle": "Angle",
+        "answerFirst": "Answer first: {answer}",
+        "formats": {
+          "paragraphs": "Paragraphs",
+          "list": "List",
+          "steps": "Steps",
+          "table": "Table",
+          "faq": "FAQ"
+        },
+        "factSources": {
+          "statistic": "Statistic",
+          "study": "Study",
+          "quote": "Quote",
+          "example": "Example",
+          "official": "Official source"
+        },
+        "fact": "{kind}: {claim}",
+        "factFrom": "From {source}",
+        "factToFind": "Source to find",
+        "proof": {
+          "title": "Proof to gather",
+          "info": "What only your brand can show. Add it in Your input and the Content Agent writes from it.",
+          "kinds": {
+            "experience": "Experience",
+            "data": "Data",
+            "case": "Case",
+            "test": "Test",
+            "quote": "Quote"
+          },
+          "have": "In Your input",
+          "add": "Add input",
+          "addFor": "Add input: {what}"
+        },
+        "notes": {
+          "title": "Writing notes",
+          "names": "Names as written",
+          "brand": "Brand: {name}",
+          "products": "Products: {names}",
+          "competitors": "Competitors: {names}",
+          "links": "Links",
+          "link": "<muted>{kind} · </muted>{anchor} <muted>→ {page} · {where}</muted>",
+          "internal": "Internal",
+          "outbound": "Outbound",
+          "inSection": "in “{section}”",
+          "anywhere": "anywhere",
+          "freshness": "Freshness",
+          "datedPoint": "Date: {point}",
+          "updatedLine": "Show an “Updated” date",
+          "yearInTitle": "Put the year in the title",
+          "leftOut": "Left for another page"
+        },
         "editor": {
           "goal": "Goal",
           "audience": "Audience",
@@ -4281,7 +4660,18 @@
           "save": "Save brief",
           "cancel": "Cancel",
           "saved": "Brief saved",
-          "failed": "Couldn't save the brief. Try again."
+          "failed": "Couldn't save the brief. Try again.",
+          "tooLong": "The brief is too long to save. Shorten its sections or key points.",
+          "tldr": "TL;DR: what the page's top must say",
+          "angle": "Angle: what only this page can show",
+          "answer": "Section {index} answer first",
+          "answerLabel": "Answer first",
+          "answerPlaceholder": "What the section's first sentences must answer",
+          "proof": "Proof to gather",
+          "proofKind": "Proof {index} kind",
+          "proofWhat": "Proof {index}",
+          "removeProof": "Remove proof {index}",
+          "addProof": "Add proof"
         }
       },
       "export": {
@@ -4296,9 +4686,33 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
+        "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
+        "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
+        "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
+        "target": {
+          "label": "Send to",
+          "webflow": {
+            "title": "Webflow",
+            "hint": "A draft item in {collection}",
+            "collection": "your collection",
+            "notReady": "Not ready: connect it again or pick its collection in Settings › Integrations"
+          },
+          "wordpress": {
+            "title": "WordPress",
+            "hint": "A draft post on {site}",
+            "notReady": "Sign-in refused: connect WordPress again in Settings › Integrations"
+          },
+          "webhook": {
+            "title": "Your workflow",
+            "hint": "The brand's webhook (Zapier, Make, n8n)"
+          },
+          "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
+          "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
+          "retry": "Try again"
+        },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
         "fillNow": "Fill now",
         "empty": "The page has nothing under its title yet. Write it first, then send it.",
@@ -4326,6 +4740,18 @@
           "failed": "The last send failed, {when}.",
           "published": "Published {when}."
         },
+        "lastWebflow": {
+          "queued": "Last sent to Webflow {when}, still on its way.",
+          "sent": "In Webflow as a draft item since {when}.",
+          "failed": "The last send to Webflow failed, {when}.",
+          "published": "Published {when}."
+        },
+        "lastWordPress": {
+          "queued": "Last sent to WordPress {when}, still on its way.",
+          "sent": "In WordPress as a draft post since {when}.",
+          "failed": "The last send to WordPress failed, {when}.",
+          "published": "Published {when}."
+        },
         "errors": {
           "no_webhook": "This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.",
           "webhook_not_subscribed": "The brand's webhook doesn't receive \"Content page sent\". Turn it on in Webhook Settings on Content Opportunities.",
@@ -4337,14 +4763,35 @@
           "failed": "Couldn't send the page. Try again.",
           "too_large": "Too much to send in one go. Send fewer pages, or shorter ones.",
           "webhookStatus": "The webhook answered {status} and didn't take the page. Check your workflow, then send again.",
-          "webhookFailed": "The webhook didn't take the page: {reason}"
+          "webhookFailed": "The webhook didn't take the page: {reason}",
+          "webflowFailed": "Webflow didn't take the page: {reason}",
+          "webflow_not_configured": "Webflow isn't set up on this server. Send to your workflow instead.",
+          "no_webflow": "Connect Webflow in Settings › Integrations first.",
+          "webflow_refused": "Webflow refused the brand's site token. Connect it again in Settings › Integrations.",
+          "webflow_not_ready": "Pick the Webflow collection pages go to in Settings › Integrations.",
+          "in_progress": "This page is already on its way to Webflow. Wait for it, then send again.",
+          "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
+          "wordpressFailed": "WordPress didn't take the page: {reason}",
+          "wordpress_not_configured": "WordPress isn't set up on this server. Send to your workflow instead.",
+          "no_wordpress": "Connect WordPress in Settings › Integrations first.",
+          "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
+          "in_progressWordPress": "This page is already on its way to WordPress. Wait for it, then send again.",
+          "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations."
         },
         "cancel": "Cancel",
         "send": "Send",
         "sending": "Sending",
-        "sent": "Sent to your CMS"
+        "sent": "Sent to your CMS",
+        "sentWebflow": "Sent to Webflow as a draft item",
+        "sentWebflowUpdated": "Updated in Webflow",
+        "webflowChanged": "{tables, plural, =0 {} one {# table went as a list. } other {# tables went as lists. }}{images, plural, =0 {} one {# image wasn't sent: add it in Webflow.} other {# images weren't sent: add them in Webflow.}}",
+        "sentWordPress": "Sent to WordPress as a draft post",
+        "sentWordPressUpdated": "Draft post updated in WordPress",
+        "wordpressLive": "Its post was already published or scheduled, so the page went as a new draft. Move the text over in WordPress; published as it is, its slug gets \"-2\".",
+        "wordpressJsonLd": "JSON-LD left out: add schema with your SEO plugin."
       },
       "rulesChip": "Rules {met}/{total}",
+      "rulesChipReading": "Rules · reading",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
         "title": "Reviewed by",
@@ -4387,17 +4834,20 @@
         "stepOf": "Step {n} of {total}",
         "allDone": "Every step is done",
         "path": "All steps",
-        "skip": "Skip",
+        "skip": "Skip this step",
         "skipped": "· skipped",
+        "passed": "· yours in the Rules tab",
         "working": "Content Agent is working",
         "stop": "Stop",
         "marking": "Marking it ready…",
+        "saving": "Saving the page first…",
         "tipsTitle": "If you see…",
         "tipLine": "{state} →",
         "states": {
           "done": "done",
           "now": "now",
           "skipped": "skipped",
+          "passed": "taken by Content Agent, what's left is yours in the Rules tab",
           "ahead": "to do"
         },
         "steps": {
@@ -4417,13 +4867,14 @@
           "writeMine": "The page is empty: write it, and the next step follows from what you write.",
           "import": "The live page didn't come in. I write a first draft from your sources, or you write it yourself.",
           "length": "{count, number} characters against a Length of {target, number}. Small fixes won't get there, so rewrite it in one go.",
-          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open. Small, reviewable changes for them.",
+          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open for the agent. Small, reviewable changes for them.",
+          "fixRulesOthers": "{count, plural, one {# more is} other {# more are}} yours to decide in the Rules tab.",
           "proofTrust": "Trust is {trust}, under {gate}. The Quality tab names what raises it.",
           "proofTrustTodo": "Trust is {trust}, under {gate}. Only you can do this first: {todo}.",
           "proofTodo": "Only you can do this: {todo}.",
           "check": "Links, schema, placeholders and Trust {gate}+, before you mark it ready.",
           "checkRules": "The rules are met. Mark it ready when you are.",
-          "ready": "Every step is done. Export it for your CMS.",
+          "ready": "Every step is done. Export it for your CMS, and mark it published once it's live.",
           "published": "It's published. Export it again when the page changes."
         },
         "actions": {
@@ -4437,7 +4888,8 @@
           "showTodos": "Show to-dos",
           "beforePublish": "Before you publish",
           "markReady": "Mark ready",
-          "export": "Export"
+          "export": "Export",
+          "markPublished": "Mark published"
         },
         "tips": {
           "longPage": "Page far longer than Length",
@@ -4452,6 +4904,7 @@
           "quiet": "Before you publish has the author, dates and schema (JSON-LD) for your CMS.",
           "quietOther": "Before you publish has the author and what your CMS adds for this page type.",
           "quietProduct": "Before you publish has the Product schema (JSON-LD) with the page's price for your CMS.",
+          "quietItemList": "Before you publish has the ItemList schema (JSON-LD) of the products the page links, for your CMS.",
           "warnings": "Before you publish: {list}.",
           "trust": "Trust {trust}, below 60",
           "noAuthor": "no author yet",
@@ -4615,6 +5068,13 @@
           "detailLive": "Often added by your CMS. If not, paste the code below into the page. It gives only the updated date: your page keeps the published date it has.",
           "product": "Product schema with its price",
           "productDetail": "Price read from the page: {price}. Check it's the product's. Often added by your shop's theme; if not, paste the code below into the page. Availability, SKU and reviews come from a product feed, once one is connected.",
+          "itemList": "ItemList schema with {count, plural, one {# product} other {# products}}",
+          "itemListDetail": "Often added by your shop's theme on a collection page. If not, paste the code below into the page. Each product's price and stock go in its own page's Product schema.",
+          "itemListNone": "ItemList schema needs links to your products",
+          "itemListNoneDetail": "{count, plural, =0 {Ansvisor finds no links to your product pages here} one {Ansvisor finds one link to your product pages here} other {Ansvisor finds # links to your product pages here}} (/products/…, /product/…): link at least two of the products it lists to their own pages on your site, and the code lists them in the page's order.",
+          "itemListTitle": "ItemList schema",
+          "itemListReading": "Reading the page's links to your product pages…",
+          "itemListUnknown": "Your brand's domains couldn't be read, so its product links can't be told: check the ItemList your CMS adds.",
           "productNoName": "Product schema needs the product's name",
           "productNoNameDetail": "The title is empty or still has a placeholder in square brackets: write the product's name there. Without it, search engines show no product result.",
           "productNoPrice": "Product schema needs the price",
@@ -4622,7 +5082,22 @@
           "productSeveral": "Product schema needs one price",
           "productSeveralDetail": "The page states more than one price ({prices}), so the code doesn't guess which is the product's. Write its price once, or its range as one (\"$119–$139\"), or connect your product feed.",
           "other": "Schema for this page type",
-          "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles."
+          "otherDetail": "Check what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.",
+          "otherDetailTyped": "Check what your CMS adds for it. The code Ansvisor gives here is for articles, product pages and category pages."
+        },
+        "shopping": {
+          "title": "Shopping links",
+          "reading": "Reading your catalog for the linked products' stock…",
+          "failed": "Couldn't read your catalog: check the products the page links are in stock before you publish.",
+          "ok": "Shopping links work",
+          "okDetail": "{count, plural, =0 {{category, select, yes {No product linked yet; the category page is.} other {No product linked yet.}}} one {# product linked, in stock and accepted by Merchant Center.} other {# products linked, in stock and accepted by Merchant Center.}}",
+          "bad": "{count, plural, one {# product link to remove or replace} other {# product links to remove or replace}}",
+          "badDetail": "{list}{more, plural, =0 {} other { +# more}}. Remove or replace these links on the page: Brief › Shopping path lists products that sell.",
+          "item": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+          "noCategory": "No link to the category page",
+          "noCategoryDetail": "Link the category page in Brief › Shopping path, so readers reach the products.",
+          "few": "{count} of {want} products linked",
+          "fewDetail": "Link more of the products in Brief › Shopping path that are in stock: a product card or grid counts."
         },
         "disclosure": {
           "ok": "Disclosure",
@@ -4640,7 +5115,9 @@
         "pageReading": "Still reading the page for claims that need your proof, so your to-dos may change.",
         "productNote": "The price, its currency and the images are the page's own (a \"$\" reads as US dollars): check they match your shop before you paste it.",
         "datesNote": "The dates are today's: change them if the page goes out on another day.",
+        "itemListNote": "The products are the page's links to your product pages, in its order: check the list before you paste it.",
         "headlineLeftOut": "The title still has a placeholder in square brackets, so the code leaves the headline out. Fill it in, and the headline comes back here.",
+        "nameLeftOut": "The title still has a placeholder in square brackets, so the code leaves the list's name out. Fill it in, and the name comes back here.",
         "states": {
           "ok": "done",
           "check": "check it",
@@ -4714,13 +5191,18 @@
         "confirmCase": "Confirm",
         "confirmCaseFailed": "Couldn't save that confirmation. Try again.",
         "confirmCaseFull": "This page keeps 50 confirmations already.",
+        "feed": {
+          "none": "Price and stock aren't checked: no product feed is connected for this brand yet.",
+          "connect": "Connect a feed",
+          "notFound": "Price and stock aren't checked: no product in your feed has this page's URL or title."
+        },
         "weightsFor": {
           "line": "Checks and weights for {type}{detected, select, yes { (detected)} other {}}:",
           "noType": "an article (no page type yet)",
           "change": "Change",
           "changeLabel": "Change the page type",
           "article": "an author with experience, sourced claims, short sentences and the answer first.",
-          "product": "no author (your brand's), your own product photos, proof for claims, prices that match, shipping and returns, a specs table and short plain copy.",
+          "product": "no author (your brand's), your own product photos, proof for claims, the price and stock your product feed has, shipping and returns, a specs table and short plain copy.",
           "category": "your own product images, your brand's information on its site, prices and claims that match, an intro and a buying FAQ.",
           "feature": "your own screenshots and data, customer cases you may publish, sourced metrics, a price that matches, a comparison table, proof per section and use case steps in scannable sections.",
           "comparison": "an author who says how the picks were made and when they were last checked, balance and a disclosure, a side-by-side table, the summary first."
@@ -4778,6 +5260,12 @@
             "detailOld": "The page's check date is over a year old. Add line puts this month's under the opening paragraph: check the products first, then update or remove the old date",
             "detailWrite": "Comparison readers trust a date they can see: write when you last checked the products",
             "done": "The page shows when it was last checked"
+          },
+          "introFacts": {
+            "title": "Confirm the intro's facts",
+            "next": "confirm the intro's facts, once you've checked them",
+            "detail": "Its counts and prices: only you know they're right. Check them against your catalog, then confirm. {facts}{more, plural, =0 {} one { and # more} other { and # more}}",
+            "done": "You confirmed the intro's facts"
           },
           "shippingReturns": {
             "title": "Say how shipping and returns work",
@@ -4898,7 +5386,8 @@
             "pickReviewer": "Pick now",
             "addImage": "Add now",
             "addCheckDate": "Add now",
-            "confirmCase": "Confirm now"
+            "confirmCase": "Confirm now",
+            "confirmIntro": "Confirm now"
           },
           "later": "Later"
         },
@@ -4985,6 +5474,10 @@
             "line": "{kind, select, price {Price} trial {Trial length} founded {Founding year} other {A fact}} differs from brand facts · Page {page} · {source, select, pricing {pricing page} about {About page} product {product page} other {your site}} {fact}",
             "detail": "{count, plural, one {Match the page to the fact you approved, or check it in Brand settings} other {# facts differ: match the page to the facts you approved, or check them in Brand settings}}"
           },
+          "feedMatch": {
+            "line": "{kind, select, price {Price} gtin {GTIN} other {Stock}} differs from your product feed · Page {kind, select, stock {{page, select, in {in stock} other {out of stock}}} other {{page}}} · Feed {kind, select, stock {{feed, select, in {in stock} other {out of stock}}} other {{feed}}}",
+            "detail": "{count, plural, one {Check which is right, and fix the page or your feed: search engines and Merchant Center compare them} other {# differ: check which is right, and fix the page or your feed. Search engines and Merchant Center compare them}}"
+          },
           "disclosure": {
             "line": "The page recommends {brand} without a disclosure",
             "detail": "Add a line saying the product the page recommends is {brand}'s own: readers and AI engines trust a page that says so."
@@ -5037,6 +5530,7 @@
         "setName": "{type} · Ansvisor default",
         "pickSet": "Pick a page type",
         "met": "{met} of {total} rules met",
+        "metReading": "Reading the rules…",
         "typeGroup": "{type} rules",
         "groups": {
           "type": "Page type rules",
@@ -5072,6 +5566,9 @@
           "fairness": "Fair: name where the competitor wins",
           "specsTable": "Specs table",
           "feedMatch": "Price, GTIN and stock match the feed",
+          "shopCategoryLink": "Links its category page",
+          "shopProductLinks": "Links the shopping path's products",
+          "shopLinksLive": "No sold-out or refused product linked",
           "fitQuestions": "Answer fit and sizing questions",
           "first40Words": "Type + key attributes in the first 40 words",
           "introText": "Intro text above products",
@@ -5094,7 +5591,10 @@
           "aiTraces": "Finds phrases that read as machine-written (delve, in today's fast-paced world, not only… but also). Fixing them comes with the Content Agent.",
           "whoFor": "Who the page is for, in one sentence, e.g. \"Sales leaders at 20–200 person B2B teams\".",
           "first40Words": "ChatGPT reads about the first 50 tokens (~40 words) of a product description. The rest is ignored.",
-          "feedMatch": "Checked against the product feed once it's connected.",
+          "feedMatch": "Checked against the product in your product feed with this page's URL, or else its name: the price, any GTIN the page gives, and the stock, where both say them.",
+          "shopCategoryLink": "A link to the category page in Brief › Shopping path, so readers and AI answers reach the products.",
+          "shopProductLinks": "Links to the products in Brief › Shopping path that are in stock and accepted by Merchant Center: this many, or all of them when fewer are. A product card or grid counts.",
+          "shopLinksLive": "Every product the page links from its shopping path, or removed from it, is in stock, accepted by Merchant Center for free listings, and still in the catalog. Remove or replace a link to one that isn't, on the page.",
           "definitionFirst": "The paragraph under the H1 says what the term is (\"X is …\") in a few words: what answer engines quote for \"what is\" prompts.",
           "measureSteps": "The longest numbered list on the page counts as the steps."
         },
@@ -5132,6 +5632,10 @@
           "notSet": "Not set",
           "aiCheck": "AI check",
           "needsFeed": "Needs feed",
+          "feedReading": "Reading feed",
+          "notInFeed": "Not in feed",
+          "feedNothing": "Nothing to compare",
+          "feedDiffers": "{count, plural, one {# differs} other {# differ}} from feed",
           "noFanouts": "No fan-outs",
           "addPrompts": "Add prompts",
           "noFanoutsHint": "No fan-outs yet: they come from the page's prompts. Add its prompts in Sources.",
@@ -5139,6 +5643,9 @@
           "notHowTo": "Not a how-to",
           "englishOnly": "English only",
           "noSizes": "No sizes",
+          "noShoppingPath": "Pick in Brief",
+          "shoppingReading": "Reading catalog",
+          "shoppingFailed": "Couldn't read",
           "numberCheck": "Number check"
         },
         "mineName": "My rules · {type}",
@@ -5169,8 +5676,18 @@
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
         },
-        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but {kept, number} of them are passages AI answers quote, tables and other blocks a rewrite keeps as they are. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachHeadings": "The page is {count, number} characters for a Length of {target, number}, but its headings and an answer under each come to about {least, number}. Raise the Length to about {suggested, number}, or use fewer sections.",
+        "raiseLength": "Raise Length to {suggested, number}",
+        "rewriteCitedToo": "Rewrite, cited passages too",
+        "rewriteCitedTooHint": "That rewrites the passages AI answers quote as well, so they may stop being quoted. You compare it with the page before anything changes.",
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
+        "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
+        "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
+        "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
+        "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
+        "shopItem": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
@@ -5476,8 +5993,13 @@
       "fromTask": {
         "title": "From a task in {ref}",
         "titleNoRef": "From an Action Center task",
+        "url": "URL",
         "where": "Where",
         "why": "Why",
+        "change": "Change",
+        "changeBefore": "Before",
+        "changeAfter": "After",
+        "changeAdd": "Add",
         "how": "How",
         "doneWhen": "Done when",
         "effort": "Effort"
@@ -5536,6 +6058,8 @@
       "testing": "Testing...",
       "testSuccess": "Webhook responded successfully!",
       "testFailed": "Webhook test failed: {error}",
+      "testRedirect": "The address redirects (HTTP {status}) to {location}. Nothing is sent on to it: use that address instead.",
+      "testForbidden": "Only admins and managers can test the webhook.",
       "save": "Save Webhook",
       "saving": "Saving...",
       "saved": "Webhook saved!",
@@ -6967,6 +7491,7 @@
     "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
     "tabOverview": "Overview",
     "tabMyProducts": "My Products",
+    "connectCatalog": "These are your products as AI shopping cards showed them. Connect your product catalog (Google Merchant Center or a product feed) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",
     "colProductTitle": "Product Title",
     "colPlatforms": "Platforms",
@@ -7421,7 +7946,9 @@
       "briefs": "{count, number} content briefs a month",
       "audits": "{count, number} site audits a month",
       "aiUsage": "{count}x AI usage",
-      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance."
+      "aiUsageCustom": "Custom AI usage, from {count}x",
+      "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance.",
+      "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you."
     },
     "contactUs": "Contact Us",
     "integrations": "Integrations",
@@ -7528,6 +8055,8 @@
     "integrations_propertyMapping": "Property mapping",
     "integrations_notMapped": "Not mapped",
     "integrations_selectProperty": "Select a property",
+    "integrations_stores": "Stores and marketplaces",
+    "integrations_cms": "Content management systems",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -7540,10 +8069,13 @@
         "ok": "Synced",
         "failed": "Couldn't sync",
         "format_error": "Not a feed",
+        "auth_failed": "Sign-in refused",
         "never": "Not synced yet"
       },
       "products": "{count, plural, one {# product} other {# products}}",
       "lastSync": "synced {when}",
+      "issues": "{count, plural, one {# with an issue} other {# with issues}}",
+      "repeated": "{count, plural, one {# listed again, kept once} other {# listed again, kept once}}",
       "skipped": "{count, plural, one {# product was skipped} other {# products were skipped}}",
       "syncNow": "Sync now",
       "remove": "Remove",
@@ -7554,6 +8086,43 @@
       "uploadFile": "Upload a file",
       "uploadHint": "CSV or XML, up to 4 MB. For a larger catalog, add its feed URL.",
       "managersOnly": "Admins and managers can add and sync sources.",
+      "categories": {
+        "title": "Category pages",
+        "description": "Where each catalog category lives on your site, so buying guides and comparisons can link to it. We matched them to your site's pages that read as a category page; check them once.",
+        "unavailable": "Couldn't read the category pages right now.",
+        "category": "Category",
+        "productsHeading": "Products",
+        "pageHeading": "Page on your site",
+        "actions": "Actions",
+        "products": "{products, plural, one {# product} other {# products}} · {inStock} in stock",
+        "noPage": "No page",
+        "how": {
+          "address": "Its address names the category",
+          "title": "Its title names the category",
+          "words": "Most of the category's words",
+          "manual": "Set by hand",
+          "none": "Nothing on your site reads as it"
+        },
+        "change": "Change",
+        "changeLabel": "Change the page for {category}",
+        "urlLabel": "Page address for {category}",
+        "urlPlaceholder": "https://example.com/collections/…",
+        "save": "Save",
+        "setNone": "No page",
+        "useMatch": "Use the match",
+        "cancel": "Cancel",
+        "saved": "Saved.",
+        "errors": {
+          "invalid": "That isn't a web address. Paste the page's address.",
+          "off_site": "The page must be on the brand's own site.",
+          "not_found": "This category isn't in the catalog any more. Reload the page.",
+          "forbidden": "Only admins and managers can change this.",
+          "session": "Your session expired. Sign in again.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many requests. Wait a few minutes.",
+          "failed": "Couldn't save the page. Try again later."
+        }
+      },
       "synced": "{count, plural, one {# product read} other {# products read}}",
       "errors": {
         "invalid": "Enter a feed address starting with http:// or https://.",
@@ -7567,6 +8136,189 @@
         "workspace": "This brand isn't in your workspace.",
         "busy": "Too many syncs. Wait a few minutes.",
         "failed": "Couldn't sync the catalog. Try again later."
+      },
+      "stores": {
+        "title": "Connect a store",
+        "connect": "Connect {store}",
+        "formLabel": "{store} sign-in",
+        "submit": "Connect",
+        "update": "Update sign-in",
+        "save": "Save sign-in",
+        "cancel": "Cancel",
+        "kept": "The sign-in is checked with the store, then kept encrypted on the server and used only to read the catalog. It isn't shown again.",
+        "notConfigured": "Store connections aren't set up on this server yet.",
+        "connected": "{store} connected. Its products are being read.",
+        "updated": "Sign-in saved. The products are being read again.",
+        "errors": {
+          "connect_failed": "Check what you entered and try again.",
+          "auth_failed": "The store refused this sign-in. Check it and try again.",
+          "unreachable": "The store couldn't be reached. Try again in a moment.",
+          "duplicate": "This store is connected already.",
+          "too_many": "A brand can have 10 sources at most.",
+          "other_account": "This sign-in is for another store. Add that store as a new source.",
+          "not_configured": "Store connections aren't set up on this server yet.",
+          "not_connected": "The workspace sign-in this source is read with isn't connected anymore. Connect it again above.",
+          "forbidden": "Only admins and managers can change the catalog.",
+          "not_found": "This store no longer exists.",
+          "invalid": "Fill in every field.",
+          "session": "Your session expired. Sign in again.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many requests. Wait a few minutes.",
+          "failed": "Couldn't reach the catalog. Try again later."
+        }
+      }
+    },
+    "merchantCenter": {
+      "description": "Your products and the problems Merchant Center reports for them. Google AI Overviews and AI Mode show products from it.",
+      "title": "Merchant Center account for {brand}",
+      "hint": "Pick the account that sells this brand's products. They're read every day into the brand's product catalog below, with their issues.",
+      "noBrand": "Pick a brand to add its Merchant Center account.",
+      "pick": "Choose an account",
+      "add": "Add account",
+      "none": "This Google sign-in doesn't open any Merchant Center account. Ask an admin of the account to add you in Merchant Center, then try again.",
+      "retry": "Try again",
+      "alreadyAdded": "{account} · already added",
+      "advanced": "An advanced account that manages several stores holds no products itself: pick the store's own account (a sub-account).",
+      "managersOnly": "Admins and managers pick {brand}'s Merchant Center account. Once added, it's listed in Product catalog below.",
+      "connected": "{account} added to {brand}. Its products are being read now.",
+      "addFailed": "Couldn't add the account. Try again in a moment.",
+      "errors": {
+        "not_connected": "The Google sign-in no longer opens Merchant Center. Disconnect it and connect again.",
+        "connect_failed": "This Google sign-in can't open that account. Pick another one.",
+        "unreachable": "Merchant Center couldn't be reached. Try again in a moment.",
+        "duplicate": "This account is added to the brand already.",
+        "not_configured": "Merchant Center isn't set up correctly on this server, or this Google account can't open Merchant Center. Ask whoever runs your Ansvisor server, or check the account's users in Merchant Center.",
+        "failed": "Couldn't read the Merchant Center accounts."
+      }
+    },
+    "webflow": {
+      "title": "Webflow",
+      "description": "Send to CMS puts {brand}'s pages in a Webflow collection as draft items. You publish them in Webflow.",
+      "noBrand": "Pick a brand to connect its Webflow site.",
+      "unavailable": "Couldn't read the Webflow connection right now.",
+      "notConfigured": "Webflow isn't set up on this server yet.",
+      "connected": "Connected",
+      "setupNotFinished": "Setup not finished",
+      "refused": "Token refused",
+      "site": "Site: {site}",
+      "notConnectedMember": "Not connected. Admins and managers can connect Webflow.",
+      "refusedMember": "Webflow refused the token. Pages can't go there until an admin or manager pastes a new one.",
+      "pagesGoTo": "Pages go to {collection}.",
+      "noCollection": "No collection picked yet. Pages can't go to Webflow until an admin or manager finishes the setup.",
+      "tokenLabel": "Site token",
+      "tokenPlaceholder": "Paste the site token",
+      "tokenSteps": {
+        "label": "How to get a site token",
+        "open": "In Webflow, go to Site settings › Apps & Integrations › API access and click Generate API token.",
+        "name": "Enter a token name (4–80 characters), e.g. “Ansvisor connector”.",
+        "permissions": "Under Permissions, set CMS to Read and write and Sites to Read-only. Leave everything else on No access.",
+        "copy": "Click Generate token, copy the token and paste it into the field below."
+      },
+      "tokenNote": "Webflow shows the token only once. We store it securely and won’t display it again.",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "connectedToast": "Webflow connected",
+      "connectedSetupToast": "Webflow connected. Now pick a collection and save.",
+      "refusedNote": "Webflow refused the saved token. Paste a new one to send pages again.",
+      "replaceToken": "Replace token",
+      "cancel": "Cancel",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect Webflow?",
+      "disconnectDescription": "Pages stop going to Webflow, and the token is removed. Items already sent stay in Webflow.",
+      "disconnected": "Webflow disconnected",
+      "siteLabel": "Site",
+      "sitePlaceholder": "Pick a site",
+      "setupStep": "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.",
+      "collectionLabel": "Collection",
+      "collectionPlaceholder": "Pick a collection",
+      "loadingCollections": "Reading the site's collections…",
+      "noCollections": "This site has no CMS collections.",
+      "collectionsUnavailable": "Couldn't read the site's collections right now.",
+      "fieldsUnavailable": "Couldn't read the collection's fields right now. Pick it again in a moment.",
+      "fieldsTitle": "Which field takes what",
+      "fieldsHint": "Each page's title and slug go to the item's Name and Slug.",
+      "parts": {
+        "body": "Page content (rich text)",
+        "metaTitle": "Meta title",
+        "metaDescription": "Meta description",
+        "jsonLd": "JSON-LD (structured data)",
+        "date": "Date (the day it's first sent)"
+      },
+      "notSent": "Not sent",
+      "pickField": "Pick a field",
+      "fieldRequired": "{name} (required)",
+      "jsonLdHint": "JSON-LD goes as plain JSON. In the collection template, add an Embed that puts this field inside a JSON-LD script tag.",
+      "dateHint": "The date field gets the day a page first goes to Webflow. Sending the page again leaves its date as it is.",
+      "save": "Save",
+      "saved": "Saved. Pages go to {collection}.",
+      "errors": {
+        "not_configured": "Webflow isn't set up on this server yet.",
+        "invalid": "Check what you picked and try again.",
+        "invalidToken": "That doesn't look like a Webflow site token.",
+        "forbidden": "Only admins and managers can change the Webflow connection.",
+        "not_connected": "Connect Webflow first.",
+        "auth_failed": "Webflow refused this token. Check it and try again.",
+        "missing_scopes": "The token needs Sites: Read and CMS: Read and write. Generate one with them.",
+        "no_access": "The token doesn't reach this site or collection.",
+        "no_site": "This token reaches no Webflow site.",
+        "not_found": "That site or collection is gone. Pick another.",
+        "invalid_map": "The fields don't fit the collection.",
+        "changed": "The connection changed meanwhile. Reload and try again.",
+        "session": "Your session expired. Sign in again.",
+        "workspace": "This brand isn't in your workspace.",
+        "busy": "Too many requests. Wait a few minutes.",
+        "failed": "Couldn't reach Webflow. Try again later."
+      }
+    },
+    "wordpress": {
+      "title": "WordPress",
+      "description": "Send to CMS puts {brand}'s pages on its WordPress site as draft posts. You publish them in WordPress.",
+      "noBrand": "Pick a brand to connect its WordPress site.",
+      "unavailable": "Couldn't read the WordPress connection right now.",
+      "notConfigured": "WordPress isn't set up on this server yet.",
+      "connected": "Connected",
+      "refused": "Sign-in refused",
+      "site": "Site: {site}",
+      "account": "signs in as {account}",
+      "notConnectedMember": "Not connected. Admins and managers can connect WordPress.",
+      "refusedMember": "WordPress refused the sign-in. Pages can't go there until an admin or manager connects it again.",
+      "pagesGoTo": "Pages go to {site} as draft posts.",
+      "siteLabel": "Site address",
+      "sitePlaceholder": "https://blog.example.com",
+      "userLabel": "User",
+      "userPlaceholder": "WordPress user name",
+      "passwordLabel": "Application Password",
+      "passwordPlaceholder": "xxxx xxxx xxxx xxxx xxxx xxxx",
+      "passwordShort": "That's shorter than an Application Password: WordPress makes one of 24 letters and digits. Paste the one it made, not the user's own password.",
+      "passwordHint": "In WordPress: Users › Profile › Application Passwords. Name it Ansvisor, add it, and paste it here. A separate user with the Author role is enough: Ansvisor writes drafts only. It's kept encrypted by our API, never shown again.",
+      "connect": "Connect",
+      "connecting": "Checking the site…",
+      "connectedToast": "WordPress connected",
+      "refusedNote": "WordPress refused the saved sign-in. Connect it again to send pages.",
+      "replace": "Change sign-in",
+      "cancel": "Cancel",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect WordPress?",
+      "disconnectDescription": "Pages stop going to WordPress, and its Application Password is revoked where the site allows. Posts already sent stay in WordPress.",
+      "disconnected": "WordPress disconnected",
+      "disconnectedNotRevoked": "WordPress disconnected. The site didn't let us revoke the Application Password: delete it in WordPress under Users › Profile.",
+      "errors": {
+        "not_configured": "WordPress isn't set up on this server yet.",
+        "invalid": "Check the site's https address (without a port), and that you pasted the Application Password WordPress made, not the user's own password.",
+        "forbidden": "Only admins and managers can change the WordPress connection.",
+        "not_wordpress": "There's no WordPress REST API at that address. Check the address, and that Settings › Permalinks in WordPress isn't set to Plain.",
+        "no_app_passwords": "This site has Application Passwords turned off. WordPress 5.6 and later have them; a security plugin may turn them off.",
+        "auth_failed": "WordPress refused the user or the Application Password. Check them and try again.",
+        "header_dropped": "The site's server didn't pass the sign-in on to WordPress. In WordPress, save Settings › Permalinks once, or ask your host to pass the Authorization header.",
+        "users_hidden": "The site hides its users from the REST API, as some security plugins do. Let signed-in users reach /wp-json/wp/v2/users/me.",
+        "site_refused": "The site refused the request: a firewall or a security plugin may block its REST API.",
+        "redirect": "The site sends its /wp-json/ address on to another one. If it's a WordPress site, use the address it goes to (with or without www); if it isn't, there's no WordPress here.",
+        "no_access": "This user can't write posts on the site. Use an Author, an Editor or an Administrator.",
+        "unreachable": "The site couldn't be reached. Check the address and try again.",
+        "session": "Your session expired. Sign in again.",
+        "workspace": "This brand isn't in your workspace.",
+        "busy": "Too many requests. Wait a few minutes.",
+        "failed": "Couldn't reach WordPress. Try again later."
       }
     },
     "integrations_connected": "Connected",
@@ -7764,6 +8516,59 @@
       "deleteButton": "Delete Brand Permanently",
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
+      "conversions": {
+        "title": "Conversions from AI visits",
+        "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",
+        "label": "Track conversions from AI visits",
+        "help": "Off, with the tag without them, the snippet keeps nothing in the browser. On, it keeps a random id for AI visitors only, never a name or an email.",
+        "managersOnly": "Only admins and managers can change this.",
+        "on": "Conversions are on. Use the tag below on your site.",
+        "off": "Conversions are off. Put the tag without them back on your site: until then it still keeps the id in visitors' browsers.",
+        "saveFailed": "Couldn't save it. Try again.",
+        "copyTag": "Copy the tag",
+        "copyConsent": "Copy the consent call",
+        "copyDeny": "Copy the refusal call",
+        "copyCall": "Copy the conversion call",
+        "copyOrderCall": "Copy the order call",
+        "copyPixel": "Copy the Shopify pixel",
+        "copyBridge": "Copy the Shopify consent script",
+        "copied": "Copied",
+        "noTag": "There's no tag to show yet: the server URL or the brand's tracking code is missing.",
+        "consent": {
+          "label": "Consent",
+          "wait": "Wait for the visitor's consent (recommended)",
+          "always": "Don't wait: our own banner covers it",
+          "waitHint": "No id is kept and no journey is sent until your site says the visitor agreed. AI visits themselves are counted as before.",
+          "alwaysHint": "Use this only if your cookie banner already asks for analytics storage, or where no consent is needed."
+        },
+        "steps": {
+          "tag": "Use this tag",
+          "tagHelp": "It replaces the tag you have, before the closing <code>{tag}</code> tag of every page. The first line lets your site call ansvisor() before the tag has loaded.",
+          "consent": "When the visitor agrees",
+          "consentHelp": "Call this from your cookie banner once the visitor agrees, and on every page after.",
+          "refuse": "When the visitor refuses",
+          "denyHelp": "Call this when the visitor says no, or takes consent back, and on every page after, while they say no: the id kept in their browser is deleted, and nothing more is sent.",
+          "consentMode": "Google Consent Mode works on its own: the snippet follows <code>{name}</code>. A banner set up inside Google Tag Manager needs a tag for each line above, run when the visitor chooses.",
+          "forms": "Forms",
+          "formsHelp": "A form with an email field counts as a signup, contact and newsletter forms too: add <code>{goal}</code> to name its goal (demo, newsletter, booking), or <code>{off}</code> to leave it out. A login with a password doesn't count. Don't also call a signup from your own code for the same form, or it counts twice.",
+          "calls": "Other conversions",
+          "callsHelp": "Call these from your own code, on a thank-you page or after a purchase. The tag's first line keeps them until it loads.",
+          "shopify": "Shopify store",
+          "shopifyHelp": "In Shopify admin, open Settings › Customer events › Add custom pixel and name it Ansvisor. Under Customer privacy, set Permission to Analytics and Data sale to \"Data collected does not qualify as data sale\". Paste this code, save, then connect it.",
+          "shopifyConsent": "Your store asks for consent: add this to your theme (theme.liquid, after the tag) so Shopify's cookie banner gives its answer.",
+          "shopifyHeadless": "A headless store whose checkout is on another domain can't link its orders this way.",
+          "showPixel": "Show the Shopify pixel"
+        },
+        "limits": {
+          "title": "What it can't see",
+          "consent": "Visitors who refuse cookies, in the EU for example.",
+          "direct": "AI visits that arrive without a referrer: they count as Direct.",
+          "estimate": "Google's AI Overviews and AI Mode, which stay an estimate.",
+          "domains": "Journeys from one subdomain to another, www to app for example: each keeps its own id.",
+          "iframes": "Forms inside an iframe, like a Typeform or Calendly embed.",
+          "personal": "No name, email or IP address is stored with a conversion."
+        }
+      },
       "shopping": {
         "title": "Shopping mode",
         "description": "Turn this on if this brand is in e-commerce. We’ll add ChatGPT Shopping to every prompt under this brand and show Product Visibility in the menu.",

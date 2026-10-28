@@ -14,6 +14,8 @@ import {
   type NextStepId,
   type NextStepState,
   type PathState,
+  type ThirdPasses,
+  type ThirdTry,
 } from '@/lib/content/next-step';
 import { cn } from '@/lib/utils';
 import { RunSteps } from './_agent-card';
@@ -48,6 +50,50 @@ export function writeSkips(draftId: string, skips: Partial<Record<NextStepId, st
     localStorage.setItem(skipsKey(draftId), JSON.stringify(skips));
   } catch {
     // Skipped for this visit only.
+  }
+}
+
+/**
+ * The agent on the third step on this draft, in this browser: the run under
+ * way or waiting for a decision (thirdStepTried), and the steps it took with
+ * what the page read then (thirdStepPasses). An attempt kept before these
+ * (#1550's, with no step) is read as none.
+ */
+export interface ThirdStepStore {
+  attempt: ThirdTry | null;
+  passes: ThirdPasses;
+}
+const NO_THIRD_STEP: ThirdStepStore = { attempt: null, passes: {} };
+const thirdTryKey = (draftId: string) => `aeo:next-step-third-try:${draftId}`;
+
+export function readThirdStep(draftId: string): ThirdStepStore {
+  try {
+    const read = JSON.parse(localStorage.getItem(thirdTryKey(draftId)) ?? 'null') as {
+      attempt?: unknown;
+      passes?: unknown;
+    } | null;
+    if (read && typeof read === 'object' && 'passes' in read) {
+      const attempt = read.attempt as ThirdTry | null;
+      return {
+        attempt: attempt && typeof attempt === 'object' && 'step' in attempt ? attempt : null,
+        passes: read.passes && typeof read.passes === 'object' ? (read.passes as ThirdPasses) : {},
+      };
+    }
+  } catch {
+    // Storage unavailable (private mode) or unreadable: none taken.
+  }
+  return NO_THIRD_STEP;
+}
+
+export function writeThirdStep(draftId: string, store: ThirdStepStore) {
+  try {
+    if (store.attempt || Object.keys(store.passes).length) {
+      localStorage.setItem(thirdTryKey(draftId), JSON.stringify(store));
+    } else {
+      localStorage.removeItem(thirdTryKey(draftId));
+    }
+  } catch {
+    // Kept for this visit only.
   }
 }
 
@@ -93,6 +139,17 @@ export function stepActor(step: NextStep): 'agent' | 'you' {
   return AGENT_ACTIONS.has(step.primary) ? 'agent' : 'you';
 }
 
+/**
+ * Fix open rules' reason: the rules a run can close, and the others the
+ * Rules tab counts as open (Length, a setting only the person fills, rules
+ * held by quoted passages), so the two never seem to disagree.
+ */
+function fixRulesReason(t: T, state: NextStepState): string {
+  const fix = t('reasons.fixRules', { count: state.openRules.length });
+  const others = (state.openTotal ?? state.openRules.length) - state.openRules.length;
+  return others > 0 ? `${fix} ${t('reasons.fixRulesOthers', { count: others })}` : fix;
+}
+
 /** Why the step is next, from the page's own numbers. */
 export function stepReason(
   t: T,
@@ -105,9 +162,9 @@ export function stepReason(
     case 'length':
       return state.rewrite?.reason === 'length'
         ? t('reasons.length', { count: state.rewrite.count, target: state.rewrite.target })
-        : t('reasons.fixRules', { count: state.openRules.length });
+        : fixRulesReason(t, state);
     case 'fixRules':
-      return t('reasons.fixRules', { count: state.openRules.length });
+      return fixRulesReason(t, state);
     case 'write':
     case 'import':
       // Once the person said they'd write it, the step is theirs.
@@ -155,6 +212,7 @@ const PATH_DOT: Record<PathState, string> = {
   done: 'bg-foreground text-background',
   now: 'bg-foreground/10 text-foreground ring-1 ring-foreground',
   skipped: 'bg-muted text-muted-foreground',
+  passed: 'bg-muted text-muted-foreground',
   ahead: 'bg-muted text-muted-foreground',
 };
 
@@ -190,6 +248,7 @@ export function NextStepButton({
   const name = stepName(t, step.id, state);
   const now = path.findIndex((p) => p.state === 'now');
   const why = blocked(step.primary);
+  const whyAlternative = step.alternative ? blocked(step.alternative) : null;
   const whyId = useId();
   // After Skip, the new step's button takes focus (Skip itself may be gone).
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -271,7 +330,8 @@ export function NextStepButton({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={blocked(step.alternative) !== null}
+                  disabled={whyAlternative !== null}
+                  aria-describedby={!why && whyAlternative ? whyId : undefined}
                   onClick={() => onAction(step.alternative!)}
                 >
                   {t(`actions.${step.alternative}`)}
@@ -290,12 +350,14 @@ export function NextStepButton({
                 </Button>
               )}
             </div>
-            {why && (
+            {/* The step's own button first; else why the other one is held
+                (Mark published on an archived page). */}
+            {(why ?? whyAlternative) && (
               <p
                 id={whyId}
                 className="text-xs text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
               >
-                {why}
+                {why ?? whyAlternative}
               </p>
             )}
           </div>
@@ -310,7 +372,8 @@ export function NextStepButton({
                 'flex items-center gap-2 text-[13px]',
                 p.state === 'done' && 'text-muted-foreground line-through',
                 p.state === 'now' && 'font-medium',
-                (p.state === 'ahead' || p.state === 'skipped') && 'text-muted-foreground',
+                (p.state === 'ahead' || p.state === 'skipped' || p.state === 'passed') &&
+                  'text-muted-foreground',
               )}
             >
               <span
@@ -323,10 +386,14 @@ export function NextStepButton({
                 {p.state === 'done' ? <Check className="h-2.5 w-2.5" /> : i + 1}
               </span>
               <span className="min-w-0 [overflow-wrap:anywhere]">
-                {stepName(t, p.id, state)}
-                {p.state === 'skipped' && (
+                {/* A step the agent took is crossed out as a done one is; its
+                    note, the person's part, isn't (editor test 2026-10-27). */}
+                <span className={cn(p.state === 'passed' && 'line-through')}>
+                  {stepName(t, p.id, state)}
+                </span>
+                {(p.state === 'skipped' || p.state === 'passed') && (
                   <span aria-hidden className="ml-1.5 text-xs no-underline">
-                    {t('skipped')}
+                    {t(p.state)}
                   </span>
                 )}
                 <span className="sr-only"> · {t(`states.${p.state}`)}</span>

@@ -28,11 +28,50 @@
  * on: the server marks that visit's pageview, it doesn't count another
  * (gkhngyk on #1247).
  *
+ * Conversions (CE-017, 00286), only on a brand that turned them on and
+ * installed the tag with data-c="1": everything above stays as it was
+ * without it, and nothing is kept in the browser. With it, a visitor who
+ * came from an AI assistant gets a random id (ansvisor_v in localStorage,
+ * with the first AI visit: source, page and time), and the snippet sends
+ * the pages they go on to (k: "pv"), the forms they send and the site's
+ * own ansvisor('conversion', …) calls (k: "cv"), each with that first
+ * visit, for 30 days from it (first touch). The id is kept only once the
+ * site says the visitor agreed (data-consent="wait", the default):
+ * ansvisor('consent', 'granted'), or Google Consent Mode granting
+ * analytics_storage in an update, or in a default on the page before t.js
+ * that names no region (a regional default, "denied in the EU", can't say
+ * which this visitor got; a default after t.js only ever pauses). An id
+ * kept earlier says the visitor agreed then, on the pages after.
+ * Until then events wait on the page; ansvisor('consent', 'denied'), or a
+ * Consent Mode update taking analytics_storage back, deletes the stored id
+ * and what waited, and a default that denies it only pauses. The page keeps
+ * the id in memory, so a grant later on it (a banner pushing "denied" until
+ * the visitor chooses, a visitor changing their mind) still keeps the AI
+ * landing. Calls queued before t.js run consent first, so a queued
+ * "denied" comes before anything is sent. data-consent="always" keeps it at
+ * once, for a site whose own banner covers it, unless Consent Mode says
+ * otherwise. Pages go without their query string, forms without anything
+ * typed in them; an id past its 30 days is deleted. A visitor it doesn't
+ * follow (no AI visit, no id kept) gets no hooks: no dataLayer made, no
+ * wrapped push or pushState, no submit listener; and the hooks it adds
+ * never stop the site's own push or route change.
+ *
+ * Forms: one with an email field counts as a signup once per page, unless
+ * it says otherwise (data-ansvisor-goal="demo", "newsletter"…) or opts out
+ * (data-ansvisor="off"); one with a password field counts only as a signup
+ * (autocomplete="new-password"), not as a login, or when it says its goal.
+ * Not seen: forms in an iframe (a Typeform, a Calendly) or a shadow root,
+ * form.submit() from script, posts without a form, and journeys across
+ * subdomains (storage is per origin). ansvisor() may be called before t.js
+ * loads (from GTM, say) through the queue stub:
+ * window.ansvisor = window.ansvisor || function () { (ansvisor.q = ansvisor.q || []).push(arguments) };
+ *
  * Plain ES5 apart from URL / URLSearchParams, as before: it runs on the
  * customer's pages, in whatever browser their visitors have.
  */
 
 import { AI_SOURCES, AI_SOURCES_VERSION } from './ai-sources.js';
+import { CONVERSION_GOALS } from './traffic-events.js';
 
 /** The list in the snippet's compact shape: k key, h hosts, a aliases, p referrer path, u 0 = not by utm. */
 export function snippetSources() {
@@ -64,9 +103,10 @@ return"";
 }
 var pf=m(h,false);
 if(!pf){try{pf=m(new URLSearchParams(location.search).get("utm_source"),true)}catch(e){}}
-if(!pf)return;
+var c=document.currentScript,cv=!!c&&c.getAttribute("data-c")==="1";
+if(!pf&&!cv)return;
 window.__at=1;
-var c=document.currentScript,k=c.getAttribute("data-t"),o=c.src.replace(/\\/t\\.js(\\?.*)?$/,"");
+var k=c.getAttribute("data-t"),o=c.src.replace(/\\/t\\.js(\\?.*)?$/,"");
 var u=location.href,st=0,x=o+"/track/"+k;
 try{var n=performance.getEntriesByType("navigation")[0];st=n&&n.responseStatus||0}catch(e){}
 function post(d){
@@ -78,12 +118,83 @@ function nfOf(ti){
 if(!st)return /(^|[^0-9])404([^0-9]|$)|not found/i.test(ti)?1:0;
 return st>199&&st<300&&/(^|[|:\\u00b7\\u2022\\u2013\\u2014-]\\s*)(404 page not found|404 not found|404 error|error 404|page not found|not found|404)\\s*([|:\\u00b7\\u2022\\u2013\\u2014-]|$)/i.test(ti)?1:0;
 }
+if(pf){
 var nf=nfOf(document.title||"");
 post({u:u,r:r,s:pf,v:V,a:navigator.userAgent,t:Date.now(),l:navigator.language,d:screen.width+"x"+screen.height,st:st,nf:nf});
 if(!nf&&(!st||st>199&&st<300)){
 var again=function(){setTimeout(function(){if(nfOf(document.title||""))post({k:"nf",u:u,s:pf,a:navigator.userAgent,st:st})},1500)};
 if(document.readyState==="complete")again();else window.addEventListener("load",again);
 }
+}
+if(!cv)return;
+var G=${JSON.stringify(CONVERSION_GOALS)},K="ansvisor_v",W=2592e6,now=Date.now();
+var ok=!1,q=[],v=null,old=!1,last="";
+function here(){return location.origin+location.pathname}
+try{var j=JSON.parse(localStorage.getItem(K)||"null");if(j&&j.id&&j.f&&now-j.f.at<W){v=j;old=!0}else if(j)localStorage.removeItem(K)}catch(e){}
+if(!v&&pf){
+var a="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",id="",rb=null;
+try{rb=crypto.getRandomValues(new Uint8Array(22))}catch(e){}
+for(var i=0;i<22;i++)id+=a.charAt((rb?rb[i]:Math.floor(Math.random()*256))&63);
+v={id:id,f:{s:pf,u:here(),at:now}};
+}
+function keep(){if(v)try{localStorage.setItem(K,JSON.stringify(v))}catch(e){}}
+function send(d){if(!v)return;d.id=v.id;d.f=v.f;d.u=d.u||here();if(ok)post(d);else q.push(d)}
+function grant(){ok=!0;keep();var w=q;q=[];for(var i=0;i<w.length;i++)post(w[i])}
+function deny(){ok=!1;q=[];try{localStorage.removeItem(K)}catch(e){}}
+function pv(){var p=here();if(p===last)return;last=p;send({k:"pv"})}
+function gc(it){return it&&it[0]==="consent"&&it[2]&&it[2].analytics_storage?it:null}
+var dl=window.dataLayer||[],up="",df="",rg=!1;
+for(var i=0;i<dl.length;i++){var it=gc(dl[i]);if(!it)continue;if(it[1]==="update")up=it[2].analytics_storage;else if(it[2].region)rg=!0;else df=it[2].analytics_storage}
+if(up==="denied")deny();
+else if(up==="granted")ok=!0;
+else if(df==="denied")ok=!1;
+else if(rg)ok=old;
+else ok=df==="granted"||old||c.getAttribute("data-consent")==="always";
+function num(x,max,whole){if(typeof x==="string"&&x!=="")x=+x;return typeof x==="number"&&isFinite(x)&&x>=0&&x<=max&&(!whole||x%1===0)?x:void 0}
+function cmd(t,a){
+if(t==="consent"){if(a==="granted")grant();else if(a==="denied")deny();return}
+if(t!=="conversion")return;
+if(typeof a==="string")a={type:a};
+a=a||{};
+var g=String(a.type||a.goal||"custom"),known=G.indexOf(g)!==-1,d={k:"cv",g:known?g:"custom",o:"call"},x;
+if(a.label||!known)d.n=String(a.label||g).slice(0,80);
+x=num(a.value,1e9);if(x!==void 0)d.val=x;
+if(a.currency)d.cur=String(a.currency).slice(0,10);
+x=num(a.units,1e5,!0);if(x!==void 0)d.q=x;
+if(a.order!=null)d.ref=String(a.order).slice(0,200);
+send(d);
+}
+var Q=window.ansvisor&&window.ansvisor.q||[];
+window.ansvisor=function(t,a){cmd(t,a)};
+for(var i=0;i<Q.length;i++)if(Q[i][0]==="consent")cmd(Q[i][0],Q[i][1]);
+for(var i=0;i<Q.length;i++)if(Q[i][0]!=="consent")cmd(Q[i][0],Q[i][1]);
+if(!v)return;
+window.dataLayer=dl;
+if(ok)keep();
+if(old)pv();else last=here();
+var dp=dl.push;
+dl.push=function(){
+try{for(var i=0;i<arguments.length;i++){var it=gc(arguments[i]);if(!it)continue;var s=it[2].analytics_storage;
+if(it[1]==="update"){if(s==="granted")grant();else deny()}else if(s==="denied")ok=!1}}catch(e){}
+return dp.apply(dl,arguments);
+};
+document.addEventListener("submit",function(e){
+var f=e.target;
+if(!v||!f||f.tagName!=="FORM"||f.__av||f.getAttribute("data-ansvisor")==="off")return;
+var g=f.getAttribute("data-ansvisor-goal");
+if(!g){
+if(!f.querySelector("input[type=email],input[name*=email]"))return;
+if(f.querySelector("input[type=password]")&&!f.querySelector("input[autocomplete=new-password]"))return;
+g="signup";
+}
+f.__av=1;
+var d={k:"cv",g:G.indexOf(g)!==-1?g:"custom",o:"form"},n=f.getAttribute("data-ansvisor-label")||f.getAttribute("id")||f.getAttribute("name");
+if(n)d.n=String(n).slice(0,80);
+send(d);
+},!0);
+var hp=window.history&&history.pushState;
+if(hp)history.pushState=function(){var res=hp.apply(history,arguments);try{pv()}catch(e){}return res};
+window.addEventListener("popstate",function(){try{pv()}catch(e){}});
 })();
 `;
 }

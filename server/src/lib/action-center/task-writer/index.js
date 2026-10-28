@@ -17,6 +17,8 @@
 
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import supabaseAdmin from '../../../config/supabase.js';
+import { isCloud } from '../../../config/plans.js';
+import { ACTIVE_SUBSCRIPTION_STATUSES } from '../../active-subscriptions.js';
 import { logger } from '../../logger.js';
 import { resolveModel } from '../../ai-provider.js';
 import { withRetry } from '../../retry.js';
@@ -27,7 +29,15 @@ import { getTask } from '../tasks/registry.js';
 import { IMPROVE_ACTION_KIND } from '../from-prompt-improve.js';
 import { OPPORTUNITY_ACTION_KIND } from '../from-opportunity.js';
 import { buildEvidence, evidenceForPrompt, hasTargets } from './evidence.js';
-import { MAX_TASKS, sameTask, taskProblems } from './quality.js';
+import {
+  MAX_TASKS,
+  TASK_CHECKS,
+  onlyGaps,
+  pageAddress,
+  sameTask,
+  taskGaps,
+  taskProblems,
+} from './quality.js';
 import { buildRetryPrompt, buildTaskWriterPrompt, taskWriterSchema } from './prompt.js';
 
 /** Whether this deployment writes tasks at all. */
@@ -182,15 +192,18 @@ function sift(tasks, evidence, kept) {
 
 /**
  * Whether anyone has worked on the action's tasks: moved one on, added one,
- * renamed or edited one. The night writes only untouched plans; a person
- * rewrites theirs with "Regenerate tasks".
+ * renamed, edited or sent one. The night writes only untouched plans; a
+ * person rewrites theirs with "Regenerate tasks". A library task's details
+ * from its template (AC-010, tasks/templates.js) aren't anyone's work; an
+ * edit in the drawer drops their mark.
  */
 export function isTouched(rows) {
   return rows.some(
     (row) =>
       row.status !== 'todo' ||
       (!row.task_key && row.details?.source !== 'ai') ||
-      (row.task_key && (row.title || row.details)),
+      (row.task_key &&
+        (row.title || (row.details && (row.details.source !== 'template' || row.details.sent)))),
   );
 }
 
@@ -294,6 +307,8 @@ async function compose({ action, brand, domains, signals, name, trigger, userId,
     const first = sift(await callModel({ modelId, ...base, charge }), evidence, []);
     let tasks = first.accepted;
     let refused = first.refused;
+    // The refusals of the last round asked: the first round's were asked for again.
+    let lastRefused = first.refused;
 
     // Refused tasks come back once, with their reasons.
     const missing = Math.min(refused.length, MAX_TASKS - tasks.length);
@@ -303,27 +318,87 @@ async function compose({ action, brand, domains, signals, name, trigger, userId,
       tasks = [...tasks, ...second.accepted];
       // Both rounds' refusals, so a review sees how often the first answer misses.
       refused = [...refused, ...second.refused];
+      lastRefused = second.refused;
     }
 
-    if (dryRun) return { status: 'preview', tasks, refused, costUsd, evidence: shown };
-    if (tasks.length === 0) {
+    // AC-010: a task the last round refused only for the fields it misses
+    // (the exact page, the change, Done when, how it's checked) waits for an
+    // admin or a manager to fill them, up to the action's MAX_TASKS.
+    const reviews = [];
+    for (const { task, problems } of lastRefused) {
+      if (tasks.length + reviews.length >= MAX_TASKS) break;
+      if (!onlyGaps(problems) || [...tasks, ...reviews].some((t) => sameTask(t, task))) continue;
+      reviews.push(task);
+    }
+
+    if (dryRun) return { status: 'preview', tasks, reviews, refused, costUsd, evidence: shown };
+    if (tasks.length === 0 && reviews.length === 0) {
       await markWritten(actionId, now);
       return { status: 'skipped', reason: 'no_valid_tasks', refused, costUsd };
     }
 
-    const kept = await replaceTasks(actionId, tasks, { now });
-    await markWritten(actionId, now, { changed: true });
+    // The reviews first: a failure there leaves the tasks as they were. None
+    // to show yet: the template tasks stay, and the reviews wait.
+    await replaceReviews(actionId, reviews);
+    const kept = tasks.length > 0 ? await replaceTasks(actionId, tasks, { now }) : null;
+    await markWritten(actionId, now, { changed: tasks.length > 0 });
     await supabaseAdmin.from('action_events').insert({
       action_id: actionId,
       event: 'tasks_generated',
-      data: { count: tasks.length, kept, trigger },
+      data: { count: tasks.length, kept, trigger, reviews: reviews.length },
       actor_id: userId,
     });
-    return { status: 'written', tasks, refused, kept, costUsd };
+    return { status: 'written', tasks, reviews, refused, kept, costUsd };
   } finally {
     // Nothing charged (the first call failed): the hold goes.
     await budget?.release();
   }
+}
+
+const text = (value) => (typeof value === 'string' ? value.trim() : '');
+
+/** A written task's details as stored (AC-004, AC-010); a field it misses is null. */
+function detailsOf(task) {
+  const after = text(task.change?.after);
+  const check = text(task.check).toLowerCase();
+  return {
+    url: pageAddress(task.url),
+    where: text(task.where),
+    why: text(task.why),
+    change: after ? { before: text(task.change.before) || null, after } : null,
+    how: (task.how ?? []).map(text).filter(Boolean),
+    doneWhen: text(task.doneWhen) || null,
+    check: TASK_CHECKS.includes(check) ? check : null,
+    type: task.type,
+    effort: text(task.effort),
+    role: text(task.role),
+    source: 'ai',
+    refs: task.refs,
+  };
+}
+
+/**
+ * The action's tasks waiting for review (AC-010, 00293) in place of the ones
+ * an earlier writing left: a new writing is the one to review.
+ */
+async function replaceReviews(actionId, reviews) {
+  const { error: deleteError } = await supabaseAdmin
+    .from('action_task_reviews')
+    .delete()
+    .eq('action_id', actionId)
+    .eq('source', 'ai');
+  if (deleteError) throw new Error(deleteError.message);
+  if (reviews.length === 0) return;
+  const { error } = await supabaseAdmin.from('action_task_reviews').insert(
+    reviews.map((task) => ({
+      action_id: actionId,
+      title: task.title.trim(),
+      details: detailsOf(task),
+      missing: taskGaps(task),
+      source: 'ai',
+    })),
+  );
+  if (error) throw new Error(error.message);
 }
 
 /** Record the writing; the action counts as updated only when its tasks changed. */
@@ -368,17 +443,7 @@ export async function replaceTasks(actionId, tasks, { now = new Date() } = {}) {
         title: task.title.trim(),
         mode: 'human',
         permission: 'read',
-        details: {
-          where: task.where.trim(),
-          why: task.why.trim(),
-          how: task.how.map((step) => step.trim()).filter(Boolean),
-          doneWhen: task.doneWhen.trim(),
-          type: task.type,
-          effort: task.effort.trim(),
-          role: task.role.trim(),
-          source: 'ai',
-          refs: task.refs,
-        },
+        details: detailsOf(task),
       })),
     )
     .select('id, position');
@@ -416,14 +481,23 @@ const SWEEP_LIMIT = 20;
  * Write the tasks of recent actions that have none written yet. Runs after
  * a brand's signal pass and once a day for the ones it missed. An
  * organization whose budget is spent is skipped for the rest of the sweep.
+ * On the cloud, only for organizations still on a plan (2026-10-27):
+ * filtered in the query, so the actions of one whose plan ended can't take
+ * the sweep's places, each one only to be refused its budget.
  *
  * @param {{ brandId?: string, now?: Date, limit?: number }} [options]
  */
 export async function sweepActionTasks({ brandId, now = new Date(), limit = SWEEP_LIMIT } = {}) {
   if (!isTaskWriterEnabled()) return { skipped: 'disabled' };
-  let query = supabaseAdmin
-    .from('actions')
-    .select('id, brand_id, kind, status')
+  let query = supabaseAdmin.from('actions');
+  query = isCloud()
+    ? query
+        .select(
+          'id, brand_id, kind, status, brands!inner(organizations!inner(subscription_status))',
+        )
+        .in('brands.organizations.subscription_status', ACTIVE_SUBSCRIPTION_STATUSES)
+    : query.select('id, brand_id, kind, status');
+  query = query
     .is('tasks_generated_at', null)
     .gte('created_at', new Date(now.getTime() - SWEEP_WINDOW_MS).toISOString())
     .not('status', 'in', '("completed","dismissed")')

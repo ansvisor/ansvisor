@@ -1,4 +1,4 @@
-import { Composio } from '@composio/core';
+import { AuthScheme, Composio } from '@composio/core';
 
 /**
  * Composio managed-auth helper (#577, extended for Google Analytics in #658).
@@ -29,10 +29,20 @@ export const PROVIDERS = {
     label: 'Google Analytics',
     authConfigEnv: 'COMPOSIO_GA_AUTH_CONFIG_ID',
   },
+  // The catalog's Merchant Center sources read through it (#1270): see proxyRequest.
+  'google-merchant-center': {
+    label: 'Google Merchant Center',
+    authConfigEnv: 'COMPOSIO_GMC_AUTH_CONFIG_ID',
+  },
 };
 
 export function isKnownProvider(provider) {
   return Object.hasOwn(PROVIDERS, provider);
+}
+
+/** Entity id: one connection per organization per provider (#577). */
+export function entityIdFor(organizationId) {
+  return `org_${organizationId}`;
 }
 
 function authConfigId(provider) {
@@ -85,6 +95,27 @@ export async function getActiveConnection(provider, entityId) {
 
 export async function deleteConnection(connectedAccountId) {
   await getClient().connectedAccounts.delete(connectedAccountId);
+}
+
+/**
+ * A call to a provider's own API through Composio's proxy (#1270), on one
+ * connected account: Composio adds the account's OAuth token on its side,
+ * so the token never reaches us, and we choose the API version ourselves
+ * (a toolkit's ready-made tools may call an older one). Composio doesn't
+ * retry it: the caller decides what a 429 means.
+ *
+ * Returns the API's own answer, whatever its status: `{ status, headers, data }`.
+ * Throws when Composio itself refuses the call (an account no longer active).
+ */
+export async function proxyRequest(connectedAccountId, { endpoint, query = {}, signal }) {
+  const parameters = Object.entries(query)
+    .filter(([, value]) => value != null && value !== '')
+    .map(([name, value]) => ({ in: 'query', name, value: String(value) }));
+  const res = await getClient().tools.proxyExecute(
+    { endpoint, method: 'GET', parameters, connectedAccountId },
+    signal ? { signal } : undefined,
+  );
+  return { status: res.status, headers: res.headers ?? {}, data: res.data ?? null };
 }
 
 /**
@@ -248,4 +279,69 @@ export async function runGaReport(entityId, propertyId, body) {
     property: `properties/${propertyId}`,
     ...body,
   });
+}
+
+// ─── Webflow (Send to CMS, #1331 phase 2) ───────────────────────────────────
+
+/**
+ * Webflow has no Composio-managed OAuth app, so a brand connects its site
+ * with a site token: an API-key connected account under the brand's own
+ * Composio user (a site token is one site's). Composio keeps the token; we
+ * keep the account's id (brand_cms_connections, 00283). Not in PROVIDERS:
+ * the shared connect flow above is the workspace's OAuth.
+ */
+const WEBFLOW_AUTH_CONFIG_ENV = 'COMPOSIO_WEBFLOW_AUTH_CONFIG_ID';
+
+/** Pinned as Search Console's is; manual tool execution rejects "latest". */
+const WEBFLOW_TOOLKIT_VERSION = process.env.COMPOSIO_WEBFLOW_TOOLKIT_VERSION || '20260826_00';
+
+export function isWebflowConfigured() {
+  return Boolean(process.env.COMPOSIO_API_KEY && process.env[WEBFLOW_AUTH_CONFIG_ENV]);
+}
+
+/**
+ * A connected account for a Webflow site token, under `entityId`. Returns
+ * its id; whether Webflow takes the token is the first tool call's to say.
+ * A new token is a second account until the first is removed (an API-key
+ * account is active whether Webflow takes its token or not), so more than
+ * one is allowed: forgetWebflowAccounts keeps the brand to one.
+ */
+export async function connectWebflowToken(entityId, token) {
+  const request = await getClient().connectedAccounts.initiate(
+    entityId,
+    process.env[WEBFLOW_AUTH_CONFIG_ENV],
+    { config: AuthScheme.APIKey({ api_key: token }), allowMultiple: true },
+  );
+  const id = request?.id ?? request?.connectedAccountId ?? null;
+  if (!id) throw new Error('Composio returned no connected account');
+  return id;
+}
+
+/**
+ * Removes the Webflow accounts under `entityId` but `keep` (none kept when
+ * it's null): the ones a replaced token, a refused one or a failed removal
+ * left. Throws when one can't be removed.
+ */
+export async function forgetWebflowAccounts(entityId, keep = null) {
+  const accounts = await getClient().connectedAccounts.list({
+    authConfigIds: [process.env[WEBFLOW_AUTH_CONFIG_ENV]],
+    userIds: [entityId],
+  });
+  for (const account of accounts.items ?? []) {
+    if (account.id && account.id !== keep) await deleteConnection(account.id);
+  }
+}
+
+/** A Webflow tool, run on one connected account; its data, or an error with Webflow's words. */
+export async function executeWebflowTool(slug, { entityId, accountId }, args) {
+  const result = await getClient().tools.execute(slug, {
+    userId: entityId,
+    connectedAccountId: accountId,
+    arguments: args,
+    version: WEBFLOW_TOOLKIT_VERSION,
+  });
+  if (result?.successful === false) {
+    throw new Error(result?.error || `${slug} failed`);
+  }
+  return result?.data ?? {};
 }

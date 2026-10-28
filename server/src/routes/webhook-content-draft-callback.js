@@ -7,6 +7,8 @@ import {
   webhookCallbackAuthFailureLimiter,
 } from '../middleware/rate-limiter.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
+import { liveAddress, markDeliveryPublished } from '../lib/content-published.js';
+import { isBrandActive } from '../lib/active-subscriptions.js';
 
 /**
  * Send to CMS's callback (#1331): the workspace's automation tells how a sent
@@ -17,7 +19,9 @@ import { webhookSecretsMatch } from '../lib/webhook-secret.js';
  * limiters (each secret's budget, failed attempts by IP) cover it too. A
  * delivery id with its webhook's secret proves the package arrived, so the
  * callback counts whatever the delivery reads: an automation may call back
- * before it answers the send, or after the send gave up waiting.
+ * before it answers the send, or after the send gave up waiting. Once the
+ * brand's plan has ended (2026-10-27), it is answered 202 and nothing is
+ * written, as /webhooks/content does.
  */
 
 const router = Router();
@@ -26,6 +30,8 @@ router.use(webhookCallbackLimiter, webhookCallbackAuthFailureLimiter);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DENIED = { error: 'Invalid webhook credentials' };
+/** Once the plan has ended: a 2xx, so the workflow neither fails nor retries. */
+const IGNORED = { success: false, ignored: true, code: 'subscription_inactive' };
 const MAX_URL = 2048;
 
 /** A field a workflow left unmapped (Zapier and Make send "" or null) reads as left out. */
@@ -57,21 +63,6 @@ const statusBody = z.object({
 });
 
 /**
- * An http(s) address as the browser reads it (no stray whitespace kept),
- * without sign-in details (they'd be stored and shown as a link), or null.
- */
-function liveAddress(value) {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    if (url.username || url.password) return null;
-    return url.href.length <= MAX_URL ? url.href : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * POST /webhooks/content-drafts/:deliveryId/status
  * Body: { status: "published", url, externalId? } or { status: "failed", reason?, externalId? }.
  * Published marks the delivery published at that address, and its page too
@@ -88,10 +79,12 @@ router.post('/:deliveryId/status', async (req, res) => {
     // answer the same, so this route doesn't tell which deliveries exist.
     if (!UUID.test(deliveryId)) return res.status(401).json(DENIED);
 
+    // A webhook's delivery only: a Webflow one (00284) is the API's own to write.
     const { data: delivery, error } = await supabaseAdmin
       .from('content_draft_deliveries')
       .select('id, brand_id, draft_id, status, published_url')
       .eq('id', deliveryId)
+      .eq('target', 'webhook')
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!delivery) return res.status(401).json(DENIED);
@@ -107,6 +100,8 @@ router.post('/:deliveryId/status', async (req, res) => {
       (c) => c.events?.includes(DELIVERY_EVENT) && webhookSecretsMatch(c.webhook_secret, provided),
     );
     if (!matches) return res.status(401).json(DENIED);
+    // Asked only once the secret matched, so the answer tells a stranger nothing.
+    if (!(await isBrandActive(delivery.brand_id))) return res.status(202).json(IGNORED);
 
     const parsed = statusBody.safeParse(req.body ?? {});
     const url = parsed.success && parsed.data.url ? liveAddress(parsed.data.url) : null;
@@ -117,7 +112,6 @@ router.post('/:deliveryId/status', async (req, res) => {
       });
     }
     const { status, externalId, reason } = parsed.data;
-    const now = new Date().toISOString();
     const own = externalId ? { external_id: externalId } : {};
 
     if (status === 'failed') {
@@ -137,53 +131,8 @@ router.post('/:deliveryId/status', async (req, res) => {
       return res.json({ success: true, status: failed?.length ? 'failed' : 'published' });
     }
 
-    // This delivery said so already (a workflow's retry): nothing changes,
-    // its time included, but a CMS id the retry adds. A new delivery of a
-    // page live at the same address (the post updated in place) is the page
-    // as published again.
-    if (delivery.status === 'published' && delivery.published_url === url) {
-      if (externalId) {
-        const { error: idError } = await supabaseAdmin
-          .from('content_draft_deliveries')
-          .update(own)
-          .eq('id', delivery.id);
-        if (idError) throw new Error(idError.message);
-      }
-      return res.json({ success: true, status: 'published' });
-    }
-    if (delivery.draft_id) {
-      const { data: latest, error: latestError } = await supabaseAdmin
-        .from('content_draft_deliveries')
-        .select('id')
-        .eq('draft_id', delivery.draft_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (latestError) throw new Error(latestError.message);
-      if (latest?.id === delivery.id) {
-        const { error: draftError } = await supabaseAdmin
-          .from('content_drafts')
-          .update({ status: 'published', published_url: url, published_at: now })
-          .eq('id', delivery.draft_id);
-        if (draftError) throw new Error(draftError.message);
-        // The page as published, in History (00215 keeps "publish" for the
-        // server), unless History's latest version is already this page.
-        const { error: keepError } = await supabaseAdmin.rpc('content_draft_snapshot', {
-          p_draft_id: delivery.draft_id,
-          p_origin: 'publish',
-        });
-        if (keepError) {
-          req.log?.warn?.({ err: keepError }, 'content draft publish version not kept');
-        }
-      }
-    }
-    // The delivery last: a write above that fails answers 500, and the
-    // workflow's retry, finding it not yet published, does it all again.
-    const { error: deliveryError } = await supabaseAdmin
-      .from('content_draft_deliveries')
-      .update({ status: 'published', published_url: url, published_at: now, ...own })
-      .eq('id', delivery.id);
-    if (deliveryError) throw new Error(deliveryError.message);
+    // A workflow's retry changes nothing but a CMS id it adds (content-published.js).
+    await markDeliveryPublished(delivery, url, { externalId });
     return res.json({ success: true, status: 'published' });
   } catch (error) {
     req.log?.error?.({ err: error }, 'content draft status callback error');

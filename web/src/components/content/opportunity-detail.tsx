@@ -76,6 +76,7 @@ import { NewContentDialog, type DialogPreset } from '@/components/content/new-co
 import { useAssetTypeLabel } from '@/hooks/use-asset-type-label';
 import { toast } from 'sonner';
 import { suggestedDate } from '@/lib/suggested-date';
+import { formatNumber } from '@/lib/format';
 
 export const IMPACT_COLORS: Record<string, string> = {
   high: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
@@ -807,7 +808,7 @@ export function OpportunityDetail({
                     {brief.contentType.replace(/-/g, ' ')}
                   </Badge>
                   <Badge variant="outline" className="text-xs tabular-nums">
-                    ~{brief.targetWordCount.toLocaleString()} words
+                    ~{formatNumber(brief.targetWordCount)} words
                   </Badge>
                 </div>
               </div>
@@ -961,6 +962,12 @@ function FromTaskCard({
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+          {task.url && (
+            <>
+              <dt className="text-muted-foreground">{t('url')}</dt>
+              <dd className="min-w-0 break-words">{task.url}</dd>
+            </>
+          )}
           {task.where && (
             <>
               <dt className="text-muted-foreground">{t('where')}</dt>
@@ -971,6 +978,27 @@ function FromTaskCard({
             <>
               <dt className="text-muted-foreground">{t('why')}</dt>
               <dd className="min-w-0 break-words">{task.why}</dd>
+            </>
+          )}
+          {task.change && (
+            <>
+              <dt className="text-muted-foreground">{t('change')}</dt>
+              <dd className="min-w-0 break-words">
+                {task.change.before ? (
+                  <>
+                    <span className="text-muted-foreground">{t('changeBefore')}: </span>
+                    {task.change.before}
+                    <br />
+                    <span className="text-muted-foreground">{t('changeAfter')}: </span>
+                    {task.change.after}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-muted-foreground">{t('changeAdd')}: </span>
+                    {task.change.after}
+                  </>
+                )}
+              </dd>
             </>
           )}
           {task.how && task.how.length > 0 && (

@@ -23,7 +23,7 @@ The steps unlock when their data is ready, not on a schedule:
 | Stage | Steps | Ready |
 |---|---|---|
 | **Set up** | Set your KPIs · Add at least 3 competitors · Add at least 3 topics · Add 3 prompts per topic · Connect Google Search Console · Connect Google Analytics · Add the AI Traffic snippet | Now |
-| **Explore** | See where you stand in Visibility · Read your first AI answers · Track high-value prompt suggestions · Check what AI says about you · See who AI quotes · See visits from AI | When the first AI answers are in (about 3 hours). The high-value prompts step waits about 24 hours after you connect Search Console or Analytics. |
+| **Explore** | See where you stand in Brand Visibility · Read your first AI answers · Track high-value prompt suggestions · Check what AI says about you · See who AI quotes · See visits from AI | When the first AI answers are in (about 3 hours). The high-value prompts step waits about 24 hours after you connect Search Console or Analytics. |
 | **Act** | Pick content from suggestions · Create your first content · Optimize a page | When the first content suggestions are in (about 24 hours) |
 | **Ready** | You're ready | After every step above is done or skipped |
 
@@ -81,7 +81,18 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 
 ### Tasks
 
-Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". Open a task to see its details: **What**, **Where**, **Why**, **How** (one step per line), **Done when**, **Type** (Content, On-page, Technical, Outreach, PR or Product), **Effort** and **Role**. Click **Edit** to change any of them.
+Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". Open a task to see its details: **What**, **URL** (the exact page), **Where**, **Why**, **Change** (the text before and after, or the text to add), **How** (one step per line), **Done when**, **How we check** (Automatic: we fetch the page again; Re-run: the prompts run again; Manual: you confirm it), **Type** (Content, On-page, Technical, Outreach, PR or Product), **Effort** and **Role**. Click **Edit** to change any of them. A task from the Action Center's own plan comes with its **Done when**, with **How we check** for most of them (not for a task measured over a GA4 or Search Console window), and with its **URL** when it changes a page and the action is about one page.
+
+A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, and when you click **Check now**), by what it changes:
+
+- **A broken page:** the page answers again.
+- **Publishing:** the page answers where it wasn't before. A page already live at the first check passes once it changes.
+- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions.
+- **Crawler access:** robots.txt lets the AI crawlers in, and the page isn't noindex. Only when the audit raised it; a page found uncrawled in the bot logs isn't checked here.
+- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a few words.
+- **A task written with its new text:** that text is on the page, and the text it replaces is gone.
+
+Only pages on the brand's own site are read. One that passes is completed by itself, and History says so; one that doesn't shows **Last check** with what is still missing. A task you reopen after it passed stays open: its checks still show what they find, the nightly check leaves it, and the call is yours. Site Audit fixes are checked by your next audit.
 
 A task's status is **To Do**, **In Progress**, **Completed** or **Skipped** (with a reason). Skipped tasks leave the count, so they don't hold an action short of done. Use **Add task** for work of your own, and delete tasks you don't need.
 
@@ -92,6 +103,8 @@ From a task you can also:
 - **Send to webhook** — post the task to the brand's webhook, for a workflow outside Ansvisor. The webhook is set up under **Content → Webhook Settings**, with the **Action Center task sent** event selected.
 
 Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance.
+
+A task the AI writes without its **URL**, its **Change**, **Done when** or **How we check** doesn't reach your list. It waits on the **Needs review** tab, which admins and managers see, with what it misses. Click **Edit**, fill the missing fields and click **Approve** to add it after the action's other tasks, or **Dismiss** it.
 
 Some tasks that only read data, such as checking a page's traffic in your connected Analytics, can be carried out by Ansvisor itself overnight. The action's History says so. Nothing that would change something outside Ansvisor runs without your approval: such a task waits as **Waiting Approval**.
 

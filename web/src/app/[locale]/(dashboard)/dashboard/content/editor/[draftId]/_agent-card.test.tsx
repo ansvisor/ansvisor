@@ -210,7 +210,7 @@ describe('AgentCard', () => {
     // Working: the run, not the step.
     await render([], true, { next: step });
     expect(card.textContent).toBe('Content Agent is working');
-    // A rewrite to decide: still under the step, with its own buttons.
+    // A rewrite to decide heads with what it is, not the step after it, with its own buttons.
     await render(
       [
         suggestion({
@@ -223,11 +223,46 @@ describe('AgentCard', () => {
       false,
       { next: step },
     );
-    expect(card.textContent).toContain('Next · Shorten to your Length');
+    expect(card.textContent).not.toContain('Next · Shorten to your Length');
     expect(card.textContent).toContain(
-      'Last run: Content Agent rewrote the page to its rules · 37 → 12 characters · cut to the Length',
+      'Content Agent rewrote the page to its rules37 → 12 characters · cut to the Length',
     );
     expect(buttons()).toEqual(['Compare', 'Reject', 'Accept']);
+  });
+
+  it('says how many placeholders the result leaves to fill', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Teams cut churn by [figure, source].</p>',
+      afterText:
+        '<h1>New</h1><p>Teams cut churn by [figure, source].</p><p>[name of a real person] said so in [year].</p>',
+      reason: 'answered each heading first',
+    });
+    await render([page], false);
+    // Two new: the one the page had isn't the run's.
+    expect(container.textContent).toContain('answered each heading first · 2 placeholders to fill');
+    // A list the agent wrote without paragraphs in its items: read by their words.
+    await render(
+      [
+        suggestion({
+          kind: 'page',
+          beforeHtml: '<h1>Old</h1><ul><li><p>Churn fell [figure, source].</p></li></ul>',
+          afterText:
+            '<h1>New</h1><ul><li>Churn fell [figure, source].</li></ul><p>Since [year].</p>',
+          reason: 'kept the list',
+        }),
+      ],
+      false,
+    );
+    expect(container.textContent).toContain('kept the list · 1 placeholder to fill');
+    await render(
+      [
+        suggestion({ afterText: 'look at [figure, source]' }),
+        suggestion({ id: 's2', beforeText: 'old', afterText: 'new' }),
+      ],
+      false,
+    );
+    expect(container.textContent).toContain('1 placeholder to fill');
   });
 
   it('reads a rewrite against the Length, not the agent’s say, and says what it kept', async () => {
@@ -237,17 +272,87 @@ describe('AgentCard', () => {
       afterText: '<h1>New</h1><p>Shorter.</p>',
       reason: 'shortened the content to about 4 characters',
     });
-    // 12 characters for a Length of 4 (3–5): missed, most of it kept.
-    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 4 } });
+    // 12 characters for a Length of 4 (3–5): missed, and what it keeps puts it out of reach.
+    await render([page], false, {
+      length: { target: 4, min: 3, max: 5, kept: 4, outOfReach: true },
+    });
     expect(container.textContent).toContain(
       '37 → 12 characters · Length 4 not reached (4 characters are passages AI answers quote, tables and other blocks a rewrite keeps as they are)',
     );
     expect(container.textContent).not.toContain('shortened the content');
+    // Something kept, but not why it missed: not named as the reason.
+    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 4 } });
+    expect(container.textContent).toContain('37 → 12 characters · Length 4 not reached');
+    expect(container.textContent).not.toContain('characters are passages AI answers quote');
     // Within the Length: the agent's own words.
     await render([page], false, { length: { target: 12, min: 10, max: 14, kept: 0 } });
     expect(container.textContent).toContain(
       '37 → 12 characters · shortened the content to about 4 characters',
     );
+  });
+
+  it('says when a rewrite meant to shorten the page came out longer', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>Short.</p>',
+      afterText: '<h1>New</h1><p>A much longer page than before.</p>',
+      reason: 'answered each heading first',
+    });
+    // Before 10, over the Length's top (5): asked to shorten it, it came out longer.
+    await render([page], false, { length: { target: 4, min: 3, max: 5, kept: 0 } });
+    expect(container.textContent).toContain(
+      '10 → 35 characters · Length 4 not reached · longer than the page before',
+    );
+    // A page under its Length, asked to grow: longer is what it was asked for.
+    await render([page], false, { length: { target: 20, min: 16, max: 24, kept: 0 } });
+    expect(container.textContent).toContain('10 → 35 characters · Length 20 not reached');
+    expect(container.textContent).not.toContain('longer than the page before');
+  });
+
+  it('says the last run failed in place of an earlier batch’s review', async () => {
+    await render([suggestion({ status: 'accepted' })], false, { lastRunFailed: true });
+    expect(container.textContent).toContain("Content Agent couldn't finish");
+    expect(container.textContent).toContain('Nothing it wrote was kept.');
+    expect(container.textContent).not.toContain('All suggestions reviewed');
+  });
+
+  it('reads the gain from the page with the changes in, and names a rule they would break', async () => {
+    await render([suggestion()], false, {
+      rules: { ...rules, after: { now: 9, met: 8, breaks: 'Internal links' } },
+    });
+    expect(container.textContent).toContain('Rules 9 → 8 of 14 · would break Internal links');
+    // Counted from the page as it is now, not a read a beat behind it.
+    await render([suggestion()], false, {
+      rules: { ...rules, met: 7, after: { now: 9, met: 10, breaks: null } },
+    });
+    expect(container.textContent).toContain('Rules 9 → 10 of 14');
+    // A whole page rewritten: its count beside its characters.
+    await render(
+      [
+        suggestion({
+          kind: 'page',
+          beforeHtml: '<h1>Old</h1><p>Long.</p>',
+          afterText: '<h1>New</h1><p>Short.</p>',
+          reason: 'answered each heading first',
+        }),
+      ],
+      false,
+      { rules: { ...rules, after: { now: 9, met: 8, breaks: 'FAQ' } } },
+    );
+    expect(container.textContent).toContain(
+      'answered each heading first · Rules 9 → 8 of 14 · would break FAQ',
+    );
+  });
+
+  it('counts a rewrite’s characters as the toolbar does, when the editor gives them', async () => {
+    const page = suggestion({
+      kind: 'page',
+      beforeHtml: '<h1>Old</h1><p>A much longer page than this one.</p>',
+      afterText: '<h1>New</h1><p>Shorter.</p>',
+      reason: 'cut it',
+    });
+    await render([page], false, { pageChars: { before: 6_617, after: 5_468 } });
+    expect(container.textContent).toContain('6,617 → 5,468 characters');
   });
 
   it('says it is working, with nothing to press', async () => {

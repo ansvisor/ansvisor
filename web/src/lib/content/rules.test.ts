@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { htmlBlockElement } from './html-allowlist';
+import type { ShoppingCheck, ShoppingLinkState } from './shopping-check';
 import {
   NO_DRAFT_RULES,
   NOT_FOR_AGENT,
+  notForAgentMessage,
   fanoutsToUse,
   openRulesForAgent,
+  overLengthFor,
   activeRules,
   effectiveRules,
   splitRules,
@@ -29,8 +33,13 @@ import {
   RULE_LENGTH_MIN,
   RULE_LENGTH_MAX,
   lengthBand,
+  NO_REACH,
+  NO_RULE_CONTEXT,
+  heldMessage,
+  keptOutOfReach,
   lengthOutOfReach,
   rewriteAdvice,
+  SHOPPING_RULE_KEYS,
   type RuleStatus,
 } from './rules';
 
@@ -238,6 +247,60 @@ describe('length and structure', () => {
     expect(one.forAgent.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
     expect(one.notForAgent).toEqual([]);
     expect(openRulesForAgent(statuses, ['oneH1']).forAgent).toEqual([]);
+    // Held on this page by what it keeps word for word: the person's, apart.
+    const held = openRulesForAgent(statuses, undefined, new Set(['aiTraces']));
+    expect(held.forAgent.some(({ rule }) => rule.key === 'aiTraces')).toBe(false);
+    expect(held.held.map(({ rule }) => rule.key)).toEqual(['aiTraces']);
+    expect(held.notForAgent.map(({ rule }) => rule.key)).toEqual(['oneH1']);
+    // What to say when they're all that's left: the quoted passages', else the Length's.
+    expect(heldMessage(held.held)).toBe('heldLength');
+    expect(heldMessage([{ rule: { key: 'sentence' } }])).toBe('heldAll');
+  });
+
+  it('tells a Fix run of a page over its Length it doesn’t send (editor test 2026-10-26)', () => {
+    const rules = activeRules(ruleSet('blog_post'), {
+      overrides: { length: { value: '1000' } },
+    });
+    const statuses = (characters: number) =>
+      rules.map((r) => ({
+        rule: r,
+        status: checkRule(r, page('<h1>T</h1><p>x</p>', characters), ctx),
+      }));
+    const over = statuses(1_500);
+    const { forAgent, held } = openRulesForAgent(over, undefined, new Set(['length']));
+    expect(held.map(({ rule }) => rule.key)).toEqual(['length']);
+    expect(overLengthFor(over, forAgent)).toEqual({ count: 1_500, max: 1_200 });
+    // Sent as a rule, it says so itself; within its Length, or short: nothing.
+    expect(overLengthFor(over, openRulesForAgent(over).forAgent)).toBeUndefined();
+    // Asked for some rules only, Length not among them; a hand-off, which sends none.
+    expect(overLengthFor(over, openRulesForAgent(over, ['faq']).forAgent)).toEqual({
+      count: 1_500,
+      max: 1_200,
+    });
+    expect(overLengthFor(over, [])).toEqual({ count: 1_500, max: 1_200 });
+    expect(overLengthFor(statuses(1_150), forAgent)).toBeUndefined();
+    expect(overLengthFor(statuses(200), forAgent)).toBeUndefined();
+    // A Length of 0 reads every page as long, at most 0: nothing said.
+    const zero = activeRules(ruleSet('blog_post'), { overrides: { length: { value: '0' } } }).map(
+      (r) => ({ rule: r, status: checkRule(r, page('<h1>T</h1><p>x</p>', 1_500), ctx) }),
+    );
+    expect(overLengthFor(zero, [])).toBeUndefined();
+    // Length off.
+    const off = activeRules(ruleSet('blog_post'), { overrides: { length: { on: false } } }).map(
+      (r) => ({ rule: r, status: checkRule(r, page('<h1>T</h1><p>x</p>', 1_500), ctx) }),
+    );
+    expect(overLengthFor(off, [])).toBeUndefined();
+  });
+
+  it('reads a rule met without the locked passages as held by them', () => {
+    const sentence = activeRules(ruleSet('blog_post'), {
+      overrides: { sentence: { value: '20' } },
+    }).find((r) => r.key === 'sentence')!;
+    const long = 'A sentence that runs well past twenty characters.';
+    const all = page(`<h1>T</h1><p>${long}</p><p>Short.</p>`, 60);
+    expect(checkRule(sentence, all, NO_RULE_CONTEXT).state).toBe('bad');
+    const rest = page('<h1>T</h1><p>Short.</p>', 10);
+    expect(checkRule(sentence, rest, NO_RULE_CONTEXT).state).toBe('ok');
   });
 
   it('wants a short summary under the H1, and a short answer under each H2', () => {
@@ -392,6 +455,166 @@ describe('links and sources', () => {
   });
 });
 
+describe('shopping path rules (shopping path, part 6)', () => {
+  const item = (n: number, title: string, state: ShoppingLinkState, inPath = true) => ({
+    key: `shop.example/products/p${n}`,
+    title,
+    state,
+    inPath,
+  });
+  const shopping: ShoppingCheck = {
+    categories: ['shop.example/collections/hiking-boots'],
+    products: [
+      item(1, 'Summit', 'ok'),
+      item(2, 'Trail', 'sold_out'),
+      item(3, 'Ridge', 'ok'),
+      item(4, 'Alpine', 'ok'),
+    ],
+    site: 'https://shop.example/blog/boots',
+  };
+  const shopRule = (key: string, value?: string) => {
+    const found = activeRules(
+      ruleSet('buying_guide', { shopping: true }),
+      value === undefined ? NO_DRAFT_RULES : { overrides: { [key]: { value } } },
+    ).find((r) => r.key === key);
+    if (!found) throw new Error(`no rule ${key}`);
+    return found;
+  };
+  const grid = (hrefs: string[]) =>
+    htmlBlockElement(hrefs.map((h) => `<a class="ansvisor-product" href="${h}">x</a>`).join(''));
+  const html =
+    '<h1>Boots</h1><p>Our <a href="https://shop.example/collections/hiking-boots/">hiking boots</a>.</p>' +
+    '<p>The <a href="https://www.shop.example/products/p1?utm_source=x">Summit</a>.</p>' +
+    grid(['https://shop.example/products/p2', 'https://shop.example/products/p3']);
+  const status = (
+    key: string,
+    read = page(html),
+    with_: RuleContext['shopping'] = shopping,
+    value?: string,
+  ) => checkRule(shopRule(key, value), read, { ...ctx, shopping: with_ });
+
+  it('come only on an online shop’s page that takes a shopping path', () => {
+    const keys = (pageType: Parameters<typeof ruleSet>[0], on: boolean) =>
+      ruleSet(pageType, { shopping: on })
+        .map((r) => r.key)
+        .filter((k) => SHOPPING_RULE_KEYS.has(k));
+    expect(keys('buying_guide', true)).toEqual([
+      'shopCategoryLink',
+      'shopProductLinks',
+      'shopLinksLive',
+    ]);
+    expect(keys('buying_guide', false)).toEqual([]);
+    expect(keys('product_page', true)).toEqual([]);
+    expect(NOT_FOR_AGENT.has('shopLinksLive')).toBe(true);
+  });
+
+  it('read every link on the page: the text’s, a heading’s, a table’s and a product grid’s, each once', () => {
+    const read = page(
+      '<h2><a href="https://shop.example/products/p4">Alpine</a></h2>' +
+        '<table><tr><td><a href="https://shop.example/products/p3">Ridge</a></td></tr></table>' +
+        '<ul><li><a href="https://shop.example/products/p1">Summit</a></li></ul>' +
+        grid(['https://shop.example/products/p1', 'https://shop.example/products/p2']),
+    );
+    expect(read.links).toEqual([
+      'https://shop.example/products/p4',
+      'https://shop.example/products/p3',
+      'https://shop.example/products/p1',
+      'https://shop.example/products/p2',
+    ]);
+    expect(status('shopProductLinks', read)).toEqual({ state: 'ok' });
+    expect(status('shopCategoryLink')).toEqual({ state: 'ok' });
+  });
+
+  it('count only the products that sell towards the number, and name the ones that don’t', () => {
+    // Summit and Ridge sell; Trail, in the grid, is sold out: 2 of 3.
+    expect(status('shopProductLinks')).toEqual({ state: 'bad', code: 'partOf', count: 2, of: 3 });
+    expect(status('shopLinksLive')).toEqual({
+      state: 'bad',
+      code: 'found',
+      count: 1,
+      items: [{ title: 'Trail', state: 'sold_out' }],
+    });
+    // A path of three, one sold out: both rules can be met, by the two that sell.
+    const three = { ...shopping, products: shopping.products.slice(0, 3) };
+    const two = page(
+      '<p><a href="https://shop.example/products/p1">a</a> <a href="https://shop.example/products/p3">b</a></p>',
+    );
+    expect(status('shopProductLinks', two, three)).toEqual({ state: 'ok' });
+    expect(status('shopLinksLive', two, three)).toEqual({ state: 'ok' });
+  });
+
+  it('find a link to a product removed from the path that no longer sells', () => {
+    const removed = {
+      ...shopping,
+      products: [...shopping.products, item(9, 'Canyon', 'gone', false)],
+    };
+    const read = page('<p><a href="/products/p9">Canyon</a></p>');
+    expect(status('shopLinksLive', read, removed)).toEqual({
+      state: 'bad',
+      code: 'found',
+      count: 1,
+      items: [{ title: 'Canyon', state: 'gone' }],
+    });
+    // Not one of the path's: it never counts towards the products linked.
+    expect(status('shopProductLinks', read, removed, '1')).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 0,
+      of: 1,
+    });
+  });
+
+  it('want the category page, three products or all of a smaller path, none sold out', () => {
+    const bare = page('<p>Nothing linked.</p>');
+    expect(status('shopCategoryLink', bare)).toEqual({ state: 'bad', code: 'missing' });
+    expect(status('shopProductLinks', bare)).toEqual({
+      state: 'bad',
+      code: 'partOf',
+      count: 0,
+      of: 3,
+    });
+    expect(
+      status('shopProductLinks', bare, { ...shopping, products: shopping.products.slice(0, 2) }),
+    ).toEqual({ state: 'bad', code: 'partOf', count: 0, of: 1 });
+    expect(status('shopLinksLive', bare)).toEqual({ state: 'ok' });
+  });
+
+  it('wait for the path, say when there is none, and when it can’t be read', () => {
+    expect(status('shopProductLinks', page(html), 'reading')).toEqual({
+      state: 'info',
+      code: 'shoppingReading',
+    });
+    expect(status('shopLinksLive', page(html), 'failed')).toEqual({
+      state: 'info',
+      code: 'shoppingFailed',
+    });
+    expect(status('shopLinksLive', page(html), null)).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
+    });
+    expect(status('shopCategoryLink', page(html), { ...shopping, categories: [] })).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
+    });
+    // Every product sold out: none to link, pick again in Brief.
+    const soldOut = { ...shopping, products: [item(2, 'Trail', 'sold_out')] };
+    expect(status('shopProductLinks', page(html), soldOut)).toEqual({
+      state: 'info',
+      code: 'noShoppingPath',
+    });
+  });
+
+  it('says what to do instead when only a sold-out link is open: not the feed’s message', () => {
+    expect(notForAgentMessage([{ rule: { key: 'shopLinksLive' } }])).toBe('notForAgentShopping');
+    expect(
+      notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'feedMatch' } }]),
+    ).toBe('notForAgentFeed');
+    expect(
+      notForAgentMessage([{ rule: { key: 'shopLinksLive' } }, { rule: { key: 'oneH1' } }]),
+    ).toBe('notForAgent');
+  });
+});
+
 describe('style', () => {
   it('finds AI traces and banned words', () => {
     expect(check('aiTraces', '<p>Let’s delve in. It is important to note this.</p>')).toEqual({
@@ -443,6 +666,45 @@ describe('page type rules', () => {
       count: 1,
       of: 3,
     });
+  });
+
+  it('checks a product page against its product in the feed, once one is connected (CE-053)', () => {
+    const feed = (html: string, catalog: RuleContext['catalog']) =>
+      checkRule(rule('feedMatch', 'product_page'), page(html), { ...ctx, catalog });
+    const product = (price: number, availability = 'in_stock') => ({
+      connected: true,
+      product: {
+        title: 'Ridge 28',
+        url: 'https://acme.example/products/ridge-28',
+        via: 'url' as const,
+        variants: [{ price, salePrice: null, currency: 'USD', availability, gtin: null }],
+      },
+    });
+    const html = '<p>The Ridge 28 costs $129.</p><p>In stock.</p>';
+    expect(feed(html, null)).toEqual({ state: 'info', code: 'needsFeed' });
+    expect(feed(html, 'reading')).toEqual({ state: 'info', code: 'feedReading' });
+    expect(feed(html, { connected: false, product: null })).toEqual({
+      state: 'info',
+      code: 'needsFeed',
+    });
+    expect(feed(html, { connected: true, product: null })).toEqual({
+      state: 'info',
+      code: 'notInFeed',
+    });
+    expect(feed('<p>A daypack.</p>', product(129))).toEqual({ state: 'info', code: 'feedNothing' });
+    expect(feed(html, product(129))).toEqual({ state: 'ok' });
+    expect(feed(html, product(119, 'out_of_stock'))).toEqual({
+      state: 'bad',
+      code: 'feedDiffers',
+      count: 2,
+    });
+    // The person checks which is right, the page or the feed: not the agent's,
+    // and the message says so (the extra H1s' first, when both are open).
+    expect(NOT_FOR_AGENT.has('feedMatch')).toBe(true);
+    expect(notForAgentMessage([{ rule: { key: 'feedMatch' } }])).toBe('notForAgentFeed');
+    expect(notForAgentMessage([{ rule: { key: 'feedMatch' } }, { rule: { key: 'oneH1' } }])).toBe(
+      'notForAgent',
+    );
   });
 
   it('checks a product and a category page', () => {
@@ -758,31 +1020,116 @@ describe('rewriteAdvice', () => {
     expect(rewriteAdvice(statuses(60_001))).toBeNull();
   });
 
-  it("doesn't recommend shortening a page whose kept blocks are most of its Length", () => {
-    // The user's page: 6,877 characters for 4,000, 3,799 of them quoted passages and tables.
+  it("doesn't recommend shortening a page a rewrite can't bring under its Length", () => {
     const page = statuses(6_877, [], '4000');
-    expect(rewriteAdvice(page, 3_799)).toBeNull();
-    expect(lengthOutOfReach(page, 3_799)).toEqual({
+    // The least a rewrite comes to (kept + headings + least answers) past the band's top (4,800).
+    const floor = { kept: 3_799, floor: 5_100, last: null };
+    expect(rewriteAdvice(page, floor)).toBeNull();
+    expect(lengthOutOfReach(page, floor)).toEqual({
       count: 6_877,
       target: 4_000,
       kept: 3_799,
-      suggested: 6_000,
+      why: 'floor',
+      least: 5_100,
+      suggested: 5_500,
     });
     // Little kept: a rewrite still gets there.
-    expect(rewriteAdvice(page, 1_000)).toMatchObject({ reason: 'length' });
-    expect(lengthOutOfReach(page, 1_000)).toBeNull();
+    expect(rewriteAdvice(page, { kept: 1_000, floor: 1_800, last: null })).toMatchObject({
+      reason: 'length',
+    });
     // Many rules open: still a rewrite, for them, the Length out of reach not among them.
     expect(
-      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer'], '4000'), 3_799),
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer'], '4000'), floor),
     ).toBeNull();
     expect(
-      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), 3_799),
+      rewriteAdvice(statuses(6_877, ['faq', 'summary', 'h2Answer', 'keywords'], '4000'), floor),
     ).toMatchObject({ reason: 'open' });
     // Under its Length, what is kept doesn't stop it.
-    expect(lengthOutOfReach(statuses(2_000, [], '4000'), 3_799)).toBeNull();
+    expect(lengthOutOfReach(statuses(2_000, [], '4000'), floor)).toBeNull();
+  });
+
+  it('doesn’t offer a rewrite again for a Length the last one missed, and only then', () => {
+    const page = statuses(6_877, [], '4000');
+    // The user's test page (2026-10-25): 78% kept, so in reach by its kept blocks
+    // alone, but the last rewrite, written to 4,000, came to 5,468.
+    const missed = { chars: 5_468, target: 4_000, kept: 3_125 };
+    const run = { kept: 3_125, floor: 4_300, last: missed };
+    expect(rewriteAdvice(page, run)).toBeNull();
+    expect(lengthOutOfReach(page, run)).toMatchObject({
+      why: 'reached',
+      least: 5_468,
+      suggested: 5_500,
+    });
+    // Asked for a little less since (within its band): it didn't reach the longer one either.
+    expect(lengthOutOfReach(statuses(6_877, [], '3500'), run)).toMatchObject({ why: 'reached' });
+    // Asked for much less: what it came to for 4,000 says nothing; the estimate decides.
+    expect(lengthOutOfReach(statuses(6_877, [], '3000'), run)).toMatchObject({
+      why: 'floor',
+      least: 4_300,
+    });
+    // A near miss of 10,000 says nothing of 3,000 either.
+    const near = { ...run, floor: 1_800, last: { chars: 12_400, target: 10_000, kept: 3_125 } };
+    expect(lengthOutOfReach(statuses(6_877, [], '3000'), near)).toBeNull();
+    // A rewrite that met a longer Length says nothing of a shorter one.
+    const met = { ...run, last: { chars: 9_800, target: 10_000, kept: 3_125 } };
+    expect(lengthOutOfReach(page, met)).toBeNull();
+    expect(rewriteAdvice(page, { ...met, kept: 1_000, floor: 1_800 })).toMatchObject({
+      reason: 'length',
+    });
+    // Written with Length off: it was asked for none.
+    expect(lengthOutOfReach(page, { ...run, last: { ...missed, target: null } })).toBeNull();
+    // A passage unlocked since: a rewrite may go shorter now.
+    expect(lengthOutOfReach(page, { ...run, kept: 2_900 })).toBeNull();
+    // More locked since: what it came to then doesn't say it gets there now.
+    expect(
+      lengthOutOfReach(page, {
+        kept: 4_500,
+        floor: 5_200,
+        last: { chars: 4_500, target: 4_000, kept: 1_000 },
+      }),
+    ).toMatchObject({ why: 'floor', least: 5_200 });
+    // The last one got within the band: in reach, whatever the estimate says.
+    expect(
+      lengthOutOfReach(page, { ...run, floor: 5_000, last: { ...missed, chars: 4_700 } }),
+    ).toBeNull();
+    // Past both: the more of the two, so one Raise is enough.
+    expect(lengthOutOfReach(page, { ...run, floor: 6_200 })).toMatchObject({
+      why: 'floor',
+      least: 6_200,
+      suggested: 6_500,
+    });
+    // Never a Length past the page as it is.
+    expect(lengthOutOfReach(statuses(4_900, [], '4000'), run)?.suggested).toBe(5_000);
+    // Rewritten with its cited passages too (it kept less): still missing says keeping them misses too…
+    const citedToo = { ...run, last: { chars: 5_200, target: 4_000, kept: 0 } };
+    expect(lengthOutOfReach(page, citedToo)).toMatchObject({ why: 'reached', least: 5_200 });
+    // …but coming within the band doesn't say keeping them does.
+    expect(
+      lengthOutOfReach(page, {
+        ...citedToo,
+        floor: 5_000,
+        last: { ...citedToo.last, chars: 4_500 },
+      }),
+    ).toMatchObject({ why: 'floor', least: 5_000 });
+  });
+
+  it('names what a rewrite keeps as why it missed only when that alone puts the Length out of reach', () => {
+    const page = statuses(6_877, [], '4000');
+    const missed = { chars: 5_468, target: 4_000, kept: 3_125 };
+    // The rewrite missed, but its kept blocks and headings alone fit: not their doing.
+    expect(keptOutOfReach(page, { kept: 3_125, floor: 4_300, last: missed })).toBe(false);
+    expect(keptOutOfReach(page, { kept: 3_799, floor: 5_100, last: missed })).toBe(true);
   });
 
   it('recommends it for 4 rules or more the agent can fix', () => {
+    // A rule held by what the page keeps isn't one a rewrite fixes.
+    expect(
+      rewriteAdvice(
+        statuses(null, ['faq', 'summary', 'h2Answer', 'sentence']),
+        NO_REACH,
+        new Set(['sentence']),
+      ),
+    ).toBeNull();
     expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer']))).toBeNull();
     expect(rewriteAdvice(statuses(null, ['faq', 'summary', 'h2Answer', 'keywords']))).toEqual({
       reason: 'open',

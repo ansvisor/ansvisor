@@ -14,7 +14,10 @@ import {
 import {
   articleJsonLd,
   isArticlePage,
+  itemListJsonLd,
+  MIN_LISTED,
   productJsonLd,
+  type ListedProduct,
   type PageOfferRead,
   jsonLdScript,
   localDate,
@@ -22,7 +25,9 @@ import {
   pageName,
   titleHasPlaceholder,
 } from '@/lib/content/page-schema';
+import { qualityPhase } from '@/lib/content/quality';
 import { checksOff } from '@/lib/content/quality-profiles';
+import { listed, type ShoppingLinks } from '@/lib/content/shopping-check';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -95,13 +100,27 @@ export function BeforePublish({
   disclosureAdded = false,
   onAddDisclosure,
   product = null,
+  category = null,
+  shopping = null,
 }: {
+  /**
+   * The page's shopping links against the catalog now (shopping path, part
+   * 6): the products that no longer sell, the category page, the products
+   * linked; 'reading' while it's read again, 'failed' when it couldn't be;
+   * null on a page without a shopping path.
+   */
+  shopping?: ShoppingLinks | 'reading' | 'failed' | null;
   /**
    * Phase 3 (CE-053): a product page's Product schema, from its opening
    * paragraph, its images and the price it states (pageOffer); null on
    * other pages.
    */
   product?: { description: string | null; images: string[]; offer: PageOfferRead } | null;
+  /**
+   * Phase 3 (CE-054): a category page's ItemList, from its links to the
+   * brand's product pages (listedProducts); null on other pages.
+   */
+  category?: { items: ListedProduct[]; status: 'read' | 'reading' | 'unknown' } | null;
   /** Opened by Mark ready, by Export, or by Send to CMS. */
   mode?: 'markReady' | 'export' | 'send';
   paste: ReadyToPaste;
@@ -156,7 +175,7 @@ export function BeforePublish({
         .filter((s) => s.gain > 0)
         .sort((a, b) => b.gain - a.gain)
     : [];
-  const article = !product && isArticlePage(pageType);
+  const article = !product && !category && isArticlePage(pageType);
   // Product needs its name and price: without either, no code to paste.
   const productName = pageName(title);
   const offer = product?.offer && !('several' in product.offer) ? product.offer : null;
@@ -173,26 +192,34 @@ export function BeforePublish({
         offer,
       }),
     );
+  // An ItemList lists two products at least: one isn't a list.
+  const itemListLd =
+    category?.status === 'read' &&
+    category.items.length >= MIN_LISTED &&
+    jsonLdScript(itemListJsonLd({ name: productName, items: category.items }));
   const jsonLd = productLd
     ? productLd
-    : article
-      ? jsonLdScript(
-          articleJsonLd({
-            title,
-            // An author only confirmed (00271) isn't named here: left out, as unknown.
-            author: authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
-            authorUrl:
-              (author &&
-                siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
-              null,
-            brandName,
-            brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
-            image,
-            isNew,
-            today: localDate(new Date()),
-          }),
-        )
-      : null;
+    : itemListLd
+      ? itemListLd
+      : article
+        ? jsonLdScript(
+            articleJsonLd({
+              title,
+              // An author only confirmed (00271) isn't named here: left out, as unknown.
+              author:
+                authorsRead && !(!author && quality.authorConfirmed?.real) ? author : undefined,
+              authorUrl:
+                (author &&
+                  siteTrust?.checks.authorPages.authors.find((a) => a.name === author.name)?.url) ||
+                null,
+              brandName,
+              brandUrl: siteTrust?.checks.organizationSchema.url ?? null,
+              image,
+              isNew,
+              today: localDate(new Date()),
+            }),
+          )
+        : null;
   // Added here: it counts once the page is read again.
   const [added, setAdded] = useState(false);
   // Where the page's type counts it (CE-052): a product page is the brand's own.
@@ -264,18 +291,49 @@ export function BeforePublish({
                       },
                 ]),
           ]
-      : article
+      : category
         ? [
-            { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
-            isNew
-              ? { state: 'check' as const, title: t('schema.title'), detail: t('schema.detail') }
-              : {
+            category.status !== 'read'
+              ? {
                   state: 'check' as const,
-                  title: t('schema.titleLive'),
-                  detail: t('schema.detailLive'),
-                },
+                  title: t('schema.itemListTitle'),
+                  detail: t(
+                    category.status === 'reading'
+                      ? 'schema.itemListReading'
+                      : 'schema.itemListUnknown',
+                  ),
+                }
+              : itemListLd
+                ? {
+                    state: 'check' as const,
+                    title: t('schema.itemList', { count: category.items.length }),
+                    detail: t('schema.itemListDetail'),
+                  }
+                : {
+                    state: 'missing' as const,
+                    title: t('schema.itemListNone'),
+                    detail: t('schema.itemListNoneDetail', { count: category.items.length }),
+                  },
           ]
-        : [{ state: 'check' as const, title: t('schema.other'), detail: t('schema.otherDetail') }]),
+        : article
+          ? [
+              { state: 'check' as const, title: t('dates.title'), detail: t('dates.detail') },
+              isNew
+                ? { state: 'check' as const, title: t('schema.title'), detail: t('schema.detail') }
+                : {
+                    state: 'check' as const,
+                    title: t('schema.titleLive'),
+                    detail: t('schema.detailLive'),
+                  },
+            ]
+          : [
+              {
+                state: 'check' as const,
+                title: t('schema.other'),
+                // Phase 3 gives product and category pages their code too.
+                detail: t(qualityPhase() >= 3 ? 'schema.otherDetailTyped' : 'schema.otherDetail'),
+              },
+            ]),
     // Phase 2 (CE-050): where the page puts the brand forward.
     ...(disclosure
       ? [
@@ -303,6 +361,7 @@ export function BeforePublish({
                 },
         ]
       : []),
+    ...(shopping ? [shoppingRow(t, shopping)] : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
 
@@ -426,11 +485,13 @@ export function BeforePublish({
             >
               {jsonLd}
             </pre>
-            {titleHasPlaceholder(title) && (
-              <p className="text-xs text-amber-700 dark:text-amber-300">{t('headlineLeftOut')}</p>
+            {(article || itemListLd) && titleHasPlaceholder(title) && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                {t(itemListLd ? 'nameLeftOut' : 'headlineLeftOut')}
+              </p>
             )}
             <p className="text-xs text-muted-foreground">
-              {t(productLd ? 'productNote' : 'datesNote')}
+              {t(productLd ? 'productNote' : itemListLd ? 'itemListNote' : 'datesNote')}
             </p>
           </div>
         )}
@@ -519,4 +580,50 @@ function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
     };
   }
   return { state: 'ok', title: t('paste.title'), detail: t('paste.ok') };
+}
+
+/**
+ * The shopping links' row (shopping path, part 6): the products the page
+ * links that no longer sell, by name, to remove or replace on the page;
+ * else a missing link to the category page; else too few products linked;
+ * else how many work. While the catalog is read, or when it can't be, a
+ * check of its own.
+ */
+function shoppingRow(t: T, shopping: ShoppingLinks | 'reading' | 'failed'): Row {
+  if (shopping === 'reading' || shopping === 'failed') {
+    return { state: 'check', title: t('shopping.title'), detail: t(`shopping.${shopping}`) };
+  }
+  if (shopping.bad.length) {
+    const { shown, more } = listed(shopping.bad);
+    return {
+      state: 'missing',
+      title: t('shopping.bad', { count: shopping.bad.length }),
+      detail: t('shopping.badDetail', {
+        list: shown.map((p) => t('shopping.item', { title: p.title, state: p.state })).join(', '),
+        more,
+      }),
+    };
+  }
+  if (shopping.categories > 0 && !shopping.categoryLinked) {
+    return {
+      state: 'missing',
+      title: t('shopping.noCategory'),
+      detail: t('shopping.noCategoryDetail'),
+    };
+  }
+  if (shopping.linked.length < shopping.want) {
+    return {
+      state: 'missing',
+      title: t('shopping.few', { count: shopping.linked.length, want: shopping.want }),
+      detail: t('shopping.fewDetail'),
+    };
+  }
+  return {
+    state: 'ok',
+    title: t('shopping.ok'),
+    detail: t('shopping.okDetail', {
+      count: shopping.linked.length,
+      category: shopping.categoryLinked ? 'yes' : 'no',
+    }),
+  };
 }

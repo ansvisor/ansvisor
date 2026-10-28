@@ -12,9 +12,10 @@ import {
 } from '@/lib/catalog';
 
 /**
- * A brand's catalog sources (#1263, 00279), read and changed through RLS:
- * members read them; admins and managers add and remove feed URLs. The API
- * reads the feeds and imports uploads (lib/catalog-client.ts).
+ * A brand's catalog sources (#1263, 00279, 00282), read and changed through
+ * RLS: members read them; admins and managers add and remove feed URLs. The
+ * API reads the feeds and stores, imports uploads, and connects and removes
+ * stores (lib/catalog-client.ts).
  */
 
 const FORMATS = ['auto', 'google_xml', 'csv', 'meta_csv'] as const;
@@ -25,7 +26,9 @@ export async function listCatalogSources(brandId: string): Promise<CatalogSource
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('catalog_sources')
-    .select('id, kind, format, url, last_synced_at, last_status, last_error, last_counts')
+    .select(
+      'id, kind, format, url, account, label, last_synced_at, last_status, last_error, last_counts',
+    )
     .eq('brand_id', brandId)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
@@ -42,6 +45,8 @@ export async function listCatalogSources(brandId: string): Promise<CatalogSource
         kind: row.kind as CatalogSourceKind,
         format: row.format as CatalogFormat,
         url: row.url,
+        account: row.account,
+        label: row.label,
         lastSyncedAt: row.last_synced_at,
         lastStatus: row.last_status as CatalogSyncStatus | null,
         lastError: row.last_error,
@@ -92,7 +97,7 @@ export async function addFeedSource(
   return { ok: true, id: data.id };
 }
 
-/** Removes a source, and with it its products: admins and managers. */
+/** Removes a feed or an upload, and with it its products: admins and managers. A store goes through the API. */
 export async function removeCatalogSource(id: string): Promise<void> {
   if (!z.guid().safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();

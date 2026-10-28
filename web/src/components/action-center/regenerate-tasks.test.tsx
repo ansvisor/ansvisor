@@ -10,6 +10,10 @@ const { toast, regenerate } = vi.hoisted(() => ({
 }));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/actions/action-task-writer', () => ({ regenerateActionTasks: regenerate }));
+let canManage = true;
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ role: canManage ? 'admin' : 'analyst', canManage, canAdmin: canManage }),
+}));
 
 const { RegenerateTasks } = await import('./regenerate-tasks');
 
@@ -36,6 +40,7 @@ const button = (name: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === name)!;
 
 beforeEach(() => {
+  canManage = true;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -51,7 +56,7 @@ afterEach(() => {
 
 describe('RegenerateTasks', () => {
   it('asks first, saying what stays, then writes and reloads', async () => {
-    regenerate.mockResolvedValueOnce({ written: 4, kept: 1 });
+    regenerate.mockResolvedValueOnce({ written: 4, kept: 1, reviews: 0 });
     const onDone = vi.fn();
     const onBusyChange = vi.fn();
     render(
@@ -73,6 +78,31 @@ describe('RegenerateTasks', () => {
     expect(onDone).toHaveBeenCalled();
     // The rest of the tab waited while the tasks were rewritten.
     expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('says how many wait in Needs review (AC-010)', async () => {
+    regenerate.mockResolvedValueOnce({ written: 1, kept: 0, reviews: 2 });
+    render(
+      <RegenerateTasks actionId="a1" disabled={false} onBusyChange={() => {}} onDone={() => {}} />,
+    );
+    act(() => button('Regenerate tasks').click());
+    await act(async () => button('Regenerate').click());
+    expect(toast.success).toHaveBeenCalledWith(
+      '1 task written; 2 wait in Needs review for the page, the change or the check',
+    );
+  });
+
+  it('tells someone without the Needs review tab who reviews', async () => {
+    canManage = false;
+    regenerate.mockResolvedValueOnce({ written: 0, kept: 0, reviews: 1 });
+    render(
+      <RegenerateTasks actionId="a1" disabled={false} onBusyChange={() => {}} onDone={() => {}} />,
+    );
+    act(() => button('Regenerate tasks').click());
+    await act(async () => button('Regenerate').click());
+    expect(toast.success).toHaveBeenCalledWith(
+      '0 tasks written; 1 waits for an admin or a manager to review',
+    );
   });
 
   it("words the server's reason, and a timeout", async () => {

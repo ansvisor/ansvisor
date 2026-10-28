@@ -92,7 +92,9 @@ import { toCsv } from '@/lib/csv';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
+import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { CatalogNote } from './_catalog-note';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { MerchantSplitCard } from './merchant_split_card';
 import { OpenAiIndexCard } from './openai_index_card';
@@ -430,6 +432,7 @@ export default function ShoppingPage() {
                       {tCommon('exportCsv')}
                     </Button>
                   </div>
+                  <CatalogNote brandId={activeBrandId} />
                   <ProductTable
                     t={t}
                     products={ownProducts}
@@ -699,7 +702,7 @@ function PromptsTabContent({
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
-                      {row.totalCards.toLocaleString()}
+                      {formatNumber(row.totalCards)}
                     </TableCell>
                     <TableCell>
                       <div
@@ -768,7 +771,7 @@ function PromptsTabContent({
                         )}
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(app.timestamp).toLocaleString(undefined, {
+                          {new Date(app.timestamp).toLocaleString('en-US', {
                             month: 'short',
                             day: 'numeric',
                             hour: '2-digit',
@@ -990,7 +993,7 @@ function KpiGrid({
       />
       <KpiCard
         title={t('kpiOwnProducts')}
-        value={productsSurfaced.toLocaleString()}
+        value={formatNumber(productsSurfaced)}
         subtitle={t('kpiOwnProductsSub')}
         icon={ArrowUpRight}
         locked={!hasFullAccess}
@@ -1248,7 +1251,7 @@ function ProductTable({
           {sortedProducts.map((p, idx) => {
             const formattedPrice =
               p.last_price !== null
-                ? new Intl.NumberFormat(undefined, {
+                ? new Intl.NumberFormat('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   }).format(p.last_price)
@@ -1256,7 +1259,7 @@ function ProductTable({
             const lastPriceStr =
               p.last_price !== null ? `${formattedPrice} ${p.price_currency || ''}` : '—';
             const formattedDate = p.last_seen
-              ? new Date(p.last_seen).toLocaleDateString(undefined, {
+              ? new Date(p.last_seen).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
                 })
@@ -1323,7 +1326,7 @@ function ProductTable({
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">
-                  {p.impressions.toLocaleString()}
+                  {formatNumber(p.impressions)}
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">
                   {lastPriceStr}
@@ -1451,7 +1454,7 @@ function ProductAppearancesDrawer({
             <ProductMatchScores brandId={brandId} filters={filters} product={product} />
           )}
           {product?.appearances.map((app) => {
-            const dateStr = new Date(app.created_at).toLocaleDateString(undefined, {
+            const dateStr = new Date(app.created_at).toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric',
               hour: '2-digit',

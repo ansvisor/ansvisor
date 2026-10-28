@@ -170,6 +170,7 @@ export async function sendTopicOpportunityToActionCenter(topic, { suggestionIds,
       permission: item.permission,
       depends_on: item.dependsOn,
       title_params: item.titleParams,
+      details: item.details,
       status: 'todo',
     })),
   );

@@ -4,7 +4,12 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
 import {
+  ATTRIBUTION_RULE,
+  attributableSources,
+  bannedWordsOf,
+  placeholderAttributionsInHtml,
   FANOUT_RULE,
+  HEADING_LIMITS,
   HEADING_RULE,
   LINK_RULE,
   MAX_AGENT_SUGGESTIONS,
@@ -17,9 +22,24 @@ import {
   suggestionsSchema,
   WRITING_STALE_MS,
 } from './content-agent.js';
-import { contentBriefModelId, rebuildSources } from './content-brief.js';
+import {
+  WRITING_GUARDRAIL,
+  briefForWriter,
+  briefRulesOn,
+  contentBriefModelId,
+  rebuildSources,
+} from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
+import { draftLanguage } from './content-language.js';
 import { linkAllowList, linkTargetsPrompt, readLinkTargets } from './content-links.js';
+import { insertProductGrid } from './shopping-blocks.js';
+import {
+  linkShoppingPath,
+  shoppingGiven,
+  shoppingPathFor,
+  shoppingPrompt,
+  withShopping,
+} from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
 import { authorWords, guardPeople, guardPeopleInHtml, knownPeople } from './content-people.js';
 import {
@@ -34,6 +54,7 @@ import {
   sourceWords,
   stripSourceIds,
   todayText,
+  withNamedNumbers,
 } from './content-sources.js';
 import {
   MAX_PAGE_HTML,
@@ -48,7 +69,15 @@ import {
   rewriteSchema,
   textLength,
 } from './content-rewrite.js';
-import { advanceRun, finishRun, isStop, runCall, startRun, stopIfStopped } from './content-runs.js';
+import {
+  advanceRun,
+  finishRun,
+  fixUnderWay,
+  isStop,
+  runCall,
+  startRun,
+  stopIfStopped,
+} from './content-runs.js';
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
@@ -71,6 +100,14 @@ import { reserveAiBudget } from './plan-guard.js';
 
 /** How long the model may take: nobody waits on the request. */
 const CALL_TIMEOUT_MS = 180_000;
+/** How far a Length's band reaches either side of it (the editor's LENGTH_TOLERANCE). */
+const LENGTH_TOLERANCE = 0.2;
+/**
+ * How far past the top of its Length's band a rewrite may come before one
+ * more pass cuts it: 15% of the Length (editor test 2026-10-25, where
+ * rewrites for 4,000 came to 5,468, 6,843 and 7,335 characters).
+ */
+const CUT_PASS_OVER = 0.15;
 
 // A 'writing' older than WRITING_STALE_MS (content-agent.js, which Fix open
 // rules checks too) was left by a server that stopped: it can start again.
@@ -100,6 +137,12 @@ export const writeDraftInput = z.object({
   textRules: z.array(z.string().trim().min(1).max(300)).max(50).default([]),
   /** The passages AI answers quote today, by passageKey (an existing page's). */
   locked: z.array(z.string().max(5000)).max(500).default([]),
+  /**
+   * How many rules the editor counts (its "met of total": those it checks on
+   * the page), for the run's "Reading N rules" step; the rules sent also
+   * hold those only AI can read (tone, language).
+   */
+  counted: z.number().int().min(0).max(60).optional(),
 });
 
 export const pageSchema = z.object({
@@ -135,6 +178,25 @@ How to write:
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
 
+/**
+ * With the brief rules (2026) on: the brief's section plans followed, headings
+ * kept short (the editor's limits), and the guardrail.
+ */
+const WRITE_RULES_2026 = `- Follow the brief's section plans when it has them: each section's answer first, its format, the facts it names (a placeholder until a source is found), the names as written.
+- Headings are one short line: the title up to ${HEADING_LIMITS.h1} characters, each section heading about 8 to 15 words (a fan-out's own words, when shorter) and under ${HEADING_LIMITS.other} characters. Never put a sentence or an answer in a heading.
+${WRITING_GUARDRAIL}`;
+
+/** The prompts as the run uses them: version 1's, or with the brief rules (2026) on, theirs too. */
+export function writeSystemPrompt() {
+  return briefRulesOn() ? `${WRITE_SYSTEM_PROMPT}\n${WRITE_RULES_2026}` : WRITE_SYSTEM_PROMPT;
+}
+export function suggestSystemPrompt() {
+  return briefRulesOn() ? `${SUGGEST_SYSTEM_PROMPT}\n${WRITING_GUARDRAIL}` : SUGGEST_SYSTEM_PROMPT;
+}
+export function rewriteSystemPrompt() {
+  return briefRulesOn() ? `${REWRITE_SYSTEM_PROMPT}\n${WRITING_GUARDRAIL}` : REWRITE_SYSTEM_PROMPT;
+}
+
 const SUGGEST_SYSTEM_PROMPT = `You are the Content Agent for Answer Engine Optimization (AEO). You improve one existing web page so AI assistants cite it, by suggesting changes that a person reviews.
 
 Rules for your suggestions:
@@ -148,6 +210,7 @@ ${FANOUT_RULE}
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes; write a placeholder in square brackets instead, e.g. [figure, source, year].
 ${SOURCES_RULE}
+${ATTRIBUTION_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
 - "reason" says in a few words what the change does, e.g. "answer the search 'x' (fan-out)".
 - Write in the language asked for.`;
@@ -209,17 +272,19 @@ export function sourcedPage(page, known, people = knownPeople()) {
 }
 
 /** The brief as the model reads it: the draft's own, else its opportunity's. */
-export function briefText(draftBrief, opportunityBrief) {
+export function briefText(draftBrief, opportunityBrief, { links = true } = {}) {
   if (draftBrief?.outline?.length || draftBrief?.goal) {
     const sections = draftBrief.outline.map(
       (s) =>
         `${s.heading}${s.keyPoints?.length ? `: ${s.keyPoints.join('; ')}` : ''}${s.fanout ? ` (answers the AI search "${s.fanout}")` : ''}`,
     );
+    // Version 2's plan after it, with the brief rules on (briefForWriter).
+    const plan = briefForWriter(draftBrief, { links });
     return `Goal: ${draftBrief.goal || '—'}
 Audience: ${draftBrief.audience || '—'}
 Outline:
 ${list(sections)}
-Keywords: ${(draftBrief.keywords ?? []).join(', ') || '—'}`;
+Keywords: ${(draftBrief.keywords ?? []).join(', ') || '—'}${plan ? `\n${plan}` : ''}`;
   }
   if (opportunityBrief?.outline?.length) {
     const sections = opportunityBrief.outline.map(
@@ -338,7 +403,8 @@ async function organizationWriting(organizationId, draftId, staleBefore) {
  * that the agent isn't already on it or on another of the organization's
  * drafts, the AI usage budget and the model; marks it 'writing' and runs the
  * model in the background. Throws with `.status` 404 for a draft outside the
- * brand, 409 (code 'not_draft', 'writing' or 'org_writing'), PlanLimitError
+ * brand, 409 (code 'not_draft', 'writing', 'open_suggestions', 'running'
+ * or 'org_writing'), PlanLimitError
  * once the budget is spent, and the provider's error when the model isn't
  * set up — all before anything runs.
  */
@@ -346,7 +412,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      'id, brand_id, title, page_type, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id',
+      'id, brand_id, title, page_type, rules, method, source_url, body_html, status, agent_state, agent_state_at, opportunity_id, brief, action_id, shopping_path',
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -377,6 +443,17 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
     throw Object.assign(new Error('Decide the open suggestions first'), {
       status: 409,
       code: 'open_suggestions',
+    });
+  }
+  // A Fix open rules (or Quality's hand-off) still under way on the draft,
+  // maybe from another tab: a run beside it would make a model call of its
+  // own, charged, and its batch would land on a page this one changes. One at
+  // a time, as Fix open rules refuses beside a Start (content-agent.js). A
+  // live page's Start, which runs as a Fix too, is 'writing' above.
+  if (await fixUnderWay(draftId)) {
+    throw Object.assign(new Error('The agent is already fixing it'), {
+      status: 409,
+      code: 'running',
     });
   }
   if (rewrite) {
@@ -502,7 +579,9 @@ async function letGo(draft) {
  * leaves no page, fails the run. The draft's status doesn't change.
  */
 async function rewritePage({
+  attributable,
   draft,
+  shoppingPath,
   brand,
   model,
   input,
@@ -518,18 +597,22 @@ async function rewritePage({
   // The Length rule's target; with Length off, the page keeps its length.
   const length = ruleKeys.has('length') ? input.sources.length : textLength(draft.body_html);
   // Where it may link: the brand's pages and the draft's sources (A).
-  const targets = await readLinkTargets({
-    brandId: draft.brand_id,
-    draftId: draft.id,
-    sourceUrl: draft.source_url,
-    ruleKeys,
-  });
+  // …and its shopping path's shop pages (shopping path, part 4).
+  const targets = withShopping(
+    await readLinkTargets({
+      brandId: draft.brand_id,
+      draftId: draft.id,
+      sourceUrl: draft.source_url,
+      ruleKeys,
+    }),
+    shoppingPath,
+  );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({
       model,
       schema: rewriteSchema,
-      system: REWRITE_SYSTEM_PROMPT,
+      system: rewriteSystemPrompt(),
       prompt: buildWritePrompt({
         brand,
         draft,
@@ -543,14 +626,19 @@ async function rewritePage({
     }),
   );
   await budget.charge(usage);
+  if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
+  // Well past its Length: one more pass that only cuts.
+  const answer = ruleKeys.has('length')
+    ? await cutToLength({ answer: object, page, length, brand, draft, model, run })
+    : object;
   await advanceRun(run, 3);
 
-  if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   // No invented person or quote (CE-044): read in its words as written,
   // blockquotes too, before what it kept goes back, so the page's own
   // passages are never touched.
   const cleaned = cleanPageHtml(
-    guardPeopleInHtml(object.html, people).html,
+    // A claim given to a source it wasn't given: a placeholder, not the page dropped.
+    placeholderAttributionsInHtml(guardPeopleInHtml(answer.html, people).html, attributable),
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -575,7 +663,7 @@ async function rewritePage({
   await stopIfStopped(run);
   // The data it says it wrote from (CE-033).
   const { sources } = sourceSuggestion({
-    named: object.sources,
+    named: answer.sources,
     marks: [],
     pieces: [],
     numbered,
@@ -594,8 +682,13 @@ async function rewritePage({
     before_text: '',
     before_html: draft.body_html,
     after_text: html,
-    reason: clean(stripSourceIds(object.reason)).slice(0, 300) || 'Rewrote the page to the rules',
+    reason: clean(stripSourceIds(answer.reason)).slice(0, 300) || 'Rewrote the page to the rules',
     rule_keys: [...ruleKeys],
+    // What it was asked for and came to (00285): a Length it missed isn't
+    // offered again. With Length off, it was asked for none.
+    length_target: ruleKeys.has('length') ? length : null,
+    kept_chars: page.keptChars,
+    after_chars: textLength(html),
     ...(sources.length ? { sources } : {}),
   });
   if (insertError) throw insertError;
@@ -609,6 +702,85 @@ async function rewritePage({
     return await letGo(draft);
   }
   return { rewritten: true };
+}
+
+/**
+ * One more pass when a rewrite came well past its Length (CUT_PASS_OVER past
+ * its band's top): the model cuts its own page to the Length, keeping every
+ * heading with its answer, each kept line, the links and the facts. On its
+ * own hold on the budget, so a budget the first pass used up skips it. The
+ * cut is taken only when it is shorter and keeps every kept line; else, or
+ * when it fails, the first rewrite stands (logged). A stop goes through.
+ */
+async function cutToLength({ answer, page, length, brand, draft, model, run }) {
+  const total = ownText({ ...page, html: answer.html }) + page.keptChars;
+  const max = Math.round(length * (1 + LENGTH_TOLERANCE));
+  if (total <= max + length * CUT_PASS_OVER) return answer;
+  const budget = await reserveAiBudget(brand.organization_id, {
+    feature: 'content',
+    modelId: contentBriefModelId(),
+    draftId: draft.id,
+  }).catch((err) => {
+    logger.info(
+      { draftId: draft.id, code: err?.code },
+      '[content-writer] no budget to cut further',
+    );
+    return null;
+  });
+  if (!budget) return answer;
+  try {
+    const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
+      generateObject({
+        model,
+        schema: rewriteSchema,
+        system: rewriteSystemPrompt(),
+        prompt: cutPrompt({ html: answer.html, page, total, length, max }),
+        abortSignal,
+      }),
+    );
+    await budget.charge(usage);
+    const cut = isPageHtml(object.html)
+      ? ownText({ ...page, html: object.html }) + page.keptChars
+      : Infinity;
+    // Each kept line on its own, as restoreKept puts them back: one written
+    // into a paragraph would fail the whole run.
+    const keepsAll =
+      cut < Infinity &&
+      restoreKept(object.html, page.kept, { word: page.word, h1Token: page.h1Token }).missing
+        .length === 0;
+    if (cut >= total || !keepsAll) {
+      logger.info(
+        { draftId: draft.id, total, cut },
+        '[content-writer] the cut pass kept nothing shorter',
+      );
+      return answer;
+    }
+    // The first pass's data and reason: the cut had no data to name, only the page.
+    return { ...answer, html: object.html };
+  } catch (err) {
+    if (isStop(err, run)) throw err;
+    if (NoObjectGeneratedError.isInstance(err) && err.usage) await budget.charge(err.usage);
+    else await budget.release();
+    logger.warn(
+      { err: { name: err?.name, message: err?.message }, draftId: draft.id },
+      '[content-writer] the cut pass failed; the first rewrite stands',
+    );
+    return answer;
+  } finally {
+    // A stop before the call went out leaves the hold unused: it goes (a no-op once charged or kept).
+    await budget.release();
+  }
+}
+
+/** What the cut pass is told: its own page, how long it is and the Length to cut it to. */
+function cutPrompt({ html, page, total, length, max }) {
+  return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
+
+Cut repetition, filler, long examples and the least useful detail first. Keep the H1 and every heading, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts and any placeholders in square brackets. Add nothing new. Return the whole page.
+
+${html}
+
+Write in the page's own language.`;
 }
 
 /**
@@ -674,7 +846,8 @@ function startWritingRun(draft, input, rewrite) {
     claimedAt: draft.agent_state === 'writing' ? (draft.agent_state_at ?? null) : null,
     kind: rewrite ? 'rewrite' : draft.method === 'create' ? 'write' : 'fix',
     counts: {
-      rules: input.rules.length,
+      // As the editor counts them, so the step and its rules chip agree (editor test 2026-10-25).
+      rules: input.counted ?? input.rules.length,
       sources: promptIds.length + fanouts.length + pages.length + queries.length,
     },
   });
@@ -683,7 +856,7 @@ function startWritingRun(draft, input, rewrite) {
 /** The run itself, step by step: nothing is kept once it is stopped. */
 async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
   await advanceRun(run, 1);
-  const [prompts, inputRow, opportunityRes] = await Promise.all([
+  const [prompts, inputRow, opportunityRes, shoppingPath] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
     readDraftInputs(draft.id),
     draft.opportunity_id && !draft.brief
@@ -694,9 +867,20 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
           .eq('brand_id', draft.brand_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    // Its shopping path, checked: none when it isn't one (shopping path, part 4).
+    shoppingPathFor(draft),
   ]);
   if (opportunityRes.error) throw opportunityRes.error;
-  const brief = briefText(draft.brief, opportunityRes.data?.brief);
+  // A new page's writer has no links rule: the brief's planned links are left out for it.
+  const brief = briefText(draft.brief, opportunityRes.data?.brief, {
+    links: rewrite || draft.method !== 'create',
+  });
+  // What the brief gives the guards: never its addresses (a planned link's
+  // "/top-37-tools", "/interview-with-john-smith"), as sourceWords keeps a
+  // cited page's out.
+  const briefGiven = brief.replace(/https?:\/\/\S+/g, ' ');
+  // The shopping path's prices and names (shopping path, part 4): the catalog's, written unmarked.
+  const shopping = shoppingGiven(shoppingPath);
   // The data it writes from, numbered (CE-033), Brief › Your input last
   // (CE-048); the numbers a suggestion may write unmarked (the page's, the
   // brand's, the brief's, the rules', today's), and those a page written
@@ -708,35 +892,55 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     queries: input.sources.queries,
     inputs: inputSources(inputRow, brand.name),
   });
-  const known = knownNumbers(
-    htmlText(draft.body_html),
-    draft.title,
-    brand.name,
-    brand.industry,
-    brand.description,
-    brief,
-    ...input.rules.flatMap((r) => [r.name, r.detail]),
-    ...input.textRules,
-    todayText(),
+  const known = withNamedNumbers(
+    knownNumbers(
+      htmlText(draft.body_html),
+      draft.title,
+      brand.name,
+      brand.industry,
+      brand.description,
+      briefGiven,
+      shopping.prices,
+      ...input.rules.flatMap((r) => [r.name, r.detail]),
+      ...input.textRules,
+      todayText(),
+    ),
+    shopping.names,
   );
-  const knownInPage = new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]);
+  const knownInPage = withNamedNumbers(
+    new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]),
+    shopping.names,
+  );
   // The people and quotes it may name: the same words, its data's and the authors' (CE-044).
+  const authors = await authorWords(supabaseAdmin, brand.organization_id);
   const people = knownPeople(
     htmlText(draft.body_html),
     draft.title,
     brand.name,
     brand.industry,
     brand.description,
-    brief,
+    briefGiven,
+    ...shopping.names,
     ...input.rules.flatMap((r) => [r.name, r.detail]),
     ...input.textRules,
     ...numbered.map(sourceWords),
-    ...(await authorWords(supabaseAdmin, brand.organization_id)),
+    ...authors,
+  );
+  // The sources a claim may be given to: the ones the page gives claims to,
+  // its Your input and authors (editor test 2026-10-25).
+  const attributable = attributableSources(
+    draft.body_html,
+    numbered,
+    authors,
+    await draftLanguage(draft, brand),
+    [brand.name],
   );
 
   if (rewrite) {
     return await rewritePage({
+      attributable,
       draft,
+      shoppingPath,
       brand,
       model,
       input,
@@ -755,8 +959,15 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       generateObject({
         model,
         schema: pageSchema,
-        system: WRITE_SYSTEM_PROMPT,
-        prompt: buildWritePrompt({ brand, draft, numbered, brief, input }),
+        system: writeSystemPrompt(),
+        prompt: buildWritePrompt({
+          brand,
+          draft,
+          numbered,
+          brief,
+          input,
+          linkTargets: shoppingPrompt(shoppingPath),
+        }),
         abortSignal,
       }),
     );
@@ -780,7 +991,12 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       draft,
       {
         title,
-        body_html: renderPage({ ...written, title }),
+        // The shopping path's names it wrote, linked (shopping-links.js), and
+        // its products as a grid where the page names them most (shopping-blocks.js).
+        body_html: insertProductGrid(
+          linkShoppingPath(renderPage({ ...written, title }), shoppingPath).html,
+          shoppingPath && { ...shoppingPath, pageType: draft.page_type },
+        ),
         status: 'in_review',
         author: 'agent',
         agent_state: null,
@@ -796,18 +1012,22 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // Where it may link: the brand's pages and the draft's sources (A).
-  const targets = await readLinkTargets({
-    brandId: draft.brand_id,
-    draftId: draft.id,
-    sourceUrl: draft.source_url,
-    ruleKeys,
-  });
+  // …and its shopping path's shop pages (shopping path, part 4).
+  const targets = withShopping(
+    await readLinkTargets({
+      brandId: draft.brand_id,
+      draftId: draft.id,
+      sourceUrl: draft.source_url,
+      ruleKeys,
+    }),
+    shoppingPath,
+  );
   await advanceRun(run, 2);
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({
       model,
       schema: suggestionsSchema,
-      system: SUGGEST_SYSTEM_PROMPT,
+      system: suggestSystemPrompt(),
       prompt: buildWritePrompt({
         brand,
         draft,
@@ -830,7 +1050,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     lockedKeys,
     ruleKeys,
     linkAllowList(targets),
-    { numbered, known, people },
+    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules) },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);

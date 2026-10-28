@@ -21,8 +21,10 @@ import {
   sendPagesToCms,
   type CmsDelivery,
   type CmsSendError,
+  type CmsTarget,
 } from '@/lib/content/cms-send-client';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
+import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from '@/components/content/cms-target';
 import { readCmsSources } from './_cms-sources';
 
 /** How often the sends going on in the background are read. */
@@ -64,6 +66,8 @@ interface Refusal {
   code: CmsSendError;
   field: string | null;
   title: string | null;
+  /** Where the pages were going. */
+  target: CmsTarget;
 }
 
 type Phase =
@@ -109,6 +113,20 @@ export function BulkSendDialog({
   // Why a request was refused; with the page its `pages.N` named, when it named one.
   const [failure, setFailure] = useState<Refusal | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const {
+    webflow,
+    wordpress,
+    target,
+    pick,
+    sent: keepTarget,
+    unchecked: targetUnchecked,
+    reading: targetReading,
+    retry: retryTarget,
+  } = useCmsTarget(brandId);
+  const collection = webflow?.ready
+    ? webflow.collection || tEditor('send.target.webflow.collection')
+    : '';
+  const site = wordpress?.ready ? wordpress.site : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +203,7 @@ export function BulkSendDialog({
   }, []);
 
   const send = async () => {
+    if (!target) return;
     setPhase({ kind: 'sending' });
     setFailure(null);
     const made = new Map<string, CmsDelivery>();
@@ -207,7 +226,7 @@ export function BulkSendDialog({
         notSent += group.length;
         continue;
       }
-      const result = await sendPagesToCms(brandId, group);
+      const result = await sendPagesToCms(brandId, group, target);
       if (!result.ok) {
         // The page a refusal names ("pages.2.html"), as the group's own.
         const index = Number(/^pages\.(\d+)\./.exec(result.field ?? '')?.[1] ?? NaN);
@@ -215,6 +234,7 @@ export function BulkSendDialog({
           code: result.code,
           field: result.field,
           title: Number.isInteger(index) ? (group[index]?.title ?? null) : null,
+          target,
         };
         notSent += group.length;
         continue;
@@ -266,6 +286,7 @@ export function BulkSendDialog({
       setPhase({ kind: 'ready' });
       return;
     }
+    keepTarget(target);
     const left = [...made.values()].some((d) => d.status === 'queued');
     setPhase(
       left && !waitedOut
@@ -274,7 +295,7 @@ export function BulkSendDialog({
     );
   };
 
-  const failureText = ({ code, field, title }: Refusal) => {
+  const failureText = ({ code, field, title, target: to }: Refusal) => {
     if (code === 'session' || code === 'workspace' || code === 'busy') return tFailure(code);
     // A page archived or deleted since the dialog read it.
     if (code === 'not_found') return t('notFound');
@@ -283,6 +304,13 @@ export function BulkSendDialog({
       return title
         ? t('invalidPage', { title, field: named })
         : tEditor('send.errors.invalidField', { field: named });
+    }
+    // No page named: any of them may be the one on its way.
+    if (code === 'in_progress') return t(to === 'wordpress' ? 'inProgressWordPress' : 'inProgress');
+    // No CMS ready sent the pages to the webhook: what to fix is the one connected.
+    if (code === 'no_webhook' && !webflow?.ready && !wordpress?.ready) {
+      if (webflow) return tEditor('send.errors.no_webhookWebflow');
+      if (wordpress) return tEditor('send.errors.no_webhookWordPress');
     }
     return tEditor(`send.errors.${code}`);
   };
@@ -303,8 +331,38 @@ export function BulkSendDialog({
           <DialogTitle>
             {t('title', { count: phase.kind === 'reading' ? drafts.length : items.length })}
           </DialogTitle>
-          <DialogDescription>{t('description')}</DialogDescription>
+          <DialogDescription>
+            {!target
+              ? tEditor('send.descriptionReading')
+              : target === 'webflow'
+                ? t('descriptionWebflow', { collection })
+                : target === 'wordpress'
+                  ? t('descriptionWordPress', { site })
+                  : t('description')}
+          </DialogDescription>
         </DialogHeader>
+
+        {/* Where the pages go, before they go: Webflow or WordPress once Settings has it ready. */}
+        {(webflow || wordpress) && target && !after && (
+          <CmsTargetPicker
+            value={target}
+            webflow={webflow}
+            wordpress={wordpress}
+            disabled={phase.kind === 'sending'}
+            onChange={(next) => {
+              pick(next);
+              setFailure(null);
+            }}
+          />
+        )}
+        {targetUnchecked && !after && (
+          <CmsTargetUnchecked
+            target={targetUnchecked}
+            reading={targetReading}
+            onRetry={retryTarget}
+            disabled={phase.kind === 'sending'}
+          />
+        )}
 
         {phase.kind === 'reading' ? (
           <div className="flex items-center justify-center py-8" aria-busy="true">
@@ -387,7 +445,7 @@ export function BulkSendDialog({
               <Button variant="outline" disabled={phase.kind === 'sending'} onClick={onClose}>
                 {t('cancel')}
               </Button>
-              <Button disabled={busy || ready.length === 0} onClick={() => void send()}>
+              <Button disabled={busy || ready.length === 0 || !target} onClick={() => void send()}>
                 {phase.kind === 'sending' && <LoadingDots className="mr-1" />}
                 {phase.kind === 'sending' ? t('sending') : t('send', { count: ready.length })}
               </Button>

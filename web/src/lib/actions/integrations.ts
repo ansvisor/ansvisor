@@ -4,7 +4,10 @@ import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 
 /** Providers that expose the shared connect / status / disconnect flow. */
-export type IntegrationProvider = 'google-search-console' | 'google-analytics';
+export type IntegrationProvider =
+  | 'google-search-console'
+  | 'google-analytics'
+  | 'google-merchant-center';
 
 export type IntegrationStatus = 'not_configured' | 'not_connected' | 'connected';
 

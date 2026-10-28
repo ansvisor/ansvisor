@@ -3,23 +3,55 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Loader2, Package, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { KeyRound, Loader2, Package, RefreshCw, Store, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserRole } from '@/hooks/use-user-role';
 import { addFeedSource, listCatalogSources, removeCatalogSource } from '@/lib/actions/catalog';
-import type { CatalogSource } from '@/lib/catalog';
-import { syncCatalogSource, uploadCatalogFile, type CatalogSyncResult } from '@/lib/catalog-client';
+import { isStoreSource, SIGN_IN_PLATFORM_LABELS, type CatalogSource } from '@/lib/catalog';
+import {
+  connectStore,
+  listStoreConnectors,
+  removeStore,
+  syncCatalogSource,
+  updateStoreSignIn,
+  uploadCatalogFile,
+  type CatalogSyncResult,
+  type SignInConnector,
+  type StoreConnector,
+  type StoreResult,
+} from '@/lib/catalog-client';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { StoreSignInForm } from './catalog-store-form';
+
+/** A brand's sources as the card read them: null when they couldn't be read. */
+export interface CatalogSourcesRead {
+  brandId: string;
+  sources: CatalogSource[] | null;
+}
 
 /**
  * Product catalog (#1263): where the active brand's catalog comes from, a
- * product feed URL read daily, or a CSV / feed file uploaded. Admins and
- * managers add, sync and remove; members see the sources and how they went.
+ * product feed URL read daily, a CSV / feed file uploaded, or a store
+ * connected with its sign-in (00282), as the API's connectors offer them.
+ * A Google Merchant Center account (#1270) is added above, under its
+ * Integrations card, and listed here with how many of its products
+ * Merchant Center reports issues for. Admins and managers add, sync and
+ * remove; members see the sources and how they went.
+ *
+ * `refreshKey`: changed by the page to read the sources again (an account
+ * added elsewhere). `onSources` hears each read, for the Merchant Center
+ * picker to mark the accounts the brand has already.
  */
-export function CatalogSourcesCard() {
+export function CatalogSourcesCard({
+  refreshKey = 0,
+  onSources,
+}: {
+  refreshKey?: number;
+  onSources?: (read: CatalogSourcesRead | null) => void;
+}) {
   const t = useTranslations('settings.catalog');
   const format = useFormatter();
   const { activeBrandId, brands } = useBrandStore();
@@ -36,6 +68,27 @@ export function CatalogSourcesCard() {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  // The stores the API can connect; null until read, or when it can't be.
+  const [stores, setStores] = useState<{
+    connectors: StoreConnector[];
+    ready: boolean;
+    signIns: SignInConnector[];
+  } | null>(null);
+  // The store being connected (its kind), or the store whose sign-in is being replaced (its id).
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listStoreConnectors().then((list) => {
+      if (!cancelled) setStores(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const connectorOf = (kind: string) => stores?.connectors.find((c) => c.kind === kind) ?? null;
+  const signInOf = (kind: string) => stores?.signIns.find((c) => c.kind === kind) ?? null;
 
   // Bumped to read the sources again, after a sync, an add or a removal.
   const [reads, setReads] = useState(0);
@@ -56,9 +109,12 @@ export function CatalogSourcesCard() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, reads]);
+  }, [activeBrandId, reads, refreshKey]);
 
   const current = loaded?.brandId === activeBrandId ? loaded : null;
+  useEffect(() => {
+    onSources?.(current);
+  }, [current, onSources]);
   const sources = current?.sources ?? null;
   const failed = current !== null && current.sources === null;
   const now = current?.at ?? new Date();
@@ -93,16 +149,65 @@ export function CatalogSourcesCard() {
     setBusy(null);
   };
 
-  const remove = async (id: string) => {
+  const remove = async (source: CatalogSource) => {
     if (!window.confirm(t('removeConfirm'))) return;
-    setBusy(id);
-    try {
-      await removeCatalogSource(id);
+    setBusy(source.id);
+    if (isStoreSource(source.kind)) {
+      // A store goes through the API, which holds its sign-in.
+      const removed = await removeStore(source.id);
+      if (!removed.ok) toast.error(t(`stores.errors.${removed.code}`));
       load();
-    } catch {
-      toast.error(t('errors.forbidden'));
+    } else {
+      try {
+        await removeCatalogSource(source.id);
+        load();
+      } catch {
+        toast.error(t('errors.forbidden'));
+      }
     }
     setBusy(null);
+  };
+
+  /** Says how a store call went, then reads the sources again. */
+  const reportStore = (result: StoreResult, success: string) => {
+    if (!result.ok) toast.error(result.message ?? t(`stores.errors.${result.code}`));
+    else toast.success(success);
+    load();
+    return result.ok;
+  };
+
+  const connect = async (connector: StoreConnector, input: Record<string, string>) => {
+    if (!activeBrandId) return;
+    setBusy('connect');
+    const ok = reportStore(
+      await connectStore(activeBrandId, connector.kind, input),
+      t('stores.connected', { store: connector.label }),
+    );
+    if (ok) setConnecting(null);
+    setBusy(null);
+  };
+
+  const signIn = async (source: CatalogSource, input: Record<string, string>) => {
+    setBusy(source.id);
+    const ok = reportStore(await updateStoreSignIn(source.id, input), t('stores.updated'));
+    if (ok) setSigningIn(null);
+    setBusy(null);
+  };
+
+  /** How a source is named in its row: a feed by its address, a store by its name and account. */
+  const nameOf = (source: CatalogSource) => {
+    if (source.kind === 'feed_url') return source.url;
+    if (source.kind === 'upload') return t('upload');
+    // A sign-in platform's account by its name and id ("Google Merchant Center · Acme (123)"),
+    // named by the platform even before (or without) the API's connectors.
+    const signIn = signInOf(source.kind)?.label ?? SIGN_IN_PLATFORM_LABELS[source.kind];
+    if (signIn) {
+      const account =
+        source.label && source.account ? `${source.label} (${source.account})` : source.account;
+      return account ? `${signIn} · ${account}` : signIn;
+    }
+    const platform = connectorOf(source.kind)?.label ?? source.label ?? source.kind;
+    return source.account ? `${platform} · ${source.account}` : platform;
   };
 
   const upload = async (file: File | undefined) => {
@@ -145,13 +250,25 @@ export function CatalogSourcesCard() {
                         className="min-w-0 truncate font-medium"
                         title={source.url ?? undefined}
                       >
-                        {source.kind === 'feed_url' ? source.url : t('upload')}
+                        {nameOf(source)}
                       </span>
                       <div className="flex items-center gap-2">
                         <Badge variant={source.lastStatus === 'ok' ? 'secondary' : 'outline'}>
                           {source.lastStatus ? t(`status.${source.lastStatus}`) : t('status.never')}
                         </Badge>
-                        {canManage && source.kind === 'feed_url' && (
+                        {canManage && isStoreSource(source.kind) && connectorOf(source.kind) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy !== null}
+                            onClick={() => setSigningIn(signingIn === source.id ? null : source.id)}
+                            aria-label={t('stores.update')}
+                            aria-expanded={signingIn === source.id}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canManage && source.kind !== 'upload' && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -171,7 +288,7 @@ export function CatalogSourcesCard() {
                             size="sm"
                             variant="ghost"
                             disabled={busy !== null}
-                            onClick={() => remove(source.id)}
+                            onClick={() => remove(source)}
                             aria-label={t('remove')}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -181,6 +298,10 @@ export function CatalogSourcesCard() {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {t('products', { count: source.products })}
+                      {(source.lastCounts?.issues?.items ?? 0) > 0 &&
+                        ` · ${t('issues', { count: source.lastCounts!.issues!.items })}`}
+                      {(source.lastCounts?.repeated ?? 0) > 0 &&
+                        ` · ${t('repeated', { count: source.lastCounts!.repeated! })}`}
                       {source.lastSyncedAt &&
                         ` · ${t('lastSync', { when: format.relativeTime(new Date(source.lastSyncedAt), now) })}`}
                     </p>
@@ -198,6 +319,15 @@ export function CatalogSourcesCard() {
                           ))}
                         </ul>
                       </details>
+                    )}
+                    {signingIn === source.id && connectorOf(source.kind) && (
+                      <StoreSignInForm
+                        connector={connectorOf(source.kind)!}
+                        submitLabel={t('stores.save')}
+                        busy={busy === source.id}
+                        onSubmit={(input) => void signIn(source, input)}
+                        onCancel={() => setSigningIn(null)}
+                      />
                     )}
                   </li>
                 ))}
@@ -251,6 +381,45 @@ export function CatalogSourcesCard() {
                   </Button>
                   <span className="text-xs text-muted-foreground">{t('uploadHint')}</span>
                 </div>
+                {stores && stores.connectors.length > 0 && (
+                  <div className="space-y-2 border-t pt-3">
+                    <p className="text-sm font-medium">{t('stores.title')}</p>
+                    {stores.ready ? (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          {stores.connectors.map((connector) => (
+                            <Button
+                              key={connector.kind}
+                              type="button"
+                              variant={connecting === connector.kind ? 'secondary' : 'outline'}
+                              size="sm"
+                              disabled={busy !== null}
+                              aria-expanded={connecting === connector.kind}
+                              onClick={() =>
+                                setConnecting(connecting === connector.kind ? null : connector.kind)
+                              }
+                            >
+                              <Store className="mr-2 h-4 w-4" />
+                              {t('stores.connect', { store: connector.label })}
+                            </Button>
+                          ))}
+                        </div>
+                        {connecting && connectorOf(connecting) && (
+                          <StoreSignInForm
+                            key={connecting}
+                            connector={connectorOf(connecting)!}
+                            submitLabel={t('stores.submit')}
+                            busy={busy === 'connect'}
+                            onSubmit={(input) => void connect(connectorOf(connecting)!, input)}
+                            onCancel={() => setConnecting(null)}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{t('stores.notConfigured')}</p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">{t('managersOnly')}</p>

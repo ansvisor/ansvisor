@@ -4,6 +4,7 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import { Mapping } from '@tiptap/pm/transform';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { passageKey } from '@/lib/content/cited-passages';
+import { LEAST_ANSWER, LEAST_SUMMARY } from '@/lib/content/rules';
 
 /**
  * Locked passages in the editor (CE-018): a passage AI answers quote today
@@ -187,6 +188,99 @@ export function keptCharacters(state: EditorState): number {
     if (keep) kept += block.textBetween(0, block.content.size, undefined, ' ').length;
   });
   return kept;
+}
+
+/**
+ * The least a page rewrite comes to, for Length's reach (rules.ts
+ * RewriteReach): what it keeps (keptCharacters), each heading (a rewrite
+ * keeps the sections, content-rewrite.js), and, at their least, an answer
+ * under each heading (it answers each first) and a summary under the H1
+ * (when the rules ask for one) where no kept passage stands there already.
+ * Low on purpose, so a Length called out of reach really is.
+ */
+export function rewriteFloor(
+  state: EditorState,
+  { summary }: { summary: boolean },
+): { kept: number; floor: number } {
+  const locks = citedLocks(state);
+  let kept = 0;
+  let floor = 0;
+  // The section open now: under a heading (its level), or the H1's summary;
+  // null before the H1. `empty` until a block stands under it.
+  let section: { level: number; least: number; answered: boolean; empty: boolean } | null = null;
+  const close = (next: number) => {
+    // A heading that only groups the deeper ones under it (an H2 over H3s)
+    // needs no answer of its own.
+    const grouping = section && section.empty && section.level > 1 && next > section.level;
+    if (section && !section.answered && !grouping) floor += section.least;
+  };
+  state.doc.forEach((block) => {
+    const text = () => block.textBetween(0, block.content.size, undefined, ' ').length;
+    const locked = block.isTextblock && isLocked(blockKey(block), locks);
+    if (block.type.name === 'heading') {
+      const level = Number(block.attrs.level);
+      close(level);
+      if (locked) kept += text();
+      else floor += text();
+      section =
+        level === 1
+          ? { level, least: summary ? LEAST_SUMMARY : 0, answered: !summary, empty: true }
+          : { level, least: LEAST_ANSWER, answered: false, empty: true };
+      return;
+    }
+    // An empty paragraph between an H2 and its H3s doesn't make it a section of its own.
+    if (section && (!block.isTextblock || block.textContent.trim())) section.empty = false;
+    let keep = KEPT_NODES.has(block.type.name) || locked;
+    // A quoted passage stands as the answer, in a list or a quote too; a
+    // table or an image alone doesn't.
+    let answers = locked;
+    block.descendants((node) => {
+      if (node.type.name === 'image' || node.type.name === 'table') keep = true;
+      else if (node.isTextblock && isLocked(blockKey(node), locks)) keep = answers = true;
+      return !answers;
+    });
+    if (!keep) return;
+    kept += text();
+    if (answers && section) section.answered = true;
+  });
+  close(0);
+  return { kept, floor: kept + floor };
+}
+
+/** The keys of the quoted passages still locked (not unlocked by the person), sorted. */
+export function lockedKeysLeft(state: EditorState): string[] {
+  const locks = citedLocks(state);
+  return [...locks.labels.keys()].filter((key) => !locks.unlocked.has(key)).sort();
+}
+
+/**
+ * The page's HTML without the passages it keeps locked (their blocks, by
+ * the key their words make): what the agent may change, for a rule read as
+ * the rules read the page (readPage), so a rule met without them is held by
+ * them alone.
+ */
+export function htmlWithoutLocked(html: string, keys: ReadonlySet<string>): string {
+  if (!keys.size) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const el of doc.body.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6')) {
+    if (keys.has(passageKey(el.textContent ?? ''))) el.remove();
+  }
+  return doc.body.innerHTML;
+}
+
+/** The quoted passages a rewrite keeps now (locked, not unlocked): how many, and their characters. */
+export function lockedPassagesLeft(state: EditorState): { count: number; chars: number } {
+  const locks = citedLocks(state);
+  let count = 0;
+  let chars = 0;
+  state.doc.descendants((node) => {
+    if (node.isTextblock && isLocked(blockKey(node), locks)) {
+      count += 1;
+      chars += node.textContent.length;
+    }
+    return !node.isTextblock;
+  });
+  return { count, chars };
 }
 
 /** How many quoted passages the page has now (the marks the plugin keeps). */

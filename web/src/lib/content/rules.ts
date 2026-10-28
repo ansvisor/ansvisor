@@ -3,9 +3,17 @@ import { LANGUAGES } from '@/config/prompt-options';
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/drafts';
 import { lengthTarget } from '@/lib/content/editor';
+import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
+import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
+import {
+  shoppingLinks,
+  type ShoppingCheck,
+  type ShoppingLinkState,
+} from '@/lib/content/shopping-check';
+import { PRODUCTS_FOR } from '@/lib/content/shopping-path';
 
 /**
  * The editor's Rules tab (Content Editor CE-009, spec §10): the rules a page
@@ -257,16 +265,46 @@ export function languageRuleValue(code: string | null | undefined): string {
 }
 
 /**
+ * A shopping path's rules (shopping path, part 6), on an online shop's page
+ * that takes one: it links its category page, enough of its products, and
+ * none that no longer sells.
+ */
+const SHOPPING_RULES: RuleDef[] = [
+  { key: 'shopCategoryLink', group: 'links', kind: 'switch', value: '', check: 'page' },
+  {
+    key: 'shopProductLinks',
+    group: 'links',
+    kind: 'number',
+    value: '3',
+    unit: 'links',
+    check: 'page',
+  },
+  { key: 'shopLinksLive', group: 'links', kind: 'switch', value: '', check: 'page' },
+];
+
+/** The Shopping rules' keys: checked against the shopping path (shoppingStatus). */
+export const SHOPPING_RULE_KEYS: ReadonlySet<string> = new Set(SHOPPING_RULES.map((r) => r.key));
+
+/**
  * The rules of a set: the type's own, then the shared groups, with the
- * type's length, or the page's own when it was brought in to optimize.
+ * type's length, or the page's own when it was brought in to optimize; and
+ * a shopping path's on an online shop's page that takes one (`shopping`).
  */
 export function ruleSet(
   pageType: PageType | null,
-  defaults: { keywords?: string[]; language?: string | null; length?: number | null } = {},
+  defaults: {
+    keywords?: string[];
+    language?: string | null;
+    length?: number | null;
+    shopping?: boolean;
+  } = {},
 ): RuleDef[] {
   const own = (pageType && TYPE_RULES[pageType]) || [];
+  const shopping =
+    defaults.shopping && pageType && Object.hasOwn(PRODUCTS_FOR, pageType) ? SHOPPING_RULES : [];
   return [
     ...own,
+    ...shopping,
     ...SHARED_RULES.map((rule) => {
       if (rule.key === 'length') {
         return { ...rule, value: String(defaults.length ?? lengthTarget(pageType)) };
@@ -529,6 +567,12 @@ export interface PageRead {
   characters: number;
   /** H1s with words inside the page's HTML blocks. */
   htmlBlockH1s?: number;
+  /**
+   * Every link on the page, each once: in any block (a heading's, a table's
+   * too) and inside its HTML blocks (a product card or grid's). What the
+   * Shopping rules and Before you publish read (shopping path).
+   */
+  links?: string[];
 }
 
 const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
@@ -554,6 +598,11 @@ export function readPage(html: string, characters: number): PageRead {
   // An HTML block's H1s are the page's too (One H1 per page): the editor
   // doesn't rewrite them, so the rule says so.
   let htmlBlockH1s = 0;
+  // Every link, whatever block holds it, an HTML block's too: a product
+  // card's or grid's counts for the Shopping rules.
+  const links = new Set(
+    [...doc.body.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? ''),
+  );
   for (const el of doc.body.querySelectorAll('[data-html-block]')) {
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (!inner) continue;
@@ -561,6 +610,7 @@ export function readPage(html: string, characters: number): PageRead {
     htmlBlockH1s += [...block.body.querySelectorAll('h1')].filter((h) =>
       h.textContent?.trim(),
     ).length;
+    for (const a of block.body.querySelectorAll('a[href]')) links.add(a.getAttribute('href') ?? '');
   }
   return {
     blocks,
@@ -570,6 +620,7 @@ export function readPage(html: string, characters: number): PageRead {
       .join(' '),
     characters,
     htmlBlockH1s,
+    links: [...links].filter((href) => href.trim()),
   };
 }
 
@@ -582,7 +633,13 @@ const isQuestion = (b: PageBlock) => b.text.trim().endsWith('?');
 /** A rule's status: met, not met (with what's missing), or one the page can't say. */
 export type RuleStatus =
   | { state: 'ok' }
-  | { state: 'bad'; code: 'over' | 'found'; count: number }
+  | {
+      state: 'bad';
+      code: 'over' | 'found';
+      count: number;
+      /** The linked products that no longer sell, by name and why (shopLinksLive). */
+      items?: { title: string; state: ShoppingLinkState }[];
+    }
   | {
       state: 'bad';
       code: 'partOf';
@@ -595,6 +652,8 @@ export type RuleStatus =
   /** Out of the Length rule's band, as it reads (lengthBand). */
   | { state: 'bad'; code: 'short' | 'long'; count: number; min: number; max: number }
   | { state: 'bad'; code: 'words'; count: number }
+  /** The page's price, GTIN or stock differs from its product's in the feed (CE-053). */
+  | { state: 'bad'; code: 'feedDiffers'; count: number }
   | { state: 'bad'; code: 'missing' | 'noH2' | 'notSet' }
   /** No FAQ yet: the fan-outs its questions should use, the most searched first. */
   | { state: 'bad'; code: 'needsFaq'; missing?: string[] }
@@ -603,11 +662,18 @@ export type RuleStatus =
       code:
         | 'aiCheck'
         | 'needsFeed'
+        | 'feedReading'
+        | 'notInFeed'
+        | 'feedNothing'
         | 'noFanouts'
         | 'addKeywords'
         | 'notHowTo'
         | 'englishOnly'
-        | 'noSizes';
+        | 'noSizes'
+        /** No shopping path yet, it's being read, or it couldn't be (shopping path, part 6). */
+        | 'noShoppingPath'
+        | 'shoppingReading'
+        | 'shoppingFailed';
     };
 
 export interface RuleContext {
@@ -617,6 +683,18 @@ export interface RuleContext {
   fanouts: string[];
   /** The brand's language (brands.language); none reads as English. */
   language?: string | null;
+  /**
+   * The page's product in the brand's catalog (getCatalogMatch, Quality
+   * CE-053), for "Price, GTIN and stock match the feed": 'reading' while it
+   * is read; none where the feed isn't checked (before Phase 3, other types).
+   */
+  catalog?: CatalogMatch | 'reading' | null;
+  /**
+   * The page's shopping path read against the catalog now (shopping-check.ts),
+   * for the Shopping rules: 'reading' while it is read, 'failed' when it
+   * couldn't be; none without a path.
+   */
+  shopping?: ShoppingCheck | 'reading' | 'failed' | null;
 }
 
 /** Phrases that read as machine-written (spec §10, "Remove AI traces"). */
@@ -748,9 +826,22 @@ const atLeast = (have: number, want: number): RuleStatus =>
 
 /**
  * Rules the Content Agent can't fix: it changes words and adds blocks, never
- * a heading's level, so a page's extra H1s are made H2s in the editor.
+ * a heading's level, so a page's extra H1s are made H2s in the editor; a
+ * price, GTIN or stock that differs from the feed is the person's to check
+ * (the page or the feed may be the one that's wrong); a linked product that
+ * no longer sells is the person's to remove or replace.
  */
-export const NOT_FOR_AGENT = new Set(['oneH1']);
+export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch', 'shopLinksLive']);
+
+/**
+ * What to do instead, for the open rules the agent doesn't fix: its
+ * message's key, the extra H1s' first, then the feed's.
+ */
+export const notForAgentMessage = (open: readonly { rule: { key: string } }[]) => {
+  const has = (key: string) => open.some(({ rule }) => rule.key === key);
+  if (has('oneH1')) return 'notForAgent';
+  return has('shopLinksLive') && !has('feedMatch') ? 'notForAgentShopping' : 'notForAgentFeed';
+};
 
 /**
  * The fan-outs a rule still needs (fanoutH2, fanoutFaq), quoted for the
@@ -773,20 +864,62 @@ export function fanoutsToUse(status: RuleStatus, max = 300): string | null {
 
 /**
  * The rules on that the page doesn't meet (of `only`, when given): the ones
- * the Content Agent is asked to fix, and those it can't.
+ * the Content Agent is asked to fix, those it never fixes, and those `held`
+ * on this page by what it keeps word for word (editor test 2026-10-25: long
+ * sentences all inside passages AI answers quote, a Length out of a
+ * rewrite's reach), which are the person's to decide.
  */
 export function openRulesForAgent<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
   only?: string[],
-): { forAgent: T[]; notForAgent: T[] } {
+  held: ReadonlySet<string> = NO_HELD,
+): { forAgent: T[]; notForAgent: T[]; held: T[] } {
   const open = rules.filter(
     ({ rule, status }) => rule.on && status.state === 'bad' && (!only || only.includes(rule.key)),
   );
   return {
-    forAgent: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key)),
+    forAgent: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key) && !held.has(rule.key)),
     notForAgent: open.filter(({ rule }) => NOT_FOR_AGENT.has(rule.key)),
+    held: open.filter(({ rule }) => !NOT_FOR_AGENT.has(rule.key) && held.has(rule.key)),
   };
 }
+
+/** No rule held by what the page keeps. */
+export const NO_HELD: ReadonlySet<string> = new Set();
+
+/**
+ * A page past its Length when a Fix run doesn't send the Length rule (held
+ * for the person, or not picked; a hand-off sends none: editor test
+ * 2026-10-26): its characters and the most it may have, so what the agent
+ * adds for the other rules stays short. Undefined with Length off, within
+ * it, sent, or a Length of 0.
+ */
+export function overLengthFor<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  sent: readonly { rule: ActiveRule }[],
+): { count: number; max: number } | undefined {
+  const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
+  if (!length || sent.some(({ rule }) => rule.key === 'length')) return undefined;
+  const { status } = length;
+  // A Length of 0 reads every page as long, at most 0: nothing to say.
+  return status.state === 'bad' && 'code' in status && status.code === 'long' && status.max >= 1
+    ? { count: status.count, max: status.max }
+    : undefined;
+}
+
+/**
+ * What to say when only held rules are left for the agent: the quoted
+ * passages' (a sentence in one), else the Length's, out of a rewrite's reach.
+ */
+export const heldMessage = (held: readonly { rule: { key: string } }[]) =>
+  held.some(({ rule }) => rule.key === 'sentence') ? 'heldAll' : 'heldLength';
+
+/** A rule read with nothing of the brand's: for checks that read only the page. */
+export const NO_RULE_CONTEXT: RuleContext = {
+  brandDomains: [],
+  competitorDomains: [],
+  fanouts: [],
+};
 
 /** How far off its Length a page may be before Rewrite the page to these rules is recommended. */
 export const REWRITE_LENGTH_OFF = 0.3;
@@ -795,12 +928,36 @@ export const REWRITE_OPEN_RULES = 4;
 /** The most text a page sent whole may hold (content-rewrite.js MAX_REWRITE_CHARS). */
 export const REWRITE_MAX_CHARS = 60_000;
 
+/** The page's last rewrite, as the API keeps it (00285). */
+export interface LastRewrite {
+  /** The characters it came to (the editor counts its page again, as its toolbar does). */
+  chars: number;
+  /** The Length it was written to; null with Length off. */
+  target: number | null;
+  /** The characters it kept word for word. */
+  kept: number;
+}
+
 /**
- * A Length out of a rewrite's reach: what a rewrite keeps as it is (the
- * passages AI answers quote, tables, images, quotes, HTML blocks, the
- * server's keepBlocks) is this share of it or more.
+ * What a page rewrite can't go under, and what the last one came to: a
+ * Length under either is out of its reach (editor test 2026-10-25, where a
+ * page kept 78% of its Length and three rewrites never got there).
  */
-export const KEPT_LENGTH_SHARE = 0.85;
+export interface RewriteReach {
+  /** The characters it keeps as they are (the passages AI answers quote, tables, images…). */
+  kept: number;
+  /**
+   * The least a rewrite that keeps them comes to: those, the headings, and
+   * the least answer under each heading and summary under the H1 where
+   * nothing kept stands (rewriteFloor in the editor). Kept low on purpose.
+   */
+  floor: number;
+  /** The page's last rewrite, or null for none (or one made before 00285). */
+  last: LastRewrite | null;
+}
+
+/** Nothing known about what a rewrite keeps or reached: every Length is in reach. */
+export const NO_REACH: RewriteReach = { kept: 0, floor: 0, last: null };
 
 /** A long page whose Length a rewrite can't reach, and a Length it could. */
 export interface LengthOutOfReach {
@@ -808,18 +965,62 @@ export interface LengthOutOfReach {
   target: number;
   /** The characters a rewrite keeps as they are. */
   kept: number;
-  /** A Length with room for the kept blocks and the words around them, to the 500. */
+  /** Why: the least a rewrite comes to is past the Length, or the last rewrite came to `least`. */
+  why: 'floor' | 'reached';
+  /** The least a rewrite comes to: the estimate, or what the last one came to, the more. */
+  least: number;
+  /** A Length the page can be rewritten to: that, up to the 500. */
   suggested: number;
 }
 
 /**
- * Whether the page is over its Length by more than a rewrite could take out:
- * the blocks it keeps are KEPT_LENGTH_SHARE of the Length or more. Null
- * otherwise, and for a page under its Length.
+ * What the last rewrite says of this Length: the characters it came to, when
+ * it was written to a Length (not with Length off) and it was asked for
+ * this Length or a longer one, or missed its own and this one is within that
+ * one's band. Null when it says nothing (a rewrite to 10,000 says nothing of
+ * 3,000), or the page keeps less now than it kept then (a passage unlocked
+ * since: a rewrite may go shorter). The counts differ by about a space a
+ * block, so a little slack. `inReach`: whether coming within the band would
+ * say this Length is in reach — not when the page keeps more now than then
+ * (one rewritten with its cited passages too, say): keeping less and still
+ * missing says keeping more misses too, but not the other way round.
+ */
+function lastRewriteSays(
+  last: LastRewrite | null,
+  target: number,
+  kept: number,
+): { chars: number; inReach: boolean } | null {
+  if (!last || last.target === null) return null;
+  const slack = last.kept * 0.02 + 20;
+  if (last.kept > kept + slack) return null;
+  const band = lengthBand(last.target);
+  const missedItsOwn = last.chars > band.max && target >= band.min;
+  if (target < last.target && !missedItsOwn) return null;
+  return { chars: last.chars, inReach: last.kept >= kept - slack };
+}
+
+/**
+ * Whether what a rewrite keeps, with the headings and their answers, puts
+ * the Length out of its reach on its own: what the agent card names as why
+ * a rewrite missed (the rewrite itself is no reason).
+ */
+export function keptOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
+  rules: T[],
+  reach: RewriteReach,
+): boolean {
+  return lengthOutOfReach(rules, { ...reach, last: null }) !== null;
+}
+
+/**
+ * Whether the page is over its Length by more than a rewrite could take
+ * out: the least a rewrite comes to (`reach.floor`) is past the top of the
+ * Length's band, or the last rewrite (lastRewriteSays) came to more than it.
+ * A last rewrite that got within the band says it's in reach, whatever the
+ * estimate. Null otherwise, and for a page under its Length.
  */
 export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
-  kept: number,
+  reach: RewriteReach,
 ): LengthOutOfReach | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = Number(length?.rule.current);
@@ -832,17 +1033,26 @@ export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatu
   ) {
     return null;
   }
-  if (kept < target * KEPT_LENGTH_SHARE) return null;
-  // Room for the kept blocks and the words around them, not past the page
-  // as it is (that would read short) nor the rule's own top.
+  const { max } = lengthBand(target);
+  const says = lastRewriteSays(reach.last, target, reach.kept);
+  if (says?.inReach && says.chars <= max) return null;
+  const reached = says && says.chars > max ? says.chars : null;
+  if (reached === null && reach.floor <= max) return null;
+  // The more of the two, so the Length suggested is one a rewrite can reach.
+  const least = Math.max(reach.floor, reached ?? 0);
+  const why = reached !== null && reached >= reach.floor ? 'reached' : 'floor';
+  // A Length the page fits as a rewrite leaves it, never under the rule's
+  // own value nor past its top, nor past the page as it is (that would read short).
   const roundUp = (n: number) => Math.ceil(n / 500) * 500;
   return {
     count: status.count,
     target,
-    kept,
+    kept: reach.kept,
+    why,
+    least,
     suggested: Math.min(
       RULE_LENGTH_MAX,
-      Math.max(target, Math.min(roundUp(kept * 1.5), roundUp(status.count))),
+      Math.max(target, Math.min(roundUp(least), roundUp(status.count))),
     ),
   };
 }
@@ -855,12 +1065,14 @@ export type RewriteAdvice =
 /**
  * Whether the Rules tab recommends Rewrite the page to these rules over
  * Apply rules with Agent's few edits a run: the page more than 30% off its
- * Length (one a rewrite can reach, given the `kept` characters it keeps),
- * or 4 rules or more open that the agent can fix. Null otherwise.
+ * Length (one a rewrite can reach, given what it keeps and what the last
+ * one came to: never again after one missed it), or 4 rules or more open
+ * that the agent can fix. Null otherwise.
  */
 export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
-  kept = 0,
+  reach: RewriteReach = NO_REACH,
+  held: ReadonlySet<string> = NO_HELD,
 ): RewriteAdvice | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
   const target = Number(length?.rule.current);
@@ -876,25 +1088,86 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
     target > 0
   ) {
     const off = Math.abs(status.count - target) / target;
-    if (off > REWRITE_LENGTH_OFF && !lengthOutOfReach(rules, kept)) {
+    if (off > REWRITE_LENGTH_OFF && !lengthOutOfReach(rules, reach)) {
       return { reason: 'length', count: status.count, target, percent: Math.round(off * 100) };
     }
   }
   // A Length out of reach is no rule a rewrite meets.
-  const outOfReach = lengthOutOfReach(rules, kept) !== null;
-  const open = openRulesForAgent(rules).forAgent.filter(
+  const outOfReach = lengthOutOfReach(rules, reach) !== null;
+  const open = openRulesForAgent(rules, undefined, held).forAgent.filter(
     ({ rule }) => !(outOfReach && rule.key === 'length'),
   ).length;
   return open >= REWRITE_OPEN_RULES ? { reason: 'open', count: open } : null;
 }
 
+/**
+ * "Price, GTIN and stock match the feed" (CE-053): the page against its
+ * product in the brand's catalog, once a catalog is connected and has it.
+ */
+function feedStatus(
+  page: PageRead,
+  catalog: CatalogMatch | 'reading' | null | undefined,
+): RuleStatus {
+  if (catalog === 'reading') return { state: 'info', code: 'feedReading' };
+  if (!catalog?.connected) return { state: 'info', code: 'needsFeed' };
+  if (!catalog.product) return { state: 'info', code: 'notInFeed' };
+  const texts = page.blocks.map((b) => b.text);
+  const { compared, mismatches } = feedCheck({
+    texts,
+    offer: pageOffer(texts),
+    variants: catalog.product.variants,
+  });
+  if (!compared) return { state: 'info', code: 'feedNothing' };
+  return mismatches.length
+    ? { state: 'bad', code: 'feedDiffers', count: mismatches.length }
+    : { state: 'ok' };
+}
+
+/**
+ * A Shopping rule's status (shopping path, part 6), from every link on the
+ * page (PageRead's `links`): the category page linked; at least `n` of the
+ * path's products that sell, or all of them when fewer do; none that no
+ * longer sells, by name.
+ */
+function shoppingStatus(
+  key: string,
+  n: number,
+  hrefs: string[],
+  check: RuleContext['shopping'],
+): RuleStatus {
+  if (check === 'reading') return { state: 'info', code: 'shoppingReading' };
+  if (check === 'failed') return { state: 'info', code: 'shoppingFailed' };
+  if (!check) return { state: 'info', code: 'noShoppingPath' };
+  const read = shoppingLinks(hrefs, check, n);
+  if (key === 'shopCategoryLink') {
+    if (!check.categories.length) return { state: 'info', code: 'noShoppingPath' };
+    return read.categoryLinked ? { state: 'ok' } : { state: 'bad', code: 'missing' };
+  }
+  if (key === 'shopProductLinks') {
+    if (!read.products) return { state: 'info', code: 'noShoppingPath' };
+    return atLeast(read.linked.length, read.want);
+  }
+  return read.bad.length
+    ? {
+        state: 'bad',
+        code: 'found',
+        count: read.bad.length,
+        items: read.bad.map((p) => ({ title: p.title, state: p.state })),
+      }
+    : { state: 'ok' };
+}
+
+/** A number rule's value as the checks read it: a whole number, 0 when it isn't one. */
+export const ruleNumber = (rule: Pick<ActiveRule, 'current'>) =>
+  Math.max(0, Math.floor(Number(rule.current) || 0));
+
 /** Checks one rule against the page as written. */
 export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): RuleStatus {
-  if (rule.check === 'feed') return { state: 'info', code: 'needsFeed' };
+  if (rule.check === 'feed') return feedStatus(page, ctx.catalog);
   if (rule.key === 'whoFor' && !rule.current.trim()) return { state: 'bad', code: 'notSet' };
   if (rule.check === 'ai') return { state: 'info', code: 'aiCheck' };
 
-  const n = Math.max(0, Math.floor(Number(rule.current) || 0));
+  const n = ruleNumber(rule);
   const { blocks } = page;
   const h1 = blocks.findIndex((b) => b.tag === 'h1');
   const firstH2 = blocks.findIndex((b) => b.tag === 'h2');
@@ -904,6 +1177,9 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
   const own = ctx.brandDomains.map(normalizeDomain);
   const competitors = ctx.competitorDomains.map(normalizeDomain);
   const links = blocks.flatMap((b) => (isText(b) ? b.links : []));
+  if (SHOPPING_RULE_KEYS.has(rule.key)) {
+    return shoppingStatus(rule.key, n, page.links ?? [], ctx.shopping);
+  }
   const outbound = (href: string) => {
     const host = linkHost(href);
     if (!host) return false;
@@ -1126,7 +1402,9 @@ export function lengthWarns(statuses: { rule: ActiveRule; status: RuleStatus }[]
  */
 const LEAST_SECTION = 200;
 const LEAST_QUESTION = 150;
-const LEAST_SUMMARY = 100;
+export const LEAST_SUMMARY = 100;
+/** The least answer under a heading, a sentence or two (rewriteFloor). */
+export const LEAST_ANSWER = 100;
 
 /**
  * Rules that can't both be met (Content Agent rule gaps, C): the fan-out

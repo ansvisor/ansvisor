@@ -48,12 +48,28 @@ vi.mock('@/lib/download', () => ({ saveBlob }));
 const readCmsStatuses = vi.hoisted(() => vi.fn());
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
+const refreshWebflowPublished = vi.hoisted(() => vi.fn());
+const refreshWordPressPublished = vi.hoisted(() => vi.fn());
+// Mark published (CE-013).
+const publishPage = vi.hoisted(() => vi.fn());
+const readPublishAddress = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress }));
 vi.mock('@/lib/content/cms-send-client', () => ({
   readCmsStatuses,
+  refreshWebflowPublished,
+  refreshWordPressPublished,
   readDraftCms,
   sendPagesToCms,
   readKeptFields: vi.fn(async () => new Map()),
   readDeliveries: vi.fn(async () => []),
+}));
+// The brand's Webflow connection (#1331, phase 2): none here.
+vi.mock('@/lib/webflow-client', () => ({
+  readWebflow: async () => ({ ok: true, configured: false, connection: null }),
+}));
+// Nor its WordPress site (00294).
+vi.mock('@/lib/wordpress-client', () => ({
+  readWordPress: async () => ({ ok: true, configured: false, connection: null }),
 }));
 vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
 
@@ -107,6 +123,17 @@ async function renderPage() {
   });
 }
 
+/** A draft's last send, as readCmsStatuses returns it. */
+const sendOf = (status: string) => ({
+  status,
+  target: 'webhook',
+  at: '2026-10-24T10:00:00Z',
+  httpStatus: status === 'failed' ? 500 : 200,
+  error: null,
+  publishedUrl: null,
+});
+const lastSendBox = () => container.querySelector('[aria-label="Last send"]');
+
 const tab = (name: string) =>
   [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) =>
     el.textContent?.startsWith(name),
@@ -119,6 +146,16 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   getContentDrafts.mockReset();
+  refreshWebflowPublished.mockReset().mockResolvedValue([]);
+  refreshWordPressPublished.mockReset().mockResolvedValue([]);
+  readPublishAddress.mockReset().mockResolvedValue('https://acme.example/pipeline-forecasting');
+  publishPage.mockReset().mockResolvedValue({
+    ok: true,
+    publishedUrl: 'https://acme.example/pipeline-forecasting',
+    publishedAt: '2026-10-25T10:00:00Z',
+    onBrandDomain: true,
+    taskCompleted: false,
+  });
   getContentStartOptions.mockReset().mockResolvedValue({
     opportunities: [],
     prompts: [],
@@ -380,15 +417,19 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(document.querySelector<HTMLInputElement>('#cms-slug')!.value).toBe('pricing');
 
     await act(async () => inDialog('Send').click());
-    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
-      expect.objectContaining({
-        draftId: 'd1',
-        slug: 'pricing',
-        html: '<p>Teams trust it.</p>',
-        // Authors come with Quality (CE-038): while it is off, none goes.
-        author: null,
-      }),
-    ]);
+    expect(sendPagesToCms).toHaveBeenCalledWith(
+      'brand-1',
+      [
+        expect.objectContaining({
+          draftId: 'd1',
+          slug: 'pricing',
+          html: '<p>Teams trust it.</p>',
+          // Authors come with Quality (CE-038): while it is off, none goes.
+          author: null,
+        }),
+      ],
+      'webhook',
+    );
     expect(dialog()).toBeNull();
     expect(readCmsStatuses).toHaveBeenCalledTimes(2);
   });
@@ -469,6 +510,119 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(marks[1].getAttribute('href')).toBe('https://acme.example/churn');
   });
 
+  it('says a page sent to Webflow is a draft item there', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'webflow',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    expect(
+      container.querySelector('[aria-label^="In Webflow as a draft item since Oct 24, 2026"]'),
+    ).not.toBeNull();
+    // Webflow says when it goes live: asked once as the Library opens.
+    expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWebflowPublished).toHaveBeenCalledWith('brand-1');
+  });
+
+  it('reads the list again when pages sent to Webflow went live there', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'webflow',
+            at: '2026-10-24T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    refreshWebflowPublished.mockResolvedValue(['d1']);
+    await renderPage();
+    await act(async () => {});
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    // Once a brand per visit, however often the list is read.
+    expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it('doesn’t ask Webflow for a brand with no page there', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
+  });
+
+  it('says a page sent to WordPress is a draft post there, and asks WordPress once', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('wordpress')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    refreshWordPressPublished.mockResolvedValue(['d1']);
+    await renderPage();
+    await act(async () => {});
+    expect(
+      container.querySelectorAll('[aria-label^="In WordPress as a draft post since Oct 24, 2026"]'),
+    ).toHaveLength(2);
+    // WordPress says when a post goes live: asked once, the list read again as it marked one.
+    expect(refreshWordPressPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWordPressPublished).toHaveBeenCalledWith('brand-1');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+  });
+
+  it('asks Webflow and WordPress once each when pages went to both', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    refreshWebflowPublished.mockResolvedValue(['d1']);
+    refreshWordPressPublished.mockResolvedValue(['d2']);
+    await renderPage();
+    await act(async () => {});
+    expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWordPressPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWebflowPublished).toHaveBeenCalledWith('brand-1');
+    expect(refreshWordPressPublished).toHaveBeenCalledWith('brand-1');
+  });
+
   it('says the workflow’s reason for a page its webhook took that then failed', async () => {
     getContentDrafts.mockResolvedValue([row({})]);
     readCmsStatuses.mockResolvedValue(
@@ -534,9 +688,11 @@ describe('Send to CMS from a Library row (#1331)', () => {
       }),
     );
     await act(async () => inDialog('Send').click());
-    expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', [
-      expect.objectContaining({ draftId: 'd1' }),
-    ]);
+    expect(sendPagesToCms).toHaveBeenCalledWith(
+      'brand-1',
+      [expect.objectContaining({ draftId: 'd1' })],
+      'webhook',
+    );
   });
 
   it('is for admins and managers only', async () => {
@@ -668,6 +824,27 @@ describe('a Library row’s menu (00233)', () => {
     await act(async () => found.click());
   };
 
+  it('keeps a list filtered by Last send on show when it is read again in another order', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    const first = row({});
+    const second = row({ id: 'd2', title: 'Churn guide' });
+    getContentDrafts.mockResolvedValueOnce([first, second]).mockResolvedValue([second, first]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sendOf('failed')],
+        ['d2', sendOf('failed')],
+      ]),
+    );
+    await renderPage();
+    // The second read of the sends never answers: the drafts are the same.
+    readCmsStatuses.mockReturnValue(new Promise(() => {}));
+    await pick('Pipeline forecasting', 'In progress');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.textContent).toContain('Churn guide');
+    expect(container.textContent).toContain('Pipeline forecasting');
+  });
+
   it('sets a status, Ready as the editor’s Mark ready, and reads the list again', async () => {
     getContentDrafts.mockResolvedValue([row({})]);
     await renderPage();
@@ -693,8 +870,20 @@ describe('a Library row’s menu (00233)', () => {
     expect(markContentDraftReady).toHaveBeenCalledWith('d1');
     expect(getContentDrafts).toHaveBeenCalledTimes(2);
 
+    // Published asks where the page is live (CE-013), from where it can tell.
     await pick('Pipeline forecasting', 'Published');
-    expect(setContentDraftStatus).toHaveBeenCalledWith('d1', 'published');
+    expect(setContentDraftStatus).not.toHaveBeenCalledWith('d1', 'published');
+    expect(readPublishAddress).toHaveBeenCalledWith('d1');
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.querySelector<HTMLInputElement>('#publish-url')!.value).toBe(
+      'https://acme.example/pipeline-forecasting',
+    );
+    const save = [...dialog.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Mark published',
+    )!;
+    await act(async () => save.click());
+    expect(publishPage).toHaveBeenCalledWith('d1', 'https://acme.example/pipeline-forecasting');
+    expect(getContentDrafts).toHaveBeenCalledTimes(3);
   });
 
   it('lets members set a status only', async () => {
@@ -734,6 +923,14 @@ describe('a Library row’s menu (00233)', () => {
 
     await act(async () => tab('Archived').click());
     expect(container.textContent).toContain('Old pricing page');
+    // An archived page is restored before it's marked live (CE-013).
+    const published = (await menuItems('Old pricing page')).find(
+      (el) => el.textContent === 'Published',
+    )!;
+    expect(published.hasAttribute('data-disabled')).toBe(true);
+    await act(async () =>
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+    );
     await pick('Old pricing page', 'Restore');
     expect(archiveContentDraft).toHaveBeenLastCalledWith('d2', false);
   });
@@ -901,6 +1098,126 @@ describe('the Library’s Export and Created filter (CE-002)', () => {
     await act(async () => csvItem(items).click());
     await act(async () => {});
     expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['new']);
+  });
+
+  it('lists only the drafts whose last send is as the URL names, and exports those (#1331)', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1', title: 'Failed page' }),
+      row({ id: 'd2', title: 'Sent page' }),
+      row({ id: 'd3', title: 'Unsent page' }),
+    ]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sendOf('failed')],
+        ['d2', sendOf('sent')],
+      ]),
+    );
+    await renderPage();
+    expect(container.textContent).toContain('Failed page');
+    expect(container.textContent).not.toContain('Sent page');
+    expect(container.textContent).not.toContain('Unsent page');
+    expect(container.querySelector('[aria-label="Last send"]')!.textContent).toContain(
+      'Last send: Failed',
+    );
+
+    const items = await openExport();
+    await act(async () => csvItem(items).click());
+    await act(async () => {});
+    expect(getContentDraftPages).toHaveBeenCalledWith('brand-1', ['d1']);
+  });
+
+  it('lists the drafts never sent', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=never');
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1', title: 'Sent page' }),
+      row({ id: 'd2', title: 'Unsent page' }),
+    ]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('published')]]));
+    await renderPage();
+    expect(container.textContent).toContain('Unsent page');
+    expect(container.textContent).not.toContain('Sent page');
+  });
+
+  it('leaves Last send out for a brand that sent no page', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(lastSendBox()).toBeNull();
+    expect(container.querySelector('[aria-label="Created"]')).not.toBeNull();
+  });
+
+  it('shows Last send once a page was sent', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('sent')]]));
+    await renderPage();
+    expect(container.querySelector('[aria-label="Last send"]')!.textContent).toContain(
+      'Last send: Any',
+    );
+  });
+
+  it('waits for the sends before it filters by them, rather than list every draft', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    getContentDrafts.mockResolvedValue([
+      row({ id: 'd1', title: 'Failed page' }),
+      row({ id: 'd2', title: 'Unsent page' }),
+    ]);
+    let answer: (sends: Map<string, unknown>) => void = () => {};
+    readCmsStatuses.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    await renderPage();
+    expect(container.textContent).not.toContain('Unsent page');
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+
+    await act(async () => answer(new Map([['d1', sendOf('failed')]])));
+    expect(container.textContent).toContain('Failed page');
+    expect(container.textContent).not.toContain('Unsent page');
+  });
+
+  it('lists nothing to export while the sends it filters by are read', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=never');
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockReturnValue(new Promise(() => {}));
+    await renderPage();
+    const exportButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Export',
+    )!;
+    expect(exportButton.disabled).toBe(true);
+  });
+
+  it('leaves Last send out on a brand that sent none, after one that did', async () => {
+    getContentDrafts.mockImplementation(async (brandId: string) =>
+      brandId === 'brand-1' ? [row({})] : [],
+    );
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('sent')]]));
+    await renderPage();
+    expect(lastSendBox()).not.toBeNull();
+    brandState.activeBrandId = 'brand-2';
+    await renderPage();
+    expect(lastSendBox()).toBeNull();
+  });
+
+  it('blames the Created filter when it is the one that leaves nothing', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?created=7d&sent=failed');
+    getContentDrafts.mockResolvedValue([row({ createdAt: '2026-01-05T09:00:00Z' })]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('failed')]]));
+    await renderPage();
+    expect(container.textContent).toContain('Nothing in this tab was created in this period.');
+  });
+
+  it('says nothing of the cap while Last send narrows the list', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=failed');
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn guide' })]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('failed')]]));
+    await renderPage();
+    expect(container.textContent).not.toContain('Churn guide');
+    expect(container.textContent).not.toContain('changed most recently');
+  });
+
+  it('says when nothing in the tab matches the Last send filter', async () => {
+    window.history.replaceState(null, '', '/dashboard/content/library?sent=queued');
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(new Map([['d1', sendOf('sent')]]));
+    await renderPage();
+    expect(container.textContent).toContain('No page in this tab matches the Last send filter.');
   });
 
   it('says when nothing in the tab was created in the range', async () => {

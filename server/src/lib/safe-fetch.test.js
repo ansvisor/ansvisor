@@ -139,11 +139,36 @@ describe('fetchPage against a local site', () => {
       res.writeHead(200, { 'content-type': 'text/html' });
       res.end('x'.repeat(5_000));
     },
+    // Small on the wire, large once opened: the cap counts what's opened.
+    '/big-gzip': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' });
+      res.end(zlib.gzipSync('x'.repeat(50_000)));
+    },
     '/slow': (res) => {
       setTimeout(() => {
         res.writeHead(200, { 'content-type': 'text/html' });
         res.end('late');
       }, 300);
+    },
+    // The connection drops part way through the body.
+    '/cut': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html', 'content-length': '1000' });
+      res.write('<p>part');
+      setTimeout(() => res.socket.destroy(), 10);
+    },
+    '/cut-gzip': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' });
+      res.write(zlib.gzipSync(`<p>${'x'.repeat(10_000)}</p>`).subarray(0, 40));
+      setTimeout(() => res.socket.destroy(), 10);
+    },
+    // Nested deeper than a browser keeps: as a page, and as a text file.
+    '/deep': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end('<div>'.repeat(600));
+    },
+    '/deep-text': (res) => {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end('<div>'.repeat(600));
     },
   };
 
@@ -198,11 +223,27 @@ describe('fetchPage against a local site', () => {
     await expect(get('/slow', { timeoutMs: 50 })).rejects.toMatchObject({ code: 'timeout' });
   });
 
+  it('turns away a web page nested deeper than any browser keeps, not another type', async () => {
+    await expect(get('/deep')).rejects.toMatchObject({ code: 'too_deep' });
+    await expect(get('/deep-text', { types: /^text\/plain/ })).resolves.toMatchObject({
+      status: 200,
+    });
+  });
+
   it('reads another content type only when asked to', async () => {
     await expect(get('/feed.xml')).rejects.toMatchObject({ code: 'not_html' });
     await expect(
       get('/feed.xml', { types: /^\s*application\/xml\b/i, accept: 'application/xml' }),
     ).resolves.toMatchObject({ html: '<rss version="2.0"><channel></channel></rss>' });
+  });
+
+  it('fails a page cut off part way, compressed or not, instead of waiting for it', async () => {
+    // Past its own timeout, a compressed page cut off would wait forever: the
+    // request is already over, so the timeout has nothing left to stop.
+    await expect(get('/cut', { timeoutMs: 2000 })).rejects.toMatchObject({ code: 'unreachable' });
+    await expect(get('/cut-gzip', { timeoutMs: 2000 })).rejects.toMatchObject({
+      code: 'unreachable',
+    });
   });
 
   it('reads the start of a page over the cap when asked to, instead of refusing it', async () => {
@@ -213,6 +254,16 @@ describe('fetchPage against a local site', () => {
     // Under the cap, the whole page, as without it.
     await expect(get('/page', { truncate: true })).resolves.toMatchObject({
       html: '<h1>Pricing</h1><p>Plans ünd prices</p>',
+    });
+  });
+
+  it('counts a compressed page by what it opens to, refused or cut at the cap', async () => {
+    await expect(get('/big-gzip', { maxBytes: 1_000 })).rejects.toMatchObject({
+      code: 'too_large',
+    });
+    await expect(get('/big-gzip', { maxBytes: 1_000, truncate: true })).resolves.toMatchObject({
+      status: 200,
+      html: 'x'.repeat(1_000),
     });
   });
 });

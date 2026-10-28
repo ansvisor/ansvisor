@@ -1,11 +1,13 @@
 'use client';
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { getMyRuleSets, saveDraftRules, saveMyRuleSet } from '@/lib/actions/content-drafts';
 import { isPageType, type ContentDraft, type PageType } from '@/lib/content/drafts';
+import type { CatalogMatch } from '@/lib/content/feed-match';
 import type { SiteType } from '@/lib/content/page-types';
+import type { ShoppingCheck } from '@/lib/content/shopping-check';
 import {
   MAX_TEXT_RULES,
   activeRules,
@@ -48,8 +50,18 @@ export interface DraftRulesState {
   total: number;
   /** The page length the rules ask for. */
   length: number;
+  /**
+   * Whether the count stands (set by the editor once the set, the fan-outs,
+   * the brief and the catalog are read): before, rules come and go from it.
+   */
+  settled?: boolean;
   /** The sections and questions the rules ask for take more than Length allows. */
   lengthConflict: { need: number; max: number } | null;
+  /**
+   * The rules checked against another page (an agent's change applied to a
+   * copy): what it would meet and break (editor test 2026-10-25).
+   */
+  checkHtml: (html: string, characters: number) => { rule: ActiveRule; status: RuleStatus }[];
   /** Turns a rule on or off, or gives it a value, for this draft. */
   change: (key: string, change: { on?: boolean; value?: string }) => void;
   /** Loads a set into the draft: a type's Ansvisor default, or the workspace's My rules for it. */
@@ -90,6 +102,8 @@ export function useDraftRules({
   characters,
   pageType,
   reads,
+  catalog = null,
+  shopping = null,
 }: {
   draft: ContentDraft;
   /** The brand's business type as the editor holds it: My rules are kept per type (00227). */
@@ -98,6 +112,15 @@ export function useDraftRules({
   characters: number;
   pageType: string | null;
   reads: Pick<DraftReads, 'brief' | 'sources'>;
+  /** The page's product in the brand's catalog (CE-053), for the feed rule (RuleContext's). */
+  catalog?: CatalogMatch | 'reading' | null;
+  /**
+   * The draft's shopping path against the catalog (useShoppingCheck), for the
+   * Shopping rules (shopping path, part 6): shown once it's read and has one,
+   * or couldn't be read; not while it's first read, so a draft without a
+   * path never shows them.
+   */
+  shopping?: ShoppingCheck | 'reading' | 'failed' | null;
 }): DraftRulesState {
   const t = useTranslations('contentEditor.editor.rules');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -132,7 +155,7 @@ export function useDraftRules({
   const sources = reads.sources;
   const ctx = useMemo<RuleContext>(() => {
     if (!sources || sources.failed) {
-      return { brandDomains: [], competitorDomains: [], fanouts: [], language };
+      return { brandDomains: [], competitorDomains: [], fanouts: [], language, catalog, shopping };
     }
     const fanouts = buildSourceGroups(sources.data, sources.choices, {
       title: draft.title,
@@ -146,8 +169,10 @@ export function useDraftRules({
       competitorDomains: sources.data.competitorDomains,
       fanouts: fanouts ?? [],
       language,
+      catalog,
+      shopping,
     };
-  }, [sources, draft.title, draft.sourceUrl, language]);
+  }, [sources, draft.title, draft.sourceUrl, language, catalog, shopping]);
   const brief = reads.brief;
   const keywords = useMemo(
     () => (brief.status === 'ready' ? (brief.brief?.keywords ?? []) : []),
@@ -163,10 +188,15 @@ export function useDraftRules({
   const rules = useMemo(
     () =>
       activeRules(
-        ruleSet(setType, { keywords, language, length: effective.importLength }),
+        ruleSet(setType, {
+          keywords,
+          language,
+          length: effective.importLength,
+          shopping: shopping !== null && shopping !== 'reading',
+        }),
         effective,
       ),
-    [setType, keywords, language, effective],
+    [setType, keywords, language, effective, shopping],
   );
   // The checks follow the page a beat behind typing.
   const deferredHtml = useDeferredValue(html);
@@ -180,6 +210,13 @@ export function useDraftRules({
     [rules, page, ctx],
   );
   const { met, total } = rulesMet(checked);
+  const checkHtml = useCallback(
+    (other: string, count: number) => {
+      const read = readPage(other, count);
+      return rules.map((rule) => ({ rule, status: checkRule(rule, read, ctx) }));
+    },
+    [rules, ctx],
+  );
   const conflict = useMemo(
     () => lengthConflict(checked, ctx.fanouts.length),
     [checked, ctx.fanouts.length],
@@ -241,6 +278,7 @@ export function useDraftRules({
     total,
     length: ruleLength(rules, setType),
     lengthConflict: conflict,
+    checkHtml,
     change: (key, change) =>
       edited({
         overrides: { ...effective.overrides, [key]: { ...effective.overrides[key], ...change } },

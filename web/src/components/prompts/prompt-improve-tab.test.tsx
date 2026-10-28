@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { PlanId } from '@/config/plans';
-import type { ImproveQuota } from '@/lib/prompt-improve';
+import type { ImproveQuota, ImproveSet } from '@/lib/prompt-improve';
 import { ImproveTab, type ImproveController } from './prompt-improve-tab';
 
 vi.mock('@/i18n/navigation', () => ({
@@ -24,9 +24,13 @@ vi.mock('@/i18n/navigation', () => ({
 let container: HTMLDivElement;
 let root: Root;
 
-const controller = (quota: ImproveQuota | null, planId: PlanId | null): ImproveController => ({
+const controller = (
+  quota: ImproveQuota | null,
+  planId: PlanId | null,
+  set: ImproveSet | null = null,
+): ImproveController => ({
   status: 'ready',
-  set: null,
+  set,
   quota,
   planId,
   drafts: [],
@@ -40,11 +44,15 @@ const controller = (quota: ImproveQuota | null, planId: PlanId | null): ImproveC
   sending: false,
 });
 
-async function render(quota: ImproveQuota | null, planId: PlanId | null) {
+async function render(
+  quota: ImproveQuota | null,
+  planId: PlanId | null,
+  set: ImproveSet | null = null,
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ImproveTab improve={controller(quota, planId)} />
+        <ImproveTab improve={controller(quota, planId, set)} />
       </NextIntlClientProvider>,
     );
   });
@@ -64,6 +72,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
 });
 
 describe('the Improve tab’s budget', () => {
@@ -116,5 +125,44 @@ describe('the Improve tab’s budget', () => {
     );
     expect(container.textContent).not.toContain('generations left');
     expect(container.textContent).not.toContain('used up');
+  });
+});
+
+describe('the Improve tab’s dates', () => {
+  it('reads them in English whatever the browser’s locale is', async () => {
+    // A Turkish browser: a date without a locale would read "17.10.2026".
+    const toLocaleDateString = Date.prototype.toLocaleDateString;
+    const toLocaleString = Date.prototype.toLocaleString;
+    vi.spyOn(Date.prototype, 'toLocaleDateString').mockImplementation(function (
+      this: Date,
+      locales?: Intl.LocalesArgument,
+      options?: Intl.DateTimeFormatOptions,
+    ) {
+      return toLocaleDateString.call(this, locales ?? 'tr-TR', options);
+    });
+    vi.spyOn(Date.prototype, 'toLocaleString').mockImplementation(function (
+      this: Date,
+      locales?: Intl.LocalesArgument,
+      options?: Intl.DateTimeFormatOptions,
+    ) {
+      return toLocaleString.call(this, locales ?? 'tr-TR', options);
+    });
+    // The day and time it shows follow the time zone the tests run in.
+    const at = '2026-10-17T11:05:00.000Z';
+    await render(null, 'self_hosted', {
+      sent: {
+        latest: { actionId: 'a1', actionNo: 12, sentAt: at, suggestionIds: [] },
+        sentSuggestionIds: [],
+      },
+      rangeKey: '30d',
+      region: 'us',
+      platforms: [],
+      suggestions: [],
+      latestResultAt: at,
+      generatedAt: at,
+      stale: false,
+    });
+    expect(container.textContent).toMatch(/Generated Oct \d{1,2}, 2026, \d{1,2}:\d{2}\s(AM|PM)/);
+    expect(container.textContent).toMatch(/Sent Oct \d{1,2}, 2026 · AC-12/);
   });
 });

@@ -57,6 +57,7 @@ export function linkStatus(err) {
   switch (err.code) {
     case 'not_html':
     case 'too_large':
+    case 'too_deep':
       return 'ok';
     case 'http_error':
       return GONE.has(err.status) ? 'broken' : 'unknown';
