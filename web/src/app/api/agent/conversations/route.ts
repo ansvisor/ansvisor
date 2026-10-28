@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { resolveAgentAuth } from '@/lib/agent/auth';
 import { getPlan, hasFeature, type PlanId } from '@/config/plans';
 import { isAgentKeyConfigured } from '@/lib/agent/key';
+import { subscriptionActiveFor, subscriptionInactiveResponse } from '@/lib/mcp/subscription-gate';
 
 /**
  * GET /api/agent/conversations
@@ -39,7 +40,9 @@ export async function GET() {
  *
  * Plan-gated: the chat endpoint already gates on `ai_agent`, but we gate
  * here too so a non-Growth user clicking "+ New chat" gets the 403
- * immediately rather than after typing a message.
+ * immediately rather than after typing a message. Likewise a read-only
+ * workspace (Cloud, plan not active) gets 402 subscription_inactive here, as
+ * the chat does; reading and deleting conversations stay open.
  */
 export async function POST(req: Request) {
   const auth = await resolveAgentAuth();
@@ -47,6 +50,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const organizationId: string = auth.organizationId;
+  if (!(await subscriptionActiveFor(organizationId))) return subscriptionInactiveResponse();
 
   const { data: org } = await supabaseAdmin
     .from('organizations')

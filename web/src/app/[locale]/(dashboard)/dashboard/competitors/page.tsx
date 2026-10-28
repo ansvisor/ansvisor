@@ -5,6 +5,7 @@ import { useRouter } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/competitor';
 import type { SuggestedCompetitor } from '@/lib/ai-brand-setup';
 import { SuggestCompetitorsDialog } from './_suggest-competitors-dialog';
@@ -1241,6 +1242,14 @@ export default function CompetitorsPage() {
   const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Competitor | null>(null);
+  // A read-only workspace (plan not active): Add, Suggest (it asks the AI as
+  // it opens) and Delete open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const openAdd = guard(() => setDialogOpen(true), { action: tActions('addCompetitors') });
+  const openSuggest = guard(() => setSuggestDialogOpen(true), {
+    action: tActions('suggestCompetitors'),
+  });
 
   // Head-to-head
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null);
@@ -1558,11 +1567,11 @@ export default function CompetitorsPage() {
                 />
               )}
             </div>
-            <Button variant="outline" className="gap-2" onClick={() => setSuggestDialogOpen(true)}>
+            <Button variant="outline" className="gap-2" onClick={openSuggest}>
               <Sparkles className="h-4 w-4" />
               {t('suggestCompetitors')}
             </Button>
-            <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+            <Button className="gap-2" onClick={openAdd}>
               <Plus className="h-4 w-4" />
               {t('addCompetitor')}
             </Button>
@@ -1571,10 +1580,7 @@ export default function CompetitorsPage() {
       </HeaderWithAiUsage>
 
       {competitors.length === 0 ? (
-        <EmptyState
-          onAdd={() => setDialogOpen(true)}
-          onSuggest={() => setSuggestDialogOpen(true)}
-        />
+        <EmptyState onAdd={openAdd} onSuggest={openSuggest} />
       ) : (
         <>
           {/* Competitor List */}
@@ -1619,7 +1625,9 @@ export default function CompetitorsPage() {
                     onSelect={() =>
                       selectCompetitor(selectedCompetitorId === comp.id ? null : comp.id)
                     }
-                    onDelete={() => setConfirmDelete(comp)}
+                    onDelete={guard(() => setConfirmDelete(comp), {
+                      action: tActions('deleteCompetitors'),
+                    })}
                     deleting={deleting === comp.id}
                   />
                 ))}
