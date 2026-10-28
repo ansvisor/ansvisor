@@ -35,7 +35,7 @@ describe('AIProviderAvatar', () => {
     ['openai', 'ChatGPT', '/platforms/chatgpt.svg'],
     ['anthropic', 'Claude', '/platforms/claude.svg'],
     ['google', 'Gemini', '/platforms/gemini.svg'],
-    ['googleAio', 'Google AI Overview', '/platforms/google.svg'],
+    ['googleAio', 'Google AI Overviews', '/platforms/google.svg'],
     ['googleAiMode', 'Google AI Mode', '/platforms/gemini.svg'],
     ['perplexity', 'Perplexity', '/platforms/perplexity.svg'],
     ['copilot', 'Microsoft Copilot', '/platforms/copilot.svg'],
