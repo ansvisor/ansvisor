@@ -116,6 +116,20 @@ describe('livePageLine', () => {
     expect(line).toContain("answer a lost prompt's question");
   });
 
+  it('says one as one', () => {
+    const line = livePageLine(
+      livePageSummary({
+        citations: { cur: 1, prev: 3 },
+        aiVisits: { cur: 1, prev: 0 },
+        promptCounts: { cur: 1, lost: 1 },
+        prompts: [{ text: 'pour over vs french press', cur: 0, prev: 2 }],
+      }),
+    );
+    expect(line).toContain(
+      'tracked AI answers cited it 1 time (3 before), for 1 prompt, and it had 1 AI visit (0 before). It lost 1 prompt it was cited for: "pour over vs french press".',
+    );
+  });
+
   it('asks nothing about lost prompts when none was lost', () => {
     const line = livePageLine(
       livePageSummary({ ...impact, promptCounts: { cur: 1, lost: 0 }, prompts: [] }),

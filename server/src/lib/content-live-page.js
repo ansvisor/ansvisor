@@ -18,6 +18,8 @@ const LOST_SHOWN = 3;
 
 const n = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
 const pair = (value) => ({ cur: n(value?.cur), prev: n(value?.prev) });
+/** "1 time", "12 times". */
+const counted = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 /**
  * The numbers the agent is told, from content_page_impact's answer; null
@@ -59,10 +61,10 @@ export function livePageLine(summary) {
   if (!summary) return '';
   const { days, citations, prompts, lostPrompts, aiVisits } = summary;
   const lost = prompts.lost
-    ? ` It lost ${prompts.lost} prompt${prompts.lost === 1 ? '' : 's'} it was cited for${
+    ? ` It lost ${counted(prompts.lost, 'prompt')} it was cited for${
         lostPrompts.length ? `: ${lostPrompts.map((text) => `"${text}"`).join(', ')}` : ''
       }.`
     : '';
-  return `How the live page does now (last ${days} days, against the ${days} before): tracked AI answers cited it ${citations.cur} times (${citations.prev} before), for ${prompts.cur} prompt${prompts.cur === 1 ? '' : 's'}, and it had ${aiVisits.cur} AI visits (${aiVisits.prev} before).${lost}
+  return `How the live page does now (last ${days} days, against the ${days} before): tracked AI answers cited it ${counted(citations.cur, 'time')} (${citations.prev} before), for ${counted(prompts.cur, 'prompt')}, and it had ${counted(aiVisits.cur, 'AI visit')} (${aiVisits.prev} before).${lost}
 It earns these as it reads now: keep the answers, facts and names AI engines may cite from it, and change them only where a rule needs it.${prompts.lost ? " Where a rule's change can, answer a lost prompt's question." : ''}`;
 }
