@@ -6,7 +6,7 @@ It is designed to run alongside the `web/` app during local development and can 
 
 ## Prerequisites
 
-- Node.js 24 or newer
+- Node.js 20 or newer
 - npm, or Yarn if you prefer using it for package scripts
 - A configured Supabase project
 - At least one AI provider API key for tracking and content generation

@@ -76,6 +76,7 @@ import {
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
+import { getAiUsageFor, getMeFor } from './account';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -965,7 +966,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_prompt_volumes',
     {
       description:
-        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, the Google search volume of each keyword, total_google_volume (the Google volume of the prompt: the median of its keyword volumes, not their sum), est_ai_volume (estimated AI search demand: total_google_volume × the AI adoption rate), est_ai_volume_low and est_ai_volume_high (its likely range, from how far the keyword volumes agree), volume_confidence (high / medium / low; one level less once the volumes are over six months old), volume_type (always "estimate": AI engines publish no search volumes, so quote the range rather than a single number), competition_index (0-100), and competition label (LOW / MEDIUM / HIGH). Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
+        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, the Google search volume of each keyword, total_google_volume (the Google volume of the prompt: the median of its keyword volumes, not their sum), est_ai_volume (estimated AI search demand: total_google_volume × the AI adoption rate), est_ai_volume_low and est_ai_volume_high (its likely range, from how far the keyword volumes agree), volume_confidence (high / medium / low; one level less once the volumes are over six months old), volume_type (always "estimate": AI engines publish no search volumes, so quote the range rather than a single number), competition_index (0-100), competition label (LOW / MEDIUM / HIGH), and measured_demand: the real signs people ask it — search_console (the brand Search Console queries that match it over 28 days: impressions, clicks, top_query), google_trends (12 months: rising / steady / falling and change_percent), people_also_ask (how many questions Google lists for its top keyword, and the first 3), youtube (videos and their views) — the level they come to (high / medium / low) and read_at, or null until any was read. Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z
@@ -1762,6 +1763,35 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         };
       }
       return result ? json(result) : notFound('Draft');
+    },
+  );
+
+  // ─── The account: who the key acts as, and the AI allowance (B2) ───
+
+  server.registerTool(
+    'get_me',
+    {
+      title: 'Who am I',
+      description:
+        "Who this connection acts as: the user's id and email, their organization (id and name), their role (admin, manager, analyst or agency_partner), their work areas (what they work on, from Settings › Account, e.g. Content or Founders & leaders) and whether they can choose who sees which menu sections (can_manage_menus). Use it to tailor answers to the person — lead with what their work areas cover — and before suggesting something only an admin or a manager may do.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => json(await getMeFor(auth)),
+  );
+
+  server.registerTool(
+    'get_ai_usage',
+    {
+      title: 'AI usage this period',
+      description:
+        "How much of the workspace's monthly AI allowance is used this period, as the Billing page's meter shows it: percent_used (0–100, to a tenth; the allowance is one budget that Improve suggestions, the Content Editor's AI and quality checks, and the Action Center's task writing all draw on), each feature's share (features: improve, content, action_center, other — only those that used some), the plan, whether it is the free trial's smaller allowance, and when the period started and renews. unlimited is true where nothing is metered (self-hosted); active_plan is false when the workspace has no active plan, so there is no allowance. Dollars are not shown. Use it before suggesting AI-heavy work (many Improve runs or drafts), or when asked how much AI is left.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+      const usage = await getAiUsageFor(auth);
+      return usage ? json(usage) : notFound('Organization');
     },
   );
 
