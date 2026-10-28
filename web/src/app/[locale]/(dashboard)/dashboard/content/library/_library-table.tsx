@@ -52,6 +52,7 @@ import {
   type LibraryTab,
 } from '@/lib/content/drafts';
 import type { CmsStatus } from '@/lib/content/cms-send-client';
+import type { DraftShopping } from '@/lib/content/shopping-check';
 import { DRAFT_EXPORT_FORMATS, type DraftExportFormat } from '@/lib/content/draft-export';
 import { formatDate, formatMonthDay } from '@/lib/format';
 
@@ -87,6 +88,7 @@ export interface LibrarySelection {
  * editor; its menu sets the status and, for admins and managers, sends it
  * to the CMS (#1331), archives or deletes it (00233). Beside its status, its
  * last send to the CMS; with a selection, a box to pick rows to send together.
+ * An online shop's Library has a Shopping path column too (00352).
  */
 export function LibraryTable({
   drafts,
@@ -94,6 +96,7 @@ export function LibraryTable({
   actions,
   cms,
   selection,
+  shopping = false,
 }: {
   drafts: ContentDraftListItem[];
   tab: LibraryTab;
@@ -101,6 +104,8 @@ export function LibraryTable({
   /** Each draft's last send to the CMS; none for a draft never sent. */
   cms: ReadonlyMap<string, CmsStatus>;
   selection?: LibrarySelection;
+  /** Whether to show the Shopping path column: the brand sells online. */
+  shopping?: boolean;
 }) {
   const t = useTranslations('contentEditor.library');
   const tTypes = useTranslations('contentEditor.pageTypes');
@@ -137,6 +142,7 @@ export function LibraryTable({
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
           <TableHead>{t('columns.status')}</TableHead>
+          {shopping && <TableHead>{t('columns.shopping')}</TableHead>}
           <TableHead>{t('columns.created')}</TableHead>
           <TableHead>{t('columns.updated')}</TableHead>
           <TableHead className="w-8 pl-0 pr-4">
@@ -196,6 +202,11 @@ export function LibraryTable({
                   {sent && <CmsStatusMark status={sent} />}
                 </span>
               </TableCell>
+              {shopping && (
+                <TableCell>
+                  <ShoppingPathMark shopping={draft.shopping} />
+                </TableCell>
+              )}
               <TableCell className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
                 <time dateTime={draft.createdAt} title={formatDate(draft.createdAt)}>
                   {tableDate(draft.createdAt)}
@@ -288,9 +299,91 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
   );
 }
 
-/** A draft's last send to the CMS, as an icon whose tip says when and how it went. */
+const SHOPPING_BADGE = {
+  ok: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400',
+  attention: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+} as const;
+
+/**
+ * A draft's shopping path (00352): OK, or how many of the products it links
+ * no longer sell; its tip says what it links, which ones and why, and where
+ * and when it was checked. None, or not checked yet, in grey.
+ */
+function ShoppingPathMark({ shopping }: { shopping: DraftShopping | undefined }) {
+  const t = useTranslations('contentEditor.library.shopping');
+  const format = useFormatter();
+  if (!shopping || shopping.state === 'none') {
+    return <span className="text-xs text-muted-foreground">{t('none')}</span>;
+  }
+  const label =
+    shopping.state === 'unchecked'
+      ? t('unchecked')
+      : shopping.state === 'ok'
+        ? t('ok')
+        : shopping.bad.every((link) => link.state === 'sold_out')
+          ? t('soldOut', { count: shopping.bad.length })
+          : t('notForSale', { count: shopping.bad.length });
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={300}
+        closeDelay={0}
+        render={
+          <button
+            type="button"
+            className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            aria-label={label}
+          />
+        }
+      >
+        {shopping.state === 'unchecked' ? (
+          <span className="text-xs text-muted-foreground">{label}</span>
+        ) : (
+          <Badge
+            variant="outline"
+            className={`whitespace-nowrap ${SHOPPING_BADGE[shopping.state]}`}
+          >
+            {label}
+          </Badge>
+        )}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-72 space-y-1">
+        {shopping.state === 'unchecked' ? (
+          <p>{t('uncheckedHint')}</p>
+        ) : (
+          <>
+            <p>
+              {t('linked', {
+                categoriesLinked: shopping.categoriesLinked,
+                categories: shopping.categories,
+                productsLinked: shopping.productsLinked,
+                products: shopping.products,
+              })}
+            </p>
+            {shopping.bad.map((link) => (
+              <p key={link.id} className="[overflow-wrap:anywhere]">
+                {t(`states.${link.state}`, { title: link.title })}
+              </p>
+            ))}
+            <p className="opacity-80">
+              {t(shopping.readFrom === 'page' ? 'checkedPage' : 'checkedDraft', {
+                when: format.dateTime(new Date(shopping.checkedAt), { dateStyle: 'medium' }),
+              })}
+            </p>
+          </>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * A draft's last send to the CMS, as an icon whose tip says when and how it
+ * went, and on wide screens its word: "In Webflow · draft", "Live"…
+ */
 function CmsStatusMark({ status }: { status: CmsStatus }) {
   const t = useTranslations('contentEditor.library.cms');
+  const tShort = useTranslations('contentEditor.editor.sentChip');
   const format = useFormatter();
   const when = format.dateTime(new Date(status.at), { dateStyle: 'medium', timeStyle: 'short' });
   const live = status.status === 'published' ? status.publishedUrl : null;
@@ -316,7 +409,7 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
       : status.status === 'published'
         ? 'text-blue-600 dark:text-blue-400'
         : 'text-muted-foreground';
-  const className = `inline-flex rounded p-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${tone}`;
+  const className = `inline-flex items-center gap-1 rounded p-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${tone}`;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -338,6 +431,9 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
         }
       >
         {icon}
+        <span aria-hidden className="hidden whitespace-nowrap text-xs font-medium xl:inline">
+          {tShort(`${status.target}.${status.status}`)}
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-72 space-y-1">
         <p>{label}</p>
