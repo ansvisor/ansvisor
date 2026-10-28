@@ -223,16 +223,38 @@ const escapeText = (value) => String(value).replace(/[&<>"']/g, (c) => ENTITIES[
 const clean = (value) => String(value ?? '').trim();
 
 /**
- * The written page as the editor's HTML: an H1, the opening paragraphs, an
- * H2 per section with its paragraphs and list, and the FAQ as H3 questions.
- * Every text is escaped: the model writes text, never markup.
+ * A heading as a reader sees one: its first letter a capital when its first
+ * word is all lowercase, as a fan-out's words come ("latest news ChatGPT"),
+ * in the page's language (Turkish "i" → "İ"). A name written lowercase on
+ * purpose ("iPhone", "eBay") stays as it is.
  */
-export function renderPage(page) {
+export function headingCase(text, language) {
+  const value = clean(text);
+  const [first = ''] = value.split(/\s+/u);
+  if (!first || first !== first.toLowerCase() || first === first.toUpperCase()) return value;
+  const chars = Array.from(value);
+  let capital;
+  try {
+    capital = chars[0].toLocaleUpperCase(language || undefined);
+  } catch {
+    capital = chars[0].toUpperCase();
+  }
+  return capital + chars.slice(1).join('');
+}
+
+/**
+ * The written page as the editor's HTML: an H1, the opening paragraphs, an
+ * H2 per section with its paragraphs and list, and the FAQ as H3 questions,
+ * each heading starting with a capital (headingCase). Every text is escaped:
+ * the model writes text, never markup.
+ */
+export function renderPage(page, { language = null } = {}) {
   const p = (text) => (clean(text) ? `<p>${escapeText(clean(text))}</p>` : '');
-  const parts = [`<h1>${escapeText(clean(page.title))}</h1>`, ...page.intro.map(p)];
+  const h = (level, text) => `<h${level}>${escapeText(headingCase(text, language))}</h${level}>`;
+  const parts = [h(1, page.title), ...page.intro.map(p)];
   for (const section of page.sections) {
     if (!clean(section.heading)) continue;
-    parts.push(`<h2>${escapeText(clean(section.heading))}</h2>`, ...section.paragraphs.map(p));
+    parts.push(h(2, section.heading), ...section.paragraphs.map(p));
     const bullets = section.bullets.filter((b) => clean(b));
     if (bullets.length) {
       parts.push(`<ul>${bullets.map((b) => `<li>${p(b)}</li>`).join('')}</ul>`);
@@ -240,9 +262,9 @@ export function renderPage(page) {
   }
   const faq = page.faq.filter((item) => clean(item.question) && clean(item.answer));
   if (faq.length && clean(page.faqHeading)) {
-    parts.push(`<h2>${escapeText(clean(page.faqHeading))}</h2>`);
+    parts.push(h(2, page.faqHeading));
     for (const item of faq) {
-      parts.push(`<h3>${escapeText(clean(item.question))}</h3>`, p(item.answer));
+      parts.push(h(3, item.question), p(item.answer));
     }
   }
   return parts.filter(Boolean).join('');
@@ -931,13 +953,10 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   );
   // The sources a claim may be given to: the ones the page gives claims to,
   // its Your input and authors (editor test 2026-10-25).
-  const attributable = attributableSources(
-    draft.body_html,
-    numbered,
-    authors,
-    await draftLanguage(draft, brand),
-    [brand.name],
-  );
+  const language = await draftLanguage(draft, brand);
+  const attributable = attributableSources(draft.body_html, numbered, authors, language, [
+    brand.name,
+  ]);
 
   if (rewrite) {
     return await rewritePage({
@@ -978,7 +997,8 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     await advanceRun(run, 3);
     // No number without a source: a placeholder where one had none.
     const written = sourcedPage(object, knownInPage, people);
-    const title = clean(written.title).slice(0, 300) || draft.title;
+    // The title column as the H1 reads it: a capital first (headingCase).
+    const title = headingCase(clean(written.title).slice(0, 300), language) || draft.title;
     // Stopped meanwhile: the page stays as it was, and History with it.
     await stopIfStopped(run);
     // Try again over a page the person has written in: History keeps it
@@ -997,7 +1017,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
         // The shopping path's names it wrote, linked (shopping-links.js), and
         // its products as a grid where the page names them most (shopping-blocks.js).
         body_html: insertProductGrid(
-          linkShoppingPath(renderPage({ ...written, title }), shoppingPath).html,
+          linkShoppingPath(renderPage({ ...written, title }, { language }), shoppingPath).html,
           shoppingPath && { ...shoppingPath, pageType: draft.page_type },
         ),
         status: 'in_review',
