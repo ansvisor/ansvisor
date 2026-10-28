@@ -530,4 +530,25 @@ describe('fixedPages', () => {
     ]);
     expect(reads[0].order).toEqual(['created_at', 'id']);
   });
+
+  it('caps a fix at 20 pages once the ones audited since are left out', async () => {
+    const paths = Array.from({ length: 25 }, (_, i) => `/page-${i + 1}`);
+    fixedActions = [
+      {
+        brand_id: 'brand-a',
+        completed_at: '2026-10-05T10:00:00Z',
+        payload: { targets: paths.map((path) => ({ id: `https://acme.com${path}` })) },
+      },
+    ];
+    // Its first five pages were audited since.
+    recentAudits = paths.slice(0, 5).map((path) => ({
+      brand_id: 'brand-a',
+      url: `https://acme.com${path}`,
+      final_url: null,
+      created_at: '2026-10-06T00:00:00Z',
+    }));
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+
+    expect((await fixedPages(brandRows, NOW)).map((p) => p.path)).toEqual(paths.slice(5));
+  });
 });

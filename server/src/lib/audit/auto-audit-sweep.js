@@ -177,7 +177,10 @@ async function recentlyTriedPages(brands, now) {
   return new Set((data ?? []).map((row) => opportunityKey(row.url)).filter(Boolean));
 }
 
-/** Pages one fix action offers at most: a run takes few anyway. */
+/**
+ * Pages one fix action offers at most, of those still due (its others are
+ * left out first): a run takes few anyway.
+ */
 const FIXED_PER_ACTION = 20;
 
 /**
@@ -252,7 +255,7 @@ export async function fixedPages(brands, now) {
 
   // By the brand's page (runPageKey): brands sharing a domain fix their own.
   const pages = new Map();
-  for (const action of actions) {
+  for (const [index, action] of actions.entries()) {
     const own = domains.get(action.brand_id) ?? [];
     const p = action.payload ?? {};
     const urls = [
@@ -261,7 +264,7 @@ export async function fixedPages(brands, now) {
     ].filter(
       (url) => typeof url === 'string' && /^https?:\/\//i.test(url) && onBrandDomain(url, own),
     );
-    for (const url of [...new Set(urls)].slice(0, FIXED_PER_ACTION)) {
+    for (const url of urls) {
       const key = opportunityKey(url);
       const id = key ? runPageKey(action.brand_id, key) : null;
       // Newest fix first: the first one read for a page is its last.
@@ -274,6 +277,7 @@ export async function fixedPages(brands, now) {
         url,
         path,
         fixedAt: Date.parse(action.completed_at),
+        action: index,
       });
     }
   }
@@ -305,9 +309,17 @@ export async function fixedPages(brands, now) {
       if (id && !(lastAudit.get(id) >= at)) lastAudit.set(id, at);
     }
   }
-  return [...pages]
-    .filter(([id, page]) => !(lastAudit.get(id) >= page.fixedAt))
-    .map(([, { brandId, key, url, path }]) => ({ brandId, key, url, path }));
+  // The pages still due, each fix's first FIXED_PER_ACTION of them.
+  const perAction = new Map();
+  const due = [];
+  for (const [id, page] of pages) {
+    if (lastAudit.get(id) >= page.fixedAt) continue;
+    const taken = perAction.get(page.action) ?? 0;
+    if (taken >= FIXED_PER_ACTION) continue;
+    perAction.set(page.action, taken + 1);
+    due.push({ brandId: page.brandId, key: page.key, url: page.url, path: page.path });
+  }
+  return due;
 }
 
 /** Record the finished run and, when the org asked for it, e-mail what it found. */
