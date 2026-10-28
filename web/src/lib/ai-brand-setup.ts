@@ -30,15 +30,25 @@ export interface BrandSetupParams {
   description: string;
   website: string;
   language: string;
+  /** The brand's industry, where one is kept: a brand's Prompts page sends it; setup has none. */
+  industry?: string;
 }
 
 /**
  * The longest the API takes each field (server/src/lib/brand-setup-input.js).
  * What's sent is cut to them, so a long description kept on the brand never
  * fails a suggestion. A topic is held to `topic` where it's typed: its name
- * comes back with its prompts, so it isn't cut here.
+ * comes back with its prompts, so it isn't cut here. `topics` is the most
+ * one prompts call takes; more go in batches.
  */
-export const BRAND_SETUP_LIMITS = { name: 200, website: 200, description: 2000, topic: 100 };
+export const BRAND_SETUP_LIMITS = {
+  name: 200,
+  industry: 200,
+  website: 200,
+  description: 2000,
+  topics: 20,
+  topic: 100,
+};
 
 /** At most `max` UTF-16 units, as the API's limits count them, never half of an emoji's pair. */
 function cut(value: string | undefined, max: number): string | undefined {
@@ -97,38 +107,46 @@ export interface GeneratePromptsResult {
 /**
  * POST /api/prompts/from-topics
  *
- * Returns per-topic prompt groups.
- * Throws if the request fails.
+ * Returns per-topic prompt groups, in the topics' order. The API takes
+ * BRAND_SETUP_LIMITS.topics a call, so more (a brand's Prompts page starts
+ * with every topic it tracks) are asked in batches side by side; no topics,
+ * no call. Throws if any request fails.
  */
 export async function generatePromptsFromTopics(
   params: BrandSetupParams,
   topics: string[],
 ): Promise<GeneratePromptsResult> {
   const authorization = await getAuthHeader();
-  const res = await fetch(`${API_BASE}/api/prompts/from-topics`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: authorization,
-    },
-    body: JSON.stringify({
-      brandName: cut(params.brandName, BRAND_SETUP_LIMITS.name),
-      industry: '',
-      description: cut(params.description, BRAND_SETUP_LIMITS.description),
-      topics,
-      language: params.language,
-    }),
-  });
+  const batches: string[][] = [];
+  for (let i = 0; i < topics.length; i += BRAND_SETUP_LIMITS.topics) {
+    batches.push(topics.slice(i, i + BRAND_SETUP_LIMITS.topics));
+  }
+  const groups = await Promise.all(
+    batches.map(async (batch): Promise<TopicPromptGroup[]> => {
+      const res = await fetch(`${API_BASE}/api/prompts/from-topics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: authorization,
+        },
+        body: JSON.stringify({
+          brandName: cut(params.brandName, BRAND_SETUP_LIMITS.name),
+          industry: cut(params.industry, BRAND_SETUP_LIMITS.industry) ?? '',
+          description: cut(params.description, BRAND_SETUP_LIMITS.description),
+          topics: batch,
+          language: params.language,
+        }),
+      });
 
-  if (!res.ok) throw new Error('Failed to generate prompts');
-  const data = await res.json();
-  const topicPrompts = (data.topicPrompts || []).map(
-    (tp: { topic: string; prompts: string[] }) => ({
-      topic: tp.topic,
-      prompts: tp.prompts,
+      if (!res.ok) throw new Error('Failed to generate prompts');
+      const data = await res.json();
+      return (data.topicPrompts || []).map((tp: { topic: string; prompts: string[] }) => ({
+        topic: tp.topic,
+        prompts: tp.prompts,
+      }));
     }),
   );
-  return { topicPrompts };
+  return { topicPrompts: groups.flat() };
 }
 
 // ── Competitor suggestions ─────────────────────────────────────────────────────
