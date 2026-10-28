@@ -23,7 +23,10 @@ create table if not exists public.cited_page_features (
   domain text not null,
   -- The brand's own page, cited for the same prompts.
   own boolean not null default false,
-  -- { words, checks: { "<check key>": "pass" | "warn" | "fail" | "na" } }
+  -- { words, checks: { "<check key>": "pass" | "warn" | "fail" | "na" } }, or
+  -- { unreadable: true[, disallowed: true] } for a page that couldn't be read
+  -- (it blocks readers, a wall, robots.txt): kept so it counts against the
+  -- day's reads and isn't tried again while fresh.
   features jsonb not null default '{}'::jsonb,
   read_at timestamptz not null default now(),
   unique (brand_id, page_key)
