@@ -139,6 +139,28 @@ describe('pickRunPages', () => {
     ]);
   });
 
+  it("rounds the fixed pages' half up: three of a five-page run", () => {
+    const pages = pickRunPages(
+      [
+        {
+          brandId: 'a',
+          opportunities: [row('/a-80', { priority: 80 }), row('/a-70', { priority: 70 })],
+        },
+      ],
+      5,
+      NOW,
+      new Set(),
+      ['/fixed-1', '/fixed-2', '/fixed-3', '/fixed-4'].map((path) => fixedPage(path)),
+    );
+    expect(pages.map((p) => p.path)).toEqual([
+      '/fixed-1',
+      '/fixed-2',
+      '/fixed-3',
+      '/a-80',
+      '/a-70',
+    ]);
+  });
+
   it('gives a one-page run to a fixed page, and none to a run with no slots', () => {
     const inbox = [{ brandId: 'a', opportunities: [row('/a-80', { priority: 80 })] }];
     expect(

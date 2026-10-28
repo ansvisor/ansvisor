@@ -15,6 +15,7 @@ let auditRows;
 let triedRows;
 let failCounts;
 let fixedActions;
+let actionsError;
 let recentAudits;
 let domainRows;
 let prefRows;
@@ -67,7 +68,9 @@ function query(table) {
     then: (resolve) => {
       ops.push(op);
       // Fix actions completed lately (learning B7), and the audits since.
-      if (table === 'actions') return resolve({ data: fixedActions, error: null });
+      if (table === 'actions') {
+        return resolve(actionsError ? { data: null, error: actionsError } : { data: fixedActions });
+      }
       if (table === 'brand_domains') return resolve({ data: domainRows, error: null });
       if (table === 'site_audit_page_prefs') {
         return resolve({ data: prefRows.slice(op.range[0], op.range[1] + 1), error: null });
@@ -144,6 +147,7 @@ beforeEach(async () => {
   triedRows = [];
   failCounts = {};
   fixedActions = [];
+  actionsError = null;
   recentAudits = [];
   domainRows = [
     { brand_id: 'brand-a', domain: 'acme.com' },
@@ -550,5 +554,60 @@ describe('fixedPages', () => {
     const { fixedPages } = await import('./auto-audit-sweep.js');
 
     expect((await fixedPages(brandRows, NOW)).map((p) => p.path)).toEqual(paths.slice(5));
+  });
+
+  it('counts an audit by the address it ended at, and the same page however its address is written', async () => {
+    fixedActions = [
+      {
+        brand_id: 'brand-a',
+        completed_at: '2026-10-05T10:00:00Z',
+        payload: {
+          targets: [
+            { id: 'https://www.acme.com/a-due/?utm_source=mail' },
+            { id: 'http://acme.com/a-due' },
+            { id: 'HTTPS://ACME.COM/a-due#top' },
+            { id: 'https://acme.com/a-fixed' },
+            { id: 'https://acme.com/a-moved' },
+          ],
+        },
+      },
+    ];
+    recentAudits = [
+      // The same page, written another way.
+      {
+        brand_id: 'brand-a',
+        url: 'http://www.acme.com/a-fixed/?ref=1',
+        final_url: null,
+        created_at: '2026-10-06T00:00:00Z',
+      },
+      // Asked for another address, redirected to the fixed page.
+      {
+        brand_id: 'brand-a',
+        url: 'https://acme.com/old-address',
+        final_url: 'https://www.acme.com/a-moved/',
+        created_at: '2026-10-06T00:00:00Z',
+      },
+    ];
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+
+    expect(await fixedPages(brandRows, NOW)).toEqual([
+      {
+        brandId: 'brand-a',
+        key: 'acme.com/a-due',
+        url: 'https://www.acme.com/a-due/?utm_source=mail',
+        path: '/a-due',
+      },
+    ]);
+  });
+
+  it('runs on the inboxes, as before, when the fixed pages cannot be read', async () => {
+    actionsError = { message: 'connection reset' };
+    await run();
+    expect(ops.some((op) => op.table === 'actions')).toBe(true);
+    expect(startAudits.mock.calls.map(([brandId, urls]) => [brandId, urls])).toEqual([
+      ['brand-a', ['https://acme.com/pinned', 'https://acme.com/a-90', 'https://acme.com/a-40']],
+      ['brand-b', ['https://acme.com/b-80', 'https://acme.com/b-70']],
+    ]);
+    expect(runOps().at(-1).update).toMatchObject({ status: 'completed' });
   });
 });
