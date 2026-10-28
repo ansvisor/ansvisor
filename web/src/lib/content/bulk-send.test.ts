@@ -19,6 +19,13 @@ describe('bulkSendNotes', () => {
     });
   });
 
+  it('counts the failures, not "Nothing was sent", when some were sent', () => {
+    expect(bulkSendNotes({ sent: 1, failed: 1, redirected: 1 })).toEqual({
+      sent: 1,
+      failure: 'failed',
+    });
+  });
+
   it('counts the failures when some had another cause, or an older API says none', () => {
     expect(bulkSendNotes({ sent: 1, failed: 2, redirected: 1 }).failure).toBe('failed');
     expect(bulkSendNotes({ sent: 1, failed: 2 }).failure).toBe('failed');

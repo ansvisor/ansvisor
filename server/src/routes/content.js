@@ -18,9 +18,6 @@ import { getLanguageName } from '../lib/languages.js';
 import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from '../lib/chunked-in.js';
 import { isRedirect, postJson } from '../lib/safe-post.js';
-
-/** What a send says of a webhook that redirects, and the test too: nothing reaches where it points. */
-const WEBHOOK_REDIRECT_ERROR = 'The webhook address redirects. Use the address it redirects to.';
 import { webhookTestLimiter } from '../middleware/rate-limiter.js';
 import {
   assertBrandAccess,
@@ -40,6 +37,9 @@ import {
   promptSuggestionRequest,
   runningSuggestionJob,
 } from '../lib/prompt-content-suggestion.js';
+
+/** What a send says of a webhook that redirects, and the test too: nothing reaches where it points. */
+const WEBHOOK_REDIRECT_ERROR = 'The webhook address redirects. Use the address it redirects to.';
 
 const router = Router();
 
