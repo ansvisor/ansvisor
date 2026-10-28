@@ -6335,6 +6335,42 @@ describe('the side panel', () => {
       expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe('[phone number]');
     });
 
+    it('opens the HTML view at the placeholder the page hides from Show in HTML, past the five it shows', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1>' +
+            '<p>Ask [competitor] and [name of a real person].</p>' +
+            '<p><img src="https://cdn.example.com/a.jpg" alt="[photo of the founder]"></p>' +
+            '<p>Costs [price], since [year], at [city].</p>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('6 placeholders to fill');
+      await act(async () => button('Show in HTML')!.click());
+      const area = [...container.querySelectorAll('textarea')].find((a) =>
+        a.value.includes('[photo of the founder]'),
+      )!;
+      expect(area).toBeTruthy();
+      expect(area.value.slice(area.selectionStart, area.selectionEnd)).toBe(
+        '[photo of the founder]',
+      );
+      const editor = (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
+        .editor;
+      expect(editor.state.selection.empty).toBe(true);
+    });
+
+    it("counts a code block's placeholder once in the toolbar", async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><pre><code>token = "[api key]"</code></pre>',
+        }),
+      );
+      await renderPage();
+      expect(container.textContent).toContain('1 placeholder to fill');
+      expect(button('Show in HTML')).toBeFalsy();
+    });
+
     it('puts the byline under the H1 for a brand that adds it to content, and says so', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

@@ -1439,11 +1439,15 @@ export function DraftEditor({
   if (placeholderCount > 0 && !hadPlaceholders) setHadPlaceholders(true);
   // The placeholders a send or an export finds that the page's text doesn't
   // show: in an image's alt text, the JSON-LD, an HTML block, or a title the
-  // page doesn't hold. The toolbar counts them with the page's.
+  // page doesn't hold. The toolbar counts them with the page's (a code
+  // block's too, which the marks hold and pagePlaceholders doesn't read).
   const hiddenPlaceholders = useMemo(() => {
     const html = publishableHtml(pageHtml);
     const found = exportPlaceholders(html) + titlePlaceholders(title, html);
-    return Math.max(0, found - pagePlaceholders(pageHtml).count);
+    const code = Array.from(
+      new DOMParser().parseFromString(pageHtml, 'text/html').querySelectorAll('pre'),
+    ).reduce((sum, pre) => sum + (pre.textContent?.match(PLACEHOLDER)?.length ?? 0), 0);
+    return Math.max(0, found - pagePlaceholders(pageHtml).count - code);
   }, [pageHtml, title]);
   // Who may edit the page's author: only they get Edit author (CE-037's rule).
   const canEditPageAuthor =
@@ -2250,12 +2254,14 @@ export function DraftEditor({
       )
       .run();
   };
-  // Fill now for a placeholder the page's text doesn't show: once the HTML view is open.
-  const [fillInHtml, setFillInHtml] = useState(false);
+  // Fill now for a placeholder the page's text doesn't show, and the
+  // toolbar's Show in HTML: once the HTML view is open (Show in HTML's, the
+  // first the page's text doesn't show).
+  const [fillInHtml, setFillInHtml] = useState<null | { hidden: boolean }>(null);
   useEffect(() => {
     if (!fillInHtml || htmlSource === null) return;
-    setFillInHtml(false);
-    selectHtmlPlaceholder(htmlSourceRef.current, htmlSource);
+    setFillInHtml(null);
+    selectHtmlPlaceholder(htmlSourceRef.current, htmlSource, fillInHtml);
   }, [fillInHtml, htmlSource]);
   const fillFirstPlaceholder = () => {
     if (htmlSource !== null) {
@@ -2264,9 +2270,17 @@ export function DraftEditor({
     }
     if (showFirstPlaceholder()) return;
     if (openHtmlView()) {
-      setFillInHtml(true);
+      setFillInHtml({ hidden: false });
       toast(t('placeholders.inHtmlView', { html: '</>' }));
     }
+  };
+  // Show in HTML: straight to the HTML view, past the page's own placeholders.
+  const showHiddenPlaceholder = () => {
+    if (htmlSource !== null) {
+      selectHtmlPlaceholder(htmlSourceRef.current, htmlSource, { hidden: true });
+      return;
+    }
+    if (openHtmlView()) setFillInHtml({ hidden: true });
   };
 
   /**
@@ -4112,7 +4126,7 @@ export function DraftEditor({
               onToggleHtml={htmlSource === null ? openHtmlView : applyHtmlView}
               onAttach={attachments.open}
               linkRequest={linkRequest}
-              placeholders={{ hidden: hiddenPlaceholders, onShowHidden: fillFirstPlaceholder }}
+              placeholders={{ hidden: hiddenPlaceholders, onShowHidden: showHiddenPlaceholder }}
               // + Insert › Products, from an online shop's catalog (shopping path, part 5).
               productsBrandId={siteType === 'ecommerce' ? draft.brandId : null}
             />
@@ -4394,9 +4408,37 @@ export function DraftEditor({
   );
 }
 
-/** The HTML view's first placeholder, selected and scrolled to. */
-function selectHtmlPlaceholder(area: HTMLTextAreaElement | null, source: string) {
-  const m = new RegExp(PLACEHOLDER.source, 'iu').exec(blankCode(source, { words: true }));
+/**
+ * Where the page's text shows a placeholder in the HTML view's source: in
+ * its words, not an alt or title value, the JSON-LD, or an HTML block's code
+ * (between its markers).
+ */
+function shownPlaceholderAt(source: string): Set<number> {
+  const blocks = [...source.matchAll(/<!-- html-block -->[\s\S]*?<!-- \/html-block -->/g)];
+  const inBlock = (i: number) => blocks.some((b) => i > b.index && i < b.index + b[0].length);
+  const words = blankCode(source, { words: true, fields: false });
+  return new Set(
+    [...words.matchAll(new RegExp(PLACEHOLDER.source, 'giu'))]
+      .map((m) => m.index)
+      .filter((i) => !inBlock(i)),
+  );
+}
+
+/**
+ * The HTML view's first placeholder, selected and scrolled to. With
+ * `hidden`, the first the page's text doesn't show (an image's alt text,
+ * the JSON-LD, an HTML block), when there is one.
+ */
+function selectHtmlPlaceholder(
+  area: HTMLTextAreaElement | null,
+  source: string,
+  { hidden = false } = {},
+) {
+  const found = [
+    ...blankCode(source, { words: true }).matchAll(new RegExp(PLACEHOLDER.source, 'giu')),
+  ];
+  const shown = hidden ? shownPlaceholderAt(source) : null;
+  const m = found.find((f) => !shown?.has(f.index)) ?? found[0];
   if (!m || !area) return;
   area.focus();
   area.setSelectionRange(m.index, m.index + m[0].length);

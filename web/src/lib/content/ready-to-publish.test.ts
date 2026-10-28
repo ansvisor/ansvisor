@@ -136,6 +136,17 @@ describe('blankCode', () => {
     ).toEqual(['[name of a real person]']);
   });
 
+  it('without fields, leaves only the words the page shows: no alt, title or JSON-LD', () => {
+    const html =
+      '<script type="application/ld+json">{"text":"Costs [price]."}</script>\n' +
+      '<p title="[tip]">Ask <img src="a.jpg" alt="[photo of the founder]"> [name of a real person].</p>';
+    const blanked = blankCode(html, { words: true, fields: false });
+    expect(blanked).toHaveLength(html.length);
+    expect(matches(blanked).map((m) => html.slice(m.index, m.index + m[0].length))).toEqual([
+      '[name of a real person]',
+    ]);
+  });
+
   it('blanks comments and what scripts, styles and templates hold, keeping the tags', () => {
     const html =
       '<!-- <h1>Old</h1> -->\n<script>document.write("</h1>")</script><template><h1>T</h1></template>\n<h1>Pour-over</h1>';
