@@ -68,7 +68,12 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
+import {
+  BRAND_SETUP_LIMITS,
+  suggestTopics,
+  generatePromptsFromTopics,
+  suggestCompetitors,
+} from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { DASHBOARD_HOME } from '@/config/home';
@@ -1359,6 +1364,7 @@ export default function OnboardingPage() {
                     <div className="flex items-center gap-2 pt-2">
                       <Input
                         placeholder="Add custom topic..."
+                        maxLength={BRAND_SETUP_LIMITS.topic}
                         value={customTopic}
                         onChange={(e) => setCustomTopic(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && addCustomTopic()}

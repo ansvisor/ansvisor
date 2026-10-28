@@ -1,7 +1,7 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/client';
 import type { PromptUsageSummary } from '@/lib/prompt-usage-summary';
-import type { AiUsage, UsageLimits } from './ai-usage';
+import { aiUsageFromApi, type AiUsage, type UsageLimits } from './ai-usage';
 
 /**
  * The header meter's reads (AI usage spec §3.1), from the browser through
@@ -43,7 +43,7 @@ export async function readAiUsage(): Promise<AiUsage | null> {
     if (body.error === 'plan_limit') return null;
     throw new Error(body.message || body.error || `Server error: ${res.status}`);
   }
-  return (await res.json()) as AiUsage;
+  return aiUsageFromApi((await res.json()) as AiUsage);
 }
 
 async function readJson<T>(url: string, init?: RequestInit): Promise<T | null> {

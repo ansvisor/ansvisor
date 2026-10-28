@@ -36,6 +36,9 @@ describe('checkActionTask', () => {
   it('says why nothing was checked, and returns the server’s error rather than throwing', async () => {
     vi.stubGlobal('fetch', respond(200, { checked: null, reason: 'not_checkable' }));
     expect(await checkActionTask('t1')).toEqual({ checked: null, reason: 'not_checkable' });
+    // A shopping links task whose draft has no path left (shopping path, part 7).
+    vi.stubGlobal('fetch', respond(200, { checked: null, reason: 'no_shopping_path' }));
+    expect(await checkActionTask('t1')).toEqual({ checked: null, reason: 'no_shopping_path' });
     vi.stubGlobal('fetch', respond(200, { checked: null, reason: 'something new' }));
     expect(await checkActionTask('t1')).toEqual({ checked: null, reason: 'no_answer' });
     vi.stubGlobal('fetch', respond(404, { error: 'Task not found', code: 'not_found' }));
