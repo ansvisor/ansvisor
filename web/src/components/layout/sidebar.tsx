@@ -214,9 +214,11 @@ export function Sidebar() {
   }, [underMenu]);
 
   // The count beside Tracked Prompts, refreshed on brand switch and on every
-  // page change so adding or deleting prompts shows up.
+  // page change so adding or deleting prompts shows up. Not read while
+  // Prompts is off the viewer's menu.
+  const promptsOnMenu = !hiddenSections.has('prompts');
   useEffect(() => {
-    if (!activeBrandId) return;
+    if (!activeBrandId || !promptsOnMenu) return;
     let cancelled = false;
     getTrackedPromptCount(activeBrandId)
       .then((n) => !cancelled && setTrackedCount(n))
@@ -224,7 +226,7 @@ export function Sidebar() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, pathname]);
+  }, [activeBrandId, pathname, promptsOnMenu]);
 
   const setSubmenuOpen = (href: string, open: boolean) => {
     setOpenMenus((prev) => ({ ...prev, [href]: open }));

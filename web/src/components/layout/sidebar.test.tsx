@@ -17,7 +17,8 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
 }));
-vi.mock('@/lib/actions/prompt', () => ({ getTrackedPromptCount: async () => 0 }));
+const getTrackedPromptCount = vi.hoisted(() => vi.fn(async () => 0));
+vi.mock('@/lib/actions/prompt', () => ({ getTrackedPromptCount }));
 vi.mock('@/hooks/use-feature-gate', () => ({
   useFeatureGate: () => ({ canUse: () => true, requiredPlanFor: () => null, isCloud: false }),
 }));
@@ -47,6 +48,18 @@ vi.mock('@/config/dashboard', () => {
           },
         ],
       },
+      {
+        title: 'Analytics',
+        items: [
+          {
+            title: 'Prompts',
+            href: '/dashboard/prompts',
+            icon: Icon,
+            children: [{ title: 'Tracked Prompts', href: '/dashboard/prompts/tracked' }],
+          },
+          { title: 'Mentions', href: '/dashboard/mentions', icon: Icon },
+        ],
+      },
     ],
   };
 });
@@ -62,6 +75,7 @@ vi.stubGlobal('localStorage', {
 const { Sidebar } = await import('./sidebar');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
+const { useBrandStore } = await import('@/stores/use-brand-store');
 
 /** The dashboard sidebar, expanded (it opens collapsed). */
 
@@ -76,6 +90,8 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   // Expanded: a collapsed sidebar shows icons alone.
   useSidebarStore.setState({ isCollapsed: false });
+  useBrandStore.setState({ activeBrandId: null });
+  getTrackedPromptCount.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -120,7 +136,22 @@ describe('Sidebar', () => {
     );
   });
 
-  it('says nothing when the whole menu shows', async () => {
+  it('drops a group whose sections are all off the menu, title and all', async () => {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <MenuAccessProvider hidden={['prompts', 'mentions']} canManageMenus={false}>
+            <Sidebar />
+          </MenuAccessProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.textContent).toContain('Execution');
+    expect(container.textContent).not.toContain('Analytics');
+    expect(container.querySelector('a[href="/dashboard/mentions"]')).toBeNull();
+  });
+
+  it('shows the whole menu without a menu to go by', async () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -128,6 +159,31 @@ describe('Sidebar', () => {
         </NextIntlClientProvider>,
       );
     });
+    expect(container.querySelector('[data-submenu="/dashboard/content"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/dashboard/mentions"]')).not.toBeNull();
     expect(container.textContent).not.toContain('off your menu');
+  });
+
+  it('reads the tracked prompts’ count only while Prompts is on the menu', async () => {
+    useBrandStore.setState({ activeBrandId: 'brand-1' });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <MenuAccessProvider hidden={['prompts']} canManageMenus={false}>
+            <Sidebar />
+          </MenuAccessProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(getTrackedPromptCount).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <Sidebar />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(getTrackedPromptCount).toHaveBeenCalledWith('brand-1');
   });
 });
