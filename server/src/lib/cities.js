@@ -13,6 +13,13 @@
  * - `google`: Google's canonical location name, as Google Ads geotargets
  *   spell it.
  */
+/**
+ * Türkiye as Google's geotargets spell it, in ASCII: Google renamed it from
+ * Turkey. Still to be confirmed with a real request; if Google reads it
+ * otherwise, this line is the only one to change.
+ */
+const GOOGLE_TURKIYE = 'Turkiye';
+
 export const CITIES = [
   {
     country: 'US',
@@ -173,17 +180,35 @@ export const CITIES = [
     id: 'ISTANBUL',
     name: 'Istanbul',
     region: 'Istanbul',
-    google: 'Istanbul,Istanbul,Turkey',
+    google: `Istanbul,Istanbul,${GOOGLE_TURKIYE}`,
   },
-  { country: 'TR', id: 'ANKARA', name: 'Ankara', region: 'Ankara', google: 'Ankara,Ankara,Turkey' },
-  { country: 'TR', id: 'IZMIR', name: 'Izmir', region: 'Izmir', google: 'Izmir,Izmir,Turkey' },
-  { country: 'TR', id: 'BURSA', name: 'Bursa', region: 'Bursa', google: 'Bursa,Bursa,Turkey' },
+  {
+    country: 'TR',
+    id: 'ANKARA',
+    name: 'Ankara',
+    region: 'Ankara',
+    google: `Ankara,Ankara,${GOOGLE_TURKIYE}`,
+  },
+  {
+    country: 'TR',
+    id: 'IZMIR',
+    name: 'Izmir',
+    region: 'Izmir',
+    google: `Izmir,Izmir,${GOOGLE_TURKIYE}`,
+  },
+  {
+    country: 'TR',
+    id: 'BURSA',
+    name: 'Bursa',
+    region: 'Bursa',
+    google: `Bursa,Bursa,${GOOGLE_TURKIYE}`,
+  },
   {
     country: 'TR',
     id: 'ANTALYA',
     name: 'Antalya',
     region: 'Antalya',
-    google: 'Antalya,Antalya,Turkey',
+    google: `Antalya,Antalya,${GOOGLE_TURKIYE}`,
   },
   { country: 'JP', id: 'TOKYO', name: 'Tokyo', region: 'Tokyo', google: 'Tokyo,Tokyo,Japan' },
   { country: 'JP', id: 'OSAKA', name: 'Osaka', region: 'Osaka', google: 'Osaka,Osaka,Japan' },

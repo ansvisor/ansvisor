@@ -438,7 +438,7 @@ describe('cloro-scraper – buildRequestBody state targeting (#554)', () => {
 
 describe('cloro-scraper – buildRequestBody city targeting (PROMPT-015d)', () => {
   it("sends a city's Google name to the Google engines, beside the country", () => {
-    const location = 'Istanbul,Istanbul,Turkey';
+    const location = 'Istanbul,Istanbul,Turkiye';
     expect(buildRequestBody('p', 'google-aimode', 'TR', undefined, location)).toMatchObject({
       country: 'TR',
       location,
@@ -452,7 +452,7 @@ describe('cloro-scraper – buildRequestBody city targeting (PROMPT-015d)', () =
 
   it('never sends it to the other engines', () => {
     expect(
-      buildRequestBody('p', 'chatgpt-web', 'TR', undefined, 'Istanbul,Istanbul,Turkey'),
+      buildRequestBody('p', 'chatgpt-web', 'TR', undefined, 'Istanbul,Istanbul,Turkiye'),
     ).not.toHaveProperty('location');
   });
 });

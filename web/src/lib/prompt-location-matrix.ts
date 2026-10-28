@@ -32,6 +32,9 @@ export type PromptLocationMatrix = Record<string, Record<string, PromptLocationC
 /** Locations read at most in one go: each is its own read. */
 export const MATRIX_REGIONS = 12;
 
+/** The matrix's database reads running at once, at most: each is a heavy aggregate. */
+export const MATRIX_READS_AT_ONCE = 3;
+
 /** A cell's value for the metric; null without answers there (or, for position, never named). */
 export function metricValue(
   cell: PromptLocationCell | undefined,

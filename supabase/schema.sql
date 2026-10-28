@@ -41857,6 +41857,8 @@ create policy "prompt_table_views: write" on public.prompt_table_views
 comment on table public.prompt_table_views is
   'Tracked Prompts columns (PROMPT-015a, 00363): a person''s shown and ordered columns per brand, and the brand''s shared view (user_id null) set by an admin or manager.';
 
+notify pgrst, 'reload schema';
+
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00364_cloro_countries.sql
 -- ─────────────────────────────────────────────────────────────────────────
