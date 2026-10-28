@@ -417,7 +417,9 @@ describe('past success', () => {
     );
 
     expect(none.reason.pastSuccess).toBeNull();
-    expect(none.reason.factors.pastSuccess).toBe(0.5);
+    // No result behind it: no rate, rather than the prior read as one.
+    expect(none.reason.factors).not.toHaveProperty('pastSuccess');
+    expect(worked.reason.factors.pastSuccess).toBe(0.69);
     expect(worked.score).toBeGreaterThan(none.score);
     expect(rarely.score).toBeLessThan(none.score);
     expect(worked.reason.pastSuccess).toEqual({ improved: 3, results: 3, points: 3.75 });
