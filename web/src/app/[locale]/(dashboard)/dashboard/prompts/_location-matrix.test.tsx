@@ -282,14 +282,14 @@ describe('a location with no answers yet', () => {
     );
   });
 
-  it("says no engine answers from a US state when only Google's, run country-wide, would", async () => {
+  it("waits for Google's engines in a US state: they ask from the state now", async () => {
     getTrackingCountries.mockResolvedValue([{ code: 'US', models: ['aimode', 'aioverview'] }]);
     getPromptLocationMatrix.mockResolvedValue({ p1: { US: cell(62) } });
     await renderRows([
       prompt('p1', 'google only', ['US', 'US-CA'], 'Coffee', { platforms: ['google-aio'] }),
     ]);
-    // US, then US-CA.
-    expect(bodyRows()[1].slice(2, 4)).toEqual(['62', 'No engine here']);
+    // US, then US-CA: answers elsewhere in the window, so the state's come with the next run.
+    expect(bodyRows()[1].slice(2, 4)).toEqual(['62', 'Within 24h']);
   });
 
   it('shows Limit reached instead of + Track once the plan’s locations are used up', async () => {
