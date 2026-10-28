@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { setContentDraftStatus } from '@/lib/actions/content-drafts';
 import { publishPage, readPublishAddress } from '@/lib/content/publish-client';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Mark published (CE-013): the person gives the address the page is live
@@ -44,6 +45,7 @@ export function PublishDialog({
 }) {
   const t = useTranslations('contentEditor.publish');
   const tFailure = useTranslations('apiFailure');
+  const { openUpgrade } = useUpgradeGate();
   // Undefined while the starting address is read.
   const [url, setUrl] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
@@ -90,10 +92,15 @@ export function PublishDialog({
     }
     setSaving(false);
     if (!result.ok) {
+      // A read-only workspace: the upgrade dialog, with the reason kept here.
+      if (result.code === 'subscription') openUpgrade();
       setProblem(
         result.code === 'invalid_url'
           ? t('invalidUrl')
-          : result.code === 'session' || result.code === 'workspace' || result.code === 'busy'
+          : result.code === 'session' ||
+              result.code === 'workspace' ||
+              result.code === 'busy' ||
+              result.code === 'subscription'
             ? tFailure(result.code)
             : t(result.code === 'not_found' ? 'notFound' : 'failed'),
       );

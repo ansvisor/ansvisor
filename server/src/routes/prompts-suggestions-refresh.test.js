@@ -74,6 +74,8 @@ vi.mock('ai', () => ({ generateObject, NoObjectGeneratedError: class extends Err
 vi.mock('../lib/ai-provider.js', () => ({ resolveModel: vi.fn(() => 'model') }));
 vi.mock('../lib/gsc-suggestions.js', () => ({ getGscSuggestionCandidates: async () => [] }));
 vi.mock('../lib/ga-suggestions.js', () => ({ getGaSuggestionCandidates: async () => [] }));
+const getCatalogSuggestionCandidates = vi.fn();
+vi.mock('../lib/catalog-suggestions.js', () => ({ getCatalogSuggestionCandidates }));
 // Retries without the real backoff delay.
 vi.mock('../lib/retry.js', () => ({
   withRetry: async (fn, { attempts }) => {
@@ -114,6 +116,7 @@ beforeEach(async () => {
   delete process.env.PROMPT_SUGGESTION_MODEL;
   db = { inserts: [] };
   reserveRelevanceAllowance.mockResolvedValue({ unlimited: false, id: 'r1' });
+  getCatalogSuggestionCandidates.mockResolvedValue([]);
   settleRelevanceUsage.mockResolvedValue();
   generateObject.mockResolvedValue(answer({ relevance: 8 }));
 
@@ -225,5 +228,43 @@ describe('suggestion refresh relevance', () => {
   it('still answers when settling fails, leaving the worst case charged', async () => {
     settleRelevanceUsage.mockRejectedValue(new Error('db down'));
     expect((await refresh()).status).toBe(200);
+  });
+});
+
+describe('suggestion refresh from the catalog (ECOM-003)', () => {
+  const packs = {
+    category: 'Bags > Hiking backpacks',
+    products: 18,
+    priceLow: 60,
+    priceHigh: 180,
+    priceUnder: 150,
+    currency: 'USD',
+  };
+
+  it('asks for shopping questions from the categories, and keeps the one each came from', async () => {
+    getCatalogSuggestionCandidates.mockResolvedValue([packs]);
+    const suggestions = Array.from({ length: 15 }, (_, i) => suggestion(i));
+    suggestions[0] = suggestion(0, { sourceCategory: 'bags > hiking backpacks ' });
+    // A category the catalog never offered: a plain suggestion.
+    suggestions[1] = suggestion(1, { sourceCategory: 'Tents' });
+    generateObject.mockResolvedValue({ object: { suggestions }, usage: {} });
+
+    expect((await refresh()).status).toBe(200);
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(system).toContain('WHAT THE BRAND SELLS');
+    expect(system).toContain('Derive at least 1 shopping suggestions');
+    expect(prompt).toContain(
+      '"Bags > Hiking backpacks" — 18 products, 60–180 USD (most under 150 USD)',
+    );
+    const [rows] = insertsInto('prompt_suggestions');
+    expect(rows[0]).toMatchObject({ source: 'catalog', source_data: packs });
+    expect(rows[1]).toMatchObject({ source: 'llm', source_data: null });
+  });
+
+  it('leaves the catalog out of the prompt for a brand without one', async () => {
+    expect((await refresh()).status).toBe(200);
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(system).not.toContain('WHAT THE BRAND SELLS');
+    expect(prompt).not.toContain('product catalog categories');
   });
 });
