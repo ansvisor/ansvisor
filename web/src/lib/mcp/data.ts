@@ -17,6 +17,7 @@ import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
+import { WRITE_TOOL_BRANDS, assertNotDemoBrand } from '@/lib/mcp/demo-gate';
 import {
   fetchPromptUsageRow,
   toPromptUsageSummary,
@@ -55,15 +56,23 @@ export interface BrandRow {
   industry: string | null;
   region: string | null;
   created_at: string;
+  /** The demo brand (00380): sample data, read like any brand; nothing on it is written or run. */
+  is_demo: boolean;
 }
 
+/**
+ * The organization's brands, newest first. The demo brand is one of them,
+ * marked is_demo, unless the organization hid it (once a plan was bought, or
+ * from the brand menu).
+ */
 export async function listBrandsFor(auth: McpAuthContext): Promise<BrandRow[]> {
   if (!auth.organizationId) return [];
 
   const { data, error } = await supabaseAdmin
     .from('brands')
-    .select('id, name, slug, industry, region, created_at')
+    .select('id, name, slug, industry, region, created_at, is_demo')
     .eq('organization_id', auth.organizationId)
+    .or('is_demo.eq.false,demo_hidden_at.is.null')
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -1020,7 +1029,11 @@ export async function generateBriefFor(
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
-  // No brief (an LLM call) for a read-only workspace, whoever asks.
+  // No brief (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
+  await assertNotDemoBrand(
+    auth.organizationId,
+    await WRITE_TOOL_BRANDS.generate_content_brief({ opportunity_id: opportunityId }),
+  );
   await assertSubscriptionActive(auth.organizationId);
 
   const apiUrl = API_BASE_URL;
@@ -1206,7 +1219,8 @@ export async function runSiteAuditFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
-  // No audit (quota and crawling) for a read-only workspace, whoever asks.
+  // No audit (quota and crawling) on the demo brand, nor for a read-only workspace, whoever asks.
+  await assertNotDemoBrand(auth.organizationId, brandId);
   await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;
@@ -3432,7 +3446,11 @@ export async function createImproveActionFor(
     .eq('prompt_sets.brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
-  // No Improve action (an LLM call) for a read-only workspace, whoever asks.
+  // No Improve action (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
+  await assertNotDemoBrand(
+    auth.organizationId,
+    await WRITE_TOOL_BRANDS.create_improve_action({ prompt_id: input.promptId }),
+  );
   await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;

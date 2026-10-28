@@ -152,7 +152,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_brands',
     {
       description:
-        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, and creation date. Always call this first to resolve a brand id before using other tools.',
+        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, creation date and is_demo. A brand with is_demo true is the demo brand: sample data for exploring Ansvisor, read like any brand, but nothing on it can be changed, run or generated (those tools answer demo_brand); say so when you report on it. Always call this first to resolve a brand id before using other tools.',
       inputSchema: {},
     },
     async () => {

@@ -7,6 +7,7 @@ import {
   failedCallResponse,
   subscriptionInactiveResponse,
 } from '@/lib/subscription-guard';
+import { callOnDemoBrand, demoBrandToolResult } from './demo-gate';
 
 /**
  * Ansvisor Cloud's read-only mode on the API key surface (MCP tools, the
@@ -68,7 +69,8 @@ type LooseRegisterTool = (name: string, config: unknown, cb: AnyToolCallback) =>
  * tool, check the organization's plan before it runs. The plan that can't be
  * read refuses the call too (subscriptionActiveFor throws). The plan is read once
  * per server, which the MCP route builds per request, and only when a gated
- * tool is called.
+ * tool is called. A call on the demo brand is refused first, whatever the
+ * plan (demo-gate.ts).
  */
 export function gateWriteTools(server: McpServer, organizationId: string | null): McpServer {
   let active: Promise<boolean> | null = null;
@@ -80,6 +82,7 @@ export function gateWriteTools(server: McpServer, organizationId: string | null)
       isReadTool(name)
         ? cb
         : async (...args: unknown[]) => {
+            if (await callOnDemoBrand(name, organizationId, args[0])) return demoBrandToolResult();
             active ??= subscriptionActiveFor(organizationId);
             if (!(await active)) return subscriptionInactiveToolResult();
             return cb(...args);
