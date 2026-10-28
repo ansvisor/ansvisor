@@ -91,6 +91,8 @@ interface RivalSlots {
 
 /** A question's shelves, counted once for every category it's in. */
 interface PromptShelves {
+  /** Its first card's place among the cards: a category lists its questions in that order. */
+  at: number;
   words: Set<string>;
   /** The catalog products on its shelves. */
   products: Set<string>;
@@ -119,6 +121,7 @@ export function categoryRows(
     let prompt = prompts.get(card.promptId);
     if (!prompt) {
       prompt = {
+        at,
         words: new Set(categoryWords(card.promptText)),
         products: new Set(),
         slots: 0,
@@ -203,7 +206,9 @@ export function categoryRows(
         name: category.name,
         leaf,
         prompts: mine.size,
-        promptIds: [...mine],
+        // In the cards' order, as before counting once per question: the
+        // Action Center takes a category's first 50.
+        promptIds: [...mine].sort((a, b) => prompts.get(a)!.at - prompts.get(b)!.at),
         shelfShare,
         productsOnShelf: shown.size,
         products: category.productIds.length,
