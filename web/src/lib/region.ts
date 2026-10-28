@@ -1,5 +1,6 @@
 import { CITIES } from '@/config/cities';
 import { TRACKING_COUNTRIES, US_STATES } from '@/config/prompt-options';
+import { countryName, isCountryCode } from '@/lib/tracking-countries';
 
 /**
  * Tracking locations (#691).
@@ -50,7 +51,9 @@ export function parseLocation(code: string): ParsedLocation | null {
     return CITY_LABELS.has(normalized) ? { country, state: null, city } : null;
   }
   const [country, state, ...rest] = normalized.split('-');
-  if (rest.length > 0 || !REGION_LABELS.has(country)) return null;
+  // Any country (PROMPT-015e): the picker offers those an engine answers
+  // from, and the run skips an engine in one it doesn't.
+  if (rest.length > 0 || !(REGION_LABELS.has(country) || isCountryCode(country))) return null;
   if (state === undefined) return { country, state: null };
   if (country !== 'US' || !STATE_LABELS.has(state)) return null;
   return { country, state };
@@ -83,7 +86,7 @@ export function regionLabel(code: string): string {
   if (!parsed) return code.trim();
   if (parsed.city) return CITY_LABELS.get(normalizeRegionCode(code)) ?? parsed.city;
   if (parsed.state) return STATE_LABELS.get(parsed.state) ?? parsed.state;
-  return REGION_LABELS.get(parsed.country) ?? parsed.country;
+  return REGION_LABELS.get(parsed.country) ?? countryName(parsed.country);
 }
 
 export function regionFlag(code: string): string {

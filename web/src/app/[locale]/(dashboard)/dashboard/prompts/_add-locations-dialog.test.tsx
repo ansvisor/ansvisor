@@ -10,6 +10,8 @@ const actions = vi.hoisted(() => ({
   bulkUpdatePromptLocations: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt', () => actions);
+// The engines' countries (PROMPT-015e): none read, so the picker's own list.
+vi.mock('@/lib/actions/tracking-countries', () => ({ getTrackingCountries: async () => [] }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/i18n/navigation', () => ({

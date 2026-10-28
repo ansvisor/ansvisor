@@ -40,6 +40,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
     if (table === 'catalog_source_credentials') return row.source_id;
     if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
+    if (table === 'cloro_countries') return `${row.model}|${row.country}`;
     return `${row.brand_id}|${row.source}|${row.external_id}`;
   };
   // The unique keys' rows, by table, as the database's unique indexes find them.
@@ -67,6 +68,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
           if (kind === 'eq') return at === value;
           if (kind === 'neq') return at !== value;
           if (kind === 'is') return value === null ? at == null : at === value;
+          if (kind === 'lt') return at < value;
           return value.includes(at);
         });
       if (state.op === 'select') {
@@ -131,6 +133,10 @@ export function fakeDb({ maxRows = Infinity } = {}) {
       },
       is: (column, value) => {
         state.filters.push(['is', column, value]);
+        return builder;
+      },
+      lt: (column, value) => {
+        state.filters.push(['lt', column, value]);
         return builder;
       },
       single: () => {
