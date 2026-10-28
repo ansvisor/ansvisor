@@ -218,6 +218,33 @@ export function deriveOutcome(metrics) {
 }
 
 /**
+ * What became of the signals that raised the action, when it is measured
+ * (learning A3): how many ended (resolved, the condition gone), turned into
+ * another kind of the same subject (resolved with `supersededBy`: still
+ * there), were dismissed by a person, or are still open. The closest
+ * measure to the action's own aim, and a cheap one. Null for an action no
+ * signal raised (one sent from Content, Insights, Mentions…).
+ */
+export async function signalOutcome(actionId) {
+  const { data, error } = await supabaseAdmin
+    .from('action_signals')
+    .select('signals(status, payload)')
+    .eq('action_id', actionId);
+  if (error) throw new Error(`action_signals: ${error.message}`);
+  const signals = (data ?? []).map((row) => row.signals).filter(Boolean);
+  if (!signals.length) return null;
+  const counts = { total: signals.length, ended: 0, replaced: 0, dismissed: 0, open: 0 };
+  for (const signal of signals) {
+    if (signal.status === 'resolved') {
+      if (signal.payload?.supersededBy) counts.replaced += 1;
+      else counts.ended += 1;
+    } else if (signal.status === 'dismissed') counts.dismissed += 1;
+    else counts.open += 1;
+  }
+  return counts;
+}
+
+/**
  * Measure one closed action and record the result.
  *
  * Returns the outcome written, or null when the action is not ready — it
@@ -234,6 +261,10 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // not happened yet reads low for a reason that has nothing to do with the
   // action, and would file most recent work as a decline.
   if (afterWindow.to >= utcDay(now)) return null;
+
+  // What became of the signals that raised it, kept beside the metrics.
+  const signals = await signalOutcome(action.id);
+  const withSignals = (validation) => (signals ? { ...validation, signals } : validation);
 
   // An action sent from a content opportunity is measured on its own prompts
   // and pages; the brand-wide numbers would bury a single piece of content.
@@ -265,13 +296,13 @@ export async function validateAction(action, { now = new Date() } = {}) {
     const outcome = deriveOutcome(metrics);
     await write(
       action.id,
-      {
+      withSignals({
         measuredAt: now.toISOString(),
         beforeWindow,
         afterWindow,
         metrics,
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
-      },
+      }),
       outcome,
       now,
     );
@@ -284,7 +315,12 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // in the rule that produced it, not a failure here — say so plainly rather
   // than inventing a metric it never claimed.
   if (kpiKeys.length === 0) {
-    await write(action.id, null, 'not_measurable', now);
+    await write(
+      action.id,
+      signals ? { measuredAt: now.toISOString(), signals } : null,
+      'not_measurable',
+      now,
+    );
     return 'not_measurable';
   }
 
@@ -303,7 +339,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
   const outcome = deriveOutcome(metrics);
   await write(
     action.id,
-    { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics },
+    withSignals({ measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics }),
     outcome,
     now,
   );

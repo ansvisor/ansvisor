@@ -20,8 +20,8 @@ import {
 const NOW = new Date('2026-09-20T04:00:00Z');
 const daysAgo = (n) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
 
-/** Records every write so a test can assert what was stored. */
-function mockWrites() {
+/** Records every write so a test can assert what was stored; `rows` answers a table's reads. */
+function mockWrites(rows = {}) {
   const writes = { updated: [], inserted: [] };
   from.mockImplementation((table) => {
     const builder = {
@@ -41,7 +41,7 @@ function mockWrites() {
         return builder;
       },
       then: (resolve, reject) =>
-        Promise.resolve({ data: [], error: null, count: 0 }).then(resolve, reject),
+        Promise.resolve({ data: rows[table] ?? [], error: null, count: 0 }).then(resolve, reject),
     };
     return builder;
   });
@@ -334,6 +334,45 @@ describe('validateAction', () => {
     expect(rpc).not.toHaveBeenCalled();
     const patch = writes.updated.find((w) => w.table === 'actions').patch;
     expect(patch.validation).toBeNull();
+  });
+
+  it('keeps what became of the signals that raised it beside the metrics (learning A3)', async () => {
+    const signal = (status, payload = {}) => ({ signals: { status, payload } });
+    const writes = mockWrites({
+      action_signals: [
+        signal('resolved'),
+        signal('resolved'),
+        signal('resolved', { supersededBy: 'topic_dropped' }),
+        signal('dismissed'),
+        signal('acknowledged'),
+        signal('new'),
+      ],
+    });
+    rpc.mockResolvedValue({ data: { total_citations: 10 }, error: null });
+
+    await validateAction(action(), { now: NOW });
+
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.signals).toEqual({
+      total: 6,
+      ended: 2,
+      replaced: 1,
+      dismissed: 1,
+      open: 2,
+    });
+    expect(patch.validation.metrics).toHaveLength(1);
+  });
+
+  it('keeps the signals of an action with nothing else to measure', async () => {
+    const writes = mockWrites({ action_signals: [{ signals: { status: 'resolved' } }] });
+
+    expect(await validateAction(action({ kpi_keys: [] }), { now: NOW })).toBe('not_measurable');
+
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation).toEqual({
+      measuredAt: NOW.toISOString(),
+      signals: { total: 1, ended: 1, replaced: 0, dismissed: 0, open: 0 },
+    });
   });
 
   it('does nothing for an action that never closed', async () => {

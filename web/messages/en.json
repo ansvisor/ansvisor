@@ -2590,6 +2590,7 @@
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
+        "signalsAfter": "Of the {total, plural, one {signal} other {# signals}} that raised it, when measured: {ended} ended{replaced, plural, =0 {} other {, # turned into another}}{dismissed, plural, =0 {} other {, # dismissed}}{open, plural, =0 {} other {, # still open}}.",
         "result": "Result",
         "visibilityChange": "Visibility Change",
         "citationsChange": "Citations Change",

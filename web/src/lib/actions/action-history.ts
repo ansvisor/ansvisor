@@ -28,6 +28,7 @@ import {
   type ActionHistoryTask,
   type ActionResultMetric,
   type AffectedEntity,
+  type SignalOutcome,
   type TriggerSignal,
 } from '@/lib/action-center/history';
 
@@ -57,14 +58,32 @@ const HISTORY_COLUMNS =
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
   measuredAt: string;
-  beforeWindow: { from: string; to: string };
-  afterWindow: { from: string; to: string };
-  metrics: {
+  // Absent for an action with no metric to measure, kept for its signals.
+  beforeWindow?: { from: string; to: string };
+  afterWindow?: { from: string; to: string };
+  metrics?: {
     metric: string;
     unit: string;
     before: number | null;
     after: number | null;
   }[];
+  /** What became of the signals that raised it (learning A3). */
+  signals?: SignalOutcome;
+}
+
+/** The signals' counts, when the sweep kept them and they add up. */
+function signalsFrom(validation: ValidationSnapshot | null): SignalOutcome | null {
+  const s = validation?.signals;
+  if (!s || typeof s !== 'object') return null;
+  const n = (value: unknown) => (typeof value === 'number' && value >= 0 ? value : 0);
+  const counts = {
+    total: n(s.total),
+    ended: n(s.ended),
+    replaced: n(s.replaced),
+    dismissed: n(s.dismissed),
+    open: n(s.open),
+  };
+  return counts.total > 0 ? counts : null;
 }
 
 /**
@@ -262,6 +281,7 @@ export async function getActionHistory(
       triggerSignals,
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
+      signalsAfter: signalsFrom(row.validation),
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
       dueDate: row.due_date ?? null,

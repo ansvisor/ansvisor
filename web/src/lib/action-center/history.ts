@@ -80,6 +80,19 @@ export interface TriggerSignal {
   detectedAt: string;
 }
 
+/**
+ * What became of the signals that raised an action, when it was measured
+ * (learning A3): ended (the condition gone), replaced (still there as
+ * another kind), dismissed by a person, or still open.
+ */
+export interface SignalOutcome {
+  total: number;
+  ended: number;
+  replaced: number;
+  dismissed: number;
+  open: number;
+}
+
 export interface ActionHistoryItem {
   id: string;
   actionNo: number;
@@ -102,6 +115,8 @@ export interface ActionHistoryItem {
   affected: AffectedEntity[];
   /** Empty until something measures an action's effect. */
   results: ActionResultMetric[];
+  /** Its signals when it was measured; absent before, or with no signal behind it. */
+  signalsAfter?: SignalOutcome | null;
   /** Improve actions only: positions per platform against the baseline (PROMPT-008). */
   positionOutcome: ImproveOutcome | null;
   tasks: ActionHistoryTask[];
