@@ -55,6 +55,11 @@ export interface LocationPickerProps {
   allowEmpty?: boolean;
 }
 
+/** A name without its accents and dots: İstanbul → Istanbul. */
+function withoutMarks(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 /** Engines with no sub-country mechanism — mirrors the worker's collapse. */
 const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
 
@@ -96,7 +101,11 @@ export function LocationPicker({
       // Cities (PROMPT-015d): asked by Google's engines and the API models.
       ...CITIES.map((city) => ({
         value: cityCode(city.country, city.id),
-        label: city.label,
+        // Found typed with or without its marks: "Ist" finds İstanbul, "Sao" São Paulo.
+        label:
+          withoutMarks(city.label) === city.label
+            ? city.label
+            : `${city.label} ${withoutMarks(city.label)}`,
         sublabel: `City · ${regionLabel(city.country)}`,
       })),
     ],
