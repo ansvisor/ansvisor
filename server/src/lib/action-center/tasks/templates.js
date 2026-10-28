@@ -26,7 +26,6 @@ const TEMPLATES = Object.freeze({
   strengthen_entity_content: { check: 'auto', page: true },
   // Its links go on other pages: the action's page is the one they point to.
   add_internal_links: { check: 'auto', page: false },
-  improve_cta_path: { check: 'auto', page: true },
   publish_content: { check: 'auto', page: true },
   fix_crawler_access: { check: 'auto', page: true },
   fix_structured_data: { check: 'auto', page: true },
@@ -43,6 +42,10 @@ const TEMPLATES = Object.freeze({
   validate_competitive_gap: { check: 'rerun' },
   validate_third_party_citation: { check: 'rerun' },
   measure_action_outcome: { check: 'rerun' },
+  // A call to action rewritten: the person confirms it. A re-fetch can't
+  // tell (#1565): a CTA band is often outside the page's content area, and
+  // its words too few to read as the page changing.
+  improve_cta_path: { check: 'manual', page: true },
   // Work outside the page: the person confirms it.
   create_content_brief: { check: 'manual' },
   create_content_draft: { check: 'manual' },

@@ -294,7 +294,6 @@ export const PAGE_CHECKED_TASKS: readonly string[] = [
   'refresh_content',
   'strengthen_reference_asset',
   'strengthen_entity_content',
-  'improve_cta_path',
 ];
 
 /**

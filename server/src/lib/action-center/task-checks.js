@@ -49,7 +49,6 @@ export const CHECKS = Object.freeze({
   refresh_content: 'changed',
   strengthen_reference_asset: 'changed',
   strengthen_entity_content: 'changed',
-  improve_cta_path: 'changed',
 });
 
 /** The most open tasks one nightly sweep checks: pages are fetched one at a time. */
