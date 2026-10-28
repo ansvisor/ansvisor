@@ -57,7 +57,7 @@ function brand(id: string, isDemo = false): Brand {
   return {
     id,
     organizationId: 'org1',
-    name: isDemo ? 'Brewline Coffee' : 'Acme',
+    name: isDemo ? 'Brewline Coffee' : 'Acme Coffee',
     slug: id,
     shoppingModeEnabled: false,
     isActive: true,
@@ -73,13 +73,19 @@ async function render({
   active = false,
   status = null,
   everSubscribed = false,
+  ownBrand = true,
 }: {
   selected?: 'own' | 'demo';
   active?: boolean;
   status?: string | null;
   everSubscribed?: boolean;
+  /** The workspace has its own brand besides the demo. */
+  ownBrand?: boolean;
 } = {}) {
-  useBrandStore.setState({ brands: [brand('own'), brand('demo', true)], activeBrandId: selected });
+  useBrandStore.setState({
+    brands: ownBrand ? [brand('own'), brand('demo', true)] : [brand('demo', true)],
+    activeBrandId: selected,
+  });
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -124,15 +130,31 @@ afterEach(() => {
 });
 
 describe('DemoBanner', () => {
-  it('says the brand is a demo, alone, and offers the trial to a new workspace', async () => {
+  it('says the brand is a demo, alone, and offers the trial to a new workspace for its own brand', async () => {
     await render();
     expect(bands()).toHaveLength(1);
     expect(band()?.textContent).toContain(
-      "You're exploring Brewline Coffee, a demo brand with sample data. Start a 14-day free trial, or get 50% off your first month.",
+      "You're exploring Brewline Coffee, a demo brand with sample data. Start tracking Acme Coffee with a 14-day free trial, or get 50% off your first month.",
     );
     expect(band()?.textContent).not.toContain('then 50% off');
-    expect(band()?.querySelector('strong')?.textContent).toBe('Brewline Coffee');
+    expect([...band()!.querySelectorAll('strong')].map((b) => b.textContent)).toEqual([
+      'Brewline Coffee',
+      'Acme Coffee',
+    ]);
     expect(bandButton()?.textContent).toBe('See plans');
+    await act(async () => {
+      bandButton()!.click();
+    });
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Use Ansvisor for Acme Coffee',
+    );
+  });
+
+  it('says it generally before the workspace has a brand of its own', async () => {
+    await render({ ownBrand: false });
+    expect(band()?.textContent).toContain(
+      "You're exploring Brewline Coffee, a demo brand with sample data. Start a 14-day free trial, or get 50% off your first month.",
+    );
     await act(async () => {
       bandButton()!.click();
     });
@@ -145,7 +167,7 @@ describe('DemoBanner', () => {
     await render({ status: 'canceled', everSubscribed: true });
     expect(bands()).toHaveLength(1);
     expect(band()?.textContent).toContain(
-      'a demo brand with sample data. Get 50% off your first month.',
+      'a demo brand with sample data. Get 50% off your first month of tracking Acme Coffee.',
     );
     expect(band()?.textContent).not.toContain('trial');
     expect(bandButton()?.textContent).toBe('See plans');
@@ -154,15 +176,20 @@ describe('DemoBanner', () => {
   it('says only the trial, or neither, with the first-month offer off', async () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render();
-    expect(band()?.textContent).toContain('sample data. Start a 14-day free trial.');
+    expect(band()?.textContent).toContain(
+      'sample data. Start tracking Acme Coffee with a 14-day free trial.',
+    );
     expect(band()?.textContent).not.toContain('50%');
     await render({ status: 'canceled', everSubscribed: true });
+    expect(band()?.textContent).toContain('sample data. Pick a plan to track Acme Coffee.');
+    await render({ status: 'canceled', everSubscribed: true, ownBrand: false });
     expect(band()?.textContent).toContain('sample data. Pick a plan to use it for your own brand.');
   });
 
-  it('points back to the own brand while the plan is active', async () => {
+  it('points back to the own brand, by name, while the plan is active', async () => {
     await render({ active: true, status: 'active', everSubscribed: true });
     expect(band()?.textContent).toContain('Nothing here runs or uses AI.');
+    expect(bandButton()?.textContent).toBe('Switch to Acme Coffee');
     await act(async () => {
       bandButton()!.click();
     });

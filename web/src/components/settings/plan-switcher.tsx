@@ -5,9 +5,12 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Check, ArrowUp, ArrowDown, Mail, ExternalLink, Repeat, ShoppingCart } from 'lucide-react';
 import {
-  PlanPrice,
-  PlanStartButtons,
+  PlanDetailsToggle,
+  PlanStart,
+  PlanStartCard,
+  StartChoicePicker,
   useFirstMonthOffer,
+  useStartChoice,
   useStartCheckout,
 } from '@/components/billing/plan-start';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,12 +36,11 @@ import {
 import {
   FIRST_MONTH_CODE,
   annualSaving,
+  choicePeriod,
   periodPrice,
   subscriptionEnded,
-  takesPromoCode,
   type BillingInterval,
 } from '@/lib/billing/plan-purchase';
-import type { PromoOffer } from '@/lib/billing/promo-code';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useRouter } from '@/i18n/navigation';
@@ -92,21 +94,25 @@ export function PlanSwitcher({
 
   const currentPlanId = subscription.planId as PlanId;
   const currentInterval: BillingInterval = subscription.interval === 'year' ? 'year' : 'month';
-  const [period, setPeriod] = useState<BillingInterval>(currentInterval);
+  const [periodPicked, setPeriod] = useState<BillingInterval>(currentInterval);
   // A trial is bought outright: any plan, either period, paid today.
   const trialing = subscription.status === 'trialing';
   // A canceled or never-started plan: no subscription to change, so a card
   // starts a new one through Stripe Checkout (the workspace is read-only
   // until then).
   const ended = subscriptionEnded(subscription.status);
+  // With no plan active, a plan starts as the plan dialog does: one choice
+  // above the cards (the free trial for a workspace that never had a plan,
+  // monthly with the first-month offer, or a year), then a card's button.
+  // Otherwise the cards change the plan or its period.
+  const [choice, setChoice] = useStartChoice(trialOffered && canAdmin);
+  const period = ended ? choicePeriod(choice) : periodPicked;
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
-  // With no plan active, a card starts one as the plan dialog does: Buy now,
-  // with the first-month offer on a monthly plan, and the free trial for a
-  // workspace that never had a plan.
-  const [offer, setOffer] = useState<PromoOffer | null>(null);
-  useFirstMonthOffer(ended && canAdmin && firstMonthOfferOn(), setOffer);
-  const discounted = offer && takesPromoCode(period) ? offer : null;
-  const { checkout, start } = useStartCheckout({
+  // The first-month offer, from the first frame, for an admin choosing a plan.
+  const [offer, setOffer] = useFirstMonthOffer(ended && canAdmin && firstMonthOfferOn());
+  // The plans' details, in the cards, while a plan is being chosen.
+  const [details, setDetails] = useState(false);
+  const { checkout, failed, start } = useStartCheckout({
     organizationId,
     period,
     // Stripe turned the code down since it was checked: the plain prices.
@@ -251,35 +257,44 @@ export function PlanSwitcher({
           {trialOffered ? t('planNotStarted', { days: TRIAL_DAYS }) : t('planEnded')}
         </p>
       )}
-      {/* Billing period: a year up front saves 20% */}
+      {/* How a plan starts, or the billing period: a year up front saves 20% */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div
-          role="group"
-          aria-label={t('billingPeriod')}
-          className="inline-flex rounded-lg border bg-muted/40 p-0.5"
-        >
-          {(['month', 'year'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={period === value}
-              onClick={() => setPeriod(value)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                period === value
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {value === 'month' ? t('monthly') : t('annual')}
-              {value === 'year' && saving > 0 && (
-                <span className="rounded-full bg-emerald-100 px-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                  {t('savePercent', { percent: saving })}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        {ended ? (
+          <StartChoicePicker
+            choice={choice}
+            onChange={setChoice}
+            trialOffered={trialOffered && canAdmin}
+            offer={offer}
+          />
+        ) : (
+          <div
+            role="group"
+            aria-label={t('billingPeriod')}
+            className="inline-flex rounded-lg border bg-muted/40 p-0.5"
+          >
+            {(['month', 'year'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={period === value}
+                onClick={() => setPeriod(value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors',
+                  period === value
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {value === 'month' ? t('monthly') : t('annual')}
+                {value === 'year' && saving > 0 && (
+                  <span className="rounded-full bg-emerald-100 px-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                    {t('savePercent', { percent: saving })}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
         {trialing && period === 'month' && (
           <p className="text-xs text-muted-foreground">
             {t('firstMonthOffer', { code: FIRST_MONTH_CODE })}
@@ -291,24 +306,55 @@ export function PlanSwitcher({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {SUBSCRIBABLE_PLANS.map((planId) => {
           const plan = PLANS[planId];
-          // An ended plan is no one's current plan any more.
-          const isCurrent = !ended && planId === currentPlanId;
+          // Once the plan has ended, a card starts a new one as the plan
+          // dialog's do: its price and one button, the details on request.
+          if (ended) {
+            return (
+              <PlanStartCard
+                key={planId}
+                planId={planId}
+                choice={choice}
+                offer={offer}
+                details={details}
+              >
+                {canAdmin && (
+                  <PlanStart
+                    planId={planId}
+                    choice={choice}
+                    offer={offer}
+                    trialOffered={trialOffered}
+                    opening={checkout?.planId === planId ? checkout.mode : null}
+                    disabled={
+                      periodPrice(planId, period) == null || !organizationId || checkout != null
+                    }
+                    error={failed?.planId === planId ? failed.message : null}
+                    // A code goes with buying monthly only: the trial comes without an offer.
+                    onStart={(mode) =>
+                      void start(
+                        planId,
+                        mode,
+                        mode === 'buy' && choice === 'month' ? offer?.code : undefined,
+                      )
+                    }
+                  />
+                )}
+              </PlanStartCard>
+            );
+          }
+          const isCurrent = planId === currentPlanId;
           const upgrade = isUpgrade(planId);
           const price = periodPrice(planId, period);
           const fullYear = plan.pricing ? plan.pricing.monthly * 12 : null;
           const planSaving = annualSaving(planId);
-          // What its button does: none once the plan has ended (the card's
-          // ways to start, below); buy it now during a trial; otherwise switch
+          // What its button does: buy it now during a trial; otherwise switch
           // the period of the current plan, or change to this one.
-          const action = ended
-            ? null
-            : trialing
-              ? 'buy'
-              : isCurrent
-                ? period === currentInterval
-                  ? null
-                  : 'period'
-                : 'change';
+          const action = trialing
+            ? 'buy'
+            : isCurrent
+              ? period === currentInterval
+                ? null
+                : 'period'
+              : 'change';
 
           return (
             <Card key={planId} className={isCurrent ? 'border-primary' : undefined}>
@@ -328,36 +374,29 @@ export function PlanSwitcher({
                 <p className="text-sm text-muted-foreground">{tCards(`${planId}.tagline`)}</p>
               </CardHeader>
               <CardContent>
-                {ended ? (
-                  <div className="mb-4">
-                    <PlanPrice planId={planId} period={period} discounted={discounted} />
-                  </div>
-                ) : (
-                  <div className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    {period === 'year' && fullYear != null && price != null && (
-                      <span className="text-base text-muted-foreground line-through">
-                        <span className="sr-only">{t('regularPrice')} </span>$
-                        {formatNumber(fullYear)}
-                      </span>
-                    )}
-                    <span>
-                      <span className="text-2xl font-bold">
-                        {price != null ? `$${formatNumber(price)}` : '—'}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        /{period === 'year' ? t('year') : t('month')}
-                      </span>
+                <div className="mb-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  {period === 'year' && fullYear != null && price != null && (
+                    <span className="text-base text-muted-foreground line-through">
+                      <span className="sr-only">{t('regularPrice')} </span>${formatNumber(fullYear)}
                     </span>
-                    {period === 'year' && planSaving != null && (
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400"
-                      >
-                        {t('savePercent', { percent: planSaving })}
-                      </Badge>
-                    )}
-                  </div>
-                )}
+                  )}
+                  <span>
+                    <span className="text-2xl font-bold">
+                      {price != null ? `$${formatNumber(price)}` : '—'}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      /{period === 'year' ? t('year') : t('month')}
+                    </span>
+                  </span>
+                  {period === 'year' && planSaving != null && (
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400"
+                    >
+                      {t('savePercent', { percent: planSaving })}
+                    </Badge>
+                  )}
+                </div>
 
                 <ul className="mb-4 space-y-1.5 text-sm">
                   {planFeatures(planId).map((feature) => (
@@ -377,20 +416,6 @@ export function PlanSwitcher({
                   ))}
                 </ul>
 
-                {ended && canAdmin && (
-                  <PlanStartButtons
-                    planId={planId}
-                    period={period}
-                    discounted={discounted}
-                    trialOffered={trialOffered}
-                    opening={checkout?.planId === planId ? checkout.mode : null}
-                    disabled={price == null || !organizationId || checkout != null}
-                    // A code goes with buying now only: the trial comes without an offer.
-                    onStart={(mode) =>
-                      void start(planId, mode, mode === 'buy' ? discounted?.code : undefined)
-                    }
-                  />
-                )}
                 {action && canAdmin && (
                   <Button
                     className="w-full"
@@ -439,7 +464,8 @@ export function PlanSwitcher({
       </div>
 
       {/* The cards list the highlights; the pricing page has every feature */}
-      <div className="flex justify-center">
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        {ended && <PlanDetailsToggle open={details} onToggle={() => setDetails((open) => !open)} />}
         <a
           href={PRICING_URL}
           target="_blank"

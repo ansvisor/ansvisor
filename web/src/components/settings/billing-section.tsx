@@ -168,8 +168,30 @@ export function BillingSection() {
   // trial beside Buy now. (An Enterprise plan set up without Stripe is active.)
   const noPlanYet = ended && neverSubscribed;
 
+  // Choosing a plan, or changing it.
+  const planCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          {noPlanYet ? tOffer('chooseHowToStart') : ended ? t('choosePlanTitle') : t('changePlan')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <PlanSwitcher
+          subscription={subscription}
+          onUpdate={(data) => setSubscription({ ...subscription, ...data })}
+          organizationId={organizationId}
+          trialOffered={noPlanYet}
+        />
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
+      {/* With no plan active, choosing one comes first, all in view. */}
+      {ended && planCard}
+
       {/* Current Plan */}
       <Card>
         <CardHeader>
@@ -215,25 +237,7 @@ export function BillingSection() {
       <AiUsageCard />
 
       {/* Plan Switcher */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {noPlanYet
-              ? tOffer('chooseHowToStart')
-              : ended
-                ? t('choosePlanTitle')
-                : t('changePlan')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PlanSwitcher
-            subscription={subscription}
-            onUpdate={(data) => setSubscription({ ...subscription, ...data })}
-            organizationId={organizationId}
-            trialOffered={noPlanYet}
-          />
-        </CardContent>
-      </Card>
+      {!ended && planCard}
 
       <Separator />
 

@@ -78,13 +78,16 @@ vi.mock('@/lib/actions/topic', () => ({
   getTopics: vi.fn(async () => [{ id: 't1', name: 'Coffee' }]),
   createTopics: vi.fn(async () => undefined),
 }));
+const getCompetitors = vi.hoisted(() => vi.fn(async (): Promise<unknown[]> => []));
 vi.mock('@/lib/actions/competitor', () => ({
-  getCompetitors: vi.fn(async () => []),
+  getCompetitors,
   addCompetitor: vi.fn(),
 }));
 vi.mock('@/lib/actions/brand', () => ({ createBrand: vi.fn(), markBrandAsEcommerce: vi.fn() }));
+const getTrackedPromptCount = vi.hoisted(() => vi.fn(async () => 10));
 vi.mock('@/lib/actions/prompt', () => ({
   getPromptCapacity: vi.fn(async () => ({ maxPrompts: 50, used: 0 })),
+  getTrackedPromptCount,
   savePromptSet: vi.fn(),
 }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
@@ -190,13 +193,28 @@ describe('setup suggestions used up for the day', () => {
 });
 
 describe('the plan step', () => {
-  // The trial check, and Checkout's answer.
+  // The trial check, the first-month code's check, and Checkout's answer.
   const trialAvailable = { value: true };
-  const fetchMock = vi.fn(async (url: string) =>
+  const promo = { status: 200 };
+  const answer = async (url: string) =>
     url === '/api/stripe/trial'
       ? Response.json({ trialAvailable: trialAvailable.value, trialDays: 14 })
-      : Response.json({ url: '#checkout' }),
-  );
+      : url === '/api/stripe/promo-code'
+        ? Response.json(
+            promo.status === 200
+              ? {
+                  valid: true,
+                  code: 'SAVE50',
+                  percentOff: 50,
+                  amountOff: null,
+                  duration: 'once',
+                  durationInMonths: null,
+                }
+              : { error: 'Internal error' },
+            { status: promo.status },
+          )
+        : Response.json({ url: '#checkout' });
+  const fetchMock = vi.fn(answer);
   /** What was sent to Checkout. */
   const checkoutBody = () =>
     JSON.parse(
@@ -209,23 +227,34 @@ describe('the plan step', () => {
   ];
   const slots = (slot: string) =>
     [...container.querySelectorAll(`[data-slot="${slot}"]`)].map((el) => el.textContent);
+  const choices = () =>
+    [...container.querySelectorAll('[data-choice]')].map((el) => el.textContent);
+  async function choose(choice: 'trial' | 'month' | 'year') {
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(`[data-choice="${choice}"]`)!.click();
+    });
+  }
 
   beforeEach(() => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
     trialAvailable.value = true;
+    promo.status = 200;
     fetchMock.mockClear();
+    fetchMock.mockImplementation(answer);
     vi.stubGlobal('fetch', fetchMock);
     db.onboarded = true;
   });
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
+    getCompetitors.mockResolvedValue([]);
   });
 
   it('offers the demo brand under the plans, for someone not ready to add a card', async () => {
     db.onboarded = true;
     await render();
-    expect(text()).toContain('One last step');
+    expect(text()).toContain('Choose how to start');
     const card = container.querySelector('[data-slot="explore-demo"]')!;
     expect(card.textContent).toContain('Not ready to add a card? Explore a demo brand');
     // The own brand, read without the demo brand.
@@ -237,32 +266,73 @@ describe('the plan step', () => {
     expect(button('Explore the demo')).toBeDefined();
   });
 
-  it('offers two ways to start on each plan, a card for both', async () => {
+  it('offers one choice of how to start, then one button on each plan, a card for both', async () => {
     await render();
     expect(text()).toContain('Choose how to start');
     expect(text()).not.toContain('Start Your 14-Day Free Trial');
     expect(text()).not.toContain('No charge today');
-    expect(container.querySelector('[data-slot="offer-line"]')?.textContent).toBe(
-      'Start a 14-day free trial, or get 50% off your first month.',
-    );
+    expect(choices()).toEqual(['14-day trial', 'Monthly50% off the first month', 'YearlySave 20%']);
+    // Monthly first, with the first-month offer: its price large on the card.
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual(['Buy now', 'Buy now']);
+    expect(modeButtons('trial')).toEqual([]);
+    expect(slots('plan-price')[0]).toContain('$24.50first month');
+    expect(slots('due-amount')).toEqual(['$24.50', '$124.50']);
+    expect(slots('start-terms')).toEqual(['Full plan from day one', 'Full plan from day one']);
+    expect(slots('limited-offer')).toEqual(['Limited offer', 'Limited offer']);
+    expect(slots('trust-line')).toEqual([
+      'Secure checkout with Stripe · Cancel any time',
+      'Secure checkout with Stripe · Cancel any time',
+    ]);
+    expect(container.querySelector('[data-slot="card-note"]')?.textContent).toBe(
+      'Card required for both.',
+    );
+    // Billing's own taglines and features, not onboarding's copy of them.
+    expect(text()).toContain('For small teams getting started with AI visibility');
+    expect(text()).toContain('50 prompts tracked');
+    expect(text()).not.toContain('Core Platform Features');
+    // The demo card stays below the plans.
+    expect(container.querySelector('[data-slot="explore-demo"]')).not.toBeNull();
+  });
+
+  it("says what is ready to track, from the own brand's real setup", async () => {
+    getCompetitors.mockResolvedValue([
+      { id: 'c1', name: 'Crema Club' },
+      { id: 'c2', name: 'Origin Box' },
+    ]);
+    await render();
+    await act(async () => {});
+    expect(getTrackedPromptCount).toHaveBeenCalledWith('b1');
+    expect(container.querySelector('[data-slot="ready-to-track"]')?.textContent).toBe(
+      'Ready to track for Acme: 10 prompts · 1 topic · 2 competitors',
+    );
+    expect(container.querySelector('[data-slot="ready-to-track"] strong')?.textContent).toBe(
+      'Acme',
+    );
+  });
+
+  it('says nothing of it when the setup could not be read', async () => {
+    getTrackedPromptCount.mockRejectedValueOnce(new Error('offline'));
+    await render();
+    await act(async () => {});
+    expect(container.querySelector('[data-slot="ready-to-track"]')).toBeNull();
+  });
+
+  it('shows the trial with nothing due today, when it ends and what follows', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-28T12:00:00Z'));
+    await render();
+    await choose('trial');
     expect(modeButtons('trial').map((b) => b.textContent)).toEqual([
       'Start 14-day free trial',
       'Start 14-day free trial',
     ]);
-    expect(slots('buy-terms')).toEqual([
-      'Limited offer$24.50 first month, then $49/monthFull plan from day one',
-      'Limited offer$124.50 first month, then $249/monthFull plan from day one',
+    expect(slots('due-amount')).toEqual(['$0', '$0']);
+    expect(slots('start-terms')).toEqual([
+      'Free until Nov 11, then $49/monthLimited AI usage for 14 days',
+      'Free until Nov 11, then $249/monthLimited AI usage for 14 days',
     ]);
-    expect(slots('trial-terms')).toEqual([
-      'Free for 14 days, then $49/monthLimited AI usage for 14 days',
-      'Free for 14 days, then $249/monthLimited AI usage for 14 days',
-    ]);
-    expect(container.querySelector('[data-slot="card-note"]')?.textContent).toBe(
-      'Card required for both. Cancel any time.',
-    );
-    // The demo card stays below the plans.
-    expect(container.querySelector('[data-slot="explore-demo"]')).not.toBeNull();
+    // No offer with the trial: the plain price.
+    expect(text()).not.toContain('Limited offer');
   });
 
   it('buys now with the first-month offer, and starts the trial without it', async () => {
@@ -271,6 +341,7 @@ describe('the plan step', () => {
     expect(checkoutBody()).toEqual({
       planId: 'starter',
       organizationId: 'org-1',
+      interval: 'month',
       mode: 'buy',
       promotionCode: 'SAVE50',
     });
@@ -279,37 +350,103 @@ describe('the plan step', () => {
     root = createRoot(container);
     fetchMock.mockClear();
     await render();
+    await choose('trial');
     await act(async () => modeButtons('trial')[1].click());
-    expect(checkoutBody()).toEqual({ planId: 'growth', organizationId: 'org-1', mode: 'trial' });
+    expect(checkoutBody()).toEqual({
+      planId: 'growth',
+      organizationId: 'org-1',
+      interval: 'month',
+      mode: 'trial',
+    });
   });
 
-  it('offers only Buy now once the trial was used', async () => {
+  it('buys a year at its price, without the code', async () => {
+    await render();
+    await choose('year');
+    expect(slots('due-amount')).toEqual(['$470', '$2,390']);
+    expect(modeButtons('buy').map((b) => b.textContent)).toEqual([
+      'Choose Starter',
+      'Choose Growth',
+    ]);
+    await act(async () => modeButtons('buy')[1].click());
+    expect(checkoutBody()).toEqual({
+      planId: 'growth',
+      organizationId: 'org-1',
+      interval: 'year',
+      mode: 'buy',
+    });
+  });
+
+  it('says by the button when Checkout would not open, and stops waiting', async () => {
+    await render();
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/api/stripe/checkout'
+        ? Response.json({ error: 'Price not configured for this plan' }, { status: 400 })
+        : answer(url),
+    );
+    await act(async () => modeButtons('buy')[1].click());
+    const growth = container.querySelector('[data-plan="growth"]')!;
+    expect(growth.querySelector('[role="alert"]')?.textContent).toBe(
+      "Couldn't open the checkout. Try again.",
+    );
+    expect(modeButtons('buy').map((b) => b.textContent)).toEqual(['Buy now', 'Buy now']);
+    expect(modeButtons('buy').every((b) => !b.disabled)).toBe(true);
+  });
+
+  it('turns to buying once Checkout finds the trial used', async () => {
+    await render();
+    await choose('trial');
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/api/stripe/checkout'
+        ? Response.json({ error: 'Trial used', code: 'trial_unavailable' }, { status: 409 })
+        : answer(url),
+    );
+    await act(async () => modeButtons('trial')[0].click());
+    expect(choices()).toEqual(['Monthly50% off the first month', 'YearlySave 20%']);
+    expect(container.querySelector('[data-plan="starter"] [role="alert"]')?.textContent).toBe(
+      "This workspace's free trial has been used. Buy now to start the plan.",
+    );
+    expect(text()).toContain('Choose Your Plan');
+  });
+
+  it('keeps the offer as configured when its code could not be checked', async () => {
+    promo.status = 500;
+    await render();
+    await act(async () => {});
+    expect(slots('due-amount')).toEqual(['$24.50', '$124.50']);
+    await act(async () => modeButtons('buy')[0].click());
+    expect(checkoutBody()).toMatchObject({ promotionCode: 'SAVE50' });
+  });
+
+  it('offers only buying once the trial was used', async () => {
     trialAvailable.value = false;
     await render();
     expect(text()).toContain('Choose Your Plan');
+    expect(choices()).toEqual(['Monthly50% off the first month', 'YearlySave 20%']);
     expect(modeButtons('trial')).toEqual([]);
-    expect(container.querySelector('[data-slot="offer-line"]')?.textContent).toBe(
-      'Get 50% off your first month.',
-    );
-    expect(container.querySelector('[data-slot="card-note"]')?.textContent).toBe(
-      'Card required. Cancel any time.',
-    );
+    expect(slots('start-terms')).toEqual([]);
+    expect(container.querySelector('[data-slot="card-note"]')?.textContent).toBe('Card required.');
   });
 
   it('shows the plain price with the first-month offer off', async () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render();
+    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%']);
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual([
       'Choose Starter',
       'Choose Growth',
     ]);
+    expect(slots('due-amount')).toEqual(['$49', '$249']);
     expect(text()).not.toContain('Limited offer');
     expect(text()).not.toContain('50%');
-    expect(container.querySelector('[data-slot="offer-line"]')?.textContent).toBe(
-      'Start a 14-day free trial.',
-    );
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/stripe/promo-code');
     await act(async () => modeButtons('buy')[0].click());
-    expect(checkoutBody()).toEqual({ planId: 'starter', organizationId: 'org-1', mode: 'buy' });
+    expect(checkoutBody()).toEqual({
+      planId: 'starter',
+      organizationId: 'org-1',
+      interval: 'month',
+      mode: 'buy',
+    });
   });
 
   it('starts the demo brand setup ahead for an organization with none yet', async () => {

@@ -74,20 +74,38 @@ async function click(label: string) {
   });
 }
 
+/**
+ * The plan cards by plan name: a paid plan's cards, or, once it has ended,
+ * the cards a new plan starts from (as the plan dialog's).
+ */
+const planCards = () =>
+  [...container.querySelectorAll('[data-slot="card"], section[data-plan]')].map(
+    (card) =>
+      [
+        card.querySelector('[data-slot="card-title"], h3')?.textContent ?? '',
+        card as HTMLElement,
+      ] as const,
+  );
+const planCard = (plan: string) => planCards().find(([name]) => name === plan)?.[1];
+
 /** Each plan card's text, by plan name. */
 const cardText = () =>
-  Object.fromEntries(
-    [...container.querySelectorAll('[data-slot="card"]')].map((card) => [
-      card.querySelector('[data-slot="card-title"]')?.textContent,
-      card.textContent,
-    ]),
-  );
+  Object.fromEntries(planCards().map(([name, card]) => [name, card.textContent]));
 
 /** A plan card's way to start ('buy' or 'trial'), by plan name. */
 const startButton = (plan: string, mode: 'buy' | 'trial') =>
-  [...container.querySelectorAll('[data-slot="card"]')]
-    .find((card) => card.querySelector('[data-slot="card-title"]')?.textContent === plan)
-    ?.querySelector<HTMLButtonElement>(`button[data-mode="${mode}"]`) ?? null;
+  planCard(plan)?.querySelector<HTMLButtonElement>(`button[data-mode="${mode}"]`) ?? null;
+
+/** Picks how a plan starts, above the cards: the trial, monthly or a year. */
+async function choose(choice: 'trial' | 'month' | 'year') {
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>(`[data-choice="${choice}"]`)!.click();
+  });
+}
+
+/** What a plan card says is due today. */
+const dueToday = (plan: string) =>
+  planCard(plan)?.querySelector('[data-slot="due-amount"]')?.textContent ?? null;
 
 /** Each plan card's name and its list, in order. */
 const cards = () =>
@@ -368,7 +386,12 @@ describe('choosing a plan once the old one has ended', () => {
     expect(button('Reactivate')).toBeUndefined();
     expect(button('Cancel Subscription')).toBeUndefined();
 
-    await click('AnnualSave 20%');
+    // One choice above the cards: monthly or a year, no trial for a plan that ended.
+    expect(
+      [...container.querySelectorAll('[data-choice]')].map((b) => b.getAttribute('data-choice')),
+    ).toEqual(['month', 'year']);
+    await choose('year');
+    expect(dueToday('Growth')).toBe('$2,390');
     await click('Choose Growth');
 
     expect(sent('/api/stripe/checkout')).toEqual({
@@ -386,16 +409,60 @@ describe('choosing a plan once the old one has ended', () => {
     checkout = Response.json({}, { status: 500 });
     await render('starter', { status: 'canceled' });
     await click('Choose Starter');
-    expect(toast.error).toHaveBeenCalledWith("Couldn't open the checkout. Try again.");
+    // By the plan's button, in place of the checkout's word, and no spinner left.
+    expect(planCard('Starter')?.querySelector('[role="alert"]')?.textContent).toBe(
+      "Couldn't open the checkout. Try again.",
+    );
+    expect(planCard('Starter')?.querySelector('[data-slot="trust-line"]')).toBeNull();
+    expect(planCard('Growth')?.querySelector('[role="alert"]')).toBeNull();
     expect(button('Choose Starter')?.disabled).toBe(false);
+    expect(container.textContent).not.toContain('Opening checkout');
+  });
+
+  it('shows the plans’ details in their cards on request, and hides them again', async () => {
+    await render('starter', { status: 'canceled' });
+    const toggle = () =>
+      container.querySelector<HTMLButtonElement>('[data-slot="plan-details-toggle"]')!;
+    const details = () => planCard('Growth')!.querySelector('[data-slot="plan-details"]')!;
+    expect(toggle().textContent).toBe('Show plan details');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(details().className).toContain('invisible');
+    expect(details().textContent).toContain('White-label reports & Looker Studio');
+
+    await act(async () => toggle().click());
+    expect(toggle().textContent).toBe('Hide plan details');
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(details().className).not.toContain('invisible');
+    // The price and button give their place to the details, in the same cell.
+    expect(startButton('Growth', 'buy')!.parentElement!.parentElement!.className).toContain(
+      'invisible',
+    );
+
+    await act(async () => toggle().click());
+    expect(details().className).toContain('invisible');
+  });
+
+  it('shows the first-month offer on the first frame, before Stripe answers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    );
+    await render('growth', { status: 'canceled' });
+    expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now');
+    expect(cardText().Starter).toContain('$24.50first monththen $49/mo');
+    expect(dueToday('Starter')).toBe('$24.50');
   });
 
   it('offers a plan that ended only Buy now, at 50% off the first month', async () => {
     promo = SAVE50;
     await render('growth', { status: 'canceled' });
-    await vi.waitFor(() => expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now'));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now');
     expect(cardText().Starter).toContain('Limited offer');
     expect(cardText().Starter).toContain('$24.50first monththen $49/mo');
+    expect(dueToday('Starter')).toBe('$24.50');
+    expect(cardText().Starter).toContain('Secure checkout with Stripe · Cancel any time');
+    expect(container.querySelector('[data-choice="trial"]')).toBeNull();
     expect(startButton('Starter', 'trial')).toBeNull();
     expect(container.textContent).not.toContain('free trial');
 
@@ -417,8 +484,12 @@ describe('choosing a plan once the old one has ended', () => {
       "Buy a plan now, or try one free for 14 days first. Either way you add a card on Stripe's secure checkout.",
     );
     await vi.waitFor(() => expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now'));
+    expect(cardText().Starter).toContain('Full plan from day one');
+    await choose('trial');
+    expect(startButton('Starter', 'buy')).toBeNull();
     expect(startButton('Growth', 'trial')?.textContent).toBe('Start 14-day free trial');
-    expect(cardText().Growth).toContain('Free for 14 days, then $249/month');
+    expect(dueToday('Growth')).toBe('$0');
+    expect(cardText().Growth).toMatch(/Free until [A-Z][a-z]{2} \d{1,2}, then \$249\/month/);
     expect(cardText().Growth).toContain('Limited AI usage for 14 days');
 
     // The trial comes without the offer's code.
