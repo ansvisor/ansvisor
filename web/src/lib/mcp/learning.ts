@@ -71,7 +71,7 @@ export async function getActionScorecardFor(
   if (!(await brandInOrg(auth, params.brandId))) return null;
   const { data, error } = await supabaseAdmin.rpc('action_scorecard', {
     p_brand_id: params.brandId,
-    p_since: params.since ?? null,
+    p_since: params.since ? new Date(params.since).toISOString() : null,
   });
   if (error) throw new Error(error.message);
   return sortScorecard(

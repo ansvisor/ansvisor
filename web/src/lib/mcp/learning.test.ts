@@ -85,7 +85,7 @@ describe('getActionScorecardFor', () => {
       since: '2026-09-01T00:00:00Z',
     });
     expect(rpcCalls).toEqual([
-      ['action_scorecard', { p_brand_id: 'brand-1', p_since: '2026-09-01T00:00:00Z' }],
+      ['action_scorecard', { p_brand_id: 'brand-1', p_since: '2026-09-01T00:00:00.000Z' }],
     ]);
     expect(scorecard).toEqual([
       {
@@ -112,6 +112,14 @@ describe('getActionScorecardFor', () => {
         top_dismiss_reason: null,
       }),
     ]);
+  });
+
+  it('passes the start to the database as an ISO timestamp, whatever form it came in', async () => {
+    await getActionScorecardFor(auth, { brandId: 'brand-1', since: '1' });
+    expect(rpcCalls[0][1]).toEqual({
+      p_brand_id: 'brand-1',
+      p_since: new Date('1').toISOString(),
+    });
   });
 
   it('reads every action without a start', async () => {
