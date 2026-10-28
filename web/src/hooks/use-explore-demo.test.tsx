@@ -26,7 +26,11 @@ vi.hoisted(() => {
 
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => router }));
-const demoClient = vi.hoisted(() => ({ prepareDemoBrand: vi.fn(), setDemoHidden: vi.fn() }));
+const demoClient = vi.hoisted(() => ({
+  prepareDemoBrand: vi.fn(),
+  setDemoHidden: vi.fn(),
+  demoPreparation: vi.fn((): { startedAt: number; answered: boolean } | null => null),
+}));
 vi.mock('@/lib/demo/demo-client', () => demoClient);
 const getBrandById = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ getBrandById }));
@@ -34,6 +38,7 @@ const toastError = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast: { error: toastError } }));
 
 const { useExploreDemo, usePreloadDemo } = await import('./use-explore-demo');
+const { DemoSetupDialog } = await import('@/components/demo/demo-setup-dialog');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -58,11 +63,14 @@ function brand(id: string, extra: Partial<Brand> = {}): Brand {
 }
 
 function Probe() {
-  const { explore, opening } = useExploreDemo();
+  const { explore, opening, setupDialog } = useExploreDemo();
   return (
-    <button type="button" data-opening={String(opening)} onClick={() => void explore()}>
-      Explore
-    </button>
+    <>
+      <button type="button" data-opening={String(opening)} onClick={() => void explore()}>
+        Explore
+      </button>
+      <DemoSetupDialog {...setupDialog} />
+    </>
   );
 }
 
@@ -79,6 +87,7 @@ async function clickExplore() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  demoClient.demoPreparation.mockReturnValue(null);
   useBrandStore.setState({ brands: [brand('own')], activeBrandId: 'own' });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -86,6 +95,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root.unmount());
   container.remove();
 });
@@ -139,6 +149,94 @@ describe('useExploreDemo', () => {
     expect(useBrandStore.getState().activeBrandId).toBe('own');
     expect(router.push).not.toHaveBeenCalled();
     expect(container.querySelector('button')!.dataset.opening).toBe('false');
+  });
+});
+
+describe('useExploreDemo while the demo is still being prepared', () => {
+  /** A setup asked `ago` ms before the click, its answer held until `answer` is called. */
+  function preparing(ago: number) {
+    let answer: (value: unknown) => void = () => {};
+    demoClient.prepareDemoBrand.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    demoClient.demoPreparation.mockReturnValue({ startedAt: Date.now() - ago, answered: false });
+    return (value: unknown) => act(async () => answer(value));
+  }
+  const step = (key: string) =>
+    document.body.querySelector<HTMLElement>(`[data-step="${key}"]`)?.dataset.state;
+  const dialogText = () => document.body.querySelector('[data-slot="dialog-content"]')?.textContent;
+
+  it('shows the setup screen from where it stands, then opens the demo', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    const advance = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
+    const answer = preparing(2500);
+    getBrandById.mockResolvedValue(brand('demo', { isDemo: true }));
+    await clickExplore();
+    expect(dialogText()).toContain('Preparing your demo');
+    // Asked 2.5 s ago (on an earlier onboarding step): the brand is set up.
+    expect(step('brand')).toBe('done');
+    expect(step('answers')).toBe('now');
+    expect(step('reports')).toBe('next');
+    await advance(2000);
+    expect(step('answers')).toBe('done');
+    expect(step('citations')).toBe('now');
+    expect(router.push).not.toHaveBeenCalled();
+
+    await answer({ ok: true, brandId: 'demo', version: 3, rebuilt: true });
+    // The steps left run through first, quickly.
+    await advance(300);
+    expect(router.push).not.toHaveBeenCalled();
+    expect(step('mentions')).toBe('done');
+    expect(step('reports')).not.toBe('done');
+    await advance(600);
+    // Everything done a moment, then the demo opens.
+    expect(step('reports')).toBe('done');
+    expect(dialogText()).toContain('Ready. Opening the Action Center…');
+    expect(router.push).not.toHaveBeenCalled();
+    await advance(600);
+    expect(router.push).toHaveBeenCalledWith('/dashboard/action-center');
+    expect(useBrandStore.getState().activeBrandId).toBe('demo');
+    vi.useRealTimers();
+    await vi.waitFor(() => expect(dialogText()).toBeUndefined());
+  });
+
+  it('says a failure in the screen, and tries again from it', async () => {
+    const answer = preparing(60_000);
+    await clickExplore();
+    await answer({ ok: false, status: 500 });
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(
+      "Couldn't prepare the demo. Check your connection and try again.",
+    );
+    expect(toastError).not.toHaveBeenCalled();
+    expect(container.querySelector('button')!.dataset.opening).toBe('false');
+
+    preparing(0);
+    const retry = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Try again',
+    )!;
+    await act(async () => retry.click());
+    expect(demoClient.prepareDemoBrand).toHaveBeenCalledTimes(2);
+    expect(document.body.querySelector('[role="alert"]')).toBeNull();
+    expect(step('brand')).toBe('now');
+  });
+
+  it('closes on Close, and a setup answering later opens nothing', async () => {
+    const answer = preparing(60_000);
+    await clickExplore();
+    await answer({ ok: false, status: 500 });
+    const close = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Close',
+    )!;
+    await act(async () => close.click());
+    await vi.waitFor(() => expect(dialogText()).toBeUndefined());
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('opens at once, without the screen, when the setup asked ahead is done', async () => {
+    demoClient.prepareDemoBrand.mockResolvedValue({ ok: true, brandId: 'demo', version: 3 });
+    demoClient.demoPreparation.mockReturnValue({ startedAt: Date.now() - 20_000, answered: true });
+    getBrandById.mockResolvedValue(brand('demo', { isDemo: true }));
+    await clickExplore();
+    expect(dialogText()).toBeUndefined();
+    expect(router.push).toHaveBeenCalledWith('/dashboard/action-center');
   });
 });
 

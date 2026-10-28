@@ -10,7 +10,11 @@ const explore = vi.hoisted(() => vi.fn());
 const state = vi.hoisted(() => ({ opening: false }));
 const preload = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/use-explore-demo', () => ({
-  useExploreDemo: () => ({ explore, opening: state.opening }),
+  useExploreDemo: () => ({
+    explore,
+    opening: state.opening,
+    setupDialog: { setup: null, onRetry: explore, onClose: () => {} },
+  }),
   usePreloadDemo: preload,
 }));
 

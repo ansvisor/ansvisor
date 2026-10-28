@@ -59,8 +59,16 @@ export function ensureDemoBrand(): Promise<DemoCall<DemoEnsured>> {
   );
 }
 
+/** The setup asked for on this page: when it was asked, and whether it answered. */
+export interface DemoPreparation {
+  startedAt: number;
+  answered: boolean;
+}
+
+type Asked = DemoPreparation & { request: Promise<DemoCall<DemoEnsured>> };
+
 // The setup asked for on this page, shared by whoever asks next.
-let preparing: Promise<DemoCall<DemoEnsured>> | null = null;
+let preparing: Asked | null = null;
 
 /**
  * The demo brand's setup, asked once per page: a screen that offers the
@@ -70,12 +78,27 @@ let preparing: Promise<DemoCall<DemoEnsured>> | null = null;
  */
 export function prepareDemoBrand(): Promise<DemoCall<DemoEnsured>> {
   if (!preparing) {
-    preparing = ensureDemoBrand().then((result) => {
-      if (!result.ok) preparing = null;
-      return result;
-    });
+    const asked: Asked = {
+      startedAt: Date.now(),
+      answered: false,
+      request: ensureDemoBrand().then((result) => {
+        asked.answered = true;
+        if (!result.ok && preparing === asked) preparing = null;
+        return result;
+      }),
+    };
+    preparing = asked;
   }
-  return preparing;
+  return preparing.request;
+}
+
+/**
+ * Where the setup asked on this page stands (null when none is under way or
+ * done): the click that opens the demo shows the setup screen while it is
+ * still waited for, counted from when it was asked.
+ */
+export function demoPreparation(): DemoPreparation | null {
+  return preparing && { startedAt: preparing.startedAt, answered: preparing.answered };
 }
 
 /** Lets tests ask again. */

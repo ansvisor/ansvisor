@@ -23,6 +23,7 @@ const push = vi.hoisted(() => vi.fn());
 const ensureDemoBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/demo/demo-client', () => ({
   prepareDemoBrand: ensureDemoBrand,
+  demoPreparation: () => null,
   setDemoHidden: vi.fn(),
 }));
 vi.mock('@/lib/actions/brand', () => ({ getBrandById: vi.fn() }));

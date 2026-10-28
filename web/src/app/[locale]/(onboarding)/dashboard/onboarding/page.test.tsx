@@ -69,7 +69,11 @@ vi.mock('@/lib/supabase/client', () => {
   };
 });
 const prepareDemoBrand = vi.hoisted(() => vi.fn(async () => ({ ok: false, status: 0 })));
-vi.mock('@/lib/demo/demo-client', () => ({ prepareDemoBrand, setDemoHidden: vi.fn() }));
+vi.mock('@/lib/demo/demo-client', () => ({
+  prepareDemoBrand,
+  demoPreparation: () => null,
+  setDemoHidden: vi.fn(),
+}));
 vi.mock('@/lib/actions/topic', () => ({
   getTopics: vi.fn(async () => [{ id: 't1', name: 'Coffee' }]),
   createTopics: vi.fn(async () => undefined),
