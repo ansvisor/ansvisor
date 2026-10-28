@@ -21,7 +21,10 @@
 --   * profiles.menu_shown / menu_hidden: a person's exception to their role:
 --     a section shown that the role hides, or hidden that it shows.
 --     profiles.can_manage_menus: a manager an admin let change menus. All
---     three are set by the server (the guard below), like role.
+--     three are set by the server (the guard below), like role, and belong
+--     to the organization and role they were given for: moving organization
+--     (removed, then invited elsewhere) clears all three, and a new role
+--     clears can_manage_menus (the reset below).
 --   * profiles.work_areas: what the person works on or leads, theirs to set.
 --     work_areas_asked_at: when they answered (or skipped) the step, so it
 --     is asked once.
@@ -115,3 +118,42 @@ begin
   return new;
 end;
 $$;
+
+-- A removed member keeps their profile (organization_id goes null) and an
+-- invitation moves it to the next organization, so a menu manager of one
+-- organization would arrive in another still able to change its menus.
+-- Whoever makes the change, a new organization clears the menu columns and
+-- a new role clears the right to change menus (an admin gives it again);
+-- a value the same update sets stays, only one carried over goes. Fires
+-- after the guard (triggers run in name order), so the guard checks what
+-- the person asked for, not this reset.
+create or replace function public.reset_profile_menu_access()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (new.organization_id is distinct from old.organization_id
+      or new.role is distinct from old.role)
+     and new.can_manage_menus is not distinct from old.can_manage_menus
+  then
+    new.can_manage_menus := false;
+  end if;
+  if new.organization_id is distinct from old.organization_id then
+    if new.menu_shown is not distinct from old.menu_shown then
+      new.menu_shown := '{}';
+    end if;
+    if new.menu_hidden is not distinct from old.menu_hidden then
+      new.menu_hidden := '{}';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_reset_menu_access on public.profiles;
+create trigger profiles_reset_menu_access
+  before update of organization_id, role on public.profiles
+  for each row execute function public.reset_profile_menu_access();
+
+notify pgrst, 'reload schema';

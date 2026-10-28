@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   ALWAYS_ON_SECTION,
   MENU_SECTIONS,
   WORK_AREAS,
+  WORK_AREA_IDS,
   cleanMenuSections,
   hiddenMenuSections,
   menuSectionOf,
@@ -116,5 +119,49 @@ describe('cleanMenuSections', () => {
     expect(cleanMenuSections(['reports', 'nope', 'content', 'reports', ALWAYS_ON_SECTION])).toEqual(
       ['content', 'reports'],
     );
+  });
+});
+
+describe('the database (00374)', () => {
+  const migration = (name: string) =>
+    readFileSync(join(__dirname, `../../../supabase/migrations/${name}.sql`), 'utf8');
+  const sql = migration('00374_menu_access');
+  const triggerName = (text: string, fn: string) =>
+    text.match(
+      new RegExp(`create trigger (\\w+)\\s+before update[^;]*?function public\\.${fn}`),
+    )?.[1];
+
+  it('accepts exactly the work areas the app knows', () => {
+    const check = sql.match(/work_areas <@ array\[([^\]]*)\]/)?.[1] ?? '';
+    expect([...check.matchAll(/'([a-z]+)'/g)].map((m) => m[1])).toEqual(WORK_AREA_IDS);
+  });
+
+  it('clears menu access when the person moves organization, the right to change menus on a new role', () => {
+    const body = sql.match(
+      /function public\.reset_profile_menu_access\(\)[\s\S]*?\$\$([\s\S]*?)\$\$/,
+    )?.[1];
+    const flat = body?.replace(/\s+/g, ' ');
+    // A new organization or role clears the right to change menus…
+    expect(flat).toContain(
+      '(new.organization_id is distinct from old.organization_id or new.role is distinct from old.role) and new.can_manage_menus is not distinct from old.can_manage_menus then new.can_manage_menus := false;',
+    );
+    // …and a new organization the person's exceptions, unless the same
+    // update sets them.
+    expect(flat).toContain(
+      "if new.organization_id is distinct from old.organization_id then if new.menu_shown is not distinct from old.menu_shown then new.menu_shown := '{}'; end if; if new.menu_hidden is not distinct from old.menu_hidden then new.menu_hidden := '{}'; end if;",
+    );
+    // Before-update triggers run in name order: the guard sees what the
+    // person asked for, then the reset clears.
+    expect(sql).toMatch(
+      /create trigger profiles_reset_menu_access\s+before update of organization_id, role on public\.profiles/,
+    );
+    const guard = triggerName(
+      migration('00228_profiles_server_columns'),
+      'guard_profile_server_columns',
+    );
+    const reset = triggerName(sql, 'reset_profile_menu_access');
+    expect(guard).toBeTruthy();
+    expect(reset).toBeTruthy();
+    expect(guard! < reset!).toBe(true);
   });
 });
