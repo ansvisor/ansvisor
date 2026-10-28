@@ -324,6 +324,14 @@ describe('pageCheckable', () => {
     );
   });
 
+  it('keeps Check now on a shopping links task, which has no new text (#1616)', () => {
+    expect(pageCheckable({ taskKey: null, details: auto() }, 'shopping_links')).toBe(true);
+    expect(pageCheckable({ taskKey: null, details: auto() }, 'content_draft')).toBe(false);
+    expect(
+      pageCheckable({ taskKey: null, details: auto({ check: 'manual' }) }, 'shopping_links'),
+    ).toBe(false);
+  });
+
   it("lists the API's checked tasks, no more and no fewer", () => {
     const server = readFileSync(
       join(__dirname, '../../../../server/src/lib/action-center/task-checks.js'),

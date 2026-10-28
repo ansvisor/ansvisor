@@ -301,13 +301,19 @@ export const PAGE_CHECKED_TASKS: readonly string[] = [
  * Whether Check now can check a task here, as the API's checkKind reads it:
  * checked Automatic, with a page, and a library task it checks on its page
  * or a written one with its new text. A Site Audit fix is checked by the
- * next audit instead.
+ * next audit instead. A shopping links action's task (`actionKind`
+ * 'shopping_links') is checked on its draft by the shopping check, with no
+ * new text to look for.
  */
-export function pageCheckable(task: {
-  taskKey: string | null;
-  details: ActionTaskDetails | null;
-}): boolean {
+export function pageCheckable(
+  task: {
+    taskKey: string | null;
+    details: ActionTaskDetails | null;
+  },
+  actionKind?: string,
+): boolean {
   const d = task.details;
   if (d?.check !== 'auto' || !d.url?.trim()) return false;
-  return task.taskKey ? PAGE_CHECKED_TASKS.includes(task.taskKey) : Boolean(d.change?.after);
+  if (task.taskKey) return PAGE_CHECKED_TASKS.includes(task.taskKey);
+  return actionKind === 'shopping_links' || Boolean(d.change?.after);
 }

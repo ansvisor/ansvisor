@@ -736,7 +736,7 @@ export function ActionDrawer({
                       // An open task the API checks on its page (AC-010).
                       check={
                         (task.status === 'todo' || task.status === 'in_progress') &&
-                        pageCheckable(task)
+                        pageCheckable(task, action.kind)
                           ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
                           : undefined
                       }
