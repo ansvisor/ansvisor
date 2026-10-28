@@ -20,6 +20,10 @@ import { AiProvidersSection } from '@/components/settings/ai-providers-section';
 import { NotificationsSection } from '@/components/settings/notifications-section';
 import { IntegrationsSection } from '@/components/settings/integrations-section';
 import { OrganizationSection } from '@/components/settings/organization-section';
+import { MenuAccessSection } from '@/components/settings/menu-access-section';
+import { WorkAreasCard } from '@/components/settings/work-areas-card';
+import { useCanManageMenus } from '@/components/providers/menu-access-provider';
+import { Badge } from '@/components/ui/badge';
 import { updateAccountName } from '@/lib/actions/organization';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,6 +45,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
   const tAuth = useTranslations('auth');
   const router = useRouter();
   const { isCloud } = usePlanContext();
+  const canManageMenus = useCanManageMenus();
   const [active, setActive] = useState<SettingsSection>(section);
 
   const show = (next: SettingsSection) => {
@@ -82,6 +87,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     account: t('account'),
     organization: t('organization'),
     team: t('team'),
+    'menu-access': t('menuAccess.title'),
     authors: t('authors.title'),
     content: t('content.title'),
     notifications: t('notifications'),
@@ -92,9 +98,10 @@ export function SettingsView({ section }: { section: SettingsSection }) {
   };
   // AI Providers (bring your own key) and Billing are cloud-only: self-host
   // operators set ANTHROPIC_API_KEY in their own env.
-  const navItems = SETTINGS_SECTIONS.filter((id) => hasSettingsSection(id, { isCloud })).map(
-    (id) => ({ id, label: labels[id] }),
-  );
+  // Menu access is listed for admins and the managers they let change menus.
+  const navItems = SETTINGS_SECTIONS.filter(
+    (id) => hasSettingsSection(id, { isCloud }) && (id !== 'menu-access' || canManageMenus),
+  ).map((id) => ({ id, label: labels[id] }));
 
   return (
     <div className="space-y-6">
@@ -122,6 +129,11 @@ export function SettingsView({ section }: { section: SettingsSection }) {
               )}
             >
               {item.label}
+              {item.id === 'menu-access' && (
+                <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
+                  {t('menuAccess.new')}
+                </Badge>
+              )}
             </button>
           ))}
         </nav>
@@ -172,11 +184,20 @@ export function SettingsView({ section }: { section: SettingsSection }) {
             </Card>
           )}
 
+          {/* What the person works on or leads: it narrows their own menu. */}
+          {active === 'account' && (
+            <div className="mt-6">
+              <WorkAreasCard />
+            </div>
+          )}
+
           {/* Organization */}
           {active === 'organization' && <OrganizationSection />}
 
           {/* Team */}
           {active === 'team' && <TeamSection />}
+
+          {active === 'menu-access' && <MenuAccessSection />}
 
           {active === 'authors' && hasSettingsSection('authors', { isCloud }) && <AuthorsSection />}
 
