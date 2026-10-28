@@ -94,6 +94,15 @@ export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the p
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
 
+/**
+ * What a placeholder is for: each one holds a send to a CMS or an export
+ * until the person fills it (CE-044, CE-057), so only for a fact they must
+ * find. A page, a document or a competitor is written as words: the agent
+ * wrote "[About]", "[OpenAI release notes]" and "[competitor]" where plain
+ * words do, and a page waited on six.
+ */
+export const PLACEHOLDER_RULE = `- A placeholder in square brackets is only for a fact the person must find: a number, a price, a date, a person's name, a customer's name or a quote. Never put a page, a document, a link, a product, a brand, a company or a competitor in brackets: write it in plain words ("your About page", "OpenAI's release notes"), name the competitors given, or write "competitors". Each placeholder holds the page back until the person fills it, so write as few as the facts need.`;
+
 /** What the agent may say of a source, and the names a list keeps (editor test 2026-10-25). */
 export const ATTRIBUTION_RULE = `- Never give a claim to a source that neither the page nor Your input gives ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a list has (products, brands, people): never drop one.`;
 
@@ -183,6 +192,7 @@ ${LINK_RULE}
 ${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
+${PLACEHOLDER_RULE}
 ${SOURCES_RULE}
 ${ATTRIBUTION_RULE}
 - Keep the page's voice and change as little as each rule needs. At most ${MAX_AGENT_SUGGESTIONS} suggestions.
