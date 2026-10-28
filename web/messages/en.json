@@ -7919,7 +7919,54 @@
   },
   "shopping": {
     "title": "Product Visibility",
-    "description": "Product cards AI engines surface — your products versus the competitive set.",
+    "description": "Which of your products AI recommends, why, and what it sells.",
+    "why": {
+      "button": "Why Ansvisor Product Visibility?",
+      "eyebrow": "Why Ansvisor Product Visibility?",
+      "title": "From AI shelf to cart",
+      "lead": "AI assistants now pick products for your shoppers. See which of yours make the shelf, fix the ones that don't, and know what it sells.",
+      "steps": {
+        "shelf": {
+          "title": "See your AI shelf",
+          "body": "For every shopping question, the products AI shows, in order. Yours and your competitors'."
+        },
+        "why": {
+          "title": "Know why you lost",
+          "body": "Your product next to the one AI picked, attribute by attribute: fit, weight, rating, delivery, data."
+        },
+        "fix": {
+          "title": "Fix it, then push",
+          "body": "The agent rewrites titles, feed fields and schema. You approve, we send it to Shopify."
+        },
+        "sell": {
+          "title": "See what it sells",
+          "body": "Orders and revenue from AI, per product, tied to the questions that brought them."
+        }
+      },
+      "closing": "Most tools tell you if you're visible. Ansvisor shows why, fixes it and shows the sales.",
+      "gotIt": "Got it",
+      "connectGa": "Connect Google Analytics",
+      "ga": "Google Analytics"
+    },
+    "sources": {
+      "label": "Data sources",
+      "catalog": "Product catalog",
+      "catalogLine": "{count, plural, one {# product} other {# products}} · synced {when}",
+      "catalogNotSynced": "{count, plural, one {# product} other {# products}} · not synced yet",
+      "catalogNone": "Not connected · your products, from a feed, a file or your store",
+      "catalogFailed": "Couldn't be read right now",
+      "ga": "Google Analytics",
+      "gsc": "Google Search Console",
+      "gaPitch": "Not connected · see the path from AI visit to order",
+      "gscPitch": "Not connected · shopping questions from your real searches",
+      "googleFailed": "Couldn't be read right now",
+      "marketplaces": "Marketplaces & feeds",
+      "connected": "Connected",
+      "connect": "Connect",
+      "notConnected": "Not connected",
+      "soon": "Soon",
+      "manage": "Manage"
+    },
     "kpiCardRate": "Shopping card rate",
     "kpiCardRateSub": "Tracked prompts that returned ≥1 card",
     "kpiOwnProducts": "Your products surfaced",
@@ -7951,7 +7998,8 @@
     "emptyDescription": "Perplexity, Google AI Mode, and Microsoft Copilot return shopping cards on commercial-intent prompts (\"best running shoes for marathon training\"). Once tracking runs against a card-eligible prompt, results show up here.",
     "lockedTitle": "Upgrade for full shopping analytics",
     "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
-    "tabOverview": "Overview",
+    "tabShelf": "Shelf",
+    "tabProducts": "Products",
     "tabMyProducts": "My Products",
     "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",

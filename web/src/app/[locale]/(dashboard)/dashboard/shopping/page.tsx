@@ -32,6 +32,7 @@ import {
   Calendar,
   Globe,
   AlertTriangle,
+  HelpCircle,
 } from 'lucide-react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -94,8 +95,12 @@ import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { googleSourceStatus } from '@/lib/traffic-sources';
+import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { CatalogNote } from './_catalog-note';
+import { ProductDataStrip, useProductSources } from './_data-strip';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
+import { WhyDialog } from './_why-dialog';
 import { MerchantSplitCard } from './merchant_split_card';
 import { OpenAiIndexCard } from './openai_index_card';
 import { ProductMatchScores } from './product_match_scores';
@@ -104,6 +109,10 @@ import { useMerchantDestinations } from './use_merchant_destinations';
 import { useOpenAiIndex } from './use_openai_index';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
+
+/** The page's tabs, the one open in the URL (?tab=products). */
+const SHOPPING_TABS = ['shelf', 'prompts', 'products', 'competitors'] as const;
+type ShoppingTab = (typeof SHOPPING_TABS)[number];
 
 // Theme tokens in globals.css ship as full oklch values; reference them
 // directly with var(--…). Wrapping in hsl() yields invalid CSS, so chart
@@ -120,6 +129,7 @@ export default function ShoppingPage() {
   const t = useTranslations('shopping');
   const tCommon = useTranslations('common');
   const { activeBrandId } = useBrandStore();
+  const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const { canUse, requiredPlanFor } = useFeatureGate();
   const { canManage } = useUserRole();
   const hasFullAccess = canUse('shopping_analytics');
@@ -148,7 +158,22 @@ export default function ShoppingPage() {
   const [promptsData, setPromptsData] = useState<CardEligiblePromptsResponse | null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<ShoppingTab>('shelf');
+  const [whyOpen, setWhyOpen] = useState(false);
+  const sources = useProductSources(activeBrandId);
+  const primaryDomain =
+    activeBrand?.domains?.find((d) => d.isPrimary)?.domain ?? activeBrand?.domains?.[0]?.domain;
+  // Connect Google Analytics in the Why popup: while GA isn't connected.
+  const offerGa =
+    canManage && !!sources.google && googleSourceStatus(sources.google.ga) === 'not_connected';
+
+  useEffect(() => {
+    setActiveTab(readUrlChoice('tab', SHOPPING_TABS, 'shelf'));
+  }, []);
+  const changeTab = (next: ShoppingTab) => {
+    setActiveTab(next);
+    writeUrlParams({ tab: next }, { tab: 'shelf' });
+  };
 
   const filters = useMemo<ShoppingFilters>(
     () => ({
@@ -262,7 +287,7 @@ export default function ShoppingPage() {
   if (!activeBrandId) {
     return (
       <div className="space-y-6">
-        <PageHeader t={t} />
+        <PageHeader t={t} onWhy={() => setWhyOpen(true)} />
         <EmptyState title={t('noBrandTitle')} description={t('noBrandDescription')} />
       </div>
     );
@@ -277,7 +302,19 @@ export default function ShoppingPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader t={t} />
+      <PageHeader t={t} onWhy={() => setWhyOpen(true)} />
+      <WhyDialog
+        open={whyOpen}
+        onOpenChange={setWhyOpen}
+        offerGa={offerGa}
+        onConnected={sources.reload}
+      />
+      <ProductDataStrip
+        sources={sources}
+        domain={primaryDomain}
+        canConnect={canManage}
+        onConnected={sources.reload}
+      />
 
       {amazonShareDropAlert && (
         <div
@@ -328,15 +365,19 @@ export default function ShoppingPage() {
             hasFullAccess={hasFullAccess}
             triggerRate={promptsData?.triggerRate}
           />
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => changeTab(value as ShoppingTab)}
+            className="space-y-6"
+          >
             <TabsList>
-              <TabsTrigger value="overview">{t('tabOverview')}</TabsTrigger>
+              <TabsTrigger value="shelf">{t('tabShelf')}</TabsTrigger>
               <TabsTrigger value="prompts">{t('tabPrompts')}</TabsTrigger>
-              <TabsTrigger value="own_products">{t('tabMyProducts')}</TabsTrigger>
+              <TabsTrigger value="products">{t('tabProducts')}</TabsTrigger>
               <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="space-y-6">
+            <TabsContent value="shelf" className="space-y-6">
               {hasFullAccess ? (
                 <>
                   <div className="grid gap-4 lg:grid-cols-2">
@@ -385,7 +426,7 @@ export default function ShoppingPage() {
               )}
             </TabsContent>
 
-            <TabsContent value="own_products" className="space-y-6">
+            <TabsContent value="products" className="space-y-6">
               {hasFullAccess ? (
                 <>
                   <div className="flex items-center justify-between">
@@ -838,14 +879,31 @@ function PromptsTabContent({
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
-function PageHeader({ t }: { t: ReturnType<typeof useTranslations<'shopping'>> }) {
+/** The title, with "Why Ansvisor Product Visibility?" beside it (ECOM-010). */
+function PageHeader({
+  t,
+  onWhy,
+}: {
+  t: ReturnType<typeof useTranslations<'shopping'>>;
+  onWhy: () => void;
+}) {
   return (
     <HeaderWithAiUsage>
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <ShoppingBag className="h-6 w-6 text-primary" />
-          {t('title')}
-        </h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <ShoppingBag className="h-6 w-6 text-primary" />
+            {t('title')}
+          </h1>
+          <button
+            type="button"
+            onClick={onWhy}
+            className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <HelpCircle className="h-3.5 w-3.5" aria-hidden />
+            {t('why.button')}
+          </button>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
       </div>
     </HeaderWithAiUsage>
