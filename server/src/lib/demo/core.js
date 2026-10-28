@@ -276,6 +276,8 @@ export function coreRows({ brandId, now }) {
     site_type: BRAND.siteType,
     shopping_mode_enabled: true,
     is_active: true,
+    // The app ships the made-up brand's logo (web/public/demo/logos).
+    logo_url: '/demo/logos/brewline.svg',
     created_at: since,
   };
   const brandInfo = { brandName: BRAND.name, domains: [BRAND.domain] };
