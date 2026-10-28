@@ -31,6 +31,12 @@ import {
 const AMBER_NOTE = ACTION_STATUS_BADGE.on_hold;
 
 /**
+ * The step videos' place under "How to do this". Off until the videos are
+ * recorded: the numbered steps say how meanwhile.
+ */
+const SHOW_STEP_VIDEOS = false;
+
+/**
  * A Getting started step's card (AC-ALT2 §6), on the right of the Actions
  * page: why the step matters, how to do it, and when it counts as done. Its
  * button opens the step's page in a new tab; an optional step can be skipped
@@ -197,14 +203,21 @@ export function GettingStartedStepCard({
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('panel.how')}
           </h3>
-          {/* The video's place, 16:9, until the videos are recorded. */}
-          <div className="mt-2 flex aspect-video flex-col items-center justify-center gap-2 rounded-lg border bg-muted/40 text-muted-foreground">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full border bg-card">
-              <Play className="h-4 w-4" />
-            </span>
-            <span className="text-xs font-medium">{t('panel.videosSoon')}</span>
-          </div>
-          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm">
+          {/* The video's place, 16:9, once the videos are recorded. */}
+          {SHOW_STEP_VIDEOS && (
+            <div className="mt-2 flex aspect-video flex-col items-center justify-center gap-2 rounded-lg border bg-muted/40 text-muted-foreground">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border bg-card">
+                <Play className="h-4 w-4" />
+              </span>
+              <span className="text-xs font-medium">{t('panel.videosSoon')}</span>
+            </div>
+          )}
+          <ol
+            className={cn(
+              'list-decimal space-y-1 pl-5 text-sm',
+              SHOW_STEP_VIDEOS ? 'mt-3' : 'mt-2',
+            )}
+          >
             {list('how').map((how) => (
               <li key={how}>{how}</li>
             ))}

@@ -49,6 +49,8 @@ const readCmsStatuses = vi.hoisted(() => vi.fn());
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 const refreshWebflowPublished = vi.hoisted(() => vi.fn());
+const refreshWordPressPublished = vi.hoisted(() => vi.fn());
+const refreshFramerPublished = vi.hoisted(() => vi.fn());
 // Mark published (CE-013).
 const publishPage = vi.hoisted(() => vi.fn());
 const readPublishAddress = vi.hoisted(() => vi.fn());
@@ -56,6 +58,8 @@ vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress
 vi.mock('@/lib/content/cms-send-client', () => ({
   readCmsStatuses,
   refreshWebflowPublished,
+  refreshWordPressPublished,
+  refreshFramerPublished,
   readDraftCms,
   sendPagesToCms,
   readKeptFields: vi.fn(async () => new Map()),
@@ -64,6 +68,14 @@ vi.mock('@/lib/content/cms-send-client', () => ({
 // The brand's Webflow connection (#1331, phase 2): none here.
 vi.mock('@/lib/webflow-client', () => ({
   readWebflow: async () => ({ ok: true, configured: false, connection: null }),
+}));
+// Nor its WordPress site (00294).
+vi.mock('@/lib/wordpress-client', () => ({
+  readWordPress: async () => ({ ok: true, configured: false, connection: null }),
+}));
+// Nor its Framer collection (00295).
+vi.mock('@/lib/framer-client', () => ({
+  readFramer: async () => ({ ok: true, configured: false, connection: null }),
 }));
 vi.mock('@/lib/actions/content-authors', () => ({ getContentAuthors: vi.fn(async () => null) }));
 // The workspace's plan: active unless a test says it's read-only.
@@ -163,6 +175,8 @@ beforeEach(() => {
   root = createRoot(container);
   getContentDrafts.mockReset();
   refreshWebflowPublished.mockReset().mockResolvedValue([]);
+  refreshWordPressPublished.mockReset().mockResolvedValue([]);
+  refreshFramerPublished.mockReset().mockResolvedValue([]);
   readPublishAddress.mockReset().mockResolvedValue('https://acme.example/pipeline-forecasting');
   publishPage.mockReset().mockResolvedValue({
     ok: true,
@@ -576,8 +590,168 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
   });
 
-  it('doesn’t ask Webflow by itself while the workspace is read-only', async () => {
+  it('doesn’t ask Webflow or WordPress by itself while the workspace is read-only', async () => {
     gate.isLocked = true;
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    await renderPage();
+    // What is stored is listed; nothing is asked of the API.
+    expect(container.textContent).toContain('Pipeline forecasting');
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
+  });
+
+  it('doesn’t ask Webflow for a brand with no page there', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    await renderPage();
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
+    expect(refreshFramerPublished).not.toHaveBeenCalled();
+  });
+
+  it('says a page sent to WordPress is a draft post there, and asks WordPress once', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('wordpress')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    refreshWordPressPublished.mockResolvedValue(['d1']);
+    await renderPage();
+    await act(async () => {});
+    expect(
+      container.querySelectorAll('[aria-label^="In WordPress as a draft post since Oct 24, 2026"]'),
+    ).toHaveLength(2);
+    // WordPress says when a post goes live: asked once, the list read again as it marked one.
+    expect(refreshWordPressPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWordPressPublished).toHaveBeenCalledWith('brand-1');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+  });
+
+  it('asks Webflow and WordPress once each when pages went to both', async () => {
+    getContentDrafts.mockResolvedValue([row({}), row({ id: 'd2', title: 'Churn' })]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
+      ]),
+    );
+    refreshWebflowPublished.mockResolvedValue(['d1']);
+    refreshWordPressPublished.mockResolvedValue(['d2']);
+    await renderPage();
+    await act(async () => {});
+    expect(refreshWebflowPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWordPressPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWebflowPublished).toHaveBeenCalledWith('brand-1');
+    expect(refreshWordPressPublished).toHaveBeenCalledWith('brand-1');
+    expect(refreshFramerPublished).not.toHaveBeenCalled();
+  });
+
+  it('says a page sent to Framer is a draft item there, and asks Framer once', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn' }),
+      row({ id: 'd3', title: 'Pricing' }),
+    ]);
+    const sent = (status: string, error: string | null = null) => ({
+      status,
+      target: 'framer',
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('sent')],
+        ['d2', sent('sent')],
+        // Its item deleted in Framer since (framer-status).
+        ['d3', sent('failed', 'Removed in Framer')],
+      ]),
+    );
+    refreshFramerPublished.mockResolvedValue(['d1']);
+    await renderPage();
+    await act(async () => {});
+    expect(
+      container.querySelectorAll('[aria-label^="In Framer as a draft item since Oct 24, 2026"]'),
+    ).toHaveLength(2);
+    // Framer says when an item goes live: asked once, the list read again as it marked one.
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(1);
+    expect(refreshFramerPublished).toHaveBeenCalledWith('brand-1');
+    expect(getContentDrafts).toHaveBeenCalledTimes(2);
+    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    expect(refreshWordPressPublished).not.toHaveBeenCalled();
+
+    const mark = container.querySelector<HTMLElement>(
+      '[aria-label^="The last send to Framer failed, Oct 24, 2026"]',
+    )!;
+    await act(async () => {
+      mark.focus();
+      mark.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.body.textContent).toContain('Removed in Framer');
+  });
+
+  it('doesn’t ask Framer when none of its pages is in Framer as a draft item', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn' }),
+      row({ id: 'd3', title: 'Pricing' }),
+    ]);
+    const last = (status: string) => ({
+      status,
+      target: 'framer',
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', last('queued')],
+        ['d2', last('failed')],
+        ['d3', last('published')],
+      ]),
+    );
+    await renderPage();
+    await act(async () => {});
+    expect(container.querySelector('[aria-label^="Sending to Framer since"]')).not.toBeNull();
+    expect(refreshFramerPublished).not.toHaveBeenCalled();
+  });
+
+  it('asks Framer again for another brand, once a brand per visit', async () => {
     getContentDrafts.mockResolvedValue([row({})]);
     readCmsStatuses.mockResolvedValue(
       new Map([
@@ -585,7 +759,7 @@ describe('Send to CMS from a Library row (#1331)', () => {
           'd1',
           {
             status: 'sent',
-            target: 'webflow',
+            target: 'framer',
             at: '2026-10-24T10:00:00Z',
             httpStatus: null,
             error: null,
@@ -595,15 +769,55 @@ describe('Send to CMS from a Library row (#1331)', () => {
       ]),
     );
     await renderPage();
-    // What is stored is listed; nothing is asked of the API.
-    expect(container.textContent).toContain('Pipeline forecasting');
-    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    await act(async () => {});
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(1);
+    expect(refreshFramerPublished).toHaveBeenLastCalledWith('brand-1');
+    brandState.activeBrandId = 'brand-2';
+    await renderPage();
+    await act(async () => {});
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(2);
+    expect(refreshFramerPublished).toHaveBeenLastCalledWith('brand-2');
+    // Back to the first: read already on this visit.
+    brandState.activeBrandId = 'brand-1';
+    await renderPage();
+    await act(async () => {});
+    expect(refreshFramerPublished).toHaveBeenCalledTimes(2);
   });
 
-  it('doesn’t ask Webflow for a brand with no page there', async () => {
-    getContentDrafts.mockResolvedValue([row({})]);
+  it('asks Webflow, WordPress and Framer once each when pages went to all three', async () => {
+    getContentDrafts.mockResolvedValue([
+      row({}),
+      row({ id: 'd2', title: 'Churn' }),
+      row({ id: 'd3', title: 'Pricing' }),
+    ]);
+    const sent = (target: string) => ({
+      status: 'sent',
+      target,
+      at: '2026-10-24T10:00:00Z',
+      httpStatus: null,
+      error: null,
+      publishedUrl: null,
+    });
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        ['d1', sent('webflow')],
+        ['d2', sent('wordpress')],
+        ['d3', sent('framer')],
+      ]),
+    );
+    refreshWebflowPublished.mockResolvedValue(['d1']);
+    refreshWordPressPublished.mockResolvedValue(['d2']);
+    refreshFramerPublished.mockResolvedValue(['d3']);
     await renderPage();
-    expect(refreshWebflowPublished).not.toHaveBeenCalled();
+    await act(async () => {});
+    for (const refresh of [
+      refreshWebflowPublished,
+      refreshWordPressPublished,
+      refreshFramerPublished,
+    ]) {
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(refresh).toHaveBeenCalledWith('brand-1');
+    }
   });
 
   it('says the workflow’s reason for a page its webhook took that then failed', async () => {
