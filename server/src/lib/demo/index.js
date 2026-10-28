@@ -17,9 +17,14 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { BRAND } from './brewline.js';
 import { core } from './core.js';
+// demo-site: AI Referral Traffic, Site Audit, the catalog and fan-out intents.
+import { catalog } from './catalog.js';
+import { fanoutIntents } from './fanout-intents.js';
+import { site } from './site.js';
+import { traffic } from './traffic.js';
 
 /** Bump to rebuild every demo brand on its next visit. */
-export const DEMO_VERSION = 1;
+export const DEMO_VERSION = 3;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -40,10 +45,17 @@ const WAIT_POLL_MS = 1000;
  * The modules that build the demo, in order. Each is `{ name, tables,
  * build(ctx) }`: `tables` are the brand-scoped tables it owns (written, or
  * rebuilt by what it calls), cleared in reverse order before a rebuild.
- * Action Center, Content, reports, Site Audit, traffic and Product
- * Visibility follow as modules of their own.
+ * Action Center, Content and reports follow as modules of their own.
  */
-export const DEMO_MODULES = [core];
+export const DEMO_MODULES = [
+  core,
+  // demo-site: AI Referral Traffic, Site Audit, Product Visibility's catalog,
+  // and the intents of the core's fan-out searches (a shared cache).
+  traffic,
+  site,
+  catalog,
+  fanoutIntents,
+];
 
 const COLUMNS = 'id, demo_version, demo_built_at, demo_hidden_at';
 
