@@ -206,6 +206,8 @@ describe('improveRound', () => {
             details: { platform: 'chatgpt-web' },
           },
           { title: 'Pitch seriouseats.com', status: 'todo', details: { platform: 'gemini-web' } },
+          { title: 'Add an FAQ', status: 'skipped', details: { platform: 'gemini-web' } },
+          { title: 'Run it again', status: 'failed', details: { platform: 'gemini-web' } },
           { title: ' ', status: 'todo', details: null },
         ],
         now,
@@ -220,8 +222,11 @@ describe('improveRound', () => {
         { id: 'gemini-web', verdict: 'unchanged' },
       ],
       suggestions: [
-        { platform: 'chatgpt-web', title: 'Add a table to /pricing', done: true },
-        { platform: 'gemini-web', title: 'Pitch seriouseats.com', done: false },
+        { platform: 'chatgpt-web', title: 'Add a table to /pricing', status: 'done' },
+        { platform: 'gemini-web', title: 'Pitch seriouseats.com', status: 'not_done' },
+        // Skipped is the team's call, told apart; a failed run is not done.
+        { platform: 'gemini-web', title: 'Add an FAQ', status: 'skipped' },
+        { platform: 'gemini-web', title: 'Run it again', status: 'not_done' },
       ],
     });
   });

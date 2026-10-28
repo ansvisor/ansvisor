@@ -307,7 +307,7 @@ describe('buildImprovePrompt', () => {
             { id: 'chatgpt-web', verdict: 'improved' },
             { id: 'gemini-web', verdict: 'unchanged' },
           ],
-          suggestions: [{ platform: 'gemini-web', title: 'Pitch seriouseats.com', done: true }],
+          suggestions: [{ platform: 'gemini-web', title: 'Pitch seriouseats.com', status: 'done' }],
         },
       ],
     });
@@ -319,6 +319,46 @@ describe('buildImprovePrompt', () => {
       buildImprovePrompt({ promptText: 'best coffee subscription', brand, platforms }).prompt,
     ).not.toContain('Earlier Improve rounds');
     expect(prompt).not.toContain('too early to read');
+    expect(prompt).not.toContain('skipped');
+  });
+
+  /** What the team skipped is its call, not a suggestion that waits to be done. */
+  it('says which earlier suggestions the team skipped, and not to suggest them again', () => {
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand: { name: 'Acme', domains: [] },
+      platforms: [
+        {
+          id: 'gemini-web',
+          state: 'not_mentioned',
+          evidence: {
+            fanouts: [],
+            citedDomains: [],
+            competitors: [],
+            competitorUrls: [],
+            brandPages: [],
+            excerpt: '',
+          },
+        },
+      ],
+      history: [
+        {
+          sent: '2026-09-10',
+          daysAgo: 48,
+          open: false,
+          final: true,
+          platforms: [{ id: 'gemini-web', verdict: 'unchanged' }],
+          suggestions: [
+            { platform: 'gemini-web', title: 'Pitch seriouseats.com', status: 'skipped' },
+            { platform: 'gemini-web', title: 'Add an FAQ', status: 'not_done' },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain(
+      'Suggestions: [Gemini] "Pitch seriouseats.com" (skipped by the team); [Gemini] "Add an FAQ" (not done)',
+    );
+    expect(prompt).toContain('Do not suggest again what the team skipped.');
   });
 
   /** A round sent under a week ago has no read of its own yet (learning B5). */
@@ -347,7 +387,7 @@ describe('buildImprovePrompt', () => {
           open: true,
           final: false,
           platforms: [{ id: 'gemini-web', verdict: 'too_early' }],
-          suggestions: [{ platform: 'gemini-web', title: 'Pitch seriouseats.com', done: true }],
+          suggestions: [{ platform: 'gemini-web', title: 'Pitch seriouseats.com', status: 'done' }],
         },
         {
           sent: '2026-10-28',

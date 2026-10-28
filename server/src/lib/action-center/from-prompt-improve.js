@@ -115,12 +115,19 @@ export const IMPROVE_PAST_ROUNDS = 2;
 
 const DAY_MS = 86_400_000;
 
+/** How the next generation reads a task's status: done, skipped by the team, or neither. */
+function suggestionStatus(status) {
+  if (status === 'completed') return 'done';
+  if (status === 'skipped') return 'skipped';
+  return 'not_done';
+}
+
 /**
  * One earlier Improve round on a prompt, as the next generation reads it
  * (learning B5): when it was sent and how many days before `now`, whether
  * it's still open, how each of its platforms moved since (final a month
  * after it was completed), and the suggestions it carried, each with whether
- * it was done.
+ * it was done or skipped.
  *
  * Until its read is OUTCOME_WINDOW_DAYS past the send, the read's days still
  * overlap the baseline's (on the day it's sent, every platform is
@@ -153,7 +160,7 @@ export function improveRound(action, tasks, now = new Date()) {
       .map((task) => ({
         platform: task.details?.platform ?? null,
         title: task.title.trim(),
-        done: task.status === 'completed',
+        status: suggestionStatus(task.status),
       })),
   };
 }
