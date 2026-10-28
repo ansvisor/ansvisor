@@ -237,6 +237,19 @@ describe('a location with no answers yet', () => {
     );
   });
 
+  it('waits only for a new prompt; an older one answered nowhere just had no run: a dash', async () => {
+    getPromptLocationMatrix.mockResolvedValue({});
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    await renderRows([
+      prompt('p1', 'older prompt', ['US', 'TR'], 'Coffee', { createdAt: '2026-09-01T00:00:00Z' }),
+      prompt('p2', 'new prompt', ['US', 'TR'], 'Coffee', { createdAt: hourAgo }),
+    ]);
+    const rows = bodyRows();
+    expect(rows[1].slice(2)).toEqual(['—', '—', '—']);
+    expect(container.querySelector('span[title="No answers here in this period"]')).not.toBeNull();
+    expect(rows[2].slice(2)).toEqual(['Within 24h', 'Within 24h', '—']);
+  });
+
   it('shows a plain dash for a custom range that ended before today', async () => {
     getPromptLocationMatrix.mockResolvedValue({ p1: { US: cell(62) } });
     await renderRows([prompt('p1', 'best specialty coffee subscription', ['US', 'TR'])], {

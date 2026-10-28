@@ -212,6 +212,7 @@ import {
   type PromptColumnId,
 } from '@/lib/prompt-table-columns';
 import {
+  awaitsFirstAnswers,
   matrixLocations,
   metricValue,
   type PromptLocationMatrix,
@@ -3951,6 +3952,14 @@ function AllPromptsTab({
                 const vol = volumeByPromptId.get(p.id);
                 const vis = visibility[p.id];
                 const status = promptStatus(p, now);
+                // Its empty location columns wait for their first answers only
+                // while it's new, or answered elsewhere (a location just added).
+                const awaiting = awaitsFirstAnswers(
+                  p,
+                  Boolean(vis) ||
+                    Object.values(locationMatrix?.[p.id] ?? {}).some((c) => c.runs > 0),
+                  now,
+                );
                 const cells: Record<PromptColumnId, React.ReactNode> = {
                   topic: (
                     <TableCell key="topic">
@@ -4176,6 +4185,7 @@ function AllPromptsTab({
                               prompt={p}
                               region={loc.region}
                               window={positionsWindow}
+                              awaiting={awaiting}
                               className="font-normal"
                             />
                           ) : value === null ? (

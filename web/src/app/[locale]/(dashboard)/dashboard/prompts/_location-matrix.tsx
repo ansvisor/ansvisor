@@ -34,6 +34,7 @@ import {
   type LocationMetric,
   type PromptLocationCell,
   type PromptLocationMatrix,
+  awaitsFirstAnswers,
   reachesToday,
 } from '@/lib/prompt-location-matrix';
 import { parseLocation, regionFlag, regionLabel } from '@/lib/region';
@@ -128,30 +129,40 @@ export function LocationPending({
   prompt,
   region,
   window,
+  awaiting,
   className,
 }: {
   prompt: Pick<Prompt, 'isActive' | 'platforms' | 'models'>;
   region: string;
   /** The table's window: one that ended before today just had no answers there. */
   window: { to?: string };
+  /**
+   * Whether its first answers can still be on their way (awaitsFirstAnswers).
+   * If not, an active prompt just had none there in this window: a dash.
+   */
+  awaiting: boolean;
   className?: string;
 }) {
   const t = useTranslations('prompts.locations');
   const countries = useTrackingCountries();
   const tipId = useId();
   const parsed = parseLocation(region);
-  if (!reachesToday(window)) {
+  const state = !reachesToday(window)
+    ? null
+    : !prompt.isActive
+      ? 'paused'
+      : parsed && !answersFrom(prompt, parsed, countries)
+        ? 'noEngine'
+        : awaiting
+          ? 'pending'
+          : null;
+  if (!state) {
     return (
       <span className={cn('text-xs text-muted-foreground', className)} title={t('noAnswers')}>
         —
       </span>
     );
   }
-  const state = !prompt.isActive
-    ? 'paused'
-    : parsed && !answersFrom(prompt, parsed, countries)
-      ? 'noEngine'
-      : 'pending';
   const tip = t(`${state}Tip`, { location: regionLabel(region) });
   // Why, on hover and on keyboard focus; and for a screen reader, as the
   // label's description.
@@ -432,6 +443,12 @@ export function LocationMatrix({
           {pageRows.map((p) => {
             const values = valuesOf(p);
             const gap = rowGap(values);
+            // Its empty locations wait for their first answers only while it's
+            // new, or answered elsewhere (a location just added).
+            const awaiting = awaitsFirstAnswers(
+              p,
+              Object.values(matrix[p.id] ?? {}).some((c) => c.runs > 0),
+            );
             return (
               <TableRow key={p.id}>
                 <TableCell className="max-w-[320px] pl-6 text-sm font-medium">
@@ -490,6 +507,7 @@ export function LocationMatrix({
                           prompt={p}
                           region={r}
                           window={window}
+                          awaiting={awaiting}
                           className="w-full py-1.5"
                         />
                       </TableCell>
