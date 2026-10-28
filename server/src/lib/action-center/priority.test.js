@@ -369,6 +369,28 @@ describe('scorePriority', () => {
     expect(sent('no_ai_traffic', { valueSignal: 'revenue' }).reason.commercial).toBe(true);
   });
 
+  /** A page sent from a Site Audit report (learning D2): a fix on the site, near to hand. */
+  it('scores a page sent from a Site Audit report as a site fix', () => {
+    const sent = (checks) =>
+      scorePriority(
+        {
+          action: action({
+            kind: 'audit_page',
+            category: 'fix',
+            impact: 'medium',
+            payload: { checks: Array.from({ length: checks }, (_, i) => ({ key: `c${i}` })) },
+          }),
+          signals: [],
+        },
+        NOW,
+      );
+    expect(sent(2).reason).toMatchObject({
+      change: 'issue',
+      subject: { entity: 'pages', count: 1 },
+    });
+    expect(sent(6).score).toBeGreaterThan(sent(2).score);
+  });
+
   it('scores a live page linking products that no longer sell as a sure, quick fix (shopping path, part 7)', () => {
     const linked = scorePriority(
       {
