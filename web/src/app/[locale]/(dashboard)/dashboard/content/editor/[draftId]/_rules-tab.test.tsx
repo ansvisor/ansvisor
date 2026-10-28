@@ -532,11 +532,11 @@ describe('the Rules tab', () => {
     }));
     await render(state(undefined, { rules: checked, ...rulesMet(checked) }));
     const live = [...container.querySelectorAll('li')].find((li) =>
-      li.textContent?.startsWith('No sold-out or refused product linked'),
+      li.textContent?.startsWith('No out-of-stock or refused product linked'),
     )!;
     expect(live.textContent).toContain('4 found');
     expect(live.textContent).toContain(
-      'A (sold out), B (Merchant Center refuses it), C (sold out) +1 more: remove or replace these links on the page.',
+      'A (not in stock), B (Merchant Center refuses it), C (not in stock) +1 more: remove or replace these links on the page.',
     );
   });
 

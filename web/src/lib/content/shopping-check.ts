@@ -9,7 +9,11 @@ import { linkKey } from '@/lib/content/link-targets';
  * it or the path left out: the page may still link it.
  */
 
-/** A product's state now: sold out, refused by Merchant Center, gone from the catalog, or fine. */
+/**
+ * A product's state now: not in stock (`sold_out`: no variant in stock, so
+ * pre-order, back-order and no stock given too), refused by Merchant
+ * Center, gone from the catalog, or fine.
+ */
 export type ShoppingLinkState = 'ok' | 'sold_out' | 'refused' | 'gone';
 
 export interface ShoppingProductCheck {
