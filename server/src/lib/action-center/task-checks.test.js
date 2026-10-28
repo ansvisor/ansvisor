@@ -557,7 +557,7 @@ describe('runTaskCheck', () => {
     // No address can be made: still tried.
     const typed = task({ details: { check: 'auto', url: 'not an address' } });
     const fetch = fetchOf({});
-    expect(await runTaskCheck(typed, action, { fetch, now })).toEqual({ reason: 'not_checkable' });
+    expect(await runTaskCheck(typed, action, { fetch, now })).toEqual({ reason: 'no_address' });
     expect(lastWrite().payload.details.autoCheck).toEqual({ triedAt: at });
     expect(fetch).not.toHaveBeenCalled();
     // Claimed by another run meanwhile (the task changed since it was read): left to it.
@@ -674,7 +674,7 @@ describe('runTaskCheck', () => {
     const fetch = fetchOf({ [PAGE]: html('x') });
     ops = [];
     expect(await runTaskCheck(crawl, action, { fetch, now })).toEqual({
-      reason: 'not_checkable',
+      reason: 'from_bot_logs',
     });
     expect(fetch).not.toHaveBeenCalled();
     expect(lastWrite().payload.details.autoCheck).toEqual({
@@ -752,6 +752,19 @@ describe('runTaskCheck', () => {
     expect(
       await runTaskCheck(task({ task_key: 'fix_technical_issue' }), action, { fetch }),
     ).toEqual({ reason: 'not_checkable' });
+    // A written task with no new text, and a task with no page, each by its own reason (#1565 C8).
+    expect(
+      await runTaskCheck(
+        task({ task_key: null, details: { check: 'auto', url: '/pricing' } }),
+        action,
+        {
+          fetch,
+        },
+      ),
+    ).toEqual({ reason: 'no_change_text' });
+    expect(
+      await runTaskCheck(task({ details: { check: 'auto', url: '' } }), action, { fetch }),
+    ).toEqual({ reason: 'no_address' });
     expect(await runTaskCheck(task({ status: 'completed' }), action, { fetch })).toEqual({
       reason: 'not_open',
     });

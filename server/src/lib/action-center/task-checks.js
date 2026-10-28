@@ -127,6 +127,19 @@ export function checkKind(task) {
   return text(d.change?.after) ? 'text' : null;
 }
 
+/**
+ * Why a task has no check here, by what it lacks, as Check now says it
+ * (en.json checkNot): no page, a written task with no new text to look
+ * for, or a library task checked elsewhere (a Site Audit fix, by the next
+ * audit).
+ */
+function uncheckable(task) {
+  const d = task.details ?? {};
+  if (d.check === 'auto' && !text(d.url)) return 'no_address';
+  if (d.check === 'auto' && !task.task_key) return 'no_change_text';
+  return 'not_checkable';
+}
+
 /** A name's last label that is a file's, not a domain's: "pricing.html" is a page. */
 const FILE_ENDINGS = new Set([
   'html',
@@ -561,7 +574,7 @@ async function checkShoppingTask(task, action, { fetch, now }) {
  */
 export async function runTaskCheck(read, action, { fetch = fetchPage, now = new Date() } = {}) {
   const kind = checkKind(read);
-  if (!kind) return { reason: 'not_checkable' };
+  if (!kind) return { reason: uncheckable(read) };
   if (!OPEN.includes(read.status)) return { reason: 'not_open' };
   if (kind === 'shoppingLinks') return checkShoppingTask(read, action, { fetch, now });
   const d = read.details ?? {};
@@ -574,14 +587,14 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
   const task = { ...read, details: claim, updated_at: now.toISOString() };
   const domains = await brandDomains(action.brand_id);
   const url = pageAddress(d.url, storedHost(domains[0]));
-  if (!url) return { reason: 'not_checkable' };
+  if (!url) return { reason: 'no_address' };
   let auditChecks = [];
   if (kind === 'structuredData' || kind === 'crawlers') {
     auditChecks = await auditChecksFor(task.action_id, url);
     // Raised from the bot logs (a cited page crawlers never read): robots.txt
     // can't say it's fixed. Its try is kept (the claim), so the sweep goes on to others.
     if (kind === 'crawlers' && !auditChecks.includes('ai-bot-access')) {
-      return { reason: 'not_checkable' };
+      return { reason: 'from_bot_logs' };
     }
   }
 

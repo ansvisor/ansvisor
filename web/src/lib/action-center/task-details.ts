@@ -280,3 +280,40 @@ export function cleanTaskDetailsEdit(
     role: clip(edit.role, TASK_DETAIL_LIMITS.role),
   };
 }
+
+/**
+ * The library tasks the API checks on their page (AC-010): its CHECKS'
+ * keys (server/src/lib/action-center/task-checks.js). Change both together.
+ */
+export const PAGE_CHECKED_TASKS: readonly string[] = [
+  'publish_content',
+  'fix_broken_target',
+  'fix_structured_data',
+  'fix_crawler_access',
+  'optimize_content',
+  'refresh_content',
+  'strengthen_reference_asset',
+  'strengthen_entity_content',
+  'improve_cta_path',
+];
+
+/**
+ * Whether Check now can check a task here, as the API's checkKind reads it:
+ * checked Automatic, with a page, and a library task it checks on its page
+ * or a written one with its new text. A Site Audit fix is checked by the
+ * next audit instead. A shopping links action's task (`actionKind`
+ * 'shopping_links') is checked on its draft by the shopping check, with no
+ * new text to look for.
+ */
+export function pageCheckable(
+  task: {
+    taskKey: string | null;
+    details: ActionTaskDetails | null;
+  },
+  actionKind?: string,
+): boolean {
+  const d = task.details;
+  if (d?.check !== 'auto' || !d.url?.trim()) return false;
+  if (task.taskKey) return PAGE_CHECKED_TASKS.includes(task.taskKey);
+  return actionKind === 'shopping_links' || Boolean(d.change?.after);
+}

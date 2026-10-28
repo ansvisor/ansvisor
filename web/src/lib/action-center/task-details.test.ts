@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  PAGE_CHECKED_TASKS,
+  pageCheckable,
+  type ActionTaskDetails,
   TASK_DETAIL_LIMITS,
   cleanTaskDetailsEdit,
   isTaskDetailsEdit,
@@ -296,5 +301,44 @@ describe('where a task was sent', () => {
     expect(
       parseTaskDetails({ where: '/pricing', sent: { content: {}, webhook: 'x' } })?.sent,
     ).toEqual({ content: null, webhook: null });
+  });
+});
+
+describe('pageCheckable', () => {
+  const auto = (over: Partial<ActionTaskDetails> = {}) =>
+    ({ check: 'auto', url: '/pricing', change: null, ...over }) as ActionTaskDetails;
+
+  it('checks a library task the API reads on its page, or a written one with its new text', () => {
+    expect(pageCheckable({ taskKey: 'refresh_content', details: auto() })).toBe(true);
+    expect(
+      pageCheckable({ taskKey: null, details: auto({ change: { before: null, after: 'New' } }) }),
+    ).toBe(true);
+  });
+
+  it('leaves out a Site Audit fix, a written task without new text, and a task with no page', () => {
+    expect(pageCheckable({ taskKey: 'fix_meta_description', details: auto() })).toBe(false);
+    expect(pageCheckable({ taskKey: null, details: auto() })).toBe(false);
+    expect(pageCheckable({ taskKey: 'refresh_content', details: auto({ url: ' ' }) })).toBe(false);
+    expect(pageCheckable({ taskKey: 'refresh_content', details: auto({ check: 'manual' }) })).toBe(
+      false,
+    );
+  });
+
+  it('keeps Check now on a shopping links task, which has no new text (#1616)', () => {
+    expect(pageCheckable({ taskKey: null, details: auto() }, 'shopping_links')).toBe(true);
+    expect(pageCheckable({ taskKey: null, details: auto() }, 'content_draft')).toBe(false);
+    expect(
+      pageCheckable({ taskKey: null, details: auto({ check: 'manual' }) }, 'shopping_links'),
+    ).toBe(false);
+  });
+
+  it("lists the API's checked tasks, no more and no fewer", () => {
+    const server = readFileSync(
+      join(__dirname, '../../../../server/src/lib/action-center/task-checks.js'),
+      'utf8',
+    );
+    const block = server.match(/export const CHECKS = Object\.freeze\(\{([^}]*)\}\)/)![1];
+    const keys = [...block.matchAll(/^\s*([a-z_]+):/gm)].map((m) => m[1]);
+    expect([...PAGE_CHECKED_TASKS].sort()).toEqual(keys.sort());
   });
 });

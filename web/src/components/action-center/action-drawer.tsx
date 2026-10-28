@@ -92,6 +92,7 @@ import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
   hasTaskSpec,
+  pageCheckable,
   withTemplateDoneWhen,
   withoutTemplateDoneWhen,
   type TaskDetailsEdit,
@@ -732,11 +733,10 @@ export function ActionDrawer({
                         webhook: webhookReady,
                         onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
                       }}
-                      // An open task checked automatically, with its page (AC-010).
+                      // An open task the API checks on its page (AC-010).
                       check={
                         (task.status === 'todo' || task.status === 'in_progress') &&
-                        task.details?.check === 'auto' &&
-                        task.details.url
+                        pageCheckable(task, action.kind)
                           ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
                           : undefined
                       }

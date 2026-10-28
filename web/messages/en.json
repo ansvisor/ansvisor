@@ -1363,6 +1363,9 @@
           "checkMissing": "Checked: {missing}",
           "checkNot": {
             "not_checkable": "This task isn't checked on its page: a Site Audit fix is checked by your next audit.",
+            "no_address": "This task's URL isn't a page's address. Edit it to a full address, or a path on the brand's site.",
+            "no_change_text": "This task has no new text to look for on the page. Add it under Change, or check the task yourself.",
+            "from_bot_logs": "This crawler fix came from your bot logs, and robots.txt can't show it's done. Mark it done once crawlers read the page.",
             "not_open": "This task is already done or skipped.",
             "no_answer": "Couldn't read the page. Try again later.",
             "changed": "The task changed while it was checked. Try again.",
