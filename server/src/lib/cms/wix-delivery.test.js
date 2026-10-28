@@ -115,6 +115,13 @@ describe('seoTags', () => {
       },
     ]);
   });
+
+  it('escapes every "<" in the JSON-LD, so it can’t end the script it goes in', () => {
+    const [tag] = seoTags({}, [{ '@type': 'Article', headline: 'Cold brew </script><b>x' }]);
+    expect(tag.children).not.toContain('<');
+    expect(tag.children).toContain('\\u003c/script>\\u003cb>x');
+    expect(JSON.parse(tag.children).headline).toBe('Cold brew </script><b>x');
+  });
 });
 
 describe('sendToWix', () => {
@@ -154,6 +161,22 @@ describe('sendToWix', () => {
     expect(await send()).toMatchObject({ taken: true, updated: true, live: false });
     expect(wix.updateDraftPost.mock.calls[1][4]).toMatchObject({ live: true });
     expect(wix.createDraftPost).not.toHaveBeenCalled();
+  });
+
+  it('keeps the post’s id when Wix’s answer to the update leaves it out', async () => {
+    previous = POST;
+    wix.readDraftPost.mockResolvedValue({ id: POST, status: 'UNPUBLISHED', url: null });
+    wix.updateDraftPost.mockResolvedValue({ id: null, status: null, url: null });
+    // Kept on the delivery, the page's next send updates this post rather than making a second.
+    expect(await send()).toMatchObject({ taken: true, updated: true, externalId: POST });
+    expect(wix.createDraftPost).not.toHaveBeenCalled();
+  });
+
+  it('writes a scheduled post as a draft, not as a live post’s draft version', async () => {
+    previous = POST;
+    wix.readDraftPost.mockResolvedValue({ id: POST, status: 'SCHEDULED', url: null });
+    expect(await send()).toMatchObject({ taken: true, updated: true });
+    expect(wix.updateDraftPost.mock.calls[0][4]).toMatchObject({ live: false });
   });
 
   it('writes a new post when the last one was deleted or is gone', async () => {

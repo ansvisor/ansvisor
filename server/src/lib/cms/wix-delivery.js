@@ -22,8 +22,12 @@ import { WixError, createDraftPost, readDraftPost, toRicos, updateDraftPost } fr
 const EXCERPT_MAX = 500;
 const SLUG_MAX = 100;
 
-/** The post's statuses that mean it's live, or about to be. */
-const LIVE = new Set(['PUBLISHED', 'SCHEDULED']);
+/**
+ * The post's status that means it's live: its changes go to its draft
+ * version (UPDATE_PUBLICATION). A scheduled post isn't live yet, so it's
+ * written as a draft is (UPDATE).
+ */
+const LIVE = 'PUBLISHED';
 
 /**
  * The post the page's last Wix send made on this site, if any, whatever
@@ -90,7 +94,8 @@ export function seoTags(page, jsonLd = []) {
     tags.push({
       type: 'script',
       props: { type: 'application/ld+json' },
-      children: JSON.stringify(block),
+      // Every "<" escaped: nothing in it can end or open a tag in the post's script.
+      children: JSON.stringify(block).replace(/</g, '\\u003c'),
       custom: false,
       disabled: false,
     });
@@ -138,7 +143,7 @@ export async function sendToWix({ delivery, page, html, jsonLd = [], connection,
       try {
         written = await updateDraftPost(siteId, apiKey, current.id, post, {
           ...opts,
-          live: LIVE.has(current.status),
+          live: current.status === LIVE,
         });
       } catch (err) {
         if (!(err instanceof WixError && err.code === 'not_found')) throw err;
@@ -148,7 +153,8 @@ export async function sendToWix({ delivery, page, html, jsonLd = [], connection,
     written ??= await createDraftPost(siteId, apiKey, post, opts);
     return {
       taken: true,
-      externalId: written.id,
+      // Wix's answer to an update may leave out the post's id: it's the one updated, still.
+      externalId: written.id ?? current?.id,
       collectionId: siteId,
       updated,
       // A live post's draft was written: nothing new was made beside it.

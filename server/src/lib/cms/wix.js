@@ -20,8 +20,10 @@ export const WIX_API = 'https://www.wixapis.com';
 
 export class WixError extends Error {
   /**
-   * @param {'invalid'|'auth_failed'|'no_access'|'no_blog'|'no_member'|'not_found'|'unreachable'|'failed'} code
-   *   'auth_failed': the key is refused (the person connects again)
+   * @param {'invalid'|'auth_failed'|'no_access'|'no_ricos_permission'|'no_blog'|'no_member'|
+   *   'not_found'|'unreachable'|'failed'} code
+   *   'auth_failed': the key is refused (the person connects again);
+   *   'no_ricos_permission': the key may write the Blog, not use Wix's converter
    * @param {string} message
    * @param {number} [status] the HTTP status Wix answered, when it did
    */
@@ -101,9 +103,10 @@ async function call(path, { siteId, apiKey, method = 'GET', query, body, request
 
 /**
  * Checks a site and its key before they're kept: the key opens the site's
- * Blog, and a member can own the posts it writes (Wix's Blog needs one): the
- * owner of its newest post, else its first member. The site's name when the
- * key may read it.
+ * Blog, it may use Wix's converter (a page is sent through it: tried on a
+ * line of text, which Wix doesn't keep), and a member can own the posts it
+ * writes (Wix's Blog needs one): the owner of its newest post, else its
+ * first member. The site's name when the key may read it.
  *
  * @returns {Promise<{ siteName: string|null, memberId: string }>}
  */
@@ -122,6 +125,7 @@ export async function checkSite(siteId, apiKey, { request, base } = {}) {
     }
     throw err;
   }
+  await toRicos(siteId, apiKey, '<p>x</p>', { request, base });
   let memberId = posts?.posts?.[0]?.memberId ?? null;
   if (!memberId) {
     const members = await call('/members/v1/members/query', {
@@ -145,51 +149,94 @@ export async function checkSite(siteId, apiKey, { request, base } = {}) {
   };
 }
 
-/** The most Wix's converter takes at once. */
-export const RICOS_CHUNK = 10_000;
+/** The most Wix's converter is sent at once: its limit is 30,000 characters. */
+export const RICOS_CHUNK = 29_000;
 /** What the converter keeps of a page beside paragraphs, lists and text styles. */
 const RICOS_PLUGINS = ['HEADING', 'LINK', 'TABLE', 'CODE_BLOCK', 'DIVIDER'];
 
 const escapeText = (text) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/** Pieces joined, in order, as many as fit in `limit` characters at a time. */
+function pack(pieces, limit) {
+  const packed = [];
+  let current = '';
+  for (const piece of pieces) {
+    if (current && current.length + piece.length > limit) {
+      packed.push(current);
+      current = '';
+    }
+    current += piece;
+  }
+  if (current) packed.push(current);
+  return packed;
+}
+
+/**
+ * Text, escaped, in pieces of at most `limit` characters, cut between
+ * words. Only a word longer than that on its own is cut: an escaped
+ * character takes up to five, so its parts are a fifth of the limit.
+ */
+function textPieces(text, limit) {
+  const parts = [];
+  for (const word of text.match(/\S+\s*|\s+/g) ?? []) {
+    let rest = word;
+    while (rest) {
+      const part =
+        escapeText(rest).length <= limit ? rest : rest.slice(0, Math.max(1, Math.floor(limit / 5)));
+      parts.push(escapeText(part));
+      rest = rest.slice(part.length);
+    }
+  }
+  return pack(parts, limit);
+}
+
+/**
+ * A node's HTML in pieces of at most `limit` characters, each one whole. A
+ * node longer than that is split among its children, each piece in a copy
+ * of its tag (a list's items in lists, a table's rows in tables, a
+ * paragraph's text in paragraphs, between words). One with nothing to split
+ * it by goes as its text, in paragraphs.
+ */
+function nodePieces($, node, limit) {
+  const outer = $.html(node);
+  if (outer.length <= limit) return [outer];
+  if (node.type === 'text') return textPieces(node.data, limit);
+  if (node.type === 'tag' && node.children?.length) {
+    const empty = $.html($(node).clone().empty());
+    const close = `</${node.name}>`;
+    const room = limit - empty.length;
+    // A tag that takes up half the room isn't worth copying.
+    if (empty.endsWith(close) && room >= limit / 2) {
+      const open = empty.slice(0, -close.length);
+      const inner = node.children.flatMap((child) => nodePieces($, child, room));
+      return pack(inner, room).map((html) => `${open}${html}${close}`);
+    }
+  }
+  const text = $(node).text().replace(/\s+/g, ' ').trim();
+  return textPieces(text, limit - '<p></p>'.length).map((piece) => `<p>${piece}</p>`);
+}
+
 /**
  * The page's top-level blocks in pieces of at most RICOS_CHUNK characters,
- * in order. A block longer than that on its own goes as its text, paragraph
- * by paragraph.
+ * in order. A block longer than that on its own is split among its children
+ * (nodePieces).
  */
 export function ricosChunks(html, limit = RICOS_CHUNK) {
   const $ = cheerio.load(html, null, false);
   const blocks = [];
   for (const node of $.root().contents().toArray()) {
-    const outer = $.html(node);
-    if (!outer.trim()) continue;
-    if (outer.length <= limit) {
-      blocks.push(outer);
-      continue;
-    }
-    const text = $(node).text().replace(/\s+/g, ' ').trim();
-    // Cut the text, then escape each piece: an escaped character takes up
-    // to five, so a piece stays within the limit.
-    const step = Math.floor((limit - 7) / 5);
-    for (let at = 0; at < text.length; at += step) {
-      blocks.push(`<p>${escapeText(text.slice(at, at + step))}</p>`);
-    }
+    if (!$.html(node).trim()) continue;
+    blocks.push(...nodePieces($, node, limit));
   }
-  const chunks = [];
-  let current = '';
-  for (const block of blocks) {
-    if (current && current.length + block.length > limit) {
-      chunks.push(current);
-      current = '';
-    }
-    current += block;
-  }
-  if (current) chunks.push(current);
-  return chunks;
+  return pack(blocks, limit);
 }
 
-/** The page's HTML as Wix's rich content: its pieces converted one after another, joined. */
+/**
+ * The page's HTML as Wix's rich content: its pieces converted one after
+ * another, joined. A key refused there has the Blog's permissions, not the
+ * converter's (Manage Ricos Document).
+ */
 export async function toRicos(siteId, apiKey, html, { request, base } = {}) {
   const nodes = [];
   for (const chunk of ricosChunks(html)) {
@@ -200,6 +247,15 @@ export async function toRicos(siteId, apiKey, html, { request, base } = {}) {
       body: { html: chunk, options: { plugins: RICOS_PLUGINS } },
       request,
       base,
+    }).catch((err) => {
+      if (err instanceof WixError && err.code === 'no_access') {
+        throw new WixError(
+          'no_ricos_permission',
+          'The API key needs the Ricos permission (Manage Ricos Document) too. Add it to the key in Wix’s API Keys Manager, then try again.',
+          err.status,
+        );
+      }
+      throw err;
     });
     if (!Array.isArray(data?.document?.nodes)) {
       throw new WixError('failed', 'Wix couldn’t read the page’s text.');
@@ -209,15 +265,30 @@ export async function toRicos(siteId, apiKey, html, { request, base } = {}) {
   return { nodes };
 }
 
+/**
+ * A post's address, whole: Wix may give it without its scheme
+ * (mysite.wixsite.com/mysite/post/x), so it gets https://. Null when it
+ * isn't a web address.
+ */
+export function webAddress(url) {
+  const value = typeof url === 'string' ? url.trim() : '';
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith('//')) return `https:${value}`;
+  // A host first: example.com/…, mysite.wixsite.com/…
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?([/?#]|$)/i.test(value)) return `https://${value}`;
+  return null;
+}
+
 /** A draft post as Send to CMS keeps it. */
 function draftOf(data) {
   const post = data?.draftPost ?? {};
-  const url =
+  const url = webAddress(
     typeof post.url === 'string'
       ? post.url
       : post.url?.base && post.url?.path
         ? `${post.url.base.replace(/\/$/, '')}${post.url.path}`
-        : null;
+        : null,
+  );
   return {
     id: typeof post.id === 'string' ? post.id : null,
     status: typeof post.status === 'string' ? post.status : null,

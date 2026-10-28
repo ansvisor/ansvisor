@@ -16,9 +16,12 @@ const db = {
   // The brand's Webflow connection (00283), and whether this server has Webflow set up.
   webflow: null,
   webflowConfigured: true,
-  // Its WordPress connection (00294), and whether this server can keep its sign-in.
+  // Its WordPress connection (00294), and whether this server can keep its sign-in
+  // (or a Wix site's API key: the same key keeps both).
   wordpress: null,
   wordpressConfigured: true,
+  // Its Wix connection (00372).
+  wix: null,
   queued: [],
   updates: [],
   rpc: [],
@@ -53,7 +56,8 @@ function from(table) {
     if (table === 'webhook_configs') return { data: db.configs, error: null };
     if (table === 'brand_cms_connections') {
       const provider = q.filters.find(([op, col]) => op === 'eq' && col === 'provider')?.[2];
-      return { data: provider === 'wordpress' ? db.wordpress : db.webflow, error: null };
+      const connections = { wordpress: db.wordpress, wix: db.wix };
+      return { data: provider in connections ? connections[provider] : db.webflow, error: null };
     }
     if (table === 'brands') {
       db.brandReads += 1;
@@ -105,6 +109,8 @@ const sendToWordPress = vi.fn();
 vi.mock('./cms/wordpress-delivery.js', () => ({
   sendToWordPress: (...args) => sendToWordPress(...args),
 }));
+const sendToWix = vi.fn();
+vi.mock('./cms/wix-delivery.js', () => ({ sendToWix: (...args) => sendToWix(...args) }));
 
 const { DAILY_DELIVERIES, DeliveryError, PAUSE_MS, cleanPublishHtml, sendContentPages, signBody } =
   await import('./content-delivery.js');
@@ -158,10 +164,12 @@ beforeEach(() => {
   db.webflowConfigured = true;
   db.wordpress = null;
   db.wordpressConfigured = true;
+  db.wix = null;
   db.rpcError = null;
   postJson.mockReset().mockResolvedValue({ status: 200, answer: '{"ok":true}' });
   sendToWebflow.mockReset();
   sendToWordPress.mockReset();
+  sendToWix.mockReset();
 });
 
 afterEach(() => {
@@ -715,6 +723,101 @@ describe('sendContentPages to WordPress (phase 2, 00294)', () => {
       (u) =>
         u.table === 'content_draft_deliveries' &&
         u.update.error === 'WordPress refused the user or the Application Password.',
+    );
+    expect(closed).toHaveLength(2);
+  });
+});
+
+describe('sendContentPages to Wix (phase 2, 00372)', () => {
+  const connection = {
+    id: 'cn1',
+    brand_id: 'b1',
+    status: 'connected',
+    site_id: '2f8a1c3e-1111-4222-8333-944455556666',
+    account: 'c00e8a5c-322b-4e77-8813-002e3ea7e811',
+    updated_at: '2026-10-28T09:00:00Z',
+  };
+  const toWix = (pages = [page()]) =>
+    sendContentPages({ orgId: 'o1', brandId: 'b1', userId: 'u1', pages, target: 'wix' });
+
+  it('sends a page to the brand’s site, not its webhooks, and keeps the post on the delivery', async () => {
+    db.wix = connection;
+    sendToWix.mockResolvedValue({
+      taken: true,
+      externalId: '9124f6ef-a537-4bdd-bca3-e7306947deeb',
+      collectionId: connection.site_id,
+      updated: false,
+      live: false,
+      changed: { images: 0 },
+    });
+    const sent = await toWix();
+    expect(db.rpc[0].args.p_target).toBe('wix');
+    expect(postJson).not.toHaveBeenCalled();
+    expect(sendToWebflow).not.toHaveBeenCalled();
+    expect(sendToWordPress).not.toHaveBeenCalled();
+    expect(sendToWix).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connection,
+        html: '<h2>Why</h2><p>Because.</p>',
+        page: expect.objectContaining({ draftId: page().draftId, slug: 'best-aeo-tools' }),
+      }),
+    );
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'sent',
+      external_id: '9124f6ef-a537-4bdd-bca3-e7306947deeb',
+      target_collection: connection.site_id,
+    });
+    expect(sent.deliveries[0]).toMatchObject({ status: 'sent', updated: false });
+  });
+
+  it('refuses before reserving when Wix isn’t connected or set up', async () => {
+    db.wordpressConfigured = false;
+    await expect(toWix()).rejects.toMatchObject({ code: 'wix_not_configured', status: 503 });
+    db.wordpressConfigured = true;
+    await expect(toWix()).rejects.toMatchObject({ code: 'no_wix', status: 409 });
+    db.wix = { ...connection, status: 'auth_failed' };
+    await expect(toWix()).rejects.toMatchObject({ code: 'wix_refused', status: 409 });
+    // A WordPress connection isn't a Wix one.
+    db.wix = null;
+    db.wordpress = {
+      id: 'cn2',
+      brand_id: 'b1',
+      status: 'connected',
+      site_url: 'https://b.example',
+    };
+    await expect(toWix()).rejects.toMatchObject({ code: 'no_wix' });
+    expect(db.rpc).toEqual([]);
+    expect(sendToWix).not.toHaveBeenCalled();
+  });
+
+  it('refuses a page already on its way to Wix, naming it', async () => {
+    db.wix = connection;
+    db.rpcError = { message: 'delivery_in_progress' };
+    await expect(toWix()).rejects.toMatchObject({
+      code: 'in_progress',
+      message: 'A page is already being sent to Wix. Wait for it, then send again.',
+    });
+    expect(sendToWix).not.toHaveBeenCalled();
+  });
+
+  it('stops a batch once Wix refuses the API key, closing the rest with the reason', async () => {
+    vi.useFakeTimers();
+    db.wix = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToWix.mockResolvedValue({
+      taken: false,
+      failure: 'Wix refused the API key.',
+      refused: true,
+    });
+    await toWix([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToWix).toHaveBeenCalledTimes(1);
+    const closed = db.updates.filter(
+      (u) =>
+        u.table === 'content_draft_deliveries' && u.update.error === 'Wix refused the API key.',
     );
     expect(closed).toHaveLength(2);
   });

@@ -37,6 +37,8 @@ alter table public.brand_cms_connections
 
 comment on column public.brand_cms_connections.site_id is
   'Webflow: the site pages go to (00283). Framer (00295): the project''s id, as Framer connects to it. Wix (00372): the site''s id.';
+comment on column public.brand_cms_connections.site_name is
+  'The site''s name (Webflow, WordPress, Wix (00372): its display name, when the API key may read it), or the Framer project''s (00295).';
 comment on column public.brand_cms_connections.account is
   'WordPress (00294): the user the connection signs in as, with an Application Password. Framer (00295): the user the API key acts as. Both kept in brand_cms_credentials. Wix (00372): the member who owns the posts it writes.';
 
