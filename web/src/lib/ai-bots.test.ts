@@ -41,6 +41,34 @@ describe('botsCardState', () => {
       state({ connections: [conn(null), conn('2026-10-19T09:00:00Z', 'c2')], usage: usage() }),
     ).toBe('on');
   });
+
+  it('without an active plan, is locked only if the plan it was on had no report (Starter)', () => {
+    // The caps read 0 whatever the plan was.
+    const noPlan = usage({ cap: 0, rawCap: 0, noPlan: true });
+    const growth = { planId: 'growth' as const };
+    expect(
+      botsCardState({ connections: [conn('2026-10-19T09:00:00Z')], usage: noPlan }, growth),
+    ).toBe('on');
+    expect(botsCardState({ connections: [conn(null)], usage: noPlan }, growth)).toBe('waiting');
+    expect(botsCardState({ connections: [], usage: noPlan }, growth)).toBe('off');
+    expect(
+      botsCardState(
+        { connections: [conn('2026-10-19T09:00:00Z')], usage: noPlan },
+        { planId: 'starter' },
+      ),
+    ).toBe('locked');
+    // A read-only workspace (isLocked) reads the same, marked or not.
+    const zero = usage({ cap: 0, rawCap: 0 });
+    expect(
+      botsCardState({ connections: [conn(null)], usage: zero }, { ...growth, isLocked: true }),
+    ).toBe('waiting');
+    expect(
+      botsCardState(
+        { connections: [conn(null)], usage: zero },
+        { planId: 'starter', isLocked: true },
+      ),
+    ).toBe('locked');
+  });
 });
 
 describe('lastBotEvent and rowsPausedUntil', () => {
@@ -117,6 +145,45 @@ describe('botReportState and sampleBotTypes (AT-011)', () => {
     expect(
       botReportState({ connections: [], usage: usage() }, report('2026-10-19T09:00:00Z')),
     ).toBe('data');
+  });
+
+  it('shows a workspace whose Growth plan ended its own data, not the locked sample', () => {
+    const noPlan = usage({ cap: 0, rawCap: 0, noPlan: true });
+    const growth = { planId: 'growth' as const };
+    expect(
+      botReportState(
+        { connections: [conn(null)], usage: noPlan },
+        report('2026-10-19T09:00:00Z'),
+        growth,
+      ),
+    ).toBe('data');
+    expect(botReportState({ connections: [conn(null)], usage: noPlan }, report(null), growth)).toBe(
+      'waiting',
+    );
+    expect(botReportState({ connections: [], usage: noPlan }, report(null), growth)).toBe('off');
+    // Read-only (isLocked) without the server's mark reads the same.
+    expect(
+      botReportState(
+        { connections: [conn(null)], usage: usage({ cap: 0, rawCap: 0 }) },
+        report('2026-10-19T09:00:00Z'),
+        { ...growth, isLocked: true },
+      ),
+    ).toBe('data');
+  });
+
+  it('keeps the locked sample and Upgrade for a workspace whose Starter plan ended', () => {
+    const noPlan = usage({ cap: 0, rawCap: 0, noPlan: true });
+    expect(
+      botReportState({ connections: [conn(null)], usage: noPlan }, report('2026-10-19T09:00:00Z'), {
+        planId: 'starter',
+      }),
+    ).toBe('locked');
+    expect(
+      botReportState({ connections: [], usage: usage({ cap: 0, rawCap: 0 }) }, report(null), {
+        planId: 'starter',
+        isLocked: true,
+      }),
+    ).toBe('locked');
   });
 
   it("samples the mockup's numbers, last seen 2h, 40m and 5m ago", () => {
