@@ -43,7 +43,10 @@ vi.mock('../config/supabase.js', () => ({
         neq: (col, v) => (op.filters.push([`${col}<>`, v]), chain),
         gt: (col, v) => (op.filters.push([`${col}>`, v]), chain),
         in: (col, v) => (op.filters.push([col, v]), chain),
+        is: (col, v) => (op.filters.push([`${col} is`, v]), chain),
         or: (v) => (op.filters.push(['or', v]), chain),
+        order: () => chain,
+        range: () => chain,
         limit: () => chain,
         update: (value) => ((op.kind = 'update'), (op.value = value), chain),
         insert: (value) => ((op.kind = 'insert'), (op.value = value), chain),
@@ -516,6 +519,172 @@ describe('runDraftWriting on a new page', () => {
     // What the person didn't give is still a placeholder.
     expect(written).not.toContain('Marco Rossi');
     expect(written).not.toContain('3,400');
+  });
+
+  /** A draft's shopping path as content_drafts.shopping_path keeps it. */
+  const shoppingPath = (over = {}) => ({
+    version: 1,
+    builtAt: '2026-10-27T10:00:00.000Z',
+    pageType: 'guide',
+    categories: [
+      { name: 'Hiking Boots', url: 'https://shop.example/collections/hiking-boots', title: null },
+    ],
+    products: [
+      {
+        id: 'p1',
+        title: 'Summit GTX Boot',
+        url: 'https://shop.example/products/p1',
+        price: 189,
+        salePrice: null,
+        currency: 'USD',
+        availability: 'in_stock',
+        image: null,
+        issues: [],
+        score: 9,
+      },
+      {
+        id: 'p2',
+        title: 'Trail 450 Boot',
+        url: 'https://shop.example/products/p2',
+        price: 129,
+        salePrice: null,
+        currency: 'USD',
+        availability: 'in_stock',
+        image: null,
+        issues: [],
+        score: 8,
+      },
+      {
+        id: 'p3',
+        title: 'Evil Boot',
+        url: 'https://evil.example/products/p3',
+        price: 99,
+        salePrice: null,
+        currency: 'USD',
+        availability: 'in_stock',
+        image: null,
+        issues: [],
+        score: 7,
+      },
+    ],
+    leftOut: [],
+    locked: [],
+    removed: [],
+    added: [],
+    ...over,
+  });
+
+  it("writes with the draft's shopping path, its prices kept and its names linked (shopping path)", async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        intro: [
+          'Good hiking boots keep you dry. The Summit GTX Boot costs $189, or 189.00 USD; the Trail 450 Boot [figure, source].',
+          'At 450 g it is light, and $199 elsewhere.',
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    // Sold out since the path was built: the catalog's stock now.
+    rows.catalog_variants = [
+      { id: 'v1', product_id: 'p1', availability: 'out of stock', price: 189, currency: 'USD' },
+    ];
+    await expect(run(draftRow({ shopping_path: shoppingPath() }))).resolves.toEqual({
+      written: true,
+    });
+    const { prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain('- Summit GTX Boot: 189.00 USD, out of stock');
+    // A page off the brand's site isn't offered.
+    expect(prompt).not.toContain('Evil Boot');
+    const written = draftUpdates().find((u) => u.body_html)?.body_html;
+    expect(written).toContain(
+      '<a href="https://shop.example/collections/hiking-boots">hiking boots</a>',
+    );
+    expect(written).toContain(
+      'The <a href="https://shop.example/products/p1">Summit GTX Boot</a> costs $189, or 189.00 USD;',
+    );
+    // A product's own number where its name is: nowhere else, nor another price.
+    expect(written).toContain('Trail 450 Boot</a> [figure, source].');
+    expect(written).toContain('At [figure, source] g it is light, and [figure, source] elsewhere.');
+  });
+
+  it('writes a draft whose shopping path is broken as one with none', async () => {
+    generateObject.mockResolvedValue({
+      object: { ...page, intro: ['The Summit GTX Boot costs $189.'] },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    for (const broken of [
+      shoppingPath({ categories: { name: 'Hiking Boots' } }),
+      shoppingPath({ products: [null] }),
+    ]) {
+      generateObject.mockClear();
+      writes = [];
+      await expect(run(draftRow({ shopping_path: broken }))).resolves.toEqual({ written: true });
+      expect(generateObject.mock.calls[0][0].prompt).not.toContain('The shopping path');
+      const written = draftUpdates().find((u) => u.body_html)?.body_html;
+      expect(written).toContain('<p>The Summit GTX Boot costs [figure, source].</p>');
+    }
+  });
+
+  it("puts the checked path's products in stock as a grid, not the ones the draft keeps (shopping path, part 5)", async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        sections: [
+          { heading: 'How to choose', paragraphs: ['Fit first.'], bullets: [] },
+          {
+            heading: 'Our picks',
+            paragraphs: ['The Summit GTX Boot, then the Trail 450 Boot.'],
+            bullets: [],
+          },
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    const variant = (id, productId, price) => ({
+      id,
+      product_id: productId,
+      availability: 'in stock',
+      price,
+      sale_price: null,
+      currency: 'USD',
+    });
+    // All in stock now, the first cheaper than when the path was built.
+    rows.catalog_variants = [
+      variant('v1', 'p1', 179),
+      variant('v2', 'p2', 129),
+      variant('v3', 'p3', 99),
+      variant('v4', 'p4', 99),
+    ];
+    const kept = shoppingPath({ pageType: 'buying_guide' });
+    // Kept as a member saved it: one page off the brand's site (Evil Boot), one over http.
+    kept.products.push({
+      ...kept.products[1],
+      id: 'p4',
+      title: 'Plain Boot',
+      url: 'http://shop.example/products/p4',
+    });
+    await expect(
+      run(draftRow({ page_type: 'buying_guide', shopping_path: kept })),
+    ).resolves.toEqual({ written: true });
+    const written = draftUpdates().find((u) => u.body_html)?.body_html;
+    const encoded = /<div data-html-block="([^"]+)"><\/div>/.exec(written);
+    const grid = Buffer.from(encoded[1], 'base64').toString('utf8');
+    expect(grid.match(/class="ansvisor-product"/g)).toHaveLength(2);
+    expect(grid).toContain('href="https://shop.example/products/p1"');
+    expect(grid).toContain('href="https://shop.example/products/p2"');
+    expect(grid).not.toContain('Evil Boot');
+    expect(grid).not.toContain('Plain Boot');
+    // The catalog's price now, not the one the path was built with.
+    expect(grid).toContain('$179.00');
+    expect(grid).not.toContain('$189.00');
+    // At the end of the section that links them.
+    expect(written).toMatch(
+      /Trail 450 Boot<\/a>\.<\/p><div data-html-block="[^"]+"><\/div><h2>FAQ<\/h2>/,
+    );
   });
 
   it('leaves a draft marked ready during the run as it is', async () => {

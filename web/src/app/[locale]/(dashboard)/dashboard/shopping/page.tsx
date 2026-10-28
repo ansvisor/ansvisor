@@ -97,6 +97,7 @@ import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
+import { CatalogNote } from './_catalog-note';
 import { ProductDataStrip, useProductSources } from './_data-strip';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { WhyDialog } from './_why-dialog';
@@ -472,6 +473,7 @@ export default function ShoppingPage() {
                       {tCommon('exportCsv')}
                     </Button>
                   </div>
+                  <CatalogNote brandId={activeBrandId} />
                   <ProductTable
                     t={t}
                     products={ownProducts}
