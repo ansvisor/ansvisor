@@ -32,6 +32,7 @@ const brand = (id: string, name: string, isDemo = false) => ({
 });
 const store = vi.hoisted(() => ({
   brands: [] as ReturnType<typeof brand>[],
+  loaded: true,
   activeBrandId: null as string | null,
   setActiveBrand: vi.fn(),
   addBrand: vi.fn(),
@@ -101,6 +102,7 @@ beforeEach(() => {
   root = createRoot(container);
   store.brands = [brand('b1', 'Acme'), brand('b2', 'Globex')];
   store.activeBrandId = 'b1';
+  store.loaded = true;
   push.mockReset();
   onNavigate.mockReset();
   openUpgrade.mockReset();
@@ -215,6 +217,14 @@ describe('BrandSwitcher', () => {
     document.body.replaceChildren(container);
     root = createRoot(container);
     store.brands = [];
+    await render();
+    expect(container.textContent).toBe('');
+  });
+
+  // A new browser: no brand listed yet isn't no brand at all.
+  it('offers no Add Brand before the brands are loaded', async () => {
+    store.brands = [];
+    store.loaded = false;
     await render();
     expect(container.textContent).toBe('');
   });

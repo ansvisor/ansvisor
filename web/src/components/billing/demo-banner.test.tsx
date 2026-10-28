@@ -85,6 +85,7 @@ async function render({
   useBrandStore.setState({
     brands: ownBrand ? [brand('own'), brand('demo', true)] : [brand('demo', true)],
     activeBrandId: selected,
+    loaded: true,
   });
   await act(async () => {
     root.render(

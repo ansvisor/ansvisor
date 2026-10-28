@@ -6,9 +6,12 @@ describe('the demo brand’s integrations', () => {
     expect(demoIntegration('google-search-console')).toBe('connected');
     expect(demoIntegration('google-analytics')).toBe('connected');
     expect(demoIntegration('webflow')).toBe('connected');
-    for (const id of ['google-merchant-center', 'shopify', 'wordpress', 'framer', 'wix']) {
+    for (const id of ['google-merchant-center', 'shopify', 'wix']) {
       expect(demoIntegration(id)).toBe('soon');
     }
+    // Live with a card of their own, shown as on any brand.
+    expect(demoIntegration('wordpress')).toBeNull();
+    expect(demoIntegration('framer')).toBeNull();
     expect(demoIntegration('hubspot')).toBeNull();
   });
 
@@ -19,6 +22,6 @@ describe('the demo brand’s integrations', () => {
 
   it('rows of their own only for those without a card yet, by group', () => {
     expect(upcomingDemoIntegrations('stores')).toEqual(['shopify']);
-    expect(upcomingDemoIntegrations('cms')).toEqual(['wordpress', 'framer', 'wix']);
+    expect(upcomingDemoIntegrations('cms')).toEqual(['wix']);
   });
 });

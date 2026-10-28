@@ -11,6 +11,20 @@ import messages from '../../../../messages/en.json';
  * onboarding's plan step.
  */
 
+// An in-memory localStorage for the brand store: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
+
 let profile: Record<string, unknown> | null;
 let org: Record<string, unknown> | null;
 let orgError: { message: string } | null;
@@ -63,7 +77,8 @@ vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
-// The brands the layout hands the brand store.
+// The brands the layout hands the brand store (the store is marked loaded
+// in beforeEach, as BrandLoader leaves it).
 let loaded: { id: string }[] = [];
 vi.mock('@/components/providers/brand-loader', () => ({
   BrandLoader: ({ brands }: { brands: { id: string }[] }) => {
@@ -80,6 +95,7 @@ vi.mock('@/lib/actions/brand', () => ({
 }));
 
 const { default: DashboardLayout } = await import('./layout');
+const { useBrandStore } = await import('@/stores/use-brand-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -123,6 +139,7 @@ beforeEach(() => {
   owner = null;
   orgBrands = [];
   loaded = [];
+  useBrandStore.setState({ loaded: true });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);

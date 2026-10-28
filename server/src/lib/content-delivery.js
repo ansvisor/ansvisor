@@ -7,7 +7,10 @@ import { PageFetchError } from './safe-fetch.js';
 import { brandSiteType, rulesLanguage, untouchedRules } from './content-language.js';
 import { postJson } from './safe-post.js';
 import { isWebflowConfigured } from './composio.js';
+import { credentialsConfigured } from './catalog/credentials.js';
 import { sendToWebflow } from './cms/webflow-delivery.js';
+import { sendToWordPress } from './cms/wordpress-delivery.js';
+import { sendToFramer } from './cms/framer-delivery.js';
 
 /**
  * Send to CMS, phase 1 (#1331): an admin or manager sends Content Editor
@@ -25,8 +28,10 @@ import { sendToWebflow } from './cms/webflow-delivery.js';
  * the workspace's next send (reserve_content_deliveries).
  *
  * Phase 2: a page can go to the brand's Webflow collection instead (00283,
- * cms/webflow-delivery.js), as a draft item, under the same cap, batches
- * and delivery rows; a delivery says where it went (`target`, 00284).
+ * cms/webflow-delivery.js), as a draft item, to its WordPress site (00294,
+ * cms/wordpress-delivery.js), as a draft post, or to its Framer collection
+ * (00295, cms/framer-delivery.js), as a draft item, under the same cap,
+ * batches and delivery rows; a delivery says where it went (`target`).
  */
 
 export const DELIVERY_EVENT = 'content_draft.sent';
@@ -60,8 +65,11 @@ export const deliveryPage = z.object({
     .default(null),
 });
 
-/** Where pages go: the brand's webhook (phase 1) or its Webflow collection (phase 2). */
-const DELIVERY_TARGETS = ['webhook', 'webflow'];
+/**
+ * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
+ * WordPress site or its Framer collection (phase 2).
+ */
+const DELIVERY_TARGETS = ['webhook', 'webflow', 'wordpress', 'framer'];
 
 export const sendInput = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
@@ -74,7 +82,9 @@ export const sendInput = z.object({
 export class DeliveryError extends Error {
   /**
    * @param {'no_webhook'|'webhook_not_subscribed'|'webflow_not_configured'|'no_webflow'|
-   *   'webflow_refused'|'webflow_not_ready'|'in_progress'|'not_found'|'daily_limit'} code
+   *   'webflow_refused'|'webflow_not_ready'|'wordpress_not_configured'|'no_wordpress'|
+   *   'wordpress_refused'|'framer_not_configured'|'no_framer'|'framer_refused'|
+   *   'framer_not_ready'|'in_progress'|'not_found'|'daily_limit'} code
    */
   constructor(code, message, status) {
     super(message);
@@ -260,6 +270,77 @@ async function webflowFor(brandId) {
   return data;
 }
 
+/** The brand's WordPress connection, its sign-in kept by the API (00294). */
+async function wordpressFor(brandId) {
+  if (!credentialsConfigured()) {
+    throw new DeliveryError(
+      'wordpress_not_configured',
+      'WordPress is not set up on this server.',
+      503,
+    );
+  }
+  const { data, error } = await supabaseAdmin
+    .from('brand_cms_connections')
+    .select('id, brand_id, status, site_url, updated_at')
+    .eq('brand_id', brandId)
+    .eq('provider', 'wordpress')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new DeliveryError('no_wordpress', 'Connect WordPress in Settings › Integrations.', 409);
+  }
+  if (data.status === 'auth_failed') {
+    throw new DeliveryError(
+      'wordpress_refused',
+      'WordPress refused the sign-in. Connect it again in Settings › Integrations.',
+      409,
+    );
+  }
+  return data;
+}
+
+/**
+ * The brand's Framer connection (00295), its key kept by the API, ready to
+ * take pages: a collection with its title and body fields.
+ */
+async function framerFor(brandId) {
+  if (!credentialsConfigured()) {
+    throw new DeliveryError('framer_not_configured', 'Framer is not set up on this server.', 503);
+  }
+  const { data, error } = await supabaseAdmin
+    .from('brand_cms_connections')
+    .select('id, brand_id, status, site_id, collection_id, field_map, updated_at')
+    .eq('brand_id', brandId)
+    .eq('provider', 'framer')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new DeliveryError('no_framer', 'Connect Framer in Settings › Integrations.', 409);
+  }
+  if (data.status === 'auth_failed') {
+    throw new DeliveryError(
+      'framer_refused',
+      'Framer refused the API key. Connect it again in Settings › Integrations.',
+      409,
+    );
+  }
+  if (!data.collection_id || !data.field_map?.title || !data.field_map?.body) {
+    throw new DeliveryError(
+      'framer_not_ready',
+      'Pick the Framer collection and its fields in Settings › Integrations.',
+      409,
+    );
+  }
+  return data;
+}
+
+/** A CMS a page goes to itself, not through the webhook: its connection, and how a page is sent. */
+const NATIVE = {
+  webflow: { label: 'Webflow', connect: webflowFor, send: sendToWebflow },
+  wordpress: { label: 'WordPress', connect: wordpressFor, send: sendToWordPress },
+  framer: { label: 'Framer', connect: framerFor, send: sendToFramer },
+};
+
 async function brandFor(brandId) {
   const [{ data: brand }, { data: domains }] = await Promise.all([
     supabaseAdmin
@@ -329,18 +410,19 @@ async function sendToWebhooks({ delivery, page, brand, html, jsonLd, configs }) 
 }
 
 /**
- * Sends one queued delivery, to the brand's webhooks or its Webflow
- * collection, and writes how it went: sent, or failed with the reason. A
- * Webflow item's id and collection are kept on the delivery, so the page's
- * next send updates the item. A webhook's callback can land before the
+ * Sends one queued delivery, to the brand's webhooks or its CMS (a Webflow
+ * or Framer collection, a WordPress site), and writes how it went: sent, or
+ * failed with the reason. A Webflow or Framer item's or WordPress post's id,
+ * and its collection or site, are kept on the delivery, so the page's next
+ * send updates it. A webhook's callback can land before the
  * webhook answers (an automation that publishes, or fails, first): then the
  * delivery keeps what the callback said, and that is what comes back.
  */
-async function deliver({ delivery, page, brand, configs, webflow }) {
+async function deliver({ delivery, page, brand, configs, native }) {
   const html = cleanPublishHtml(page.html);
   const jsonLd = jsonLdOf(html);
-  const sent = webflow
-    ? await sendToWebflow({ delivery, page, html, jsonLd, connection: webflow })
+  const sent = native
+    ? await native.send({ delivery, page, html, jsonLd, connection: native.connection })
     : await sendToWebhooks({ delivery, page, brand, html, jsonLd, configs });
   const update = {
     status: sent.taken ? 'sent' : 'failed',
@@ -351,10 +433,12 @@ async function deliver({ delivery, page, brand, configs, webflow }) {
       ? { external_id: sent.externalId, target_collection: sent.collectionId }
       : {}),
   };
-  // How Webflow took it, for the one page's answer (and the batch); not kept.
-  const how = webflow
+  // How the CMS took it, for the one page's answer (and the batch); not kept.
+  // live: WordPress had the page's post live, so a new draft was made;
+  // Framer's item updated isn't a draft, so it goes live with the site's next publish.
+  const how = native
     ? sent.taken
-      ? { updated: sent.updated, changed: sent.changed }
+      ? { updated: sent.updated, changed: sent.changed, live: sent.live }
       : { refused: Boolean(sent.refused) }
     : {};
   const { data: written, error } = await supabaseAdmin
@@ -364,8 +448,9 @@ async function deliver({ delivery, page, brand, configs, webflow }) {
     .eq('status', 'queued')
     .select('id');
   if (sent.externalId && (error || (written && !written.length))) {
-    // The item is in Webflow whatever the row says: its id is kept, or the
-    // page's next send makes a second item and fails on its slug.
+    // The item (or post) is in the CMS whatever the row says: its id is
+    // kept, or the page's next send makes a second one (Webflow refusing it
+    // on its slug).
     const { error: idError } = await supabaseAdmin
       .from('content_draft_deliveries')
       .update({ external_id: sent.externalId, target_collection: sent.collectionId })
@@ -405,9 +490,9 @@ async function closeQueued(delivery, reason) {
 
 /**
  * The batch's pages, one after another; one deleted or archived before its
- * turn doesn't go, and once Webflow refuses the token, the rest don't either.
+ * turn doesn't go, and once the CMS refuses the sign-in, the rest don't either.
  */
-async function deliverBatch(going, { brand, configs, webflow, batchId }) {
+async function deliverBatch(going, { brand, configs, native, batchId }) {
   let refused = null;
   for (const [i, item] of going.entries()) {
     if (refused) {
@@ -427,8 +512,8 @@ async function deliverBatch(going, { brand, configs, webflow, batchId }) {
         await closeQueued(item.delivery, 'The page was deleted or archived before it was sent');
         continue;
       }
-      const sent = await deliver({ ...item, brand, configs, webflow });
-      if (sent.refused) refused = sent.error ?? 'Webflow refused the site token';
+      const sent = await deliver({ ...item, brand, configs, native });
+      if (sent.refused) refused = sent.error ?? `${native?.label ?? 'The CMS'} refused the sign-in`;
     } catch (err) {
       logger.error(
         { err, batchId, deliveryId: item.delivery.id },
@@ -463,8 +548,8 @@ async function myRuleSets(orgId, siteType, drafts) {
 
 /**
  * Sends pages of one brand: checks they are the brand's (not archived), that
- * a webhook takes the event (or the brand's Webflow collection is ready, for
- * target 'webflow'), reserves them against the day's cap (those past
+ * a webhook takes the event (or the brand's Webflow or Framer collection is
+ * ready, or its WordPress site connected, for those targets), reserves them against the day's cap (those past
  * it don't go), keeps each page's slug and meta on its draft, then sends
  * them. One page is sent before this returns; more go on in the background,
  * so a CMS isn't sent 25 posts at once.
@@ -494,8 +579,9 @@ export async function sendContentPages({
   if ((drafts ?? []).length !== ids.length) {
     throw new DeliveryError('not_found', 'A page to send is not in this brand', 404);
   }
-  const webflow = target === 'webflow' ? await webflowFor(brandId) : null;
-  const configs = webflow ? [] : await webhooksFor(brandId);
+  const cms = NATIVE[target] ?? null;
+  const native = cms ? { ...cms, connection: await cms.connect(brandId) } : null;
+  const configs = native ? [] : await webhooksFor(brandId);
 
   const batchId = pages.length > 1 ? crypto.randomUUID() : null;
   const { data: queued, error: reserveError } = await supabaseAdmin.rpc(
@@ -511,11 +597,11 @@ export async function sendContentPages({
     },
   );
   if (reserveError) {
-    // 00284: a page already on its way to Webflow isn't sent again meanwhile.
+    // 00284, 00294, 00295: a page already on its way to the CMS isn't sent there again meanwhile.
     if (/delivery_in_progress/.test(reserveError.message ?? '')) {
       throw new DeliveryError(
         'in_progress',
-        'A page is already being sent to Webflow. Wait for it, then send again.',
+        `A page is already being sent to ${cms?.label ?? 'the CMS'}. Wait for it, then send again.`,
         409,
       );
     }
@@ -578,10 +664,10 @@ export async function sendContentPages({
     };
   }
   if (pages.length === 1) {
-    const sent = await deliver({ ...going[0], brand, configs, webflow });
+    const sent = await deliver({ ...going[0], brand, configs, native });
     return { batchId, deliveries: [sent], skipped: 0 };
   }
-  void deliverBatch(going, { brand, configs, webflow, batchId });
+  void deliverBatch(going, { brand, configs, native, batchId });
   return {
     batchId,
     deliveries: rows.map((r) => ({ id: r.id, draftId: r.draft_id, status: r.status })),

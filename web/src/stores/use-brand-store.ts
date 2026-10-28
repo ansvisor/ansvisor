@@ -5,6 +5,13 @@ import type { Brand } from '@/types';
 interface BrandStore {
   brands: Brand[];
   activeBrandId: string | null;
+  /**
+   * The brands are the server's list (setBrands), not yet the last visit's
+   * or none: until then an empty list doesn't mean the member has no brand,
+   * and the brand on screen (the demo brand or the workspace's own) isn't
+   * known. Never kept between visits.
+   */
+  loaded: boolean;
   setBrands: (brands: Brand[]) => void;
   addBrand: (brand: Brand) => void;
   updateBrand: (id: string, updates: Partial<Brand>) => void;
@@ -18,6 +25,7 @@ export const useBrandStore = create<BrandStore>()(
     (set, get) => ({
       brands: [],
       activeBrandId: null,
+      loaded: false,
 
       // The brand kept from the last visit only while it is still one of the
       // member's: a brand deleted, or another workspace's (an account
@@ -26,6 +34,7 @@ export const useBrandStore = create<BrandStore>()(
       setBrands: (brands) =>
         set({
           brands,
+          loaded: true,
           activeBrandId: brands.some((b) => b.id === get().activeBrandId)
             ? get().activeBrandId
             : (brands[0]?.id ?? null),

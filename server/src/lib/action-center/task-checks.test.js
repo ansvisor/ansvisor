@@ -34,6 +34,7 @@ function table(name) {
     or: filter('or'),
     order: filter('order'),
     limit: () => chain,
+    range: filter('range'),
     maybeSingle: async () => {
       reads.push({ table: name, filters: q.filters });
       const row = db[name];
@@ -55,6 +56,8 @@ vi.mock('../shopping-check.js', () => ({ checkShoppingDraft }));
 const {
   CHANGED_BELOW,
   MIN_CHANGED_RUNS,
+  SKETCH_VERSION,
+  SWEEP_PER_BRAND,
   changedRuns,
   checkKind,
   checkPage,
@@ -267,9 +270,10 @@ describe('checkPage', () => {
     const FAQ = ld(
       '{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"a"},{"@type":"Question","name":"b"}]}',
     );
-    const check = (head, auditChecks) =>
+    const check = (head, auditChecks, previous = null) =>
       checkPage('structuredData', PAGE, {
         auditChecks,
+        previous,
         fetch: fetchOf({ [PAGE]: html('x', head) }),
       });
     // A FAQ schema fix isn't passed by the site's Organization block.
@@ -278,11 +282,21 @@ describe('checkPage', () => {
       missing: ['no_faq_schema'],
     });
     expect(await check(`${ORG}${FAQ}`, ['faq-schema'])).toEqual({ passed: true, missing: [] });
-    // No checks named: the JSON-LD must be valid schema.org; {"foo":1} isn't.
-    expect(await check(ORG, [])).toEqual({ passed: true, missing: [] });
-    expect(await check(ld('{"foo":1}'), [])).toEqual({
+    // No checks named (another action's fix, #1565 B): the JSON-LD must be
+    // valid schema.org, {"foo":1} isn't, and a page valid all along (the
+    // site's Organization block) isn't fixed by it…
+    expect(await check(ORG, [])).toEqual({ passed: false, missing: ['valid_before'] });
+    const failed = await check(ld('{"foo":1}'), []);
+    expect(failed).toEqual({
       passed: false,
       missing: ['structured_data_invalid'],
+      sawFailing: true,
+    });
+    // …it passes once a check on this page found it failing.
+    expect(await check(ORG, [], { ...failed, url: PAGE })).toEqual({ passed: true, missing: [] });
+    expect(await check(ORG, [], { ...failed, url: 'https://acme.example/other' })).toEqual({
+      passed: false,
+      missing: ['valid_before'],
     });
     expect(await check('', ['json-ld-presence', 'json-ld-validity'])).toEqual({
       passed: false,
@@ -301,7 +315,7 @@ describe('checkPage', () => {
     // A good block beside one that doesn't parse: validity's warn, still open.
     const broken = `${ORG}${ld('{"@type":"Product",')}`;
     for (const auditChecks of [['json-ld-validity'], []]) {
-      expect(await check(broken, auditChecks)).toEqual({
+      expect(await check(broken, auditChecks)).toMatchObject({
         passed: false,
         missing: ['structured_data_invalid'],
       });
@@ -374,6 +388,96 @@ describe('checkPage', () => {
     const moved = await look(essay(12, { 3: '2027', 9: 'usd19' }), { ...first, url: PAGE });
     // A large share of a short page's runs moved, but far fewer than MIN_CHANGED_RUNS.
     expect(moved).toMatchObject({ passed: false, missing: ['not_changed'] });
+  });
+
+  describe('what changes by itself (#1565 A)', () => {
+    const run = (prefix, n) => Array.from({ length: n }, (_, i) => `${prefix}${i}`).join(' ');
+    const block = (attrs, prefix, n) => `<div ${attrs}><p>${run(prefix, n)}</p></div>`;
+    /** A 200-word page, with its testimonials and its latest posts. */
+    const page = (quotes, posts, extra = '', body = essay(200)) =>
+      `<html><head><title>Pricing</title></head><body><main><h1>Pricing</h1><p>${body}</p>` +
+      `${block('class="testimonials"', quotes, 28)}${extra}</main>` +
+      `${block('id="sidebar" class="latest-posts"', posts, 30)}</body></html>`;
+    const look = (body, previous = null) =>
+      checkPage('changed', PAGE, { previous, fetch: fetchOf({ [PAGE]: body }) });
+
+    it('never passes a testimonial rotated, the latest posts moved on, or a new short review', async () => {
+      const first = await look(page('quoteA', 'postA'));
+      const kept = { ...first, url: PAGE };
+      expect(await look(page('quoteB', 'postB'), kept)).toMatchObject({
+        passed: false,
+        missing: ['not_changed'],
+      });
+      // A 50-word review in a block of its own: fewer than MIN_CHANGED_RUNS runs.
+      expect(
+        await look(page('quoteA', 'postA', `<p>${run('review', 50)}</p>`), kept),
+      ).toMatchObject({ passed: false, missing: ['not_changed'] });
+    });
+
+    it('passes a rewritten 60-word paragraph on the same short page', async () => {
+      const first = await look(page('quoteA', 'postA'));
+      const rewritten = essay(
+        200,
+        Object.fromEntries(Array.from({ length: 60 }, (_, i) => [70 + i, `new${i}`])),
+      );
+      expect(
+        (await look(page('quoteA', 'postA', '', rewritten), { ...first, url: PAGE })).passed,
+      ).toBe(true);
+    });
+
+    it('still finds a written task’s text in a testimonial', async () => {
+      const fetch = fetchOf({ [PAGE]: page('quoteA', 'postA') });
+      expect(await checkPage('text', PAGE, { after: 'quoteA3 quoteA4', fetch })).toMatchObject({
+        passed: true,
+      });
+    });
+
+    it.each([
+      [
+        'Elementor',
+        '<div class="elementor-widget-wrap">',
+        (text) =>
+          `<div class="elementor-element elementor-widget elementor-widget-text-editor">` +
+          `<div class="elementor-widget-container"><p>${text}</p></div></div>`,
+      ],
+      [
+        'HubSpot',
+        '<div class="row-fluid">',
+        (text) =>
+          `<div class="span12 widget-span widget-type-rich_text">` +
+          `<div class="cell-wrapper"><p>${text}</p></div></div>`,
+      ],
+    ])('passes a %s page rewritten in its widgets', async (_, wrap, widget) => {
+      const built = (prefix) =>
+        `<html><head><title>Pricing</title></head><body>${wrap}` +
+        `${[0, 1, 2, 3].map((i) => widget(run(`${prefix}${i}x`, 50))).join('')}</div></body></html>`;
+      const first = await look(built('old'));
+      expect((await look(built('new'), { ...first, url: PAGE })).passed).toBe(true);
+    });
+
+    it('counts a pricing page’s “Most popular” plan, and still leaves out a sidebar', () => {
+      const read = visibleText(
+        `<html><body><main><h1>Pricing</h1><div class="plan popular"><p>Growth plan words</p></div>` +
+          `<p>${FILLER}</p></main><aside class="sidebar"><p>Sidebar words</p></aside>` +
+          `<div class="widget-area"><p>Widget area words</p></div>` +
+          `<div class="popular-posts"><p>Popular posts words</p></div></body></html>`,
+        undefined,
+        { steady: true },
+      );
+      expect(read).toContain('Growth plan words');
+      expect(read).not.toContain('Sidebar words');
+      expect(read).not.toContain('Widget area words');
+      expect(read).not.toContain('Popular posts words');
+    });
+
+    it('takes a new first look over one kept before these were left out', async () => {
+      const first = await look(page('quoteA', 'postA'));
+      expect(first.sketch.v).toBe(SKETCH_VERSION);
+      const { hashes, runs } = first.sketch;
+      const again = await look(page('quoteA', 'postA'), { url: PAGE, sketch: { hashes, runs } });
+      expect(again).toMatchObject({ passed: false, missing: ['first_look'] });
+      expect(again.sketch.v).toBe(SKETCH_VERSION);
+    });
   });
 
   it('reads a page with too few words as no answer: an empty shell, or bot protection’s', async () => {
@@ -457,6 +561,8 @@ describe('runTaskCheck', () => {
   });
   const now = new Date('2026-10-27T03:00:00Z');
   const at = now.toISOString();
+  /** The task's last write: what the check found (the first is its claim, triedAt alone). */
+  const lastWrite = () => ops.filter((op) => op.table === 'action_tasks').at(-1);
 
   it('completes a task that passes, keeps the check on it and tells History', async () => {
     const fetch = fetchOf({ [PAGE]: html('x') });
@@ -466,15 +572,19 @@ describe('runTaskCheck', () => {
     });
     // A page read up to 512 KB.
     expect(fetch.mock.calls[0][1]).toMatchObject({ maxBytes: 512 * 1024, truncate: true });
-    const update = ops.find((op) => op.table === 'action_tasks');
+    const update = lastWrite();
     expect(update.payload).toMatchObject({
       status: 'completed',
       // The template's mark stays: a check is no one's edit.
       details: { source: 'template', autoCheck: { passed: true } },
     });
-    // Only if no one moved or edited it meanwhile.
+    // Only if no one moved or edited it meanwhile: the claim on the task as
+    // read, the result on the claim.
+    const [claim] = ops.filter((op) => op.table === 'action_tasks');
+    expect(claim.payload.details.autoCheck).toEqual({ triedAt: at });
+    expect(claim.filters).toContainEqual(['updated_at', '2026-10-26T10:00:00Z']);
     expect(update.filters).toContainEqual(['status', 'todo']);
-    expect(update.filters).toContainEqual(['updated_at', '2026-10-26T10:00:00Z']);
+    expect(update.filters).toContainEqual(['updated_at', at]);
     expect(ops.find((op) => op.table === 'action_events').payload).toMatchObject({
       action_id: 'a1',
       event: 'task_checked',
@@ -506,7 +616,7 @@ describe('runTaskCheck', () => {
       now,
     });
     expect(result.autoCheck).toMatchObject({ passed: true, url: PAGE, held: true });
-    expect(ops.find((op) => op.table === 'action_tasks').payload).not.toHaveProperty('status');
+    expect(lastWrite().payload).not.toHaveProperty('status');
     expect(ops.some((op) => op.table === 'action_events')).toBe(false);
     // A check that fails meanwhile keeps it held; one that passes again doesn't close it.
     ops = [];
@@ -523,7 +633,7 @@ describe('runTaskCheck', () => {
       { fetch: fetchOf({ [PAGE]: html('x') }), now },
     );
     expect(again.autoCheck).toMatchObject({ passed: true, held: true });
-    expect(ops.find((op) => op.table === 'action_tasks').payload).not.toHaveProperty('status');
+    expect(lastWrite().payload).not.toHaveProperty('status');
     // Its URL edited since: a new page, checked as one.
     ops = [];
     await runTaskCheck(
@@ -531,7 +641,42 @@ describe('runTaskCheck', () => {
       action,
       { fetch: fetchOf({ 'https://acme.example/plans': html('x') }), now },
     );
-    expect(ops.find((op) => op.table === 'action_tasks').payload.status).toBe('completed');
+    expect(lastWrite().payload.status).toBe('completed');
+  });
+
+  it('marks a task tried before reading anything, so one it can’t check leaves the queue (#1565 C6)', async () => {
+    // No address can be made: still tried.
+    const typed = task({ details: { check: 'auto', url: 'not an address' } });
+    const fetch = fetchOf({});
+    expect(await runTaskCheck(typed, action, { fetch, now })).toEqual({ reason: 'no_address' });
+    expect(lastWrite().payload.details.autoCheck).toEqual({ triedAt: at });
+    expect(fetch).not.toHaveBeenCalled();
+    // Claimed by another run meanwhile (the task changed since it was read): left to it.
+    ops = [];
+    db.moved = true;
+    expect(await runTaskCheck(task(), action, { fetch, now })).toEqual({ reason: 'changed' });
+    expect(fetch).not.toHaveBeenCalled();
+    db.moved = false;
+  });
+
+  it('a read that throws still writes triedAt', async () => {
+    // The page comes back, then reading it throws: the claim already marked the task tried.
+    const fetch = vi.fn(async (url) => ({
+      url,
+      status: 200,
+      get html() {
+        throw new Error('unreadable');
+      },
+    }));
+    const written = task({
+      task_key: null,
+      details: { check: 'auto', url: '/pricing', change: { after: 'Plans from $9' } },
+    });
+    await expect(runTaskCheck(written, action, { fetch, now })).rejects.toThrow('unreadable');
+    expect(fetch).toHaveBeenCalled();
+    const writes = ops.filter((op) => op.table === 'action_tasks');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].payload.details.autoCheck).toEqual({ triedAt: at });
   });
 
   it('reads only the brand’s own pages', async () => {
@@ -556,6 +701,38 @@ describe('runTaskCheck', () => {
     db.brand_domains = [{ domain: 'https://www.acme.example/' }];
     const fetch = fetchOf({ 'https://www.acme.example/pricing': html('x') });
     expect((await runTaskCheck(task(), action, { fetch, now })).autoCheck.passed).toBe(true);
+  });
+
+  it('passes another action’s structured data fix only after a check found the page failing (#1565 B)', async () => {
+    // F06's brand-entity raised it: none of its checks is a structured data check.
+    db.actions = { targets: [{ id: PAGE, checks: ['brand-entity'] }] };
+    const ORG =
+      '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Acme"}</script>';
+    const run = (autoCheck, head) =>
+      runTaskCheck(
+        task({
+          task_key: 'fix_structured_data',
+          details: {
+            check: 'auto',
+            url: '/pricing',
+            source: 'template',
+            ...(autoCheck ? { autoCheck } : {}),
+          },
+        }),
+        action,
+        { fetch: fetchOf({ [PAGE]: html('x', head) }), now },
+      );
+    // The site's Organization block was there all along: not fixed by it.
+    const first = await run(null, ORG);
+    expect(first.autoCheck).toMatchObject({ passed: false, missing: ['valid_before'] });
+    expect(first.autoCheck).not.toHaveProperty('sawFailing');
+    // No valid block now: kept as seen failing…
+    const broken = await run(first.autoCheck, '');
+    expect(broken.autoCheck).toMatchObject({ passed: false, sawFailing: true });
+    // …through a read that found it failing again, and then fixed: passed.
+    const still = await run(broken.autoCheck, '');
+    expect(still.autoCheck.sawFailing).toBe(true);
+    expect((await run(still.autoCheck, ORG)).autoCheck).toMatchObject({ passed: true });
   });
 
   it('checks structured data by the checks its page failed, and a crawler fix only from the audit', async () => {
@@ -588,10 +765,10 @@ describe('runTaskCheck', () => {
     const fetch = fetchOf({ [PAGE]: html('x') });
     ops = [];
     expect(await runTaskCheck(crawl, action, { fetch, now })).toEqual({
-      reason: 'not_checkable',
+      reason: 'from_bot_logs',
     });
     expect(fetch).not.toHaveBeenCalled();
-    expect(ops.find((op) => op.table === 'action_tasks').payload.details.autoCheck).toEqual({
+    expect(lastWrite().payload.details.autoCheck).toEqual({
       triedAt: at,
     });
     db.actions = { targets: [{ id: PAGE, checks: ['ai-bot-access'] }] };
@@ -626,7 +803,7 @@ describe('runTaskCheck', () => {
       missing: ['page_error'],
       sketch: { hashes: ['aa'], runs: 1 },
     });
-    const update = ops.find((op) => op.table === 'action_tasks');
+    const update = lastWrite();
     expect(update.payload).not.toHaveProperty('status');
     expect(ops.some((op) => op.table === 'action_events')).toBe(false);
     // Another page's first look isn't kept for this one.
@@ -653,7 +830,7 @@ describe('runTaskCheck', () => {
     expect(await runTaskCheck(tried, action, { fetch: fetchOf({}), now })).toEqual({
       reason: 'no_answer',
     });
-    expect(ops.find((op) => op.table === 'action_tasks').payload.details.autoCheck).toEqual({
+    expect(lastWrite().payload.details.autoCheck).toEqual({
       at: 'x',
       passed: false,
       missing: ['page_error'],
@@ -666,6 +843,19 @@ describe('runTaskCheck', () => {
     expect(
       await runTaskCheck(task({ task_key: 'fix_technical_issue' }), action, { fetch }),
     ).toEqual({ reason: 'not_checkable' });
+    // A written task with no new text, and a task with no page, each by its own reason (#1565 C8).
+    expect(
+      await runTaskCheck(
+        task({ task_key: null, details: { check: 'auto', url: '/pricing' } }),
+        action,
+        {
+          fetch,
+        },
+      ),
+    ).toEqual({ reason: 'no_change_text' });
+    expect(
+      await runTaskCheck(task({ details: { check: 'auto', url: '' } }), action, { fetch }),
+    ).toEqual({ reason: 'no_address' });
     expect(await runTaskCheck(task({ status: 'completed' }), action, { fetch })).toEqual({
       reason: 'not_open',
     });
@@ -799,6 +989,21 @@ describe('sweepTaskChecks', () => {
     expect(filters).toContainEqual(['is', 'details->autoCheck->>held', null]);
     // Never a demo brand's (00380): its tasks are sample data.
     expect(filters).toContainEqual(['actions.brands.is_demo', false]);
+  });
+
+  it('checks at most SWEEP_PER_BRAND of one brand’s tasks a night, the others’ too', async () => {
+    const other = { brand_id: 'b2', status: 'new', deleted_at: null };
+    db.action_tasks = [
+      ...Array.from({ length: 25 }, (_, i) => row(`a${i}`)),
+      ...Array.from({ length: 3 }, (_, i) => row(`b${i}`, { actions: other })),
+    ];
+    const fetch = fetchOf({ [PAGE]: html('x') });
+    expect(await sweepTaskChecks({ fetch, now })).toEqual({ checked: 23, passed: 23 });
+    expect(SWEEP_PER_BRAND).toBe(20);
+    // Read a page at a time, in a steady order.
+    const filters = reads.find((r) => r.table === 'action_tasks').filters;
+    expect(filters).toContainEqual(['range', 0, 999]);
+    expect(filters).toContainEqual(['order', 'id']);
   });
 
   it('checks the open tasks not tried in the last day, one at a time', async () => {

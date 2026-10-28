@@ -92,6 +92,7 @@
         "guides/site-audit",
         "guides/reports",
         "guides/daily-pulse",
+        "guides/menu-access",
         "guides/mcp-server",
         "guides/looker-studio"
       ]

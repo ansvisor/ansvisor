@@ -11,6 +11,9 @@
  * shows a Coming soon row for it in that group. When one goes live, its line
  * here becomes `{ id, state: 'connected' }` and its new card reads
  * demoIntegration(id), as the cards below do.
+ *
+ * One not named here (WordPress, Framer) shows on the demo brand as on any
+ * brand, not connected: its buttons open the plan dialog.
  */
 export type DemoIntegrationState = 'connected' | 'soon';
 
@@ -26,8 +29,6 @@ export const DEMO_INTEGRATIONS: readonly DemoIntegration[] = [
   { id: 'google-merchant-center', state: 'soon' },
   { id: 'shopify', state: 'soon', group: 'stores' },
   { id: 'webflow', state: 'connected' },
-  { id: 'wordpress', state: 'soon', group: 'cms' },
-  { id: 'framer', state: 'soon', group: 'cms' },
   { id: 'wix', state: 'soon', group: 'cms' },
 ];
 
