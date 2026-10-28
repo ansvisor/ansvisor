@@ -190,31 +190,45 @@ async function measureTraffic(brandId, from, to) {
 }
 
 /**
- * The verdict, from the measured pairs alone.
+ * The verdict, from the measured pairs alone (learning A4).
  *
  * A metric counts as moved only past MEANINGFUL_CHANGE_RATIO — these numbers
  * drift week to week on their own, and calling a 1% wobble an improvement
- * would make every outcome meaningless. Mixed movement reads as improved:
- * something the action aimed at did move, and reporting that as "no change"
- * would hide it.
+ * would make every outcome meaningless.
+ *
+ * The action's main metric (`primary`, the one its aim reads in) decides
+ * when it was measured: up is improved, down declined, still no meaningful
+ * change, whatever the others did beside it, but `mixed` when another moved
+ * the other way. Without one measured, every metric counts, and movement
+ * both ways is `mixed`: it used to read as improved, which taught that
+ * anything moving up was the work paying off.
  */
-export function deriveOutcome(metrics) {
+export function deriveOutcome(metrics, primary = null) {
   const measured = metrics.filter((m) => m.before != null && m.after != null);
   if (measured.length === 0) return 'not_measurable';
 
-  let improved = 0;
-  let declined = 0;
-  for (const { before, after } of measured) {
+  const direction = ({ before, after }) => {
     const floor = Math.abs(before) * MEANINGFUL_CHANGE_RATIO;
     // A metric that was zero before has no ratio to scale by; any real
     // arrival counts as movement.
     const threshold = before === 0 ? Number.EPSILON : floor;
-    if (after - before > threshold) improved += 1;
-    else if (before - after > threshold) declined += 1;
-  }
+    if (after - before > threshold) return 1;
+    if (before - after > threshold) return -1;
+    return 0;
+  };
+  const moves = measured.map((m) => ({ metric: m.metric, dir: direction(m) }));
+  const up = moves.some((m) => m.dir > 0);
+  const down = moves.some((m) => m.dir < 0);
 
-  if (improved > 0) return 'improved';
-  if (declined > 0) return 'declined';
+  const main = primary ? moves.find((m) => m.metric === primary) : null;
+  if (main) {
+    if (main.dir > 0) return down ? 'mixed' : 'improved';
+    if (main.dir < 0) return up ? 'mixed' : 'declined';
+    return 'no_meaningful_change';
+  }
+  if (up && down) return 'mixed';
+  if (up) return 'improved';
+  if (down) return 'declined';
   return 'no_meaningful_change';
 }
 
@@ -352,15 +366,18 @@ export async function validateAction(action, { now = new Date() } = {}) {
       before: before[metric],
       after: after[metric],
     }));
+    // Its aim: the first of its success metrics a basket reads, else its visibility.
+    const primary = (action.kpi_keys ?? []).find((key) => key in BASKET_KPIS) ?? 'ai_visibility';
     return finish(
       {
         measuredAt: now.toISOString(),
         beforeWindow,
         afterWindow,
         metrics,
+        primary,
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
       },
-      deriveOutcome(metrics),
+      deriveOutcome(metrics, primary),
     );
   }
 
@@ -375,6 +392,8 @@ export async function validateAction(action, { now = new Date() } = {}) {
   if (targets) {
     const asked = (action.kpi_keys ?? []).filter((key) => key in BASKET_KPIS);
     const keys = asked.length ? asked : Object.keys(BASKET_KPIS);
+    // Its aim: the first metric it names, else what its targets read in.
+    const primary = asked[0] ?? (targets.entity === 'pages' ? 'citations' : 'ai_visibility');
     const [before, after, brandBefore, brandAfter] = await Promise.all([
       measureBasket(action.brand_id, targets, beforeWindow.from, beforeWindow.to),
       measureBasket(action.brand_id, targets, afterWindow.from, afterWindow.to),
@@ -402,6 +421,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
           beforeWindow,
           afterWindow,
           metrics,
+          primary,
           scope: {
             kind: 'targets',
             entity: targets.entity,
@@ -410,7 +430,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
           },
           ...(brandWide.length ? { brandWide } : {}),
         },
-        deriveOutcome(metrics),
+        deriveOutcome(metrics, primary),
       );
     }
   }
@@ -432,9 +452,11 @@ export async function validateAction(action, { now = new Date() } = {}) {
     after: after[metric] ?? null,
   }));
 
+  // Its aim: the first success metric its signals name.
+  const primary = kpiKeys[0];
   return finish(
-    { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics },
-    deriveOutcome(metrics),
+    { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics, primary },
+    deriveOutcome(metrics, primary),
   );
 }
 

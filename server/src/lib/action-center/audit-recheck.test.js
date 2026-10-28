@@ -113,7 +113,8 @@ describe('auditRecheck', () => {
 describe('auditOutcome', () => {
   it('judges a fix by its pages audited again, and leaves it to the metrics with none', () => {
     expect(auditOutcome({ audited: 2, passed: 2 })).toBe('improved');
-    expect(auditOutcome({ audited: 2, passed: 1 })).toBe('improved');
+    // Part of the work took (learning A4).
+    expect(auditOutcome({ audited: 2, passed: 1 })).toBe('mixed');
     expect(auditOutcome({ audited: 2, passed: 0 })).toBe('no_meaningful_change');
     expect(auditOutcome({ audited: 0, passed: 0 })).toBeNull();
   });

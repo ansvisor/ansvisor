@@ -122,6 +122,8 @@ export interface ActionHistoryItem {
    * A1), with the brand-wide figures kept as a second line.
    */
   measuredOn?: { entity: 'prompts' | 'pages'; count: number } | null;
+  /** The metric its result is judged by (learning A4); absent before it was measured. */
+  primaryMetric?: string | null;
   /** A Site Audit fix's pages audited again since it closed, and how many pass (learning A2). */
   auditAfter?: { pages: number; audited: number; passed: number } | null;
   brandWideResults?: ActionResultMetric[];

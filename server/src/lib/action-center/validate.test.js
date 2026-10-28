@@ -89,10 +89,21 @@ describe('deriveOutcome', () => {
     expect(deriveOutcome([pair('citations', 100, 100 - wobble)])).toBe('no_meaningful_change');
   });
 
-  it('reports an improvement when one metric rose and another fell', () => {
-    expect(deriveOutcome([pair('citations', 100, 150), pair('mentions', 100, 50)])).toBe(
-      'improved',
-    );
+  it('reads one metric up and another down as mixed, not improved (learning A4)', () => {
+    expect(deriveOutcome([pair('citations', 100, 150), pair('mentions', 100, 50)])).toBe('mixed');
+  });
+
+  it('lets the main metric decide, mixed when another moved the other way', () => {
+    const up = pair('citations', 100, 150);
+    const down = pair('mentions', 100, 50);
+    const still = pair('ai_visibility', 40, 40);
+    expect(deriveOutcome([up, still], 'citations')).toBe('improved');
+    expect(deriveOutcome([up, down], 'citations')).toBe('mixed');
+    expect(deriveOutcome([down, still], 'mentions')).toBe('declined');
+    // Its aim didn't move: no meaningful change, whatever moved beside it.
+    expect(deriveOutcome([up, still], 'ai_visibility')).toBe('no_meaningful_change');
+    // A main metric not measured leaves it to the others.
+    expect(deriveOutcome([up], 'mentions')).toBe('improved');
   });
 
   // Nothing to scale a ratio by, so any real arrival counts.

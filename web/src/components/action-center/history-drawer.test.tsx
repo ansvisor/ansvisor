@@ -208,6 +208,23 @@ describe('HistoryDrawer', () => {
     );
   });
 
+  it('names the main metric it was judged by, and reads a mixed result (learning A4)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, outcome: 'mixed', results: [], primaryMetric: 'citations' }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    const result = under('Result');
+    expect(result).toMatch(/Judged by \S.*, its main metric\./);
+    expect(result).toContain(
+      'some metrics moved up and others down, or only some of its pages pass',
+    );
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);

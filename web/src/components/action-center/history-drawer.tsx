@@ -208,6 +208,11 @@ export function HistoryDrawer({
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.result')}</p>
+            {item.primaryMetric && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('drawer.primary', { metric: tRegistry(`${item.primaryMetric}.name`) })}
+              </p>
+            )}
             {item.measuredOn && (
               <p className="mt-1 text-xs text-muted-foreground">
                 {t('drawer.measuredOn', { ...item.measuredOn })}
