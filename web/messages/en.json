@@ -287,6 +287,11 @@
       "show": "Show the demo brand",
       "hide": "Hide the demo brand",
       "failed": "Couldn't change the demo brand. Try again."
+    },
+    "chat": {
+      "soon": "Soon (next week)",
+      "note": "Chat arrives next week. This is a preview of it.",
+      "frameTitle": "Chat preview"
     }
   },
   "common": {

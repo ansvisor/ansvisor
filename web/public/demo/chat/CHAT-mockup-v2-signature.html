@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat Signature Features · Ansvisor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0a0a0a;--mut:#737373;--mut2:#737373;--faint:#a3a3a3;--line:#ececec;--soft:#f7f7f6;--page:#fafaf9;--side:#f7f7f6;--act:#ebeae7;--pos:#16a34a;--posbg:#dcfce7;--possoft:#f0fdf4;--amber:#b45309;--amberbg:#fef3c7;--red:#dc2626;--redbg:#fee2e2;--gold:#D9B98A;--sh:0 1px 2px rgba(10,10,10,.04);--shh:0 4px 14px rgba(10,10,10,.06);--shp:0 12px 32px rgba(10,10,10,.12)}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:Inter,system-ui,sans-serif;font-size:14px;color:var(--ink);background:#fff}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:8px}
+code,.mono{font-family:"Geist Mono",monospace}
+/* mockup nav */
+.mnav{height:40px;display:flex;align-items:center;gap:4px;padding:0 12px;border-bottom:1px solid var(--line);background:#fff;font-size:12.5px;overflow-x:auto;white-space:nowrap}
+.mnav a{text-decoration:none;color:var(--mut);padding:4px 9px;border-radius:8px}
+.mnav a:hover{background:var(--soft);color:var(--ink)}
+.mnav a[aria-current="page"]{background:var(--ink);color:#fff;font-weight:500}
+.mnav .sep{width:1px;height:18px;background:var(--line);margin:0 6px;flex:none}
+.mnav .lbl{color:var(--mut2);font-size:11px;text-transform:uppercase;letter-spacing:.4px;margin-right:4px}
+.app{display:flex;height:calc(100vh - 40px)}
+/* app sidebar */
+.side{width:236px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:10px 10px 8px;gap:1px;overflow:auto}
+.bsw{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;margin-bottom:8px;width:100%;font-weight:600;font-size:13.5px}
+.bsw:hover{background:#efeeec}.bsw .lg{width:24px;height:24px;border-radius:7px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.bsw em{margin-left:auto;font-style:normal;color:var(--mut2);font-weight:400}
+.nv{display:flex;align-items:center;gap:9px;width:100%;padding:6px 8px;border-radius:8px;font-size:13.5px;color:#44403c;min-height:32px}
+.nv:hover{background:#efeeec}.nv.on{background:var(--act);color:var(--ink);font-weight:500}
+.nv svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+.nv .cv{margin-left:auto;font-size:10px;color:var(--mut2)}
+.nv.sub{padding-left:33px;font-size:13px;min-height:28px}
+.subs[hidden]{display:none}
+.newp{margin-left:auto;font-size:10.5px;font-weight:500;border:1px solid #d6d3cf;border-radius:20px;padding:0 7px;color:#57534e;background:#fff;line-height:17px}
+.sgh{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);padding:12px 8px 4px;font-weight:500}
+.sfoot{margin-top:auto;border-top:1px solid var(--line);padding-top:8px;display:grid;gap:1px}
+.me{width:100%;border-radius:8px;cursor:pointer}.me:hover{background:#efeeec}.me{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12.5px;color:var(--mut)}.me i{width:22px;height:22px;border-radius:50%;background:#e4e2de;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:11px;color:var(--ink);font-weight:600}
+/* main */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.top{display:flex;align-items:center;gap:10px;padding:9px 18px;border-bottom:1px solid var(--line);min-height:50px}
+.back{flex:none;display:inline-flex;align-items:center;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-weight:500;color:var(--ink);text-decoration:none;white-space:nowrap}.back:hover{background:var(--soft);border-color:#d6d3cf}
+a.nv{text-decoration:none}.crumb .cl{color:var(--mut);text-decoration:none;border-radius:6px;padding:0 2px;font-size:13.5px}.crumb .cl:hover{color:var(--ink);text-decoration:underline}
+.crumb{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--mut);min-width:0}.crumb b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.usg{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:4px 8px;font-size:12px;color:var(--mut)}.usg:hover{background:var(--soft)}
+.ub{width:44px;height:4px;border-radius:4px;background:#e4e2de;overflow:hidden}.ub i{display:block;height:100%;background:var(--ink);border-radius:4px}
+/* buttons (live app sizes) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;font:500 14px Inter,system-ui,sans-serif;border:1px solid var(--line);background:#fff;border-radius:10px;color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:#d6d3cf;background:#fcfcfb}
+.btn.pri{background:var(--ink);border-color:var(--ink);color:#fff}.btn.pri:hover{background:#2e2b27}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;border-radius:8px}
+.btn.gh{border-color:transparent;background:none;color:var(--mut)}.btn.gh:hover{background:var(--soft);color:var(--ink)}
+.btn[disabled],.btn.dis{opacity:.45;cursor:not-allowed}
+.btn .cls{font-size:10px;font-weight:600;letter-spacing:.3px;border-radius:5px;padding:0 5px;line-height:16px}
+.btn.pri .cls{background:rgba(255,255,255,.18)}
+.ex{background:var(--redbg);color:var(--red)}.wr{background:var(--amberbg);color:var(--amber)}.rd{background:#f1f0ee;color:#57534e}
+.cls{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.3px;border-radius:5px;padding:0 5px;line-height:16px}
+.pill{font-size:11.5px;border:1px solid var(--line);border-radius:20px;padding:1px 9px;color:var(--mut);white-space:nowrap;background:#fff}
+.pill.ok{border-color:#bfe6cf;color:var(--pos);background:var(--posbg)}
+.pill.am{border-color:#f3dfb8;color:var(--amber);background:var(--amberbg)}
+.pill.dk{border-color:var(--ink);color:#fff;background:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;border:1px solid var(--line);border-radius:20px;padding:2px 9px;background:#fff;color:#44403c;cursor:pointer;line-height:16px}
+.chip:hover{border-color:var(--ink)}
+.chip i{font-style:normal;color:var(--mut2);font-size:10.5px}
+.chip.st{cursor:default}.chip.st:hover{border-color:var(--line)}
+.chip.zero{background:var(--posbg);border-color:#bfe6cf;color:#166534;cursor:default}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.scr{display:none;flex:1;min-height:0}.scr.on{display:flex}
+.thread{flex:1;overflow:auto;padding:22px 0 30px;min-width:0}
+.col{max-width:820px;margin:0 auto;padding:0 24px}
+.pg{flex:1;overflow:auto;padding:22px 26px 60px;min-width:0}
+.pgh{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}.pgh h1{font-size:24px;font-weight:700;margin:0;letter-spacing:-.5px}.pgh p{margin:4px 0 0;color:var(--mut);font-size:13px}.pgh .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.um{margin-left:auto;max-width:78%;background:var(--soft);border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:9px 13px;margin-bottom:6px;width:fit-content}
+.umctx{display:flex;justify-content:flex-end;gap:6px;margin-bottom:16px}
+.av{width:28px;height:28px;border-radius:9px;background:var(--ink);display:flex;align-items:center;justify-content:center;flex:none}
+.av svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ahead{display:flex;gap:10px;align-items:center;margin-bottom:8px}.ahead span{font-size:12px;color:var(--mut)}
+.tools{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.tool{display:inline-flex;align-items:center;gap:7px;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:4px 9px;background:#fff;color:#44403c}
+.tool .ti{width:16px;height:16px;border-radius:5px;background:var(--posbg);color:var(--pos);display:flex;align-items:center;justify-content:center;font-size:9px}
+.tool em{font-style:normal;color:var(--mut2)}
+.card{border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(10,10,10,.04);margin-bottom:14px;overflow:hidden}
+.ch{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.ch b{font-size:14px}.ch .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.cb{padding:12px 14px}
+.cf{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);background:#fff}
+.cf .l{font-size:12px;color:var(--mut)}.cf .r{margin-left:auto;display:flex;gap:6px}
+.meta{display:flex;flex-wrap:wrap;gap:14px;padding:9px 14px;background:var(--soft);border-top:1px solid var(--line);font-size:12px;color:var(--mut)}.meta b{color:var(--ink);font-weight:500}
+.sec{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut2);margin:16px 0 8px;font-weight:500}
+.num{font-variant-numeric:tabular-nums;border-bottom:1px dashed #cfcbc4;cursor:pointer;border-radius:3px}
+.num:hover{background:var(--soft);border-bottom-color:var(--ink)}
+.neg{color:var(--red)}.posc{color:var(--pos)}
+.comp{max-width:772px;margin:8px auto 14px;width:calc(100% - 48px);border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 2px 10px rgba(10,10,10,.05);display:flex;align-items:center;gap:8px;padding:8px 8px 8px 14px}
+.comp .in{flex:1;color:var(--mut2);font-size:14px}
+.send{width:32px;height:32px;border-radius:10px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center}
+/* ---------- f-why ---------- */
+.mv{display:flex;align-items:baseline;gap:10px;margin:2px 0 12px;flex-wrap:wrap}
+.mv b{font-size:15px}
+.wx{border:1px solid var(--line);border-radius:14px;background:var(--soft);padding:10px 12px;margin-bottom:14px}
+.wxh{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:8px;white-space:nowrap;flex-wrap:wrap}.wxh b{font-weight:600}.wxh .r{margin-left:auto}
+.wxr{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.wxe{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--mut);width:100%}
+.wxe:hover{border-color:#d6d3cf}
+.wxe b{display:block;color:var(--ink);font-weight:500;font-size:12.5px}
+.wxe.hit{border-color:#f3dfb8;background:var(--amberbg)}.wxe.hit em{color:var(--amber)}
+.wxe em{font-style:normal}.wxe b,.wxe em{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wxe{min-width:0}
+.wxe.lock{opacity:.55}
+.cause{border:1px solid var(--line);border-radius:14px;margin-bottom:8px;background:#fff}
+.czh{display:grid;grid-template-columns:72px minmax(0,1fr) 132px 18px;gap:12px;align-items:center;width:100%;padding:10px 12px;border-radius:14px}
+.czh:hover{background:#fcfcfb}
+.share b{display:block;font-size:17px;letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+.share i{display:block;height:4px;border-radius:4px;background:#e4e2de;margin-top:4px;position:relative;overflow:hidden}
+.share i::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--w);background:var(--ink);border-radius:4px}
+.czt{min-width:0}.czt b,.czt em{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.czt b{font-size:13.5px;font-weight:500}.czt em{font-style:normal;font-size:12px;color:var(--mut)}
+.czh .conf{justify-self:stretch;text-align:center}
+.conf{font-size:11px;border-radius:6px;padding:1px 7px;white-space:nowrap;border:1px solid var(--line);color:#57534e;background:#fff}
+.conf.hi{border-color:#bfe6cf;color:var(--pos);background:var(--posbg)}
+.conf.md{border-color:#e4e2de;color:#57534e;background:#f1f0ee}
+.conf.lo{border-color:#f3dfb8;color:var(--amber);background:var(--amberbg)}
+.car{font-size:11px;color:var(--mut2);transition:transform .2s;text-align:center}
+.czh[aria-expanded="true"] .car{transform:rotate(180deg)}
+.czc{padding:0 12px 10px 96px}
+.czb{padding:0 12px 12px 96px}
+.czb[hidden]{display:none}
+.mt{border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12.5px}
+.mt .r{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1.35fr) minmax(0,1.25fr) 52px 74px;gap:10px;align-items:center;padding:7px 10px;border-top:1px solid var(--line)}
+.mt .r:first-child{border-top:0;background:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut)}
+.mt .r span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt code{font-size:11.5px;color:var(--mut)}
+.strike{text-decoration:line-through;color:var(--mut2)}
+.nxg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:stretch}
+.nx{border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;background:#fff;width:100%;display:flex;flex-direction:column;gap:3px}
+.nx:hover{border-color:var(--ink)}.nx em{font-style:normal;font-size:12px;color:var(--mut)}.nx .t{display:flex;align-items:center;gap:6px;font-weight:500;min-width:0}.nx{min-width:0}.nx .t>span:first-child,.nx em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.nx .t>:not(:first-child){flex:none;margin-left:auto}
+.dup{display:flex;gap:10px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:13px;margin-bottom:10px}
+.dup em{display:block;font-style:normal;font-size:12px;color:var(--mut)}
+.done-line{display:flex;gap:8px;align-items:center;font-size:13px;color:#166534;background:var(--posbg);border:1px solid #bfe6cf;border-radius:12px;padding:9px 12px}
+.done-line .btn{margin-left:auto}
+.fu{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;gap:10px;align-items:center;border-top:1px solid var(--line);margin-top:10px;padding-top:10px;font-size:13px}.fu b{font-weight:500}.fu em{display:block;font-style:normal;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fu .lgo{color:var(--pos);background:var(--posbg);border-color:#bfe6cf}
+.mused{display:block;font-size:11.5px;color:var(--mut2);margin:6px 0 14px}
+/* ---------- f-impact ---------- */
+.kp4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.kp{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:#fff}
+.kp small{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+.kp b{font-size:24px;letter-spacing:-.6px;font-weight:700}
+.kp em{display:block;font-style:normal;font-size:12px;color:var(--mut);margin-top:2px}
+.kp em.g{color:var(--pos)}
+.mon{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;height:32px;overflow:hidden}
+.mon button{height:30px;padding:0 10px;font-size:13px}.mon button:hover{background:var(--soft)}.mon span{padding:0 6px;font-weight:500;font-size:13px}
+.fl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.fc{border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12.5px;background:#fff}
+.fc:hover{border-color:#d6d3cf}.fc[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.fc i{font-style:normal;font-size:11px;opacity:.7;margin-left:3px}
+.tbl{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tr{display:grid;grid-template-columns:minmax(0,1fr) 124px 104px 76px 164px 172px 92px;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13px}
+.tr:first-child{border-top:0}.tr.th{background:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut)}
+.tr.sel{background:#fbfaf8;box-shadow:inset 3px 0 0 var(--ink)}
+.tr b{font-weight:500}.tr em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.tr>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr>span>b,.tr>span>em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.main.dpush .tr{grid-template-columns:minmax(0,1fr) 76px 164px 150px}
+.main.dpush .tr>span:nth-child(2),.main.dpush .tr>span:nth-child(3),.main.dpush .tr>span:nth-child(7){display:none}
+.cps{display:grid;grid-template-columns:repeat(4,38px);gap:4px}
+.cps>span{text-align:center;font-size:10.5px;letter-spacing:0}
+.cp{height:28px;width:38px;border-radius:7px;border:1px solid var(--line);font-size:10.5px;font-variant-numeric:tabular-nums;text-align:center;line-height:1.1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--mut);background:#fff;padding:0}
+.cp small{display:block;font-size:9px;color:var(--mut2);text-transform:none}
+.cp:hover{border-color:var(--ink)}
+.cp.imp{background:var(--posbg);border-color:#bfe6cf;color:#166534;font-weight:600}
+.cp.nmc{background:#f1f0ee;border-color:#e4e2de;color:#57534e;font-weight:600}
+.cp.pen{border-color:var(--ink);color:var(--ink);font-weight:600}
+.cp.up{border-style:dashed;color:var(--mut2)}
+.cp.na{background:var(--soft);color:var(--mut2)}
+.oc{display:inline;font-size:12px}
+.oc::before{content:"";display:inline-block;vertical-align:1px;margin-right:6px;width:7px;height:7px;border-radius:50%;background:#d6d3cf;box-sizing:border-box}
+.cpt{border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12.5px;margin-bottom:12px}.cpt>div{display:grid;grid-template-columns:56px minmax(0,1fr) 82px 52px;gap:8px;padding:6px 10px;border-top:1px solid var(--line)}.cpt>div:first-child{border-top:0}.cpt>div>span:first-child{color:var(--mut)}.cpt>div>span:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.oc.imp::before{background:var(--pos)}.oc.pen::before{background:var(--ink);box-shadow:0 0 0 3px rgba(10,10,10,.1)}.oc.dec::before{background:var(--red)}.oc.nmc::before{background:var(--mut2)}.oc.nm::before{background:#fff;border:1.5px solid var(--mut2)}
+.method{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+/* drawer */
+.main.dpush .scr.on>.pg,.main.dpush .scr.on>.thread{margin-right:420px}
+.drawer{position:absolute;top:50px;right:0;bottom:0;width:420px;background:#fff;border-left:1px solid var(--line);box-shadow:-14px 0 34px rgba(0,0,0,.08);display:none;flex-direction:column;z-index:30}
+.drawer.on{display:flex;animation:slin .2s ease-out}
+@keyframes slin{from{transform:translateX(16px);opacity:0}}
+.dh{display:flex;align-items:flex-start;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dh b{display:block;font-size:15px}.dh em{display:block;font-style:normal;font-size:12px;color:var(--mut);margin-top:2px}
+.dh .x{margin-left:auto}
+.db{flex:1;overflow:auto;padding:14px 16px}
+.df{display:flex;gap:6px;padding:10px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+.focus{background:var(--amberbg);border:1px solid #f3dfb8;color:#7c4a03;border-radius:10px;padding:7px 10px;font-size:12.5px;margin-bottom:12px}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;font-size:12.5px;margin-bottom:12px}.kv span:nth-child(odd){color:var(--mut)}
+.ans{border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:12.5px;margin-bottom:8px;line-height:1.5}
+.ans .h{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--mut);margin-bottom:4px}.ans .h b{color:var(--ink);font-weight:500}
+mark{background:#fff3c4;color:var(--ink);border-radius:3px;padding:0 2px}
+.cit{font:11.5px "Geist Mono",monospace;color:var(--mut);display:block;margin-top:4px}
+.cit.mine{color:var(--ink)}
+/* ---------- settings (f-mcp) ---------- */
+.stabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:18px;font-size:13.5px;overflow-x:auto}
+.stabs button{padding:8px 0;color:var(--mut);white-space:nowrap}.stabs button[aria-selected="true"]{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--ink)}
+.subtabs{display:flex;gap:4px;margin-bottom:16px}
+.subtabs button{font-size:12.5px;padding:4px 10px;border-radius:8px;color:var(--mut)}.subtabs button[aria-selected="true"]{background:var(--act);color:var(--ink);font-weight:500}
+.split2{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:22px;align-items:start}
+.box{border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:12px}
+.bxh{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.bxh b{font-size:14px}.bxh .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.bxb{padding:12px 14px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:13px}
+.row:first-child{border-top:0}
+.row>div{flex:1;min-width:0}.row em{display:block;font-style:normal;font-size:12px;color:var(--mut)}
+.lgo{width:30px;height:30px;border-radius:9px;background:var(--soft);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;flex:none}
+.okk{font-size:11.5px;color:var(--pos);background:var(--posbg);border-radius:6px;padding:0 6px;white-space:nowrap}
+.ent{font-size:11px;border:1px solid #d6d3cf;border-radius:6px;padding:0 6px;color:#57534e;white-space:nowrap;background:#fff}
+.sw{width:32px;height:18px;border-radius:9px;background:#d6d3cf;position:relative;flex:none}.sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s}
+.sw[aria-checked="true"]{background:var(--ink)}.sw[aria-checked="true"]::after{left:16px}
+.sw:disabled{opacity:.4;cursor:not-allowed}
+.endp{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:5px 6px 5px 10px;font:12.5px "Geist Mono",monospace;background:var(--soft)}
+.endp span{flex:1}
+.kt{display:grid;grid-template-columns:minmax(0,1fr) 76px 172px 84px 76px;gap:10px;align-items:center;font-size:12.5px;padding:8px 0;border-top:1px solid var(--line);min-height:50px}
+.kt>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kt>span>b,.kt>span>code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kt>.btn{justify-self:end}
+.kt.th{min-height:0}
+.arow,.srow{display:grid;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:13px;min-height:52px}
+.arow{grid-template-columns:30px minmax(0,1fr) 104px 84px}.srow{grid-template-columns:70px minmax(0,1fr) 72px 32px}
+.arow:first-child,.srow:first-child{border-top:0}
+.arow>div,.srow>div{min-width:0}.arow em,.srow em{display:block;font-style:normal;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arow>.btn{justify-self:end;width:84px}.arow>.st3{justify-self:stretch;min-width:0}.srow>span:nth-child(3){justify-self:stretch;text-align:right;font-size:11px;color:var(--mut)}
+.lk{font-size:11px;border:1px solid #d6d3cf;border-radius:6px;padding:0 6px;color:#57534e;white-space:nowrap;background:#fff}
+.gate{display:flex;align-items:center;gap:10px;border:1px solid #f3dfb8;background:var(--amberbg);color:#7c4a03;border-radius:12px;padding:9px 12px;font-size:13px;margin-bottom:14px}.gate[hidden]{display:none}.gate .btn{margin-left:auto}
+.box.locked .bxb{opacity:.5}
+.stp.lockd{color:var(--mut2)}.stp.lockd .sn{border-style:dashed}
+.ghost{border:1px dashed #d6d3cf;border-radius:14px;padding:18px;text-align:center;color:var(--mut);font-size:13px;background:#fff}
+.kt.th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut);border-top:0;padding-top:0}
+.kt code{font-size:11.5px;color:var(--mut)}
+.radio{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:12px;margin-bottom:6px;width:100%;font-size:13px}
+.radio[aria-checked="true"]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.radio .rd2{width:16px;height:16px;border-radius:50%;border:1.5px solid #cfcbc4;flex:none;margin-top:1px;position:relative}
+.radio[aria-checked="true"] .rd2{border-color:var(--ink)}.radio[aria-checked="true"] .rd2::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink)}
+.radio em{display:block;font-style:normal;font-size:12px;color:var(--mut)}
+.radio>div{flex:1}
+.fld{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;font-size:12.5px;margin-top:8px}
+.fld label{color:var(--mut)}
+.inp{height:32px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font:13px Inter,system-ui,sans-serif;color:var(--ink);background:#fff;width:100%}
+.inp.mono{font-family:"Geist Mono",monospace;font-size:12.5px}
+.inp:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.host{border:1px solid var(--line);border-radius:16px;background:#fbfbfa;overflow:hidden;position:sticky;top:0}
+.hosth{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);background:#fff;font-size:12.5px;color:var(--mut)}
+.hosth .dots{display:flex;gap:4px}.hosth .dots i{width:8px;height:8px;border-radius:50%;background:#e4e2de}
+.hseg{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:2px;margin-left:auto}
+.hseg button{font-size:12px;padding:3px 9px;border-radius:7px;color:var(--mut)}.hseg button[aria-pressed="true"]{background:#fff;color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.hostb{padding:14px}
+.hm{background:#fff;border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:13px;margin:0 0 12px auto;width:fit-content;max-width:85%}
+.hsay{font-size:13px;color:#44403c;margin-bottom:10px;line-height:1.5}
+.app-card{border:1px solid #dcd9d4;border-radius:14px;background:#fff;overflow:hidden;box-shadow:0 4px 14px rgba(10,10,10,.06)}
+.app-card .ah{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+.app-card .ah .lg{width:20px;height:20px;border-radius:6px;background:var(--ink);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.app-card .ah .r{margin-left:auto;display:flex;gap:6px}
+.stp{display:flex;gap:10px;align-items:center;padding:7px 12px;border-top:1px dashed var(--line);font-size:12.5px}
+.stp:first-of-type{border-top:0}
+.sn{width:20px;height:20px;border-radius:50%;border:1.5px solid #d6d3cf;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:var(--mut);flex:none}
+.stp>div{flex:1}.stp em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.app-card .af{display:flex;gap:6px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);background:var(--soft)}
+.app-card .af .r{margin-left:auto;display:flex;gap:6px}
+/* ---------- f-pr ---------- */
+.prw{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;max-width:1180px;margin:0 auto;padding:0 24px}
+.ftabs{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid var(--line);overflow-x:auto}
+.ftabs button{font:12px "Geist Mono",monospace;padding:4px 9px;border-radius:7px;color:var(--mut);white-space:nowrap}
+.ftabs button[aria-selected="true"]{background:var(--act);color:var(--ink)}
+.ftabs button i{font-style:normal;margin-left:5px;color:var(--pos)}
+.diff{font:12px/1.65 "Geist Mono",monospace;overflow:auto;max-height:420px}
+.diff div{display:grid;grid-template-columns:38px 16px 1fr;white-space:pre;padding:0 10px 0 0}
+.diff div span:first-child{color:var(--mut2);text-align:right;padding-right:8px;user-select:none}
+.diff .a{background:#eefaf2}.diff .a span:nth-child(2){color:var(--pos)}
+.diff .d{background:#fdf1f1}.diff .d span:nth-child(2){color:var(--red)}
+.diff .h{background:var(--soft);color:var(--mut)}
+.sel2{display:flex;align-items:center;gap:8px;width:100%;height:36px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:13px;background:#fff}
+.sel2:hover{border-color:#d6d3cf}.sel2 em{margin-left:auto;font-style:normal;color:var(--mut2)}
+.lab{font-size:12px;color:var(--mut);margin:10px 0 4px}
+.pplan{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-bottom:10px;font-size:12px;color:var(--mut)}
+.btn[hidden]{display:none}
+.pseg button{position:relative}.seg.pseg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.yp{position:absolute;left:50%;bottom:calc(100% + 5px);transform:translateX(-50%);font:600 10.5px/16px Inter,system-ui,sans-serif;color:#16a34a;background:#ecfdf3;border-radius:20px;padding:0 7px;white-space:nowrap;pointer-events:none}
+.pplan{padding-top:20px}
+.prs{display:grid;gap:0}
+.prs .p{display:flex;gap:10px;align-items:flex-start;padding:7px 0;font-size:13px}
+.prs .p .sn.g{background:var(--pos);border-color:var(--pos);color:#fff}
+.prs .p .sn.k{border-color:var(--ink);color:var(--ink)}
+.prs .p em{display:block;font-style:normal;font-size:12px;color:var(--mut)}
+.task{font:12px/1.55 "Geist Mono",monospace;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px 12px;white-space:pre-wrap;color:#292524;max-height:210px;overflow:auto}
+.seg{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:2px}
+.seg button{font-size:12.5px;padding:4px 10px;border-radius:8px;color:var(--mut);white-space:nowrap}
+.seg button[aria-pressed="true"],.seg button[aria-selected="true"]{background:#fff;color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+/* ---------- f-watch ---------- */
+.wbox{border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:16px;background:#fff;box-shadow:0 2px 10px rgba(10,10,10,.04)}
+.wrow{display:flex;gap:8px;align-items:center}
+.parse{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 4px}
+.tok{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:5px 9px;font-size:13px;background:#fff}
+.tok:hover{border-color:var(--ink)}
+.tok b{font-size:10.5px;letter-spacing:.4px;color:var(--mut);font-weight:600}
+.tok em{font-style:normal;color:var(--mut2);font-size:10px}
+.tok.add{border-style:dashed;color:var(--mut)}
+.wopts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.dl{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0}
+.dl.off{color:var(--mut2)}
+.wt{display:grid;grid-template-columns:minmax(0,1fr) 96px 120px 150px 44px 92px;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13px}
+.wt.th{background:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--mut);border-top:0}
+.wt>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wt b{font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wt .mini{display:flex;gap:4px;flex-wrap:nowrap;overflow:hidden;margin-top:4px}.wt .mini span{flex:none}
+.wt .mini span{font-size:11px;border-radius:6px;padding:0 6px;background:#f1f0ee;color:#57534e}
+.wt em{display:block;font-style:normal;font-size:11.5px;color:var(--mut)}
+.fired{margin:0 14px 10px;border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:12.5px;background:var(--soft)}
+.fired[hidden]{display:none}
+.menu{position:fixed;z-index:80;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.16);padding:5px;min-width:220px;display:none}
+.menu.on{display:block}
+.menu button{display:block;width:100%;padding:7px 9px;border-radius:8px;font-size:13px}.menu button:hover,.menu button:focus-visible{background:var(--soft)}
+.gen{display:block;font-size:11.5px;color:var(--mut2);margin:4px 0;cursor:help}
+.abar{display:flex;gap:2px;align-items:center;margin:8px 0 2px}
+.ib{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--mut);position:relative;flex:none}.ib:hover,.ib:focus-visible{background:var(--soft);color:var(--ink)}
+.ib svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ib::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:11.5px;font-weight:500;line-height:16px;padding:3px 7px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20}
+.ib:hover::after,.ib:focus-visible::after{opacity:1}
+.lead{margin:0 0 12px;font-size:14px;line-height:1.6;color:#292524;min-height:3.2em}
+.cin{flex:1;border:0;outline:0;font:14px Inter,system-ui,sans-serif;color:var(--ink);background:none;min-width:0}.cin::placeholder{color:#b8b3ab}
+.comp:focus-within{border-color:#d6d3cf;box-shadow:0 0 0 2px rgba(10,10,10,.12)}
+.tabk{font:500 10.5px Inter,system-ui,sans-serif;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--mut2);background:var(--soft)}.tabk[hidden]{display:none}
+.av.pulse{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{transform:scale(.9);opacity:.75}}
+.pre{opacity:0;transform:translateY(4px)}.fin{transition:opacity .3s ease,transform .3s ease}
+.tool.pre{display:none}.abar .btn{color:var(--mut)}.abar .btn:hover{color:var(--ink)}
+.menu .mft2{border-top:1px solid var(--line);margin-top:4px;padding:7px 9px 3px}
+.menu .mh{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut2);padding:6px 9px 4px}
+/* ---------- f-brief ---------- */
+.bw{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;max-width:1160px;margin:0 auto}
+.mail{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;margin-bottom:12px}
+.mailh{padding:12px 16px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--mut);display:grid;gap:3px}
+.mailh b{color:var(--ink);font-weight:600;font-size:15px}
+.mailh .ln{display:flex;gap:6px}.mailh .ln span:first-child{width:44px;color:var(--mut2)}
+.mailb{padding:18px 22px;background:#fafaf9}
+.em{max-width:600px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px 22px}
+.em .eh{display:flex;align-items:center;gap:8px;margin-bottom:14px}.em .eh .lg{width:22px;height:22px;border-radius:7px;background:var(--ink);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.em h2{font-size:18px;margin:0 0 2px;letter-spacing:-.3px}.em .sub{color:var(--mut);font-size:12.5px;margin-bottom:14px}
+.bi{display:grid;grid-template-columns:22px minmax(0,1fr) 128px;gap:10px;align-items:start;padding:11px 0;border-top:1px solid var(--line);font-size:13.5px}
+.bi>.btn{width:128px}.bi>div{min-width:0}
+.bi .n{width:22px;height:22px;border-radius:50%;background:var(--soft);border:1px solid var(--line);font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600}
+.bi em{display:block;font-style:normal;font-size:12px;color:var(--mut);margin-top:2px}
+.bi .ev{display:flex;gap:8px;flex-wrap:wrap;margin-top:5px}
+.bi .ev button{font-size:12px;color:var(--mut);text-decoration:underline;text-decoration-color:#d6d3cf}.bi .ev button:hover{color:var(--ink)}
+.em .foot{border-top:1px solid var(--line);margin-top:4px;padding-top:12px;font-size:12px;color:var(--mut);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.reply{border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:10px;overflow:hidden}
+.reply .rh{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--mut)}
+.reply .rh b{color:var(--ink);font-weight:500}.reply .rh .t{margin-left:auto}
+.reply .rb{padding:12px 16px;font-size:13.5px;line-height:1.55}
+.reply .rb .q{border-left:2px solid var(--line);padding-left:10px;color:var(--mut2);font-size:12px;margin-top:8px}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days button{width:38px;height:30px;border:1px solid var(--line);border-radius:8px;font-size:12px;text-align:center}
+.days button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.ck{display:flex;align-items:center;gap:9px;font-size:13px;padding:5px 0;width:100%}
+.ck .bx2{width:16px;height:16px;border:1.5px solid #cfcbc4;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;flex:none}
+.ck[aria-checked="true"] .bx2{background:var(--ink);border-color:var(--ink);color:#fff}
+.ck[aria-checked="false"] .bx2::after{content:""}
+.ck em{margin-left:auto;width:96px;text-align:right;font-style:normal;font-size:11.5px;color:var(--mut2)}
+.setrow{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 0;border-top:1px solid var(--line)}
+.setrow>span:first-child{flex:1}
+/* modal, toast */
+.scrim{position:fixed;inset:0;background:rgba(10,10,10,.35);display:none;align-items:center;justify-content:center;z-index:90}.scrim.on{display:flex}
+.modal{width:500px;max-width:calc(100% - 32px);background:#fff;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.2);padding:18px 20px}
+.modal h3{margin:0;font-size:17px}.modal .mh2{display:flex;align-items:center;gap:8px}.modal .mh2 .x{margin-left:auto}
+.modal .kv{margin-top:12px}
+.modal .warn{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12.5px;color:#44403c}
+.mft{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:10px;padding:8px 14px;font-size:13px;display:none;z-index:95;max-width:80%}.toast.on{display:block}
+/* ===== design polish layer (DESIGN-POLISH-2026-10-26) ===== */
+body{font-variant-numeric:tabular-nums}
+.main{background:var(--page)}.top{background:#fff}
+.col{max-width:808px}.comp{max-width:760px}
+.card,.box,.kp,.cause,.tbl,.wbox,.mail,.reply,.nx,.wxe,.mt,.host,.app-card{border-color:var(--line);box-shadow:var(--sh)}
+.card,.box,.kp,.cause,.tbl,.wbox,.mail,.reply,.host,.app-card{border-radius:14px}
+.nx,.wxe,.mt,.radio,.dup,.done-line,.endp,.sel2,.inp{border-radius:10px}
+.tbl,.mt{background:#fff}
+.nx,.wxe,.cause{transition:transform .18s ease-out,box-shadow .18s ease-out,border-color .18s ease-out}
+.nx:hover,.wxe:hover{transform:translateY(-1px);box-shadow:var(--shh);border-color:#dcdcdc}
+.cause:hover{box-shadow:var(--shh)}
+.menu{box-shadow:var(--shp);border-radius:10px}.drawer{box-shadow:var(--shp)}.modal{box-shadow:var(--shp);border-radius:14px}
+.btn,.chip,.fc,.ib,.sw::after{transition:background .15s ease-out,border-color .15s ease-out,color .15s ease-out,left .18s ease-out}
+/* done tick */
+.tk{width:20px;height:20px;border-radius:50%;background:#dcfce7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2316a34a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/12px no-repeat;display:inline-block;flex:none;vertical-align:middle}
+.tk.sm{width:16px;height:16px;background-size:10px}
+.tk.pop{animation:tkpop .24s ease-out 1}@keyframes tkpop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+.tool{border-radius:999px;padding:2px 10px 2px 3px;gap:6px}
+.okk{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--pos);background:var(--possoft);border-radius:999px;padding:1px 8px 1px 2px}
+/* step states */
+.sn.cur{border-color:#f59e0b;color:var(--amber);background:var(--amberbg);animation:ring 2s ease-out infinite}
+.sn.wait{border-color:#f59e0b;color:var(--amber);background:var(--amberbg)}
+.sn.fail{border-color:#fecaca;background:var(--redbg);color:var(--red)}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(245,158,11,.35)}70%{box-shadow:0 0 0 6px rgba(245,158,11,0)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
+/* soft pills */
+.pill{border:0;border-radius:999px;background:#f5f5f4;color:#57534e;padding:2px 9px;font-weight:500}
+.pill.ok{background:var(--possoft);color:#15803d}.pill.am{background:var(--amberbg);color:var(--amber)}
+.pill.dk{background:var(--ink);color:#fff}
+.pill.dot::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#a8a29e;margin-right:5px;vertical-align:1px}
+.conf{border:0;border-radius:999px;padding:2px 8px}.conf.hi{background:var(--possoft);color:#15803d}.conf.md{background:#f5f5f4;color:#57534e}.conf.lo{background:var(--amberbg);color:var(--amber)}
+.lk{border:0;background:#f5f5f4;color:#57534e;border-radius:999px;padding:1px 8px}
+.chip.zero{background:var(--possoft);border-color:#dcfce7;color:#15803d}
+.nx .pill.dk{font-size:10.5px;padding:1px 7px}
+/* bars + deltas */
+.share i{height:6px;border-radius:999px;background:#ececec}.share i::after{border-radius:999px}
+.ub{height:6px;border-radius:999px;background:#ececec}
+.up{color:var(--pos)}.dn{color:var(--red)}
+/* engine logos */
+.elogo{width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px;flex:none;object-fit:contain}
+.elogo.mono{display:inline-flex;align-items:center;justify-content:center;background:var(--ink);color:#fff;font-size:8.5px;font-weight:700;border-radius:4px}
+.elogos{display:inline-flex;gap:2px;margin-right:6px;vertical-align:-2px}.cl{color:var(--mut)}.elogos .elogo{margin:0}
+.lgo img{width:18px;height:18px;object-fit:contain}
+.hseg button img{width:12px;height:12px;vertical-align:-2px;margin-right:4px}
+/* locked previews */
+.lockwrap{position:relative;min-height:180px}.hseg button{white-space:nowrap;display:inline-flex;align-items:center}.ch{white-space:nowrap}
+.tr .elogos{width:48px;flex:none}
+.lockwrap .blur,.card.is-locked .cb,.card.is-locked .cf{filter:blur(3px);opacity:.5;user-select:none}
+.lockov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:16px;background:rgba(255,255,255,.55);border-radius:inherit;z-index:2}
+.lockov[hidden]{display:none}.lockov b{font-size:13.5px;font-weight:600}.lockov span{font-size:12.5px;color:var(--mut);max-width:300px}
+.lockic{width:28px;height:28px;border-radius:50%;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;box-shadow:var(--sh)}
+.lockic svg{width:14px;height:14px;stroke:var(--ink);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card{position:relative}
+/* answer bar + ghost */
+.abar .gen{margin:0 0 0 auto;display:inline}
+.cin::placeholder{color:var(--faint)}
+.tabk{font:500 11px Inter,system-ui,sans-serif;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--mut);background:#fff;line-height:16px}
+.ghost{border-color:#e5e5e5}
+@media (prefers-reduced-motion:reduce){.nx:hover,.wxe:hover{transform:none}}
+@media (max-width:1200px){.split2,.bw,.prw{grid-template-columns:1fr}.wxr{grid-template-columns:repeat(3,1fr)}.kp4{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:900px){.side{display:none}.main.dpush .scr.on>.pg,.main.dpush .scr.on>.thread{margin-right:0}.tr{grid-template-columns:minmax(0,1fr) auto}.tr>span:not(:first-child):not(:nth-child(6)){display:none}.tr.th{display:none}.drawer{width:100%}.nxg{grid-template-columns:1fr}.czh{grid-template-columns:56px 1fr 18px}.czh .conf{display:none}.czc,.czb{padding-left:12px}.wt{grid-template-columns:1fr auto}.wt>span:not(:first-child):not(:nth-child(5)){display:none}.wt.th{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <symbol id="bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V5"/><circle cx="12" cy="4" r="1" fill="#fff"/><path d="M9 13v1.5M15 13v1.5" stroke-width="2.2"/><path d="M2 12.5v2M22 12.5v2"/></symbol>
+ <symbol id="i-brand" viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/></symbol>
+ <symbol id="i-ac" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+ <symbol id="i-vis" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+ <symbol id="i-pr" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+ <symbol id="i-top" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></symbol>
+ <symbol id="i-men" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+ <symbol id="i-cit" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+ <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></symbol>
+ <symbol id="i-traf" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+ <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></symbol>
+ <symbol id="i-aud" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+ <symbol id="i-chat" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3.5"/><path d="M12 8V5M9 13v1.5M15 13v1.5"/></symbol>
+ <symbol id="i-rep" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15v2M12 10v7M17 6v11"/></symbol>
+ <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></symbol>
+ <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+ <symbol id="i-save" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5 12 16l2.5-2.5"/></symbol>
+ <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+ <symbol id="i-send-ac" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M15 9l6-6M17 3h4v4"/></symbol>
+ <symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+</svg>
+
+<nav class="mnav" aria-label="Mockup navigation">
+ <span class="lbl">Chat v2</span>
+ <a data-action="demo.openIndex" href="index.html">Index</a>
+ <a data-action="demo.openFile" href="CHAT-mockup-v2.html">Core Chat</a>
+ <a data-action="demo.openFile" href="CHAT-mockup-v2-governance.html">Governance</a>
+ <span class="sep"></span><span class="lbl">Signature</span>
+ <a data-action="demo.openScreen" href="#f-why" data-nav="f-why">Why did it move</a>
+ <a data-action="demo.openScreen" href="#f-impact" data-nav="f-impact">Impact ledger</a>
+ <a data-action="demo.openScreen" href="#f-mcp" data-nav="f-mcp">MCP</a>
+ <a data-action="demo.openScreen" href="#f-pr" data-nav="f-pr">Pull request</a>
+ <a data-action="demo.openScreen" href="#f-watch" data-nav="f-watch">Watch rules</a>
+ <a data-action="demo.openScreen" href="#f-brief" data-nav="f-brief">Morning brief</a>
+</nav>
+
+<div class="app">
+ <aside class="side" aria-label="Main navigation">
+  <button data-action="appNav.switchBrand" class="bsw" data-menu="brand" aria-haspopup="menu" aria-label="Switch brand, current Ansvisor"><span class="lg">A</span>Ansvisor<em>▾</em></button>
+  <div class="sgh">Execution</div>
+  <button data-action="appNav.navigate" class="nv" data-toast="Opens Action Center"><svg><use href="#i-ac"/></svg>Action Center<span class="newp">New</span></button>
+  <a data-action="appNav.navigate" class="nv" href="CHAT-mockup-v2.html#s-home" data-sb="chat"><svg><use href="#i-chat"/></svg>Chat</a>
+  <button data-action="appNav.navigate" class="nv" data-toast="Opens Content › Plan"><svg><use href="#i-doc"/></svg>Content</button>
+  <button data-action="appNav.navigate" class="nv sub" data-toast="Opens Plan">Plan</button><button data-action="appNav.navigate" class="nv sub" data-toast="Opens Editor">Editor</button><button data-action="appNav.navigate" class="nv sub" data-toast="Opens Opportunities">Opportunities</button><button data-action="appNav.navigate" class="nv sub" data-toast="Opens Library">Library</button>
+  <button data-action="appNav.navigate" class="nv" data-toast="Opens Audit"><svg><use href="#i-aud"/></svg>Audit</button>
+  <div class="sgh">Analytics</div>
+  <button data-action="appNav.navigate" class="nv" data-go="f-why" data-sb="vis"><svg><use href="#i-vis"/></svg>Visibility</button>
+  <button data-action="appNav.togglePrompts" class="nv" id="promptsTog" aria-expanded="false" aria-controls="promptSubs"><svg><use href="#i-pr"/></svg>Prompts<span class="cv">▾</span></button>
+  <div class="subs" id="promptSubs" hidden>
+   <button data-action="appNav.navigate" class="nv sub" data-toast="Opens Tracked Prompts">Tracked Prompts</button>
+   <button data-action="appNav.navigate" class="nv sub" data-toast="Opens Prompt Suggestions">Prompt Suggestions</button>
+   <button data-action="appNav.navigate" class="nv sub" data-toast="Opens Topics">Topics</button>
+   <button data-action="appNav.navigate" class="nv sub" data-toast="Opens Query Fan-outs">Query Fan-outs</button>
+   <button data-action="appNav.navigate" class="nv sub" data-toast="Opens Insights">Insights</button>
+  </div>
+  <button data-action="appNav.navigate" class="nv" data-toast="Opens Mentions"><svg><use href="#i-men"/></svg>Mentions<span class="newp">New</span></button>
+  <button data-action="appNav.navigate" class="nv" data-toast="Opens Citations"><svg><use href="#i-cit"/></svg>Citations</button>
+  <button data-action="appNav.navigate" class="nv" data-toast="Opens Product Visibility"><svg><use href="#i-box"/></svg>Product Visibility</button>
+  <button data-action="appNav.navigate" class="nv" data-toast="Opens AI Referral Traffic"><svg><use href="#i-traf"/></svg>AI Referral Traffic</button>
+  <button data-action="appNav.navigate" class="nv" data-go="f-impact" data-sb="rep" style="margin-top:8px"><svg><use href="#i-rep"/></svg>Reports</button>
+  <div class="sfoot">
+   <button data-action="appNav.navigate" class="nv" data-go="f-mcp" data-sb="set"><svg><use href="#i-set"/></svg>Settings</button>
+   <button data-action="account.openMenu" class="me" data-menu="me" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu, Alex Kim, Admin"><i>A</i>Alex Kim · Admin<span style="margin-left:auto" class="pill">Growth</span></button>
+  </div>
+ </aside>
+
+ <main class="main" id="main">
+  <div class="top">
+   <a data-action="nav.backToChat" class="back" id="backLink" href="CHAT-mockup-v2.html#s-home" aria-label="Back to Chat">← Back to Chat</a><div class="crumb" id="crumb"></div>
+   <div class="r">
+    <button data-action="usage.open" class="usg" data-toast="AI usage this month: 18% of the Growth limit · shared by every seat · resets Nov 1" aria-label="AI usage this month 18 percent"><span class="ub"><i style="width:18%"></i></span>18%</button>
+    <span id="topR"></span>
+   </div>
+  </div>
+
+  <!-- ===================== F-WHY ===================== -->
+  <section class="scr" id="f-why" aria-label="Why did it move">
+   <div class="thread"><div class="col">
+    <div class="um">Why did our Perplexity visibility drop this week?</div>
+    <div class="umctx"><span class="chip st"><i>from</i> Visibility chart · Perplexity · 7 days</span></div>
+    <div class="ahead"><span class="av" id="whyAv"><svg><use href="#bot"/></svg></span><span id="whyStatus" aria-live="polite">Answered in 5 s</span></div>
+    <div class="tools">
+     <span class="tool"><span class="tk"></span>Read 412 answers <em>· Perplexity, 7 days</em></span>
+     <span class="tool"><span class="tk"></span>Compared 38 citation snapshots</span>
+     <span class="tool"><span class="tk"></span>Read Audit changes <em>· 2</em></span>
+     <span class="tool"><span class="tk"></span>Engine weather <em>· 120 benchmark prompts</em></span>
+    </div>
+    <p class="lead" id="whyLead">About 40% of the drop is engine-wide: Perplexity changed how it cites on Oct 24 and most brands in your category moved too. The part you can fix is one lost citation on /blog/what-is-aeo and the FAQPage schema removed from /features.</p>
+    <div class="mv"><b>Perplexity visibility <button data-action="why.openEvidence" class="num" data-drawer="why-total">58 → 52</button> <span class="dn">▼ 6 pts · 7 days</span></b><span class="chip st" data-logo="ChatGPT">ChatGPT 71 · steady</span><span class="chip st" data-logo="Gemini">Gemini 64 · steady</span></div>
+
+    <div class="wx" role="group" aria-label="Engine weather">
+     <div class="wxh"><b>Engine weather</b><span style="color:var(--mut)">public benchmark · 120 prompts</span><span class="pill am">Perplexity: engine-wide −4 today · likely not you</span><span class="r"><button data-action="why.openEvidence" class="btn sm gh" data-drawer="bench">Benchmark prompts</button></span></div>
+     <div class="wxr">
+      <button data-action="why.openEvidence" class="wxe" data-drawer="bench"><b data-logo="ChatGPT">ChatGPT</b><em>±0 · steady</em></button>
+      <button data-action="why.openEvidence" class="wxe hit" data-drawer="bench"><b data-logo="Perplexity">Perplexity</b><em title="▼4 · citation change Oct 24">▼4 · citation change Oct 24</em></button>
+      <button data-action="why.openEvidence" class="wxe" data-drawer="bench"><b data-logo="Gemini">Gemini</b><em><span class="up">▲1</span> · steady</em></button>
+      <button data-action="why.openEvidence" class="wxe" data-drawer="bench"><b title="Google AI Overviews" data-logo="Google AI Overviews">Google AI Overviews</b><em>±0 · steady</em></button>
+      <button data-action="why.openEvidence" class="wxe" data-drawer="bench"><b data-logo="Copilot">Copilot</b><em><span class="up">▲1</span> · steady</em></button>
+      <button data-action="why.openEvidence" class="wxe" data-drawer="bench"><b data-logo="Grok">Grok</b><em>±0 · steady</em></button>
+     </div>
+    </div>
+
+    <div class="sec" style="margin-top:4px">What explains the −6 pts</div>
+    <div id="causes"></div>
+    <div class="abar" role="group" aria-label="Answer actions"><button data-action="answer.copy" class="ib" data-tip="Copy" aria-label="Copy" data-toast="Answer copied with links and the cause table"><svg><use href="#i-copy"/></svg></button><button data-action="answer.download" class="ib" data-tip="Download" aria-label="Download" data-dl="why-perplexity-dropped" data-tbl="1" aria-haspopup="menu" aria-expanded="false"><svg><use href="#i-dl"/></svg></button><button data-action="answer.saveToFiles" class="ib" data-tip="Save to Files" aria-label="Save to Files" data-toast="Saved to Files · why-perplexity-dropped-2026-10-26.md"><svg><use href="#i-save"/></svg></button><button data-action="answer.retry" class="ib" data-tip="Retry" aria-label="Retry" data-act="retryWhy"><svg><use href="#i-retry"/></svg></button><button data-action="answer.sendToActionCenter" class="ib" data-tip="Send to Action Center" aria-label="Send to Action Center" data-toast="Active action AC-1258 found · evidence attaches there, no duplicate"><svg><use href="#i-send-ac"/></svg></button><span class="gen" title="Times in GMT+3 · Europe/Istanbul">Generated Oct 26, 2026 · 09:14 · Data as of Oct 26, 08:00</span></div>
+    
+    <span class="mused">Detection from stored snapshots, no model reads · <b>Claude Sonnet 5.5</b> wrote the summary · 0.1% of monthly limit</span>
+
+    <div class="card" id="nextCard">
+     <div class="ch"><span class="av" style="width:22px;height:22px;border-radius:7px"><svg style="width:13px;height:13px"><use href="#bot"/></svg></span><b>Next moves</b><span class="r"><span class="pill am">Asks you</span></span></div>
+     <div class="cb" id="acBody">
+      <div class="dup"><span class="lgo">AC</span><div>Active action found · <b>AC-1258</b> Win back citations for /blog/what-is-aeo<em>Same definition, opened Oct 20 · 6 target prompts, frozen · 2 new prompts go to the candidate queue</em></div><button data-action="why.openAction" class="btn sm gh" data-toast="Opens AC-1258 in Action Center">Open</button></div>
+      <div class="chips" style="margin-bottom:2px"><span class="chip st">Evidence to attach · 3 causes</span><span class="chip st">Baseline kept from Oct 20</span><span class="chip st">No duplicate action</span></div>
+      <div class="fu" id="fuRow"><span class="tk" aria-hidden="true" style="justify-self:center"></span><div><b>Follow-up check · Nov 9</b><em>14 days after attach · re-reads the 6 target prompts from scheduled tracking data</em></div><span class="chip zero">No extra cost</span><button data-action="followup.changeDate" class="btn sm gh" data-toast="Follow-up check moved to Nov 16 (30 days)">Change date</button></div>
+     </div>
+     <div class="cf"><span class="l">Mode: Auto, ask before changes</span><div class="r"><button data-action="why.createNewAction" class="btn sm" data-toast="Not available: one active action per definition. Evidence goes to AC-1258." aria-disabled="true">Create new action</button><button data-action="why.attachToAction" class="btn sm pri" id="attachBtn">Attach to AC-1258</button></div></div>
+    </div>
+    <div class="nxg">
+     <button data-action="nextMove.open" class="nx" data-go="f-pr"><span class="t"><span title="Restore FAQPage schema on /features">Restore FAQPage schema on /features</span><span class="pill dk">Needs your click</span></span><em>Ship as a pull request · you merge</em></button>
+     <button data-action="nextMove.open" class="nx" data-go="f-watch"><span class="t"><span>Watch Lumora on Perplexity</span></span><em>Watch rule · no AI cost</em></button>
+     <button data-action="nextMove.runSkill" class="nx" data-toast="Starts /winback in a new chat, scoped to AC-1258"><span class="t"><span title="Win back /blog/what-is-aeo">Win back /blog/what-is-aeo</span><code style="font-size:11.5px;color:var(--mut)">/winback</code></span><em>5 steps · asks before changes</em></button>
+    </div>
+   </div>
+   <div class="comp"><input data-action="why.followUpInput" class="cin" id="whyIn" aria-label="Ask a follow-up" placeholder="Draft the /blog/what-is-aeo refresh for AC-1258"><kbd class="tabk" id="tabK" title="Press Tab to use this suggestion">Tab</kbd><button data-action="composer.send" class="send" data-act="sendWhy" aria-label="Send">↑</button></div>
+   </div>
+  </section>
+
+  <!-- ===================== F-IMPACT ===================== -->
+  <section class="scr" id="f-impact" aria-label="Impact ledger">
+   <div class="pg">
+    <div class="pgh"><div><h1>What Ansvisor did for you</h1><p>Ansvisor · shipped actions measured against untouched similar prompts</p><span class="gen" title="Times in GMT+3 · Europe/Istanbul">Generated Oct 26, 2026 · 09:14 · Data as of Oct 26, 08:00</span></div>
+     <div class="r"><div class="mon"><button data-action="impact.changeMonth" aria-label="Previous month" data-month="-1">‹</button><span id="monLbl">October 2026</span><button data-action="impact.changeMonth" aria-label="Next month" data-month="1">›</button></div><button data-action="impact.export" class="btn" data-dl="ansvisor-impact-oct-2026" data-tbl="1" data-extra="Copy recipe (API + filters)|Share link · view only" data-title="Export" aria-haspopup="menu" aria-expanded="false">Export ▾</button></div></div>
+    <div class="kp4">
+     <div class="kp"><small>Actions shipped</small><b><button data-action="impact.openKpi" class="num" data-drawer="imp-all" data-focus="Actions shipped · 14">14</button></b><em>Sep: 10</em></div>
+     <div class="kp"><small>Improved</small><b><button data-action="impact.openKpi" class="num" data-drawer="imp-all" data-focus="Improved · 9 of 10 measured">9 of 10</button></b><em>verdict at 14 days · 2 pending</em></div>
+     <div class="kp"><small>Citations won on target prompts</small><b><button data-action="impact.openKpi" class="num" data-drawer="imp-all" data-focus="Citations won · +63 vs control +7">+63</button></b><em class="g">control prompts: +7</em></div>
+     <div class="kp"><small>AI traffic to changed pages</small><b><button data-action="impact.openKpi" class="num" data-drawer="imp-all" data-focus="AI traffic · +18% from Google Analytics">+18%</button></b><em>Google Analytics · vs September</em></div>
+    </div>
+    <div class="method"><span class="chip st">Baseline: 14 days before ship</span><span class="chip st" title="7 days: pending, early signal · 14 days: first verdict · 30 days: confirmed · 90 days: lasting effect">Checkpoints: 7 · 14 · 30 · 90 days</span><span class="chip st">Control: untouched similar prompts</span><span class="chip st">Min. change: 3 pts</span><span class="chip zero">Scheduled tracking data · no extra cost</span><span class="chip st">Correlation, not causation</span><button data-action="integrations.connect" class="chip" data-toast="Revenue joins AI traffic with Stripe or HubSpot conversions · opens Connections">Revenue · connect Stripe</button><button data-action="impact.openHistory" class="chip aclink" data-toast="Opens Action Center › History · same outcomes and numbers, one data source">↗ Also in Action Center › History</button></div>
+    <div class="fl" role="group" aria-label="Filter by outcome">
+     <button data-action="impact.filterOutcome" class="fc" aria-pressed="true" data-oc="all">All<i>14</i></button>
+     <button data-action="impact.filterOutcome" class="fc" aria-pressed="false" data-oc="imp">Improved<i>9</i></button>
+     <button data-action="impact.filterOutcome" class="fc" aria-pressed="false" data-oc="pen">Pending<i>2</i></button>
+     <button data-action="impact.filterOutcome" class="fc" aria-pressed="false" data-oc="nmc">No meaningful change<i>1</i></button>
+     <button data-action="impact.filterOutcome" class="fc" aria-pressed="false" data-oc="dec">Declined<i>0</i></button>
+     <button data-action="impact.filterOutcome" class="fc" aria-pressed="false" data-oc="nm">Not measurable<i>2</i></button>
+    </div>
+    <div class="tbl" id="impTbl"></div>
+   </div>
+  </section>
+
+  <!-- ===================== F-MCP ===================== -->
+  <section class="scr" id="f-mcp" aria-label="MCP server">
+   <div class="pg">
+    <div class="pgh"><div><h1>Settings</h1></div><div class="r"><span style="font-size:12px;color:var(--mut)">Preview plan</span><div class="seg pseg" role="group" aria-label="Preview plan, your plan is Growth"><button data-action="demo.previewPlan" aria-pressed="false" data-mplan="trial">Trial</button><button data-action="demo.previewPlan" aria-pressed="false" data-mplan="starter">Starter</button><button data-action="demo.previewPlan" aria-pressed="true" data-mplan="growth">Growth<span class="yp" aria-hidden="true">Your plan</span></button><button data-action="demo.previewPlan" aria-pressed="false" data-mplan="ent">Enterprise</button></div></div></div>
+    <div class="stabs" role="tablist" aria-label="Settings">
+     <button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens Account">Account</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens Organization">Organization</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens Team">Team</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens Authors">Authors</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens Notifications">Notifications</button><button data-action="settings.tab" role="tab" aria-selected="true" data-toast="You are on Integrations">Integrations</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens API Keys">API Keys</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens AI Providers">AI Providers</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens Billing">Billing</button><button data-action="settings.tab" role="tab" aria-selected="false" data-toast="Opens Settings › Chat (tool policy)">Chat</button>
+    </div>
+    <div class="subtabs" role="tablist" aria-label="Integrations"><button data-action="integrations.subTab" role="tab" aria-selected="false" data-toast="Opens Connections">Connections</button><button data-action="integrations.subTab" role="tab" aria-selected="false" data-go="f-pr">GitHub</button><button data-action="integrations.subTab" role="tab" aria-selected="true" data-toast="You are on MCP server">MCP server</button></div>
+    <div class="gate" id="mcpGate" hidden></div>
+    <div class="split2">
+     <div>
+      <div class="box">
+       <div class="bxh"><b>MCP server</b><span class="chip st" id="mcpPlanChip">Growth · READ, WRITE, EXECUTE</span><div class="r"><span style="font-size:12.5px;color:var(--mut)" id="mcpOnL">On</span><button data-action="mcp.toggleServer" class="sw" role="switch" aria-checked="true" aria-label="MCP server on" data-sw="mcpOn" id="mcpSw"></button></div></div>
+       <div class="bxb">
+        <div class="endp"><span>https://mcp.ansvisor.com/v1</span><button data-action="mcp.copyEndpoint" class="btn sm" data-toast="Endpoint copied" id="epCopy">Copy</button></div>
+        <div class="chips" style="margin-top:8px"><span class="chip st">14 Ansvisor skills as tools</span><span class="chip st">Same approval rules as in Ansvisor</span><span class="chip st" title="Full auto over MCP is off in v1 · every WRITE shows an approval card or link, even on Growth+">MCP writes always ask</span><span class="chip st">runs on the host's model · barely uses your AI limit</span></div>
+       </div>
+      </div>
+      <div class="box">
+       <div class="bxh"><b>Assistants</b><span style="font-size:12px;color:var(--mut)">Claude, ChatGPT and Cursor follow the same plan rules</span></div>
+       <div class="bxb" id="hosts"></div>
+      </div>
+      <div class="box">
+       <div class="bxh"><b>Keys</b><span style="font-size:12px;color:var(--mut)">one key per person · acts with that person's role</span><div class="r"><button data-action="mcp.createKey" class="btn sm" data-act="newkey" id="newKeyBtn">Create my key</button></div></div>
+       <div class="bxb" id="keys"></div>
+      </div>
+      <div class="box">
+       <div class="bxh"><b>Scopes for new keys</b><span style="font-size:12px;color:var(--mut)">never more than the person's role</span></div>
+       <div class="bxb" id="scopes"></div>
+      </div>      <div class="box">
+       <div class="bxh"><b>Chat model source</b><span class="ent">Self-host</span></div>
+       <div class="bxb" role="radiogroup" aria-label="Chat model source">
+        <button data-action="mcp.modelSource" class="radio" role="radio" aria-checked="false" data-radio="ms"><span class="rd2"></span><div>Ansvisor models<em>default · counts against your AI limit</em></div></button>
+        <button data-action="mcp.modelSource" class="radio" role="radio" aria-checked="false" data-radio="ms"><span class="rd2"></span><div>Your provider keys<em>Growth+ · set in AI Providers</em></div></button>
+        <button data-action="mcp.modelSource" class="radio" role="radio" aria-checked="true" data-radio="ms"><span class="rd2"></span><div>Self-hosted endpoint<em>OpenAI-compatible · data stays on your network</em></div></button>
+        <div class="fld"><label for="ep">Endpoint</label><input data-action="mcp.endpointInput" id="ep" class="inp mono" value="http://10.0.4.12:11434/v1"></div>
+        <div class="fld"><label for="mdl">Model</label><input data-action="mcp.modelInput" id="mdl" class="inp mono" value="llama-4-70b-instruct"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><button data-action="mcp.testConnection" class="btn sm" data-act="testep">Test connection</button><span id="epRes" style="font-size:12px;color:var(--mut)">Not tested</span></div>
+       </div>
+      </div>
+     </div>
+     <div>
+      <div class="host" aria-label="Preview inside an external assistant">
+       <div class="hosth"><span class="dots"><i></i><i></i><i></i></span>Preview<div class="hseg" role="group" aria-label="Assistant"><button data-action="demo.previewHost" aria-pressed="false" data-host="Claude" data-logo="Claude">Claude</button><button data-action="demo.previewHost" aria-pressed="true" data-host="ChatGPT" data-logo="ChatGPT">ChatGPT</button><button data-action="demo.previewHost" aria-pressed="false" data-host="Cursor">Cursor</button></div></div>
+       <div class="hostb">
+        <div class="hm">@Ansvisor win back the Perplexity citations we lost this week</div>
+        <div class="hsay" id="hostSay">I'll use Ansvisor for this. Here is the plan it proposes:</div>
+        <div id="appWrap"></div>
+        <div style="font-size:11.5px;color:var(--mut2);margin-top:8px" id="hostFoot">Rendered by the Ansvisor MCP App inside ChatGPT</div>
+       </div>
+      </div>
+     </div>
+    </div>
+   </div>
+  </section>
+  <!-- ===================== F-PR ===================== -->
+  <section class="scr" id="f-pr" aria-label="Ship as a pull request">
+   <div class="thread">
+    <div class="col" style="max-width:1180px">
+     <div class="um">Restore the FAQPage schema on /features and add llms.txt</div>
+     <div class="umctx"><span class="chip st"><i>from</i> Why did it move · cause 4</span></div>
+    </div>
+    <div class="prw">
+     <div>
+      <div class="ahead"><span class="av"><svg><use href="#bot"/></svg></span><span>Ready to ship · 4 files · targets 4 prompts</span></div>
+      <span class="gen" title="Times in GMT+3 · Europe/Istanbul" style="margin:-4px 0 8px 38px">Generated Oct 26, 2026 · 09:14 · Audit data as of Oct 26, 08:00</span>
+      <div class="card">
+       <div class="ch"><b>Changes</b><span class="r"><span class="chip st">+46 −3</span><button data-action="pr.download" class="btn sm gh" data-toast="Saved to Files as a .zip">Download</button></span></div>
+       <div class="ftabs" role="tablist" aria-label="Changed files">
+        <button data-action="pr.fileTab" role="tab" aria-selected="true" data-file="schema">src/pages/features.astro<i>+22</i></button>
+        <button data-action="pr.fileTab" role="tab" aria-selected="false" data-file="llms">public/llms.txt<i>+14</i></button>
+        <button data-action="pr.fileTab" role="tab" aria-selected="false" data-file="robots">public/robots.txt<i>+4 −3</i></button>
+        <button data-action="pr.fileTab" role="tab" aria-selected="false" data-file="faq">src/components/FaqFeatures.astro<i>+6</i></button>
+       </div>
+       <div class="diff" id="diff" role="tabpanel"></div>
+       <div class="meta"><span>Why: <b>FAQPage schema removed Oct 21</b></span><span>Targets <button data-action="pr.openEvidence" class="num" data-drawer="why-audit">4 prompts</button></span><span>Checked: <b>JSON-LD valid</b></span></div>
+      </div>
+     </div>
+     <div>
+      <div class="pplan"><span>Preview plan</span><div class="seg pseg" role="group" aria-label="Preview plan, your plan is Growth"><button data-action="demo.previewPlan" aria-pressed="false" data-pplan="trial">Trial</button><button data-action="demo.previewPlan" aria-pressed="false" data-pplan="starter">Starter</button><button data-action="demo.previewPlan" aria-pressed="true" data-pplan="growth">Growth<span class="yp" aria-hidden="true">Your plan</span></button><button data-action="demo.previewPlan" aria-pressed="false" data-pplan="ent">Enterprise</button></div></div>
+      <div class="card">
+       <div class="ch"><b>Ship as a pull request</b><span class="r"><span class="pill dk">Needs your click</span></span></div>
+       <div class="cb">
+        <div class="lab" style="margin-top:0">Repository · GitHub</div>
+        <button data-action="pr.openRepoMenu" class="sel2" data-menu="repo" aria-haspopup="menu"><span class="lgo" style="width:22px;height:22px;font-size:10px;border-radius:6px">GH</span><span id="repoName">ansvisor/website</span><em>▾</em></button>
+        <div class="lab">Branch</div>
+        <div class="sel2" style="cursor:default"><code style="font-size:12px">ansvisor/faq-schema-features</code><em>→ main</em></div>
+        <div class="lab">Preview link</div>
+        <div style="font-size:12.5px;color:var(--mut)">Added by your host after the PR opens</div>
+       </div>
+       <div class="lockov" id="prLock" style="top:49px;border-radius:0 0 14px 14px" hidden><span class="lockic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Open a pull request in one click</b><span>Ansvisor branches, commits and opens the PR on GitHub. You merge.</span><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens plans · Growth $249 adds Open pull request">Upgrade to Growth</button></div>
+       <div class="cf"><span class="l" id="prNote">Nothing merges without you</span><div class="r"><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens plans · Growth $249 adds Open pull request" id="prUpg" hidden>Upgrade to Growth</button><button data-action="pr.open" class="btn sm pri" id="openPR">Open pull request</button></div></div>
+      </div>
+      <div class="card" id="prStatus">
+       <div class="ch"><b>Status</b><span class="r"><span class="pill" id="prPill">Not opened</span></span></div>
+       <div class="cb prs" id="prSteps"></div>
+      </div>
+      <div class="card">
+       <div class="ch"><b>Copy as agent task</b><span class="r"><span class="chip zero">All plans · incl. trial</span></span></div>
+       <div class="cb">
+        <div class="seg" role="tablist" aria-label="Agent" style="margin-bottom:8px"><button data-action="pr.agentTab" role="tab" aria-selected="true" data-agent="Claude Code">Claude Code</button><button data-action="pr.agentTab" role="tab" aria-selected="false" data-agent="Cursor">Cursor</button></div>
+        <div class="task" id="taskTxt"></div>
+        <div style="display:flex;gap:6px;margin-top:8px"><button data-action="pr.copyTask" class="btn sm" data-act="copytask">Copy task</button><button data-action="pr.saveTask" class="btn sm gh" data-toast="Saved as agent-task.md in Files">Save as .md</button></div>
+       </div>
+      </div>
+     </div>
+    </div>
+   </div>
+  </section>
+
+  <!-- ===================== F-WATCH ===================== -->
+  <section class="scr" id="f-watch" aria-label="Watch rules">
+   <div class="pg">
+    <div class="pgh"><div><h1>Watch rules</h1><p>Checked after every tracking run · fired rules show up in-app and by email</p></div><div class="r"><div class="seg" role="group" aria-label="Show rules"><button data-action="watch.scopeFilter" aria-pressed="true" data-wscope="all">All</button><button data-action="watch.scopeFilter" aria-pressed="false" data-wscope="Personal">Personal</button><button data-action="watch.scopeFilter" aria-pressed="false" data-wscope="Workspace">Workspace</button></div></div></div>
+    <div class="wbox">
+     <div class="wrow"><input data-action="watch.ruleInput" class="inp" id="wIn" aria-label="Describe the rule in plain words" value="Tell me if Lumora passes me on Perplexity" style="height:36px;font-size:14px"><button data-action="watch.parse" class="btn" data-act="parse">Parse</button></div>
+     <div class="parse" id="parsed">
+      <button data-action="watch.editClause" class="tok" data-opts="Lumora's visibility passes yours|Lumora enters the answer|Your citation count drops by 3+|Visibility drops more than 20%" aria-haspopup="menu"><b>WHEN</b><span>Lumora's visibility passes yours</span><em>▾</em></button>
+      <button data-action="watch.editClause" class="tok" data-opts="Perplexity · all tracked prompts|Perplexity · priority prompts|All engines · top 20 prompts|ChatGPT · all tracked prompts" aria-haspopup="menu"><b>FOR</b><span>Perplexity · all tracked prompts</span><em>▾</em></button>
+      <button data-action="watch.editClause" class="tok" data-opts="Notify me|Notify me and draft a brief|Notify me and propose an action" aria-haspopup="menu"><b>THEN</b><span>Notify me</span><em>▾</em></button>
+      <button data-action="watch.editClause" class="tok add" data-opts="Create action in Action Center (asks first)|Run /beat (asks first)|Nothing else" aria-haspopup="menu"><b>AND</b><span>add a step</span><em>▾</em></button>
+     </div>
+     <div class="chips" style="margin-top:8px"><span class="chip zero">no AI cost · data query</span><span class="chip st">checked every 6 h after tracking</span><span class="chip st">1 short AI call only when it fires</span></div>
+     <div class="wopts">
+      <div>
+       <div class="lab" style="margin-top:0">Deliver to</div>
+       <div class="dl"><button data-action="watch.toggleChannel" class="sw" role="switch" aria-checked="true" aria-label="In-app" data-sw="1"></button>In-app</div>
+       <div class="dl"><button data-action="watch.toggleChannel" class="sw" role="switch" aria-checked="true" aria-label="Email" data-sw="1"></button>Email · Alex Kim</div>
+       <div class="dl off"><button data-action="watch.toggleChannel" class="sw" role="switch" aria-checked="false" aria-label="Slack, not connected" data-sw="1" disabled></button>Slack · optional<button data-action="integrations.connect" class="btn sm" data-toast="Opens Connections › Slack" style="margin-left:6px">Connect</button></div>
+      </div>
+      <div>
+       <div class="lab" style="margin-top:0">Who sees it</div>
+       <div class="seg" role="radiogroup" aria-label="Rule scope"><button data-action="watch.ruleScope" role="radio" aria-checked="true" aria-pressed="true" data-rscope="Personal">Personal</button><button data-action="watch.ruleScope" role="radio" aria-checked="false" aria-pressed="false" data-rscope="Workspace" title="Workspace rules: Admin and Manager">Workspace</button></div>
+       <div style="font-size:12px;color:var(--mut);margin-top:6px" id="scopeNote">Only you · every role can create personal rules</div>
+       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button data-action="watch.clear" class="btn sm gh" data-act="clearRule">Clear</button><button data-action="watch.save" class="btn sm pri" data-act="saveRule">Save rule</button></div>
+      </div>
+     </div>
+    </div>
+    <div class="tbl" id="wTbl"></div>
+   </div>
+  </section>
+
+  <!-- ===================== F-BRIEF ===================== -->
+  <section class="scr" id="f-brief" aria-label="Morning brief">
+   <div class="pg">
+    <div class="bw">
+     <div>
+      <div class="mail">
+       <div class="mailh"><b>Your morning brief · Mon, Oct 26</b>
+        <div class="ln"><span>From</span><span>Ansvisor Chat &lt;brief@ansvisor.com&gt;</span></div>
+        <div class="ln"><span>To</span><span>Alex Kim</span><span style="margin-left:auto" title="GMT+3 · Europe/Istanbul">Oct 26, 2026 · 08:00</span></div><span class="gen" title="Times in GMT+3 · Europe/Istanbul">Generated Oct 26, 2026 · 07:58 · Data as of Oct 26, 06:00</span></div>
+       <div class="mailb"><div class="em">
+        <div class="eh"><span class="lg">A</span><b>Ansvisor</b><span style="color:var(--mut);font-size:12px;margin-left:auto">4 things since Friday</span></div>
+        <h2>Good morning, Alex</h2><div class="sub">Ansvisor · <span class="elogos" data-logos="ChatGPT,Perplexity,Gemini,Google AI Overviews,Copilot,Grok"></span>6 engines</div>
+        <div class="bi"><span class="n">1</span><div><b style="font-weight:500">ChatGPT now cites /pricing in 5 of 6 target answers</b><em>up from 2 after the FAQ block shipped Oct 3</em><div class="ev"><button data-action="brief.openEvidence" data-go="f-impact">Evidence · 6 answers</button><button data-action="impact.open" data-go="f-impact">Impact ledger</button></div></div><button data-action="brief.openInChat" class="btn sm" data-go="f-impact">Open in Chat</button></div>
+        <div class="bi"><span class="n">2</span><div><b style="font-weight:500">Perplexity −6 pts, mostly engine-wide</b><em>benchmark panel moved −4 too · 28% from one lost citation</em><div class="ev"><button data-action="brief.openEvidence" data-go="f-why">Evidence · 412 answers</button><button data-action="brief.openEvidence" data-drawer="bench">Engine weather</button></div></div><button data-action="why.open" class="btn sm pri" data-go="f-why">Why did it move</button></div>
+        <div class="bi"><span class="n">3</span><div><b style="font-weight:500">Watch rule fired: a competitor entered 3 ChatGPT answers</b><em>Corvio · top 20 prompts · Oct 24</em><div class="ev"><button data-action="watch.open" data-go="f-watch">Rule</button><button data-action="brief.openEvidence" data-drawer="why-comp">3 answers</button></div></div><button data-action="brief.startSkill" class="btn sm" data-toast="Opens Chat with /beat for Corvio on these 3 prompts">Start /beat</button></div>
+        <div class="bi"><span class="n">4</span><div><b style="font-weight:500">PR #57 waits for your merge</b><em>FAQPage schema on /features · checks passed</em><div class="ev"><button data-action="pr.openDiff" data-go="f-pr">Diff · 4 files</button></div></div><button data-action="pr.review" class="btn sm" data-go="f-pr">Review</button></div>
+        <div class="foot"><b style="color:var(--ink);font-weight:500">Reply to this email to ask Chat</b><span>·</span><button data-action="brief.settings" data-go="f-brief" data-act="focusSettings" style="text-decoration:underline;text-decoration-color:#d6d3cf">Brief settings</button><span>·</span><button data-action="brief.pause" data-toast="Paused for 1 week" style="text-decoration:underline;text-decoration-color:#d6d3cf">Pause</button></div>
+       </div></div>
+      </div>
+      <div class="sec">Reply thread</div>
+      <div class="reply"><div class="rh"><span class="lgo" style="width:24px;height:24px;font-size:10px;border-radius:50%">A</span><b>Alex Kim</b><span>to brief@ansvisor.com</span><span class="t">08:14</span></div>
+       <div class="rb">Is the Perplexity drop going to recover on its own? What should we do first?<div class="q">On Mon, Oct 26, Ansvisor Chat wrote: Your morning brief…</div></div></div>
+      <div class="reply"><div class="rh"><span class="av" style="width:24px;height:24px;border-radius:7px"><svg style="width:13px;height:13px"><use href="#bot"/></svg></span><b>Ansvisor Chat</b><span>to Alex Kim</span><span class="t">08:15</span></div>
+       <div class="rb">About 40% of the drop is engine-wide and similar shifts on the benchmark panel recovered in 9 days on average. The part you can fix: <b>/blog/what-is-aeo</b> lost 8 Perplexity citations to a newer guide. First move: refresh that page. It is already attached to AC-1258.
+        <div class="chips" style="margin-top:8px"><button data-action="brief.openInChat" class="chip" data-go="f-why">Full answer in Chat</button><button data-action="brief.openEvidence" class="chip" data-drawer="why-url">8 answers</button><button data-action="brief.startSkill" class="chip" data-toast="Starts /winback in Chat for AC-1258">Start /winback</button></div>
+        <span class="gen" title="Times in GMT+3 · Europe/Istanbul" style="margin-top:8px">Generated Oct 26, 2026 · 08:15 · Data as of Oct 26, 08:00 · also saved in Chat</span></div></div>
+      <div class="chips"><span class="chip st">Replies accepted from workspace members only</span><span class="chip st">Treated as a question, never as instructions</span></div>
+     </div>
+     <div>
+      <div class="box" id="briefSet">
+       <div class="bxh"><b>Brief settings</b><div class="r"><button data-action="brief.toggle" class="sw" role="switch" aria-checked="true" aria-label="Morning brief on" data-sw="1"></button></div></div>
+       <div class="bxb">
+        <div class="lab" style="margin-top:0">Time</div>
+        <div style="display:flex;gap:6px"><button data-action="brief.openTime" class="sel2" data-menu="time" aria-haspopup="menu" style="width:110px"><span id="timeV">08:00</span><em>▾</em></button><div class="sel2" style="cursor:default;flex:1;font-size:12.5px;color:var(--mut)">Europe/Istanbul</div></div>
+        <div class="lab">Days</div>
+        <div class="days" role="group" aria-label="Days"><button data-action="brief.day" aria-pressed="true">Mon</button><button data-action="brief.day" aria-pressed="true">Tue</button><button data-action="brief.day" aria-pressed="true">Wed</button><button data-action="brief.day" aria-pressed="true">Thu</button><button data-action="brief.day" aria-pressed="true">Fri</button><button data-action="brief.day" aria-pressed="false">Sat</button><button data-action="brief.day" aria-pressed="false">Sun</button></div>
+        <div class="lab">Brands</div>
+        <button data-action="brief.brand" class="ck" role="checkbox" aria-checked="true"><span class="bx2">✓</span>Ansvisor<em>6 engines</em></button>
+        <button data-action="brief.brand" class="ck" role="checkbox" aria-checked="false"><span class="bx2"></span>Northwind CRM<em>demo brand</em></button>
+        <div class="lab">Include</div>
+        <div class="setrow"><span>What changed overnight</span><button data-action="brief.toggleSection" class="sw" role="switch" aria-checked="true" aria-label="What changed" data-sw="1"></button></div>
+        <div class="setrow"><span>Waiting for you</span><button data-action="brief.toggleSection" class="sw" role="switch" aria-checked="true" aria-label="Waiting for you" data-sw="1"></button></div>
+        <div class="setrow"><span>Fired watch rules</span><button data-action="brief.toggleSection" class="sw" role="switch" aria-checked="true" aria-label="Fired watch rules" data-sw="1"></button></div>
+        <div class="setrow"><span>Skip when nothing changed</span><button data-action="brief.toggleSection" class="sw" role="switch" aria-checked="true" aria-label="Skip when nothing changed" data-sw="1"></button></div>
+        <div class="setrow"><span>Allow reply by email</span><button data-action="brief.toggleSection" class="sw" role="switch" aria-checked="true" aria-label="Allow reply by email" data-sw="1"></button></div>
+        <div class="chips" style="margin-top:10px"><span class="chip st">1 short AI call · ~0.05% of AI limit</span></div>
+        <div style="display:flex;gap:6px;margin-top:12px"><button data-action="brief.sendTest" class="btn sm" data-toast="Test brief sent to Alex Kim">Send test brief</button><button data-action="brief.showOnHome" class="btn sm gh" data-toast="Also shown on Chat Home every weekday">Show on Home</button></div>
+       </div>
+      </div>
+     </div>
+    </div>
+   </div>
+  </section>
+
+  <aside class="drawer" id="drawer" aria-label="Evidence" role="dialog" aria-modal="false">
+   <div class="dh"><div><b id="dT"></b><em id="dS"></em></div><button data-action="evidence.close" class="btn sm gh x" data-act="closeDrawer" aria-label="Close evidence">✕</button></div>
+   <div class="db" id="dB"></div>
+   <div class="df" id="dF"></div>
+  </aside>
+ </main>
+</div>
+
+<div class="menu" id="menu" role="menu"></div>
+<div class="scrim" id="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mT">
+ <div class="mh2"><span class="pill dk">Needs your click</span><h3 id="mT">Open a pull request?</h3><button data-action="modal.close" class="btn sm gh x" data-act="closeModal" aria-label="Close">✕</button></div>
+ <div class="kv"><span>Repository</span><span id="mRepo">ansvisor/website</span><span>Branch</span><span><code>ansvisor/faq-schema-features</code> → main</span><span>Files</span><span>4 · +46 −3</span><span>Targets</span><span>4 Perplexity and ChatGPT prompts</span></div>
+ <div class="warn">Creates a branch and a PR. Nothing is merged; you merge on GitHub.</div>
+ <div class="mft"><button data-action="modal.cancel" class="btn" data-act="closeModal">Cancel</button><button data-action="pr.confirmOpen" class="btn pri" data-act="confirmPR">Open pull request</button></div>
+</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+function $(s,r){return (r||document).querySelector(s)}function $$(s,r){return (r||document).querySelectorAll(s)}
+var CDN='https://cdn.prod.website-files.com/69e606308fb6f96fb911b251/';
+var LOGO={'ChatGPT':'69fd90d2be06050c801a349d_ChatGPT%20Logo%20-%20black%20icon.svg','Perplexity':'69f5dd5331bd4a7b8b98ebe2_perplexity-icon.svg','Gemini':'6adcadbded4b75803cfc6b09_ansvisor-app-gemini.svg','Google AI Overviews':'6adcadbdf81d5f0a4a74b17d_ansvisor-app-ai_mode.svg','Google AI Mode':'6adcadbded4b75803cfc6b09_ansvisor-app-gemini.svg','Copilot':'6adcadbdfc8e1a60a0e62d66_ansvisor-app-copilot.svg','Microsoft Copilot':'6adcadbdfc8e1a60a0e62d66_ansvisor-app-copilot.svg','Claude':'6adcadbd0f63c1ef2d5386b1_ansvisor-app-claude.svg'};
+function logo(n){return LOGO[n]?'<img class="elogo" src="'+CDN+LOGO[n]+'" alt="" aria-hidden="true">':'<span class="elogo mono" aria-hidden="true">'+(n=='Grok'?'X':n=='Cursor'?'Cu':n.charAt(0))+'</span>'}
+function logoize(r){r=r||document;$$('[data-logo]',r).forEach(function(e){if(e.dataset.lg)return;e.dataset.lg=1;e.insertAdjacentHTML('afterbegin',logo(e.dataset.logo))});
+ $$('[data-logos]',r).forEach(function(e){if(e.dataset.lg)return;e.dataset.lg=1;e.innerHTML=e.dataset.logos.split(',').map(logo).join('')});
+ $$('.kv span, .ans .h b',r).forEach(function(e){var t=e.textContent;if((LOGO[t]||t=='Grok')&&!e.dataset.lg){e.dataset.lg=1;e.insertAdjacentHTML('afterbegin',logo(t))}})}
+function toast(t){var x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(x._t);x._t=setTimeout(function(){x.classList.remove('on')},2200)}
+var SCR={
+ 'f-why':{sb:'chat',c:'<a data-action="nav.breadcrumb" class="cl" href="CHAT-mockup-v2.html#s-home">Chat</a> <span>›</span> <b>Why did Perplexity drop this week?</b> <span class="pill ok">Answered</span>',r:'<button data-action="impact.share" class="btn sm" data-toast="Shared with your team (view only)">Share</button><button data-action="impact.save" class="btn sm" data-toast="Saved to Files as a PDF with the evidence">Save</button>'},
+ 'f-impact':{sb:'rep',c:'<button data-action="impact.openReports" class="cl" data-toast="Opens Reports">Reports</button> <span>›</span> <b>What Ansvisor did for you</b>',r:'<button data-action="impact.scheduleMonthly" class="btn sm" data-toast="Scheduled: emailed on the 1st of each month">Schedule monthly</button>'},
+ 'f-mcp':{sb:'set',c:'<button data-action="header.openSettings" class="cl" data-toast="Opens Settings">Settings</button> <span>›</span> <button data-action="header.openIntegrations" class="cl" data-toast="Opens Settings › Integrations">Integrations</button> <span>›</span> <b>MCP server</b>',r:''},
+ 'f-pr':{sb:'chat',c:'<a data-action="nav.breadcrumb" class="cl" href="CHAT-mockup-v2.html#s-home">Chat</a> <span>›</span> <b>Schema and llms.txt for /features</b> <span class="pill ok">Ready</span>',r:'<button data-action="pr.backToCause" class="btn sm" data-go="f-why">Back to cause</button>'},
+ 'f-watch':{sb:'chat',c:'<a data-action="nav.breadcrumb" class="cl" href="CHAT-mockup-v2.html#s-home">Chat</a> <span>›</span> <b>Watch rules</b>',r:'<button data-action="watch.new" class="btn sm pri" data-act="newRule">New rule</button>'},
+ 'f-brief':{sb:'chat',c:'<a data-action="nav.breadcrumb" class="cl" href="CHAT-mockup-v2.html#s-home">Chat</a> <span>›</span> <b>Morning brief</b>',r:'<button data-action="brief.sendTest" class="btn sm" data-toast="Test brief sent to Alex Kim">Send test</button>'}
+};
+var counted=0;
+function countUp(){if(counted)return;counted=1;if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ $$('#f-impact .kp b .num').forEach(function(e){var full=e.textContent,t0=performance.now();e.style.minWidth=e.offsetWidth+'px';
+  (function f(t){var k=Math.min(1,(t-t0)/520),ez=1-Math.pow(1-k,3);e.textContent=full.replace(/\d+/g,function(d){return Math.round(+d*ez)});if(k<1)requestAnimationFrame(f);else e.textContent=full})(t0);setTimeout(function(){e.textContent=full},600)})}
+function go(id,noHash){if(id=='f-probe'){id='f-why';noHash=false}if(!SCR[id])id='f-why';
+ $$('.scr').forEach(function(s){s.classList.toggle('on',s.id==id)});
+ $$('[data-nav]').forEach(function(a){if(a.dataset.nav==id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+ $$('.side .nv[data-sb]').forEach(function(n){n.classList.toggle('on',n.dataset.sb==SCR[id].sb)});
+ $('#crumb').innerHTML=SCR[id].c;$('#topR').innerHTML=SCR[id].r;
+ closeDrawer();closeMenu();
+ if(id=='f-impact')countUp();
+ if(!noHash&&location.hash!='#'+id)history.replaceState(null,'','#'+id);
+ document.title=({'f-why':'Why did it move','f-impact':'Impact ledger','f-mcp':'MCP server','f-pr':'Pull request','f-watch':'Watch rules','f-brief':'Morning brief'})[id]+' · Ansvisor Chat'}
+window.addEventListener('hashchange',function(){go(location.hash.slice(1),true)});
+
+/* ---------- causes ---------- */
+var CAUSES=[
+ {k:'engine',share:40,t:'Engine-wide change on Perplexity · Oct 24',e:'about 2.4 of 6 pts · benchmark panel −4, 9 of 11 category brands moved',conf:['hi','High'],ev:[['Engine','Benchmark panel −4','bench'],['Brands','9 of 11 moved','bench']],rows:[['best AEO platform','—','—','Oct 24'],['AI visibility tracking tools','—','—','Oct 24']],eng:true},
+ {k:'url',share:28,t:'Lost citation · /blog/what-is-aeo',e:'about 1.7 pts · 8 answers now cite lumora.io/aeo-guide-2026',conf:['hi','High'],ev:[['URL','ansvisor.com/blog/what-is-aeo','why-url'],['Answers','8','why-url']],rows:[['what is answer engine optimization','ansvisor.com/blog/what-is-aeo','lumora.io/aeo-guide-2026','Oct 23'],['AEO vs SEO difference','ansvisor.com/blog/what-is-aeo','lumora.io/aeo-guide-2026','Oct 23'],['how to get cited by Perplexity','ansvisor.com/blog/what-is-aeo','lumora.io/aeo-guide-2026','Oct 24'],['AEO checklist 2026','ansvisor.com/blog/what-is-aeo','corvio.com/blog/aeo','Oct 25']]},
+ {k:'comp',share:14,t:'Competitor new page · Lumora /aeo-guide-2026',e:'about 0.8 pts · published Oct 22, cited in 4 answers you had',conf:['md','Medium'],ev:[['Page','lumora.io/aeo-guide-2026','why-comp'],['Diff','What the page does differently','why-comp']],rows:[['AEO tools for SaaS','ansvisor.com/features','lumora.io/aeo-guide-2026','Oct 23'],['AI search visibility guide','ansvisor.com/blog/what-is-aeo','lumora.io/aeo-guide-2026','Oct 24']]},
+ {k:'audit',share:8,t:'Schema change · FAQPage removed from /features',e:'about 0.5 pts · Audit diff Oct 21',conf:['md','Medium'],ev:[['Audit','FAQPage ✗ since Oct 21','why-audit'],['Prompts','4 affected','why-audit']],rows:[['Ansvisor features','ansvisor.com/features','not cited','Oct 22'],['AEO platform with Action Center','ansvisor.com/features','not cited','Oct 23']]},
+ {k:'prompts',share:5,t:'Prompt-set edit · 3 prompts added Oct 23',e:'about 0.3 pts · new prompts start without history',conf:['hi','High'],ev:[['Prompts','3 added by Sam Lee','why-prompts']],rows:[['AEO agency pricing','new','—','Oct 23'],['GEO for ecommerce','new','—','Oct 23']]},
+ {k:'swing',share:5,t:'Normal weekly swing',e:'about 0.3 pts · inside the ±1.5 pts band of the last 12 weeks',conf:['hi','High'],ev:[['Swing','12-week band','why-swing']],rows:[]}
+];
+function renderCauses(){$('#causes').innerHTML=CAUSES.map(function(c,i){
+ var body=c.rows.length?'<div class="mt"><div class="r"><span>Prompt</span><span>Cited before</span><span>Cited now</span><span>Date</span><span></span></div>'+c.rows.map(function(r){return '<div class="r"><span title="'+r[0]+'">'+r[0]+'</span><span title="'+r[1]+'"><code'+(r[1].indexOf('ansvisor')>-1?' style="color:var(--ink)"':'')+'>'+r[1]+'</code></span><span title="'+r[2]+'"><code>'+r[2]+'</code></span><span>'+r[3]+'</span><button data-action="why.openEvidence" class="btn sm gh" data-drawer="why-'+c.k+'" data-focus="Answer · '+r[0]+'">Answer</button></div>'}).join('')+'</div>':'<div style="font-size:12.5px;color:var(--mut)">No single prompt explains this part. <button data-action="why.openEvidence" class="num" data-drawer="why-swing">See the 12-week band</button></div>';
+ return '<div class="cause"><button data-action="why.toggleCause" class="czh" aria-expanded="'+(i==1)+'" aria-controls="cz'+i+'"><span class="share" style="--w:'+c.share+'%"><b>'+c.share+'%</b><i></i></span><span class="czt"><b title="'+c.t+'">'+logo('Perplexity')+c.t+'</b><em title="'+c.e+'">'+c.e+'</em></span><span class="conf '+c.conf[0]+'">'+c.conf[1]+' confidence</span><span class="car">▾</span></button>'+
+ '<div class="czc chips">'+c.ev.map(function(e){return '<button data-action="why.openEvidence" class="chip" data-drawer="'+e[2]+'"><i>'+e[0]+'</i>'+e[1]+'</button>'}).join('')+'</div>'+
+ '<div class="czb" id="cz'+i+'"'+(i==1?'':' hidden')+'>'+body+'</div></div>'}).join('')}
+
+/* ---------- drawer content ---------- */
+function ans(engine,date,txt,cits){return '<div class="ans"><div class="h"><b>'+engine+'</b><span>'+date+'</span></div>'+txt+cits.map(function(c){return '<span class="cit'+(c.indexOf('ansvisor')>-1?' mine':'')+'">↗ '+c+'</span>'}).join('')+'</div>'}
+var DR={
+ 'why-total':['Perplexity visibility · 58 → 52','412 answers · 120 tracked prompts · Oct 19–26','<div class="kv"><span>Last week</span><span>58 · 214 answers</span><span>This week</span><span>52 · 198 answers</span><span>Normal band</span><span>±1.5 pts</span><span>Sample</span><span>enough for High confidence</span></div>'+ans('Perplexity','Oct 25','For AEO tracking, <mark>Ansvisor</mark> and Lumora are the most cited options…',['lumora.io/aeo-guide-2026','ansvisor.com/pricing'])],
+ 'bench':['Engine weather · benchmark panel','Ansvisor public prompts · 120 prompts · 11 brands per category · no customer data','<div class="kv"><span>Perplexity</span><span class="neg">−4 today · citation behaviour changed Oct 24</span><span>ChatGPT</span><span>±0</span><span>Gemini</span><span>+1</span><span>Google AI Overviews</span><span>±0</span><span>Copilot</span><span>+1</span><span>Grok</span><span>±0</span></div><div class="sec">Sample benchmark prompts</div>'+ans('Perplexity','Oct 24','best customer support software for startups',['cites 3 sources, down from 6 last week'])+ans('Perplexity','Oct 24','top project management tools 2026',['cites 4 sources, down from 7 last week'])],
+ 'why-url':['Lost citation · /blog/what-is-aeo','8 Perplexity answers · Oct 23–25','<div class="kv"><span>Cited before</span><span>ansvisor.com/blog/what-is-aeo</span><span>Cited now</span><span>lumora.io/aeo-guide-2026 (6) · corvio.com/blog/aeo (2)</span><span>Your page updated</span><span>Mar 12</span></div>'+ans('Perplexity','Oct 24','Answer engine optimization means shaping content so AI engines quote it. A 2026 guide lists…',['lumora.io/aeo-guide-2026','corvio.com/blog/aeo'])+ans('Perplexity','Oct 17','Answer engine optimization means… <mark>Ansvisor</mark> explains it as…',['ansvisor.com/blog/what-is-aeo'])],
+ 'why-comp':['Competitor new page · Lumora','lumora.io/aeo-guide-2026 · published Oct 22','<div class="kv"><span>Cited in</span><span>4 answers you had last week</span><span>What it adds</span><span>2026 date in title · FAQ block · 14 stats with sources</span><span>Your page</span><span>no FAQ block · last updated Mar 12</span></div>'+ans('Perplexity','Oct 24','Per the 2026 AEO guide, teams should track citations per engine…',['lumora.io/aeo-guide-2026'])],
+ 'why-audit':['Schema change · /features','Audit diff · Oct 21','<div class="kv"><span>Before</span><span>Product ✓ · FAQPage ✓</span><span>After</span><span>Product ✓ · FAQPage ✗</span><span>Change</span><span>template update on the site</span><span>Affected prompts</span><span>4</span></div>'+ans('Perplexity','Oct 23','Ansvisor features include Action Center and…',['ansvisor.com/pricing'])],
+ 'why-prompts':['Prompt-set edit','3 prompts added Oct 23 by Sam Lee','<div class="kv"><span>Added</span><span>AEO agency pricing · GEO for ecommerce · AI SEO for marketplaces</span><span>Effect</span><span>new prompts start without history, average moves −0.3</span></div>'],
+ 'why-swing':['Normal weekly swing','Perplexity · last 12 weeks','<div class="kv"><span>Band</span><span>±1.5 pts</span><span>Median weekly move</span><span>0.9 pts</span><span>This week, after other causes</span><span>0.3 pts</span></div>'],
+ 'why-engine':['Engine-wide change','Perplexity · Oct 24','<div class="kv"><span>Benchmark panel</span><span>−4</span><span>Category brands moved</span><span>9 of 11</span></div>'],
+ 'imp-all':['October summary','14 actions shipped · Oct 1–31','<div class="kv"><span>Measured</span><span>10 · 14-day verdict in</span><span>Improved</span><span>9</span><span>No meaningful change</span><span>1</span><span>Pending</span><span>2 · before the 14-day verdict</span><span>Next checkpoint</span><span>30 days · confirmed · from Nov 2</span><span>Not measurable</span><span>2 · no tracked prompt</span><span>Citations won</span><span>+63 on target prompts · control +7</span></div>']
+};
+var CPN=[[7,'Pending · early signal'],[14,'First verdict'],[30,'Confirmed'],[90,'Lasting effect']];
+var IMP=[
+ {id:'imp1',eng:'ChatGPT',a:'FAQ block on /pricing',src:'AC-1241 · agent run, you approved',sh:'Oct 3',base:'Sep 19 – Oct 2',n:6,b:'2 of 6',af:'5 of 6',ctl:'+0 of 18',lift:'+50 pts',oc:['imp','Improved'],cf:['hi','High'],cp:[['pen','+33','Oct 10'],['imp','+50','Oct 17'],['up','Nov 2','Nov 2'],['up','Jan 1','Jan 1']]},
+ {id:'imp2',eng:'Perplexity,ChatGPT',a:'FAQPage schema on /features',src:'PR #42 · merged by Alex Kim',sh:'Oct 6',base:'Sep 22 – Oct 5',n:4,b:'41%',af:'63%',ctl:'44% → 46%',lift:'+20 pts',oc:['imp','Improved'],cf:['md','Medium'],cp:[['pen','+12','Oct 13'],['imp','+20','Oct 20'],['up','Nov 5','Nov 5'],['up','Jan 4','Jan 4']]},
+ {id:'imp3',eng:'Perplexity,Gemini',a:'Refresh /blog/aeo-checklist',src:'AC-1236 · Content Editor',sh:'Oct 9',base:'Sep 25 – Oct 8',n:8,b:'17 cit.',af:'29 cit.',ctl:'22 → 23',lift:'+11 cit.',oc:['imp','Improved'],cf:['md','Medium'],cp:[['pen','+6','Oct 16'],['imp','+11','Oct 23'],['up','Nov 8','Nov 8'],['up','Jan 7','Jan 7']]},
+ {id:'imp5',eng:'ChatGPT,Perplexity,Google AI Overviews',a:'llms.txt for ansvisor.com',src:'Chat · copied as agent task',sh:'Oct 10',base:'Sep 26 – Oct 9',n:12,b:'58%',af:'59%',ctl:'57% → 58%',lift:'±0',oc:['nmc','No meaningful change'],cf:['lo','Low'],cp:[['pen','+1','Oct 17'],['nmc','±0','Oct 24'],['up','Nov 9','Nov 9'],['up','Jan 8','Jan 8']]},
+ {id:'imp4',eng:'ChatGPT,Perplexity',a:'Comparison page /vs-lumora',src:'AC-1250 · Webflow',sh:'Oct 12',base:'Sep 28 – Oct 11',n:5,b:'0 of 5',af:'3 of 5',ctl:'+0 of 15',lift:'+60 pts',oc:['imp','Improved'],cf:['hi','High'],cp:[['pen','+40','Oct 19'],['imp','+60','Oct 26'],['up','Nov 11','Nov 11'],['up','Jan 10','Jan 10']]},
+ {id:'imp7',eng:'Perplexity',a:'Reddit answer for “AEO tools”',src:'AC-1247 · outreach, sent by you',sh:'Oct 15',n:0,b:'—',af:'—',ctl:'—',lift:'—',oc:['nm','Not measurable'],cf:['','—'],cp:[['na','—'],['na','—'],['na','—'],['na','—']]},
+ {id:'imp8',eng:'ChatGPT,Copilot',a:'Answer block on /integrations/hubspot',src:'AC-1255 · Content Editor',sh:'Oct 17',base:'Oct 3 – Oct 16',n:5,b:'1 of 5',af:'3 of 5',ctl:'+0 of 15',lift:'+40 pts',oc:['pen','Pending · early signal'],cf:['','—'],cp:[['pen','+40','Oct 24'],['up','Oct 31','Oct 31'],['up','Nov 16','Nov 16'],['up','Jan 15','Jan 15']]},
+ {id:'imp6',eng:'Gemini,Google AI Overviews',a:'Product schema on /integrations',src:'PR #49 · merged by Sam Lee',sh:'Oct 22',base:'Oct 8 – Oct 21',n:6,b:'3 of 6',af:'…',ctl:'…',lift:'…',oc:['pen','Pending · 7d on Oct 29'],cf:['','—'],cp:[['up','Oct 29','Oct 29'],['up','Nov 5','Nov 5'],['up','Nov 21','Nov 21'],['up','Jan 20','Jan 20']]}
+];
+function cpTip(c,i){var n=CPN[i];if(c[0]=='na')return 'Day '+n[0]+' · not measurable';if(c[0]=='up')return 'Day '+n[0]+' · '+n[1]+' · due '+c[2];return 'Day '+n[0]+' · '+(i==0?n[1]:n[1]+' · '+(c[0]=='imp'?'Improved':'No meaningful change'))+' · '+c[2]+' · '+c[1]+' vs control'}
+function cpStrip(r){return '<span class="cps" role="group" aria-label="Checkpoints">'+r.cp.map(function(c,i){var t=cpTip(c,i);return '<button data-action="impact.openEvidence" class="cp '+c[0]+'" title="'+t+'" aria-label="'+t+'" data-drawer="'+r.id+'" data-focus="'+t+'">'+c[1]+'</button>'}).join('')+'</span>'}
+IMP.forEach(function(r){var lbl={pen:'Pending · early signal',imp:'',nmc:'',up:'Not reached',na:''};
+ DR[r.id]=[r.a,r.src+' · shipped '+r.sh,
+ r.oc[0]=='nm'?'<div class="kv"><span>Why</span><span>no tracked prompt targets this action</span><span>Next</span><span>add 3 prompts from Prompt Suggestions to measure it</span></div>':
+ '<div class="kv"><span>Baseline</span><span>'+r.base+' · 14 days before ship</span><span>Target prompts</span><span>'+r.n+' · frozen at creation</span><span>Before</span><span>'+r.b+'</span><span>Latest</span><span>'+r.af+'</span><span>Control prompts</span><span>'+r.ctl+' · 18 similar, untouched</span><span>Lift vs control</span><span>'+r.lift+'</span><span>Outcome</span><span>'+r.oc[1]+(r.cf[1]!='—'?' · '+r.cf[1]+' confidence':'')+'</span><span>Same window</span><span>no engine-wide change on these engines</span><span>Who did it</span><span>'+r.src+'</span></div>'+
+ '<div class="sec">Checkpoints · scheduled tracking data, no extra cost</div><div class="cpt">'+r.cp.map(function(c,i){return '<div><span>Day '+CPN[i][0]+'</span><span>'+CPN[i][1]+'</span><span>'+(c[0]=='up'?'due '+c[2]:c[2])+'</span><span>'+(c[0]=='up'?'—':c[1])+'</span></div>'}).join('')+'</div><div class="sec">Answers behind it</div>'+
+ ans('ChatGPT','Oct 15','Ansvisor pricing starts with Starter at $49 a month… <mark>Ansvisor</mark> also offers a 14-day trial.',['ansvisor.com/pricing'])+ans('ChatGPT','Oct 1','Pricing for AEO tools varies; Lumora and Corvio list plans from…',['lumora.io/pricing','corvio.com/pricing'])]});
+function renderImp(f){f=f||'all';var rows=IMP.filter(function(r){return f=='all'||r.oc[0]==f});
+ $('#impTbl').innerHTML='<div class="tr th"><span>Action</span><span>Before → After</span><span>Control</span><span>Lift</span><span class="cps" title="7 days: pending, early signal · 14: first verdict · 30: confirmed · 90: lasting"><span>7d</span><span>14d</span><span>30d</span><span>90d</span></span><span>Outcome</span><span>Confidence</span></div>'+
+ (rows.length?rows.map(function(r){function nb(v,l){return v=='—'||v=='…'?'<span style="color:var(--mut2)">'+v+'</span>':'<button data-action="impact.openEvidence" class="num" data-drawer="'+r.id+'" data-focus="'+l+' · '+v+'">'+v+'</button>'}
+ return '<div class="tr" data-row="'+r.id+'"><span><b title="'+r.a+'"><span class="elogos">'+r.eng.split(',').map(logo).join('')+'</span>'+r.a+'</b><em title="'+r.src+'">'+r.src+'</em><em>Shipped '+r.sh+' · '+(r.n?nb(r.n+' prompts','Target prompts'):'no tracked prompt')+'</em></span><span>'+nb(r.b,'Before')+' → '+nb(r.af,'After')+'</span><span>'+nb(r.ctl,'Control')+'</span><span class="'+(/^\+/.test(r.lift)?'up':'')+'">'+(/^\+/.test(r.lift)?'▲ ':'')+nb(r.lift.replace(/^\+/,''),'Lift vs control')+'</span>'+cpStrip(r)+'<span title="'+r.oc[1]+'"><span class="oc '+r.oc[0]+'">'+r.oc[1]+'</span></span><span>'+(r.cf[0]?'<span class="conf '+r.cf[0]+'">'+r.cf[1]+'</span>':'—')+'</span></div>'}).join(''):'<div class="tr"><span style="color:var(--mut)">No actions with this outcome in October</span></div>')}
+function openDrawer(k,o){var d=DR[k];if(!d)return;o=o||{};$('#dT').textContent=d[0];$('#dS').textContent=d[1];
+ $('#dB').innerHTML=(o.focus?'<div class="focus">'+o.focus+'</div>':'')+d[2];logoize($('#dB'));
+ $('#dF').innerHTML='<button data-action="evidence.openAnswers" class="btn sm" data-toast="Opens all answers in Visibility › Answers, filtered">Open answers</button><button data-action="evidence.copyRecipe" class="btn sm" data-toast="Recipe copied: filters + API call to re-run this number">Copy recipe</button>'+(k.indexOf('imp')==0?'<button data-action="impact.openHistory" class="btn sm gh" data-toast="Opens this action in Action Center › History · same numbers">Action Center › History</button>':'');
+ $('#drawer').classList.add('on');$('#main').classList.add('dpush');$$('.tr[data-row]').forEach(function(t){t.classList.toggle('sel',t.dataset.row==k)})}
+function closeDrawer(){$('#drawer').classList.remove('on');$('#main').classList.remove('dpush');$$('.tr.sel').forEach(function(t){t.classList.remove('sel')})}
+
+/* ---------- MCP plan preview ---------- */
+var mplan='growth',mhost='ChatGPT';
+var KEYS=[['Alex Kim','Admin','7Qx2','ChatGPT','12 min ago'],['Sam Lee','Manager','b81K','Claude','Yesterday'],['Jordan Park','Analyst','p0Tz','Cursor','Oct 21'],['Riley Chen','Agency partner','r5Jw','ChatGPT','Oct 19']];
+function full(){return mplan=='growth'||mplan=='ent'}
+function keyScopes(role){var w=role=='Admin'||role=='Manager';if(!full()||!w)return ['READ'];return ['READ','WRITE','EXECUTE']}
+function badge(c){return '<span class="cls '+({READ:'rd',WRITE:'wr',EXECUTE:'ex'})[c]+'">'+c+'</span>'}
+function keyRow(k){var sc=keyScopes(k[1]);var tip=k[1]=='Agency partner'?'Agency partner · read only · shared brands only':k[1]=='Analyst'?'Analyst · read only':!full()?'WRITE and EXECUTE through MCP need Growth':k[1]+' · EXECUTE always needs a click';
+ return '<div class="kt"><span><b style="font-weight:500" title="'+k[0]+' · '+k[1]+'">'+k[0]+' · '+k[1]+'</b><code>ans_mcp_…'+k[2]+'</code></span><span>'+k[3]+'</span><span title="'+tip+'">'+sc.map(badge).join(' ')+'</span><span>'+k[4]+'</span><button data-action="mcp.revokeKey" class="btn sm gh" data-revoke>Revoke</button></div>'}
+function renderMcp(){var tr=mplan=='trial',st=mplan=='starter';
+ $$('[data-mplan]').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.mplan==mplan)});
+ var g=$('#mcpGate');g.hidden=!(tr||st);
+ g.innerHTML=tr?'<span class="lk">Trial</span><span>MCP is not part of the 14-day trial · READ tools start on Starter, WRITE and EXECUTE on Growth</span><button data-action="plan.compare" class="btn sm pri" data-toast="Opens plans · Starter $49 adds MCP READ tools">See plans</button>':st?'<span class="lk">Starter</span><span>READ tools work in Claude, ChatGPT and Cursor · WRITE and EXECUTE through MCP need Growth</span><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens plans · Growth $249 adds MCP WRITE and EXECUTE">Upgrade to Growth</button>':'';
+ $('#mcpPlanChip').textContent=tr?'Trial · not available':st?'Starter · READ only':(mplan=='ent'?'Enterprise':'Growth')+' · READ, WRITE, EXECUTE';
+ var sw=$('#mcpSw');sw.disabled=tr;sw.setAttribute('aria-checked',!tr);$('#mcpOnL').textContent=tr?'Off':'On';$('#epCopy').disabled=tr;$('#epCopy').classList.toggle('dis',tr);
+ var H=[['C','Claude','Connect from Claude › Connectors with your key','2 people · last used 1 h ago'],['G','ChatGPT','Add Ansvisor in ChatGPT › Apps','3 people · last used 12 min ago'],['Cu','Cursor','Add the endpoint to your Cursor MCP settings','Not connected yet']];
+ $('#hosts').innerHTML=H.map(function(h,i){h[0]=LOGO[h[1]]?'<img src="'+CDN+LOGO[h[1]]+'" alt="">':h[0];var con=!tr&&i<2;var em=tr?'Available from Starter':st?'READ tools · '+(con?h[3]:h[2]):(con?h[3]:h[2]);
+  var stc=tr?'<span class="lk">Starter+</span>':con?'<span class="okk"><span class="tk sm"></span>Connected</span>':'<span style="font-size:12px;color:var(--mut2)">Not connected</span>';
+  var btn=tr?'<button data-action="plan.upgrade" class="btn sm" data-toast="Opens plans · MCP starts on Starter">Upgrade</button>':con?'<button data-action="mcp.hostSetup" class="btn sm" data-toast="Opens setup steps for '+h[1]+'">Setup</button>':'<button data-action="mcp.hostConnect" class="btn sm pri" data-toast="Creates your '+h[1]+' key and copies the config">Connect</button>';
+  return '<div class="arow"><span class="lgo">'+h[0]+'</span><div>'+h[1]+'<em title="'+em+'">'+em+'</em></div><span class="st3">'+stc+'</span>'+btn+'</div>'}).join('');
+ var kb=$('#keys').closest('.box');kb.classList.toggle('locked',tr);$('#newKeyBtn').disabled=tr;$('#newKeyBtn').classList.toggle('dis',tr);
+ $('#keys').innerHTML='<div class="kt th"><span>Person · role</span><span>Assistant</span><span>Scopes</span><span>Last used</span><span></span></div>'+(tr?'<div class="lockwrap"><div class="blur" inert aria-hidden="true">'+KEYS.slice(0,3).map(keyRow).join('')+'</div><div class="lockov"><span class="lockic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Ansvisor inside every teammate&#39;s assistant</b><span>One key per person, same role and approvals. MCP starts on Starter.</span><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens plans · Starter $49 adds MCP READ tools">Upgrade</button></div></div>':KEYS.map(keyRow).join(''));
+ var S=[['READ','Read workspace data','visibility, prompts, citations, Action Center, reports','Starter+',!tr,tr],['WRITE','Create actions, prompts, drafts, watch rules','approval card in the assistant','Growth+',full(),!full()],['EXECUTE','Publish, open a pull request, send email','always a click · in the assistant card or in Ansvisor','Growth+',false,!full()]];
+ $('#scopes').innerHTML=S.map(function(x){return '<div class="srow"><span>'+badge(x[0])+'</span><div>'+x[1]+'<em title="'+x[2]+'">'+x[2]+'</em></div><span>'+x[3]+'</span><button data-action="mcp.toggleScope" class="sw" role="switch" aria-checked="'+x[4]+'" aria-label="'+x[0]+' scope" data-sw="1"'+(x[5]?' disabled':'')+'></button></div>'}).join('');
+ renderHost()}
+function renderHost(){var tr=mplan=='trial',st=mplan=='starter';
+ $$('[data-host]').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.host==mhost)});
+ var steps=[['Read lost citations on Perplexity','2 pages · 412 answers','READ'],['Compare with the pages cited now','lumora.io/aeo-guide-2026','READ'],['Draft refreshes in Content Editor','/blog/what-is-aeo · /features','WRITE'],['Attach to AC-1258 and set a follow-up check','Nov 9 · scheduled tracking, no extra cost','WRITE']];
+ if(tr){$('#hostSay').textContent='Ansvisor isn\'t connected to this assistant yet.';$('#appWrap').innerHTML='<div class="lockwrap" style="border-radius:14px"><div class="blur app-card" inert aria-hidden="true">'+steps.map(function(x,i){return '<div class="stp"><span class="sn">'+(i+1)+'</span><div>'+x[0]+'<em>'+x[1]+'</em></div>'+badge(x[2])+'</div>'}).join('')+'</div><div class="lockov"><span class="lockic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><b>Ask Ansvisor from Claude, ChatGPT or Cursor</b><span>Read your visibility data in the assistant you already use. From Starter.</span><button data-action="plan.upgrade" class="btn sm pri" data-toast="Opens plans · Starter $49 adds MCP READ tools">Upgrade</button></div></div>';$('#hostFoot').textContent='Same rule in Claude, ChatGPT and Cursor';return}
+ $('#hostSay').textContent=st?'I\'ll use Ansvisor for this. Starter can run the read steps here:':'I\'ll use Ansvisor for this. Here is the plan it proposes:';
+ $('#appWrap').innerHTML='<div class="app-card" id="appCard"><div class="ah"><span class="lg">A</span><b>Ansvisor</b><span style="color:var(--mut)">· /winback plan</span><span class="r"><span class="pill">MCP App</span></span></div>'+
+  steps.map(function(x,i){var lk=st&&x[2]!='READ';return '<div class="stp'+(lk?' lockd':'')+'"><span class="sn">'+(i+1)+'</span><div>'+x[0]+'<em>'+x[1]+'</em></div>'+(lk?'<span class="lk">Growth+</span>':badge(x[2]))+'</div>'}).join('')+
+  '<div class="af"><span class="chip st" style="white-space:nowrap">host model · ~0.1% AI limit</span><div class="r">'+(st?'<button data-action="mcp.openInAnsvisor" class="btn sm" data-toast="Opens this plan in Ansvisor Chat, where your role can run steps 3–4">Open in Ansvisor</button><button data-action="mcp.runReadSteps" class="btn sm pri" data-act="runRead">Run read steps</button>':'<button data-action="mcp.openInAnsvisor" class="btn sm" data-toast="Opens this plan in Ansvisor Chat">Open in Ansvisor</button><button data-action="mcp.approvePlan" class="btn sm pri" id="approveApp">Approve plan</button>')+'</div></div></div>';
+ $('#hostFoot').textContent='Rendered by the Ansvisor MCP App inside '+mhost+' · same plan rules in every assistant'}
+/* ---------- PR ---------- */
+var DIFF={schema:[['h','','@@ src/pages/features.astro @@'],['','41','<Layout title="Features · Ansvisor">'],['a','42','  <script type="application/ld+json" set:html={JSON.stringify({'],['a','43','    "@context": "https://schema.org",'],['a','44','    "@type": "FAQPage",'],['a','45','    "mainEntity": ['],['a','46','      { "@type": "Question",'],['a','47','        "name": "Which AI engines does Ansvisor track?",'],['a','48','        "acceptedAnswer": { "@type": "Answer",'],['a','49','          "text": "ChatGPT, Perplexity, Gemini, Google AI Overviews, Copilot and Grok on Growth." } },'],['a','50','      { "@type": "Question",'],['a','51','        "name": "Does Ansvisor publish changes by itself?",'],['a','52','        "acceptedAnswer": { "@type": "Answer",'],['a','53','          "text": "No. Every publish, merge or external send needs your click." } }'],['a','54','    ]'],['a','55','  })} />'],['','56','  <FeaturesHero />'],['a','57','  <FaqFeatures />']],
+ llms:[['h','','@@ public/llms.txt (new file) @@'],['a','1','# Ansvisor'],['a','2','> Agentic AI search execution platform. Tracks how AI engines'],['a','3','> mention and cite a brand, then plans and ships the fixes.'],['a','4',''],['a','5','## Product'],['a','6','- [Features](https://ansvisor.com/features)'],['a','7','- [Pricing](https://ansvisor.com/pricing)'],['a','8','- [What is AEO](https://ansvisor.com/blog/what-is-aeo)'],['a','9',''],['a','10','## Docs'],['a','11','- [API](https://ansvisor.com/docs/api)'],['a','12','- [MCP server](https://ansvisor.com/docs/mcp)'],['a','13','- [Self-host](https://ansvisor.com/docs/self-host)'],['a','14','- [GitHub](https://github.com/ansvisor)']],
+ robots:[['h','','@@ public/robots.txt @@'],['','1','User-agent: *'],['d','2','Disallow: /features/'],['d','3','Disallow: /blog/drafts'],['d','4','Crawl-delay: 10'],['a','2','Disallow: /blog/drafts/'],['a','3','User-agent: PerplexityBot'],['a','4','Allow: /'],['a','5','Sitemap: https://ansvisor.com/sitemap.xml']],
+ faq:[['h','','@@ src/components/FaqFeatures.astro (new file) @@'],['a','1','<section class="faq" aria-labelledby="faq-h">'],['a','2','  <h2 id="faq-h">Questions about Ansvisor features</h2>'],['a','3','  <details><summary>Which AI engines does Ansvisor track?</summary>'],['a','4','    <p>ChatGPT, Perplexity, Gemini, Google AI Overviews, Copilot and Grok on Growth.</p></details>'],['a','5','  <!-- 1 more question, same as the JSON-LD --></details>'],['a','6','</section>']]};
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function showDiff(k){$('#diff').innerHTML=DIFF[k].map(function(l){return '<div class="'+l[0]+'"><span>'+l[1]+'</span><span>'+(l[0]=='a'?'+':l[0]=='d'?'−':'')+'</span><span>'+esc(l[2])+'</span></div>'}).join('');
+ $$('[data-file]').forEach(function(b){b.setAttribute('aria-selected',b.dataset.file==k)})}
+var prState=0;
+function renderPR(){var s=[['Opened by Ansvisor','after your click'],['Checks','build, JSON-LD'],['Merged by you','on GitHub']];
+ var pill=$('#prPill');pill.className='pill'+(prState==2?' ok':prState==1?' dk':'');pill.textContent=['Not opened','Needs your click · merge on GitHub','Merged by Alex Kim'][prState];
+ $('#prSteps').innerHTML=s.map(function(x,i){var cls='';if(prState==1)cls=i<2?'g':'wait';if(prState==2)cls='g';
+  var em=x[1];if(prState>=1&&i==0)em='PR #57 · Oct 26, 14:02';if(prState>=1&&i==1)em='3 of 3 passed';if(prState==2&&i==2)em='Oct 26, 14:12 · impact window started';
+  return '<div class="p">'+(cls=='g'?'<span class="tk pop"></span>':'<span class="sn '+cls+'">'+(i+1)+'</span>')+'<div>'+x[0]+'<em>'+em+'</em></div></div>'}).join('')+
+  (prState==1?'<div style="display:flex;gap:6px;margin-top:6px"><button data-action="pr.viewOnGithub" class="btn sm" data-toast="Opens github.com/ansvisor/website/pull/57">View on GitHub</button><button data-action="demo.markMerged" class="btn sm gh" data-act="mergedPR">Mark merged (demo)</button></div>':'')+
+  (prState==2?'<div style="display:flex;gap:6px;margin-top:6px"><button data-action="impact.open" class="btn sm" data-go="f-impact">Impact ledger</button><button data-action="demo.resetPr" class="btn sm gh" data-act="resetPR">Reset demo</button></div>':'');
+ var b=$('#openPR');if(prState>0){b.disabled=true;b.textContent='PR #57 opened'}else{b.disabled=false;b.innerHTML='Open pull request'}}
+var pplan='growth';
+function renderPRPlan(){var g=pplan=='growth'||pplan=='ent';$$('[data-pplan]').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.pplan==pplan)});
+ var card=$('#openPR').closest('.card');card.classList.toggle('is-locked',!g);$('#prLock').hidden=g;[card.querySelector('.cb'),card.querySelector('.cf')].forEach(function(e){if(g)e.removeAttribute('inert');else e.setAttribute('inert','')});$('#prUpg').hidden=true;$('#prNote').textContent=g?'Nothing merges without you':'Pull request is Growth+ · agent task works now';
+ $('[data-menu="repo"]').disabled=!g;$('[data-menu="repo"]').style.opacity=g?'':'.5'}
+var TASK={'Claude Code':'Task for Claude Code · repo: ansvisor/website\n\n1. In src/pages/features.astro add the FAQPage JSON-LD below\n   the <Layout> tag (2 questions, text given).\n2. Create public/llms.txt with the content given.\n3. In public/robots.txt remove "Disallow: /features/" and\n   "Crawl-delay: 10", allow PerplexityBot, add the sitemap.\n4. Add src/components/FaqFeatures.astro and render it.\n5. Run the build. Validate JSON-LD. Open a PR, do not merge.\n\nWhy: FAQPage schema was removed Oct 21; 4 tracked prompts\nlost citations on Perplexity. Source: Ansvisor Chat.',
+ 'Cursor':'@workspace ansvisor/website\n\nGoal: restore FAQPage schema on /features and add llms.txt.\n- features.astro: insert JSON-LD (FAQPage, 2 Q&A)\n- public/llms.txt: new file (content given)\n- robots.txt: drop Disallow /features/ and Crawl-delay\n- FaqFeatures.astro: new component, render under hero\nCheck: build passes, JSON-LD valid. Leave the merge to a human.'};
+function showTask(a){$('#taskTxt').textContent=TASK[a];$$('[data-agent]').forEach(function(b){b.setAttribute('aria-selected',b.dataset.agent==a)})}
+
+/* ---------- watch ---------- */
+var RULES=[
+ {t:'Tell me if Lumora passes me on Perplexity',ch:['WHEN Lumora passes you','FOR Perplexity · all prompts','THEN notify'],sc:'Personal',dl:'In-app · Email',last:'Never',sub:'new',on:true},
+ {t:'A competitor enters ChatGPT’s answer for my top 20 prompts',ch:['WHEN competitor enters','FOR ChatGPT · top 20','THEN notify'],sc:'Workspace',dl:'In-app · Email',last:'Oct 24, 09:10',sub:'fired 3× this month',on:true,fired:'Corvio entered 3 answers: “AEO tools for SaaS”, “AI visibility tracking”, “GEO software”. Ansvisor is still cited in all 3.'},
+ {t:'/pricing loses a citation on any engine',ch:['WHEN citation lost','FOR /pricing · all engines','THEN notify'],sc:'Workspace',dl:'In-app · Email',last:'Oct 21, 14:30',sub:'fired once',on:true,fired:'Gemini dropped /pricing from 1 answer (“Ansvisor cost”) and cited it again on Oct 22.'},
+ {t:'Visibility drops more than 20% on priority prompts',ch:['WHEN drop > 20%','FOR priority prompts','THEN notify','AND create action · asks'],sc:'Workspace',dl:'In-app · Email',last:'Never',sub:'',on:true},
+ {t:'Engine weather changes on Perplexity',ch:['WHEN benchmark moves ≥ 3','FOR Perplexity','THEN notify'],sc:'Personal',dl:'Email',last:'Oct 24, 06:00',sub:'fired once',on:false,fired:'Benchmark panel −4 on Perplexity across 120 prompts. Likely engine-wide.'}
+];
+var wScope='all';
+function renderRules(){var rows=RULES.map(function(r,i){r.i=i;return r}).filter(function(r){return wScope=='all'||r.sc==wScope});
+ $('#wTbl').innerHTML='<div class="wt th"><span>Rule</span><span>Scope</span><span>Delivery</span><span>Last triggered</span><span>On</span><span></span></div>'+rows.map(function(r){
+ return '<div class="wt"><span><b title="'+r.t+'">'+r.t+'</b><div class="mini">'+r.ch.map(function(c){return '<span>'+c+'</span>'}).join('')+'</div></span><span>'+r.sc+'</span><span>'+r.dl+'</span><span>'+r.last+(r.sub?'<em>'+r.sub+'</em>':'')+'</span><span><button data-action="watch.toggleRule" class="sw" role="switch" aria-checked="'+r.on+'" aria-label="Rule on" data-sw="1"></button></span><span style="display:flex;gap:4px;justify-content:flex-end">'+(r.fired?'<button data-action="watch.whyFired" class="btn sm gh" data-fired="'+r.i+'" aria-expanded="false" aria-controls="fr'+r.i+'">Why</button>':'')+'<button data-action="watch.edit" class="btn sm gh" data-editrule="'+r.i+'" aria-label="Edit rule">Edit</button></span></div>'+(r.fired?'<div class="fired" id="fr'+r.i+'" hidden><b style="font-weight:500">What fired · </b>'+r.fired+' <span style="color:var(--mut2)">· explained with 1 short AI call</span> <button data-action="brief.openInChat" class="btn sm" data-go="f-why" style="margin-left:6px">Open in Chat</button></div>':'')}).join('')}
+
+/* ---------- menus ---------- */
+var MENUS={me:['Alex Kim · Admin',['Your role: Admin · See what you can do','Settings','Your plan: Growth','Sign out']],brand:['Brand',['Ansvisor','Northwind CRM','＋ Add brand']],export:['Export',['PDF report','CSV · all rows','Copy recipe (API + filters)','Share link · view only']],repo:['GitHub repositories',['ansvisor/website','ansvisor/docs','ansvisor/landing-2026','＋ Connect another repo']],time:['Send at',['07:00','07:30','08:00','08:30','09:00']]};
+var menuSrc=null;
+function openMenu(el,title,items,cb,foot){var m=$('#menu');var ds=(el&&el.dataset)||{},MK=ds.menu?ds.menu+'Menu.pick':ds.dl?'downloadMenu.pickFormat':ds.opts?'clauseMenu.pick':'menu.pick';m.innerHTML='<div class="mh">'+title+'</div>'+items.map(function(t){return '<button data-action="'+MK+'" role="menuitem">'+t+'</button>'}).join('')+(foot?'<div class="mft2">'+foot+'</div>':'');
+ m.classList.add('on');var r=el.getBoundingClientRect();m.style.left=Math.min(r.left,innerWidth-m.offsetWidth-8)+'px';m.style.top=Math.min(r.bottom+6,innerHeight-m.offsetHeight-8)+'px';
+ menuSrc={el:el,cb:cb};el.setAttribute('aria-expanded','true');var f=m.querySelector('button');if(f)f.focus()}
+function closeMenu(){var m=$('#menu');m.classList.remove('on');if(menuSrc){menuSrc.el.setAttribute('aria-expanded','false');menuSrc=null}}
+function menuCb(k,el){return function(t){
+ if(k=='repo'){if(t.indexOf('＋')==0)return toast('Opens GitHub App install · repo-scoped, PRs only');$('#repoName').textContent=t;$('#mRepo').textContent=t;toast('Repository: '+t)}
+ else if(k=='me'){if(t=='Settings')go('f-mcp');else toast(t.indexOf('Your role')==0?'Opens Settings › Team › Roles & access':t.indexOf('Your plan')==0?'Opens Settings › Billing · Growth plan':'Signed out (demo)')}
+ else if(k=='time'){$('#timeV').textContent=t;toast('Brief time set to '+t)}
+ else if(k=='brand'){toast(t.indexOf('＋')==0?'Opens Brands › Add brand':'Switched to '+t)}
+ else toast(t+' · '+(t.indexOf('Copy')==0?'copied':'started'))}}
+
+/* ---------- clicks ---------- */
+document.addEventListener('click',function(e){
+ var mi=e.target.closest('#menu button[role=menuitem]');if(mi){var cb=menuSrc&&menuSrc.cb;var t=mi.textContent;closeMenu();if(cb)cb(t);return}
+ if(!e.target.closest('#menu'))closeMenu();
+ var b=e.target.closest('button,a[data-go]');if(!b)return;
+ if(b.closest('.scrim')&&!b.dataset.act)return;
+ var d=b.dataset;
+ if(d.go){e.preventDefault();go(d.go);if(d.act=='focusSettings')setTimeout(function(){$('#briefSet').scrollIntoView({behavior:'smooth'});$('#briefSet .sw').focus()},50);return}
+ if(d.drawer){openDrawer(d.drawer,{focus:d.focus});return}
+ if(d.dl){var it=['Markdown .md','Word .docx','PDF .pdf'];if(d.tbl)it=it.concat(['CSV .csv','Excel .xlsx']);var ex=d.extra?d.extra.split('|'):[];openMenu(b,d.title||'Download',it.concat(ex),function(t){var m=t.match(/ (\.[a-z]+)$/);if(m)toast('Downloaded '+d.dl+'-2026-10-26'+m[1]+' · with “Generated Oct 26, 2026 · 09:14”');else toast(t.indexOf('Copy')==0?'Recipe copied: filters + API call':'View-only link copied')},'<span class="chip st">Links stay clickable</span>');return}
+ if(d.menu){var M=MENUS[d.menu];openMenu(b,M[0],M[1],menuCb(d.menu,b));return}
+ if(d.opts){var span=b.querySelector('span');openMenu(b,b.querySelector('b').textContent,d.opts.split('|'),function(t){span.textContent=t;b.classList.remove('add');toast(b.querySelector('b').textContent+' set · still no AI cost')});return}
+ if(d.sw){if(b.disabled)return;var on=b.getAttribute('aria-checked')!='true';b.setAttribute('aria-checked',on);if(d.sw=='mcpOn'){$('#mcpOnL').textContent=on?'On':'Off';toast(on?'MCP server on':'MCP server off · keys stop working until you turn it back on')}else toast((b.getAttribute('aria-label')||'Setting')+(on?' on':' off'));return}
+ if(d.radio){$$('[data-radio="'+d.radio+'"]').forEach(function(x){x.setAttribute('aria-checked',x==b)});toast('Model source: '+b.querySelector('div').firstChild.textContent);return}
+ if(d.host){mhost=d.host;renderHost();return}
+ if(d.pplan){pplan=d.pplan;renderPRPlan();toast('Previewing the '+b.firstChild.textContent+' plan');return}
+ if(d.mplan){mplan=d.mplan;renderMcp();toast('Previewing the '+b.firstChild.textContent+' plan');return}
+ if(d.file){showDiff(d.file);return}
+ if(d.agent){showTask(d.agent);return}
+ if(d.oc){$$('[data-oc]').forEach(function(x){x.setAttribute('aria-pressed',x==b)});renderImp(d.oc);closeDrawer();return}
+ if(d.month){var m=d.month=='-1';$('#monLbl').textContent=m?'September 2026':'October 2026';if(d.month=='1')toast('November starts Nov 1');else toast('September: 10 actions shipped · 7 improved');return}
+ if(d.wscope){wScope=d.wscope;$$('[data-wscope]').forEach(function(x){x.setAttribute('aria-pressed',x==b)});renderRules();return}
+ if(d.rscope){$$('[data-rscope]').forEach(function(x){x.setAttribute('aria-pressed',x==b);x.setAttribute('aria-checked',x==b)});$('#scopeNote').textContent=d.rscope=='Personal'?'Only you · every role can create personal rules':'Everyone in the workspace · only Admin and Manager can create';return}
+ if(d.fired){var p=$('#fr'+d.fired),open=p.hidden;p.hidden=!open;b.setAttribute('aria-expanded',open);return}
+ if(d.editrule){var r=RULES[+d.editrule];$('#wIn').value=r.t;$('#wIn').focus();toast('Editing: '+r.t);return}
+ if(b.classList.contains('czh')){var id=b.getAttribute('aria-controls'),ex=b.getAttribute('aria-expanded')=='true';b.setAttribute('aria-expanded',!ex);$('#'+id).hidden=ex;return}
+ if(b.id=='promptsTog'){var o=b.getAttribute('aria-expanded')!='true';b.setAttribute('aria-expanded',o);$('#promptSubs').hidden=!o;return}
+ if(b.id=='attachBtn'){$('#acBody').innerHTML='<div class="done-line"><span class="tk pop"></span>Attached 3 causes to <b>AC-1258</b> · follow-up check Nov 9 from scheduled tracking · no extra cost<button data-action="why.undoAttach" class="btn sm" data-act="undoAttach">Undo</button></div>';b.closest('.cf').style.display='none';toast('Attached to AC-1258 · logged in Activity');return}
+ if(b.id=='approveApp'){var sns=$$('#appCard .stp .sn');[0,1].forEach(function(k){sns[k].outerHTML='<span class="tk pop"></span>'});sns[2].classList.add('cur');$('#appCard .af').innerHTML='<span class="okk"><span class="tk sm pop"></span>Approved</span><span style="font-size:12px;color:var(--mut)">Run R-8820 in Ansvisor · step 3 will ask again</span><div class="r"><button data-action="why.openRun" class="btn sm" data-toast="Opens the run in Ansvisor">Open run</button></div>';toast('Plan approved in the assistant · run started in Ansvisor');return}
+ if(b.id=='openPR'){if(!b.disabled){$('#scrim').classList.add('on');setTimeout(function(){$('.scrim .btn.pri').focus()},30)}return}
+ if(d.revoke!==undefined){var row=b.closest('.kt');row.style.opacity='.45';b.textContent='Revoked';b.disabled=true;toast('Key revoked · that assistant loses access now');return}
+ if(d.act){act(d.act,b);return}
+ if(d.toast){toast(d.toast);return}
+});
+function act(a,b){
+ if(a=='closeDrawer')closeDrawer();
+ else if(a=='closeModal')$('#scrim').classList.remove('on');
+ else if(a=='confirmPR'){$('#scrim').classList.remove('on');prState=1;renderPR();toast('PR #57 opened on '+$('#repoName').textContent)}
+ else if(a=='mergedPR'){prState=2;renderPR();toast('Merged on GitHub · impact ledger window starts today')}
+ else if(a=='resetPR'){prState=0;renderPR()}
+ else if(a=='copytask')toast('Agent task copied');
+ else if(a=='newkey'){if(b.disabled)return;KEYS.push(['Alex Kim','Admin','n3Vd','Cursor','Just now']);$('#keys').insertAdjacentHTML('beforeend',keyRow(KEYS[KEYS.length-1]));toast('Key created · shown once, copied to clipboard')}
+ else if(a=='runRead'){$('#appCard .af').innerHTML='<span class="okk"><span class="tk sm pop"></span>Read steps done</span><span style="font-size:12px;color:var(--mut)">Steps 3–4 need Growth or Ansvisor Chat</span>';toast('Read steps ran in the assistant')}
+ else if(a=='testep'){$('#epRes').textContent='Testing…';setTimeout(function(){$('#epRes').innerHTML='<span class="okk"><span class="tk sm pop"></span>Connected · 1.2 s · tool calls supported</span>'},600)}
+ else if(a=='parse'){var v=$('#wIn').value.toLowerCase();var t=$$('#parsed .tok span');if(v.indexOf('chatgpt')>-1)t[1].textContent='ChatGPT · all tracked prompts';else if(v.indexOf('perplexity')>-1)t[1].textContent='Perplexity · all tracked prompts';toast('Parsed into WHEN / FOR / THEN · edit any chip')}
+ else if(a=='saveRule'){var sc=$('[data-rscope][aria-pressed="true"]').dataset.rscope;var tk=$$('#parsed .tok span');RULES.unshift({t:$('#wIn').value,ch:['WHEN '+tk[0].textContent,'FOR '+tk[1].textContent,'THEN '+tk[2].textContent.toLowerCase()],sc:sc,dl:'In-app · Email',last:'Never',sub:'saved just now',on:true});RULES.splice(1,1);renderRules();toast('Rule saved · checks after the next tracking run')}
+ else if(a=='clearRule'){$('#wIn').value='';$('#wIn').focus()}
+ else if(a=='newRule'){$('#wIn').value='';$('#wIn').focus();toast('Describe the rule in plain words')}
+ else if(a=='retryWhy'){playWhy();toast('Regenerating the answer · same data')}
+ else if(a=='sendWhy'){var v=$('#whyIn').value.trim();if(!v)return;toast('Sent: '+v);$('#whyIn').value='';syncSend()}
+ else if(a=='undoAttach'){buildNext();toast('Undone · evidence removed from AC-1258')}
+}
+function playWhy(){var col=$('#f-why .col');if(!col)return;var rm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ var tools=[].slice.call($$('#f-why .tools .tool')),blocks=[].slice.call(col.children).filter(function(e){return !e.matches('.um,.umctx,.ahead,.tools,#whyLead')});
+ var lead=$('#whyLead'),full=lead.dataset.full||lead.textContent;lead.dataset.full=full;var st=$('#whyStatus'),av=$('#whyAv');
+ clearTimeout(playWhy._t);clearInterval(playWhy._i);
+ if(rm){tools.concat(blocks).forEach(function(e){e.classList.remove('pre')});lead.textContent=full;st.textContent='Answered in 5 s';av.classList.remove('pulse');return}
+ tools.concat(blocks).forEach(function(e){e.classList.remove('fin');e.classList.add('pre')});lead.textContent='';av.classList.add('pulse');
+ var seq=[[0,'Thinking…'],[350,'Reading 412 Perplexity answers…',[0]],[750,'Splitting the change into causes…',[1,2,3]],[1100,'Writing the answer…']];
+ seq.forEach(function(x){setTimeout(function(){st.textContent=x[1];(x[2]||[]).forEach(function(k){tools[k].classList.remove('pre')})},x[0])});
+ setTimeout(function(){var n=0;playWhy._i=setInterval(function(){n+=6;lead.textContent=full.slice(0,n);if(n>=full.length){clearInterval(playWhy._i);
+  st.textContent='Answered in 5 s';av.classList.remove('pulse');blocks.forEach(function(e,i){setTimeout(function(){e.classList.add('fin');e.classList.remove('pre')},i*70)})}},16)},1150)}
+var whyIn=document.getElementById('whyIn');
+function syncSend(){var b=$('#f-why .send');b.disabled=!whyIn.value.trim();$('#tabK').hidden=!!whyIn.value}
+whyIn.addEventListener('keydown',function(e){if(e.key=='Tab'&&!whyIn.value&&!e.shiftKey){e.preventDefault();whyIn.value=whyIn.placeholder;syncSend()}else if(e.key=='Enter'){e.preventDefault();if(whyIn.value.trim())act('sendWhy')}});
+whyIn.addEventListener('input',syncSend);syncSend();
+var NEXT_HTML;
+function buildNext(){$('#nextCard').outerHTML=NEXT_HTML}
+document.addEventListener('keydown',function(e){if(e.key=='Escape'){closeMenu();closeDrawer();$('#scrim').classList.remove('on')}
+ if((e.key=='ArrowDown'||e.key=='ArrowUp')&&$('#menu').classList.contains('on')){var it=[].slice.call($$('#menu button'));var i=it.indexOf(document.activeElement);i=(i+(e.key=='ArrowDown'?1:-1)+it.length)%it.length;it[i].focus();e.preventDefault()}});
+$$('.days button').forEach(function(b){b.addEventListener('click',function(){var on=b.getAttribute('aria-pressed')!='true';b.setAttribute('aria-pressed',on);toast(b.textContent+(on?' on':' off'))})});
+$$('.ck').forEach(function(b){b.addEventListener('click',function(){var on=b.getAttribute('aria-checked')!='true';b.setAttribute('aria-checked',on);b.querySelector('.bx2').textContent=on?'✓':'';toast((on?'Added ':'Removed ')+b.childNodes[1].textContent)})});
+
+renderCauses();renderImp();showDiff('schema');renderPR();showTask('Claude Code');renderRules();renderMcp();renderPRPlan();logoize();
+NEXT_HTML=$('#nextCard').outerHTML;
+var q=new URLSearchParams(location.search).get('state');
+(function(){var fr=new URLSearchParams(location.search).get('from'),bl=$('#backLink');var fm=fr&&/s-[a-z0-9-]+/.exec(decodeURIComponent(fr));if(fm){bl.href='CHAT-mockup-v2.html#'+fm[0];bl.textContent='← Back to chat'}else if(document.referrer&&/CHAT-mockup-v2\.html/.test(document.referrer))bl.href=document.referrer})();
+go((location.hash||'#f-why').slice(1),true);
+if(!q&&$('#f-why').classList.contains('on'))playWhy();
+if(q=='audit'){var dead=[].slice.call($$('button,a')).filter(function(b){var d=b.dataset;return !(b.href&&b.getAttribute('href'))&&!['go','drawer','menu','opts','sw','radio','host','file','agent','oc','month','wscope','rscope','fired','editrule','mplan','pplan','act','toast','dl'].some(function(k){return d[k]!==undefined})&&d.revoke===undefined&&!b.classList.contains('czh')&&['promptsTog','attachBtn','approveApp','openPR'].indexOf(b.id)<0&&!b.closest('.days')&&!b.classList.contains('ck')}).map(function(b){return b.outerHTML.slice(0,90)});document.body.setAttribute('data-dead',dead.length+' :: '+dead.join(' || '))}
+if(q=='dl'){var db=$('#f-why [data-dl]');db.scrollIntoView({block:'center'});db.click()}if(q=='pr'){prState=1;renderPR()}if(q=='modal'){$('#scrim').classList.add('on')}if(q=='attached'){$('#attachBtn').click()}if(q=='trial'||q=='starter'){mplan=q;renderMcp();pplan=q;renderPRPlan()}if(q=='drawer'){openDrawer('imp1',{focus:'Day 14 · First verdict · Improved · Oct 17 · +50 vs control'})}
+</script>
+</body>
+</html>
