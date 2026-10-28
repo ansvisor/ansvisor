@@ -2,7 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
-import type { PromptDemand } from '@/lib/prompt-demand';
+import { trackPagePrompts, type TrackPagePromptsResult } from '@/lib/actions/prompt-suggestions';
+import { questionKey, type PromptDemand } from '@/lib/prompt-demand';
 
 /**
  * A prompt's real demand (PROMPT-014) for its Demand card: what the
@@ -32,4 +33,42 @@ export async function getPromptDemandSignals(
   } catch {
     return { error: 'Could not reach the server. Please try again.' };
   }
+}
+
+/** Prompts read per page: PostgREST's own cap. */
+const PAGE = 1000;
+
+/**
+ * "+ Track" on a People Also Ask question: tracks it in the prompt's topic
+ * (trackPagePrompts), unless the brand already tracks a prompt with the same
+ * text (questionKey: case, accents, punctuation and spacing don't count).
+ * Then nothing is added and `alreadyTracked` says so. The card already shows
+ * those as tracked (the server's `tracked`); this holds for a question
+ * tracked since the card loaded.
+ */
+export async function trackDemandQuestion(
+  brandId: string,
+  question: string,
+  topic: string,
+): Promise<TrackPagePromptsResult & { alreadyTracked?: boolean }> {
+  const text = typeof question === 'string' ? question.trim() : '';
+  if (!text) return { promptIds: [], error: 'Pick a question.' };
+
+  const supabase = await createClient();
+  const key = questionKey(text);
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('id, text, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) return { promptIds: [], error: error.message };
+    const rows = (data ?? []) as { text: string | null }[];
+    if (rows.some((row) => questionKey(row.text ?? '') === key)) {
+      return { promptIds: [], alreadyTracked: true };
+    }
+    if (rows.length < PAGE) break;
+  }
+  return trackPagePrompts(brandId, null, [{ text, topic }]);
 }

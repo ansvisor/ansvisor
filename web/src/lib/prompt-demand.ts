@@ -35,7 +35,13 @@ export interface TrendsDemand {
 }
 
 export interface PaaDemand {
-  questions: { question: string; url: string | null; domain: string | null }[];
+  questions: {
+    question: string;
+    url: string | null;
+    domain: string | null;
+    /** The brand already tracks a prompt with this text (questionKey). */
+    tracked?: boolean;
+  }[];
   at: string;
 }
 
@@ -111,6 +117,20 @@ export function gscSignalState(
   if (demand.gsc) return 'data';
   if (!status || status === 'connected') return 'notRead';
   return status;
+}
+
+/**
+ * A prompt's text as compared for "already tracked": case, accents,
+ * punctuation and spacing don't count. The server marks the People Also Ask
+ * questions the brand tracks the same way (server/src/lib/prompt-demand.js).
+ */
+export function questionKey(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
 }
 
 /** "+64%", "−12%", "0%": a year's change as the Trends card says it. */

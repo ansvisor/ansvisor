@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatChange, gscSignalState, paidSignalState, type PromptDemand } from './prompt-demand';
+import {
+  formatChange,
+  gscSignalState,
+  paidSignalState,
+  questionKey,
+  type PromptDemand,
+} from './prompt-demand';
 
 /** What each Demand card shows when its signal isn't there (PROMPT-014). */
 
@@ -53,5 +59,20 @@ describe('formatChange', () => {
     expect(formatChange(64)).toBe('+64%');
     expect(formatChange(-12)).toBe('−12%');
     expect(formatChange(0)).toBe('0%');
+  });
+});
+
+describe('questionKey', () => {
+  it('reads the same question written differently as one, as the server does', () => {
+    expect(questionKey('How do I track my brand in ChatGPT?')).toBe(
+      'how do i track my brand in chatgpt',
+    );
+    expect(questionKey('  how do I  track my brand in CHATGPT ')).toBe(
+      'how do i track my brand in chatgpt',
+    );
+    expect(questionKey('Café-crème: what is it?')).toBe('cafe creme what is it');
+    expect(questionKey('What is AI search?')).not.toBe(
+      questionKey('What is AI search monitoring?'),
+    );
   });
 });

@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import KpiSparkline from '@/components/action-center/kpi-sparkline';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
-import { trackPagePrompts } from '@/lib/actions/prompt-suggestions';
+import { trackDemandQuestion } from '@/lib/actions/prompt-demand-signals';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import {
   DEMAND_SIGNALS,
@@ -238,13 +238,16 @@ function TrendsCard({ demand }: { demand: PromptDemand }) {
               />
             </div>
             <p>
-              {trends.change === null
-                ? t.rich('trends.risingFromNone', { b: bold })
-                : t.rich('trends.change', {
+              {trends.change !== null
+                ? t.rich('trends.change', {
                     trend: t(`trends.${trends.trend}`),
                     change: formatChange(trends.change),
                     b: bold,
-                  })}
+                  })
+                : trends.trend === 'rising'
+                  ? t.rich('trends.risingFromNone', { b: bold })
+                  : // No change to give (no interest at either end): the direction alone.
+                    t.rich('trends.label', { trend: t(`trends.${trends.trend}`), b: bold })}
             </p>
           </>
         ) : (
@@ -275,13 +278,18 @@ function PaaCard({
 
   const track = async (question: string) => {
     setTracking(question);
-    const outcome = await trackPagePrompts(brandId, null, [{ text: question, topic }]).catch(
-      (err: Error) => ({ promptIds: [] as string[], error: err.message, code: undefined }),
-    );
+    const outcome = await trackDemandQuestion(brandId, question, topic).catch((err: Error) => ({
+      promptIds: [] as string[],
+      error: err.message,
+      code: undefined,
+      alreadyTracked: false,
+    }));
     setTracking(null);
-    if (outcome.promptIds.length > 0) {
+    if (outcome.promptIds.length > 0 || outcome.alreadyTracked) {
       setTracked((prev) => new Set(prev).add(question));
-      toast.success(t('paa.trackedToast', { question }));
+      toast.success(
+        t(outcome.alreadyTracked ? 'paa.alreadyTrackedToast' : 'paa.trackedToast', { question }),
+      );
       return;
     }
     toast.error(
@@ -298,8 +306,8 @@ function PaaCard({
       {paa ? (
         paa.questions.length > 0 ? (
           <ul className="flex flex-col gap-1.5">
-            {paa.questions.map(({ question }) => {
-              const done = tracked.has(question);
+            {paa.questions.map(({ question, tracked: trackedBefore }) => {
+              const done = trackedBefore === true || tracked.has(question);
               return (
                 <li key={question} className="flex items-start justify-between gap-2">
                   <span className="min-w-0 break-words text-sm">{question}</span>
@@ -309,6 +317,9 @@ function PaaCard({
                     className="h-6 shrink-0 px-2 text-xs"
                     disabled={!canManage || done || tracking !== null}
                     title={canManage ? undefined : t('paa.trackNotAllowed')}
+                    aria-label={
+                      done ? t('paa.trackedLabel', { question }) : t('paa.trackLabel', { question })
+                    }
                     onClick={() => void track(question)}
                   >
                     {tracking === question
