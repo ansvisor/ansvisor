@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { pastRound } from './history.js';
+
+// pastRound reads nothing; the client only has to load without credentials.
+vi.mock('../../../config/supabase.js', () => ({ default: {} }));
 
 /**
  * An earlier round as the task writer reads it (learning B5): what was done,
