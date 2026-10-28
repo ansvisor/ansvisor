@@ -279,6 +279,12 @@ export const ACTION_KINDS: readonly ActionKind[] = [
 ];
 
 /**
+ * The kinds sent from Product Visibility (ECOM-013): a product or a
+ * category. The Actions page's "From Products" chip lists them.
+ */
+export const FROM_PRODUCTS_KINDS: readonly string[] = ['shopping_product', 'shopping_category'];
+
+/**
  * Is this one of the kinds we have copy for?
  *
  * A guard, not a filter. Callers use it to choose between the written
