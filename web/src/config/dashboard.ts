@@ -142,11 +142,14 @@ export const dashboardNav: NavGroup[] = [
         icon: Quote,
       },
       {
+        // Product Visibility (ECOM-spec): new as a whole, with its Shelf,
+        // Products and the rest, for brands that sell online.
         title: 'Shopping',
         href: '/dashboard/shopping',
         icon: ShoppingBag,
         requiredFeature: 'shopping_analytics',
         requiresBrandPref: 'shoppingModeEnabled',
+        badge: 'New',
       },
       {
         title: 'AI Referral Traffic',

@@ -13,6 +13,8 @@ vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), err
 vi.mock('@/lib/actions/cancel-feedback', () => ({
   sendCancelFeedback: vi.fn(async () => ({ ok: true })),
 }));
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 (
   globalThis as typeof globalThis & {
@@ -30,7 +32,8 @@ async function render(
     status = 'active',
     interval = 'month',
     role = 'admin',
-  }: { status?: string; interval?: string; role?: TeamRole } = {},
+    cancelAtPeriodEnd = false,
+  }: { status?: string; interval?: string; role?: TeamRole; cancelAtPeriodEnd?: boolean } = {},
 ) {
   await act(async () => {
     root.render(
@@ -41,11 +44,12 @@ async function render(
               planId,
               status,
               currentPeriodEnd: null,
-              cancelAtPeriodEnd: false,
+              cancelAtPeriodEnd,
               priceAmount: 49,
               interval,
             }}
             onUpdate={onUpdate}
+            organizationId="org1"
           />
         </RoleProvider>
       </NextIntlClientProvider>,
@@ -263,6 +267,8 @@ describe('buying during the free trial', () => {
       }),
     });
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
+    // The layout reads the plan again: a read-only workspace opens up.
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('buys a year without a code', async () => {
@@ -296,6 +302,80 @@ describe('buying during the free trial', () => {
     expect(onUpdate).not.toHaveBeenCalled();
     // The dialog stays open to try again.
     expect(document.body.textContent).toContain('Buy Starter now?');
+  });
+});
+
+describe('choosing a plan once the old one has ended', () => {
+  beforeEach(() => {
+    // Checkout's address; a hash, which jsdom can navigate to.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ url: '#checkout' })),
+    );
+  });
+
+  it('starts a new subscription through Checkout, in the period chosen', async () => {
+    await render('starter', { status: 'canceled', cancelAtPeriodEnd: true });
+    expect(container.textContent).toContain(
+      "Your plan isn't active. Choose one to start it again; you'll pay on Stripe's secure checkout.",
+    );
+    // No plan is current, and nothing to cancel or reactivate.
+    expect(cardText().Starter).not.toContain('Current Plan');
+    expect(button('Reactivate')).toBeUndefined();
+    expect(button('Cancel Subscription')).toBeUndefined();
+
+    await click('AnnualSave 20%');
+    await click('Choose Growth');
+
+    expect(fetch).toHaveBeenCalledWith('/api/stripe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        planId: 'growth',
+        organizationId: 'org1',
+        interval: 'year',
+        returnTo: 'billing',
+      }),
+    });
+    expect(window.location.hash).toBe('#checkout');
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('says so when Checkout does not open, and lets the admin try again', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({}, { status: 500 }));
+    await render('starter', { status: 'canceled' });
+    await click('Choose Starter');
+    expect(toast.error).toHaveBeenCalledWith("Couldn't open the checkout. Try again.");
+    expect(button('Choose Starter')?.disabled).toBe(false);
+  });
+
+  it('leaves choosing a plan to admins', async () => {
+    await render('starter', { status: 'canceled', role: 'analyst' });
+    expect(button('Choose Starter')).toBeUndefined();
+    expect(button('Choose Growth')).toBeUndefined();
+  });
+});
+
+describe('a payment being retried (past_due)', () => {
+  it('changes the plan on the subscription, and never opens a second Checkout', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          planId: 'growth',
+          status: 'past_due',
+          interval: 'month',
+          priceAmount: 249,
+        }),
+      ),
+    );
+    await render('starter', { status: 'past_due' });
+    expect(button('Choose Starter')).toBeUndefined();
+    expect(button('Choose Growth')).toBeUndefined();
+    expect(container.textContent).not.toContain("Your plan isn't active.");
+    await click('Upgrade to Growth');
+    await click('Confirm Change');
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual(['/api/stripe/subscription']);
   });
 });
 

@@ -35,6 +35,7 @@ import {
   type PlatformPositionRow,
   type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
+import { assertWritable } from '@/lib/subscription-guard';
 
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   const allowedScrapers = plan.limits.allowedScrapers
@@ -205,6 +206,7 @@ export async function getPromptCapacity(
  * message (#427).
  */
 export async function savePromptSet(input: SavePromptSetInput): Promise<SavePromptSetResult> {
+  await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
   const { organizationId: orgId, region: brandRegion } = await getBrandContext(
@@ -319,6 +321,7 @@ export async function updatePrompt(
     models?: string[];
   },
 ): Promise<Prompt> {
+  await assertWritable();
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -407,6 +410,7 @@ export async function updatePromptLocations(
   id: string,
   regionsInput: string[],
 ): Promise<UpdatePromptLocationsResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   const regions = [...new Set(regionsInput.map((r) => r.trim().toUpperCase()))];
@@ -500,6 +504,7 @@ export async function bulkUpdatePromptLocations(
   action: 'add' | 'remove',
   locationsInput: string[],
 ): Promise<BulkUpdatePromptLocationsResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   const ids = [...new Set(promptIds)].filter(Boolean);
@@ -613,6 +618,7 @@ export type AddPromptToSetResult = { prompt: Prompt } | { error: string; code?: 
  * message (#427).
  */
 export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptToSetResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { data: ps } = await supabase
@@ -696,6 +702,7 @@ export async function addPromptToBrand(
   brandId: string,
   input: { text: string; category?: string; platforms: string[]; models?: string[] },
 ): Promise<AddPromptToBrandResult> {
+  await assertWritable();
   const supabase = await createClient();
   const trimmed = input.text.trim();
   if (!trimmed) return { error: 'Prompt text is required.' };
@@ -797,6 +804,7 @@ export async function setPromptActive(
   id: string,
   isActive: boolean,
 ): Promise<SetPromptActiveResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   if (isActive) {
@@ -847,6 +855,7 @@ export async function importPrompts(
   brandId: string,
   rows: ImportPromptRow[],
 ): Promise<ImportPromptsResult> {
+  await assertWritable();
   if (rows.length === 0) return { importedIdx: [], promptIds: [], analysisStarted: false };
   if (rows.length > 1000) return { error: 'Import at most 1,000 prompts at a time.' };
   const supabase = await createClient();
@@ -946,6 +955,7 @@ export async function importPrompts(
 }
 
 export async function deletePrompt(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { error } = await supabase.from('prompts').delete().eq('id', id);
@@ -965,6 +975,7 @@ export async function setPromptsActive(
   ids: string[],
   isActive: boolean,
 ): Promise<SetPromptsActiveResult> {
+  await assertWritable();
   if (ids.length === 0) return { updated: 0 };
   const supabase = await createClient();
 
@@ -998,6 +1009,7 @@ export async function setPromptsActive(
 export async function deletePrompts(
   ids: string[],
 ): Promise<{ deletedIds: string[] } | { error: string }> {
+  await assertWritable();
   if (ids.length === 0) return { deletedIds: [] };
   if (ids.length > PROMPT_DELETE_BATCH) {
     return { error: `At most ${PROMPT_DELETE_BATCH} prompts per call.` };
@@ -1010,6 +1022,7 @@ export async function deletePrompts(
 }
 
 export async function deletePromptSet(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { error } = await supabase.from('prompt_sets').delete().eq('id', id);
