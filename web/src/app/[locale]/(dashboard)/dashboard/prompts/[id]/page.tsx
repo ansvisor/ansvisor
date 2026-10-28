@@ -26,6 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import {
+  Activity,
   ArrowLeft,
   AlertCircle,
   ChevronDown,
@@ -42,6 +43,11 @@ import {
 import { getPromptVolume, type PromptVolumeEstimateRow } from '@/lib/actions/prompt-volume';
 import { promptVolumeEstimate } from '@/lib/volume-estimate';
 import { EstimateBadge, EstimateRange } from '@/components/prompts/volume-estimate';
+import { DemandLevelValue, DemandSection } from '@/components/prompts/demand-card';
+import { getPromptDemandSignals } from '@/lib/actions/prompt-demand-signals';
+import { getSuggestionSourceStates } from '@/lib/actions/integrations';
+import { DEMAND_SIGNALS, type PromptDemand } from '@/lib/prompt-demand';
+import { googleSourceStatus, type GoogleSourceStatus } from '@/lib/traffic-sources';
 import { cn } from '@/lib/utils';
 import { formatRegionDisplay } from '@/lib/region';
 import { toast } from 'sonner';
@@ -232,6 +238,13 @@ function VisibilityBar({ score }: { score: number }) {
       <span className="w-8 text-right text-xs font-semibold tabular-nums">{rounded}</span>
     </div>
   );
+}
+
+/** The KPI row's columns for its number of cards: three, four, or five with Demand. */
+function kpiGridColumns(count: number): string {
+  if (count >= 5) return 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5';
+  if (count === 4) return 'sm:grid-cols-2 lg:grid-cols-4';
+  return 'sm:grid-cols-3';
 }
 
 function KpiCard({
@@ -672,6 +685,15 @@ export default function PromptDetailPage() {
   // The prompt's estimated AI searches (PROMPT-013); no card without one.
   const [volume, setVolume] = useState<PromptVolumeEstimateRow | null>(null);
   const tVolumes = useTranslations('prompts.volumeInsights');
+  // Its real demand (PROMPT-014): read by the server every night.
+  const [demand, setDemand] = useState<PromptDemand | null>(null);
+  const [demandFailed, setDemandFailed] = useState(false);
+  // An API without the demand route yet: the page shows no Demand section.
+  const [demandUnavailable, setDemandUnavailable] = useState(false);
+  // The brand's Search Console, for the Demand card's state; bumped on connect.
+  const [gscStatus, setGscStatus] = useState<GoogleSourceStatus | null>(null);
+  const [sourcesRead, setSourcesRead] = useState(0);
+  const tDemand = useTranslations('promptDemand');
 
   // Workflow data is independent of the date window — load it once per
   // prompt, outside the main load cycle, so date changes don't refetch it.
@@ -702,6 +724,42 @@ export default function PromptDetailPage() {
       cancelled = true;
     };
   }, [promptId]);
+
+  // Like the volume, the demand doesn't depend on the date window.
+  useEffect(() => {
+    let cancelled = false;
+    setDemand(null);
+    setDemandFailed(false);
+    setDemandUnavailable(false);
+    getPromptDemandSignals(promptId)
+      .then((res) => {
+        if (cancelled) return;
+        if ('demand' in res) setDemand(res.demand);
+        else if ('unavailable' in res) setDemandUnavailable(true);
+        else setDemandFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setDemandFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [promptId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!promptBrandId) return;
+    getSuggestionSourceStates(promptBrandId)
+      .then((states) => {
+        if (!cancelled) setGscStatus(googleSourceStatus(states.gsc));
+      })
+      .catch(() => {
+        if (!cancelled) setGscStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [promptBrandId, sourcesRead]);
 
   useEffect(() => {
     let cancelled = false;
@@ -941,7 +999,7 @@ export default function PromptDetailPage() {
           <div
             className={cn(
               'grid gap-4',
-              volume ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3',
+              kpiGridColumns(3 + (volume ? 1 : 0) + (demand?.level ? 1 : 0)),
             )}
           >
             <KpiCard
@@ -971,7 +1029,29 @@ export default function PromptDetailPage() {
                 icon={TrendingUp}
               />
             )}
+            {demand?.level && (
+              <KpiCard
+                title={tDemand('kpiTitle', {
+                  signals: demand.signals,
+                  total: DEMAND_SIGNALS.length,
+                })}
+                value={<DemandLevelValue demand={demand} />}
+                icon={Activity}
+              />
+            )}
           </div>
+
+          {!demandUnavailable && (
+            <DemandSection
+              demand={demand}
+              failed={demandFailed}
+              gscStatus={gscStatus}
+              brandId={data.prompt.brandId}
+              topic={data.prompt.topicName ?? ''}
+              canManage={canManage}
+              onGscConnected={() => setSourcesRead((n) => n + 1)}
+            />
+          )}
 
           <Card>
             <CardHeader className="pb-3">
