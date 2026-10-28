@@ -400,6 +400,20 @@ describe('actionEventText', () => {
     ).toBe('30-day result: not enough data to compare positions');
   });
 
+  it('names a checked task once: its title when renamed, else its library name (#1565)', () => {
+    expect(
+      actionEventText(event('task_checked', { task: 'refresh_content', title: null }), tPage, t),
+    ).toBe('Checked automatically and done: Refresh outdated content');
+    // A line written before the API sent one name carries both: the title alone.
+    expect(
+      actionEventText(
+        event('task_checked', { task: 'refresh_content', title: 'Refresh the pricing page' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Checked automatically and done: Refresh the pricing page');
+  });
+
   it("passes a task's own title and the measured verdict", () => {
     expect(actionEventText(event('task_added', { title: 'Ask the agency' }), tPage, t)).toBe(
       'Task added: “Ask the agency”',

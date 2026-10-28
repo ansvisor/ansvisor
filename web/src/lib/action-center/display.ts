@@ -233,7 +233,12 @@ export function actionEventText(
     // Work the product did itself names the task in the reader's language
     // and the tool as it is recorded — the tool id is the audit fact, so it
     // is not translated.
-    task: eventTaskText(event.data.task, tTasks),
+    // A checked task is named once (`{task}{title}`): by its own title when it
+    // has one; lines written before the API sent only one carry both.
+    task:
+      event.event === 'task_checked' && event.data.title
+        ? ''
+        : eventTaskText(event.data.task, tTasks),
     tool: String(event.data.tool ?? ''),
     improved: Number(event.data.improved ?? 0),
     measurable: Number(event.data.measurable ?? 0),

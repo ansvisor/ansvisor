@@ -21,6 +21,12 @@ export interface PriorityReason {
   subject: { entity: string | null; count: number | null };
   /** Measured demand; null when nothing measures it. */
   demand: 'high' | 'medium' | 'low' | null;
+  /**
+   * The prompts' measured demand level (PROMPT-014: Search Console, Google
+   * Trends, People Also Ask, YouTube), the highest, when it raised the score:
+   * High or Medium. Null otherwise: Low raises nothing, so it's no reason.
+   */
+  realDemand: 'high' | 'medium' | null;
   commercial: boolean;
   /** Ground the brand held and lost. */
   heldBefore: boolean;
@@ -89,6 +95,7 @@ export function parsePriorityReason(
       count: num(subject.count),
     },
     demand: r.demand === 'high' || r.demand === 'medium' || r.demand === 'low' ? r.demand : null,
+    realDemand: r.realDemand === 'high' || r.realDemand === 'medium' ? r.realDemand : null,
     commercial: r.commercial === true,
     heldBefore: r.heldBefore === true,
     days: daysSince(num(r.days), scoredAt, now),
@@ -171,7 +178,7 @@ const SUBJECTS = new Set([
  * "Why this priority?": what changed, on what, how recently, and what makes
  * it matter — from the action's own facts, in the reader's language
  * (actionsPage.priority.reason). "Lost ground on 7 high-demand prompts
- * 2 days ago — commercial intent, previously visible."
+ * 2 days ago — measured demand High, commercial intent, previously visible."
  */
 export function priorityReasonText(reason: PriorityReason, t: Translator): string {
   const { entity, count } = reason.subject;
@@ -199,6 +206,7 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
 
   const extras: string[] = [];
   if (reason.demand === 'high' && !inSubject) extras.push(t('reason.highDemand'));
+  if (reason.realDemand) extras.push(t(`reason.realDemand.${reason.realDemand}`));
   if (reason.commercial) extras.push(t('reason.commercial'));
   if (
     reason.heldBefore &&

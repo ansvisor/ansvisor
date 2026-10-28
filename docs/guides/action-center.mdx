@@ -83,13 +83,13 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 
 Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". Open a task to see its details: **What**, **URL** (the exact page), **Where**, **Why**, **Change** (the text before and after, or the text to add), **How** (one step per line), **Done when**, **How we check** (Automatic: we fetch the page again; Re-run: the prompts run again; Manual: you confirm it), **Type** (Content, On-page, Technical, Outreach, PR or Product), **Effort** and **Role**. Click **Edit** to change any of them. A task from the Action Center's own plan comes with its **Done when**, with **How we check** for most of them (not for a task measured over a GA4 or Search Console window), and with its **URL** when it changes a page and the action is about one page.
 
-A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, and when you click **Check now**), by what it changes:
+A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, at most 20 of one brand's, the least recently tried first, and when you click **Check now**), by what it changes:
 
 - **A broken page:** the page answers again.
 - **Publishing:** the page answers where it wasn't before. A page already live at the first check passes once it changes.
-- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions.
+- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions. When the action was raised by another check (the brand's entity, say), the page's structured data must be valid, after a check found it wasn't: a page that had valid structured data all along says so, and you mark the task done once it's fixed.
 - **Crawler access:** robots.txt lets the AI crawlers in, and the page isn't noindex. Only when the audit raised it; a page found uncrawled in the bot logs isn't checked here.
-- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a few words.
+- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a new short review: about a rewritten paragraph. A sidebar, testimonials, the latest or popular posts and similar blocks that change by themselves aren't counted.
 - **A task written with its new text:** that text is on the page, and the text it replaces is gone.
 
 Only pages on the brand's own site are read. One that passes is completed by itself, and History says so; one that doesn't shows **Last check** with what is still missing. A task you reopen after it passed stays open: its checks still show what they find, the nightly check leaves it, and the call is yours. Site Audit fixes are checked by your next audit.
@@ -102,7 +102,7 @@ From a task you can also:
 - **Send to Content** — send a content task to Content as an opportunity, where a brief can be written for it.
 - **Send to webhook** — post the task to the brand's webhook, for a workflow outside Ansvisor. The webhook is set up under **Content → Webhook Settings**, with the **Action Center task sent** event selected.
 
-Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance.
+Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance. The AI also reads this brand's last three closed rounds of the same action: which tasks were done and what the result read, or why a round was dismissed. It builds on what improved results here and doesn't hand out again a task that was done without effect. Only this brand's own actions are read.
 
 A task the AI writes without its **URL**, its **Change**, **Done when** or **How we check** doesn't reach your list. It waits on the **Needs review** tab, which admins and managers see, with what it misses. Click **Edit**, fill the missing fields and click **Approve** to add it after the action's other tasks, or **Dismiss** it.
 
@@ -133,7 +133,7 @@ Every action has a **Priority Score** from 0 to 100: how soon to work on it besi
 The score weighs seven things:
 
 - **Impact** — the action's impact grade: high, medium or low.
-- **Demand** — how much the prompts, search queries or pages it is about are searched or visited. Only the most demanded few count, so a long list of low-demand prompts doesn't outrank a handful that people actually search for.
+- **Demand** — how much the prompts, search queries or pages it is about are searched or visited. Only the most demanded few count, so a long list of low-demand prompts doesn't outrank a handful that people actually search for. A prompt's measured [demand level](/guides/prompts#demand-level) raises it: High more, Medium a little, Low not at all.
 - **Severity** — what kind of change it is. A loss ranks above a sharp drop, a drop above a slip, and a slip above a gap or a site issue. Room to grow and gains rank lowest.
 - **Business value** — how commercial the searches are, or what a page is worth to the business (revenue, transactions or key events, from Google Analytics).
 - **Confidence** — how many independent kinds of finding and data sources agree. Ten signals repeating one finding count as one.
@@ -154,7 +154,7 @@ An action is scored when it is created, and again every night from that night's 
 
 The action's **Overview** tab starts with **Why this priority?**: one sentence written from the facts the score rests on. It says what changed, on what, how recently, and what makes it matter, for example:
 
-> Lost ground on 7 high-demand prompts 2 days ago — commercial intent, previously visible, confirmed by 2 sources.
+> Lost ground on 7 high-demand prompts 2 days ago — measured demand High, commercial intent, previously visible, confirmed by 2 sources.
 
 <Note>
 The Content Plan has its own Priority Score, which ranks the Plan's pages. The two are worked out separately. See [Content Editor](/guides/content-editor).

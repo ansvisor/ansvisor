@@ -40,6 +40,7 @@ const reason = (over: Partial<PriorityReason> = {}): PriorityReason => ({
   heldBefore: true,
   days: 2,
   sources: 1,
+  realDemand: null,
   pastSuccess: null,
   ...over,
 });
@@ -200,6 +201,47 @@ describe('priorityReasonText', () => {
         t,
       ),
     ).toBe('Its findings have resolved.');
+  });
+
+  it("says the prompts' measured demand level, and reads it from what was stored", () => {
+    expect(priorityReasonText(reason({ realDemand: 'high' }), t)).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — measured demand High, commercial intent, previously visible.',
+    );
+    expect(
+      priorityReasonText(
+        reason({ demand: 'medium', realDemand: 'medium', commercial: false, heldBefore: false }),
+        t,
+      ),
+    ).toBe('Lost ground on 7 prompts 2 days ago — measured demand Medium.');
+    expect(parsePriorityReason({ change: 'gap', realDemand: 'medium' })?.realDemand).toBe('medium');
+    expect(parsePriorityReason({ change: 'gap', realDemand: 'huge' })?.realDemand).toBeNull();
+  });
+
+  it('says both the measured demand and the track, when a reason has both', () => {
+    const stored = parsePriorityReason({
+      change: 'lost',
+      subject: { entity: 'prompts', count: 7 },
+      demand: 'high',
+      heldBefore: true,
+      days: 2,
+      realDemand: 'high',
+      pastSuccess: { improved: 3, results: 4, points: 3.33 },
+    });
+    expect(priorityReasonText(stored!, t)).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — measured demand High, previously visible, 3 of 4 earlier actions of this kind improved results here.',
+    );
+  });
+
+  it('never gives Low as a reason: it raises nothing', () => {
+    const stored = parsePriorityReason({
+      change: 'dropped',
+      subject: { entity: 'prompts', count: 7 },
+      demand: 'medium',
+      realDemand: 'low',
+      days: 2,
+    });
+    expect(stored?.realDemand).toBeNull();
+    expect(priorityReasonText(stored!, t)).not.toContain('measured demand');
   });
 
   it('falls back to a plain subject when the count is unknown', () => {
