@@ -179,12 +179,14 @@ describe('siteRows: pages, trust and facts', () => {
 });
 
 describe('site.build', () => {
-  it('writes only its own tables (and the audits’ signals), in order', async () => {
+  it('writes only its own tables (and the audits’ signals), the signals after their audits', async () => {
     const writes = [];
+    const keys = {};
     const db = {
       from: (table) => ({
-        insert: async (list) => {
+        upsert: async (list, { onConflict }) => {
           writes.push([table, list.length]);
+          keys[table] = onConflict;
           return { error: null };
         },
       }),
@@ -194,13 +196,20 @@ describe('site.build', () => {
     expect(tables).toEqual([
       'site_pages',
       'site_audits',
-      'audit_signal_results',
       'site_trust',
       'site_audit_brand_settings',
       'site_audit_page_prefs',
       'brand_fact_pages',
       'brand_facts',
+      'audit_signal_results',
     ]);
+    expect(keys).toMatchObject({
+      site_pages: 'brand_id,url',
+      site_audits: 'id',
+      audit_signal_results: 'audit_id,signal_key',
+      site_trust: 'brand_id',
+      brand_fact_pages: 'brand_id,kind',
+    });
     expect(tables.filter((t) => !site.tables.includes(t))).toEqual(['audit_signal_results']);
     expect(built.signals).toBe(built.audits * TOTAL_SIGNALS);
   });

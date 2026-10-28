@@ -35,6 +35,7 @@ import { group, promptTarget, single } from '../signals/library/detect.js';
 import { BRAND, SOURCES } from './brewline.js';
 import { contentRows, SENT_OPPORTUNITY } from './content.js';
 import { demoId } from './random.js';
+import { allSettledOrThrow, demoWriter } from './write.js';
 import * as S from './stats.js';
 
 const { library: T } = resolve();
@@ -911,14 +912,19 @@ function gettingStartedRows(ctx, brandId) {
   };
 }
 
-const CHUNK = 250;
-
-async function insertRows(db, table, rows) {
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const { error } = await db.from(table).insert(rows.slice(i, i + CHUNK));
-    if (error) throw new Error(`demo ${table} insert: ${error.message}`);
-  }
-}
+/** Its tables' key columns where a row has no `id` of its own. */
+const KEYS = {
+  getting_started: 'brand_id',
+  getting_started_steps: 'brand_id,step',
+  action_signals: 'action_id,signal_id',
+};
+/** Its tables without a brand_id, found through their action. */
+const SCOPES = {
+  action_signals: ['action_id', 'actions'],
+  action_tasks: ['action_id', 'actions'],
+  action_events: ['action_id', 'actions'],
+  action_task_reviews: ['action_id', 'actions'],
+};
 
 /**
  * The Action Center module. Tasks, events, signal links and task reviews
@@ -927,10 +933,25 @@ async function insertRows(db, table, rows) {
  */
 export const actionCenter = {
   name: 'actionCenter',
+  // Rebuilt in place (write.js): written over, what isn't written again deleted after.
+  inPlace: true,
+  keys: KEYS,
+  scopes: SCOPES,
   tables: ['kpi_definitions', 'getting_started', 'getting_started_steps', 'actions', 'signals'],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Each step's independent tables side by side, through the build's
+   * writer (a writer over `db` for a first build without one).
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild, keys: KEYS, scopes: SCOPES }).write,
+  }) {
     const rows = await actionCenterRows({ brandId, now });
     // Set up when its KPIs were: the KPI tab reads the brand as set up and
     // Getting started its KPI step as done, without writing either.
@@ -939,16 +960,22 @@ export const actionCenter = {
       .update({ kpi_setup_at: rows.kpiSetupAt })
       .eq('id', brandId);
     if (error) throw new Error(`demo brand kpi setup: ${error.message}`);
-    await insertRows(db, 'kpi_definitions', rows.kpis);
-    await insertRows(db, 'getting_started', rows.gettingStarted);
-    await insertRows(db, 'getting_started_steps', rows.gettingStartedSteps);
-    // Signals point at their action: the actions first.
-    await insertRows(db, 'actions', rows.actions);
-    await insertRows(db, 'signals', rows.signals);
-    await insertRows(db, 'action_signals', rows.links);
-    await insertRows(db, 'action_tasks', rows.tasks);
-    await insertRows(db, 'action_events', rows.events);
-    await insertRows(db, 'action_task_reviews', rows.reviews);
+    await allSettledOrThrow([
+      write('kpi_definitions', rows.kpis),
+      // A new brand's trigger has started Getting started: written over by brand.
+      write('getting_started', rows.gettingStarted),
+      write('getting_started_steps', rows.gettingStartedSteps),
+      write('actions', rows.actions),
+    ]);
+    // Signals, tasks, events and reviews point at their action; the links at
+    // both an action and a signal.
+    await allSettledOrThrow([
+      write('signals', rows.signals),
+      write('action_tasks', rows.tasks),
+      write('action_events', rows.events),
+      write('action_task_reviews', rows.reviews),
+    ]);
+    await write('action_signals', rows.links);
     return {
       signals: rows.signals.length,
       actions: rows.actions.length,

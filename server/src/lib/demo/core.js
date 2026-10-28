@@ -504,7 +504,8 @@ async function refreshRollups(brandId, dayFrom, dayTo) {
     return true;
   };
   const mentions = async () => {
-    if (!(await refreshMentionsDaily(brandId, dayFrom, dayTo, { termDays: TERM_DAYS }))) {
+    const options = { termDays: TERM_DAYS, together: true };
+    if (!(await refreshMentionsDaily(brandId, dayFrom, dayTo, options))) {
       return false;
     }
     await refreshPerceptionSnapshots(brandId);

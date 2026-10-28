@@ -19,7 +19,8 @@ import { catalogRecords, hashOf } from '../catalog/sync.js';
 import { parseFeed } from '../feeds/index.js';
 import { BRAND } from './brewline.js';
 import { demoId } from './random.js';
-import { DAY_MS, insertRows } from './site-common.js';
+import { DAY_MS } from './site-common.js';
+import { allSettledOrThrow, demoWriter } from './write.js';
 import { productDescription, variantsOf } from './site-html.js';
 import { CATALOG, CATEGORY_DECISIONS, REMOVED_PRODUCT, SITE_URL, pageUrl } from './site-world.js';
 
@@ -214,8 +215,17 @@ export function catalogRows({ brandId, now }) {
 }
 
 /** The catalog module: its brand-scoped tables, in the order written, and its build. */
+/** Its tables' key columns where a row has no `id` of its own. */
+const KEYS = {
+  catalog_product_categories: 'product_id,category_id',
+  catalog_category_pages: 'brand_id,category',
+};
+
 export const catalog = {
   name: 'catalog',
+  // Rebuilt in place (write.js): written over, what isn't written again deleted after.
+  inPlace: true,
+  keys: KEYS,
   tables: [
     'catalog_sources',
     // And, through them (on delete cascade), the products' images: the demo has none.
@@ -226,15 +236,31 @@ export const catalog = {
     'catalog_category_pages',
   ],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Its independent tables side by side, through the build's writer (a
+   * writer over `db` for a first build without one).
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild, keys: KEYS }).write,
+  }) {
     const rows = catalogRows({ brandId, now });
-    await insertRows(db, 'catalog_sources', [rows.source]);
-    await insertRows(db, 'catalog_products', rows.products);
-    await insertRows(db, 'catalog_variants', rows.variants);
-    await insertRows(db, 'catalog_categories', rows.categories);
-    await insertRows(db, 'catalog_product_categories', rows.productCategories);
-    await insertRows(db, 'catalog_category_pages', rows.categoryPages);
+    await allSettledOrThrow([
+      write('catalog_sources', [rows.source]),
+      write('catalog_products', rows.products),
+      write('catalog_categories', rows.categories),
+      write('catalog_category_pages', rows.categoryPages),
+    ]);
+    // Variants point at their product; the product categories at both.
+    await allSettledOrThrow([
+      write('catalog_variants', rows.variants),
+      write('catalog_product_categories', rows.productCategories),
+    ]);
     return { products: rows.products.length, variants: rows.variants.length };
   },
 };

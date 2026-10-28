@@ -14,6 +14,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { IMPROVE_PLATFORM_LABELS } from '../prompt-improve.js';
 import { BRAND, TOPICS } from './brewline.js';
 import { demoId } from './random.js';
+import { demoWriter } from './write.js';
 import * as S from './stats.js';
 
 const TEMPLATE_TITLES = {
@@ -328,13 +329,24 @@ export function reportRows({ brandId, now }) {
 /** The reports module. */
 export const reports = {
   name: 'reports',
+  // Rebuilt in place (write.js): written over, what isn't written again deleted after.
+  inPlace: true,
   tables: ['reports'],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Through the build's writer (a writer over `db` for a first build without one).
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild }).write,
+  }) {
     const rows = reportRows({ brandId, now });
-    const { error } = await db.from('reports').insert(rows);
-    if (error) throw new Error(`demo reports insert: ${error.message}`);
+    await write('reports', rows);
     return { reports: rows.length };
   },
 };
