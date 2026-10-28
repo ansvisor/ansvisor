@@ -28,7 +28,10 @@ export function lastSend(row: {
     row.status === 'queued' && Date.parse(row.created_at) < Date.now() - INTERRUPTED_AFTER_MS;
   return {
     status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
-    target: row.target === 'webflow' || row.target === 'wordpress' ? row.target : 'webhook',
+    target:
+      row.target === 'webflow' || row.target === 'wordpress' || row.target === 'framer'
+        ? row.target
+        : 'webhook',
     at: row.published_at ?? row.sent_at ?? row.created_at,
     error: interrupted ? 'Not sent: interrupted' : row.error,
   };

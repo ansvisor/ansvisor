@@ -497,7 +497,7 @@ describe('where a draft went, and its shopping links (B5)', () => {
     expect(draft.last_send).toMatchObject({ status: 'failed', error: 'Not sent: interrupted' });
   });
 
-  it('names a send to WordPress as such', async () => {
+  it.each(['wordpress', 'framer'])('names a send to %s as such', async (target) => {
     db.rows.content_drafts = [
       { ...draftRow(), shopping_built: null, content_shopping_checks: null },
     ];
@@ -506,7 +506,7 @@ describe('where a draft went, and its shopping links (B5)', () => {
       {
         draft_id: 'd1',
         status: 'sent',
-        target: 'wordpress',
+        target,
         created_at: '2026-10-25T09:00:00Z',
         sent_at: '2026-10-25T09:00:04Z',
         published_at: null,
@@ -518,7 +518,7 @@ describe('where a draft went, and its shopping links (B5)', () => {
     const [draft] = (await listContentDraftsFor(auth, 'b1'))!;
     expect(draft.last_send).toMatchObject({
       status: 'sent',
-      target: 'wordpress',
+      target,
       at: '2026-10-25T09:00:04Z',
     });
   });

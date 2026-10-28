@@ -18,7 +18,7 @@ import { assertSubscriptionActive } from './subscription-gate';
 export interface McpLastSend {
   /** queued, sent, failed (a send left queued reads as failed: interrupted) or published. */
   status: string;
-  /** webhook, webflow or wordpress: the brand's webhook, Webflow collection or WordPress site. */
+  /** webhook, webflow, wordpress or framer: the brand's webhook, Webflow collection, WordPress site or Framer collection. */
   target: string;
   /** When it was published, sent or queued. */
   at: string;

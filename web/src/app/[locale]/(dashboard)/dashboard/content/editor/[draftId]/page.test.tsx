@@ -207,6 +207,10 @@ vi.mock('@/lib/webflow-client', () => ({
 vi.mock('@/lib/wordpress-client', () => ({
   readWordPress: async () => ({ ok: true, configured: false, connection: null }),
 }));
+// Nor its Framer collection (00295).
+vi.mock('@/lib/framer-client', () => ({
+  readFramer: async () => ({ ok: true, configured: false, connection: null }),
+}));
 
 (
   globalThis as typeof globalThis & {

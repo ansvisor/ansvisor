@@ -1,15 +1,16 @@
 ---
 title: "Send to CMS"
-description: "Send Content Editor pages to Webflow as draft items, to WordPress as draft posts, or to your CMS through your workflow tool, and see where they went."
+description: "Send Content Editor pages to Webflow or Framer as draft items, to WordPress as draft posts, or to your CMS through your workflow tool, and see where they went."
 ---
 
-**Send to CMS** sends a Content Editor page to your CMS in one of three ways:
+**Send to CMS** sends a Content Editor page to your CMS in one of four ways:
 
 - **Webflow:** the page goes straight into a collection of your brand's Webflow site as a **draft item**. You publish it in Webflow.
 - **WordPress:** the page goes straight to your brand's WordPress site as a **draft post**. You publish it in WordPress.
+- **Framer:** the page goes straight into a CMS collection of your brand's Framer project as a **draft item**. You publish it in Framer.
 - **Your workflow:** the page goes to your brand's webhook as a content package (the page ready to publish, its title, slug, meta title, meta description, author and featured image). Your workflow tool (n8n, Make, Zapier or your own endpoint) turns it into a post or page in your CMS, and decides whether it lands as a draft or goes live.
 
-Ansvisor never publishes on its own. When your workflow tells Ansvisor where the page went live, or once you publish the item in Webflow or the post in WordPress, the draft becomes **Published** and its address shows in the Library.
+Ansvisor never publishes on its own. When your workflow tells Ansvisor where the page went live, or once you publish the item in Webflow or Framer or the post in WordPress, the draft becomes **Published** and its address shows in the Library.
 
 ## Connect Webflow
 
@@ -66,6 +67,31 @@ Each brand connects its own site. **Change sign-in** takes a new password, user 
 **Self-hosting:** WordPress sign-ins are encrypted with `CONNECTOR_CREDENTIALS_KEY` on the API server, the same key as the product catalog's store connections: 32 bytes in base64 (`openssl rand -base64 32`). Without it, the card says WordPress isn't set up, and pages go to Webflow or your workflow only. Changing the key makes saved sign-ins unreadable until they're entered again. The API server reaches the site over public https.
 </Note>
 
+## Connect Framer
+
+1. In Framer, open the project's **Site Settings → General** and make an **API key**. The key works as the user who makes it, so make it as a user who can edit the CMS, and copy it.
+2. In Ansvisor, open **Settings → Integrations** with the brand selected. In the **Framer** card, paste the **Project address** as your browser shows it in Framer (`https://framer.com/projects/…`), or the project's id, and the **API key**, and click **Connect**.
+3. Pick the **collection** your pages go to, then which of its fields takes what:
+
+   | Part of the page | Framer field type | |
+   |---|---|---|
+   | Title | Plain text | Required |
+   | Page content | Formatted text | Required |
+   | Meta title | Plain text | Optional |
+   | Meta description | Plain text | Optional |
+   | JSON-LD (structured data) | Plain text | Optional |
+
+   Ansvisor suggests the fields: the title goes to the field the collection's slugs are made from when it's plain text, the page content to a formatted text field named like Content or Body, else the first one, and the rest by their names. Change them if they're wrong, and **Save**. A required text field must take the title, page content, meta title or meta description (not JSON-LD), or **Save** stays off. Only the project's own collections are listed: a plugin's collections can't be written to. A collection with a required field Send to CMS can't fill (an image or a date, say), or with no plain text field for the title or no formatted text field for the page, is marked in the list and can't be saved. Make that field optional in Framer, or add the missing one, first.
+4. To use the JSON-LD field, put it inside a `<script type="application/ld+json">` tag on the collection's page in Framer.
+
+Before anything is kept, Ansvisor opens the project with the key. The API server encrypts the key before it's kept in Ansvisor's database, and it's never shown again. Framer doesn't say whether the key's user can edit the CMS, so a key that can only view the project shows up at the first send. Only **admins and managers** can connect Framer, pick the collection, replace the key or disconnect; members see where the brand's pages go.
+
+Each brand connects its own project. **Replace key** takes a new key (the collection and fields stay when it's the same project). **Disconnect** removes the key from Ansvisor. Framer has no way for Ansvisor to revoke a key, so delete it in the project's **Site Settings → General** too. If Framer refuses the saved key, the card says **Key refused** and asks for a new one.
+
+<Note>
+**Self-hosting:** Framer's API keys are encrypted with `CONNECTOR_CREDENTIALS_KEY`, as WordPress sign-ins are. The API server needs Node.js 22 or later (the Docker image runs 24) and reaches Framer at `wss://api.framer.com`. Framer's client prints its own warnings to the console; set `FRAMER_API_LOG_LEVEL=silent` to quiet it. Without `CONNECTOR_CREDENTIALS_KEY`, the card says Framer isn't set up. Changing the key makes saved keys unreadable: the card says **Key refused** until a new one is entered.
+</Note>
+
 ## Set up your workflow
 
 1. Open **Content → Opportunities → Webhook Settings**.
@@ -78,11 +104,11 @@ Only **admins and managers** can send pages.
 
 ## Choose where pages go
 
-Once the brand's Webflow collection is ready or its WordPress site is connected, the Send dialog offers them beside **Your workflow**: Webflow, WordPress, then your workflow. Your choice, and where you last sent, is remembered for the brand in your browser. With nothing remembered, or the one remembered no longer connected, the first one ready is picked.
+Once the brand's Webflow collection is ready, its WordPress site is connected or its Framer collection is ready, the Send dialog offers them beside **Your workflow**: Webflow, WordPress, Framer, then your workflow. Your choice, and where you last sent, is remembered for the brand in your browser. With nothing remembered, or the one remembered no longer connected, the first one ready is picked.
 
-A CMS connected but not ready shows but can't be picked, with what to fix, so a page doesn't go to your workflow unnoticed. Webflow isn't ready when its token is refused or no collection is picked; WordPress isn't ready when its sign-in is refused. If you chose that CMS before, the page goes to your workflow, never to the other CMS.
+A CMS connected but not ready shows but can't be picked, with what to fix, so a page doesn't go to your workflow unnoticed. Webflow isn't ready when its token is refused or no collection is picked; WordPress isn't ready when its sign-in is refused; Framer isn't ready when its key is refused or no collection and fields are picked. If you chose that CMS before, the page goes to your workflow, never to another CMS.
 
-If the dialog can't check Webflow or WordPress just then, it leaves that one out. If you chose it before, the page goes to your workflow and the dialog says so, with **Try again**.
+If the dialog can't check Webflow, WordPress or Framer just then, it leaves that one out. If you chose it before, the page goes to your workflow and the dialog says so, with **Try again**.
 
 ## Send one page
 
@@ -123,6 +149,19 @@ The toast says whether the draft post was made or updated, whether the post was 
 
 Once you publish the post in WordPress, the page becomes **Published** at the post's address. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A post published later than that stays "In WordPress as a draft post"; sending the page again then makes a new draft post, as for a published one. A post moved to the trash or deleted reads "Removed in WordPress"; send the page again to make a new post. A site that stops answering as WordPress (moved, or its permalinks set to Plain) closes nothing.
 
+**To Framer**, the page becomes a **draft item** in the collection, so it stays off the site until you publish it in Framer: the title, the slug, the page as formatted text, and the meta title, meta description and JSON-LD in the fields you picked.
+
+- Tables go as tables. Images aren't sent yet: add them in Framer.
+- A meta description left empty goes as the page's opening words. A JSON-LD field is emptied when the page has none.
+- The item's slug is the page's slug with lowercase letters, digits and `-`: accents are dropped, and dots and `_` turned into `-`, so the live address can differ slightly from the slug in the dialog.
+- Another item in the collection with the same slug stops the send: change the page's slug, or that item's. If the page has no item there yet and that item is a draft with the page's title, it's taken as the page's own (a send cut off before it finished) and updated.
+
+Sending the page again **updates** the same item and keeps its state: a draft stays a draft, and a published item's changes go live with your next publish of the site. A new item is made if the item was deleted in Framer, or after you switch collections.
+
+The toast says whether the item was made or updated, how many images were left out, and, for an item that isn't a draft, that the change goes live with your next publish of the site.
+
+Once you take the item out of draft and publish the site, the page becomes **Published** at its address: the site's address and the path of the collection's page in Framer, with the item's slug (`/blog/{slug}`, for example). Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. An item changed in Framer after the site's last publish waits for the next one, and a page sent again stays sent until the site is published again. An item published later than 60 days stays "In Framer as a draft item"; sending the page again starts the check over. A collection with no page in Framer gives its items no address, so they don't become Published. A page whose item you deleted in Framer reads "Removed in Framer"; send it again to make a new item.
+
 The page goes as **Export** makes it: the HTML without its H1 (your CMS's title field carries it), with the byline line if your brand adds the byline to its content. Ansvisor holds the send while:
 
 - a placeholder such as `[figure, source]` is still open: **Fill now** selects the first one, in the page or, when it's in an image's alt text, the JSON-LD or an HTML block, in the HTML view. The editor's toolbar counts those left and steps through them;
@@ -135,7 +174,7 @@ In the **Library**, tick the rows to send (up to 25 at once) and click **Send to
 
 The pages are sent one after another in the background, with a short pause between them so your CMS isn't flooded. The dialog follows them and says how many went, and you can close it at any time: the Library keeps following them. Very long pages go in more than one request, each once the one before has gone; closing the dialog while one waits stops the rest, and it says how many didn't go.
 
-A workspace can send **200 pages in 24 hours**, to Webflow, WordPress and your workflow together. A page already on its way to Webflow or WordPress can't be sent there again until it has gone. To WordPress, a page whose post is published or scheduled goes as a new draft post, as for one page.
+A workspace can send **200 pages in 24 hours**, to Webflow, WordPress, Framer and your workflow together. A page already on its way to Webflow, WordPress or Framer can't be sent there again until it has gone. To WordPress, a page whose post is published or scheduled goes as a new draft post, as for one page. To Framer, a page whose item isn't a draft is updated there, and the change goes live with your next publish of the site.
 
 ## See how a send went
 
@@ -144,7 +183,7 @@ Beside each row's status, the Library shows its last send:
 | Icon | Meaning |
 |---|---|
 | Clock | On its way. |
-| Paper plane | Your workflow took it (it answered with a 2xx status), it's a draft item in Webflow, or it's a draft post in WordPress. |
+| Paper plane | Your workflow took it (it answered with a 2xx status), it's a draft item in Webflow or Framer, or it's a draft post in WordPress. |
 | Red warning | It failed. Hover it to see what your workflow answered or reported, or why it couldn't be reached. |
 | Blue link | Published. Click it to open the live page. |
 
