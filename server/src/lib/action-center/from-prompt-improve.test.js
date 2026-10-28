@@ -2,10 +2,32 @@ import { describe, expect, it, vi } from 'vitest';
 
 // The module imports the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
-vi.mock('../../config/supabase.js', () => ({ default: {} }));
+const { tables, reads } = vi.hoisted(() => ({ tables: {}, reads: [] }));
+vi.mock('../../config/supabase.js', () => ({
+  default: {
+    // A read of one table, its filters recorded, its rows as given.
+    from: (table) => {
+      const filters = [];
+      reads.push({ table, filters });
+      const chain = {
+        select: () => chain,
+        eq: (column, value) => (filters.push(['eq', column, value]), chain),
+        neq: (column, value) => (filters.push(['neq', column, value]), chain),
+        in: (column, value) => (filters.push(['in', column, value]), chain),
+        is: (column, value) => (filters.push(['is', column, value]), chain),
+        order: () => chain,
+        limit: () => chain,
+        then: (resolve) => resolve({ data: tables[table] ?? [], error: null }),
+      };
+      return chain;
+    },
+  },
+}));
 
 const {
   improveBaseline,
+  improveRound,
+  loadImproveRounds,
   improveGoal,
   improveImpact,
   improveKpiKeys,
@@ -152,5 +174,94 @@ describe('improveKpiKeys', () => {
   it('measures citations only when the action names brand pages', () => {
     expect(improveKpiKeys(['https://acme.com/plans'])).toContain('citations');
     expect(improveKpiKeys([])).toEqual(['ai_visibility', 'mentions']);
+  });
+});
+
+/**
+ * Earlier Improve rounds on a prompt (learning B5): what the next
+ * generation is told each one did, and how its platforms moved.
+ */
+describe('improveRound', () => {
+  it('reads how its platforms moved and which suggestions were done', () => {
+    expect(
+      improveRound(
+        {
+          created_at: '2026-09-10T08:00:00Z',
+          status: 'completed',
+          position_outcome: {
+            final: true,
+            platforms: [
+              { platform: 'chatgpt-web', verdict: 'improved' },
+              { platform: 'gemini-web', verdict: 'unchanged' },
+            ],
+          },
+        },
+        [
+          {
+            title: 'Add a table to /pricing',
+            status: 'completed',
+            details: { platform: 'chatgpt-web' },
+          },
+          { title: 'Pitch seriouseats.com', status: 'todo', details: { platform: 'gemini-web' } },
+          { title: ' ', status: 'todo', details: null },
+        ],
+      ),
+    ).toEqual({
+      sent: '2026-09-10',
+      open: false,
+      final: true,
+      platforms: [
+        { id: 'chatgpt-web', verdict: 'improved' },
+        { id: 'gemini-web', verdict: 'unchanged' },
+      ],
+      suggestions: [
+        { platform: 'chatgpt-web', title: 'Add a table to /pricing', done: true },
+        { platform: 'gemini-web', title: 'Pitch seriouseats.com', done: false },
+      ],
+    });
+  });
+
+  it('reads an open round with no read yet', () => {
+    expect(improveRound({ status: 'in_progress', position_outcome: null }, [])).toEqual({
+      sent: null,
+      open: true,
+      final: false,
+      platforms: [],
+      suggestions: [],
+    });
+  });
+});
+
+describe('loadImproveRounds', () => {
+  it("reads the brand's own rounds on the prompt, not dismissed, with their suggestions", async () => {
+    reads.length = 0;
+    tables.actions = [{ id: 'a1', status: 'completed', created_at: '2026-09-10T08:00:00Z' }];
+    tables.action_tasks = [
+      { action_id: 'a1', title: 'Add a table to /pricing', status: 'completed', details: {} },
+      { action_id: 'other', title: 'Not this round', status: 'completed', details: {} },
+    ];
+
+    const rounds = await loadImproveRounds({ promptId: 'p1', brandId: 'b1' });
+
+    expect(reads[0]).toEqual({
+      table: 'actions',
+      filters: [
+        ['eq', 'brand_id', 'b1'],
+        ['eq', 'kind', 'prompt_improve'],
+        ['eq', 'payload->>promptId', 'p1'],
+        ['neq', 'status', 'dismissed'],
+        ['is', 'deleted_at', null],
+      ],
+    });
+    expect(rounds.map((round) => round.suggestions.map((s) => s.title))).toEqual([
+      ['Add a table to /pricing'],
+    ]);
+  });
+
+  it('reads no tasks when there is no earlier round', async () => {
+    reads.length = 0;
+    tables.actions = [];
+    expect(await loadImproveRounds({ promptId: 'p1', brandId: 'b1' })).toEqual([]);
+    expect(reads.map((read) => read.table)).toEqual(['actions']);
   });
 });

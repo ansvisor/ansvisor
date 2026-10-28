@@ -327,11 +327,53 @@ function evidenceBlock(evidence) {
   return lines.map((l) => `  ${l}`).join('\n');
 }
 
+const VERDICT_WORDS = {
+  improved: 'improved',
+  declined: 'declined',
+  unchanged: 'unchanged',
+  not_enough_data: 'not enough data',
+};
+
+/**
+ * Earlier Improve rounds on the prompt (learning B5), newest first: how its
+ * platforms moved since and which of its suggestions were done. Empty with
+ * none.
+ */
+function historyBlock(history) {
+  if (!history?.length) return '';
+  const name = (id) => IMPROVE_PLATFORM_LABELS[id] ?? id;
+  const rounds = history.map((round) => {
+    const moved = round.platforms.length
+      ? round.platforms
+          .map((p) => `${name(p.id)} ${VERDICT_WORDS[p.verdict] ?? p.verdict}`)
+          .join(', ')
+      : 'not read yet';
+    const when = round.open
+      ? 'still open'
+      : round.final
+        ? 'completed, final read'
+        : 'completed, read so far';
+    const suggestions = round.suggestions
+      .map(
+        (s) =>
+          `[${s.platform ? name(s.platform) : 'any'}] "${s.title}" (${s.done ? 'done' : 'not done'})`,
+      )
+      .join('; ');
+    return `- Sent ${round.sent ?? 'earlier'} (${when}): ${moved}.${suggestions ? `\n  Suggestions: ${suggestions}` : ''}`;
+  });
+  return `
+
+Earlier Improve rounds on this prompt, newest first:
+${rounds.join('\n')}
+Build on suggestions that came before an improvement on their platform. Do not suggest again what was done on a platform that did not move, unless the evidence now shows something new.`;
+}
+
 /**
  * System and user prompt for one generation. `platforms` are the actionable
  * ones: [{ id, state, mentionPosition, mentionTotal, citationRank, evidence }].
+ * `history`: the brand's earlier Improve rounds on the prompt (loadImproveRounds).
  */
-export function buildImprovePrompt({ promptText, brand, platforms }) {
+export function buildImprovePrompt({ promptText, brand, platforms, history = [] }) {
   const system = `You are an AI search (answer engine) optimization strategist. For one tracked prompt, you tell a brand what to do on each AI platform where it is missing or ranked late.
 
 Rules:
@@ -360,7 +402,7 @@ ${evidenceBlock(p.evidence)}`;
   const prompt = `Brand: ${brand.name}${brand.domains?.length ? ` (${brand.domains.join(', ')})` : ''}
 ${brand.description ? `About the brand: ${brand.description}\n` : ''}Tracked prompt: "${promptText}"
 
-${blocks}
+${blocks}${historyBlock(history)}
 
 Write the suggestions. Use each platform id exactly as given.`;
 

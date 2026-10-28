@@ -34,8 +34,10 @@ import {
 } from '../lib/prompt-improve.js';
 import {
   liveImproveSends,
+  loadImproveRounds,
   sendImproveToActionCenter,
 } from '../lib/action-center/from-prompt-improve.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -1156,10 +1158,19 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         promptId,
       });
       try {
+        // The brand's earlier Improve rounds on this prompt (learning B5).
+        // Without them the suggestions are still written, as before.
+        let history = [];
+        try {
+          history = await loadImproveRounds({ promptId, brandId });
+        } catch (err) {
+          logger.warn({ promptId, err: err.message }, '[improve] earlier rounds unavailable');
+        }
         const { system, prompt: userPrompt } = buildImprovePrompt({
           promptText: prompt.text,
           brand: { name: brand.name, description: brand.description, domains: brandDomains },
           platforms: withEvidence,
+          history,
         });
         // Every attempt is charged at its real token cost, so the budget holds
         // for any model, including attempts withRetry repeats after a schema miss.

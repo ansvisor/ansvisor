@@ -105,6 +105,74 @@ export function improveBaseline(snapshots, capturedAt, window) {
   return { capturedAt, window, platforms: snapshots };
 }
 
+/** Earlier Improve rounds on a prompt the next generation is shown (learning B5). */
+export const IMPROVE_PAST_ROUNDS = 2;
+
+/**
+ * One earlier Improve round on a prompt, as the next generation reads it
+ * (learning B5): when it was sent, whether it's still open, how each of its
+ * platforms moved since (final a month after it was completed), and the
+ * suggestions it carried, each with whether it was done.
+ *
+ * @param {{ created_at?: string, status: string, position_outcome?: object | null }} action
+ * @param {Array<{ title?: string | null, status: string, details?: { platform?: string } | null }>} tasks
+ */
+export function improveRound(action, tasks) {
+  const outcome = action.position_outcome ?? {};
+  return {
+    sent: typeof action.created_at === 'string' ? action.created_at.slice(0, 10) : null,
+    open: action.status !== 'completed',
+    final: outcome.final === true,
+    platforms: (Array.isArray(outcome.platforms) ? outcome.platforms : [])
+      .filter((p) => typeof p?.platform === 'string')
+      .map((p) => ({ id: p.platform, verdict: p.verdict ?? 'not_enough_data' })),
+    suggestions: tasks
+      .filter((task) => typeof task.title === 'string' && task.title.trim())
+      .map((task) => ({
+        platform: task.details?.platform ?? null,
+        title: task.title.trim(),
+        done: task.status === 'completed',
+      })),
+  };
+}
+
+/**
+ * The brand's last Improve rounds on a prompt, newest first: sent and not
+ * dismissed, nor deleted. The brand's own actions only.
+ *
+ * @returns {Promise<ReturnType<typeof improveRound>[]>}
+ */
+export async function loadImproveRounds({ promptId, brandId, limit = IMPROVE_PAST_ROUNDS }) {
+  const { data: actions, error } = await supabaseAdmin
+    .from('actions')
+    .select('id, status, created_at, position_outcome')
+    .eq('brand_id', brandId)
+    .eq('kind', IMPROVE_ACTION_KIND)
+    .eq('payload->>promptId', promptId)
+    .neq('status', 'dismissed')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`earlier Improve rounds read failed: ${error.message}`);
+  if (!actions?.length) return [];
+  const { data: tasks, error: tasksError } = await supabaseAdmin
+    .from('action_tasks')
+    .select('action_id, position, title, status, details')
+    .in(
+      'action_id',
+      actions.map((action) => action.id),
+    )
+    .order('position');
+  if (tasksError)
+    throw new Error(`earlier Improve rounds' tasks read failed: ${tasksError.message}`);
+  return actions.map((action) =>
+    improveRound(
+      action,
+      (tasks ?? []).filter((task) => task.action_id === action.id),
+    ),
+  );
+}
+
 /** One task row per selected suggestion, in the order they were shown. */
 export function improveTaskRows(actionId, suggestions) {
   return suggestions.map((s, i) => ({

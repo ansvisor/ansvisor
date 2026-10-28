@@ -276,6 +276,49 @@ describe('buildImprovePrompt', () => {
     expect(prompt).toContain('"q1" ×2');
   });
 
+  /** The brand's earlier rounds on the prompt (learning B5), and none without. */
+  it('says what earlier Improve rounds on the prompt did, and how their platforms moved', () => {
+    const platforms = [
+      {
+        id: 'gemini-web',
+        state: 'not_mentioned',
+        evidence: {
+          fanouts: [],
+          citedDomains: [],
+          competitors: [],
+          competitorUrls: [],
+          brandPages: [],
+          excerpt: '',
+        },
+      },
+    ];
+    const brand = { name: 'Acme', domains: [] };
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand,
+      platforms,
+      history: [
+        {
+          sent: '2026-09-10',
+          open: false,
+          final: true,
+          platforms: [
+            { id: 'chatgpt-web', verdict: 'improved' },
+            { id: 'gemini-web', verdict: 'unchanged' },
+          ],
+          suggestions: [{ platform: 'gemini-web', title: 'Pitch seriouseats.com', done: true }],
+        },
+      ],
+    });
+    expect(prompt).toContain(
+      '- Sent 2026-09-10 (completed, final read): ChatGPT improved, Gemini unchanged.\n  Suggestions: [Gemini] "Pitch seriouseats.com" (done)',
+    );
+    expect(prompt).toContain('Do not suggest again what was done on a platform that did not move');
+    expect(
+      buildImprovePrompt({ promptText: 'best coffee subscription', brand, platforms }).prompt,
+    ).not.toContain('Earlier Improve rounds');
+  });
+
   it('says how rarely a not-mentioned platform names the brand', () => {
     const { prompt } = buildImprovePrompt({
       promptText: 'best coffee subscription',
