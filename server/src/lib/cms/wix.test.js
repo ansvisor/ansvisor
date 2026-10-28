@@ -36,6 +36,9 @@ const start = async (routes) => {
   return { base: api.origin, request: api.request };
 };
 
+const CONVERT = 'POST /ricos/v1/ricos-document/convert/to-ricos';
+const converts = () => ({ json: { document: { nodes: [{ type: 'PARAGRAPH' }] } } });
+
 describe('siteIdOf', () => {
   it("reads the site's id, or the dashboard address it is in", () => {
     expect(siteIdOf(SITE.toUpperCase())).toBe(SITE);
@@ -48,9 +51,10 @@ describe('siteIdOf', () => {
 });
 
 describe('checkSite', () => {
-  it("checks the Blog with the key, and takes its newest post's owner and the site's name", async () => {
+  it("checks the Blog and the converter with the key, and takes its newest post's owner and the site's name", async () => {
     const opts = await start({
       'GET /blog/v3/posts': () => ({ json: { posts: [{ id: POST, memberId: MEMBER }] } }),
+      [CONVERT]: converts,
       'GET /site-properties/v4/properties': () => ({
         json: { properties: { siteDisplayName: ' Acme Coffee ' } },
       }),
@@ -62,11 +66,18 @@ describe('checkSite', () => {
     expect(first.headers.authorization).toBe(KEY);
     expect(first.headers['wix-site-id']).toBe(SITE);
     expect(first.query).toEqual({ 'paging.limit': '1' });
+    // The converter is tried on a line of text: nothing is written to the site.
+    expect(api.calls[1]).toMatchObject({
+      method: 'POST',
+      path: '/ricos/v1/ricos-document/convert/to-ricos',
+      body: { html: '<p>x</p>' },
+    });
   });
 
   it('takes a member when the Blog has no post yet, and goes without a name it may not read', async () => {
     const opts = await start({
       'GET /blog/v3/posts': () => ({ json: { posts: [] } }),
+      [CONVERT]: converts,
       'POST /members/v1/members/query': () => ({ json: { members: [{ id: MEMBER }] } }),
       'GET /site-properties/v4/properties': () => ({ status: 403, json: {} }),
     });
@@ -84,9 +95,26 @@ describe('checkSite', () => {
 
     opts = await start({
       'GET /blog/v3/posts': () => ({ json: { posts: [] } }),
+      [CONVERT]: converts,
       'POST /members/v1/members/query': () => ({ json: { members: [] } }),
     });
     await expect(checkSite(SITE, KEY, opts)).rejects.toMatchObject({ code: 'no_member' });
+  });
+
+  it('says the key needs the Ricos permission when the converter refuses it', async () => {
+    const opts = await start({
+      'GET /blog/v3/posts': () => ({ json: { posts: [{ id: POST, memberId: MEMBER }] } }),
+      [CONVERT]: () => ({ status: 403, json: { message: 'PERMISSION_DENIED' } }),
+    });
+    await expect(checkSite(SITE, KEY, opts)).rejects.toMatchObject({
+      code: 'no_ricos_permission',
+      message: expect.stringContaining('Manage Ricos Document'),
+    });
+    // Refused there, nothing else is asked.
+    expect(api.calls.map((call) => call.path)).toEqual([
+      '/blog/v3/posts',
+      '/ricos/v1/ricos-document/convert/to-ricos',
+    ]);
   });
 });
 

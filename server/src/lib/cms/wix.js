@@ -20,8 +20,10 @@ export const WIX_API = 'https://www.wixapis.com';
 
 export class WixError extends Error {
   /**
-   * @param {'invalid'|'auth_failed'|'no_access'|'no_blog'|'no_member'|'not_found'|'unreachable'|'failed'} code
-   *   'auth_failed': the key is refused (the person connects again)
+   * @param {'invalid'|'auth_failed'|'no_access'|'no_ricos_permission'|'no_blog'|'no_member'|
+   *   'not_found'|'unreachable'|'failed'} code
+   *   'auth_failed': the key is refused (the person connects again);
+   *   'no_ricos_permission': the key may write the Blog, not use Wix's converter
    * @param {string} message
    * @param {number} [status] the HTTP status Wix answered, when it did
    */
@@ -101,9 +103,10 @@ async function call(path, { siteId, apiKey, method = 'GET', query, body, request
 
 /**
  * Checks a site and its key before they're kept: the key opens the site's
- * Blog, and a member can own the posts it writes (Wix's Blog needs one): the
- * owner of its newest post, else its first member. The site's name when the
- * key may read it.
+ * Blog, it may use Wix's converter (a page is sent through it: tried on a
+ * line of text, which Wix doesn't keep), and a member can own the posts it
+ * writes (Wix's Blog needs one): the owner of its newest post, else its
+ * first member. The site's name when the key may read it.
  *
  * @returns {Promise<{ siteName: string|null, memberId: string }>}
  */
@@ -122,6 +125,7 @@ export async function checkSite(siteId, apiKey, { request, base } = {}) {
     }
     throw err;
   }
+  await toRicos(siteId, apiKey, '<p>x</p>', { request, base });
   let memberId = posts?.posts?.[0]?.memberId ?? null;
   if (!memberId) {
     const members = await call('/members/v1/members/query', {
@@ -189,7 +193,11 @@ export function ricosChunks(html, limit = RICOS_CHUNK) {
   return chunks;
 }
 
-/** The page's HTML as Wix's rich content: its pieces converted one after another, joined. */
+/**
+ * The page's HTML as Wix's rich content: its pieces converted one after
+ * another, joined. A key refused there has the Blog's permissions, not the
+ * converter's (Manage Ricos Document).
+ */
 export async function toRicos(siteId, apiKey, html, { request, base } = {}) {
   const nodes = [];
   for (const chunk of ricosChunks(html)) {
@@ -200,6 +208,15 @@ export async function toRicos(siteId, apiKey, html, { request, base } = {}) {
       body: { html: chunk, options: { plugins: RICOS_PLUGINS } },
       request,
       base,
+    }).catch((err) => {
+      if (err instanceof WixError && err.code === 'no_access') {
+        throw new WixError(
+          'no_ricos_permission',
+          'The API key needs the Ricos permission (Manage Ricos Document) too. Add it to the key in Wix’s API Keys Manager, then try again.',
+          err.status,
+        );
+      }
+      throw err;
     });
     if (!Array.isArray(data?.document?.nodes)) {
       throw new WixError('failed', 'Wix couldn’t read the page’s text.');
