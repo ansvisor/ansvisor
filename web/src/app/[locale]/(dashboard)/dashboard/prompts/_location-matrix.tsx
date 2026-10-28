@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Clock, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Table,
   TableBody,
@@ -137,6 +138,7 @@ export function LocationPending({
 }) {
   const t = useTranslations('prompts.locations');
   const countries = useTrackingCountries();
+  const tipId = useId();
   const parsed = parseLocation(region);
   if (!reachesToday(window)) {
     return (
@@ -150,18 +152,38 @@ export function LocationPending({
     : parsed && !answersFrom(prompt, parsed, countries)
       ? 'noEngine'
       : 'pending';
+  const tip = t(`${state}Tip`, { location: regionLabel(region) });
+  // Why, on hover and on keyboard focus; and for a screen reader, as the
+  // label's description.
   return (
-    <span
-      title={t(`${state}Tip`, { location: regionLabel(region) })}
-      className={cn(
-        'inline-flex items-center justify-center gap-1 text-[11px]',
-        state === 'noEngine' ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
-        className,
-      )}
-    >
-      {state === 'pending' && <Clock className="h-3 w-3" aria-hidden />}
-      {t(state)}
-    </span>
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          delay={300}
+          closeDelay={0}
+          render={
+            <button
+              type="button"
+              aria-describedby={tipId}
+              className={cn(
+                'inline-flex cursor-help items-center justify-center gap-1 rounded-md text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                state === 'noEngine'
+                  ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-muted-foreground',
+                className,
+              )}
+            />
+          }
+        >
+          {state === 'pending' && <Clock className="h-3 w-3" aria-hidden />}
+          {t(state)}
+        </TooltipTrigger>
+        <TooltipContent className="max-w-72">{tip}</TooltipContent>
+      </Tooltip>
+      <span id={tipId} className="sr-only">
+        {tip}
+      </span>
+    </>
   );
 }
 
@@ -433,7 +455,12 @@ export function LocationMatrix({
                           // The plan's locations are used up: the dialog says how to get more.
                           <button
                             type="button"
-                            aria-label={t('trackLabel', { prompt: p.text, location: where })}
+                            aria-label={t('limitLabel', {
+                              prompt: p.text,
+                              location: where,
+                              used: quota!.used,
+                              max: quota!.maxPrompts,
+                            })}
                             title={t('limitTip', { used: quota!.used, max: quota!.maxPrompts })}
                             onClick={() => onTrack(p, r)}
                             className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed py-1.5 text-[11px] text-amber-700 transition-colors hover:border-amber-500/60 dark:text-amber-400"

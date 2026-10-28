@@ -75,9 +75,14 @@ async function render(canTrack = true) {
   return container.textContent ?? '';
 }
 
+/** Each row's cells as they show: without the text only screen readers get. */
 const bodyRows = () =>
   [...container.querySelectorAll('tbody tr')].map((tr) =>
-    [...tr.querySelectorAll('td')].map((td) => td.textContent),
+    [...tr.querySelectorAll('td')].map((td) => {
+      const shown = td.cloneNode(true) as HTMLElement;
+      shown.querySelectorAll('.sr-only').forEach((el) => el.remove());
+      return shown.textContent;
+    }),
   );
 
 beforeEach(() => {
@@ -223,9 +228,13 @@ describe('a location with no answers yet', () => {
       '62',
       '—',
     ]);
-    expect(
-      container.querySelector('span[title^="Tracked in Türkiye from the next daily run"]'),
-    ).not.toBeNull();
+    // The reason reaches the keyboard and screen readers, not only the mouse.
+    const pending = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Within 24h',
+    )!;
+    expect(document.getElementById(pending.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Tracked in Türkiye from the next daily run: its first results come within 24 hours.',
+    );
   });
 
   it('shows a plain dash for a custom range that ended before today', async () => {
@@ -252,6 +261,12 @@ describe('a location with no answers yet', () => {
     // KE comes before US.
     expect(rows[1][2]).toBe('Paused');
     expect(rows[2][2]).toBe('No engine here');
+    const noEngine = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'No engine here',
+    )!;
+    expect(document.getElementById(noEngine.getAttribute('aria-describedby')!)?.textContent).toBe(
+      "None of this prompt's engines answers from Kenya, so nothing is asked there. Add an engine that does, or remove the location.",
+    );
   });
 
   it("says no engine answers from a US state when only Google's, run country-wide, would", async () => {
@@ -274,7 +289,7 @@ describe('a location with no answers yet', () => {
     await render();
     expect(container.textContent).not.toContain('+ Track');
     const limit = container.querySelector(
-      'button[aria-label="Track “same day coffee delivery near me” in Türkiye"]',
+      'button[aria-label="Limit reached: “same day coffee delivery near me” in Türkiye. Your plan\'s prompt locations are used up (200 of 200); open to see how to track here."]',
     ) as HTMLButtonElement;
     expect(limit.textContent).toBe('Limit reached');
     expect(limit.title).toBe(

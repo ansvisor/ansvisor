@@ -7047,6 +7047,7 @@
       "noEngineTip": "None of this prompt's engines answers from {location}, so nothing is asked there. Add an engine that does, or remove the location.",
       "limit": "Limit reached",
       "limitTip": "Your plan's prompt locations are used up ({used} of {max}). Open to see how to track here.",
+      "limitLabel": "Limit reached: “{prompt}” in {location}. Your plan's prompt locations are used up ({used} of {max}); open to see how to track here.",
       "kind": {
         "country": "Country",
         "state": "US state",
