@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/compone
 import { useUserRole } from '@/hooks/use-user-role';
 import {
   aiUsageTone,
+  featurePercentLabel,
   percentLabel,
   type UsageCount,
   type UsageLimits,
@@ -231,14 +232,21 @@ export function AiUsageMeter({
           </p>
         )}
 
-        <ul className="mt-3 divide-y border-t text-[13px]">
-          {usage.features.map(({ feature, percent: share }) => (
-            <li key={feature} className="flex items-center justify-between gap-3 py-1.5">
-              <span className="text-muted-foreground">{tFeature(feature)}</span>
-              <span className="font-medium tabular-nums">{percentLabel(share)}</span>
-            </li>
-          ))}
-        </ul>
+        {/* Only what used some is listed: none yet, a line says so. */}
+        {usage.features.length > 0 ? (
+          <ul className="mt-3 divide-y border-t text-[13px]">
+            {usage.features.map(({ feature, percent: share }) => (
+              <li key={feature} className="flex items-center justify-between gap-3 py-1.5">
+                <span className="text-muted-foreground">{tFeature(feature)}</span>
+                <span className="font-medium tabular-nums">{featurePercentLabel(share)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 border-t py-1.5 text-[13px] text-muted-foreground">
+            {t('popover.none')}
+          </p>
+        )}
 
         <ul className="mt-1 border-t text-[13px]">
           <li className="flex items-center justify-between gap-3 py-1.5">
