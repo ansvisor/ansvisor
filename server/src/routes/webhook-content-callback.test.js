@@ -13,6 +13,8 @@ vi.mock('../middleware/rate-limiter.js', () => ({
   webhookCallbackLimiter: (_req, _res, next) => next(),
   webhookCallbackAuthFailureLimiter: (_req, _res, next) => next(),
 }));
+const isBrandActive = vi.hoisted(() => vi.fn());
+vi.mock('../lib/active-subscriptions.js', () => ({ isBrandActive }));
 
 const { default: router } = await import('./webhook-content-callback.js');
 
@@ -74,6 +76,8 @@ beforeEach(async () => {
   state.configs = [{ brand_id: 'brand-1', is_active: true, webhook_secret: 'shared-secret' }];
   mockFrom.mockReset();
   mockFrom.mockImplementation((name) => table(name));
+  // Every brand's organization on a plan unless a test says otherwise.
+  isBrandActive.mockReset().mockResolvedValue(true);
   await startApp();
 });
 
@@ -98,6 +102,29 @@ async function send({
 }
 
 describe('POST /webhooks/content/:id/status', () => {
+  /**
+   * Once the plan has ended (2026-10-27): a 2xx, so the workflow doesn't
+   * fail or retry, and the opportunity left as it is.
+   */
+  it("changes nothing for a brand whose organization's plan has ended, and answers 202", async () => {
+    isBrandActive.mockResolvedValue(false);
+    const response = await send({ secret: 'shared-secret', status: 'completed' });
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      ignored: true,
+      code: 'subscription_inactive',
+    });
+    expect(isBrandActive).toHaveBeenCalledWith('brand-1');
+    expect(state.opportunities[0].status).toBe('sent');
+  });
+
+  it('asks about the plan only once the secret matched', async () => {
+    isBrandActive.mockResolvedValue(false);
+    expect((await send({ secret: 'wrong-secret' })).status).toBe(401);
+    expect(isBrandActive).not.toHaveBeenCalled();
+  });
+
   it('rejects a missing secret', async () => {
     const response = await send();
     expect(response.status).toBe(401);
