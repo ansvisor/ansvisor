@@ -14,7 +14,13 @@ import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
-import { parseLocation, locationsForScraper } from '../lib/locations.js';
+import {
+  isUnknownCity,
+  locationsForModels,
+  locationsForScraper,
+  parseLocation,
+} from '../lib/locations.js';
+import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
 import logger from '../lib/logger.js';
 
@@ -304,23 +310,51 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
   const allowedPlatformsFor = (prompt) => runnablePlatforms(prompt.platforms, { shoppingEnabled });
 
-  // A prompt's tracked locations (#691): country codes and US state codes
-  // (`US-CA`) alike. No locations means one untargeted run, which is what an
-  // empty list has always meant here.
+  // A prompt's tracked locations (#691): country codes, US state codes
+  // (`US-CA`) and city codes (`TR~ISTANBUL`, PROMPT-015d) alike. No locations
+  // means one untargeted run, which is what an empty list has always meant
+  // here. locationsForScraper keeps a city only for Google's engines; the API
+  // models take every code (userLocationFor). A city no list names is run by
+  // neither: its answers would be the country's, recorded as the city's.
   const locationsFor = (prompt) =>
     prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
+  const unknownCities = [
+    ...new Set(prompts.flatMap((prompt) => locationsFor(prompt).filter(isUnknownCity))),
+  ];
+  if (unknownCities.length > 0) {
+    logger.warn({ brandId, codes: unknownCities }, 'skipping city codes no city list names');
+  }
+
+  // The countries each engine answers from (PROMPT-015e, read daily): an
+  // engine isn't asked in a country it doesn't support, which would fail and
+  // cost a task. Nothing is skipped when no list was read.
+  const supportedCountries = await loadSupportedCountries().catch((err) => {
+    logger.error({ err, brandId }, 'engine country lists unreadable; nothing skipped');
+    return new Map();
+  });
+  const scraperLocations = (prompt, scraperId) =>
+    supportedLocations(locationsFor(prompt), scraperId, supportedCountries);
 
   // 4. Count total tasks: one per prompt × engine × location that engine can
   // actually run. Google AIO / AI Mode have no sub-country mechanism, so
   // their state locations collapse to one country-wide task — counting them
   // per state would promise the progress bar work that is never submitted.
   let totalTasks = 0;
+  let unsupported = 0;
   for (const prompt of prompts) {
     const locations = locationsFor(prompt);
-    totalTasks += allowedModelsFor(prompt).length * locations.length;
+    totalTasks += allowedModelsFor(prompt).length * locationsForModels(locations).length;
     for (const scraperId of allowedPlatformsFor(prompt)) {
-      totalTasks += locationsForScraper(locations, scraperId).length;
+      const runnable = scraperLocations(prompt, scraperId).length;
+      totalTasks += runnable;
+      unsupported += locationsForScraper(locations, scraperId).length - runnable;
     }
+  }
+  if (unsupported > 0) {
+    logger.info(
+      { brandId, skipped: unsupported },
+      'engine × country pairs the engine does not support, skipped',
+    );
   }
 
   // 5. Shared counters & helper
@@ -363,7 +397,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       // `region` carries the full location code — it is what gets stamped on
       // the result row, so a Google run collapsed to its country is recorded
       // as the country it actually ran in, not the state that was asked for.
-      for (const region of locationsForScraper(locationsFor(prompt), scraperId)) {
+      for (const region of scraperLocations(prompt, scraperId)) {
         scraperTasks.push({ prompt, scraperId, region });
       }
     }
@@ -394,10 +428,11 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // brand's single state column (#691): different prompts can target
         // different places, and a brand-wide override would silently win
         // over them.
-        const { country, state } = parseLocation(t.region);
+        const { country, state, city } = parseLocation(t.region);
         return submitScraperTask(t.prompt.text, t.scraperId, country, {
           webhookUrl,
           state,
+          location: city?.google,
         }).then((res) => ({
           ...res,
           meta: t,
@@ -774,7 +809,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     const locations = locationsFor(prompt);
 
     for (const modelName of modelsToRun) {
-      for (const region of locations) {
+      for (const region of locationsForModels(locations)) {
         modelTasks.push({ prompt, modelName, region });
       }
     }

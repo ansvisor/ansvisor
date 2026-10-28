@@ -1,5 +1,6 @@
 'use server';
 
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
@@ -14,6 +15,12 @@ import {
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
 import { PROMPT_DELETE_BATCH } from '@/lib/prompt-bulk-actions';
 import { isValidLocation, locationCode } from '@/lib/region';
+import { createLimiter } from '@/lib/limiter';
+import {
+  MATRIX_READS_AT_ONCE,
+  MATRIX_REGIONS,
+  type PromptLocationCell,
+} from '@/lib/prompt-location-matrix';
 import type { Plan, PlanId } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import {
@@ -28,6 +35,7 @@ import {
   type PlatformPositionRow,
   type PromptPositionCell,
 } from '@/lib/prompt-position-summary';
+import { assertWritable } from '@/lib/subscription-guard';
 
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
   const allowedScrapers = plan.limits.allowedScrapers
@@ -198,6 +206,7 @@ export async function getPromptCapacity(
  * message (#427).
  */
 export async function savePromptSet(input: SavePromptSetInput): Promise<SavePromptSetResult> {
+  await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
   const { organizationId: orgId, region: brandRegion } = await getBrandContext(
@@ -312,6 +321,7 @@ export async function updatePrompt(
     models?: string[];
   },
 ): Promise<Prompt> {
+  await assertWritable();
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -400,6 +410,7 @@ export async function updatePromptLocations(
   id: string,
   regionsInput: string[],
 ): Promise<UpdatePromptLocationsResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   const regions = [...new Set(regionsInput.map((r) => r.trim().toUpperCase()))];
@@ -493,6 +504,7 @@ export async function bulkUpdatePromptLocations(
   action: 'add' | 'remove',
   locationsInput: string[],
 ): Promise<BulkUpdatePromptLocationsResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   const ids = [...new Set(promptIds)].filter(Boolean);
@@ -606,6 +618,7 @@ export type AddPromptToSetResult = { prompt: Prompt } | { error: string; code?: 
  * message (#427).
  */
 export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptToSetResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { data: ps } = await supabase
@@ -689,6 +702,7 @@ export async function addPromptToBrand(
   brandId: string,
   input: { text: string; category?: string; platforms: string[]; models?: string[] },
 ): Promise<AddPromptToBrandResult> {
+  await assertWritable();
   const supabase = await createClient();
   const trimmed = input.text.trim();
   if (!trimmed) return { error: 'Prompt text is required.' };
@@ -790,6 +804,7 @@ export async function setPromptActive(
   id: string,
   isActive: boolean,
 ): Promise<SetPromptActiveResult> {
+  await assertWritable();
   const supabase = await createClient();
 
   if (isActive) {
@@ -840,6 +855,7 @@ export async function importPrompts(
   brandId: string,
   rows: ImportPromptRow[],
 ): Promise<ImportPromptsResult> {
+  await assertWritable();
   if (rows.length === 0) return { importedIdx: [], promptIds: [], analysisStarted: false };
   if (rows.length > 1000) return { error: 'Import at most 1,000 prompts at a time.' };
   const supabase = await createClient();
@@ -939,6 +955,7 @@ export async function importPrompts(
 }
 
 export async function deletePrompt(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { error } = await supabase.from('prompts').delete().eq('id', id);
@@ -958,6 +975,7 @@ export async function setPromptsActive(
   ids: string[],
   isActive: boolean,
 ): Promise<SetPromptsActiveResult> {
+  await assertWritable();
   if (ids.length === 0) return { updated: 0 };
   const supabase = await createClient();
 
@@ -991,6 +1009,7 @@ export async function setPromptsActive(
 export async function deletePrompts(
   ids: string[],
 ): Promise<{ deletedIds: string[] } | { error: string }> {
+  await assertWritable();
   if (ids.length === 0) return { deletedIds: [] };
   if (ids.length > PROMPT_DELETE_BATCH) {
     return { error: `At most ${PROMPT_DELETE_BATCH} prompts per call.` };
@@ -1003,6 +1022,7 @@ export async function deletePrompts(
 }
 
 export async function deletePromptSet(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   const { error } = await supabase.from('prompt_sets').delete().eq('id', id);
@@ -1133,24 +1153,86 @@ async function getPositionRows(
   window: { from: string; to?: string },
   region?: string,
 ): Promise<PositionRows> {
+  const before = previousWindow(window);
+  const [included, current, previous] = await Promise.all([
+    includedPositionPlatforms(brandId),
+    positionSums(brandId, window, region),
+    positionSums(brandId, before, region),
+  ]);
+  if (!included) return noPositionRows();
+  return { included, current, previous };
+}
+
+/** The engines the org's plan includes, as the Positions panel counts them; null without a brand. */
+async function includedPositionPlatforms(
+  brandId: string,
+): Promise<{ id: string; label: string }[] | null> {
   const supabase = await createClient();
   const { data: brand } = await supabase
     .from('brands')
     .select('organization_id')
     .eq('id', brandId)
     .maybeSingle();
-  if (!brand?.organization_id) return noPositionRows();
+  if (!brand?.organization_id) return null;
+  const plan = await getOrgPlan(brand.organization_id as string);
+  return POSITION_PLATFORMS.filter((p) => platformAccess(plan, p.id).state === 'included').map(
+    (p) => ({ id: p.id as string, label: p.label as string }),
+  );
+}
 
-  const before = previousWindow(window);
-  const [plan, current, previous] = await Promise.all([
-    getOrgPlan(brand.organization_id as string),
-    positionSums(brandId, window, region),
-    positionSums(brandId, before, region),
+/**
+ * Each tracked prompt's figures in each of `regions` (PROMPT-015b): the
+ * same reads the table uses for one location, once per location, side by
+ * side, so a location's column equals the table filtered to it. Keyed by
+ * prompt id, then location code; a prompt with no answers in a location
+ * has no cell there.
+ */
+export async function getPromptLocationMatrix(
+  brandId: string,
+  opts: { days?: number; from?: string; to?: string; regions: string[] },
+): Promise<Record<string, Record<string, PromptLocationCell>>> {
+  const regions = [...new Set(opts.regions.filter(isValidLocation))].slice(0, MATRIX_REGIONS);
+  if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
+  const days = opts.days ?? DEFAULT_PROMPT_RANGE_DAYS;
+  const window = {
+    from: opts.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+    to: opts.to,
+  };
+  // One round of reads, but at most MATRIX_READS_AT_ONCE of the heavy ones
+  // (two per location) at a time: twelve locations at once squeezed the
+  // database.
+  const limit = createLimiter(MATRIX_READS_AT_ONCE);
+  const [platforms, reads] = await Promise.all([
+    includedPositionPlatforms(brandId),
+    Promise.all(
+      regions.map((region) =>
+        Promise.all([
+          limit(() =>
+            getPromptVisibilitySummaries(brandId, { days, from: opts.from, to: opts.to, region }),
+          ),
+          limit(() => positionSums(brandId, window, region)).catch((err) => {
+            console.error('[prompts] location position sums failed:', err);
+            return new Map<string, PlatformPositionRow[]>();
+          }),
+        ]),
+      ),
+    ),
   ]);
-  const included = POSITION_PLATFORMS.filter(
-    (p) => platformAccess(plan, p.id).state === 'included',
-  ).map((p) => ({ id: p.id as string, label: p.label as string }));
-  return { included, current, previous };
+  const included = platforms ?? [];
+  const cells: Record<string, Record<string, PromptLocationCell>> = {};
+  regions.forEach((region, i) => {
+    const [visibility, positions] = reads[i];
+    for (const [promptId, vis] of Object.entries(visibility)) {
+      (cells[promptId] ??= {})[region] = {
+        score: vis.score,
+        mentions: vis.totalMentions,
+        citations: vis.totalCitations,
+        position: buildPositionCell(positions.get(promptId) ?? [], [], included).avg,
+        runs: vis.runs,
+      };
+    }
+  });
+  return cells;
 }
 
 /** A prompt and platform's sums, as prompt_position_summaries_json (00153) returns them. */
