@@ -28,9 +28,8 @@ function assertTopicNames(names: string[]) {
 }
 
 export async function createTopics(brandId: string, names: string[]): Promise<Topic[]> {
-  await assertWritable({ onboarding: true });
-  assertTopicNames(names);
   await assertWritable({ onboarding: true, brandId });
+  assertTopicNames(names);
   const supabase = await createClient();
 
   // Remove existing topics for this brand to avoid duplicates
@@ -85,9 +84,8 @@ export async function getTopicById(brandId: string, topicId: string): Promise<To
 }
 
 export async function createTopic(brandId: string, name: string): Promise<Topic> {
-  await assertWritable();
-  assertTopicNames([name]);
   await assertWritable({ brandId });
+  assertTopicNames([name]);
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -103,7 +101,6 @@ export async function createTopic(brandId: string, name: string): Promise<Topic>
 export async function updateTopic(topicId: string, name: string): Promise<Topic> {
   await assertWritable();
   assertTopicNames([name]);
-  await assertWritable();
   const supabase = await createClient();
 
   const { data, error } = await supabase
