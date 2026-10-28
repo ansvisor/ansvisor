@@ -138,14 +138,23 @@ export function matrixInsights(
       .filter((v): v is number => v !== null),
   );
   let widest: MatrixInsights['widest'] = null;
+  let widestGap = -1;
   for (const p of prompts) {
     const values = regions.map((r) => metricValue(matrix[p.id]?.[r], 'visibility'));
     const gap = rowGap(values);
-    if (gap === null || (widest && gap <= widest.high - widest.low)) continue;
+    if (gap === null || gap <= widestGap) continue;
+    widestGap = gap;
     const known = values.map((v, i) => ({ v, r: regions[i] })).filter((x) => x.v !== null);
     const lo = known.reduce((a, b) => (b.v! < a.v! ? b : a));
     const hi = known.reduce((a, b) => (b.v! > a.v! ? b : a));
-    widest = { promptId: p.id, text: p.text, low: lo.v!, lowAt: lo.r, high: hi.v!, highAt: hi.r };
+    widest = {
+      promptId: p.id,
+      text: p.text,
+      low: Math.round(lo.v!),
+      lowAt: lo.r,
+      high: Math.round(hi.v!),
+      highAt: hi.r,
+    };
   }
   const tracking = (region: string) => prompts.filter((p) => p.regions.includes(region)).length;
   const weakest = sorted[0];
