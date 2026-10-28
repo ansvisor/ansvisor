@@ -561,6 +561,8 @@ export type BulkSendResult =
       success: true;
       sent: number;
       failed: number;
+      /** Of the failed, those whose webhook redirects (0 from an API before #1590's follow-up). */
+      redirected: number;
     }
   | {
       success: false;
@@ -593,6 +595,7 @@ export async function bulkSendToWebhook(ids: string[]): Promise<BulkSendResult> 
     success: true,
     sent: data.sent,
     failed: data.failed,
+    redirected: data.redirected ?? 0,
   };
 }
 

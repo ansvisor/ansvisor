@@ -174,7 +174,13 @@ describe('POST /api/content/webhook-test', () => {
   it('reads a redirect as an answer, not a success', async () => {
     postJson.mockResolvedValue({ status: 302, answer: '' });
     const res = await test({ webhookUrl: 'https://hooks.example/abc' });
-    expect(await res.json()).toEqual({ success: false, status: 302, statusText: 'Found' });
+    // In a send's words, so the dialog says it as a send would (#1590).
+    expect(await res.json()).toEqual({
+      success: false,
+      status: 302,
+      statusText: 'Found',
+      error: 'The webhook address redirects. Use the address it redirects to.',
+    });
     expect(postJson.mock.calls[0][2]).toEqual({ headers: {}, timeoutMs: 10_000 });
   });
 
@@ -185,6 +191,7 @@ describe('POST /api/content/webhook-test', () => {
       success: false,
       status: 308,
       statusText: 'Permanent Redirect',
+      error: 'The webhook address redirects. Use the address it redirects to.',
       location: 'https://hooks.example/v2',
     });
   });
@@ -342,7 +349,7 @@ describe('POST /api/content/bulk/send-webhook', () => {
       .mockResolvedValueOnce({ status: 200, answer: 'ok' })
       .mockRejectedValueOnce(new Error('The webhook could not be reached'));
     const res = await post('/bulk/send-webhook', { ids: ['o1', 'o2'] });
-    expect(await res.json()).toEqual({ sent: 1, failed: 1 });
+    expect(await res.json()).toEqual({ sent: 1, failed: 1, redirected: 0 });
     expect(
       postJson.mock.calls.map(([address, body, opts]) => [
         address,
@@ -358,13 +365,13 @@ describe('POST /api/content/bulk/send-webhook', () => {
     expect(writes[0].values.webhook_response).toEqual({ status: 200, body: 'ok' });
   });
 
-  it('counts a redirect failed and marks only the delivered one sent', async () => {
+  it('counts a redirect failed, and redirected, and marks only the delivered one sent', async () => {
     rows.content_opportunities = [OPPORTUNITY, { ...OPPORTUNITY, id: 'o2', title: 'FAQ page' }];
     postJson
       .mockResolvedValueOnce({ status: 302, answer: '' })
       .mockResolvedValueOnce({ status: 200, answer: 'ok' });
     const res = await post('/bulk/send-webhook', { ids: ['o1', 'o2'] });
-    expect(await res.json()).toEqual({ sent: 1, failed: 1 });
+    expect(await res.json()).toEqual({ sent: 1, failed: 1, redirected: 1 });
     const writes = updates.filter((u) => u.table === 'content_opportunities');
     expect(writes).toHaveLength(1);
     expect(writes[0].values.webhook_response).toEqual({ status: 200, body: 'ok' });
