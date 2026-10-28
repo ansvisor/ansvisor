@@ -779,6 +779,79 @@ describe('validateAction', () => {
       expect(MAX_GAP_DAYS).toBe(2);
     });
 
+    /** Net of the brand's other prompts (learning B2), on the same scale as the result. */
+    describe("an action's change net of its control", () => {
+      /** The control's prompts: six others in its topic. */
+      const prompts = [
+        { id: 'p1', topic_id: 't1' },
+        ...Array.from({ length: 6 }, (_, i) => ({ id: `c${i + 1}`, topic_id: 't1' })),
+      ];
+      /** The basket's prompts answer `own`, the control's `others`, each [before, after]. */
+      const baskets = (own, others) =>
+        rpc.mockImplementation(async (name, args) => {
+          if (name !== 'opportunity_basket_metrics') return { data: {}, error: null };
+          const [before, after] = args.p_prompt_ids.includes('p1') ? own : others;
+          return { data: args.p_from < daysAgo(20).slice(0, 10) ? before : after, error: null };
+        });
+      const sent = (kpiKeys) =>
+        action({ kind: 'mention_review', kpi_keys: kpiKeys, payload: { promptIds: ['p1'] } });
+
+      it('reads its counts at a full week’s worth too, from the same nights', async () => {
+        // Two nights missed in the week after. Per night its mentions doubled
+        // (1 → 2) and the others' held (20 → 20): read as they came, 7 → 10
+        // and 140 → 100 net to +71.4%; a week's worth, 7 → 14 and 140 → 140.
+        const writes = mockWrites({ prompts, tracking_runs: missing([5, 6]) });
+        baskets(
+          [
+            { cells: 70, visible: 14, mention_answers: 7 },
+            { cells: 50, visible: 10, mention_answers: 10 },
+          ],
+          [
+            { cells: 420, visible: 140, mention_answers: 140 },
+            { cells: 300, visible: 100, mention_answers: 100 },
+          ],
+        );
+
+        await validateAction(sent(['mentions']), { now: NOW });
+
+        const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+        expect(validation.gaps).toEqual({ before: 0, after: 2 });
+        expect(validation.metrics.find((m) => m.metric === 'mentions')).toMatchObject({
+          before: 7,
+          after: 14,
+        });
+        expect(validation.control.net).toContainEqual({
+          metric: 'mentions',
+          net: 100,
+          unit: 'percent',
+          control: { before: 140, after: 140 },
+        });
+      });
+
+      it('past MAX_GAP_DAYS nets the rates alone, the counts left out with the result’s', async () => {
+        const writes = mockWrites({ prompts, tracking_runs: missing([3, 4, 5, 6]) });
+        baskets(
+          [
+            { cells: 100, visible: 20, mention_answers: 10 },
+            { cells: 100, visible: 30, mention_answers: 20 },
+          ],
+          [
+            { cells: 100, visible: 40, mention_answers: 200 },
+            { cells: 100, visible: 44, mention_answers: 120 },
+          ],
+        );
+
+        expect(await validateAction(sent(['ai_visibility']), { now: NOW })).toBe('improved');
+
+        const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+        expect(validation.gaps).toEqual({ before: 0, after: 4, tooMany: true });
+        const netted = validation.control.net.map((m) => m.metric);
+        expect(netted).toContain('ai_visibility');
+        expect(netted).not.toContain('mentions');
+        expect(validation.control.net.find((m) => m.metric === 'ai_visibility').net).toBe(6);
+      });
+    });
+
     it('doesn’t count nights for metrics tracking doesn’t read (AI sessions)', async () => {
       const writes = mockWrites({ tracking_runs: [] });
       rpc.mockResolvedValue({ data: {}, error: null });
