@@ -157,8 +157,9 @@ describe('catalog_suggestion_categories (00371)', () => {
   );
 
   it('prices a live product by its lowest live variant, sale price first, for the service role', () => {
+    // The brand's live products, as catalog_products_brand_live_idx (00278) reads them.
     expect(sql).toMatch(
-      /join public\.catalog_products p on p\.id = pc\.product_id and p\.removed_at is null/,
+      /join public\.catalog_products p\s+on p\.id = pc\.product_id and p\.brand_id = p_brand_id and p\.removed_at is null/,
     );
     expect(sql).toMatch(/order by v\.product_id, coalesce\(v\.sale_price, v\.price\), v\.id/);
     // The "under" price: three quarters of the products at or under it.

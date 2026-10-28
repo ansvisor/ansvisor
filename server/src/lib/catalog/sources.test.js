@@ -651,6 +651,44 @@ describe("the plan's product cap (ECOM-019)", () => {
     expect(live).toHaveLength(4);
   });
 
+  it('makes only a capped workspace wait in its line, and recounts its room on its turn', async () => {
+    process.env.IS_CLOUD = 'true';
+    const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
+    // Another write of the workspace holds its line.
+    let release;
+    const holding = inLine(
+      'org-1',
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    try {
+      // A plan without a cap writes at once.
+      getCatalogProductCap.mockResolvedValue(-1);
+      const uncapped = await syncSource(source, { db: fake.db, now: NOW, fetch });
+      expect(uncapped).toMatchObject({ status: 'ok', counts: { products: { added: 2 } } });
+      expect(uncapped.counts.limit).toBeUndefined();
+
+      // A capped one waits for its turn.
+      getCatalogProductCap.mockResolvedValue(4);
+      let done = false;
+      const capped = syncSource(source, { db: fake.db, now: NOW, fetch }).then((outcome) => {
+        done = true;
+        return outcome;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(done).toBe(false);
+      // The room is counted when its turn comes: a cap of 2 by then.
+      getCatalogProductCap.mockResolvedValue(2);
+      release();
+      expect(await capped).toMatchObject({ status: 'ok', counts: { limit: 2 } });
+    } finally {
+      release();
+      await holding;
+    }
+  });
+
   it("records a workspace without an active subscription in the plan's words", () => {
     expect(failureOf(new PlanLimitError('An active subscription is required.', 402))).toEqual({
       status: 'failed',
@@ -690,6 +728,38 @@ describe('inLine', () => {
     await expect(failing).rejects.toThrow('write failed');
     await expect(third).resolves.toBe('done');
     expect(ran).toEqual(['first', 'other', 'failing', 'third']);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(lines.size).toBe(0);
+  });
+
+  it('stops waiting for work stuck past the wait, and keeps the line in order after it', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const lines = new Map();
+    const ran = [];
+    let release;
+    const stuck = inLine(
+      'org-1',
+      () =>
+        new Promise((resolve) => {
+          ran.push('stuck');
+          release = resolve;
+        }),
+      lines,
+      20,
+    );
+    const next = inLine('org-1', async () => ran.push('next') && 'written', lines, 20);
+    // Waits its whole time (LINE_WAIT_MS) for the work before it, which ends.
+    const after = inLine('org-1', async () => ran.push('after'), lines);
+    await expect(next).resolves.toBe('written');
+    await after;
+    // The stuck work is still running: the line went on without it, in order.
+    expect(ran).toEqual(['stuck', 'next', 'after']);
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      { line: 'org-1', waitMs: 20 },
+      '[catalog] capped write stopped waiting in line',
+    );
+    release('late');
+    await expect(stuck).resolves.toBe('late');
     await new Promise((resolve) => setImmediate(resolve));
     expect(lines.size).toBe(0);
   });

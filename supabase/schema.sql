@@ -42059,7 +42059,8 @@ as $$
   with live as (
     select pc.category_id, pc.product_id
     from public.catalog_product_categories pc
-    join public.catalog_products p on p.id = pc.product_id and p.removed_at is null
+    join public.catalog_products p
+      on p.id = pc.product_id and p.brand_id = p_brand_id and p.removed_at is null
     where pc.brand_id = p_brand_id
   ),
   priced as (
