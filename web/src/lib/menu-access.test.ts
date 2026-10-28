@@ -129,6 +129,7 @@ describe('menuOfProfile', () => {
   it('builds the menu from the profile and the role’s row', () => {
     expect(menuOfProfile(profile, ['citations'])).toEqual({
       hidden: ['content', 'audit', 'prompts', 'citations', 'shopping', 'traffic'],
+      hiddenByAdmin: ['citations'],
       workAreas: ['brand'],
       workAreasAsked: false,
       canManageMenus: true,

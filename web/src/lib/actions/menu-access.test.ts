@@ -102,6 +102,7 @@ describe('getMyMenu', () => {
     expect(menu.hidden.sort()).toEqual(
       ['audit', 'citations', 'content', 'prompts', 'shopping', 'traffic'].sort(),
     );
+    expect(menu.hiddenByAdmin).toEqual(['citations']);
     expect(menu.workAreas).toEqual(['brand']);
     expect(menu.workAreasAsked).toBe(false);
     expect(menu.canManageMenus).toBe(false);

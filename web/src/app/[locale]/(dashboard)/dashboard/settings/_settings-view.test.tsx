@@ -35,6 +35,7 @@ for (const [path, name] of [
   ['@/components/settings/integrations-section', 'IntegrationsSection'],
   ['@/components/settings/organization-section', 'OrganizationSection'],
   ['@/components/settings/menu-access-section', 'MenuAccessSection'],
+  ['@/components/settings/work-areas-card', 'WorkAreasCard'],
 ]) {
   vi.doMock(path, () => ({ [name]: () => null }));
 }

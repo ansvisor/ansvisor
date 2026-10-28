@@ -140,6 +140,8 @@ export function hiddenMenuSections(
 export interface MyMenu {
   /** Sections off this person's left menu. */
   hidden: string[];
+  /** Of those, the ones their role or an exception takes off, whatever their work areas. */
+  hiddenByAdmin: string[];
   workAreas: WorkAreaId[];
   /** Whether they answered (or skipped) "What do you work on?". */
   workAreasAsked: boolean;
@@ -168,15 +170,15 @@ export function workAreasOf(values: readonly string[] | null): WorkAreaId[] {
 /** A person's menu from their profile and their role's hidden sections. */
 export function menuOfProfile(profile: MenuProfile, roleHidden: readonly string[]): MyMenu {
   const workAreas = workAreasOf(profile.work_areas);
-  const hidden = hiddenMenuSections({
+  const access = {
     role: profile.role,
     roleHidden,
     shown: profile.menu_shown ?? [],
     hidden: profile.menu_hidden ?? [],
-    workAreas,
-  });
+  };
   return {
-    hidden: [...hidden],
+    hidden: [...hiddenMenuSections({ ...access, workAreas })],
+    hiddenByAdmin: [...hiddenMenuSections({ ...access, workAreas: [] })],
     workAreas,
     workAreasAsked: profile.work_areas_asked_at !== null,
     canManageMenus: canManageMenus(profile),

@@ -130,7 +130,9 @@
     "contentLibrary": "Library",
     "contentPlan": "Plan",
     "contentEditor": "Editor",
-    "toggleSubmenu": "Show or hide {label}"
+    "toggleSubmenu": "Show or hide {label}",
+    "menuOff": "{count, plural, one {# section} other {# sections}} off your menu.",
+    "menuOffChange": "Change"
   },
   "actionCenter": {
     "dismissReason": {
@@ -8041,6 +8043,13 @@
       "useRoleMenu": "Use {role}'s menu",
       "savedAsYouChange": "Saved as you change it.",
       "personSees": "{name} sees {section}",
+      "workAreasTitle": "Your work areas",
+      "workAreasDescription": "Pick what you work on or lead, and your menu shows only what you need. Pick none to see every section you can.",
+      "workAreasDescriptionAdmin": "Pick what you work on or lead, and your menu shows only what you need. Pick none to see every section. Nobody else can take a section off an admin's menu.",
+      "yourMenu": "Your menu",
+      "hiddenByAdmin": "Hidden by your admin",
+      "notInWorkAreas": "Not in your work areas",
+      "adminTookOff": "{count, plural, one {Your admin took a section off your menu.} other {Your admin took # sections off your menu.}} Their pages still open from a link; ask an admin if you need one on your menu.",
       "areas": {
         "leaders": {
           "title": "Founders & leaders",
