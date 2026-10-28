@@ -29,6 +29,7 @@ import { getTask } from '../tasks/registry.js';
 import { IMPROVE_ACTION_KIND } from '../from-prompt-improve.js';
 import { OPPORTUNITY_ACTION_KIND } from '../from-opportunity.js';
 import { buildEvidence, evidenceForPrompt, hasTargets } from './evidence.js';
+import { loadPastRounds } from './history.js';
 import {
   MAX_TASKS,
   TASK_CHECKS,
@@ -299,10 +300,19 @@ async function compose({ action, brand, domains, signals, name, trigger, userId,
     };
 
     const shown = evidenceForPrompt(evidence);
+    // Its earlier rounds here (learning B5), the product's own analysis steps
+    // left out. Without them it is still written, as before.
+    let history = [];
+    try {
+      history = await loadPastRounds(action, { skip: isAnalysisTask });
+    } catch (err) {
+      logger.warn({ actionId, err: err.message }, '[task-writer] past rounds unavailable');
+    }
     const base = buildTaskWriterPrompt({
       action: { name, category: action.category },
       brand: { name: brand.name, description: brand.description, domains },
       evidence: shown,
+      history,
     });
     const first = sift(await callModel({ modelId, ...base, charge }), evidence, []);
     let tasks = first.accepted;
@@ -331,7 +341,9 @@ async function compose({ action, brand, domains, signals, name, trigger, userId,
       reviews.push(task);
     }
 
-    if (dryRun) return { status: 'preview', tasks, reviews, refused, costUsd, evidence: shown };
+    if (dryRun) {
+      return { status: 'preview', tasks, reviews, refused, costUsd, evidence: shown, history };
+    }
     if (tasks.length === 0 && reviews.length === 0) {
       await markWritten(actionId, now);
       return { status: 'skipped', reason: 'no_valid_tasks', refused, costUsd };
