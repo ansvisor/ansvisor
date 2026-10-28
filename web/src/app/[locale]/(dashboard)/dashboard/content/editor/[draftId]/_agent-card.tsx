@@ -196,10 +196,11 @@ export function RunSteps({
   const format = useFormatter();
   const shown = shownSteps(run);
   // The rules it keeps its changes small for (learning B6), by their names.
-  const live = run.steps.find((step) => step.key === 'gather_sources')?.live;
   const careful = (run.steps[0]?.careful ?? [])
     .filter((key) => tRules.has(key))
     .map((key) => tRules(key));
+  // What the live page earns, kept in mind on its sources step (learning B5).
+  const live = run.steps.find((step) => step.key === 'gather_sources')?.live;
   return (
     <>
       <ol className="mt-1 flex flex-wrap items-center gap-1 text-[12px]">
