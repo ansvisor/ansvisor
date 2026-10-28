@@ -17,9 +17,8 @@
 import { createClient } from '@/lib/supabase/server';
 import type { ActionCategory } from '@/lib/action-center/registry';
 import {
-  ACTION_DISMISS_REASONS,
   ACTION_OUTCOMES,
-  type ActionDismissReason,
+  dismissReasonOf,
   type ActionOutcome,
   type ActionStatus,
   type TaskStatus,
@@ -30,6 +29,7 @@ import { storedPriorityLevel } from '@/lib/action-center/priority';
 import { readEntityCounts, withEntityCounts } from '@/lib/action-center/entity-counts';
 import {
   HISTORY_STATUSES,
+  controlNetOf,
   daysBetween,
   type ActionHistoryItem,
   type ActionHistoryTask,
@@ -38,7 +38,6 @@ import {
   type OutcomeReading,
   type SignalOutcome,
   type TriggerSignal,
-  type ControlNet,
 } from '@/lib/action-center/history';
 
 interface HistoryRow {
@@ -97,26 +96,6 @@ interface ValidationSnapshot {
     basis?: string;
     prompts?: number;
     net?: { metric?: string; net?: number; unit?: string }[];
-  };
-}
-
-/** Its change net of the control basket, the metrics it can name. */
-function controlFrom(validation: ValidationSnapshot | null): ControlNet | null {
-  const control = validation?.control;
-  if (!control || !Array.isArray(control.net)) return null;
-  const net = control.net.flatMap((m) =>
-    typeof m?.metric === 'string' &&
-    typeof m.net === 'number' &&
-    Number.isFinite(m.net) &&
-    (m.unit === 'points' || m.unit === 'percent')
-      ? [{ metric: m.metric, net: m.net, unit: m.unit as 'points' | 'percent' }]
-      : [],
-  );
-  if (!net.length || !Number.isInteger(control.prompts)) return null;
-  return {
-    basis: control.basis === 'topics' ? 'topics' : 'brand',
-    prompts: control.prompts as number,
-    net,
   };
 }
 
@@ -374,11 +353,7 @@ export async function getActionHistory(
       triggerSignals,
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
-      dismissReason: (ACTION_DISMISS_REASONS as readonly string[]).includes(
-        row.dismiss_reason ?? '',
-      )
-        ? (row.dismiss_reason as ActionDismissReason)
-        : null,
+      dismissReason: dismissReasonOf(row.dismiss_reason),
       signalsAfter: signalsFrom(row.validation),
       measuredOn: measuredOnFrom(row.validation),
       auditAfter: auditFrom(row.validation),
@@ -392,7 +367,7 @@ export async function getActionHistory(
       brandWideResults: resultsFrom(
         row.validation?.brandWide ? { ...row.validation, metrics: row.validation.brandWide } : null,
       ),
-      controlNet: controlFrom(row.validation),
+      controlNet: controlNetOf(row.validation),
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
       dueDate: row.due_date ?? null,
