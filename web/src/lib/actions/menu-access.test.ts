@@ -225,6 +225,13 @@ describe('setMenuManager', () => {
     expect(writes()).toEqual([]);
   });
 
+  it('takes only true or false', async () => {
+    signedInAs({ role: 'admin' });
+    answers['admin.profiles.select'] = { data: { role: 'manager' }, error: null };
+    await expect(setMenuManager(ADA, 'yes' as never)).rejects.toThrow();
+    expect(writes()).toEqual([]);
+  });
+
   it('lets a manager change menus', async () => {
     signedInAs({ role: 'admin' });
     answers['admin.profiles.select'] = { data: { role: 'manager' }, error: null };

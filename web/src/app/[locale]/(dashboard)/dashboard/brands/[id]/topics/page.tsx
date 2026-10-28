@@ -8,6 +8,7 @@ import {
   getTopics,
   updateTopic,
 } from '@/lib/actions/topic';
+import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 import type { Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -155,6 +156,7 @@ export default function BrandTopicsPage({ params }: PageProps) {
                     {editingId === topic.id ? (
                       <div className="flex flex-1 items-center gap-2">
                         <Input
+                          maxLength={TOPIC_NAME_CHARS}
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
                           onKeyDown={(e) => {
@@ -266,6 +268,7 @@ export default function BrandTopicsPage({ params }: PageProps) {
                   <div className="flex gap-2">
                     <Input
                       placeholder="e.g. Industry, Comparison, How-to..."
+                      maxLength={TOPIC_NAME_CHARS}
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
