@@ -22,6 +22,7 @@ import {
   PLANS,
   PRICING_URL,
   SUBSCRIBABLE_PLANS,
+  FIRST_MONTH_OFFER,
   firstMonthOfferOn,
   type PlanId,
 } from '@/config/plans';
@@ -167,8 +168,21 @@ export function ChoosePlanDialog({
     if (!open || !offerOn || !canAdmin || offerCodeTried.current) return;
     offerCodeTried.current = true;
     void checkPromoCode(FIRST_MONTH_CODE).then((found) => {
-      // Quietly: a code that doesn't apply leaves the field as it was.
-      if (typeof found === 'object') setOffer((current) => current ?? found);
+      // Quietly: a code that doesn't apply leaves the field as it was. One
+      // that couldn't be checked (Stripe unreachable, or not set up on a
+      // local server) still shows the offer as configured; checkout applies
+      // the code and says so by the field if Stripe turns it down.
+      const shown =
+        found === 'failed'
+          ? {
+              code: FIRST_MONTH_CODE,
+              percentOff: FIRST_MONTH_OFFER.percentOff,
+              amountOff: null,
+              duration: 'once' as const,
+              durationInMonths: null,
+            }
+          : found;
+      if (typeof shown === 'object') setOffer((current) => current ?? shown);
     });
   }, [open, offerOn, canAdmin]);
 
