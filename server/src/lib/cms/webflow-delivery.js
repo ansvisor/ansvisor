@@ -95,7 +95,8 @@ export async function sendToWebflow({ delivery, page, html, jsonLd, connection }
       }
     }
     const updated = Boolean(itemId);
-    // Only a new item is given the day it's sent: one sent again keeps its date.
+    // A new item (or one gone from Webflow since) is given the day it's sent,
+    // as one sent again with an empty date is above; any other keeps its date.
     itemId ??= await createItem(
       account,
       collectionId,
