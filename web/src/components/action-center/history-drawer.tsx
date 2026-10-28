@@ -208,6 +208,10 @@ export function HistoryDrawer({
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.result')}</p>
+            {item.signalsAfter && (
+              // The closest measure to the action's own aim: did what raised it end?
+              <p className="mt-1 text-xs">{t('drawer.signalsAfter', { ...item.signalsAfter })}</p>
+            )}
             {!measured && (
               // The honest state, and the reason for it. Everything above this
               // line is recorded; the effect is not, because nothing re-reads

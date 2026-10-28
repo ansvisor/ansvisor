@@ -129,6 +129,30 @@ describe('HistoryDrawer', () => {
     expect(under('What was the goal?')).toContain('Nov 9');
   });
 
+  it('says what became of the signals that raised it, beside the result (learning A3)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          signalsAfter: { total: 4, ended: 2, replaced: 1, dismissed: 0, open: 1 },
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Of the 4 signals that raised it, when measured: 2 ended, 1 turned into another, 1 still open.',
+    );
+
+    render(
+      <HistoryDrawer brandId="b1" item={{ ...item, signalsAfter: null }} onOpenChange={() => {}} />,
+    );
+    await act(async () => {});
+    expect(under('Result')).not.toContain('that raised it');
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);
