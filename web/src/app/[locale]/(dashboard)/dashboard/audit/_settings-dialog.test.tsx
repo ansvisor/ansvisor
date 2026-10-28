@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { AuditAutoStatus, AuditSettings, AutoAuditRun } from '@/lib/actions/audits';
 import { AuditSettingsDialog, parsePatterns } from './_settings-dialog';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 (
   globalThis as typeof globalThis & {
@@ -35,6 +36,7 @@ let container: HTMLDivElement;
 let root: Root;
 const onSaved = vi.fn();
 const onOpenChange = vi.fn();
+const openUpgrade = vi.fn();
 
 /** A billing month from Sep 22 to Oct 22 whose last run (day 28, Oct 19) is done. */
 const schedule = (enabled = true): AuditAutoStatus => ({
@@ -71,20 +73,25 @@ const latestRun: AutoAuditRun = {
 async function render(
   canManage = true,
   timing?: { schedule: AuditAutoStatus; latestRun: AutoAuditRun | null },
+  isLocked = false,
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AuditSettingsDialog
-          brandId={BRAND}
-          open
-          onOpenChange={onOpenChange}
-          canManage={canManage}
-          onSaved={onSaved}
-          schedule={timing?.schedule}
-          latestRun={timing?.latestRun}
-          now={new Date('2026-10-19T12:00:00Z')}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <AuditSettingsDialog
+            brandId={BRAND}
+            open
+            onOpenChange={onOpenChange}
+            canManage={canManage}
+            onSaved={onSaved}
+            schedule={timing?.schedule}
+            latestRun={timing?.latestRun}
+            now={new Date('2026-10-19T12:00:00Z')}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -153,6 +160,29 @@ describe('AuditSettingsDialog', () => {
     expect(toast.success).toHaveBeenCalledWith('Site Audit settings saved');
     expect(onSaved).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('opens to read on a read-only workspace; Save and Unpin open the upgrade dialog', async () => {
+    await render(true, undefined, true);
+    const [auto] = dialog().querySelectorAll('[role="checkbox"]');
+    act(() => (auto as HTMLElement).click());
+    await act(async () => button('Save').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Saving the audit settings needs a plan');
+    await act(async () => button('Unpin').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Unpinning pages needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(actions.saveAuditSettings).not.toHaveBeenCalled();
+    expect(actions.setOpportunityPrefs).not.toHaveBeenCalled();
+  });
+
+  // The server reads the month's audits as 0 once the plan has ended.
+  it('says "No active plan" on a read-only workspace, not "all 0 audits a month are yours"', async () => {
+    actions.getAuditSettings.mockResolvedValue(
+      settings({ autoAudit: { enabled: false, setting: null, perRun: 5, limit: 0 } }),
+    );
+    await render(true, undefined, true);
+    expect(dialog().textContent).toContain('No active plan');
+    expect(dialog().textContent).not.toContain('audits a month are yours');
   });
 
   it("shows the server's message when a pattern is refused", async () => {

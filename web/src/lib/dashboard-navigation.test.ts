@@ -77,6 +77,11 @@ describe('shouldShowDashboardNavItem', () => {
     expect(shouldShowDashboardNavItem(shopping, { shoppingModeEnabled: true })).toBe(true);
   });
 
+  // Product Visibility (ECOM-spec) is new as a whole.
+  it('marks Shopping new', () => {
+    expect(shopping.badge).toBe('New');
+  });
+
   it('hides a section off the viewer’s menu, by its route', () => {
     const content = dashboardNav
       .flatMap((group) => group.items)

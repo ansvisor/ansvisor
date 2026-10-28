@@ -25,6 +25,7 @@ import {
 } from '@/lib/content/cms-send-client';
 import type { ContentDraftListItem } from '@/lib/content/drafts';
 import { CmsTargetPicker, CmsTargetUnchecked, useCmsTarget } from '@/components/content/cms-target';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { readCmsSources } from './_cms-sources';
 
 /** How often the sends going on in the background are read. */
@@ -104,6 +105,7 @@ export function BulkSendDialog({
   const t = useTranslations('contentEditor.library.bulk');
   const tEditor = useTranslations('contentEditor.editor');
   const tFailure = useTranslations('apiFailure');
+  const { openUpgrade } = useUpgradeGate();
   const [phase, setPhase] = useState<Phase>({ kind: 'reading' });
   const [items, setItems] = useState<BulkItem[]>([]);
   // The sends made, as last read, by draft.
@@ -232,6 +234,8 @@ export function BulkSendDialog({
       }
       const result = await sendPagesToCms(brandId, group, target);
       if (!result.ok) {
+        // A read-only workspace: the upgrade dialog, and the rest wait too.
+        if (result.code === 'subscription') openUpgrade();
         // The page a refusal names ("pages.2.html"), as the group's own.
         const index = Number(/^pages\.(\d+)\./.exec(result.field ?? '')?.[1] ?? NaN);
         stopped = {
@@ -300,7 +304,9 @@ export function BulkSendDialog({
   };
 
   const failureText = ({ code, field, title, target: to }: Refusal) => {
-    if (code === 'session' || code === 'workspace' || code === 'busy') return tFailure(code);
+    if (code === 'session' || code === 'workspace' || code === 'busy' || code === 'subscription') {
+      return tFailure(code);
+    }
     // A page archived or deleted since the dialog read it.
     if (code === 'not_found') return t('notFound');
     if (code === 'invalid' && field) {

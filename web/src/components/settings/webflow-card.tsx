@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   WEBFLOW_PARTS,
   WEBFLOW_PART_TYPES,
@@ -75,6 +76,11 @@ export function WebflowCard() {
   const t = useTranslations('settings.webflow');
   const { activeBrandId, brands } = useBrandStore();
   const { canManage } = useUserRole();
+  // A read-only workspace's refusal opens the upgrade dialog, not a toast;
+  // while it is read-only, Replace token opens it at once. Disconnect stays
+  // open: it ends an access, it starts nothing.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const brand = brands.find((b) => b.id === activeBrandId) ?? null;
 
   // The connection as read for a brand: another brand's never shows.
@@ -125,7 +131,8 @@ export function WebflowCard() {
     const result = await disconnectWebflow(activeBrandId);
     setDisconnecting(false);
     if (!result.ok) {
-      toast.error(t(`errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else toast.error(t(`errors.${result.code}`));
       return;
     }
     setConnection(null);
@@ -178,7 +185,13 @@ export function WebflowCard() {
           {canManage && connection && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {!replacing && current?.configured && connection.status === 'connected' && (
-                <Button variant="outline" size="sm" onClick={() => setReplacingFor(activeBrandId)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={guard(() => setReplacingFor(activeBrandId), {
+                    action: tActions('connectCms'),
+                  })}
+                >
                   {t('replaceToken')}
                 </Button>
               )}
@@ -283,6 +296,9 @@ function TokenForm({
   onCancel?: () => void;
 }) {
   const t = useTranslations('settings.webflow');
+  // Read-only (plan not active): Connect opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [token, setToken] = useState('');
   const [connecting, setConnecting] = useState(false);
 
@@ -291,7 +307,9 @@ function TokenForm({
     const result = await connectWebflow(brandId, token.trim());
     setConnecting(false);
     if (!result.ok) {
-      toast.error(t(result.code === 'invalid' ? 'errors.invalidToken' : `errors.${result.code}`));
+      if (result.code === 'subscription') openUpgrade();
+      else
+        toast.error(t(result.code === 'invalid' ? 'errors.invalidToken' : `errors.${result.code}`));
       return;
     }
     setToken('');
@@ -309,12 +327,14 @@ function TokenForm({
     onConnected(result.connection);
   };
 
+  const connectToken = guard(() => void connect(), { action: tActions('connectCms') });
+
   return (
     <form
       className="space-y-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (token.trim() && !connecting) void connect();
+        if (token.trim() && !connecting) connectToken();
       }}
     >
       <Label htmlFor={`webflow-token-${brandId}`}>{t('tokenLabel')}</Label>
@@ -379,6 +399,9 @@ function WebflowMapping({
   onStale: () => void;
 }) {
   const t = useTranslations('settings.webflow');
+  // Read-only (plan not active): Save opens the upgrade dialog before anything is sent.
+  const { guard, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // The saved settings, for the fields read: a save doesn't read them again.
   const saved = useRef(connection);
   useEffect(() => {
@@ -390,6 +413,10 @@ function WebflowMapping({
   }, [onStale]);
   /** Says what went wrong, and reads the connection again when it changed. */
   const report = (code: WebflowError) => {
+    if (code === 'subscription') {
+      openUpgrade();
+      return;
+    }
     toast.error(t(`errors.${code}`));
     if (STALE.includes(code)) stale.current();
   };
@@ -625,7 +652,7 @@ function WebflowMapping({
           <Button
             size="sm"
             className="gap-2"
-            onClick={save}
+            onClick={guard(save, { action: tActions('saveCmsSettings') })}
             disabled={saving || !fields || fieldsNow?.failed || !fields.length || !map.body}
           >
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

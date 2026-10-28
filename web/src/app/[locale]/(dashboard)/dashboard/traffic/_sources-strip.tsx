@@ -24,19 +24,23 @@ import {
  * Google Analytics or Google Search Console: connected with its property and
  * last sync, syncing with how long the first data takes, or a Connect that
  * runs the Settings OAuth flow in a popup, here. Connections stay org-wide.
+ * Also on Product Visibility's strip, which says what each one adds there
+ * (`pitch`, its line while not connected).
  */
-function GoogleSource({
+export function GoogleSource({
   provider,
   state,
   domain,
   canConnect,
   onConnected,
+  pitch,
 }: {
   provider: IntegrationProvider;
   state: SourceState;
   domain: string | undefined;
   canConnect: boolean;
   onConnected: () => void;
+  pitch?: string;
 }) {
   const t = useTranslations('traffic.sources');
   const tCommon = useTranslations('common');
@@ -90,7 +94,7 @@ function GoogleSource({
     <SourceCard
       tone="off"
       title={title}
-      line={isGa ? t('notConnectedGa') : t('notConnectedGsc')}
+      line={pitch ?? (isGa ? t('notConnectedGa') : t('notConnectedGsc'))}
       action={
         // A span carries the tooltip: a disabled button gets no hover.
         <span title={canConnect ? undefined : t('connectNotAllowed')}>

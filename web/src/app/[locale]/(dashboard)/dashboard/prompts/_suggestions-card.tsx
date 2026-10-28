@@ -24,6 +24,7 @@ import {
   Trash2,
   BarChart3,
   Clock,
+  ShoppingBag,
 } from 'lucide-react';
 import { Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -53,7 +54,9 @@ import {
   type PromptSuggestion,
 } from '@/lib/actions/prompt-suggestions';
 import type { PlanId } from '@/config/plans';
+import { priceText } from '@/lib/shopping/price';
 import {
+  catalogSourceData,
   fromYourData,
   gaSourceData,
   gscSourceData,
@@ -61,6 +64,7 @@ import {
   type GscSuggestionBadge,
 } from '@/lib/prompt-suggestion-source';
 import type { SuggestionSourceStates } from '@/lib/actions/integrations';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Analytics evidence, in the customer's own numbers (#705). A blind spot is
@@ -153,13 +157,15 @@ function HoverTip({ content, children }: { content: string; children: React.Reac
  *
  * Every suggestion is phrased by our own generation step, so `Ansvisor Agents`
  * is always present; a data source badge joins it when the suggestion was
- * mined from the brand's own Search Console or Analytics rather than from the
- * model alone. Two badges is the honest reading — the data and the phrasing
- * come from different places.
+ * mined from the brand's own Search Console or Analytics, or drawn from its
+ * catalog (ECOM-003), rather than from the model alone. Two badges is the
+ * honest reading — the data and the phrasing come from different places.
  */
 function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
+  const tCatalog = useTranslations('prompts.suggestions.catalog');
   const gsc = gscSourceData(suggestion);
   const ga = gaSourceData(suggestion);
+  const catalog = catalogSourceData(suggestion);
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -196,6 +202,24 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
           </Badge>
         </HoverTip>
       )}
+      {catalog && (
+        <HoverTip
+          content={
+            catalog.priceUnder !== null
+              ? tCatalog('tooltipPrice', {
+                  category: catalog.category,
+                  products: catalog.products,
+                  price: priceText(catalog.priceUnder, catalog.currency),
+                })
+              : tCatalog('tooltip', { category: catalog.category, products: catalog.products })
+          }
+        >
+          <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
+            <ShoppingBag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            {tCatalog('badge')}
+          </Badge>
+        </HoverTip>
+      )}
       <HoverTip content="Phrased by Ansvisor from your brand, the prompts you already track, and the competitors cited in your AI answers.">
         <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
           <Shield className="h-3.5 w-3.5 text-muted-foreground" />
@@ -207,9 +231,12 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
 }
 
 /** Which data source a row carries, for the source filter. */
-type SourceFilter = 'all' | 'data' | 'gsc' | 'ga' | 'agents';
+type SourceFilter = 'all' | 'data' | 'gsc' | 'ga' | 'shopping' | 'agents';
 
-const SOURCE_FILTER_LABELS: Record<SourceFilter, string> = {
+const SOURCE_FILTERS: SourceFilter[] = ['all', 'data', 'gsc', 'ga', 'shopping', 'agents'];
+
+// Shopping's label is translated (prompts.suggestions.catalog.filter).
+const SOURCE_FILTER_LABELS: Record<Exclude<SourceFilter, 'shopping'>, string> = {
   all: 'All sources',
   // Either Google source: Getting started's high-value prompts step links here
   // with ?source=data.
@@ -286,6 +313,10 @@ export function SuggestionsCard({
   limitActions,
 }: Props) {
   const t = useTranslations('prompts.suggestions');
+  // A read-only workspace (plan not active): generating, adding and
+  // dismissing open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // One method note for the list's volume ranges (PROMPT-013).
   const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
@@ -297,13 +328,7 @@ export function SuggestionsCard({
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   // A link can open the list on a source (?source=data).
   useEffect(() => {
-    setSourceFilter(
-      readUrlChoice<SourceFilter>(
-        'source',
-        Object.keys(SOURCE_FILTER_LABELS) as SourceFilter[],
-        'all',
-      ),
-    );
+    setSourceFilter(readUrlChoice<SourceFilter>('source', SOURCE_FILTERS, 'all'));
   }, []);
   const [search, setSearch] = useState('');
   const [clearing, setClearing] = useState(false);
@@ -366,7 +391,8 @@ export function SuggestionsCard({
       if (sourceFilter === 'data' && !fromYourData(s)) return false;
       if (sourceFilter === 'gsc' && !gscSourceData(s)) return false;
       if (sourceFilter === 'ga' && !gaSourceData(s)) return false;
-      if (sourceFilter === 'agents' && fromYourData(s)) return false;
+      if (sourceFilter === 'shopping' && !catalogSourceData(s)) return false;
+      if (sourceFilter === 'agents' && (fromYourData(s) || catalogSourceData(s))) return false;
       if (!q) return true;
       return (
         s.suggestedText.toLowerCase().includes(q) ||
@@ -375,6 +401,16 @@ export function SuggestionsCard({
       );
     });
   }, [suggestions, sourceFilter, search]);
+
+  // Shopping is offered once the catalog gave a suggestion (ECOM-003), or a link asked for it.
+  const filters = SOURCE_FILTERS.filter(
+    (key) =>
+      key !== 'shopping' ||
+      sourceFilter === 'shopping' ||
+      suggestions.some((s) => catalogSourceData(s) !== null),
+  );
+  const filterLabel = (key: SourceFilter) =>
+    key === 'shopping' ? t('catalog.filter') : SOURCE_FILTER_LABELS[key];
 
   const notice = useMemo(
     () => sourceNotice(sourceStates, suggestions),
@@ -513,13 +549,13 @@ export function SuggestionsCard({
                 <SelectTrigger className="h-8 w-44 text-xs">
                   <Filter className="h-3.5 w-3.5 text-muted-foreground" />
                   <SelectValue placeholder="All sources">
-                    {(value) => SOURCE_FILTER_LABELS[(value as SourceFilter) ?? 'all']}
+                    {(value) => filterLabel((value as SourceFilter) ?? 'all')}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(SOURCE_FILTER_LABELS) as SourceFilter[]).map((key) => (
+                  {filters.map((key) => (
                     <SelectItem key={key} value={key}>
-                      {SOURCE_FILTER_LABELS[key]}
+                      {filterLabel(key)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -536,7 +572,7 @@ export function SuggestionsCard({
               </div>
 
               <Button
-                onClick={handleRefresh}
+                onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
                 disabled={refreshing}
                 size="sm"
                 variant="outline"
@@ -551,7 +587,7 @@ export function SuggestionsCard({
               </Button>
 
               <Button
-                onClick={handleAddAll}
+                onClick={guard(handleAddAll, { action: tActions('addPrompts') })}
                 disabled={adding || clearing || visible.length === 0}
                 size="sm"
                 variant="outline"
@@ -567,7 +603,7 @@ export function SuggestionsCard({
               </Button>
 
               <Button
-                onClick={handleClearAll}
+                onClick={guard(handleClearAll, { action: tActions('dismissSuggestions') })}
                 disabled={clearing || adding || visible.length === 0}
                 size="sm"
                 variant="outline"
@@ -648,7 +684,7 @@ export function SuggestionsCard({
             </div>
             {notice.kind === 'ready' && (
               <Button
-                onClick={handleRefresh}
+                onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
                 disabled={refreshing}
                 size="sm"
                 className="shrink-0 gap-2"
@@ -685,7 +721,12 @@ export function SuggestionsCard({
               Click refresh to generate new prompt ideas tailored to your brand and competitor
               activity.
             </p>
-            <Button onClick={handleRefresh} disabled={refreshing} size="sm" className="gap-2">
+            <Button
+              onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
+              disabled={refreshing}
+              size="sm"
+              className="gap-2"
+            >
               {refreshing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
@@ -793,7 +834,9 @@ export function SuggestionsCard({
                           size="icon"
                           variant="outline"
                           className="h-8 w-8"
-                          onClick={() => handleAccept(s)}
+                          onClick={guard(() => handleAccept(s), {
+                            action: tActions('addPrompts'),
+                          })}
                           disabled={busy}
                           title="Add to tracked prompts"
                           aria-label="Add to tracked prompts"
@@ -808,7 +851,9 @@ export function SuggestionsCard({
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground"
-                          onClick={() => handleDismiss(s)}
+                          onClick={guard(() => handleDismiss(s), {
+                            action: tActions('dismissSuggestions'),
+                          })}
                           disabled={busy}
                           title="Dismiss suggestion"
                           aria-label="Dismiss suggestion"

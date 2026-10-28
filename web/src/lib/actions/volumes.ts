@@ -3,8 +3,9 @@
 import { createClient } from '@/lib/supabase/server';
 import type { PromptVolume } from '@/types';
 import { API_BASE_URL } from '@/config/api';
+import type { NoPlanMark } from '@/lib/billing/no-plan';
 
-export interface VolumeQuota {
+export interface VolumeQuota extends NoPlanMark {
   used: number;
   limit: number;
   remaining: number;
@@ -58,7 +59,7 @@ export async function analyzePromptVolume(
  * rather than the reason. A small closed set of codes survives both, and the
  * wording stays in the UI where it can be written for a person.
  */
-export type VolumeErrorCode = 'quota_exceeded' | 'plan_limit' | 'failed';
+export type VolumeErrorCode = 'quota_exceeded' | 'plan_limit' | 'subscription_inactive' | 'failed';
 
 export type StartVolumeAnalysisResult =
   | { ok: true; started: number; running: boolean; remaining?: number }
@@ -81,7 +82,12 @@ export interface VolumeAnalysisStatus {
 }
 
 async function toErrorCode(res: Response): Promise<VolumeErrorCode> {
-  const body: { error?: string } = await res.json().catch(() => ({}));
+  const body: { error?: string; code?: string } = await res.json().catch(() => ({}));
+  // The workspace's plan isn't active (an ended trial, a canceled plan): the
+  // server's 402 subscription_inactive, or plan-guard's 402 for no active
+  // subscription. Its body says plan_limit too, but nothing is missing from
+  // the plan: there is no plan.
+  if (body.code === 'subscription_inactive' || res.status === 402) return 'subscription_inactive';
   if (body.error === 'quota_exceeded') return 'quota_exceeded';
   if (body.error === 'plan_limit') return 'plan_limit';
   console.error('Volume analysis request failed', res.status, body.error);
