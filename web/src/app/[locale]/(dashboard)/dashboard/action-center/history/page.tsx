@@ -52,6 +52,13 @@ const VIEWS = ['actions', 'scorecard'] as const;
 type HistoryView = (typeof VIEWS)[number];
 
 /**
+ * The range each view starts on until one is picked. An action's final
+ * reading comes 30 days after it closed (learning B1), so the scorecard
+ * over 30 days would hold mostly readings so far.
+ */
+const DEFAULT_RANGE: Record<HistoryView, RangePreset> = { actions: '30d', scorecard: '90d' };
+
+/**
  * History: what was done, and what it moved.
  *
  * Reads the same actions the Actions tab triages, but from the far end — an
@@ -74,7 +81,9 @@ export default function ActionCenterHistoryPage() {
   const [loadFailed, setLoadFailed] = useState(false);
 
   const [view, setView] = useState<HistoryView>('actions');
-  const [range, setRange] = useState<RangePreset>('30d');
+  // Null until one is picked: the view's own default.
+  const [pickedRange, setRange] = useState<RangePreset | null>(null);
+  const range = pickedRange ?? DEFAULT_RANGE[view];
   const [status, setStatus] = useState<ActionStatus | 'all'>('all');
   const [type, setType] = useState<ActionCategory | 'all'>('all');
   const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
@@ -91,7 +100,8 @@ export default function ActionCenterHistoryPage() {
   const [urlRead, setUrlRead] = useState(false);
   useEffect(() => {
     setView(readUrlChoice('view', VIEWS, 'actions'));
-    setRange(readUrlChoice('range', RANGE_PRESETS, '30d'));
+    const urlRange = readUrlParam('range');
+    setRange(RANGE_PRESETS.find((preset) => preset === urlRange) ?? null);
     setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...HISTORY_STATUSES], 'all'));
     setType(readUrlChoice<ActionCategory | 'all'>('type', ['all', ...ACTION_CATEGORIES], 'all'));
     setPriority(
@@ -112,7 +122,7 @@ export default function ActionCenterHistoryPage() {
           { view, range, status, type, priority, source, sort, q: search.trim() },
           {
             view: 'actions',
-            range: '30d',
+            range: DEFAULT_RANGE[view],
             status: 'all',
             type: 'all',
             priority: 'all',

@@ -514,8 +514,12 @@ export function scorePriority(
       pastSuccess: past.results
         ? { improved: past.improved, results: past.results, points: round2(past.points) }
         : null,
+      // Its rate only with a result behind it: with none, the prior would
+      // read as a measured 0.5.
       factors: Object.fromEntries(
-        Object.entries({ ...factors, pastSuccess: past.rate }).map(([k, v]) => [k, round2(v)]),
+        Object.entries({ ...factors, ...(past.results ? { pastSuccess: past.rate } : {}) }).map(
+          ([k, v]) => [k, round2(v)],
+        ),
       ),
     },
   };

@@ -362,7 +362,7 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      * couple of results barely move it: a kind with none sits at the prior
      * and its score doesn't move. Never another brand's history. The score
      * moves by the rate's distance from the prior times `pastSuccessSwing`:
-     * up to 10 points either way, about 6 for a kind that improved 10
+     * up to 10 points either way, about 6.7 for a kind that improved 10
      * times out of 10.
      */
     pastSuccessSwing: 20,

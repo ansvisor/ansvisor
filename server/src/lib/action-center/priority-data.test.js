@@ -196,6 +196,7 @@ describe('priorityOnCreate', () => {
     rpcResult = { data: null, error: { message: 'timeout' } };
     const without = await priorityOnCreate({ ...improve, brand_id: 'b1' }, NOW);
     expect(without.priority_reason.pastSuccess).toBeNull();
+    expect(without.priority_reason.factors).not.toHaveProperty('pastSuccess');
     expect(without.priority_score).toBeLessThan(withTrack.priority_score);
   });
 });
