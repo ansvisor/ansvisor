@@ -777,9 +777,11 @@ export function ActionDrawer({
                           ? t('drawer.noSignalsMentionReview')
                           : action.kind === 'traffic_pages'
                             ? t('drawer.noSignalsTrafficPages')
-                            : opportunityId
-                              ? t('drawer.noSignalsOpportunity')
-                              : t('drawer.noSignals')}
+                            : action.kind === 'audit_page'
+                              ? t('drawer.noSignalsAuditPage')
+                              : opportunityId
+                                ? t('drawer.noSignalsOpportunity')
+                                : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {

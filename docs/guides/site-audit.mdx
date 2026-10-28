@@ -87,7 +87,7 @@ Click a row to open its latest report. The arrow beside a page lists its earlier
 
 ## The audit report
 
-Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top re-run the audit on the same URL or delete it (**Delete audit** can't be undone).
+Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top re-run the audit on the same URL or delete it (**Delete audit** can't be undone). On a page that fails checks, **Send to Action Center** sends the page and the checks it fails as one Fix action, without waiting for the nightly pass (see below); sent again, it opens the action already there for the page.
 
 ### Total score
 
@@ -177,3 +177,5 @@ The **Audit Score** section of [Reports](/guides/reports) brings your audit scor
 <Card title="Continue: Reports" icon="arrow-right" href="/guides/reports">
   Turn your AI visibility and audit scores into shareable snapshot reports.
 </Card>
+
+You can also send one page yourself from its report with **Send to Action Center**: the action names the page and the checks it fails, takes the Fix low-scoring pages plan, and is judged once the page is audited again, by the checks it fails passing, and measured on the page's citations and AI visits.
