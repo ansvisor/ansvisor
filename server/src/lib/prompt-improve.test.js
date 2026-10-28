@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   answerExcerpt,
   buildImprovePrompt,
@@ -9,11 +9,6 @@ import {
   sanitizeSuggestions,
   withPageChecks,
 } from './prompt-improve.js';
-
-// competitor-pages.js (the page checks' gaps) reaches the supabase admin
-// client at import time, whose config hard-exits when SUPABASE_* env is
-// absent, as in CI.
-vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 const BRAND_DOMAINS = ['acme.com'];
 

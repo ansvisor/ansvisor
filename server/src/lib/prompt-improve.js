@@ -2,7 +2,9 @@
  * Positions panel → Improve tab (PROMPT-003): platform-specific suggestions to
  * improve one prompt's position.
  *
- * Pure on purpose. The route loads the answers; this module decides each
+ * Pure on purpose. The route loads the answers, and what the page checks
+ * found on the cited pages lately (storedFeatures); this module, which reads
+ * no database (page-features.js, not competitor-pages.js), decides each
  * platform's state, gathers the evidence the model may cite, builds the
  * prompt, and checks what comes back against that evidence. The checks are
  * the point of the feature: a suggestion has to name a real sub-query, URL or
@@ -11,7 +13,7 @@
 
 import { z } from 'zod';
 import { extractHostname } from './response-parser.js';
-import { FEATURE_CHECKS, featureGaps } from './action-center/competitor-pages.js';
+import { FEATURE_CHECKS, featureGaps } from './action-center/page-features.js';
 import { describeSignal } from './audit/rubric.js';
 import { opportunityKey } from './audit/opportunities.js';
 
