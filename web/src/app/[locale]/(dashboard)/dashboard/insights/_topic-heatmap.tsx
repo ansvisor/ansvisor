@@ -6,24 +6,11 @@ import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { numberFormat } from '@/lib/number-format';
-import { heatShade, topicHeatmap, type TopicCompetitors } from '@/lib/insights-topics';
+import { HEAT_SHADES, heatShade, topicHeatmap, type TopicCompetitors } from '@/lib/insights-topics';
 import { TONE_TEXT } from './kpi-format';
 
 /** Rows shown before "Show all". */
 const VISIBLE_ROWS = 6;
-
-/**
- * Cell shades, light to dark: soft theme-relative tints, so they read in
- * both themes and a full table doesn't turn into dark blocks. The text keeps
- * its color on every shade.
- */
-const SHADES = [
-  'bg-muted/40 text-muted-foreground',
-  'bg-foreground/[0.06] text-foreground',
-  'bg-foreground/[0.12] text-foreground',
-  'bg-foreground/[0.2] text-foreground',
-  'bg-foreground/[0.32] text-foreground',
-] as const;
 
 /**
  * "Topics vs competitors" (VIS-010), as in the v2 mockup: a row per topic,
@@ -98,7 +85,7 @@ export function TopicHeatmap({
                       title={t('openTopic', { topic: row.name })}
                       className={cn(
                         'block rounded-md px-1 py-1.5 text-center font-semibold tabular-nums transition-opacity hover:opacity-80',
-                        SHADES[heatShade(value, low, high)],
+                        HEAT_SHADES[heatShade(value, low, high)],
                         // Too few answers to read much into: shown, but faded.
                         row.status === 'lowSample' && 'opacity-50',
                       )}

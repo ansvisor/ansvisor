@@ -120,6 +120,20 @@ export function topicHeatmap(topics: TopicCompetitors[], columns: string[]): Hea
 }
 
 /**
+ * Cell shades, light to dark: soft theme-relative tints, so they read in
+ * both themes and a full table doesn't turn into dark blocks. The text keeps
+ * its color on every shade. Also the Tracked Prompts Locations view's
+ * (PROMPT-015b), by heatShade's index.
+ */
+export const HEAT_SHADES = [
+  'bg-muted/40 text-muted-foreground',
+  'bg-foreground/[0.06] text-foreground',
+  'bg-foreground/[0.12] text-foreground',
+  'bg-foreground/[0.2] text-foreground',
+  'bg-foreground/[0.32] text-foreground',
+] as const;
+
+/**
  * A cell's shade, light to dark, by where its score sits between the lowest
  * and highest non-zero score in view. The map compares, so its tones spread
  * over the scores shown whatever their level (a table of 50s and 70s still

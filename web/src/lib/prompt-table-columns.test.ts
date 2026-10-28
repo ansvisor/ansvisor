@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_COLUMNS_VIEW,
+  MAX_LOCATION_COLUMNS,
   PROMPT_COLUMNS,
+  addLocationColumn,
+  parseLocationColumn,
+  removeColumn,
   effectiveView,
   moveColumn,
   readColumnsView,
@@ -67,5 +71,29 @@ describe('a view', () => {
     expect(effectiveView(mine, brand)).toBe(mine);
     expect(effectiveView(null, brand)).toBe(brand);
     expect(effectiveView(null, null)).toBe(DEFAULT_COLUMNS_VIEW);
+  });
+});
+
+describe('location columns (PROMPT-015b)', () => {
+  it('adds a metric in a location at the end, once, and takes it out', () => {
+    const added = addLocationColumn(DEFAULT_COLUMNS_VIEW, 'visibility', 'TR');
+    expect(added.order.at(-1)).toBe('loc:visibility:TR');
+    expect(addLocationColumn(added, 'visibility', 'TR').order).toEqual(added.order);
+    expect(parseLocationColumn('loc:position:US-CA')).toEqual({
+      metric: 'position',
+      region: 'US-CA',
+    });
+    expect(parseLocationColumn('volume')).toBeNull();
+    expect(removeColumn(added, 'loc:visibility:TR')).toEqual(DEFAULT_COLUMNS_VIEW);
+  });
+
+  it(`keeps saved ones, ${MAX_LOCATION_COLUMNS} at most, and drops malformed ones`, () => {
+    const many = Array.from({ length: 10 }, (_, i) => `loc:mentions:R${i}`);
+    const view = readColumnsView({
+      order: [...PROMPT_COLUMNS, ...many, 'loc:nope:TR'],
+      hidden: [],
+    });
+    expect(view?.order.filter((id) => id.startsWith('loc:'))).toHaveLength(MAX_LOCATION_COLUMNS);
+    expect(view?.order).not.toContain('loc:nope:TR');
   });
 });
