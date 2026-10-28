@@ -2087,12 +2087,13 @@ async function readActionResults(
       ),
     ),
   ]);
+  const productsOf = new Map<string, string[]>();
+  for (const link of links) {
+    if (!productsOf.has(link.category_id)) productsOf.set(link.category_id, []);
+    productsOf.get(link.category_id)!.push(link.product_id);
+  }
   for (const action of actions.values()) {
-    if (action.target.type !== 'category') continue;
-    const id = action.target.id;
-    action.products = links
-      .filter((link) => link.category_id === id)
-      .map((link) => link.product_id);
+    if (action.target.type === 'category') action.products = productsOf.get(action.target.id) ?? [];
   }
   const cards: RecheckCard[] = rows.flatMap((row) =>
     row.prompt_results
