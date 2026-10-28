@@ -1,6 +1,9 @@
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { Brand, Topic } from '@/types';
 
 (
@@ -32,34 +35,38 @@ const topics: Topic[] = Array.from({ length: 21 }, (_, i) => ({
   createdAt: '2026-01-01T00:00:00.000Z',
 }));
 
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'brand-id' }) }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({
-    auth: { getSession: async () => ({ data: { session: { access_token: 'token' } } }) },
-  }),
+/** What the page loads: each describe sets its own topics and session. */
+const loaded = vi.hoisted(() => ({
+  topics: [] as unknown[],
+  session: null as { access_token: string } | null,
 }));
-vi.mock('@/lib/actions/prompt', () => ({
-  getPromptSets: async () => [],
+
+const actions = vi.hoisted(() => ({
+  getPromptSets: vi.fn(),
   savePromptSet: vi.fn(),
   addPromptToSet: vi.fn(),
   setPromptActive: vi.fn(),
   updatePrompt: vi.fn(),
   updatePromptLocations: vi.fn(),
   bulkUpdatePromptLocations: vi.fn(),
-  getLocationQuota: async () => null,
+  getLocationQuota: vi.fn(async () => null),
   deletePrompt: vi.fn(),
 }));
+vi.mock('@/lib/actions/prompt', () => actions);
 vi.mock('@/lib/actions/brand', () => ({ getBrandById: async () => brand }));
-vi.mock('@/lib/actions/topic', () => ({ getTopics: async () => topics }));
+vi.mock('@/lib/actions/topic', () => ({ getTopics: async () => loaded.topics }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'brand-id' }) }));
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({
+    auth: { getSession: async () => ({ data: { session: loaded.session } }) },
+  }),
+}));
 vi.mock('@/components/providers/plan-provider', () => ({
   usePlanContext: () => ({ planId: 'growth', allowedModelIds: null }),
 }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
 vi.mock('@/lib/tracking-job-store', () => ({ saveTrackingJob: vi.fn() }));
-vi.mock('@/components/dashboard/prompt-suggestion-card', () => ({
-  PromptSuggestionCard: ({ text }: { text: string }) => <p>{text}</p>,
-}));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
@@ -92,12 +99,35 @@ const fetchMock = vi.fn(async (url: string, init?: { body?: string }) => {
 });
 
 let container: HTMLDivElement;
-let root: ReturnType<typeof createRoot>;
+let root: Root;
+const openUpgrade = vi.fn();
+
+async function render(isLocked: boolean) {
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <PromptsPage />
+        </UpgradeDialogContext.Provider>
+      </NextIntlClientProvider>,
+    );
+  });
+  await act(async () => {});
+}
+
+const button = (name: string) =>
+  [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => b.textContent?.trim() === name,
+  )!;
+const include = () =>
+  container.querySelector<HTMLButtonElement>(
+    '[role="checkbox"][aria-label="Include this prompt"]',
+  )!;
 
 beforeEach(() => {
-  fetchMock.mockClear();
-  toast.success.mockClear();
-  toast.error.mockClear();
+  vi.clearAllMocks();
   vi.stubGlobal('fetch', fetchMock);
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -111,8 +141,14 @@ afterEach(() => {
 });
 
 describe("a brand's Prompts page", () => {
+  beforeEach(() => {
+    loaded.topics = topics;
+    loaded.session = { access_token: 'token' };
+    actions.getPromptSets.mockResolvedValue([]);
+  });
+
   it('generates prompts for every topic of a brand with more than one call takes', async () => {
-    await act(async () => root.render(<PromptsPage />));
+    await render(false);
     expect(container.textContent).toContain('21 topics selected');
 
     const generate = [...container.querySelectorAll('button')].find(
@@ -132,5 +168,59 @@ describe("a brand's Prompts page", () => {
     expect(toast.success).toHaveBeenCalledWith('21 prompt suggestions generated!');
     expect(container.textContent).toContain('best topic 1');
     expect(container.textContent).toContain('best topic 21');
+  });
+});
+
+/**
+ * Manage prompts on a read-only workspace (plan not active): AI Generate and
+ * a prompt's Include toggle open the upgrade dialog instead of running.
+ */
+describe('Manage prompts on a read-only workspace', () => {
+  beforeEach(() => {
+    loaded.topics = [
+      { id: 't1', brandId: 'brand-id', name: 'Coffee', isActive: true, createdAt: '2026-10-01' },
+    ];
+    loaded.session = null;
+    actions.getPromptSets.mockResolvedValue([
+      {
+        id: 'set-1',
+        prompts: [
+          {
+            id: 'p1',
+            promptSetId: 'set-1',
+            text: 'Best coffee subscription?',
+            category: 'Coffee',
+            platforms: ['chatgpt'],
+            regions: ['US'],
+            models: [],
+            isActive: true,
+            workStatus: null,
+            targetUrlCount: 0,
+            citedUrlCount: 0,
+            createdAt: '2026-10-01T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+    actions.setPromptActive.mockResolvedValue({ success: true });
+  });
+
+  it('generates nothing and pauses nothing, and says why', async () => {
+    await render(true);
+    await act(async () => button('Generate Prompts').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Generating prompts needs a plan');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await act(async () => include().click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Pausing prompts needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(actions.setPromptActive).not.toHaveBeenCalled();
+  });
+
+  it('pauses a prompt on an active plan', async () => {
+    await render(false);
+    await act(async () => include().click());
+    expect(actions.setPromptActive).toHaveBeenCalledWith('p1', false);
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 });
