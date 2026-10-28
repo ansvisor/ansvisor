@@ -17,6 +17,7 @@ describe('pastRound', () => {
           outcome: 'improved',
           validation: {
             primary: 'citations',
+            readings: [{ day: 7, outcome: 'improved' }],
             metrics: [
               { metric: 'mentions', before: 1, after: 2 },
               { metric: 'citations', before: 4, after: 9 },
@@ -51,6 +52,16 @@ describe('pastRound', () => {
       done: [],
       notDone: [],
     });
+  });
+
+  it('reads a round as final once read on day 30, or measured once before readings began', () => {
+    const round = (validation) =>
+      pastRound({ status: 'completed', outcome: 'declined', validation, completed_at: null }, []);
+    expect(round({ readings: [{ day: 30, outcome: 'declined' }], final: true }).final).toBe(true);
+    // Measured before readings began (learning B1): the sweep never reads it
+    // again, so History and the MCP take it as the result too.
+    expect(round({ primary: 'citations', metrics: [] }).final).toBe(true);
+    expect(round({ readings: [{ day: 14, outcome: 'declined' }] }).final).toBe(false);
   });
 
   it('reads a dismissed round as why it was turned down', () => {

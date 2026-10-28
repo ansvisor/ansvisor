@@ -56,8 +56,14 @@ export function pastRound(row, tasks) {
   return {
     closed: str(row.completed_at).slice(0, 10) || null,
     result: row.outcome ?? 'pending_measurement',
-    // Read for the last time, a month on (learning B1); a reading so far otherwise.
-    final: validation.final === true,
+    // Read for the last time, a month on (learning B1), or measured once
+    // before readings began, which the sweep never reads again (as History
+    // and the MCP read it); a reading so far otherwise.
+    final:
+      validation.final === true ||
+      (row.outcome != null &&
+        row.outcome !== 'pending_measurement' &&
+        !Array.isArray(validation.readings)),
     mainMetric: main ? { metric: main.metric, before: main.before, after: main.after } : null,
     done: titles((task) => task.status === 'completed'),
     notDone: titles((task) => task.status !== 'completed'),
