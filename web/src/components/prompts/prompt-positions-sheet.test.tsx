@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { summarizePositions, type PositionAnswer } from '@/lib/prompt-positions';
 import type { PromptPositionsData } from '@/lib/actions/prompt-positions';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * The positions panel over a week: its cards carry the table's answer,
@@ -112,6 +113,9 @@ function unnamed(): PromptPositionsData {
 
 let container: HTMLDivElement;
 let root: Root;
+// The workspace's plan: active unless a test says it's read-only.
+let isLocked = false;
+const openUpgrade = vi.fn();
 
 async function open(
   preset: '7d' | '24h' = '7d',
@@ -120,21 +124,27 @@ async function open(
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <PromptPositionsSheet
-          prompt={{ id: 'p1', text: 'Best coffee subscription?' }}
-          range={{ preset, from: '', to: '' }}
-          window={WEEK}
-          onRangeChange={() => {}}
-          region=""
-          onClose={() => {}}
-          {...more}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <PromptPositionsSheet
+            prompt={{ id: 'p1', text: 'Best coffee subscription?' }}
+            range={{ preset, from: '', to: '' }}
+            window={WEEK}
+            onRangeChange={() => {}}
+            region=""
+            onClose={() => {}}
+            {...more}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     ),
   );
 }
 
 beforeEach(() => {
+  isLocked = false;
+  openUpgrade.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -163,6 +173,20 @@ describe('PromptPositionsSheet', () => {
       text: 'Best coffee subscription?',
       method: 'create',
     });
+  });
+
+  it('opens the upgrade dialog from Create content on a read-only workspace', async () => {
+    isLocked = true;
+    getPromptPositions.mockResolvedValue(unnamed());
+    const onStartContent = vi.fn();
+    await open('7d', { initialTab: 'improve', brandId: 'b1', onStartContent });
+    await act(async () => {});
+    const create = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Create content',
+    )!;
+    await act(async () => create.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Creating content needs a plan');
+    expect(onStartContent).not.toHaveBeenCalled();
   });
 
   it('offers no content step where the page gives no way to start', async () => {

@@ -30,7 +30,9 @@ import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/cita
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
+import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
+import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
@@ -44,6 +46,7 @@ import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
 import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
+import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js';
 import { runGaSync } from './lib/ga-sync.js';
 import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
@@ -54,6 +57,7 @@ import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
+import { refreshCloroCountries } from './lib/cloro-countries.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -144,6 +148,13 @@ async function runDailyTracking() {
   // self-hosted, since both paths funnel through here).
   await cleanupStalePendingTasks();
 
+  // Read the countries each engine answers from (PROMPT-015e) before
+  // tracking, so today's runs skip what an engine doesn't support and the
+  // location picker offers what it does. A failed read keeps yesterday's.
+  await refreshCloroCountries().catch((err) => {
+    logger.error({ err }, '[cloro-countries] refresh crashed');
+  });
+
   // Recover pulses whose fire-and-forget trigger died with the process
   // (OOM, deploy, crash) after the run had already stamped. Non-blocking —
   // today's runs and their own pulses are independent of this sweep.
@@ -179,16 +190,19 @@ async function runDailyTracking() {
   // Write the tasks of recent actions whose writing a pass missed (AC-004):
   // the budget was spent, the model failed, or the process restarted.
   // Bounded per sweep; a no-op unless ACTION_TASKS_AI is on.
-  sweepActionTasks().catch((err) => {
-    logger.error({ err }, '[task-writer] daily sweep crashed');
-  });
-
-  // Check the open tasks checked `auto` on their pages (AC-010): a page
+  //
+  // Then check the open tasks checked `auto` on their pages (AC-010): a page
   // fetched again with the free reader, one at a time, bounded per night. A
-  // task that passes is completed. Fire-and-forget like the rest.
-  sweepTaskChecks().catch((err) => {
-    logger.error({ err }, '[task-checks] daily sweep crashed');
-  });
+  // task that passes is completed. Once the writer's sweep settles, as it
+  // can delete a task a check just completed. Fire-and-forget like the rest.
+  sweepActionTasks()
+    .catch((err) => {
+      logger.error({ err }, '[task-writer] daily sweep crashed');
+    })
+    .then(() => sweepTaskChecks())
+    .catch((err) => {
+      logger.error({ err }, '[task-checks] daily sweep crashed');
+    });
 
   // Insights rollup backstop (00066). Re-refreshes the trailing days for
   // every brand, so days whose run never stamped (partial, crashed) and
@@ -283,9 +297,20 @@ async function runDailyTracking() {
 
   // Search Console sync (#644) — independent follow-up step; never blocks or
   // fails the tracking run. No-ops when Composio isn't configured.
-  runGscSync().catch((err) => {
-    logger.error({ err }, '[gsc-sync] daily run failed');
-  });
+  //
+  // Each prompt's real demand (PROMPT-014) follows it, so tonight's queries
+  // are the ones matched: Search Console every night, and the weekly Google
+  // Trends, People Also Ask and YouTube tasks when DEMAND_SIGNALS is on, read
+  // an hour later or the next night. It runs whether or not the sync did.
+  runGscSync()
+    .catch((err) => {
+      logger.error({ err }, '[gsc-sync] daily run failed');
+    })
+    .then(() => sweepPromptDemand())
+    .then(() => scheduleDemandCollect())
+    .catch((err) => {
+      logger.error({ err }, '[prompt-demand] daily sweep crashed');
+    });
 
   // AI-bot rows past their retention (AT-010): 90 days, counters 400.
   pruneBotEvents().catch((err) => {
@@ -298,9 +323,25 @@ async function runDailyTracking() {
   });
 
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
-  sweepCatalogSources().catch((err) => {
-    logger.error({ err }, '[catalog] daily sweep failed');
-  });
+  // Then the products removed from their source over 90 days ago are
+  // deleted: after the sweep, so it isn't deleting while a sync brings one back.
+  // Then the brands' AI shopping cards are matched to their catalogs as they
+  // are now (product visibility, 00360).
+  sweepCatalogSources()
+    .catch((err) => {
+      logger.error({ err }, '[catalog] daily sweep failed');
+    })
+    .then(() => purgeRemovedCatalogProducts())
+    .catch((err) => {
+      logger.error({ err }, '[catalog] daily purge failed');
+    })
+    .then(() => sweepShoppingCardMatches())
+    .catch((err) => {
+      logger.error(
+        { err: { name: err?.name, message: err?.message } },
+        '[card-match] daily sweep failed',
+      );
+    });
 
   // Pages sent to Webflow, published there since (#1331): read once a day.
   sweepWebflowPublished().catch((err) => {

@@ -66,6 +66,9 @@ const HINTED = new Set([
   'whoFor',
   'first40Words',
   'feedMatch',
+  'shopCategoryLink',
+  'shopProductLinks',
+  'shopLinksLive',
 ]);
 
 /**
@@ -458,6 +461,7 @@ export function RulesTab({
                   onChange={(change) => state.change(rule.key, change)}
                   agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
                   onOpenSources={onOpenSources}
+                  merchantCenter={state.merchantCenter ?? false}
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
@@ -661,6 +665,7 @@ function RuleRow({
   onChange,
   agentFix,
   onOpenSources,
+  merchantCenter,
   note,
 }: {
   rule: ActiveRule;
@@ -669,6 +674,8 @@ function RuleRow({
   /** "Remove AI traces" offers Fix: the agent rewrites only those phrases. */
   agentFix?: AgentFix;
   onOpenSources?: () => void;
+  /** The brand has a Merchant Center account: the Shopping hints say it's checked. */
+  merchantCenter: boolean;
   /** A warning under the rule: Length, when the other rules can't fit in it. */
   note?: string;
 }) {
@@ -689,7 +696,11 @@ function RuleRow({
         )}
         <span
           className="min-w-0 flex-1 text-xs"
-          title={HINTED.has(rule.key) ? t(`hints.${rule.key}`) : undefined}
+          title={
+            HINTED.has(rule.key)
+              ? t(`hints.${rule.key}`, { merchantCenter: merchantCenter ? 'yes' : 'no' })
+              : undefined
+          }
         >
           {name}
         </span>

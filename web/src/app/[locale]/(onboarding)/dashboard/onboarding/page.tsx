@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createBrand, markBrandAsEcommerce } from '@/lib/actions/brand';
@@ -26,13 +27,19 @@ import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
 import { setPersonProperties, track } from '@/lib/analytics';
 
+/** "What do you work on?" (menu access): once the brand is set up, before the plan. */
+const WORK_AREAS_STEP = 6;
+/** Choose a plan (cloud only): the last step. */
+const PLAN_STEP = 7;
+
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
   1: 'brand_setup',
   2: 'brand_details',
   3: 'topics',
   4: 'prompts',
   5: 'competitors',
-  6: 'plan',
+  [WORK_AREAS_STEP]: 'work_areas',
+  [PLAN_STEP]: 'plan',
 };
 import type { Brand } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -68,9 +75,17 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
+import {
+  BRAND_SETUP_LIMITS,
+  suggestTopics,
+  generatePromptsFromTopics,
+  suggestCompetitors,
+  suggestFailure,
+  type SuggestFailure,
+} from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
+import { WorkAreasStep } from '@/components/onboarding/work-areas-step';
 import { DASHBOARD_HOME } from '@/config/home';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
@@ -241,7 +256,12 @@ const PLAN_STEP_COPY: Partial<
 const TRIAL_ASSURANCES = ['Zero risk', 'No charge today', 'Cancel anytime'];
 
 // Card width per step, matched to each step's content column; unlisted steps are forms.
-const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
+const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = {
+  3: 'wide',
+  4: 'wide',
+  [WORK_AREAS_STEP]: 'wide',
+  [PLAN_STEP]: 'medium',
+};
 
 const TOPIC_LOADING_MESSAGES = [
   'Researching topics for your brand...',
@@ -264,6 +284,8 @@ const COMPETITOR_LOADING_MESSAGES = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const tWizard = useTranslations('brands.wizard');
+  const tWelcome = useTranslations('welcome');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -290,7 +312,9 @@ export default function OnboardingPage() {
   const [loadingTopics, setLoadingTopics] = useState(false);
   // #379 — suggestions can fail even after the server's retries; each step
   // then shows an inline "add your own" fallback instead of a bare toast.
-  const [topicSuggestError, setTopicSuggestError] = useState(false);
+  // 'dailyLimit': the day's setup suggestions are used up (429), so it says
+  // to try tomorrow, and offers no Try again.
+  const [topicSuggestError, setTopicSuggestError] = useState<SuggestFailure | null>(null);
   const [topicLoadingMsg, setTopicLoadingMsg] = useState('');
   const topicMsgIdx = useRef(0);
 
@@ -313,7 +337,7 @@ export default function OnboardingPage() {
   // Step 4
   const [topicPrompts, setTopicPrompts] = useState<TopicPromptsData[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
-  const [promptGenError, setPromptGenError] = useState(false);
+  const [promptGenError, setPromptGenError] = useState<SuggestFailure | null>(null);
   const [topicSaveError, setTopicSaveError] = useState(false);
   const [promptCapacity, setPromptCapacity] = useState<{
     maxPrompts: number;
@@ -329,7 +353,7 @@ export default function OnboardingPage() {
   }
   const [suggestedCompetitors, setSuggestedCompetitors] = useState<CompetitorItem[]>([]);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
-  const [competitorSuggestError, setCompetitorSuggestError] = useState(false);
+  const [competitorSuggestError, setCompetitorSuggestError] = useState<SuggestFailure | null>(null);
   const [ecommerceDetected, setEcommerceDetected] = useState(false);
   const ecommerceSetup = useRef<Promise<void> | null>(null);
   const [competitorName, setCompetitorName] = useState('');
@@ -338,7 +362,7 @@ export default function OnboardingPage() {
   const [competitorLoadingMsg, setCompetitorLoadingMsg] = useState('');
   const competitorMsgIdx = useRef(0);
 
-  // Step 6 (cloud only)
+  // Plan step (cloud only)
   const [checkoutLoading, setCheckoutLoading] = useState<PlanId | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   // Trial length when the plan step is reached; null once the organization has
@@ -350,7 +374,7 @@ export default function OnboardingPage() {
   const [trialConfirmed, setTrialConfirmed] = useState(false);
 
   useEffect(() => {
-    if (step !== 6) return;
+    if (step !== PLAN_STEP) return;
     let cancelled = false;
     fetch('/api/stripe/trial')
       .then((res) => (res.ok ? res.json() : null))
@@ -378,7 +402,9 @@ export default function OnboardingPage() {
     competitors: { name: string; domain: string }[];
   } | null>(null);
 
-  const totalSteps = isCloud() ? 6 : 5;
+  // Self-host has no plan step, and asks "What do you work on?" on the
+  // dashboard's first visit instead (/dashboard/welcome).
+  const totalSteps = isCloud() ? PLAN_STEP : 5;
 
   // Determine which scrapers/models are available based on the plan
   const currentPlan = getPlan(currentPlanId);
@@ -445,7 +471,7 @@ export default function OnboardingPage() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('organization_id, onboarding_completed')
+          .select('organization_id, onboarding_completed, work_areas_asked_at')
           .eq('id', user.id)
           .single();
 
@@ -462,7 +488,7 @@ export default function OnboardingPage() {
             if (subStatus !== 'active' && subStatus !== 'trialing') {
               setOrganizationId(profile.organization_id);
               void loadResumedPreview(profile.organization_id);
-              setStep(6);
+              setStep(profile.work_areas_asked_at ? PLAN_STEP : WORK_AREAS_STEP);
               setInitialLoading(false);
               return;
             }
@@ -670,7 +696,7 @@ export default function OnboardingPage() {
 
   const fetchTopicSuggestions = async () => {
     setLoadingTopics(true);
-    setTopicSuggestError(false);
+    setTopicSuggestError(null);
     try {
       const { topics } = await suggestTopics({
         brandName: brandName.trim(),
@@ -682,7 +708,7 @@ export default function OnboardingPage() {
       setSelectedTopics(new Set(topics.slice(0, 7)));
     } catch (err) {
       console.error('Topic suggestion error:', err);
-      setTopicSuggestError(true);
+      setTopicSuggestError(suggestFailure(err));
     } finally {
       setLoadingTopics(false);
     }
@@ -722,7 +748,7 @@ export default function OnboardingPage() {
     if (!createdBrand) return;
     setLoadingPrompts(true);
     setTopicSaveError(false);
-    setPromptGenError(false);
+    setPromptGenError(null);
     const topicNames = Array.from(selectedTopics);
 
     // Save topics to DB first, with its own error handling. createTopics
@@ -763,7 +789,7 @@ export default function OnboardingPage() {
       // advance with empty per-topic groups so the manual add inputs are
       // usable, and explain inline. Continue stays disabled until they add
       // at least one prompt.
-      setPromptGenError(true);
+      setPromptGenError(suggestFailure(err));
       setTopicPrompts(topicNames.map((topic) => ({ topic, prompts: [] })));
       setStep(4);
     } finally {
@@ -830,7 +856,7 @@ export default function OnboardingPage() {
 
   const fetchCompetitorSuggestions = async () => {
     setLoadingCompetitors(true);
-    setCompetitorSuggestError(false);
+    setCompetitorSuggestError(null);
     try {
       const { competitors, isEcommerce } = await suggestCompetitors({
         brandName: brandName.trim(),
@@ -844,7 +870,7 @@ export default function OnboardingPage() {
       if (isEcommerce) ecommerceSetup.current = turnOnProductVisibility();
     } catch (err) {
       console.error('Competitor suggestion error:', err);
-      setCompetitorSuggestError(true);
+      setCompetitorSuggestError(suggestFailure(err));
     } finally {
       setLoadingCompetitors(false);
     }
@@ -944,11 +970,11 @@ export default function OnboardingPage() {
         onboarding_completed: true,
       });
 
-      // Cloud mode → proceed to subscription step (tracking triggered after payment)
+      // Cloud mode → what they work on, then the subscription step (tracking
+      // triggered after payment)
       if (isCloud()) {
-        toast.success('Almost done! Choose a plan to get started.');
         setSavingCompetitors(false);
-        setStep(6);
+        setStep(WORK_AREAS_STEP);
         return;
       }
 
@@ -985,13 +1011,13 @@ export default function OnboardingPage() {
     }
   };
 
-  // ── Step 6: Stripe checkout ──
+  // ── Plan step: Stripe checkout ──
 
   const handleCheckout = async (planId: PlanId) => {
     if (!organizationId) return;
     setCheckoutLoading(planId);
     track('onboarding_step_completed', {
-      step: 6,
+      step: PLAN_STEP,
       step_name: 'plan',
       plan_id: planId,
     });
@@ -1321,11 +1347,19 @@ export default function OnboardingPage() {
                     {topicSuggestError && (
                       <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                         <span>
-                          Couldn&apos;t fetch topic suggestions right now — add your own above.
+                          {topicSuggestError === 'dailyLimit' ? (
+                            tWizard('suggestionsUsedUp')
+                          ) : (
+                            <>
+                              Couldn&apos;t fetch topic suggestions right now — add your own above.
+                            </>
+                          )}
                         </span>
-                        <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
-                          Try again
-                        </Button>
+                        {topicSuggestError !== 'dailyLimit' && (
+                          <Button variant="outline" size="sm" onClick={fetchTopicSuggestions}>
+                            Try again
+                          </Button>
+                        )}
                       </div>
                     )}
                     {suggestedTopics.map((topic) => {
@@ -1359,6 +1393,7 @@ export default function OnboardingPage() {
                     <div className="flex items-center gap-2 pt-2">
                       <Input
                         placeholder="Add custom topic..."
+                        maxLength={BRAND_SETUP_LIMITS.topic}
                         value={customTopic}
                         onChange={(e) => setCustomTopic(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && addCustomTopic()}
@@ -1471,8 +1506,14 @@ export default function OnboardingPage() {
 
             {promptGenError && (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                Couldn&apos;t generate prompt suggestions right now — add your own to each topic
-                below to continue.
+                {promptGenError === 'dailyLimit' ? (
+                  tWizard('promptSuggestionsUsedUp')
+                ) : (
+                  <>
+                    Couldn&apos;t generate prompt suggestions right now — add your own to each topic
+                    below to continue.
+                  </>
+                )}
               </div>
             )}
 
@@ -1617,11 +1658,19 @@ export default function OnboardingPage() {
                 {competitorSuggestError && (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                     <span>
-                      Couldn&apos;t fetch competitor suggestions right now — add your own above.
+                      {competitorSuggestError === 'dailyLimit' ? (
+                        tWizard('suggestionsUsedUp')
+                      ) : (
+                        <>
+                          Couldn&apos;t fetch competitor suggestions right now — add your own above.
+                        </>
+                      )}
                     </span>
-                    <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
-                      Try again
-                    </Button>
+                    {competitorSuggestError !== 'dailyLimit' && (
+                      <Button variant="outline" size="sm" onClick={fetchCompetitorSuggestions}>
+                        Try again
+                      </Button>
+                    )}
                   </div>
                 )}
                 {suggestedCompetitors.length > 0 && (
@@ -1716,9 +1765,41 @@ export default function OnboardingPage() {
       );
     }
 
-    // ── Step 6: Choose Plan (cloud only) ──
+    // ── What do you work on? (menu access) ──
 
-    if (step !== 6) return null;
+    if (step === WORK_AREAS_STEP) {
+      return (
+        <WorkAreasStep
+          title={tWelcome('title')}
+          lede={tWelcome('lede')}
+          onDone={() => {
+            track('onboarding_step_completed', {
+              step: WORK_AREAS_STEP,
+              step_name: 'work_areas',
+            });
+            toast.success('Almost done! Choose a plan to get started.');
+            setStep(PLAN_STEP);
+          }}
+          footer={
+            <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
+              <button
+                onClick={() => setStep(5)}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back
+              </button>
+              <StepDots current={WORK_AREAS_STEP} total={totalSteps} />
+              <div className="w-12" />
+            </div>
+          }
+        />
+      );
+    }
+
+    // ── Choose Plan (cloud only) ──
+
+    if (step !== PLAN_STEP) return null;
 
     return (
       <div className="flex flex-col p-6 md:p-10">
@@ -1840,13 +1921,13 @@ export default function OnboardingPage() {
 
         <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-8">
           <button
-            onClick={() => setStep(5)}
+            onClick={() => setStep(WORK_AREAS_STEP)}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back
           </button>
-          <StepDots current={6} total={totalSteps} />
+          <StepDots current={PLAN_STEP} total={totalSteps} />
           <div className="w-12" />
         </div>
       </div>

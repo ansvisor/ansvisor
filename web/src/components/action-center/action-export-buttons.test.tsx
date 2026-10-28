@@ -91,6 +91,7 @@ const action = {
     change: 'dropped',
     subject: { entity: 'prompts', count: 3 },
     demand: 'high',
+    realDemand: null,
     commercial: true,
     heldBefore: true,
     days: 2,

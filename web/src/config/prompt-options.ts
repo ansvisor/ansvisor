@@ -5,7 +5,7 @@ export const REGIONS = [
   { code: 'GB', label: 'United Kingdom' },
   { code: 'DE', label: 'Germany' },
   { code: 'FR', label: 'France' },
-  { code: 'TR', label: 'Turkey' },
+  { code: 'TR', label: 'Türkiye' },
   { code: 'JP', label: 'Japan' },
   { code: 'BR', label: 'Brazil' },
   { code: 'IN', label: 'India' },
@@ -22,6 +22,51 @@ export const REGIONS = [
 ] as const;
 
 export type RegionCode = (typeof REGIONS)[number]['code'];
+
+/**
+ * Countries a prompt can be tracked in (PROMPT-015c): the brand regions
+ * above, then more markets every tracking engine answers from (the AI
+ * engines' provider covers about 195 countries). A brand's own region stays
+ * the shorter list: volumes and audits are read for it.
+ */
+export const TRACKING_COUNTRIES: readonly { code: string; label: string }[] = [
+  ...REGIONS,
+  { code: 'AR', label: 'Argentina' },
+  { code: 'AT', label: 'Austria' },
+  { code: 'BE', label: 'Belgium' },
+  { code: 'CH', label: 'Switzerland' },
+  { code: 'CL', label: 'Chile' },
+  { code: 'CO', label: 'Colombia' },
+  { code: 'CZ', label: 'Czechia' },
+  { code: 'DK', label: 'Denmark' },
+  { code: 'EG', label: 'Egypt' },
+  { code: 'FI', label: 'Finland' },
+  { code: 'GR', label: 'Greece' },
+  { code: 'HU', label: 'Hungary' },
+  { code: 'ID', label: 'Indonesia' },
+  { code: 'IE', label: 'Ireland' },
+  { code: 'IL', label: 'Israel' },
+  { code: 'KE', label: 'Kenya' },
+  { code: 'KW', label: 'Kuwait' },
+  { code: 'MA', label: 'Morocco' },
+  { code: 'MY', label: 'Malaysia' },
+  { code: 'NG', label: 'Nigeria' },
+  { code: 'NO', label: 'Norway' },
+  { code: 'NZ', label: 'New Zealand' },
+  { code: 'PE', label: 'Peru' },
+  { code: 'PH', label: 'Philippines' },
+  { code: 'PK', label: 'Pakistan' },
+  { code: 'PL', label: 'Poland' },
+  { code: 'PT', label: 'Portugal' },
+  { code: 'QA', label: 'Qatar' },
+  { code: 'RO', label: 'Romania' },
+  { code: 'SA', label: 'Saudi Arabia' },
+  { code: 'TH', label: 'Thailand' },
+  { code: 'TW', label: 'Taiwan' },
+  { code: 'UA', label: 'Ukraine' },
+  { code: 'VN', label: 'Vietnam' },
+  { code: 'ZA', label: 'South Africa' },
+];
 
 /** `items` for a Select over REGIONS — without it the trigger shows the raw code. */
 export const REGION_ITEMS = REGIONS.map((r) => ({ value: r.code, label: r.label }));
@@ -127,7 +172,7 @@ export const SCRAPER_GROUPS = [
     scrapers: [
       { id: 'chatgpt-web', label: 'ChatGPT (Web)', platform: 'chatgpt' },
       { id: 'chatgpt-shopping', label: 'ChatGPT Shopping', platform: 'chatgpt-shopping' },
-      { id: 'google-aio', label: 'Google AI Overview', platform: 'google-ai-overviews' },
+      { id: 'google-aio', label: 'Google AI Overviews', platform: 'google-ai-overviews' },
       { id: 'google-aimode', label: 'Google AI Mode', platform: 'google-ai-mode' },
       { id: 'copilot-web', label: 'Microsoft Copilot', platform: 'copilot' },
       { id: 'grok-web', label: 'Grok', platform: 'grok' },

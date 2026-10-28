@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { ActionItem } from '@/lib/actions/action-center';
 import { ActionTable } from './action-table';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -35,19 +36,24 @@ let root: Root;
 const onSelect = vi.fn();
 const onStatusChange = vi.fn();
 const onDelete = vi.fn();
+const openUpgrade = vi.fn();
 
-function render(props: Partial<React.ComponentProps<typeof ActionTable>> = {}) {
+function render(props: Partial<React.ComponentProps<typeof ActionTable>> = {}, isLocked = false) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ActionTable
-          actions={[action]}
-          onSelect={onSelect}
-          onStatusChange={onStatusChange}
-          onDelete={onDelete}
-          canDelete
-          {...props}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ActionTable
+            actions={[action]}
+            onSelect={onSelect}
+            onStatusChange={onStatusChange}
+            onDelete={onDelete}
+            canDelete
+            {...props}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -98,6 +104,25 @@ describe('ActionTable row menu', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('asks why before dismissing, and dismisses with the reason, or none (learning A5)', async () => {
+    render();
+    let items = await openMenu();
+    await act(async () => items[2].click());
+    expect(onStatusChange).not.toHaveBeenCalled();
+    const dialog = () => document.querySelector('[role="dialog"]')!;
+    expect(dialog().textContent).toContain('Why dismiss it?');
+    const choice = (label: string) =>
+      [...dialog().querySelectorAll('button')].find((b) => b.textContent?.startsWith(label))!;
+    await act(async () => choice("It's already done").click());
+    expect(onStatusChange).toHaveBeenCalledWith(action, 'dismissed', 'already_done');
+
+    onStatusChange.mockClear();
+    items = await openMenu();
+    await act(async () => items[2].click());
+    await act(async () => choice('Dismiss without saying why').click());
+    expect(onStatusChange).toHaveBeenCalledWith(action, 'dismissed', null);
+  });
+
   it('asks before deleting, and deletes on Delete', async () => {
     render();
     const items = await openMenu();
@@ -111,6 +136,17 @@ describe('ActionTable row menu', () => {
     await act(async () => confirm.click());
     expect(onDelete).toHaveBeenCalledWith(action);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('changes and deletes nothing on a read-only workspace: the upgrade dialog instead', async () => {
+    render({}, true);
+    await act(async () => (await openMenu())[1].click());
+    expect(openUpgrade).toHaveBeenLastCalledWith("Changing an action's status needs a plan");
+    await act(async () => (await openMenu())[3].click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Deleting actions needs a plan');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(onStatusChange).not.toHaveBeenCalled();
+    expect(onDelete).not.toHaveBeenCalled();
   });
 
   it("keeps Delete off for members who can't delete", async () => {
