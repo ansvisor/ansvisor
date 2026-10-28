@@ -377,9 +377,13 @@ function ShoppingPathMark({ shopping }: { shopping: DraftShopping | undefined })
   );
 }
 
-/** A draft's last send to the CMS, as an icon whose tip says when and how it went. */
+/**
+ * A draft's last send to the CMS, as an icon whose tip says when and how it
+ * went, and on wide screens its word: "In Webflow · draft", "Live"…
+ */
 function CmsStatusMark({ status }: { status: CmsStatus }) {
   const t = useTranslations('contentEditor.library.cms');
+  const tShort = useTranslations('contentEditor.editor.sentChip');
   const format = useFormatter();
   const when = format.dateTime(new Date(status.at), { dateStyle: 'medium', timeStyle: 'short' });
   const live = status.status === 'published' ? status.publishedUrl : null;
@@ -399,7 +403,7 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
       : status.status === 'published'
         ? 'text-blue-600 dark:text-blue-400'
         : 'text-muted-foreground';
-  const className = `inline-flex rounded p-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${tone}`;
+  const className = `inline-flex items-center gap-1 rounded p-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${tone}`;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -421,6 +425,9 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
         }
       >
         {icon}
+        <span aria-hidden className="hidden whitespace-nowrap text-xs font-medium xl:inline">
+          {tShort(`${status.target}.${status.status}`)}
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-72 space-y-1">
         <p>{label}</p>

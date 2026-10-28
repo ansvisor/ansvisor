@@ -111,6 +111,38 @@ function named(action, ids) {
   return ids.every((id) => before.has(id));
 }
 
+/**
+ * The products each draft's open action names, by draft id. The check
+ * counts them on its page even once its path has dropped them (a rebuild
+ * keeps the products in stock): the action closes only when the page links
+ * none of them that still doesn't sell.
+ *
+ * @param {string[]} draftIds
+ * @returns {Promise<Map<string, string[]>>}
+ */
+export async function openActionProducts(db, brandId, draftIds) {
+  const byDraft = new Map();
+  if (!draftIds.length) return byDraft;
+  const drafts = new Map(draftIds.map((id) => [shoppingLinksDedupKey(id), id]));
+  const { data, error } = await db
+    .from('actions')
+    .select('dedup_key, payload')
+    .eq('brand_id', brandId)
+    .eq('kind', SHOPPING_LINKS_ACTION_KIND)
+    .in('status', ACTIVE)
+    .in('dedup_key', [...drafts.keys()]);
+  if (error) throw new Error(`actions read: ${error.message}`);
+  for (const action of data ?? []) {
+    const draftId = drafts.get(action.dedup_key);
+    const ids = action.payload?.productIds;
+    if (!draftId || !Array.isArray(ids)) continue;
+    byDraft.set(draftId, [
+      ...new Set([...(byDraft.get(draftId) ?? []), ...ids.filter((id) => typeof id === 'string')]),
+    ]);
+  }
+  return byDraft;
+}
+
 /** The page's actions, newest first: the open one, else the last closed. */
 async function pageActions(db, brandId, dedupKey) {
   const { data, error } = await db

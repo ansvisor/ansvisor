@@ -12,6 +12,9 @@ import { logger } from './logger.js';
 import { htmlBlockElement } from './shopping-blocks.js';
 import {
   DRAFT_BATCH,
+  LIVE_PAGES_DEADLINE_MS,
+  MAX_DRAFTS,
+  MAX_HREF_CHARS,
   MAX_LIVE_PAGES,
   MAX_NEW_ACTIONS,
   MIN_WORDS,
@@ -103,6 +106,20 @@ describe('pageHrefs', () => {
     expect(pageHrefs(html, 'https://shop.example/blog/boots')).toContain(
       'https://shop.example/products/p2',
     );
+  });
+
+  it('skips a link longer than a page address can be, and checks a page of them quickly', () => {
+    const at = (href) => `<a href="${href}">x</a>`;
+    const longest = `https://shop.example/products/${'a'.repeat(MAX_HREF_CHARS - 30)}`;
+    const slashes = `https://shop.example${'/'.repeat(100_000)}x`;
+    const html = `<p>${at(longest)}${at(`${longest}a`)}${at(slashes)}${link('p1')}</p>`;
+    expect(pageHrefs(html)).toEqual([longest, 'https://shop.example/products/p1?utm_source=guide']);
+    const started = Date.now();
+    linkCheck(pageHrefs(html), path([product('p1')]), {
+      states: new Map([['p1', 'ok']]),
+      pages: new Map(),
+    });
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   it('reads no link from nothing, or from a block that is no HTML', () => {
@@ -595,6 +612,50 @@ describe('checkShoppingLinks', () => {
     expect(MAX_LIVE_PAGES).toBeGreaterThan(2);
   });
 
+  it('stops reading live pages at its deadline; the rest from their drafts', async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(
+        ...Array.from({ length: 3 }, (_, i) =>
+          draft(`d${i}`, { status: 'published', published_url: `https://shop.example/${i}` }),
+        ),
+      );
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const readPage = vi.fn(async (url) => {
+        // The first page takes the whole deadline.
+        vi.setSystemTime(Date.now() + LIVE_PAGES_DEADLINE_MS);
+        return { url, status: 200, html: livePageHtml(link('p1')) };
+      });
+      const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage });
+      expect(readPage).toHaveBeenCalledOnce();
+      expect(result.live).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(fake.rows('content_shopping_checks').map((r) => r.read_from)).toEqual([
+      'page',
+      'draft',
+      'draft',
+    ]);
+  });
+
+  it('drops no row when it stops at its most drafts: the others may still have a path', async () => {
+    const fake = setup();
+    fake
+      .rows('content_drafts')
+      .push(
+        ...Array.from({ length: MAX_DRAFTS }, (_, i) => draft(`d${String(i).padStart(4, '0')}`)),
+      );
+    // A draft past the cap, and its row from an earlier run.
+    fake.rows('content_drafts').push(draft('d9999'));
+    fake.rows('content_shopping_checks').push({ draft_id: 'd9999', brand_id: BRAND });
+    const result = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW });
+    expect(result).toMatchObject({ drafts: MAX_DRAFTS, dropped: 0 });
+    expect(fake.rows('content_shopping_checks').map((r) => r.draft_id)).toContain('d9999');
+  });
+
   it('drops the rows of drafts that lost their path or were archived, and keeps the others', async () => {
     const fake = setup();
     fake.rows('content_drafts').push(draft('d1'), draft('d2'));
@@ -660,6 +721,49 @@ describe('checkShoppingLinks', () => {
       readPage: live(link('p1')),
     });
     expect(fixed).toMatchObject({ opened: 0, closed: 1 });
+    expect(action.status).toBe('completed');
+  });
+
+  it('keeps an action open while the page links its products, though a rebuilt path dropped them', async () => {
+    const fake = setup();
+    catalog(fake, [['p3', [['in_stock', 'c']]]]);
+    for (const row of fake.rows('catalog_products')) {
+      row.url = `https://shop.example/products/${row.id}`;
+    }
+    fake.rows('content_drafts').push(
+      draft('d1', {
+        status: 'published',
+        published_url: 'https://shop.example/blog/boots',
+      }),
+    );
+    const live = (html) => vi.fn(async (url) => ({ url, status: 200, html: livePageHtml(html) }));
+    const page = `${link('p1')} ${link('p2')}`;
+    await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage: live(page) });
+    const [action] = fake.rows('actions');
+    expect(action.payload.productIds).toEqual(['p2']);
+
+    // A rebuild keeps the products in stock: sold-out p2 drops out of the path.
+    fake.rows('content_drafts')[0].shopping_path = path([product('p1'), product('p3')]);
+    const synced = await checkShoppingLinks(BRAND, { db: fake.db, now: NOW, readPage: live(page) });
+    expect(synced).toMatchObject({ attention: 1, closed: 0 });
+    expect(action.status).toBe('new');
+    expect(fake.rows('content_shopping_checks')[0].bad).toEqual([
+      { id: 'p2', title: 'Boot p2', state: 'sold_out' },
+    ]);
+    const now = await checkShoppingDraft(BRAND, 'd1', {
+      db: fake.db,
+      now: NOW,
+      readPage: live(page),
+    });
+    expect(now).toMatchObject({ action: 'kept' });
+    expect(action.status).toBe('new');
+
+    const fixed = await checkShoppingDraft(BRAND, 'd1', {
+      db: fake.db,
+      now: NOW,
+      readPage: live(link('p1')),
+    });
+    expect(fixed).toMatchObject({ bad: [], action: 'closed' });
     expect(action.status).toBe('completed');
   });
 

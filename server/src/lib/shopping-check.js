@@ -1,6 +1,9 @@
 import * as cheerio from 'cheerio';
 import supabaseAdmin from '../config/supabase.js';
-import { syncShoppingLinksAction } from './action-center/from-shopping-check.js';
+import {
+  openActionProducts,
+  syncShoppingLinksAction,
+} from './action-center/from-shopping-check.js';
 import { isBrandActive } from './active-subscriptions.js';
 import { onBrandDomain } from './audit/host.js';
 import { brandSite } from './catalog/category-pages.js';
@@ -55,6 +58,9 @@ export const LIVE_PAGES_DEADLINE_MS = 3 * 60 * 1000;
 /** New Action Center actions one check opens at most: the rest wait for the next sync. */
 export const MAX_NEW_ACTIONS = 5;
 
+/** A link longer than this isn't read: no page's address is (as content_drafts caps its own). */
+export const MAX_HREF_CHARS = 2048;
+
 const TITLE_CHARS = 200;
 const MAX_BAD = 40;
 /** The path's products that sell and the page doesn't link, named to swap in. */
@@ -64,7 +70,8 @@ const MAX_SWAPS = 5;
  * Every link's address in a page's HTML, and in the HTML blocks the editor
  * keeps base64-encoded (`div[data-html-block]`, a product grid among them).
  * A relative address is read against `base`, the live page's own; without
- * one it is dropped, as a draft's links are full addresses.
+ * one it is dropped, as a draft's links are full addresses. A link longer
+ * than MAX_HREF_CHARS is dropped too.
  */
 export function pageHrefs(html, base = null) {
   const hrefs = [];
@@ -72,7 +79,7 @@ export function pageHrefs(html, base = null) {
     const $ = cheerio.load(markup);
     $('a[href]').each((_, a) => {
       const href = String($(a).attr('href') ?? '').trim();
-      if (!href) return;
+      if (!href || href.length > MAX_HREF_CHARS) return;
       try {
         hrefs.push(base ? new URL(href, base).toString() : new URL(href).toString());
       } catch {
@@ -329,6 +336,28 @@ async function dropStale(db, brandId, kept) {
   return stale.length;
 }
 
+/**
+ * The products each draft's open action names (openActionProducts), or the
+ * read's error: then no action of these drafts is synced.
+ */
+async function heldProducts(db, brandId, draftIds) {
+  try {
+    return { held: await openActionProducts(db, brandId, draftIds), heldErr: null };
+  } catch (err) {
+    return { held: new Map(), heldErr: err };
+  }
+}
+
+/**
+ * A path with its open action's products counted as ones the person
+ * removed: on its page only while they still don't sell. So a rebuild that
+ * dropped them doesn't close the action while the page links them.
+ */
+function withHeld(path, ids = []) {
+  const extra = ids.filter((id) => !path.removed.includes(id));
+  return extra.length ? { ...path, removed: [...path.removed, ...extra] } : path;
+}
+
 /** Whether a draft's live page may be read: it has one, on the brand's site. */
 function readable(draft, domains) {
   const url = livePage(draft);
@@ -403,9 +432,15 @@ export async function checkShoppingLinks(
   let complete = false;
   for (let from = 0; from < MAX_DRAFTS; from += DRAFT_BATCH) {
     const drafts = await draftBatch(db, brandId, from);
-    const paths = drafts
+    const read = drafts
       .map((d) => ({ draft: d, path: readShoppingPath(d.shopping_path, { draftId: d.id }) }))
       .filter((d) => d.path);
+    const { held, heldErr } = await heldProducts(
+      db,
+      brandId,
+      read.map((d) => d.draft.id),
+    );
+    const paths = read.map((d) => ({ ...d, path: withHeld(d.path, held.get(d.draft.id)) }));
     const catalog = await productStates(
       db,
       brandId,
@@ -443,6 +478,8 @@ export async function checkShoppingLinks(
     // what readers see, and a page that couldn't be read says nothing.
     for (const page of livePagesRead) {
       try {
+        // Without its open action's products, a check can't tell it's fixed.
+        if (heldErr) throw heldErr;
         const done = await syncShoppingLinksAction(brandId, page, {
           db,
           now,
@@ -493,8 +530,10 @@ export async function checkShoppingDraft(
     .is('archived_at', null)
     .maybeSingle();
   if (error) throw new Error(`content_drafts read: ${error.message}`);
-  const path = draft ? readShoppingPath(draft.shopping_path, { draftId: draft.id }) : null;
-  if (!path) return null;
+  const own = draft ? readShoppingPath(draft.shopping_path, { draftId: draft.id }) : null;
+  if (!own) return null;
+  const { held, heldErr } = await heldProducts(db, brandId, [draft.id]);
+  const path = withHeld(own, held.get(draft.id));
   const site = await primarySite(db, brandId);
   const domains = await siteDomains(db, brandId);
   const catalog = await productStates(db, brandId, pathProductIds(path));
@@ -511,6 +550,7 @@ export async function checkShoppingDraft(
     .from('content_shopping_checks')
     .upsert([row], { onConflict: 'draft_id' });
   if (writeErr) throw new Error(`content_shopping_checks write: ${writeErr.message}`);
+  if (fromPage && heldErr) throw heldErr;
   const action = fromPage
     ? await syncShoppingLinksAction(brandId, { draft, pageUrl: url, check }, { db, now })
     : null;
