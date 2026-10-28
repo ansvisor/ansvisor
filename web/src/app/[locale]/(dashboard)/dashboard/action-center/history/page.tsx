@@ -16,6 +16,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { getActionHistory } from '@/lib/actions/action-history';
+import { getActionScorecard } from '@/lib/actions/action-scorecard';
+import type { ScorecardRow } from '@/lib/action-center/scorecard';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { actionTexts } from '@/lib/action-center/display';
 import {
@@ -37,12 +39,24 @@ import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { HistoryTable } from '@/components/action-center/history-table';
 import { HistoryDrawer } from '@/components/action-center/history-drawer';
+import { ScorecardTable } from '@/components/action-center/scorecard-table';
 import { cn } from '@/lib/utils';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const RANGE_DAYS = { '7d': 7, '30d': 30, '90d': 90, all: null } as const;
 type RangePreset = keyof typeof RANGE_DAYS;
 const RANGE_PRESETS = Object.keys(RANGE_DAYS) as RangePreset[];
+
+/** The list of actions, or the scorecard of what each kind did (learning B3). */
+const VIEWS = ['actions', 'scorecard'] as const;
+type HistoryView = (typeof VIEWS)[number];
+
+/**
+ * The range each view starts on until one is picked. An action's final
+ * reading comes 30 days after it closed (learning B1), so the scorecard
+ * over 30 days would hold mostly readings so far.
+ */
+const DEFAULT_RANGE: Record<HistoryView, RangePreset> = { actions: '30d', scorecard: '90d' };
 
 /**
  * History: what was done, and what it moved.
@@ -66,7 +80,10 @@ export default function ActionCenterHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const [range, setRange] = useState<RangePreset>('30d');
+  const [view, setView] = useState<HistoryView>('actions');
+  // Null until one is picked: the view's own default.
+  const [pickedRange, setRange] = useState<RangePreset | null>(null);
+  const range = pickedRange ?? DEFAULT_RANGE[view];
   const [status, setStatus] = useState<ActionStatus | 'all'>('all');
   const [type, setType] = useState<ActionCategory | 'all'>('all');
   const [priority, setPriority] = useState<PriorityLevel | 'all'>('all');
@@ -75,12 +92,16 @@ export default function ActionCenterHistoryPage() {
   const [sort, setSort] = useState<HistorySort>('newest');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ActionHistoryItem | null>(null);
+  const [scorecard, setScorecard] = useState<ScorecardRow[] | null>(null);
+  const [scorecardFailed, setScorecardFailed] = useState(false);
 
   // Filters, sort and search live in the URL (#896) so a refresh keeps them
   // and a filtered view can be shared. Read after mount, before the first load.
   const [urlRead, setUrlRead] = useState(false);
   useEffect(() => {
-    setRange(readUrlChoice('range', RANGE_PRESETS, '30d'));
+    setView(readUrlChoice('view', VIEWS, 'actions'));
+    const urlRange = readUrlParam('range');
+    setRange(RANGE_PRESETS.find((preset) => preset === urlRange) ?? null);
     setStatus(readUrlChoice<ActionStatus | 'all'>('status', ['all', ...HISTORY_STATUSES], 'all'));
     setType(readUrlChoice<ActionCategory | 'all'>('type', ['all', ...ACTION_CATEGORIES], 'all'));
     setPriority(
@@ -98,9 +119,10 @@ export default function ActionCenterHistoryPage() {
     const timer = setTimeout(
       () =>
         writeUrlParams(
-          { range, status, type, priority, source, sort, q: search.trim() },
+          { view, range, status, type, priority, source, sort, q: search.trim() },
           {
-            range: '30d',
+            view: 'actions',
+            range: DEFAULT_RANGE[view],
             status: 'all',
             type: 'all',
             priority: 'all',
@@ -111,7 +133,7 @@ export default function ActionCenterHistoryPage() {
       300,
     );
     return () => clearTimeout(timer);
-  }, [urlRead, range, status, type, priority, source, sort, search]);
+  }, [urlRead, view, range, status, type, priority, source, sort, search]);
 
   const load = useCallback(async () => {
     if (!brandId) {
@@ -135,6 +157,24 @@ export default function ActionCenterHistoryPage() {
   useEffect(() => {
     if (urlRead) void load();
   }, [load, urlRead]);
+
+  // The scorecard is read only when it's shown, over the same range.
+  const loadScorecard = useCallback(async () => {
+    if (!brandId) return;
+    setScorecard(null);
+    setScorecardFailed(false);
+    try {
+      const days = RANGE_DAYS[range];
+      const from = days ? new Date(Date.now() - days * 86_400_000).toISOString() : undefined;
+      setScorecard(await getActionScorecard(brandId, { from }));
+    } catch {
+      setScorecardFailed(true);
+    }
+  }, [brandId, range]);
+
+  useEffect(() => {
+    if (urlRead && view === 'scorecard') void loadScorecard();
+  }, [loadScorecard, urlRead, view]);
 
   // Any narrowing puts the reader back on page 1; staying on page 4 of a list
   // that now has one page shows nothing and looks like a failure.
@@ -165,7 +205,11 @@ export default function ActionCenterHistoryPage() {
     return rows.sort(compareHistory(sort));
   }, [items, status, type, priority, source, search, sort, tTexts]);
 
-  const summary = useMemo(() => summarize(filtered), [filtered]);
+  // The scorecard hides the filters, so its cards count the whole range.
+  const summary = useMemo(
+    () => summarize(view === 'scorecard' ? (items ?? []) : filtered),
+    [view, items, filtered],
+  );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / HISTORY_PAGE_SIZE));
   const visible = filtered.slice((page - 1) * HISTORY_PAGE_SIZE, page * HISTORY_PAGE_SIZE);
@@ -267,6 +311,24 @@ export default function ActionCenterHistoryPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex overflow-hidden rounded-md border">
+              {VIEWS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={view === option}
+                  onClick={() => setView(option)}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-medium transition-colors',
+                    view === option
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-card text-foreground hover:bg-muted',
+                  )}
+                >
+                  {t(`view.${option}`)}
+                </button>
+              ))}
+            </div>
+            <div className="inline-flex overflow-hidden rounded-md border">
               {RANGE_PRESETS.map((preset) => (
                 <button
                   key={preset}
@@ -283,62 +345,88 @@ export default function ActionCenterHistoryPage() {
                 </button>
               ))}
             </div>
-            <FilterSelect
-              label={t('filters.status')}
-              value={status}
-              onChange={(v) => setStatus(v as ActionStatus | 'all')}
-              options={HISTORY_STATUSES.map((v) => ({ value: v, label: t(`status.${v}`) }))}
-              allLabel={t('filters.all')}
-            />
-            <FilterSelect
-              label={t('filters.type')}
-              value={type}
-              onChange={(v) => setType(v as ActionCategory | 'all')}
-              options={ACTION_CATEGORIES.map((v) => ({ value: v, label: tTypes(v) }))}
-              allLabel={t('filters.all')}
-            />
-            <FilterSelect
-              label={t('filters.priority')}
-              value={priority}
-              onChange={(v) => setPriority(v as PriorityLevel | 'all')}
-              options={PRIORITY_LEVELS.map((v) => ({
-                value: v,
-                label: tActions(`priority.levels.${v}`),
-              }))}
-              allLabel={t('filters.all')}
-            />
-            <FilterSelect
-              label={t('filters.source')}
-              value={source}
-              onChange={(v) => setSource(v as SignalSource | 'all')}
-              options={SIGNAL_SOURCES.map((v) => ({ value: v, label: tSources(v) }))}
-              allLabel={t('filters.all')}
-            />
-            <FilterSelect
-              label={t('filters.sort')}
-              value={sort}
-              onChange={(v) => setSort((v === 'all' ? 'newest' : v) as HistorySort)}
-              options={HISTORY_SORTS.map((v) => ({ value: v, label: t(`sort.${v}`) }))}
-              allLabel={t('sort.newest')}
-            />
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t('filters.search')}
-                className="h-8 w-56 pl-8 text-xs"
-              />
-            </div>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" className="text-xs" onClick={clearFilters}>
-                <X className="h-3.5 w-3.5" />
-                {t('filters.clear')}
-              </Button>
+            {view === 'actions' && (
+              <>
+                <FilterSelect
+                  label={t('filters.status')}
+                  value={status}
+                  onChange={(v) => setStatus(v as ActionStatus | 'all')}
+                  options={HISTORY_STATUSES.map((v) => ({ value: v, label: t(`status.${v}`) }))}
+                  allLabel={t('filters.all')}
+                />
+                <FilterSelect
+                  label={t('filters.type')}
+                  value={type}
+                  onChange={(v) => setType(v as ActionCategory | 'all')}
+                  options={ACTION_CATEGORIES.map((v) => ({ value: v, label: tTypes(v) }))}
+                  allLabel={t('filters.all')}
+                />
+                <FilterSelect
+                  label={t('filters.priority')}
+                  value={priority}
+                  onChange={(v) => setPriority(v as PriorityLevel | 'all')}
+                  options={PRIORITY_LEVELS.map((v) => ({
+                    value: v,
+                    label: tActions(`priority.levels.${v}`),
+                  }))}
+                  allLabel={t('filters.all')}
+                />
+                <FilterSelect
+                  label={t('filters.source')}
+                  value={source}
+                  onChange={(v) => setSource(v as SignalSource | 'all')}
+                  options={SIGNAL_SOURCES.map((v) => ({ value: v, label: tSources(v) }))}
+                  allLabel={t('filters.all')}
+                />
+                <FilterSelect
+                  label={t('filters.sort')}
+                  value={sort}
+                  onChange={(v) => setSort((v === 'all' ? 'newest' : v) as HistorySort)}
+                  options={HISTORY_SORTS.map((v) => ({ value: v, label: t(`sort.${v}`) }))}
+                  allLabel={t('sort.newest')}
+                />
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t('filters.search')}
+                    className="h-8 w-56 pl-8 text-xs"
+                  />
+                </div>
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={clearFilters}>
+                    <X className="h-3.5 w-3.5" />
+                    {t('filters.clear')}
+                  </Button>
+                )}
+              </>
             )}
           </div>
 
-          {visible.length > 0 ? (
+          {view === 'scorecard' ? (
+            scorecardFailed ? (
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
+                <h2 className="font-semibold">{t('scorecard.error')}</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 text-xs"
+                  onClick={() => void loadScorecard()}
+                >
+                  {t('scorecard.retry')}
+                </Button>
+              </div>
+            ) : scorecard ? (
+              <ScorecardTable rows={scorecard} />
+            ) : (
+              <div className="space-y-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            )
+          ) : visible.length > 0 ? (
             <>
               <HistoryTable
                 items={visible}
