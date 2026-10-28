@@ -6,6 +6,7 @@ import { FeedFormatError, parseFeed } from '../feeds/index.js';
 import { isComposioConfigured } from '../composio.js';
 import { PageFetchError } from '../safe-fetch.js';
 import { logger } from '../logger.js';
+import { queueShoppingCheck } from '../shopping-check.js';
 import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { saveItemIssues } from './issues.js';
 import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
@@ -150,13 +151,16 @@ async function record(db, id, at, outcome) {
  * A source being read already isn't read again at once: the answer says so,
  * and nothing is recorded. A store's calls stop after `readMs` (STORE_READ_MS).
  *
+ * After a sync that read the catalog, the brand's pages' shopping links are
+ * checked against it (shopping-check.js), behind the answer.
+ *
  * @param {{ id: string, brand_id: string, kind: string, format: string, url?: string|null, account?: string|null }} source
- * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number }} [options]
+ * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number, afterSync?: Function }} [options]
  *   `fetch` (a feed's), `request` (a store's HTTP client), `signInRequest`
- *   (the workspace sign-in's, sign-in.js), `connectors` and `readMs` are
- *   the tests' stand-ins
+ *   (the workspace sign-in's, sign-in.js), `connectors`, `readMs` and
+ *   `afterSync` (the shopping check's queue) are the tests' stand-ins
  */
-export async function syncSource(source, options = {}) {
+export async function syncSource(source, { afterSync = queueShoppingCheck, ...options } = {}) {
   if (reading.has(source.id)) {
     return {
       status: 'failed',
@@ -164,11 +168,14 @@ export async function syncSource(source, options = {}) {
     };
   }
   reading.add(source.id);
+  let outcome;
   try {
-    return await syncOnce(source, options);
+    outcome = await syncOnce(source, options);
   } finally {
     reading.delete(source.id);
   }
+  if (outcome.status === 'ok') afterSync(source.brand_id, options.db ? { db: options.db } : {});
+  return outcome;
 }
 
 async function syncOnce(
