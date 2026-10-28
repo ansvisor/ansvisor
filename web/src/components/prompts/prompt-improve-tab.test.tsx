@@ -11,6 +11,7 @@ import { ImproveTab, useImprove, type ImproveController } from './prompt-improve
 const actions = vi.hoisted(() => ({
   getImproveSuggestions: vi.fn(),
   generateImproveSuggestions: vi.fn(),
+  sendImproveToActionCenter: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt-improve', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/actions/prompt-improve')>()),
@@ -195,7 +196,11 @@ describe('useImprove on a read-only workspace (plan not active)', () => {
   }
   const mount = () =>
     act(async () => {
-      root.render(<Probe onImprove={keep} />);
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <Probe onImprove={keep} />
+        </NextIntlClientProvider>,
+      );
     });
 
   beforeEach(() => {
@@ -221,6 +226,11 @@ describe('useImprove on a read-only workspace (plan not active)', () => {
     expect(improve.set).toBeNull();
     await act(async () => improve.generate());
     expect(gate.openUpgrade).toHaveBeenCalledTimes(1);
+    expect(gate.openUpgrade).toHaveBeenCalledWith('Improving a prompt needs a plan');
     expect(actions.generateImproveSuggestions).not.toHaveBeenCalled();
+    // Send Actions writes to the Action Center: the dialog too, and nothing sent.
+    await act(async () => improve.send());
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Sending actions needs a plan');
+    expect(actions.sendImproveToActionCenter).not.toHaveBeenCalled();
   });
 });

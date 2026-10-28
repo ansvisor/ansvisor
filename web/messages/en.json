@@ -109,6 +109,36 @@
         "invalid": "“{code}” isn’t a valid code.",
         "failed": "Couldn't check the code. Try again."
       }
+    },
+    "actions": {
+      "addPrompts": "Adding prompts needs a plan",
+      "editPrompts": "Editing prompts needs a plan",
+      "deletePrompts": "Deleting prompts needs a plan",
+      "pausePrompts": "Pausing prompts needs a plan",
+      "resumePrompts": "Resuming prompts needs a plan",
+      "trackPrompts": "Tracking prompts needs a plan",
+      "generatePrompts": "Generating prompts needs a plan",
+      "analyzePrompts": "Analyzing prompts needs a plan",
+      "runPrompts": "Running prompts needs a plan",
+      "testPrompt": "Testing a prompt needs a plan",
+      "improvePrompt": "Improving a prompt needs a plan",
+      "changeLocations": "Changing locations needs a plan",
+      "setWorkStatus": "Setting a work status needs a plan",
+      "refreshVolumes": "Refreshing volumes needs a plan",
+      "suggestPrompts": "Suggesting prompts needs a plan",
+      "dismissSuggestions": "Dismissing suggestions needs a plan",
+      "suggestContent": "Suggesting content needs a plan",
+      "createContent": "Creating content needs a plan",
+      "optimizeContent": "Optimizing content needs a plan",
+      "sendAction": "Sending actions needs a plan",
+      "addTopics": "Adding topics needs a plan",
+      "editTopics": "Editing topics needs a plan",
+      "deleteTopics": "Deleting topics needs a plan",
+      "suggestTopics": "Suggesting topics needs a plan",
+      "addCompetitors": "Adding competitors needs a plan",
+      "deleteCompetitors": "Deleting competitors needs a plan",
+      "suggestCompetitors": "Suggesting competitors needs a plan",
+      "pinCompetitors": "Pinning competitors needs a plan"
     }
   },
   "common": {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import {
   getPromptSets,
@@ -39,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { MODEL_GROUPS, ALL_MODELS, SCRAPER_GROUPS, ALL_SCRAPERS } from '@/config/prompt-options';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { PLANS } from '@/config/plans';
 import { saveTrackingJob } from '@/lib/tracking-job-store';
 import { useRouter } from '@/i18n/navigation';
@@ -91,6 +93,10 @@ export default function PromptsPage() {
   const [generateTopics, setGenerateTopics] = useState<string[] | null>(null);
   const { planId, allowedModelIds: planAllowedModelIds } = usePlanContext();
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): every write and run below opens
+  // the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const allowedScraperIds = useMemo(() => {
     const allowed = PLANS[planId].limits.allowedScrapers;
     const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
@@ -801,7 +807,7 @@ export default function PromptsPage() {
                 </div>
 
                 <Button
-                  onClick={handleAddManualPrompt}
+                  onClick={guard(handleAddManualPrompt, { action: tActions('addPrompts') })}
                   disabled={
                     isAddingManual ||
                     !manualText.trim() ||
@@ -872,7 +878,7 @@ export default function PromptsPage() {
                   </p>
                 )}
                 <Button
-                  onClick={handleGenerate}
+                  onClick={guard(handleGenerate, { action: tActions('generatePrompts') })}
                   disabled={isGenerating || !generateTopics || generateTopics.length === 0}
                   className="w-full"
                 >
@@ -925,7 +931,10 @@ export default function PromptsPage() {
             </div>
 
             <div className="flex items-center gap-3 pt-4">
-              <Button onClick={handleSaveSuggestions} disabled={isSaving}>
+              <Button
+                onClick={guard(handleSaveSuggestions, { action: tActions('addPrompts') })}
+                disabled={isSaving}
+              >
                 {isSaving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -933,7 +942,11 @@ export default function PromptsPage() {
                 )}
                 Save Selected ({suggestions.filter((s) => s.isActive).length})
               </Button>
-              <Button variant="outline" onClick={handleGenerate} disabled={isGenerating}>
+              <Button
+                variant="outline"
+                onClick={guard(handleGenerate, { action: tActions('generatePrompts') })}
+                disabled={isGenerating}
+              >
                 {isGenerating ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -955,14 +968,18 @@ export default function PromptsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">All Prompts ({allPrompts.length})</h2>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={openBulkDialog}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={guard(openBulkDialog, { action: tActions('changeLocations') })}
+              >
                 <Globe className="mr-2 h-3.5 w-3.5" />
                 Locations
               </Button>
               <Button
                 size="sm"
                 variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
-                onClick={openAnalyzeDialog}
+                onClick={guard(openAnalyzeDialog, { action: tActions('analyzePrompts') })}
               >
                 <Search className="mr-2 h-3.5 w-3.5" />
                 Analyze Prompts
@@ -987,12 +1004,27 @@ export default function PromptsPage() {
                 topics={topics}
                 allowedScraperIds={allowedScraperIds}
                 allowedModelIds={allowedModelIds}
-                onToggle={() => handleTogglePrompt(prompt)}
-                onTextChange={(text) => handleEditPrompt(prompt.id, text)}
-                onCategoryChange={(category) => handleCategoryChange(prompt.id, category)}
-                onModelsChange={(models) => handleModelsChange(prompt.id, models)}
-                onPlatformsChange={(platforms) => handlePlatformsChange(prompt.id, platforms)}
-                onRegionsChange={(regions) => handleRegionsChange(prompt.id, regions)}
+                onToggle={guard(() => handleTogglePrompt(prompt), {
+                  action: tActions(prompt.isActive ? 'pausePrompts' : 'resumePrompts'),
+                })}
+                onTextChange={guard((text: string) => handleEditPrompt(prompt.id, text), {
+                  action: tActions('editPrompts'),
+                })}
+                onCategoryChange={guard(
+                  (category: string) => handleCategoryChange(prompt.id, category),
+                  { action: tActions('editPrompts') },
+                )}
+                onModelsChange={guard((models: string[]) => handleModelsChange(prompt.id, models), {
+                  action: tActions('editPrompts'),
+                })}
+                onPlatformsChange={guard(
+                  (platforms: string[]) => handlePlatformsChange(prompt.id, platforms),
+                  { action: tActions('editPrompts') },
+                )}
+                onRegionsChange={guard(
+                  (regions: string[]) => handleRegionsChange(prompt.id, regions),
+                  { action: tActions('editPrompts') },
+                )}
                 maxLocations={
                   // A paused prompt's locations aren't in `used`; its cap is
                   // what it could take back when resumed.
@@ -1005,7 +1037,9 @@ export default function PromptsPage() {
                       )
                     : null
                 }
-                onDelete={() => handleDeletePrompt(prompt.id)}
+                onDelete={guard(() => handleDeletePrompt(prompt.id), {
+                  action: tActions('deletePrompts'),
+                })}
                 mode="manage"
               />
             ))}
