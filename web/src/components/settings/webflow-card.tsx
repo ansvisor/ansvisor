@@ -295,8 +295,17 @@ function TokenForm({
       return;
     }
     setToken('');
-    // A new token for the same site keeps its collection; else the setup's last step is left.
-    toast.success(t(result.connection.collectionId ? 'connectedToast' : 'connectedSetupToast'));
+    // A new token for the same site keeps its collection; else the setup's last step is left,
+    // with the site to pick first when the token reaches several (none saved then).
+    toast.success(
+      t(
+        result.connection.collectionId
+          ? 'connectedToast'
+          : result.connection.siteId
+            ? 'connectedSetupToast'
+            : 'connectedPickSiteToast',
+      ),
+    );
     onConnected(result.connection);
   };
 
@@ -501,7 +510,7 @@ function WebflowMapping({
       {!connection.collectionId && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{t('setupStep')}</span>
+          <span>{t(sites.length > 1 && !siteId ? 'setupStepSite' : 'setupStep')}</span>
         </div>
       )}
       {sites.length > 1 && (
@@ -510,6 +519,8 @@ function WebflowMapping({
           items={siteItems}
           value={siteId}
           placeholder={t('sitePlaceholder')}
+          // A token for several sites saves none: the site comes first (#1601).
+          autoFocus={focusCollection && !siteId}
           onChange={(value) => {
             setSiteId(value);
             setCollectionId(null);

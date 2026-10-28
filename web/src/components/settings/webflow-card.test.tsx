@@ -158,6 +158,48 @@ describe('WebflowCard', () => {
     expect(document.activeElement).toBe(picker('Collection'));
   });
 
+  it('asks for the site first when the token reaches several, and focuses its picker (#1601)', async () => {
+    client.connectWebflow.mockResolvedValue({
+      ok: true,
+      connection: {
+        ...CONNECTED,
+        siteId: null,
+        collectionId: null,
+        collectionName: null,
+        fieldMap: {},
+      },
+      sites: [],
+    });
+    client.listWebflowCollections.mockImplementation(async (_brand: string, siteId?: string) => ({
+      ok: true,
+      sites: [
+        { id: 's1', name: 'Acme' },
+        { id: 's2', name: 'Acme Shop' },
+      ],
+      siteId: siteId ?? null,
+      collections: siteId ? [{ id: 'c1', name: 'Blog Posts', slug: 'post' }] : [],
+    }));
+    await render();
+    await typeToken('wf-token-123');
+    expect(toast.success).toHaveBeenCalledWith(
+      'Webflow connected. Now pick the site and the collection, and save.',
+    );
+    expect(container.textContent).toContain(
+      "Last step: pick the site and the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Webflow until then.",
+    );
+    expect(document.activeElement).toBe(picker('Site'));
+
+    await click(picker('Site'));
+    const shop = option('Acme Shop')!;
+    await act(async () => {
+      shop.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await click(shop);
+    expect(client.listWebflowCollections).toHaveBeenLastCalledWith('b1', 's2');
+    // The site picked, the line asks for the collection alone.
+    expect(container.textContent).toContain(SETUP_STEP);
+  });
+
   it('says the setup isn’t finished until a collection is saved', async () => {
     client.readWebflow.mockResolvedValue({
       ok: true,
