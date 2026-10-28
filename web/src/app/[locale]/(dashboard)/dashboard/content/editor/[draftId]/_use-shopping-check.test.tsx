@@ -23,6 +23,7 @@ const check = (title: string): ShoppingCheck => ({
   categories: [],
   products: [{ key: `shop.example/products/${title}`, title, state: 'ok', inPath: true }],
   site: null,
+  merchantCenter: false,
 });
 
 let container: HTMLDivElement;
