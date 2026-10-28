@@ -302,6 +302,51 @@ describe('cloro-scraper – parseScraperResponse', () => {
       ]);
     });
 
+    it('reads searches an engine joined by semicolons as each search, with its engine', () => {
+      const gemini = parseScraperResponse(
+        {
+          markdown: 't',
+          sources: [],
+          searchQueries: ['ChatGPT subscription;Gemini subscription; Google AIO subscription;'],
+        },
+        'gemini-web',
+      );
+      expect(gemini.search_queries).toEqual([
+        { query: 'ChatGPT subscription', source_platform: 'gemini-web' },
+        { query: 'Gemini subscription', source_platform: 'gemini-web' },
+        { query: 'Google AIO subscription', source_platform: 'gemini-web' },
+      ]);
+      const perplexity = parseScraperResponse(
+        {
+          markdown: 't',
+          sources: [],
+          search_model_queries: [{ query: 'a; b', engine: 'web' }],
+        },
+        'perplexity-web',
+      );
+      expect(perplexity.search_queries).toEqual([
+        { query: 'a', engine: 'web', source_platform: 'perplexity-web' },
+        { query: 'b', engine: 'web', source_platform: 'perplexity-web' },
+      ]);
+    });
+
+    it("never splits at an HTML entity's semicolon, and reads 'one;' as 'one', as the editor does", () => {
+      const read = (searchQueries) =>
+        parseScraperResponse(
+          { markdown: 't', sources: [], searchQueries },
+          'copilot-web',
+        ).search_queries.map((item) => item.query);
+      expect(read(['what&#39;s new in aeo'])).toEqual(['what&#39;s new in aeo']);
+      expect(read(['r&amp;d budget;aeo tools;what&#x27;s aeo'])).toEqual([
+        'r&amp;d budget',
+        'aeo tools',
+        'what&#x27;s aeo',
+      ]);
+      // The same as fanoutQueries('one;') in web/src/lib/content/sources.ts.
+      expect(read(['one;'])).toEqual(['one']);
+      expect(read([' ; '])).toEqual([]);
+    });
+
     it('trims surrounding whitespace so a sub-query has one canonical form', () => {
       const copilot = parseScraperResponse(
         { markdown: 't', sources: [], searchQueries: ['  spaced query  '] },
