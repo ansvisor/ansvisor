@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type {
   TrafficBrokenLink,
   TrafficDateWindow,
@@ -136,24 +137,30 @@ afterEach(() => {
   container.remove();
 });
 
+const openUpgrade = vi.fn();
 async function render({
   domain = 'acme-coffee.example.com',
   analyticsMissing = false,
-}: { domain?: string; analyticsMissing?: boolean } = {}) {
+  isLocked = false,
+}: { domain?: string; analyticsMissing?: boolean; isLocked?: boolean } = {}) {
   // Each list's own Excel / CSV, told apart by name.
   const exportButton = (name: string) => <span data-testid="export">{name}</span>;
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <PagesCard
-          brandId={BRAND}
-          dateWindow={WEEK}
-          rangeLabel="Last 7 days"
-          domain={domain}
-          analyticsMissing={analyticsMissing}
-          actions={exportButton('pages by status')}
-          brokenActions={exportButton('redirect list')}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <PagesCard
+            brandId={BRAND}
+            dateWindow={WEEK}
+            rangeLabel="Last 7 days"
+            domain={domain}
+            analyticsMissing={analyticsMissing}
+            actions={exportButton('pages by status')}
+            brokenActions={exportButton('redirect list')}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -210,6 +217,25 @@ describe('PagesCard', () => {
     await act(async () => button('Audit page').click());
     expect(runAudit).toHaveBeenCalledWith(BRAND, 'https://acme-coffee.example.com/gifts');
     expect(push).toHaveBeenCalledWith('/dashboard/audit/audit-1');
+  });
+
+  it('audits, suggests and sends nothing on a read-only workspace: the upgrade dialog instead', async () => {
+    openUpgrade.mockReset();
+    getTrafficPages.mockResolvedValue(
+      pages([page({ citations: 6 }), page({ page: '/about', valueRank: 2 })]),
+    );
+    await render({ isLocked: true });
+    await act(async () => button('Add prompts').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Suggesting prompts needs a plan');
+    expect(dialog()).toBeNull();
+    await act(async () => button('Audit page').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Running an audit needs a plan');
+    await act(async () => button('Send to Action Center').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Sending actions needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(3);
+    expect(runAudit).not.toHaveBeenCalled();
+    expect(sendTrafficPagesToActionCenter).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("can't audit without the brand's domain", async () => {

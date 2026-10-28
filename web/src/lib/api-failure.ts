@@ -9,6 +9,7 @@ export const API_FAILURES = [
   'workspace',
   'not_found',
   'plan',
+  'subscription',
   'limit',
   'busy',
   'failed',
@@ -24,6 +25,10 @@ export type ApiFailure = (typeof API_FAILURES)[number];
  */
 export function apiFailure(status: number, body: Record<string, unknown> = {}): ApiFailure {
   if (status === 401) return 'session';
+  // The workspace's plan isn't active (a trial that ended, a canceled plan):
+  // the server's 402 for any change while it is read-only. The upgrade
+  // dialog, not a toast.
+  if (body.code === 'subscription_inactive') return 'subscription';
   if (body.error === 'quota_exhausted') return 'limit';
   // A monthly budget used up: plan-guard's PlanLimitError answers 429 with plan_limit.
   if (status === 429 && body.error === 'plan_limit') return 'limit';
@@ -38,4 +43,25 @@ export function apiFailure(status: number, body: Record<string, unknown> = {}): 
   }
   if (status === 404) return 'not_found';
   return 'failed';
+}
+
+/**
+ * Whether a response body is the server's subscription_inactive (a read-only
+ * workspace), also when it comes as text: the AI SDK's chat transport throws
+ * an error whose message is the response body. A server action refused by
+ * assertWritable (lib/subscription-guard.ts) throws an error whose digest is
+ * the code, the one thing production keeps of it.
+ */
+export function isSubscriptionInactive(body: unknown): boolean {
+  let value = body;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return false;
+    }
+  }
+  if (typeof value !== 'object' || value === null) return false;
+  const { code, digest } = value as { code?: unknown; digest?: unknown };
+  return code === 'subscription_inactive' || digest === 'subscription_inactive';
 }

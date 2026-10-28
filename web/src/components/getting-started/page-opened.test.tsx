@@ -26,6 +26,7 @@ vi.mock('@/stores/use-brand-store', () => ({
 vi.mock('@/lib/actions/getting-started', () => ({ markGettingStartedPageOpened }));
 
 const { GettingStartedPageOpened } = await import('./page-opened');
+const { UpgradeDialogContext } = await import('@/components/providers/upgrade-gate');
 
 // An in-memory localStorage: the test environment has none.
 const store = new Map<string, string>();
@@ -42,8 +43,16 @@ Object.defineProperty(window, 'localStorage', {
 let container: HTMLDivElement;
 let root: Root;
 
-async function render() {
-  await act(async () => root.render(<GettingStartedPageOpened />));
+async function render(isLocked = false) {
+  await act(async () =>
+    root.render(
+      <UpgradeDialogContext.Provider
+        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade: vi.fn() }}
+      >
+        <GettingStartedPageOpened />
+      </UpgradeDialogContext.Provider>,
+    ),
+  );
 }
 
 beforeEach(() => {
@@ -76,6 +85,11 @@ describe('GettingStartedPageOpened', () => {
     markGettingStartedPageOpened.mockResolvedValue(false);
     await render();
     expect(localStorage.getItem('aeo:getting-started:b1:mentions')).toBeNull();
+  });
+
+  it('records nothing while the workspace is read-only (plan not active): it writes', async () => {
+    await render(true);
+    expect(markGettingStartedPageOpened).not.toHaveBeenCalled();
   });
 
   it('leaves other pages, and a missing brand, alone', async () => {

@@ -21,6 +21,7 @@ import {
   testWebhook,
   type WebhookTestResult,
 } from '@/lib/actions/content';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { toast } from 'sonner';
 
@@ -46,6 +47,10 @@ interface WebhookSettingsDialogProps {
 export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSettingsDialogProps) {
   const t = useTranslations('content.webhook');
   const tFailure = useTranslations('apiFailure');
+  // A read-only workspace (plan not active): the settings show, and Test and
+  // Save open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // Only admins and managers save the webhook (RLS) and test it (the API):
   // a member sees it, and why it can't be changed, before pressing anything.
   const { canManage } = useUserRole();
@@ -263,7 +268,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleTest}
+                onClick={guard(handleTest, { action: tActions('testWorkflow') })}
                 disabled={readOnly || testing || !url.trim()}
                 className="gap-2"
               >
@@ -272,7 +277,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
               </Button>
               <Button
                 size="sm"
-                onClick={handleSave}
+                onClick={guard(handleSave, { action: tActions('saveWorkflow') })}
                 disabled={readOnly || saving || !url.trim()}
                 className="gap-2"
               >

@@ -44,6 +44,7 @@ import {
   type ContentAuthor,
 } from '@/lib/content/authors';
 import { cn } from '@/lib/utils';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /** The organization byline in a brand's default select: no author. */
 const ORGANIZATION = 'organization';
@@ -70,6 +71,10 @@ export function AuthorsSection() {
   const [picking, setPicking] = useState<Record<string, string>>({});
   /** A brand's Add byline to content being saved, likewise. */
   const [bylining, setBylining] = useState<Record<string, boolean>>({});
+  // A read-only workspace (plan not active): Add, Edit, Remove, a default
+  // and the byline box open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(async () => {
     try {
@@ -209,17 +214,26 @@ export function AuthorsSection() {
                     </div>
                     {canEdit(author) && (
                       <span className="flex shrink-0 gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(author)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={guard(() => setEditing(author), {
+                            action: tActions('editAuthors'),
+                          })}
+                        >
                           {t('edit')}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            setRemoving(author);
-                            setRemoveOpen(true);
-                          }}
+                          onClick={guard(
+                            () => {
+                              setRemoving(author);
+                              setRemoveOpen(true);
+                            },
+                            { action: tActions('removeAuthors') },
+                          )}
                         >
                           {t('remove')}
                         </Button>
@@ -229,7 +243,10 @@ export function AuthorsSection() {
                 ))}
               </ul>
             )}
-            <Button size="sm" onClick={() => setEditing('new')}>
+            <Button
+              size="sm"
+              onClick={guard(() => setEditing('new'), { action: tActions('addAuthors') })}
+            >
               {t('add')}
             </Button>
 
@@ -258,11 +275,14 @@ export function AuthorsSection() {
                           items={items}
                           value={defaultOf(brand.id)}
                           disabled={!canSetDefaults || brand.id in picking}
-                          onValueChange={(value) => {
-                            if (value && value !== defaultOf(brand.id)) {
-                              void pickDefault(brand.id, value);
-                            }
-                          }}
+                          onValueChange={guard(
+                            (value: string | null) => {
+                              if (value && value !== defaultOf(brand.id)) {
+                                void pickDefault(brand.id, value);
+                              }
+                            },
+                            { action: tActions('setDefaultAuthor') },
+                          )}
                         >
                           <SelectTrigger
                             size="sm"
@@ -285,9 +305,10 @@ export function AuthorsSection() {
                             checked={bylining[brand.id] ?? !!brand.bylineInContent}
                             aria-describedby={`default-${brand.id}`}
                             disabled={!canSetDefaults || brand.id in bylining}
-                            onCheckedChange={(checked) =>
-                              void toggleByline(brand.id, checked === true)
-                            }
+                            onCheckedChange={guard(
+                              (checked: boolean) => void toggleByline(brand.id, checked === true),
+                              { action: tActions('setByline') },
+                            )}
                           />
                           {t('bylineInContent')}
                         </label>
