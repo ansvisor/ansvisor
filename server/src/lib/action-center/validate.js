@@ -456,10 +456,6 @@ export async function validateAction(action, { now = new Date() } = {}) {
 }
 
 /**
- * One reading of a closed action (learning B1): what it keeps and its
- * verdict, over the week `afterWindow` against the week before it was raised.
- */
-/**
  * A basket's control (learning B2): the brand's prompts it didn't touch,
  * read over the same windows, and the basket's change net of theirs. Kept
  * beside the result, not in its verdict. Null with too few prompts to read,
@@ -481,6 +477,10 @@ async function controlOf(brandId, promptIds, metrics, { beforeWindow, afterWindo
   }
 }
 
+/**
+ * One reading of a closed action (learning B1): what it keeps and its
+ * verdict, over the week `afterWindow` against the week before it was raised.
+ */
 async function measureReading(action, { beforeWindow, afterWindow, signals, audit, now }) {
   // The verdict from the metrics kept, by its main metric; given `aims`,
   // only the metrics the action names count (see deriveOutcome).
