@@ -25,6 +25,31 @@ vi.mock('@/hooks/use-agent-key-status', () => ({ useAgentKeyStatus: () => 'confi
 vi.mock('@/components/layout/brand-switcher', () => ({ BrandSwitcher: () => null }));
 vi.mock('@/components/layout/user-profile-nav-item', () => ({ UserProfileNavItem: () => null }));
 vi.mock('@/components/layout/theme-toggle', () => ({ ThemeToggle: () => null }));
+// A menu of its own, so the test pins how the sidebar shows a badge, not
+// which items the product marks new today.
+vi.mock('@/config/dashboard', () => {
+  const Icon = () => <svg />;
+  return {
+    dashboardNav: [
+      {
+        title: 'Execution',
+        items: [
+          { title: 'Action Center', href: '/dashboard/action-center', icon: Icon, badge: 'New' },
+          {
+            title: 'Content',
+            href: '/dashboard/content',
+            icon: Icon,
+            badge: 'New',
+            children: [
+              { title: 'Opportunities', href: '/dashboard/content' },
+              { title: 'Plan', href: '/dashboard/content/plan' },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+});
 
 // The sidebar's store keeps its state in localStorage, which this jsdom lacks.
 const stored = new Map<string, string>();
