@@ -20,9 +20,9 @@ vi.mock('@/hooks/use-integration-connect', () => ({
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
 }));
-const trackPagePrompts = vi.fn();
-vi.mock('@/lib/actions/prompt-suggestions', () => ({
-  trackPagePrompts: (...args: unknown[]) => trackPagePrompts(...args),
+const trackDemandQuestion = vi.fn();
+vi.mock('@/lib/actions/prompt-demand-signals', () => ({
+  trackDemandQuestion: (...args: unknown[]) => trackDemandQuestion(...args),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -100,7 +100,7 @@ const onGscConnected = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  trackPagePrompts.mockResolvedValue({ promptIds: ['n1'] });
+  trackDemandQuestion.mockResolvedValue({ promptIds: ['n1'] });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -164,7 +164,9 @@ describe('DemandSection with every signal read', () => {
     expect(t).toContain('Top: “How to track your brand in ChatGPT” · 310k views');
     expect(t).toContain('YouTube lists about 214 results.');
     // The level's effect.
-    expect(t).toContain("Demand level High raises this prompt's Priority Score.");
+    expect(t).toContain(
+      'Demand level High raises the Priority Score of Action Center actions about this prompt.',
+    );
   });
 
   it('says so when a read found nothing', () => {
@@ -182,7 +184,26 @@ describe('DemandSection with every signal read', () => {
     expect(t).toContain('Too little search interest to draw a line.');
     expect(t).toContain('Google shows no People Also Ask questions for this keyword.');
     expect(t).toContain('YouTube shows no videos for this keyword.');
-    expect(t).toContain("Demand level Low leaves this prompt's Priority Score as it is.");
+    expect(t).toContain(
+      'Demand level Low leaves the Priority Score of Action Center actions about this prompt as it is.',
+    );
+  });
+
+  it('says "from no search interest" only for a rising line without a change to give', () => {
+    const trends = (trend: 'rising' | 'steady', change: number | null) =>
+      full({ trends: { ...full().trends!, trend, change } });
+
+    render(trends('rising', null));
+    expect(text()).toContain('Rising · from no search interest a year ago');
+
+    // Interest in between, none at either end: steady, and no percent to give.
+    render(trends('steady', null));
+    expect(text()).toContain('Steady');
+    expect(text()).not.toContain('from no search interest');
+    expect(text()).not.toContain('vs a year ago');
+
+    render(trends('steady', 4));
+    expect(text()).toContain('Steady · +4% vs a year ago');
   });
 });
 
@@ -229,7 +250,7 @@ describe('DemandSection without a source', () => {
     expect(text()).toContain("Not read yet. Weekly reads aren't turned on yet.");
     render(empty({ pending: { trends: true, paa: false, youtube: false } }));
     expect(text()).toContain('Being read. Ready within a day.');
-    expect(text()).toContain("Not read yet. It's read once a week.");
+    expect(text()).toContain("Not read yet. It's read about once a week.");
     expect(text()).toContain('Once a signal is read, the demand level feeds');
   });
 
@@ -244,9 +265,11 @@ describe('+ Track on a People Also Ask question', () => {
     render(full());
     const [first] = buttons('+ Track');
     await act(async () => first.click());
-    expect(trackPagePrompts).toHaveBeenCalledWith('b1', null, [
-      { text: 'How do I track my brand in ChatGPT?', topic: 'Monitoring' },
-    ]);
+    expect(trackDemandQuestion).toHaveBeenCalledWith(
+      'b1',
+      'How do I track my brand in ChatGPT?',
+      'Monitoring',
+    );
     expect(toast.success).toHaveBeenCalledWith(
       '“How do I track my brand in ChatGPT?” is now a tracked prompt.',
     );
@@ -254,8 +277,36 @@ describe('+ Track on a People Also Ask question', () => {
     expect(buttons('+ Track')).toHaveLength(1);
   });
 
+  it('names the question it tracks for a screen reader', () => {
+    render(full({ paa: { ...full().paa!, questions: [full().paa!.questions[0]] } }));
+    const [button] = buttons('+ Track');
+    expect(button.getAttribute('aria-label')).toBe('Track “How do I track my brand in ChatGPT?”');
+  });
+
+  it('shows a question the brand already tracks as tracked when the page loads again', () => {
+    const [first, second] = full().paa!.questions;
+    render(full({ paa: { questions: [{ ...first, tracked: true }, second], at: READ } }));
+    const [done] = buttons('Tracked');
+    expect(done.disabled).toBe(true);
+    expect(done.getAttribute('aria-label')).toBe(
+      '“How do I track my brand in ChatGPT?” is tracked',
+    );
+    expect(buttons('+ Track')).toHaveLength(1);
+  });
+
+  it('adds nothing for a question tracked meanwhile, and shows it as tracked', async () => {
+    trackDemandQuestion.mockResolvedValue({ promptIds: [], alreadyTracked: true });
+    render(full());
+    await act(async () => buttons('+ Track')[0].click());
+    expect(toast.success).toHaveBeenCalledWith(
+      '“How do I track my brand in ChatGPT?” is already a tracked prompt.',
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(buttons('Tracked')).toHaveLength(1);
+  });
+
   it("says the plan's limit is reached", async () => {
-    trackPagePrompts.mockResolvedValue({ promptIds: [], error: 'limit', code: 'plan_limit' });
+    trackDemandQuestion.mockResolvedValue({ promptIds: [], error: 'limit', code: 'plan_limit' });
     render(full());
     await act(async () => buttons('+ Track')[0].click());
     expect(toast.error).toHaveBeenCalledWith(

@@ -35,7 +35,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { resolve } from '../config/action-engine.js';
 import { activeBrandFilter, activeOrgFilter } from './active-subscriptions.js';
-import { getTask, isDataForSeoConfigured, postTasks, readyTaskIds } from './dataforseo.js';
+import { getTask, isDataForSeoConfigured, postTasks, readyTasks } from './dataforseo.js';
 import { matchPrompt, tokens } from './signals/library/classify.js';
 import { logger } from './logger.js';
 import { rescoreBrandActions } from './action-center/priority-data.js';
@@ -54,8 +54,17 @@ export const NIGHTLY_LIMIT = 500;
 export const TASK_EXPIRE_DAYS = 3;
 /** When the night's tasks are read: Standard tasks take up to about 45 minutes. */
 export const COLLECT_DELAY_MS = 60 * 60_000;
-/** How long one sweep matches brands; the rest are matched the next night. */
+/**
+ * How long one sweep matches brands. The brands it doesn't reach are counted
+ * (`unfinished`) and go first the next night: a night takes the brands whose
+ * rows were written longest ago first (prompt_demand_brand_updates).
+ */
 export const SWEEP_DEADLINE_MS = 20 * 60_000;
+/**
+ * A sweep claims a prompt before it sets its tasks (prompt_demand_claim). A
+ * claim older than this is one whose sweep died, and may be taken again.
+ */
+export const CLAIM_STALE_MINUTES = 120;
 /** People Also Ask questions kept per prompt. */
 export const MAX_PAA_QUESTIONS = 8;
 /** Task results read at once. */
@@ -398,10 +407,17 @@ export const SOURCES = Object.freeze({
   },
 });
 
-/** A prompt is due again once its paid signals were set REFRESH_DAYS ago, or for a new keyword. */
+/**
+ * A prompt is due again once its paid signals were set REFRESH_DAYS ago, or
+ * for a new keyword. Never while its tasks wait, or while another sweep's
+ * claim on it holds (CLAIM_STALE_MINUTES).
+ */
 export function isDue(row, keyword, now) {
   if (!row) return true;
   if (row.tasks) return false;
+  if (row.claimed_at && now - Date.parse(row.claimed_at) < CLAIM_STALE_MINUTES * 60_000) {
+    return false;
+  }
   if (row.keyword !== keyword.keyword) return true;
   if (!row.posted_at) return true;
   return now - Date.parse(row.posted_at) >= REFRESH_DAYS * DAY_MS;
@@ -433,58 +449,117 @@ async function eachLimited(items, concurrency, fn) {
   await Promise.all(workers);
 }
 
+/** Postgres' foreign key violation: here, a prompt deleted since it was read. */
+const FOREIGN_KEY_VIOLATION = '23503';
+
+/** The ids, of those given, whose prompts are still there. */
+async function existingPromptIds(ids) {
+  const found = new Set();
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const { data, error } = await supabaseAdmin
+      .from('prompts')
+      .select('id')
+      .in('id', ids.slice(i, i + ID_CHUNK));
+    if (error) throw new Error(`prompts read failed: ${error.message}`);
+    for (const row of data ?? []) found.add(row.id);
+  }
+  return found;
+}
+
+/**
+ * Writes the rows, WRITE_CHUNK at a time. A prompt deleted since it was read
+ * fails its whole chunk (the foreign key): the chunk is written again
+ * without the prompts that are gone, so the others' reads (paid for) aren't
+ * lost with it.
+ */
 async function upsertRows(rows) {
+  const write = async (chunk) =>
+    (await supabaseAdmin.from('prompt_demand').upsert(chunk, { onConflict: 'prompt_id' })).error;
   for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
-    const { error } = await supabaseAdmin
-      .from('prompt_demand')
-      .upsert(rows.slice(i, i + WRITE_CHUNK), { onConflict: 'prompt_id' });
+    const chunk = rows.slice(i, i + WRITE_CHUNK);
+    let error = await write(chunk);
+    if (error?.code === FOREIGN_KEY_VIOLATION) {
+      const kept = await existingPromptIds(chunk.map((r) => r.prompt_id));
+      const left = chunk.filter((r) => kept.has(r.prompt_id));
+      logger.warn(
+        { promptIds: chunk.filter((r) => !kept.has(r.prompt_id)).map((r) => r.prompt_id) },
+        '[prompt-demand] rows of deleted prompts not written',
+      );
+      error = left.length ? await write(left) : null;
+    }
     if (error) throw new Error(`prompt demand write failed: ${error.message}`);
   }
 }
 
 /**
+ * Claims the prompts due before their tasks are set (prompt_demand_claim):
+ * only those claimed are set, so a second sweep running at once sets none
+ * of them again.
+ */
+async function claimDue(due) {
+  const { data, error } = await supabaseAdmin.rpc('prompt_demand_claim', {
+    p_rows: due.map((d) => ({ prompt_id: d.promptId, brand_id: d.brandId })),
+    p_stale_minutes: CLAIM_STALE_MINUTES,
+  });
+  if (error) throw new Error(`prompt demand claim failed: ${error.message}`);
+  const claimed = new Set(Array.isArray(data) ? data : []);
+  return due.filter((d) => claimed.has(d.promptId));
+}
+
+/**
  * Sets the paid signals' tasks for the prompts due: one task per signal and
- * prompt, tagged with the prompt's id. A signal whose request fails is set
- * again next week; a prompt none could be set for stays due.
+ * prompt, tagged with the prompt's id. The prompts are claimed first, and
+ * only those claimed are set (claimDue). Each request's task ids are
+ * written as soon as it's back, so a failure later on loses none that were
+ * paid for. A request that fails is set again next week; a prompt none
+ * could be set for stays due once its claim lapses.
  *
  * @param {Array<{ promptId: string, brandId: string, keyword: string, locationCode: number|null, languageCode: string|null }>} due
  * @returns {Promise<number>} prompts with at least one task set
  */
 export async function postDemandTasks(due, { now = Date.now() } = {}) {
   if (due.length === 0) return 0;
+  const claimed = await claimDue(due);
+  if (claimed.length === 0) return 0;
   const at = new Date(now).toISOString();
-  const ids = {};
+  const byPrompt = new Map(claimed.map((d) => [d.promptId, d]));
+  // What each prompt's row holds so far: a request's ids are added to it.
+  const rows = new Map();
   for (const name of PAID_SIGNALS) {
     const source = SOURCES[name];
-    const tasks = due.map((d) => source.task({ ...d, tag: d.promptId })).filter(Boolean);
-    try {
-      ids[name] = tasks.length ? await postTasks(source.path, tasks) : new Map();
-    } catch (err) {
-      ids[name] = new Map();
-      logger.warn(
-        { err: { message: err?.message }, signal: name },
-        '[prompt-demand] tasks not set',
-      );
+    const tasks = claimed.map((d) => source.task({ ...d, tag: d.promptId })).filter(Boolean);
+    if (tasks.length === 0) continue;
+    const { failed, errors } = await postTasks(source.path, tasks, {
+      onChunk: async (ids) => {
+        const written = [];
+        for (const [promptId, id] of ids) {
+          const d = byPrompt.get(promptId);
+          if (!d) continue;
+          const row = rows.get(promptId) ?? {
+            prompt_id: d.promptId,
+            brand_id: d.brandId,
+            keyword: d.keyword,
+            location_code: d.locationCode,
+            language_code: d.languageCode,
+            tasks: { posted_at: at, trends: null, paa: null, youtube: null },
+            posted_at: at,
+          };
+          const next = { ...row, tasks: { ...row.tasks, [name]: id } };
+          rows.set(promptId, next);
+          written.push(next);
+        }
+        await upsertRows(written);
+      },
+    });
+    if (failed > 0) {
+      logger.warn({ signal: name, failed, errors }, '[prompt-demand] tasks not set');
     }
   }
-  const rows = [];
-  for (const d of due) {
-    const tasks = { posted_at: at };
-    for (const name of PAID_SIGNALS) tasks[name] = ids[name].get(d.promptId) ?? null;
-    if (!PAID_SIGNALS.some((name) => tasks[name])) continue;
-    rows.push({
-      prompt_id: d.promptId,
-      brand_id: d.brandId,
-      keyword: d.keyword,
-      location_code: d.locationCode,
-      language_code: d.languageCode,
-      tasks,
-      posted_at: at,
-    });
-  }
-  await upsertRows(rows);
-  return rows.length;
+  return rows.size;
 }
+
+const DEMAND_ROW_COLUMNS =
+  'prompt_id, brand_id, gsc, trends, paa, youtube, tasks, posted_at, level';
 
 /** The prompt_demand rows with tasks waiting, paged. */
 async function waitingRows() {
@@ -492,7 +567,7 @@ async function waitingRows() {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabaseAdmin
       .from('prompt_demand')
-      .select('prompt_id, brand_id, gsc, trends, paa, youtube, tasks, level')
+      .select(DEMAND_ROW_COLUMNS)
       .not('tasks', 'is', null)
       .order('prompt_id', { ascending: true })
       .range(from, from + 999);
@@ -502,36 +577,82 @@ async function waitingRows() {
   }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Done tasks no row knows: set, and their ids never written (a request that
+ * timed out after DataForSEO took it, a write that failed). Their tag is
+ * their prompt's id, so each goes back to its prompt's row, where that
+ * signal has no task waiting. Rows already waiting are given theirs in
+ * place; the rest are read and returned.
+ */
+async function orphanRows(ready, waiting) {
+  const known = new Set();
+  for (const row of waiting) {
+    for (const name of PAID_SIGNALS) if (row.tasks?.[name]) known.add(row.tasks[name]);
+  }
+  const byPrompt = new Map(waiting.map((r) => [r.prompt_id, r]));
+  const found = new Map();
+  for (const name of PAID_SIGNALS) {
+    for (const [id, tag] of ready[name]) {
+      if (known.has(id) || !tag || !UUID.test(tag)) continue;
+      const row = byPrompt.get(tag);
+      if (row) {
+        if (!row.tasks[name]) row.tasks = { ...row.tasks, [name]: id };
+        continue;
+      }
+      found.set(tag, { ...found.get(tag), [name]: id });
+    }
+  }
+  if (found.size === 0) return [];
+  const ids = [...found.keys()];
+  const rows = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const { data, error } = await supabaseAdmin
+      .from('prompt_demand')
+      .select(DEMAND_ROW_COLUMNS)
+      .in('prompt_id', ids.slice(i, i + ID_CHUNK));
+    if (error) throw new Error(`prompt demand read failed: ${error.message}`);
+    for (const row of data ?? []) {
+      rows.push({
+        ...row,
+        tasks: { posted_at: row.posted_at ?? null, ...row.tasks, ...found.get(row.prompt_id) },
+      });
+    }
+  }
+  return rows;
+}
+
 /**
  * Reads the tasks that are done: each endpoint's ready list first, then
- * each of ours on it. A task older than TASK_EXPIRE_DAYS is read whether
- * listed or not, and given up if it still has nothing; the prompt is set
- * again when it's next due. The level is worked out again for each prompt
- * read; `brands` are those where a level changed. Workspaces whose plan
- * has ended are left out.
+ * each of ours on it, and the done ones no row knew (orphanRows). A task
+ * older than TASK_EXPIRE_DAYS is read whether listed or not, and given up
+ * if it still has nothing; the prompt is set again when it's next due. The
+ * level is worked out again for each prompt read; `brands` are those where
+ * a level changed. Workspaces whose plan has ended are left out.
  *
  * @returns {Promise<{ read: number, waiting: number, brands: string[], skipped?: 'off' }>}
  */
 export async function collectDemandTasks({ now = Date.now() } = {}) {
   if (!paidSignalsEnabled()) return { read: 0, waiting: 0, brands: [], skipped: 'off' };
-  const rows = await waitingRows();
-  if (rows.length === 0) return { read: 0, waiting: 0, brands: [] };
-  const isActive = await activeBrandFilter(rows.map((r) => r.brand_id));
-  const mine = rows.filter((r) => isActive(r.brand_id));
-  if (mine.length === 0) return { read: 0, waiting: 0, brands: [] };
-
   const ready = {};
   for (const name of PAID_SIGNALS) {
     try {
-      ready[name] = await readyTaskIds(SOURCES[name].path);
+      ready[name] = await readyTasks(SOURCES[name].path);
     } catch (err) {
-      ready[name] = new Set();
+      ready[name] = new Map();
       logger.warn(
         { err: { message: err?.message }, signal: name },
         '[prompt-demand] ready list not read',
       );
     }
   }
+  const waitingNow = await waitingRows();
+  const rows = [...waitingNow, ...(await orphanRows(ready, waitingNow))];
+  if (rows.length === 0) return { read: 0, waiting: 0, brands: [] };
+  const isActive = await activeBrandFilter(rows.map((r) => r.brand_id));
+  const mine = rows.filter((r) => isActive(r.brand_id));
+  if (mine.length === 0) return { read: 0, waiting: 0, brands: [] };
 
   const at = new Date(now).toISOString();
   const writes = [];
@@ -720,6 +841,27 @@ export async function refreshBrandDemand(brand, { now = Date.now(), paid = false
 }
 
 /**
+ * When each brand's rows were last written (prompt_demand_brand_updates),
+ * as times. A brand with none isn't in it. When it can't be read, every
+ * brand counts as never written: the night goes in the brands' id order.
+ */
+async function brandUpdates() {
+  const { data, error } = await supabaseAdmin.rpc('prompt_demand_brand_updates');
+  if (error) {
+    logger.warn({ err: { message: error.message } }, '[prompt-demand] brand order not read');
+    return new Map();
+  }
+  return new Map(Object.entries(data ?? {}).map(([brandId, at]) => [brandId, Date.parse(at) || 0]));
+}
+
+/** The brands never written first, then the longest since their last write. */
+export function sweepOrder(brands, updates) {
+  // A time is 0 or more: never written (-1) goes first.
+  const at = (brand) => updates.get(brand.id) ?? -1;
+  return [...brands].sort((a, b) => at(a) - at(b) || String(a.id).localeCompare(String(b.id)));
+}
+
+/**
  * The night's demand (server.js daily run): last night's tasks read, every
  * active brand's prompts matched to its Search Console queries and their
  * levels kept, then the paid signals set for the prompts due, the
@@ -727,7 +869,11 @@ export async function refreshBrandDemand(brand, { now = Date.now(), paid = false
  * their actions scored again. Brands whose workspace's plan has ended are
  * skipped; one brand's failure is logged and the rest go on.
  *
- * @returns {Promise<{ brands: number, written: number, skipped: number, failed: number, posted: number, read: number, rescored: number, paid: boolean }>}
+ * The brands go in sweepOrder, for SWEEP_DEADLINE_MS at most: the ones not
+ * reached are `unfinished`, logged, and go first the next night. `due`:
+ * the prompts whose paid signals were due, before the cap.
+ *
+ * @returns {Promise<{ brands: number, written: number, skipped: number, failed: number, unfinished: number, due: number, posted: number, read: number, rescored: number, paid: boolean }>}
  */
 export async function sweepPromptDemand({
   now = Date.now(),
@@ -740,6 +886,8 @@ export async function sweepPromptDemand({
     written: 0,
     skipped: 0,
     failed: 0,
+    unfinished: 0,
+    due: 0,
     posted: 0,
     read: 0,
     rescored: 0,
@@ -763,15 +911,17 @@ export async function sweepPromptDemand({
     .eq('is_active', true);
   if (error) throw new Error(`brands read failed: ${error.message}`);
   const isActive = await activeOrgFilter((brands ?? []).map((b) => b.organization_id));
+  const active = (brands ?? []).filter((b) => isActive(b.organization_id));
+  outcome.skipped = (brands ?? []).length - active.length;
+  const ordered = sweepOrder(active, await brandUpdates());
 
   const due = [];
   const started = Date.now();
-  for (const brand of brands ?? []) {
-    if (!isActive(brand.organization_id)) {
-      outcome.skipped += 1;
-      continue;
+  for (const [i, brand] of ordered.entries()) {
+    if (Date.now() - started > deadlineMs) {
+      outcome.unfinished = ordered.length - i;
+      break;
     }
-    if (Date.now() - started > deadlineMs) break;
     try {
       const result = await refreshBrandDemand(brand, { now, paid });
       outcome.brands += 1;
@@ -787,6 +937,13 @@ export async function sweepPromptDemand({
     }
   }
 
+  if (outcome.unfinished > 0) {
+    logger.warn(
+      { unfinished: outcome.unfinished, brands: outcome.brands, deadlineMs },
+      '[prompt-demand] sweep ran out of time: brands left for the next night',
+    );
+  }
+  outcome.due = due.length;
   if (paid && due.length) outcome.posted = await postDemandTasks(pickDue(due, limit), { now });
   outcome.rescored = await rescoreDemandBrands([...changed], { now });
   logger.info(outcome, '[prompt-demand] nightly sweep done');
@@ -814,13 +971,55 @@ export function scheduleDemandCollect(delayMs = COLLECT_DELAY_MS) {
 // ─── What the card reads ────────────────────────────────────────────────────
 
 /**
+ * A prompt's text as compared for "already tracked": case, accents,
+ * punctuation and spacing don't count ("How do I track my brand in
+ * ChatGPT?" is "how do i track my brand in chatgpt"). The web's +Track
+ * makes the same check before it adds a question (web/src/lib/prompt-demand.ts).
+ */
+export function questionKey(text) {
+  return String(text ?? '')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/** The brand's prompts' texts, active or paused, as questionKey reads them. */
+export async function brandPromptKeys(brandId) {
+  const rows = await selectAll(() =>
+    supabaseAdmin
+      .from('prompts')
+      .select('id, text, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .order('id', { ascending: true }),
+  );
+  return new Set(rows.map((r) => questionKey(r.text)).filter(Boolean));
+}
+
+/**
  * What GET /api/prompts/:id/demand answers: the signals read, the level,
  * which tasks are still waiting, and what the card needs to say about a
  * missing signal: whether the prompt has a volume analysis and a keyword to
  * read the paid signals for, and whether they're read at all on this server.
+ * Each People Also Ask question says whether the brand already tracks it
+ * (`trackedKeys`, from brandPromptKeys), so its +Track isn't offered twice.
  */
-export function demandResponse(row, volume, { paid = paidSignalsEnabled() } = {}) {
+export function demandResponse(
+  row,
+  volume,
+  { paid = paidSignalsEnabled(), trackedKeys = new Set() } = {},
+) {
   const keyword = topKeyword(volume);
+  const paa = row?.paa
+    ? {
+        ...row.paa,
+        questions: (row.paa.questions ?? []).map((q) => ({
+          ...q,
+          tracked: trackedKeys.has(questionKey(q.question)),
+        })),
+      }
+    : null;
   return {
     level: row?.level ?? null,
     signals: row?.signals ?? 0,
@@ -830,7 +1029,7 @@ export function demandResponse(row, volume, { paid = paidSignalsEnabled() } = {}
     languageCode: row?.keyword ? (row.language_code ?? null) : (keyword?.languageCode ?? null),
     gsc: row?.gsc ?? null,
     trends: row?.trends ?? null,
-    paa: row?.paa ?? null,
+    paa,
     youtube: row?.youtube ?? null,
     pending: Object.fromEntries(PAID_SIGNALS.map((name) => [name, Boolean(row?.tasks?.[name])])),
     hasVolume: Boolean(volume),
