@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const { toast, regenerate } = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -25,12 +26,17 @@ const { RegenerateTasks } = await import('./regenerate-tasks');
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
-function render(node: React.ReactNode) {
+function render(node: React.ReactNode, isLocked = false) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        {node}
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          {node}
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -78,6 +84,18 @@ describe('RegenerateTasks', () => {
     expect(onDone).toHaveBeenCalled();
     // The rest of the tab waited while the tasks were rewritten.
     expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('writes nothing on a read-only workspace: the upgrade dialog instead of the question', () => {
+    openUpgrade.mockReset();
+    render(
+      <RegenerateTasks actionId="a1" disabled={false} onBusyChange={vi.fn()} onDone={vi.fn()} />,
+      true,
+    );
+    act(() => button('Regenerate tasks').click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Regenerating tasks needs a plan');
+    expect(container.textContent).not.toContain('Done, under-way and hand-added tasks stay.');
+    expect(regenerate).not.toHaveBeenCalled();
   });
 
   it('says how many wait in Needs review (AC-010)', async () => {
