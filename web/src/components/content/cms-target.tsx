@@ -15,11 +15,12 @@ import { readWordPress } from '@/lib/wordpress-client';
  * Where Send to CMS sends (#1331, phase 2): the brand's webhook, its
  * Webflow collection once Settings › Integrations has it ready (connected,
  * a collection with a body field), its WordPress site once connected
- * (00294; no collection or fields to pick there), or its Framer collection
+ * (00294; no collection or fields to pick there), its Framer collection
  * once ready (00295; connected, a collection with its title and body
- * fields), or its Wix site's Blog once connected (00372). The choice, picked or sent to, is remembered per brand, in this
- * browser; the first ready of Webflow, WordPress and Framer is the first
- * choice where none is remembered, or the remembered one is no longer
+ * fields), or its Wix site's Blog once connected (00372; its API key not
+ * refused). The choice, picked or sent to, is remembered per brand, in this
+ * browser; the first ready of Webflow, WordPress, Framer and Wix is the
+ * first choice where none is remembered, or the remembered one is no longer
  * connected. One remembered and connected but not ready leaves the
  * webhook, as before: the page never goes to another CMS than the one
  * picked. A brand with one connected but not ready sees it, off, so its
@@ -129,8 +130,8 @@ function framerOf(result: Awaited<ReturnType<typeof readFramer>>): CmsFramer {
 }
 
 /**
- * The brand's send target: undefined while its Webflow, WordPress and
- * Framer connections are read, then where pages go and how to change it. A
+ * The brand's send target: undefined while its Webflow, WordPress, Framer
+ * and Wix connections are read, then where pages go and how to change it. A
  * failed read leaves that one out; `unchecked` names it when the person
  * picked it before, and the page goes to the webhook, with `retry`.
  */
@@ -236,8 +237,8 @@ export function useCmsTarget(brandId: string) {
 const TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'webhook'] as const;
 
 /**
- * The targets the brand has, when it has Webflow, WordPress or Framer: the
- * person picks where pages go. The webhook is always one; a CMS connected
+ * The targets the brand has, when it has Webflow, WordPress, Framer or Wix:
+ * the person picks where pages go. The webhook is always one; a CMS connected
  * but not ready shows, off, with what to do. One tab stop, the picked card;
  * the arrow keys move to the next one and pick it, past one that's off.
  * Four cards go two by two; five, three in a row.
