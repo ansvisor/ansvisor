@@ -101,7 +101,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionStatus={subscriptionStatus}
       >
         <RoleProvider role={role}>
-          <UpgradeDialogProvider adminName={adminName}>
+          <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
             {/* Inside the provider: it records nothing while the workspace is read-only. */}
             <GettingStartedPageOpened />
             <AiUsageProvider>
