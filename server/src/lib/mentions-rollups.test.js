@@ -53,6 +53,18 @@ describe('refreshMentionsDaily', () => {
     ]);
   });
 
+  it('refreshes the terms in longer chunks when asked (a small brand)', async () => {
+    rpc.mockResolvedValue({ error: null });
+    await expect(
+      refreshMentionsDaily('brand-1', '2026-10-01', '2026-10-17', { termDays: 31 }),
+    ).resolves.toBe(true);
+    const args = (from, to) => ({ p_brand_id: 'brand-1', p_day_from: from, p_day_to: to });
+    expect(rpc.mock.calls).toEqual([
+      ['refresh_mentions_daily', args('2026-10-01', '2026-10-17')],
+      ['refresh_mention_terms', args('2026-10-01', '2026-10-17')],
+    ]);
+  });
+
   // Derived state: a failed refresh costs freshness until the next sweep and
   // must never throw into a tracking run's finalize path.
   it('reports failure without throwing', async () => {
