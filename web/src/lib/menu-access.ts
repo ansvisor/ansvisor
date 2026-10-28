@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { dashboardNav } from '@/config/dashboard';
 import type { UserRole } from '@/types';
 
@@ -133,6 +134,77 @@ export function hiddenMenuSections(
     if (!byPerson || !byArea) left.add(section);
   }
   return left;
+}
+
+/** A person's menu, as the dashboard and Settings read it. */
+export interface MyMenu {
+  /** Sections off this person's left menu. */
+  hidden: string[];
+  workAreas: WorkAreaId[];
+  /** Whether they answered (or skipped) "What do you work on?". */
+  workAreasAsked: boolean;
+  /** Admin, or a manager an admin let change menus. */
+  canManageMenus: boolean;
+}
+
+/** The profile's menu columns (00374), read with the rest of the profile. */
+export interface MenuProfile {
+  role: UserRole;
+  work_areas: string[] | null;
+  work_areas_asked_at: string | null;
+  menu_shown: string[] | null;
+  menu_hidden: string[] | null;
+  can_manage_menus: boolean | null;
+}
+
+export function canManageMenus(profile: Pick<MenuProfile, 'role' | 'can_manage_menus'>): boolean {
+  return profile.role === 'admin' || (profile.role === 'manager' && !!profile.can_manage_menus);
+}
+
+export function workAreasOf(values: readonly string[] | null): WorkAreaId[] {
+  return (values ?? []).filter(isWorkAreaId);
+}
+
+/** A person's menu from their profile and their role's hidden sections. */
+export function menuOfProfile(profile: MenuProfile, roleHidden: readonly string[]): MyMenu {
+  const workAreas = workAreasOf(profile.work_areas);
+  const hidden = hiddenMenuSections({
+    role: profile.role,
+    roleHidden,
+    shown: profile.menu_shown ?? [],
+    hidden: profile.menu_hidden ?? [],
+    workAreas,
+  });
+  return {
+    hidden: [...hidden],
+    workAreas,
+    workAreasAsked: profile.work_areas_asked_at !== null,
+    canManageMenus: canManageMenus(profile),
+  };
+}
+
+/**
+ * The sections a role's row hides, as RLS lets members of the organization
+ * read it. None for admins, without a read; none, logged, when it can't be
+ * read, so the menu shows whole rather than not at all.
+ */
+export async function readRoleHidden(
+  supabase: Pick<SupabaseClient, 'from'>,
+  organizationId: string,
+  role: UserRole,
+): Promise<string[]> {
+  if (role === 'admin') return [];
+  const { data, error } = await supabase
+    .from('organization_menu_roles')
+    .select('hidden_sections')
+    .eq('organization_id', organizationId)
+    .eq('role', role)
+    .maybeSingle();
+  if (error) {
+    console.error('[menu-access] the role menu could not be read; showing the whole menu', error);
+    return [];
+  }
+  return (data?.hidden_sections as string[] | null) ?? [];
 }
 
 /** Known sections only, once each, in the menu's order; never Action Center. */
