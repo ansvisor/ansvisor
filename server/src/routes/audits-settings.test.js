@@ -11,6 +11,9 @@ let tables;
 let writes;
 let quota;
 const readSiteTrust = vi.fn();
+const isOrgActive = vi.fn();
+const getSiteAuditQuotaStatus = vi.fn(async () => quota);
+const getOrgIdForUser = vi.fn(async () => 'org-1');
 let server;
 let baseUrl;
 
@@ -70,8 +73,8 @@ async function startApp() {
   vi.doMock('../lib/plan-guard.js', () => ({
     requireFeature: () => (req, res, next) => next(),
     enforceSiteAuditQuota: vi.fn(),
-    getSiteAuditQuotaStatus: vi.fn(async () => quota),
-    getOrgIdForUser: vi.fn(),
+    getSiteAuditQuotaStatus,
+    getOrgIdForUser,
     PlanLimitError: class PlanLimitError extends Error {},
   }));
   vi.doMock('../lib/audit/context.js', () => ({ buildAuditContext: vi.fn() }));
@@ -83,6 +86,7 @@ async function startApp() {
     generateRecommendations: vi.fn(),
   }));
   vi.doMock('../lib/site-trust.js', () => ({ readSiteTrust }));
+  vi.doMock('../lib/active-subscriptions.js', () => ({ isOrgActive }));
   vi.doMock('../lib/logger.js', () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     return { default: logger, logger };
@@ -108,6 +112,8 @@ const otherBrand = '44444444-4444-4444-4444-444444444444';
 
 beforeEach(async () => {
   writes = [];
+  getSiteAuditQuotaStatus.mockClear();
+  isOrgActive.mockReset().mockResolvedValue(true);
   readSiteTrust.mockReset().mockResolvedValue({
     checks: { about: { ok: true, url: 'https://acme.com/about' } },
     score: 1,
@@ -179,6 +185,44 @@ describe('GET /api/audits/settings', () => {
       excludePatterns: ['/careers/*'],
       pinned: [{ key: 'acme.com/about', url: 'https://acme.com/about' }],
     });
+  });
+
+  it('reads what is kept once the plan has ended: auto-audit off at a limit of 0', async () => {
+    // As plan-guard answers a read without an active plan (readOnly).
+    quota = {
+      used: 10,
+      running: 0,
+      limit: 0,
+      remaining: 0,
+      noPlan: true,
+      auto: { enabled: false, setting: true, emailAfterRun: true, perRun: 0 },
+    };
+    const res = await fetch(`${baseUrl}/settings?brandId=${brandId}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).settings).toEqual({
+      autoAudit: { enabled: false, setting: true, perRun: 0, limit: 0 },
+      emailAfterRun: true,
+      excludePatterns: ['/careers/*'],
+      pinned: [{ key: 'acme.com/about', url: 'https://acme.com/about' }],
+    });
+    expect(getSiteAuditQuotaStatus).toHaveBeenCalledWith('org-1', { readOnly: true });
+  });
+});
+
+describe('GET /api/audits/quota', () => {
+  it('reads the quota as a read, so a plan that ended answers 200, not 402', async () => {
+    quota = { used: 3, running: 0, limit: 0, remaining: 0, noPlan: true };
+    const res = await fetch(`${baseUrl}/quota`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, quota });
+    expect(getSiteAuditQuotaStatus).toHaveBeenCalledWith('org-1', { readOnly: true });
+  });
+
+  it('reads nothing without an organization', async () => {
+    getOrgIdForUser.mockResolvedValueOnce(null);
+    const res = await fetch(`${baseUrl}/quota`);
+    expect(res.status).toBe(400);
+    expect(getSiteAuditQuotaStatus).not.toHaveBeenCalled();
   });
 });
 
@@ -300,9 +344,25 @@ describe('GET /api/audits/site-trust', () => {
       complete: false,
       checkedAt: '2026-10-23T12:00:00.000Z',
     });
-    expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: false });
+    expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: false, keptOnly: false });
     res = await fetch(`${baseUrl}/site-trust?brandId=${brandId}&refresh=1`);
-    expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: true });
+    expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: true, keptOnly: false });
+    expect(isOrgActive).toHaveBeenCalledWith('org-1');
+  });
+
+  it('answers only the kept read once the plan has ended, and 402 when none is kept', async () => {
+    isOrgActive.mockResolvedValue(false);
+    let res = await fetch(`${baseUrl}/site-trust?brandId=${brandId}&refresh=1`);
+    expect(res.status).toBe(200);
+    expect(readSiteTrust).toHaveBeenLastCalledWith(brandId, { refresh: true, keptOnly: true });
+
+    readSiteTrust.mockResolvedValueOnce(null);
+    res = await fetch(`${baseUrl}/site-trust?brandId=${brandId}`);
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({
+      error: 'plan_limit',
+      code: 'subscription_inactive',
+    });
   });
 
   it('wants a brand id', async () => {

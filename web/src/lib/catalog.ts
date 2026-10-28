@@ -9,6 +9,18 @@ export type CatalogFormat = 'auto' | 'google_xml' | 'csv' | 'meta_csv';
 /** `auth_failed`: the store refused the saved sign-in. */
 export type CatalogSyncStatus = 'ok' | 'failed' | 'format_error' | 'auth_failed';
 
+/** A Google Merchant Center account's kind (#1270), read with the workspace's Google sign-in. */
+export const MERCHANT_CENTER_KIND = 'merchant_center';
+export const MERCHANT_CENTER_LABEL = 'Google Merchant Center';
+
+/**
+ * The platforms read with the workspace's sign-in, named by their kind: the
+ * name a source's row keeps when the API's connectors can't be read.
+ */
+export const SIGN_IN_PLATFORM_LABELS: Readonly<Partial<Record<string, string>>> = {
+  [MERCHANT_CENTER_KIND]: MERCHANT_CENTER_LABEL,
+};
+
 /** Whether a source is a store, read with its sign-in, rather than a feed or an upload. */
 export function isStoreSource(kind: CatalogSourceKind): boolean {
   return kind !== 'feed_url' && kind !== 'upload';
@@ -24,6 +36,17 @@ export interface CatalogCounts {
   errors: string[];
   products: { added: number; changed: number; removed: number; unchanged: number };
   variants: { added: number; changed: number; removed: number; unchanged: number };
+  /**
+   * The issues a platform reports per item (Google Merchant Center, #1270,
+   * 00296): the items with at least one, and the issues per severity.
+   */
+  issues?: { items: number; disapproved: number; demoted: number; not_impacted: number };
+  /**
+   * The listings of an item read already, under another language or feed
+   * label (Google Merchant Center, #1270): kept once, not skipped. Not on
+   * syncs before it was counted.
+   */
+  repeated?: number;
 }
 
 export interface CatalogSource {

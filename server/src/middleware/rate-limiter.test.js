@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import express from 'express';
 import {
   apiLimiterKey,
   botIngestKey,
+  catalogCategoryLimiter,
+  catalogLimiter,
+  cmsLimiter,
   isJourneyBeacon,
   journeyEventKey,
+  shoppingPathLimiter,
   webhookCallbackKey,
 } from './rate-limiter.js';
 import {
@@ -140,5 +145,57 @@ describe('rate-limiter – journey events (CE-017)', () => {
     expect(isJourneyBeacon({ k: 'nf' })).toBe(false);
     expect(isJourneyBeacon('not json')).toBe(false);
     expect(isJourneyBeacon(undefined)).toBe(false);
+  });
+});
+
+describe('rate-limiter – catalog buckets', () => {
+  it("gives category page changes a wider bucket than the syncs', apart from them", async () => {
+    const app = express();
+    app.post('/sync', catalogLimiter, (_req, res) => res.json({}));
+    app.put('/categories', catalogCategoryLimiter, (_req, res) => res.json({}));
+    const server = await new Promise((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const statuses = async (method, path, n) => {
+      const out = [];
+      for (let i = 0; i < n; i += 1) out.push((await fetch(base + path, { method })).status);
+      return out;
+    };
+    try {
+      // The syncs' 20 a quarter-hour run out…
+      expect((await statuses('POST', '/sync', 21)).at(-1)).toBe(429);
+      // …and a person changing the table row by row goes on past them.
+      expect(new Set(await statuses('PUT', '/categories', 40))).toEqual(new Set([200]));
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
+describe('rate-limiter – shopping path builds', () => {
+  it("gives a draft's shopping path builds a bucket of their own: 30 a quarter-hour", async () => {
+    const app = express();
+    app.post('/shopping-path', shoppingPathLimiter, (_req, res) => res.json({}));
+    app.post('/cms', cmsLimiter, (_req, res) => res.json({}));
+    const server = await new Promise((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const statuses = async (path, n) => {
+      const out = [];
+      for (let i = 0; i < n; i += 1)
+        out.push((await fetch(base + path, { method: 'POST' })).status);
+      return out;
+    };
+    try {
+      const builds = await statuses('/shopping-path', 31);
+      expect(new Set(builds.slice(0, 30))).toEqual(new Set([200]));
+      expect(builds.at(-1)).toBe(429);
+      // The other buckets keep theirs.
+      expect(await statuses('/cms', 1)).toEqual([200]);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });

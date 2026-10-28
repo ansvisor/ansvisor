@@ -103,16 +103,22 @@ export function stockOnPage(
   return found;
 }
 
+/**
+ * A variant's stock, as the API's stock.js reads it ("In Stock" is
+ * "in_stock"): in, out, or none for pre-orders or none given.
+ */
+export function variantStock(availability: string | null | undefined): 'in' | 'out' | null {
+  const a = (availability ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+  return ['in_stock', 'instock', 'available', 'limited_availability'].includes(a)
+    ? 'in'
+    : ['out_of_stock', 'outofstock', 'sold_out', 'discontinued'].includes(a)
+      ? 'out'
+      : null;
+}
+
 /** The feed's stock: in when a variant is, out when every one is; none for pre-orders or none given. */
 export function feedStock(variants: readonly FeedVariant[]): 'in' | 'out' | null {
-  const read = variants.map((v) => {
-    const a = (v.availability ?? '').toLowerCase().replace(/[\s-]+/g, '_');
-    return ['in_stock', 'instock', 'available', 'limited_availability'].includes(a)
-      ? 'in'
-      : ['out_of_stock', 'outofstock', 'sold_out', 'discontinued'].includes(a)
-        ? 'out'
-        : null;
-  });
+  const read = variants.map((v) => variantStock(v.availability));
   if (read.includes('in')) return 'in';
   return read.length && read.every((s) => s === 'out') ? 'out' : null;
 }
