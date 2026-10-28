@@ -9,6 +9,7 @@ export const SETTINGS_SECTIONS = [
   'account',
   'organization',
   'team',
+  'menu-access',
   'authors',
   'content',
   'notifications',

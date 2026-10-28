@@ -277,6 +277,176 @@ describe('buildImprovePrompt', () => {
     expect(prompt).toContain('"q1" ×2');
   });
 
+  /** The brand's earlier rounds on the prompt (learning B5), and none without. */
+  it('says what earlier Improve rounds on the prompt did, and how their platforms moved', () => {
+    const platforms = [
+      {
+        id: 'gemini-web',
+        state: 'not_mentioned',
+        evidence: {
+          fanouts: [],
+          citedDomains: [],
+          competitors: [],
+          competitorUrls: [],
+          brandPages: [],
+          excerpt: '',
+        },
+      },
+    ];
+    const brand = { name: 'Acme', domains: [] };
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand,
+      platforms,
+      history: [
+        {
+          sent: '2026-09-10',
+          daysAgo: 48,
+          open: false,
+          final: true,
+          platforms: [
+            { id: 'chatgpt-web', verdict: 'improved' },
+            { id: 'gemini-web', verdict: 'unchanged' },
+          ],
+          suggestions: [{ platform: 'gemini-web', title: 'Pitch seriouseats.com', status: 'done' }],
+        },
+      ],
+    });
+    expect(prompt).toContain(
+      '- Sent 2026-09-10, 48 days ago (completed, final read): ChatGPT improved, Gemini unchanged.\n  Suggestions: [Gemini] "Pitch seriouseats.com" (done)',
+    );
+    expect(prompt).toContain('Do not suggest again what was done on a platform that did not move');
+    expect(
+      buildImprovePrompt({ promptText: 'best coffee subscription', brand, platforms }).prompt,
+    ).not.toContain('Earlier Improve rounds');
+    expect(prompt).not.toContain('too early to read');
+    expect(prompt).not.toContain('skipped');
+  });
+
+  /** What the team skipped is its call, not a suggestion that waits to be done. */
+  it('says which earlier suggestions the team skipped, and not to suggest them again', () => {
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand: { name: 'Acme', domains: [] },
+      platforms: [
+        {
+          id: 'gemini-web',
+          state: 'not_mentioned',
+          evidence: {
+            fanouts: [],
+            citedDomains: [],
+            competitors: [],
+            competitorUrls: [],
+            brandPages: [],
+            excerpt: '',
+          },
+        },
+      ],
+      history: [
+        {
+          sent: '2026-09-10',
+          daysAgo: 48,
+          open: false,
+          final: true,
+          platforms: [{ id: 'gemini-web', verdict: 'unchanged' }],
+          suggestions: [
+            { platform: 'gemini-web', title: 'Pitch seriouseats.com', status: 'skipped' },
+            { platform: 'gemini-web', title: 'Add an FAQ', status: 'not_done' },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain(
+      'Suggestions: [Gemini] "Pitch seriouseats.com" (skipped by the team); [Gemini] "Add an FAQ" (not done)',
+    );
+    expect(prompt).toContain('Do not suggest again what the team skipped.');
+  });
+
+  it("keeps an earlier suggestion's own double quotes from closing its quoted title", () => {
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand: { name: 'Acme', domains: [] },
+      platforms: [
+        {
+          id: 'gemini-web',
+          state: 'not_mentioned',
+          evidence: {
+            fanouts: [],
+            citedDomains: [],
+            competitors: [],
+            competitorUrls: [],
+            brandPages: [],
+            excerpt: '',
+          },
+        },
+      ],
+      history: [
+        {
+          sent: '2026-09-10',
+          daysAgo: 48,
+          open: false,
+          final: true,
+          platforms: [{ id: 'gemini-web', verdict: 'improved' }],
+          suggestions: [
+            {
+              platform: 'gemini-web',
+              title: 'Answer "is it worth it" on /pricing',
+              status: 'done',
+            },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain(`[Gemini] "Answer 'is it worth it' on /pricing" (done)`);
+  });
+
+  /** A round sent under a week ago has no read of its own yet (learning B5). */
+  it('says a round sent days ago is too early to read, not that it did not move', () => {
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best coffee subscription',
+      brand: { name: 'Acme', domains: [] },
+      platforms: [
+        {
+          id: 'gemini-web',
+          state: 'not_mentioned',
+          evidence: {
+            fanouts: [],
+            citedDomains: [],
+            competitors: [],
+            competitorUrls: [],
+            brandPages: [],
+            excerpt: '',
+          },
+        },
+      ],
+      history: [
+        {
+          sent: '2026-10-26',
+          daysAgo: 2,
+          open: true,
+          final: false,
+          platforms: [{ id: 'gemini-web', verdict: 'too_early' }],
+          suggestions: [{ platform: 'gemini-web', title: 'Pitch seriouseats.com', status: 'done' }],
+        },
+        {
+          sent: '2026-10-28',
+          daysAgo: 0,
+          open: true,
+          final: false,
+          platforms: [{ id: 'chatgpt-web', verdict: 'too_early' }],
+          suggestions: [],
+        },
+      ],
+    });
+    expect(prompt).toContain(
+      '- Sent 2026-10-26, 2 days ago (still open): Gemini too early to read.',
+    );
+    expect(prompt).toContain('- Sent 2026-10-28, today (still open): ChatGPT too early to read.');
+    expect(prompt).toContain(
+      'A platform "too early to read" was sent too recently to tell whether it moved: do not count it as not moving.',
+    );
+  });
+
   it('says how rarely a not-mentioned platform names the brand', () => {
     const { prompt } = buildImprovePrompt({
       promptText: 'best coffee subscription',
