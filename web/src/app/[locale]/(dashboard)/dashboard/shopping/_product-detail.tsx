@@ -19,7 +19,9 @@ import { formatNumber } from '@/lib/format';
 import { priceText } from '@/lib/shopping/price';
 import { READINESS_CHECKS } from '@/lib/shopping/products';
 import type { ComparisonState } from '@/lib/shopping/product-detail';
+import { productPlan } from '@/lib/shopping/action-plan';
 import { cn } from '@/lib/utils';
+import { ActionPlan } from './_action-plan';
 
 const platformName = (platform: string) => PLATFORM_LABELS[platform] ?? platform;
 
@@ -35,7 +37,14 @@ const STATE_ICON: Record<ComparisonState, React.ReactNode> = {
  * orders, "Why not your product?" beside the winner, where it shows, and
  * its readiness.
  */
-export function ProductDetailView({ detail }: { detail: ShoppingProductDetail }) {
+export function ProductDetailView({
+  detail,
+  brandId,
+}: {
+  detail: ShoppingProductDetail;
+  /** The brand, to send the actions with; none, no actions. */
+  brandId?: string;
+}) {
   const t = useTranslations('shopping.detail');
   const tReady = useTranslations('shopping.products.readiness');
   const { product, focus } = detail;
@@ -163,6 +172,23 @@ export function ProductDetailView({ detail }: { detail: ShoppingProductDetail })
           </CardContent>
         )}
       </Card>
+
+      {brandId && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t('actions.title')}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t('actions.lead')}</p>
+          </CardHeader>
+          <CardContent>
+            <ActionPlan
+              brandId={brandId}
+              target={{ type: 'product', id: product.id }}
+              plan={productPlan(detail)}
+              promptIds={[...new Set(detail.shelves.map((line) => line.promptId))]}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {detail.shelves.length > 0 && (
         <Card>

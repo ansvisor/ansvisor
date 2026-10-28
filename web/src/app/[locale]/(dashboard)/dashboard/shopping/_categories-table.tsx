@@ -1,6 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -15,25 +24,32 @@ import { getFaviconUrl } from '@/lib/favicon';
 import { formatNumber } from '@/lib/format';
 import { priceText } from '@/lib/shopping/price';
 import { cn } from '@/lib/utils';
+import { categoryPlan } from '@/lib/shopping/action-plan';
 import type { CategoryRow } from '@/lib/shopping/categories';
+import { ActionPlan } from './_action-plan';
 
 /**
  * The Categories table (ECOM-008): one row per catalog category, with its
  * shopping questions, the brand's share of their shelves, its products on
  * them, the rival with the most slots there and its products' AI revenue.
- * A category the brand barely shows in is marked "needs attention".
+ * A category the brand barely shows in is marked "needs attention". Its
+ * Plan actions sends the category's work to the Action Center (ECOM-013).
  */
 export function CategoriesTable({
   categories,
   loading,
   failed,
+  brandId,
 }: {
   /** Null for a catalog without categories. */
   categories: CategoryRow[] | null;
   loading: boolean;
   failed: boolean;
+  /** The brand, to send a category's actions with; none, no Plan actions. */
+  brandId?: string;
 }) {
   const t = useTranslations('shopping.categories');
+  const [planning, setPlanning] = useState<CategoryRow | null>(null);
   if (loading) return <Skeleton className="h-[240px] w-full" />;
   if (failed || !categories?.length) {
     return (
@@ -51,7 +67,14 @@ export function CategoriesTable({
             <TableHead className="text-right">{t('columns.share')}</TableHead>
             <TableHead className="text-right">{t('columns.onShelf')}</TableHead>
             <TableHead>{t('columns.rival')}</TableHead>
-            <TableHead className="pr-4 text-right">{t('columns.revenue')}</TableHead>
+            <TableHead className={cn('text-right', !brandId && 'pr-4')}>
+              {t('columns.revenue')}
+            </TableHead>
+            {brandId && (
+              <TableHead className="w-0 pr-4">
+                <span className="sr-only">{t('columns.plan')}</span>
+              </TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -116,13 +139,55 @@ export function CategoriesTable({
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell className="pr-4 text-right tabular-nums">
+              <TableCell className={cn('text-right tabular-nums', !brandId && 'pr-4')}>
                 {row.revenue ? priceText(Math.round(row.revenue.value), row.revenue.currency) : '—'}
               </TableCell>
+              {brandId && (
+                <TableCell className="pr-4 text-right">
+                  <Button
+                    variant={row.needsAttention ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 text-xs"
+                    aria-label={t('planFor', { category: row.leaf })}
+                    onClick={() => setPlanning(row)}
+                  >
+                    {t('plan')}
+                  </Button>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      {brandId && (
+        <Dialog open={!!planning} onOpenChange={(open) => !open && setPlanning(null)}>
+          <DialogContent className="sm:max-w-2xl">
+            {planning && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{t('planTitle', { category: planning.leaf })}</DialogTitle>
+                  <DialogDescription>
+                    {t('planLead', {
+                      share: Math.round((planning.shelfShare ?? 0) * 100),
+                      onShelf: planning.productsOnShelf,
+                      products: planning.products,
+                      prompts: planning.prompts,
+                    })}
+                  </DialogDescription>
+                </DialogHeader>
+                <ActionPlan
+                  key={planning.id}
+                  brandId={brandId}
+                  target={{ type: 'category', id: planning.id }}
+                  plan={categoryPlan(planning)}
+                  promptIds={planning.promptIds}
+                  onSent={() => setPlanning(null)}
+                />
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
   );
 }

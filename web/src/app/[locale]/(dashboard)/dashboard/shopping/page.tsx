@@ -504,6 +504,7 @@ export default function ShoppingPage() {
             <TabsContent value="categories" className="space-y-6">
               {hasFullAccess ? (
                 <CategoriesTable
+                  brandId={activeBrandId}
                   categories={categoriesRead === 'failed' ? null : (categoriesRead ?? null)}
                   loading={categoriesRead === undefined}
                   failed={categoriesRead === 'failed'}

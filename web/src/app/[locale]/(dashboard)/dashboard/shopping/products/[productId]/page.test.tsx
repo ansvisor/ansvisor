@@ -17,6 +17,15 @@ vi.mock('@/i18n/navigation', () => ({
       {children}
     </a>
   ),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), {
+    loading: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+  }),
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (s: { activeBrandId: string }) => unknown) =>
@@ -150,6 +159,9 @@ describe('ShoppingProductPage', () => {
     expect(text).toContain('Not on the shelf');
     expect(text).toContain('Missing: a GTIN (−20)');
     expect(container.querySelector('a[href="/dashboard/shopping?tab=products"]')).not.toBeNull();
+    // Actions to get on the shelf, from what it misses beside the winner (ECOM-013).
+    expect(text).toContain('Actions to get on the shelf');
+    expect(text).toContain('Send 4 actions to Action Center');
   });
 
   it('says when the product is gone, or locked', async () => {

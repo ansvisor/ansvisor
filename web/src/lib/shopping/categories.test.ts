@@ -101,6 +101,18 @@ describe('categoryRows', () => {
     expect(rows.map((row) => row.id)).toEqual(['packs', 'jackets']);
   });
 
+  it("lists a category's questions in the cards' order, found by name or by products", () => {
+    const [row] = categoryRows(
+      [{ id: 'packs', name: 'Hiking backpacks', productIds: ['ridge'] }],
+      [
+        card({ promptId: 'q9', promptText: 'best daypack', role: 'own', productId: 'ridge' }),
+        card({}),
+      ],
+      { competitors, revenueOf: new Map() },
+    );
+    expect(row.promptIds).toEqual(['q9', 'q1']);
+  });
+
   it('marks a category the brand barely shows in, once it has enough questions', () => {
     const many = categoryRows(
       [{ id: 'packs', name: 'Hiking backpacks', productIds: ['ridge'] }],

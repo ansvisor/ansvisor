@@ -96,6 +96,7 @@ describe('getShoppingCategories', () => {
         name: 'Hiking backpacks',
         leaf: 'Hiking backpacks',
         prompts: 1,
+        promptIds: ['q1'],
         shelfShare: 0.5,
         productsOnShelf: 1,
         products: 1,

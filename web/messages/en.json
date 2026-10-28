@@ -2483,6 +2483,20 @@
         "description": "Sent from the Content Editor: a draft for someone on the team to write, with its page type and the prompts it should answer.",
         "goal": "Publish the page and get the brand into AI answers for these prompts."
       },
+      "shopping_product": {
+        "title": "Get a product on the AI shelf for {targets}",
+        "titleGeneric": "Get a product on the AI shelf",
+        "namedTitle": "Get {name} on the shelf",
+        "description": "Sent from Product Visibility: a product of your catalog that AI leaves off the shelf, with the work to get it there.",
+        "goal": "Get the product into AI shopping answers for these questions."
+      },
+      "shopping_category": {
+        "title": "Win a category in AI answers for {targets}",
+        "titleGeneric": "Win a category in AI answers",
+        "namedTitle": "Win “{name}” in AI answers",
+        "description": "Sent from Product Visibility: a category of your catalog where rivals hold the AI shelf, with the work to win it.",
+        "goal": "Raise your share of the AI shelf for this category's questions."
+      },
       "shopping_links": {
         "title": "Swap the products that no longer sell on {targets}",
         "titleGeneric": "Swap the products that no longer sell",
@@ -7986,6 +8000,48 @@
       "trends": "Trends",
       "failed": "Couldn't read the shelves right now. The other tabs still work; try again in a moment."
     },
+    "plan": {
+      "types": {
+        "optimize_page": "Optimize page",
+        "create_content": "Create content",
+        "get_listed": "Get listed",
+        "technical": "Technical"
+      },
+      "lines": {
+        "optimizeWords": "Rewrite the page for what AI asked for: {words}",
+        "optimizeQuestion": "Rewrite the page to answer “{prompt}” first",
+        "compare": "A comparison, {product} vs {winner}, with an FAQ",
+        "guide": "A buying guide that features {product}",
+        "listed": "Ask the review sites AI quotes to include {product}",
+        "gtinSchema": "Add the GTIN to the feed, and Product and AggregateRating structured data",
+        "schema": "Check the product's Product, Offer and AggregateRating structured data",
+        "categoryPage": "Category page: an answer-first intro, filters named as attributes, an FAQ",
+        "buyingGuide": "Buying guide: how to choose {category}",
+        "bestLists": "Get into the “best {category}” lists AI quotes",
+        "feedFields": "Fill the feed fields AI reads for the category's {count, plural, one {# product} other {# products}}"
+      },
+      "where": {
+        "productMode": "Content Editor · the product's page",
+        "categoryMode": "Content Editor · the category page",
+        "newPage": "Content Editor · a new page",
+        "newPost": "Content Editor · a new post",
+        "outreach": "Outreach drafts · you send them",
+        "feed": "Your store's feed and the page's code"
+      },
+      "who": "Who does it",
+      "whos": {
+        "me": "Me",
+        "agent": "Agent"
+      },
+      "personOnly": "A person does this one.",
+      "pick": "Send {type}",
+      "send": "Send {count, plural, one {# action} other {# actions}} to Action Center",
+      "sending": "Sending to Action Center…",
+      "sent": "Sent to Action Center as #{number}",
+      "alreadySent": "Already in Action Center as #{number}",
+      "open": "Open",
+      "failed": "Couldn't send to Action Center. Try again."
+    },
     "detail": {
       "back": "Products",
       "onShelves": "On {count} of {total} shelves",
@@ -8027,6 +8083,10 @@
         "lower": "{percent}% lower",
         "firstWords": "ChatGPT reads about 40 words"
       },
+      "actions": {
+        "title": "Actions to get on the shelf",
+        "lead": "Grouped by type. Choose who does each one, then send them to Action Center."
+      },
       "shelves": {
         "title": "Where it shows",
         "question": "Shopping question",
@@ -8045,8 +8105,13 @@
         "share": "Shelf share",
         "onShelf": "On shelf",
         "rival": "Top rival",
-        "revenue": "AI revenue"
+        "revenue": "AI revenue",
+        "plan": "Actions"
       },
+      "plan": "Plan actions",
+      "planFor": "Plan actions for {category}",
+      "planTitle": "Category actions · {category}",
+      "planLead": "Shelf share {share}% · {onShelf} of {products} products on the shelf · {prompts, plural, one {# shopping question} other {# shopping questions}}.",
       "prompts": "{count, plural, one {# shopping question} other {# shopping questions}}",
       "attention": "needs attention",
       "empty": "Your catalog has no categories yet. Categories come from your feed's product type or Google product category, or your store's collections.",

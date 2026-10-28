@@ -1,5 +1,6 @@
 'use server';
 
+import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { expandDateToEndOfDay } from '@/lib/dates';
@@ -1765,4 +1766,68 @@ export async function getShoppingProductDetail(
       currency: ai?.currency ?? null,
     },
   };
+}
+
+// ── Actions from Product Visibility (ECOM-013) ────────────────────────────────
+
+/** A work type sent with a product or category, for a person ("me") or the agent. */
+export interface ShoppingWork {
+  type: 'optimize_page' | 'create_content' | 'get_listed' | 'technical';
+  who: 'me' | 'agent';
+  /** The line the person saw for it: the task's why. */
+  why?: string;
+}
+
+/** Questions the route takes with an action at most (from-products.js MAX_PROMPTS). */
+const ACTION_MAX_PROMPTS = 50;
+/** A work line's length the route takes at most. */
+const ACTION_WHY_MAX = 500;
+
+/** A work line cut to what the route takes, at a word where one is near. */
+function cutWhy(why: string): string {
+  const text = why.trim();
+  if (text.length <= ACTION_WHY_MAX) return text;
+  let cut = text.slice(0, ACTION_WHY_MAX - 1);
+  // Not half of a character written as two.
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > ACTION_WHY_MAX - 100 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/**
+ * Sends a product or a category to the Action Center with the work picked
+ * (POST /api/action-center/products); the open one comes back when it was
+ * sent before. A category's questions past ACTION_MAX_PROMPTS, and a work
+ * line past ACTION_WHY_MAX, are cut here: the route refuses them whole.
+ */
+export async function sendShoppingActions(
+  brandId: string,
+  target: { type: 'product' | 'category'; id: string },
+  work: ShoppingWork[],
+  promptIds: string[],
+): Promise<{ actionId: string; actionNo: number; created: boolean } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { error: 'Not authenticated' };
+  const res = await fetch(`${API_BASE_URL}/api/action-center/products`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      brandId,
+      target,
+      work: work.map((item) => (item.why ? { ...item, why: cutWhy(item.why) } : item)),
+      promptIds: [...new Set(promptIds)].slice(0, ACTION_MAX_PROMPTS),
+    }),
+  });
+  // Returned, not thrown: a thrown error's message is masked in production.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.details || body.error || `Server error: ${res.status}` };
+  }
+  return res.json();
 }

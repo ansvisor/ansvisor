@@ -1,10 +1,23 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { CategoryRow } from '@/lib/shopping/categories';
-import { CategoriesTable } from './_categories-table';
+
+const sendShoppingActions = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/shopping', () => ({ sendShoppingActions }));
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), {
+    loading: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
+const { CategoriesTable } = await import('./_categories-table');
 
 /** The Categories table (ECOM-008). */
 
@@ -41,6 +54,7 @@ const row = (over: Partial<CategoryRow>): CategoryRow => ({
   name: 'Shoes > Trail running shoes',
   leaf: 'Trail running shoes',
   prompts: 14,
+  promptIds: [],
   shelfShare: 0.31,
   productsOnShelf: 6,
   products: 24,
@@ -79,6 +93,38 @@ describe('CategoriesTable', () => {
       ['Trail running shoes14 shopping questions', '31%', '6 / 24', 'Summit Gear', '$6,100'],
       ['Hiking backpacks11 shopping questions · needs attention', '4%', '1 / 18', '—', '—'],
     ]);
+  });
+
+  it("plans a category's actions in a dialog, measured on its questions", async () => {
+    sendShoppingActions.mockResolvedValue({ actionId: 'a1', actionNo: 302, created: true });
+    render(
+      <CategoriesTable
+        brandId="b1"
+        categories={[
+          row({ promptIds: ['q1', 'q2'], needsAttention: true, leaf: 'Hiking backpacks' }),
+        ]}
+        loading={false}
+        failed={false}
+      />,
+    );
+    const plan = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Plan actions',
+    )!;
+    // Named for its row's category, the visible text first.
+    expect(plan.getAttribute('aria-label')).toBe('Plan actions for Hiking backpacks');
+    act(() => plan.click());
+    expect(document.body.textContent).toContain('Category actions · Hiking backpacks');
+    expect(document.body.textContent).toContain('Buying guide: how to choose hiking backpacks');
+    const send = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Send 4 actions to Action Center',
+    )!;
+    await act(async () => send.click());
+    expect(sendShoppingActions).toHaveBeenCalledWith(
+      'b1',
+      { type: 'category', id: 'shoes' },
+      expect.arrayContaining([expect.objectContaining({ type: 'create_content', who: 'agent' })]),
+      ['q1', 'q2'],
+    );
   });
 
   it('says when the catalog has no categories, or they could not be read', () => {
