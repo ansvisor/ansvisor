@@ -3,21 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script>
+/* Ansvisor demo: follow the app's light/dark theme. Inside the app's frame, read the parent page's <html class="dark">
+   (same origin) and keep watching it; opened on its own, follow the system setting. Dark sets <html data-theme="dark">. */
+(function(){var d=document.documentElement,p=null,mq=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
+try{if(window.parent!==window)p=window.parent.document.documentElement}catch(e){p=null}
+function apply(){var dark=p?p.classList.contains('dark'):!!(mq&&mq.matches);if(dark)d.setAttribute('data-theme','dark');else d.removeAttribute('data-theme')}
+apply();
+if(p&&window.MutationObserver)new MutationObserver(apply).observe(p,{attributes:true,attributeFilter:['class']});
+else if(mq)(mq.addEventListener?mq.addEventListener('change',apply):mq.addListener(apply))})();
+</script>
 <title>Chat v2 · Mockups</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--ink:#0a0a0a;--mut:#737373;--line:#e5e5e5;--soft:#f7f7f6}
+/* Ansvisor demo: theme tokens (light values are the originals) and the dark theme, close to the app's .dark palette */
+:root{--bg:#fff;--card:#fff;--onink:#fff}
+html[data-theme="dark"]{color-scheme:dark;--ink:#ececec;--mut:#a3a3a3;--line:#2e2e2e;--soft:#242424;--bg:#121212;--card:#1a1a1a;--onink:#141414}
 *{box-sizing:border-box}
-body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:#fff;font-size:14px;line-height:20px}
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:20px}
 .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 64px}
 h1{font-size:24px;font-weight:700;letter-spacing:-.6px;margin:0 0 4px}
 .sub{color:var(--mut);margin:0 0 28px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 @media (max-width:860px){.grid{grid-template-columns:1fr}}
-.card{border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff}
+.card{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card)}
 .card h2{font-size:15px;font-weight:600;margin:0 0 2px}
 .card p{margin:0 0 12px;color:var(--mut);font-size:12px}
-.card a.open{display:inline-flex;align-items:center;height:32px;padding:0 10px;border-radius:10px;background:var(--ink);color:#fff;text-decoration:none;font-weight:500;margin-bottom:12px}
+.card a.open{display:inline-flex;align-items:center;height:32px;padding:0 10px;border-radius:10px;background:var(--ink);color:var(--onink);text-decoration:none;font-weight:500;margin-bottom:12px}
 .card a.open:focus-visible,.card li a:focus-visible{outline:2px solid #16a34a;outline-offset:2px}
 ul{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
 li{border-bottom:1px solid var(--line)}
