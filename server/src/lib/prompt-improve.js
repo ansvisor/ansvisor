@@ -354,12 +354,19 @@ function evidenceBlock(evidence) {
  */
 export function withPageChecks(evidence, stored) {
   if (!stored?.size) return evidence;
+  // collectEvidence counts addresses: one page cited under two (www,
+  // tracking parameters) is one page here, its first address kept, or it
+  // would count twice toward featureGaps' two pages at least.
+  const seen = new Set();
   const read = [
     ...evidence.competitorUrls.map((u) => ({ url: u.url, own: false })),
     ...evidence.brandPages.map((u) => ({ url: u.url, own: true })),
   ].flatMap((page) => {
-    const found = stored.get(opportunityKey(page.url));
-    return found ? [{ ...page, checks: found.checks }] : [];
+    const key = opportunityKey(page.url);
+    const found = stored.get(key);
+    if (!found || seen.has(key)) return [];
+    seen.add(key);
+    return [{ ...page, checks: found.checks }];
   });
   if (!read.length) return evidence;
   const name = (key) => describeSignal(key)?.label ?? key;

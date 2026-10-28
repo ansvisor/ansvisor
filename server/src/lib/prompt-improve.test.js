@@ -366,6 +366,25 @@ describe('withPageChecks', () => {
     expect(prompt).toContain("The competitor pages have and the brand's don't: ");
   });
 
+  it('counts one page cited under two addresses once, at the first', () => {
+    const shown = withPageChecks(
+      {
+        ...evidence,
+        competitorUrls: [
+          { url: 'https://rival.com/kettles', count: 3 },
+          { url: 'https://www.rival.com/kettles?utm_source=chatgpt.com', count: 2 },
+        ],
+      },
+      stored,
+    );
+    expect(shown.pageChecks.map((p) => p.url)).toEqual([
+      'https://rival.com/kettles',
+      'https://acme.com/kettles',
+    ]);
+    // One competitor page is too few to compare (C1): no gap.
+    expect(shown.checkGaps).toEqual([]);
+  });
+
   it('leaves the evidence as it was when none of its pages was read', () => {
     expect(withPageChecks(evidence, new Map())).toBe(evidence);
     expect(withPageChecks(evidence, new Map([['other.com/x', { own: false, checks: {} }]]))).toBe(
