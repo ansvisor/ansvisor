@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ALWAYS_ON_SECTION,
   MENU_SECTIONS,
@@ -9,7 +9,9 @@ import {
   cleanMenuSections,
   hiddenMenuSections,
   hiddenWithWorkAreas,
+  menuOfProfile,
   menuSectionOf,
+  readRoleHidden,
   workAreaSections,
   type MenuAccess,
 } from './menu-access';
@@ -126,6 +128,68 @@ describe('hiddenWithWorkAreas', () => {
       'traffic',
     ]);
     expect(hiddenWithWorkAreas(['mentions'], [])).toEqual(['mentions']);
+  });
+});
+
+describe('menuOfProfile', () => {
+  const profile = {
+    role: 'manager' as const,
+    work_areas: ['brand', 'retired'],
+    work_areas_asked_at: null,
+    menu_shown: ['prompts'],
+    menu_hidden: [],
+    can_manage_menus: true,
+  };
+
+  it('builds the menu from the profile and the role’s row', () => {
+    expect(menuOfProfile(profile, ['citations'])).toEqual({
+      hidden: ['content', 'audit', 'prompts', 'citations', 'shopping', 'traffic'],
+      hiddenByAdmin: ['citations'],
+      workAreas: ['brand'],
+      workAreasAsked: false,
+      canManageMenus: true,
+    });
+  });
+
+  it('lets only managers and admins change menus', () => {
+    expect(menuOfProfile({ ...profile, role: 'analyst' }, []).canManageMenus).toBe(false);
+    expect(
+      menuOfProfile({ ...profile, role: 'admin', can_manage_menus: false }, []).canManageMenus,
+    ).toBe(true);
+  });
+});
+
+describe('readRoleHidden', () => {
+  function client(answer: { data: unknown; error: unknown }) {
+    const from = vi.fn(() => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: async () => answer,
+      };
+      return chain;
+    });
+    return { from };
+  }
+
+  it('reads the role’s row', async () => {
+    const supabase = client({ data: { hidden_sections: ['content'] }, error: null });
+    expect(await readRoleHidden(supabase as never, 'org', 'analyst')).toEqual(['content']);
+    expect(supabase.from).toHaveBeenCalledWith('organization_menu_roles');
+  });
+
+  it('reads nothing for admins', async () => {
+    const supabase = client({ data: null, error: null });
+    expect(await readRoleHidden(supabase as never, 'org', 'admin')).toEqual([]);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('shows the whole menu, and logs, when the row can’t be read', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = client({ data: null, error: { message: 'down' } });
+    expect(await readRoleHidden(supabase as never, 'org', 'manager')).toEqual([]);
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });
 

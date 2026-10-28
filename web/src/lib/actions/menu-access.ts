@@ -7,9 +7,13 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
 import {
   WORK_AREA_IDS,
+  canManageMenus,
   cleanMenuSections,
-  hiddenMenuSections,
-  isWorkAreaId,
+  menuOfProfile,
+  readRoleHidden,
+  workAreasOf,
+  type MenuProfile,
+  type MyMenu,
   type WorkAreaId,
 } from '@/lib/menu-access';
 import type { UserRole } from '@/types';
@@ -29,17 +33,7 @@ const MENU_ROLES: MenuRole[] = ['manager', 'analyst', 'agency_partner'];
 const userId = z.guid();
 const sections = z.array(z.string().max(64)).max(64);
 
-export interface MyMenu {
-  /** Sections off this person's left menu. */
-  hidden: string[];
-  /** Of those, the ones their role or an exception takes off, whatever their work areas. */
-  hiddenByAdmin: string[];
-  workAreas: WorkAreaId[];
-  /** Whether they answered (or skipped) "What do you work on?". */
-  workAreasAsked: boolean;
-  /** Admin, or a manager an admin let change menus. */
-  canManageMenus: boolean;
-}
+export type { MyMenu } from '@/lib/menu-access';
 
 export interface MenuMember {
   userId: string;
@@ -62,15 +56,9 @@ export interface MenuAccessSettings {
   viewerIsAdmin: boolean;
 }
 
-interface Profile {
+interface Profile extends MenuProfile {
   id: string;
-  role: UserRole;
   organization_id: string;
-  work_areas: string[] | null;
-  work_areas_asked_at: string | null;
-  menu_shown: string[] | null;
-  menu_hidden: string[] | null;
-  can_manage_menus: boolean | null;
 }
 
 async function currentProfile(): Promise<Profile> {
@@ -91,18 +79,10 @@ async function currentProfile(): Promise<Profile> {
   return profile as Profile;
 }
 
-function canManage(profile: Pick<Profile, 'role' | 'can_manage_menus'>): boolean {
-  return profile.role === 'admin' || (profile.role === 'manager' && !!profile.can_manage_menus);
-}
-
 async function requireMenuManager(): Promise<Profile> {
   const profile = await currentProfile();
-  if (!canManage(profile)) throw new Error('Only admins and menu managers can change menus');
+  if (!canManageMenus(profile)) throw new Error('Only admins and menu managers can change menus');
   return profile;
-}
-
-function workAreasOf(values: string[] | null): WorkAreaId[] {
-  return (values ?? []).filter(isWorkAreaId);
 }
 
 /** The sections each role of the organization doesn't see. */
@@ -124,34 +104,11 @@ async function readRoles(organizationId: string): Promise<Record<MenuRole, strin
 /** The viewer's left menu: what it leaves out, and their work areas. */
 export async function getMyMenu(): Promise<MyMenu> {
   const profile = await currentProfile();
-  const workAreas = workAreasOf(profile.work_areas);
-  let roleHidden: string[] = [];
-  if (profile.role !== 'admin') {
-    // Their role's row, as RLS lets members of the organization read it.
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from('organization_menu_roles')
-      .select('hidden_sections')
-      .eq('organization_id', profile.organization_id)
-      .eq('role', profile.role)
-      .maybeSingle();
-    roleHidden = data?.hidden_sections ?? [];
-  }
-
-  const access = {
-    role: profile.role,
-    roleHidden,
-    shown: profile.menu_shown ?? [],
-    hidden: profile.menu_hidden ?? [],
-  };
-  const hidden = hiddenMenuSections({ ...access, workAreas });
-  return {
-    hidden: [...hidden],
-    hiddenByAdmin: [...hiddenMenuSections({ ...access, workAreas: [] })],
-    workAreas,
-    workAreasAsked: profile.work_areas_asked_at !== null,
-    canManageMenus: canManage(profile),
-  };
+  const supabase = await createClient();
+  return menuOfProfile(
+    profile,
+    await readRoleHidden(supabase, profile.organization_id, profile.role),
+  );
 }
 
 /** Settings › Menu access: the role table and every member's menu. */
@@ -184,7 +141,7 @@ export async function getMenuAccessSettings(): Promise<MenuAccessSettings> {
       workAreas: workAreasOf(row.work_areas as string[] | null),
       shown: cleanMenuSections((row.menu_shown as string[] | null) ?? []),
       hidden: cleanMenuSections((row.menu_hidden as string[] | null) ?? []),
-      canManageMenus: canManage({
+      canManageMenus: canManageMenus({
         role: row.role as UserRole,
         can_manage_menus: row.can_manage_menus as boolean | null,
       }),

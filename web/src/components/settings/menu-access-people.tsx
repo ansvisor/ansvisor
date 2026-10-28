@@ -76,9 +76,13 @@ export function memberMenuWith(
 
 interface Props {
   settings: MenuAccessSettings;
-  /** Updates the settings shown; `undo` puts them back. */
+  /** Updates the settings shown, as a change is saved. */
   onChange: (update: (current: MenuAccessSettings) => MenuAccessSettings) => void;
-  onSaved: () => void;
+  /**
+   * A save failed: the settings are read again, so a change saved meanwhile
+   * stays, which putting back the state before it wouldn't.
+   */
+  onFailed: () => void;
 }
 
 const withMember = (
@@ -94,7 +98,7 @@ const withMember = (
  * Settings › Menu access › Who can change menus: an admin lets a manager
  * change menus too (setMenuManager). Others see who can.
  */
-export function MenuManagersCard({ settings, onChange, onSaved }: Props) {
+export function MenuManagersCard({ settings, onChange, onFailed }: Props) {
   const t = useTranslations('settings.menuAccess');
   const managers = settings.members.filter((m) => m.role === 'manager');
 
@@ -103,12 +107,9 @@ export function MenuManagersCard({ settings, onChange, onSaved }: Props) {
     onChange((current) => withMember(current, member.userId, { canManageMenus: allowed }));
     try {
       await setMenuManager(member.userId, allowed);
-      onSaved();
     } catch {
-      onChange((current) =>
-        withMember(current, member.userId, { canManageMenus: member.canManageMenus }),
-      );
       toast.error(t('saveFailed'));
+      onFailed();
     }
   };
 
@@ -168,7 +169,7 @@ export function MenuManagersCard({ settings, onChange, onSaved }: Props) {
  * Settings › Menu access › People: each non-admin's menu, and their exception
  * to their role's (setMemberMenu), saved as it changes.
  */
-export function MenuPeopleCard({ settings, onChange, onSaved }: Props) {
+export function MenuPeopleCard({ settings, onChange, onFailed }: Props) {
   const t = useTranslations('settings.menuAccess');
   const tSettings = useTranslations('settings');
   const tNav = useTranslations('nav');
@@ -182,12 +183,9 @@ export function MenuPeopleCard({ settings, onChange, onSaved }: Props) {
     onChange((current) => withMember(current, member.userId, menu));
     try {
       await setMemberMenu(member.userId, menu);
-      onSaved();
     } catch {
-      onChange((current) =>
-        withMember(current, member.userId, { shown: member.shown, hidden: member.hidden }),
-      );
       toast.error(t('saveFailed'));
+      onFailed();
     }
   };
 

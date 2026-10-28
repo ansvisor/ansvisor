@@ -7,7 +7,6 @@ import { Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useRouter } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { cn } from '@/lib/utils';
 import { dashboardNav } from '@/config/dashboard';
@@ -46,7 +45,6 @@ export function WorkAreasCard() {
   const t = useTranslations('settings.menuAccess');
   const tNav = useTranslations('nav');
   const { canAdmin } = useUserRole();
-  const router = useRouter();
   const [menu, setMenu] = useState<MyMenu | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -65,16 +63,17 @@ export function WorkAreasCard() {
     };
   }, []);
 
+  // The save's own revalidation brings the left menu up to date
+  // (setMyWorkAreas). A failed one reads the menu again, so a pick saved
+  // meanwhile stays, which putting back the state before it wouldn't.
   const save = async (workAreas: WorkAreaId[]) => {
     if (!menu) return;
-    const before = menu;
     setMenu(menuWithWorkAreas(menu, workAreas));
     try {
       await setMyWorkAreas(workAreas);
-      router.refresh();
     } catch {
-      setMenu(before);
       toast.error(t('saveFailed'));
+      getMyMenu().then(setMenu, () => setFailed(true));
     }
   };
 
