@@ -25,21 +25,18 @@ import { dayChunks, resultDayBound } from './citations-rollups.js';
  * one, then the terms a day per call, since they read each answer's text
  * and a few busy days of the largest brand would near the service role's
  * statement timeout (MENTION_HISTORY_CHUNK_DAYS). A small brand may pass a
- * longer `termDays` (the demo brand refreshes its month in one call).
- * Resolves to true when every call succeeds, false at the first that fails;
- * never throws.
+ * longer `termDays` (the demo brand refreshes its month in one call), and
+ * `together` to refresh the rollups beside the terms rather than before
+ * them (each takes its own lock and writes its own tables). Resolves to true
+ * when every call succeeds, false at the first that fails; never throws.
  */
 export async function refreshMentionsDaily(
   brandId,
   dayFrom,
   dayTo,
-  { termDays = MENTION_HISTORY_CHUNK_DAYS } = {},
+  { termDays = MENTION_HISTORY_CHUNK_DAYS, together = false } = {},
 ) {
-  const calls = [
-    ['refresh_mentions_daily', dayFrom, dayTo],
-    ...dayChunks(dayFrom, dayTo, termDays).map(([from, to]) => ['refresh_mention_terms', from, to]),
-  ];
-  for (const [fn, from, to] of calls) {
+  const call = async ([fn, from, to]) => {
     const { error } = await supabaseAdmin.rpc(fn, {
       p_brand_id: brandId,
       p_day_from: from,
@@ -52,8 +49,23 @@ export async function refreshMentionsDaily(
       );
       return false;
     }
-  }
-  return true;
+    return true;
+  };
+  const inTurn = async (calls) => {
+    for (const args of calls) {
+      if (!(await call(args))) return false;
+    }
+    return true;
+  };
+  const rollups = [['refresh_mentions_daily', dayFrom, dayTo]];
+  const terms = dayChunks(dayFrom, dayTo, termDays).map(([from, to]) => [
+    'refresh_mention_terms',
+    from,
+    to,
+  ]);
+  if (!together) return inTurn([...rollups, ...terms]);
+  const done = await Promise.all([inTurn(rollups), inTurn(terms)]);
+  return done.every(Boolean);
 }
 
 /** The Perception windows precomputed for the tab's default view (00241). */

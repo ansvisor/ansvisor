@@ -30,7 +30,8 @@ import { parseHead, selectPages } from '../site-pages.js';
 import { SITE_TRUST_CHECKS, authorPage, findPage, hasOrganization } from '../site-trust.js';
 import { BRAND } from './brewline.js';
 import { demoId } from './random.js';
-import { brandCitations, insertRows } from './site-common.js';
+import { brandCitations } from './site-common.js';
+import { allSettledOrThrow, demoWriter } from './write.js';
 import { LLMS_TXT, ROBOTS_TXT, pageHtml, productDescription } from './site-html.js';
 import {
   AUDITED_PAGES,
@@ -687,12 +688,26 @@ export async function siteRows({ brandId, now }) {
 /** Signal rows written per statement: an audit's 48 a few times over. */
 const SIGNAL_CHUNK = 480;
 
+/** Its tables' key columns where a row has no `id` of its own. */
+const KEYS = {
+  site_pages: 'brand_id,url',
+  audit_signal_results: 'audit_id,signal_key',
+  site_trust: 'brand_id',
+  site_audit_brand_settings: 'brand_id',
+  brand_fact_pages: 'brand_id,kind',
+};
+/** The audits' signals have no brand_id: found through their audit. */
+const SCOPES = { audit_signal_results: ['audit_id', 'site_audits'] };
+
 /**
- * The Site Audit module: its brand-scoped tables, in the order they are
- * written (a rebuild clears them in reverse), and its build.
+ * The Site Audit module: its brand-scoped tables and its build.
  */
 export const site = {
   name: 'site',
+  // Rebuilt in place (write.js): written over, what isn't written again deleted after.
+  inPlace: true,
+  keys: KEYS,
+  scopes: SCOPES,
   tables: [
     'site_pages',
     // And, through it (on delete cascade), audit_signal_results.
@@ -704,17 +719,31 @@ export const site = {
     'brand_facts',
   ],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Its independent tables side by side, through the build's writer (a
+   * writer over `db` for a first build without one).
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild, keys: KEYS, scopes: SCOPES }).write,
+  }) {
     const rows = await siteRows({ brandId, now });
-    await insertRows(db, 'site_pages', rows.sitePages);
-    await insertRows(db, 'site_audits', rows.audits);
-    await insertRows(db, 'audit_signal_results', rows.signals, SIGNAL_CHUNK);
-    await insertRows(db, 'site_trust', [rows.siteTrust]);
-    await insertRows(db, 'site_audit_brand_settings', [rows.settings]);
-    await insertRows(db, 'site_audit_page_prefs', rows.prefs);
-    await insertRows(db, 'brand_fact_pages', rows.factPages);
-    await insertRows(db, 'brand_facts', rows.facts);
+    await allSettledOrThrow([
+      write('site_pages', rows.sitePages),
+      write('site_audits', rows.audits),
+      write('site_trust', [rows.siteTrust]),
+      write('site_audit_brand_settings', [rows.settings]),
+      write('site_audit_page_prefs', rows.prefs),
+      write('brand_fact_pages', rows.factPages),
+      write('brand_facts', rows.facts),
+    ]);
+    // The signals point at their audit.
+    await write('audit_signal_results', rows.signals, { chunk: SIGNAL_CHUNK });
     return {
       audits: rows.audits.length,
       signals: rows.signals.length,

@@ -329,29 +329,46 @@ describe('ensureDemoBrand', () => {
 describe('the build order', () => {
   it('builds the first module alone, the others together, each after the one it names', async () => {
     const order = [];
-    const step = (name, ms) =>
+    // Each step ends when its gate opens: the order doesn't hang on timers.
+    const gates = {};
+    const step = (name) =>
       vi.fn(async () => {
         order.push(`${name}:start`);
-        await new Promise((resolve) => setTimeout(resolve, ms));
+        await new Promise((resolve) => (gates[name] = resolve));
         order.push(`${name}:end`);
         return { rows: 1 };
       });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const open = async (name) => {
+      gates[name]();
+      await settle();
+    };
     const staged = [
-      { name: 'core', tables: ['a'], build: step('core', 5), refresh: step('rollups', 10) },
-      { name: 'slow', tables: ['b'], build: step('slow', 20) },
-      { name: 'actions', tables: ['c'], build: step('actions', 5) },
-      { name: 'drafts', tables: ['d'], after: 'actions', build: step('drafts', 1) },
+      { name: 'core', tables: ['a'], build: step('core'), refresh: step('rollups') },
+      { name: 'slow', tables: ['b'], build: step('slow') },
+      { name: 'actions', tables: ['c'], build: step('actions') },
+      { name: 'drafts', tables: ['d'], after: 'actions', build: step('drafts') },
     ];
-    await ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: staged });
-
-    expect(order.slice(0, 2)).toEqual(['core:start', 'core:end']);
-    // The others start together, with the first one's rollups; drafts waits
-    // for actions only, not the slow one.
-    expect(order.indexOf('rollups:start')).toBeLessThan(order.indexOf('slow:end'));
-    expect(order.indexOf('slow:start')).toBeLessThan(order.indexOf('rollups:end'));
-    expect(order.indexOf('slow:start')).toBeLessThan(order.indexOf('actions:end'));
-    expect(order.indexOf('actions:end')).toBeLessThan(order.indexOf('drafts:start'));
-    expect(order.indexOf('drafts:end')).toBeLessThan(order.indexOf('slow:end'));
+    const built = ensureDemoBrand({ organizationId: 'org-1', now: NOW, modules: staged });
+    await settle();
+    // The first module alone.
+    expect(order).toEqual(['core:start']);
+    await open('core');
+    // The others together, with the first one's rollups; drafts waits for actions.
+    expect(order.slice(1).sort()).toEqual([
+      'actions:start',
+      'core:end',
+      'rollups:start',
+      'slow:start',
+    ]);
+    await open('actions');
+    // Drafts starts once actions is done, without waiting for the slow one.
+    expect(order.slice(-2)).toEqual(['actions:end', 'drafts:start']);
+    await open('drafts');
+    await open('rollups');
+    await open('slow');
+    await built;
+    expect(order.at(-1)).toBe('slow:end');
   });
 
   it("fails the build when the first module's rollups fail", async () => {

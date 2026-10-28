@@ -109,17 +109,22 @@ describe('catalogRows', () => {
 });
 
 describe('catalog.build', () => {
-  it('writes only its own tables, the source first', async () => {
+  it('writes only its own tables, the source first, the variants after their products', async () => {
     const writes = [];
     const db = {
       from: (table) => ({
-        insert: async () => {
+        upsert: async () => {
           writes.push(table);
           return { error: null };
         },
       }),
     };
     await catalog.build({ brandId: BRAND_ID, now: NOW, db });
-    expect(writes).toEqual(catalog.tables);
+    expect([...writes].sort()).toEqual([...catalog.tables].sort());
+    expect(writes[0]).toBe('catalog_sources');
+    expect(writes.indexOf('catalog_products')).toBeLessThan(writes.indexOf('catalog_variants'));
+    expect(writes.indexOf('catalog_categories')).toBeLessThan(
+      writes.indexOf('catalog_product_categories'),
+    );
   });
 });
