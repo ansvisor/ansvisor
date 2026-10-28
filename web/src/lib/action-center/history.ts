@@ -78,6 +78,18 @@ export interface ActionHistoryTask {
   completedAt?: string;
 }
 
+/**
+ * The day after closing an action's final reading is taken on (learning
+ * B1): the API's validation.finalReadingDay (server config/action-engine.js).
+ */
+export const FINAL_READING_DAY = 30;
+
+/** One reading of an action's effect: the day after closing, and its verdict. */
+export interface OutcomeReading {
+  day: number;
+  outcome: ActionOutcome;
+}
+
 /** A signal that opened the action. Several signals consolidate into one
  *  action, so this is a list rather than a field. */
 export interface TriggerSignal {
@@ -121,6 +133,12 @@ export interface ActionHistoryItem {
   affected: AffectedEntity[];
   /** Empty until something measures an action's effect. */
   results: ActionResultMetric[];
+  /**
+   * Its readings a week, two weeks and a month after it closed (learning
+   * B1), and whether the last, final one is in. Empty before the first.
+   */
+  readings?: OutcomeReading[];
+  outcomeFinal?: boolean;
   /** Why it was dismissed, when someone said (learning A5). */
   dismissReason?: ActionDismissReason | null;
   /** Its signals when it was measured; absent before, or with no signal behind it. */

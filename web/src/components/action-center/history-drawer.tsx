@@ -14,7 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { actionGoal, actionTexts } from '@/lib/action-center/display';
-import type { ActionHistoryItem } from '@/lib/action-center/history';
+import { FINAL_READING_DAY, type ActionHistoryItem } from '@/lib/action-center/history';
 import { UNCOUNTED_TASK_STATUSES } from '@/lib/action-center/registry';
 import { ActionIcon, PriorityBadge } from './action-table';
 import { HistoryStatusBadge } from './history-table';
@@ -92,6 +92,7 @@ export function HistoryDrawer({
   const tSources = useTranslations('actionCenter.signalsPage.sources');
   const tRegistry = useTranslations('actionCenter.registry');
   const tDismiss = useTranslations('actionCenter.dismissReason');
+  const tOutcome = useTranslations('actionCenter.actionOutcome');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
   const router = useRouter();
 
@@ -214,6 +215,21 @@ export function HistoryDrawer({
                 {t('drawer.dismissedBecause', {
                   reason: tDismiss(`${item.dismissReason}.label`),
                 })}
+              </p>
+            )}
+            {!!item.readings?.length && (
+              <p className="mt-1 text-xs">
+                {t('drawer.readings', {
+                  list: item.readings
+                    .map((r) => t('drawer.reading', { day: r.day, outcome: tOutcome(r.outcome) }))
+                    .join(' · '),
+                })}
+                {!item.outcomeFinal && (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    {t('drawer.finalOn', { day: FINAL_READING_DAY })}
+                  </span>
+                )}
               </p>
             )}
             {item.primaryMetric && (

@@ -11,6 +11,8 @@ vi.mock('../logger.js', () => ({
 
 import {
   MAX_GAP_DAYS,
+  sweepActionValidation,
+  SWEEP_FILTER,
   MEANINGFUL_CHANGE_RATIO,
   VALIDATION_WAIT_DAYS,
   deriveOutcome,
@@ -27,9 +29,13 @@ const EVERY_NIGHT = Array.from({ length: 60 }, (_, i) => ({ completed_at: daysAg
 /** Records every write so a test can assert what was stored; `rows` answers a table's reads. */
 function mockWrites(rows = {}) {
   rows = { tracking_runs: EVERY_NIGHT, ...rows };
-  const writes = { updated: [], inserted: [] };
+  const writes = { updated: [], inserted: [], ors: [] };
   from.mockImplementation((table) => {
     const builder = {
+      or: (filter) => {
+        writes.ors.push({ table, filter });
+        return builder;
+      },
       select: () => builder,
       eq: () => builder,
       is: () => builder,
@@ -395,7 +401,11 @@ describe('validateAction', () => {
     expect(outcome).toBe('not_measurable');
     expect(rpc).not.toHaveBeenCalled();
     const patch = writes.updated.find((w) => w.table === 'actions').patch;
-    expect(patch.validation).toBeNull();
+    // Nothing measured, the reading kept (learning B1).
+    expect(patch.validation).toEqual({
+      measuredAt: NOW.toISOString(),
+      readings: [{ day: 7, outcome: 'not_measurable' }],
+    });
   });
 
   it('keeps what became of the signals that raised it beside the metrics (learning A3)', async () => {
@@ -434,6 +444,7 @@ describe('validateAction', () => {
     expect(patch.validation).toEqual({
       measuredAt: NOW.toISOString(),
       signals: { total: 1, ended: 1, replaced: 0, dismissed: 0, open: 0 },
+      readings: [{ day: 7, outcome: 'not_measurable' }],
     });
   });
 
@@ -742,6 +753,140 @@ describe('validateAction', () => {
       const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
       expect(validation.gaps).toBeUndefined();
     });
+  });
+
+  describe('read a week, two weeks and a month on (learning B1)', () => {
+    /** The brand's citations by the window's last day: 100 before, then by `after`. */
+    const byDay = (after) =>
+      rpc.mockImplementation(async (_name, args) => {
+        const end = args.p_day_to;
+        const value = Object.entries(after).find(([since]) => end >= since)?.[1] ?? 100;
+        return { data: { total_citations: value }, error: null };
+      });
+
+    it('takes the week-on reading first, final later, the event naming the day', async () => {
+      const writes = mockWrites();
+      byDay({ [daysAgo(7).slice(0, 10)]: 140 });
+
+      expect(await validateAction(action(), { now: NOW })).toBe('improved');
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.readings.map((r) => [r.day, r.outcome])).toEqual([[7, 'improved']]);
+      expect(validation.final).toBeUndefined();
+      const event = writes.inserted.find((w) => w.table === 'action_events');
+      expect(event.rows.data).toEqual({ outcome: 'improved', day: 7 });
+    });
+
+    it('takes every reading due at once, the last one final and the verdict', async () => {
+      const writes = mockWrites();
+      // Closed 40 days ago: up by week one and two, back down by the month.
+      byDay({ [daysAgo(12).slice(0, 10)]: 96, [daysAgo(34).slice(0, 10)]: 150 });
+
+      const outcome = await validateAction(
+        action({ created_at: daysAgo(50), completed_at: daysAgo(40) }),
+        { now: NOW },
+      );
+      expect(outcome).toBe('no_meaningful_change');
+      const { validation, outcome: stored } = writes.updated.find(
+        (w) => w.table === 'actions',
+      ).patch;
+      expect(stored).toBe('no_meaningful_change');
+      expect(validation.readings.map((r) => [r.day, r.outcome])).toEqual([
+        [7, 'improved'],
+        [14, 'improved'],
+        [30, 'no_meaningful_change'],
+      ]);
+      expect(validation.final).toBe(true);
+      // The weeks ending 7, 14 and 30 days after the close.
+      expect(validation.readings.map((r) => r.afterWindow.to)).toEqual([
+        daysAgo(33).slice(0, 10),
+        daysAgo(26).slice(0, 10),
+        daysAgo(10).slice(0, 10),
+      ]);
+      expect(writes.inserted.find((w) => w.table === 'action_events').rows.data).toEqual({
+        outcome: 'no_meaningful_change',
+        day: 30,
+        final: true,
+      });
+    });
+
+    it('adds the readings due to those it has, and reads nothing once final', async () => {
+      let writes = mockWrites();
+      byDay({ [daysAgo(20).slice(0, 10)]: 140 });
+      const earlier = { readings: [{ day: 7, outcome: 'improved' }] };
+      await validateAction(action({ completed_at: daysAgo(20), validation: earlier }), {
+        now: NOW,
+      });
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.readings.map((r) => r.day)).toEqual([7, 14]);
+
+      writes = mockWrites();
+      const final = {
+        final: true,
+        readings: [7, 14, 30].map((day) => ({ day, outcome: 'improved' })),
+      };
+      expect(
+        await validateAction(action({ completed_at: daysAgo(40), validation: final }), {
+          now: NOW,
+        }),
+      ).toBeNull();
+      expect(writes.updated).toHaveLength(0);
+    });
+  });
+
+  it('sweeps the closed actions not read for the last time yet (learning B1)', async () => {
+    const writes = mockWrites({
+      actions: [
+        {
+          id: 'a1',
+          brand_id: 'brand-1',
+          kpi_keys: ['citations'],
+          created_at: daysAgo(30),
+          completed_at: daysAgo(10),
+          validation: null,
+        },
+      ],
+    });
+    rpc.mockResolvedValue({ data: { total_citations: 10 }, error: null });
+
+    expect(await sweepActionValidation({ now: NOW })).toEqual({ measured: 1, failed: 0 });
+    expect(writes.ors).toEqual([{ table: 'actions', filter: SWEEP_FILTER }]);
+  });
+
+  it('reads the list in pages, so actions waiting for a later reading crowd out none due', async () => {
+    // A full page of actions read a week on, their next reading not due yet.
+    const waiting = Array.from({ length: 500 }, (_, i) => ({
+      id: `w${String(i).padStart(3, '0')}`,
+      brand_id: 'brand-1',
+      kpi_keys: ['citations'],
+      created_at: daysAgo(30),
+      completed_at: daysAgo(10),
+      validation: { readings: [{ day: 7, outcome: 'improved' }] },
+    }));
+    const pages = [waiting, []];
+    const after = [];
+    from.mockImplementation(() => {
+      const page = pages.shift();
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        or: () => builder,
+        not: () => builder,
+        lte: () => builder,
+        order: () => builder,
+        limit: () => builder,
+        gt: (_column, id) => {
+          after.push(id);
+          return builder;
+        },
+        then: (resolve, reject) =>
+          Promise.resolve({ data: page, error: null }).then(resolve, reject),
+      };
+      return builder;
+    });
+
+    expect(await sweepActionValidation({ now: NOW })).toEqual({ measured: 0, failed: 0 });
+    expect(after).toEqual(['w499']);
+    expect(pages).toEqual([]);
   });
 
   it('does nothing for an action that never closed', async () => {

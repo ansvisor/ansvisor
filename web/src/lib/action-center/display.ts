@@ -240,6 +240,10 @@ export function actionEventText(
     // The validation sweep's verdict once the action closed: improved,
     // declined, and so on.
     outcome: String(event.data.outcome ?? ''),
+    // Which reading it was, counted from the close, and whether the last
+    // (learning B1); none for one measured once before.
+    day: Number(event.data.day ?? 0),
+    final: event.data.final === true ? 'yes' : 'no',
   });
 }
 

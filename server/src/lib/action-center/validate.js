@@ -59,6 +59,22 @@ export const VALIDATION_WAIT_DAYS = MEASUREMENT_WINDOW_DAYS + 1;
  */
 export const MEANINGFUL_CHANGE_RATIO = validation.meaningfulChangeRatio;
 
+/** The days after closing an action's effect is read on; the last is final (learning B1). */
+export const FINAL_READING_DAY = validation.finalReadingDay;
+export const READING_DAYS = [
+  MEASUREMENT_WINDOW_DAYS,
+  2 * MEASUREMENT_WINDOW_DAYS,
+  FINAL_READING_DAY,
+];
+
+/** The window a reading `day` days after the close covers: the week ending that day. */
+export function readingWindow(closedAt, day) {
+  return windowStartingAfter(
+    new Date(closedAt + (day - MEASUREMENT_WINDOW_DAYS) * DAY_MS),
+    MEASUREMENT_WINDOW_DAYS,
+  );
+}
+
 /** Days a window may lack a tracking run and still be compared (learning A6). */
 export const MAX_GAP_DAYS = validation.maxGapDays;
 
@@ -380,18 +396,64 @@ export async function validateAction(action, { now = new Date() } = {}) {
   if (!closedAt) return null;
 
   const beforeWindow = windowEndingBefore(new Date(action.created_at), MEASUREMENT_WINDOW_DAYS);
-  const afterWindow = windowStartingAfter(new Date(closedAt), MEASUREMENT_WINDOW_DAYS);
 
-  // The window has to be complete. Measuring a window whose last days have
+  // The readings due (learning B1): the days whose week is over, not read
+  // yet. A window has to be complete: measuring one whose last days have
   // not happened yet reads low for a reason that has nothing to do with the
   // action, and would file most recent work as a decline.
-  if (afterWindow.to >= utcDay(now)) return null;
+  const previous = Array.isArray(action.validation?.readings) ? action.validation.readings : [];
+  const taken = new Set(previous.map((r) => r.day));
+  const due = READING_DAYS.filter(
+    (day) => !taken.has(day) && readingWindow(closedAt, day).to < utcDay(now),
+  );
+  if (due.length === 0) return null;
 
   // What became of the signals that raised it (A3), and for a Site Audit
   // fix whether its pages pass when audited again (A2), kept beside the
   // metrics. A fix whose pages were audited again is judged by that: the
   // check passing is its aim.
   const [signals, audit] = await Promise.all([signalOutcome(action.id), auditRecheck(action)]);
+
+  // Each reading due, in order; the action keeps the last one's figures and
+  // verdict, every reading's verdict and metrics, and whether it's final.
+  const readings = [...previous];
+  let last = null;
+  for (const day of due) {
+    last = await measureReading(action, {
+      beforeWindow,
+      afterWindow: readingWindow(closedAt, day),
+      signals,
+      audit,
+      now,
+    });
+    readings.push({
+      day,
+      outcome: last.verdict,
+      ...(last.kept?.afterWindow ? { afterWindow: last.kept.afterWindow } : {}),
+      ...(last.kept?.metrics ? { metrics: last.kept.metrics } : {}),
+    });
+  }
+  const final = readings.some((r) => r.day === FINAL_READING_DAY);
+  await write(
+    action.id,
+    {
+      measuredAt: now.toISOString(),
+      ...(last.kept ?? {}),
+      readings,
+      ...(final ? { final: true } : {}),
+    },
+    last.verdict,
+    now,
+    { day: due[due.length - 1], final },
+  );
+  return last.verdict;
+}
+
+/**
+ * One reading of a closed action (learning B1): what it keeps and its
+ * verdict, over the week `afterWindow` against the week before it was raised.
+ */
+async function measureReading(action, { beforeWindow, afterWindow, signals, audit, now }) {
   // The verdict from the metrics kept, by its main metric; given `aims`,
   // only the metrics the action names count (see deriveOutcome).
   const finish = async (validation, aims = null) => {
@@ -438,8 +500,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
         ? 'not_measurable'
         : deriveOutcome(comparable, read.primary, aims);
     const verdict = (audit && auditOutcome(audit)) ?? outcome;
-    await write(action.id, kept, verdict, now);
-    return verdict;
+    return { kept, verdict };
   };
 
   // An action sent from a content opportunity is measured on its own prompts
@@ -580,7 +641,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
   });
 }
 
-async function write(actionId, validation, outcome, now) {
+async function write(actionId, validation, outcome, now, { day = null, final = false } = {}) {
   const { error } = await supabaseAdmin
     .from('actions')
     .update({ validation, outcome, validated_at: now.toISOString() })
@@ -589,10 +650,18 @@ async function write(actionId, validation, outcome, now) {
 
   // The trail carries the verdict, so the drawer's History tab shows when the
   // measurement happened alongside the work that preceded it.
-  await supabaseAdmin
-    .from('action_events')
-    .insert({ action_id: actionId, event: 'outcome_measured', data: { outcome } });
+  await supabaseAdmin.from('action_events').insert({
+    action_id: actionId,
+    event: 'outcome_measured',
+    // Which reading (learning B1), and whether it's the final one.
+    data: { outcome, ...(day ? { day } : {}), ...(final ? { final: true } : {}) },
+  });
 }
+
+/** The actions the sweep reads, and how many at a time. */
+export const SWEEP_FILTER =
+  'outcome.eq.pending_measurement,and(validation->readings.not.is.null,validation->>final.is.null)';
+const SWEEP_PAGE = 500;
 
 /**
  * Nightly sweep: measure every closed action whose settling period has passed.
@@ -602,28 +671,40 @@ async function write(actionId, validation, outcome, now) {
  */
 export async function sweepActionValidation({ now = new Date() } = {}) {
   const cutoff = new Date(now.getTime() - VALIDATION_WAIT_DAYS * DAY_MS).toISOString();
-  const { data, error } = await supabaseAdmin
-    .from('actions')
-    .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at')
-    .eq('status', 'completed')
-    .eq('outcome', 'pending_measurement')
-    .not('completed_at', 'is', null)
-    .lte('completed_at', cutoff)
-    .limit(500);
-  if (error) {
-    logger.error({ err: error }, '[action-validation] could not list pending actions');
-    return { measured: 0, failed: 0 };
-  }
-
   let measured = 0;
   let failed = 0;
-  for (const action of data ?? []) {
-    try {
-      if (await validateAction(action, { now })) measured += 1;
-    } catch (err) {
-      failed += 1;
-      logger.error({ err, actionId: action.id }, '[action-validation] measurement failed');
+  // In pages by id: an action waiting for a later reading stays on the list
+  // night after night, and must not crowd out the ones due.
+  let afterId = null;
+  for (;;) {
+    let query = supabaseAdmin
+      .from('actions')
+      .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at, validation')
+      .eq('status', 'completed')
+      // Never measured, or read but not for the last time yet (learning B1).
+      // One measured once before the later readings came keeps its result.
+      .or(SWEEP_FILTER)
+      .not('completed_at', 'is', null)
+      .lte('completed_at', cutoff)
+      .order('id')
+      .limit(SWEEP_PAGE);
+    if (afterId) query = query.gt('id', afterId);
+    const { data, error } = await query;
+    if (error) {
+      logger.error({ err: error }, '[action-validation] could not list pending actions');
+      break;
     }
+
+    for (const action of data ?? []) {
+      try {
+        if (await validateAction(action, { now })) measured += 1;
+      } catch (err) {
+        failed += 1;
+        logger.error({ err, actionId: action.id }, '[action-validation] measurement failed');
+      }
+    }
+    if (!data || data.length < SWEEP_PAGE) break;
+    afterId = data[data.length - 1].id;
   }
 
   logger.info({ measured, failed }, '[action-validation] sweep complete');

@@ -1307,7 +1307,7 @@
           "task_run_failed": "{task} — the automatic attempt failed; it needs doing by hand",
           "task_awaiting_approval": "{task} — waiting for your approval before it reaches outside Ansvisor",
           "position_outcome_recorded": "{measurable, plural, =0 {30-day result: not enough data to compare positions} other {30-day result: position improved on {improved} of # platforms}}",
-          "outcome_measured": "{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
+          "outcome_measured": "{day, plural, =0 {} other {Day #{final, select, yes {, final} other {}} · }}{outcome, select, improved {Result: metrics improved after this action closed} mixed {Result: mixed after this action closed} declined {Result: metrics declined after this action closed} no_meaningful_change {Result: no meaningful change in metrics after this action closed} not_measurable {Result: could not be measured} other {Result measured}}"
         },
         "deleteTask": "Delete task",
         "addTask": "Add task",
@@ -2616,11 +2616,14 @@
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "dismissedBecause": "Dismissed: {reason}.",
+        "readings": "Read after it closed: {list}.",
+        "reading": "day {day}, {outcome}",
+        "finalOn": "The final reading is on day {day}.",
         "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
         "brandWide": "Brand-wide over the same days: {list}",
         "primary": "Judged by {metric}, its main metric.",
-        "gaps": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week after it} other {# nights of the week after it}}: mentions and citations are counted as for a full week.",
-        "gapsTooMany": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week after it} other {# nights of the week after it}}: too many to compare mentions and citations fairly, so they are left out of the result.",
+        "gaps": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week of the latest reading} other {# nights of the week of the latest reading}}: mentions and citations are counted as for a full week.",
+        "gapsTooMany": "Tracking missed {before, plural, =0 {} one {# night of the week before it} other {# nights of the week before it}}{before, plural, =0 {} other {{after, plural, =0 {} other { and }}}}{after, plural, =0 {} one {# night of the week of the latest reading} other {# nights of the week of the latest reading}}: too many to compare mentions and citations fairly, so they are left out of the result.",
         "auditAfter": "Audited again since it closed: {passed} of {audited} {audited, plural, one {page passes} other {pages pass}}.",
         "auditNotYet": "None of its {pages, plural, one {page} other {# pages}} was audited again since it closed: the result is from the metrics.",
         "signalsAfter": "Of the {total, plural, one {signal} other {# signals}} that raised it, when measured: {ended} ended{replaced, plural, =0 {} other {, # turned into another}}{dismissed, plural, =0 {} other {, # dismissed}}{open, plural, =0 {} other {, # still open}}.",
@@ -2657,6 +2660,7 @@
         "description": "Select a brand to view its action history."
       },
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
+      "outcomeSoFar": "so far: day {day} of {final}",
       "outcomeHint": {
         "pending_measurement": "no result recorded",
         "improved": "vs before",

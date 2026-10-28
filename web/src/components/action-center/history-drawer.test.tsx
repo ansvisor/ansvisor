@@ -236,7 +236,7 @@ describe('HistoryDrawer', () => {
     );
     await act(async () => {});
     expect(under('Result')).toContain(
-      'Tracking missed 1 night of the week before it and 2 nights of the week after it: mentions and citations are counted as for a full week.',
+      'Tracking missed 1 night of the week before it and 2 nights of the week of the latest reading: mentions and citations are counted as for a full week.',
     );
 
     render(
@@ -248,7 +248,7 @@ describe('HistoryDrawer', () => {
     );
     await act(async () => {});
     expect(under('Result')).toContain(
-      'Tracking missed 4 nights of the week after it: too many to compare mentions and citations fairly, so they are left out of the result.',
+      'Tracking missed 4 nights of the week of the latest reading: too many to compare mentions and citations fairly, so they are left out of the result.',
     );
   });
 
@@ -263,6 +263,29 @@ describe('HistoryDrawer', () => {
     );
     await act(async () => {});
     expect(under('Result')).toContain('Dismissed: The data behind it is wrong.');
+  });
+
+  it('lists the readings after it closed, and when the final one comes (learning B1)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          outcome: 'mixed',
+          readings: [
+            { day: 7, outcome: 'improved' },
+            { day: 14, outcome: 'mixed' },
+          ],
+          outcomeFinal: false,
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'Read after it closed: day 7, Improved · day 14, Mixed. The final reading is on day 30.',
+    );
   });
 
   it('says a dismissed action was not measured, not that nothing could be read', async () => {
