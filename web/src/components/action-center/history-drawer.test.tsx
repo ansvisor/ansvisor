@@ -129,6 +129,19 @@ describe('HistoryDrawer', () => {
     expect(under('What was the goal?')).toContain('Nov 9');
   });
 
+  it('says why a dismissed action was dismissed (learning A5)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, status: 'dismissed', dismissReason: 'wrong_data' }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain('Dismissed: The data behind it is wrong.');
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);

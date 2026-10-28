@@ -91,6 +91,7 @@ export function HistoryDrawer({
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
   const tSources = useTranslations('actionCenter.signalsPage.sources');
   const tRegistry = useTranslations('actionCenter.registry');
+  const tDismiss = useTranslations('actionCenter.dismissReason');
   const tAffected = useTranslations('actionCenter.historyPage.affected');
   const router = useRouter();
 
@@ -208,6 +209,13 @@ export function HistoryDrawer({
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.result')}</p>
+            {item.status === 'dismissed' && item.dismissReason && (
+              <p className="mt-1 text-xs">
+                {t('drawer.dismissedBecause', {
+                  reason: tDismiss(`${item.dismissReason}.label`),
+                })}
+              </p>
+            )}
             {!measured && (
               // The honest state, and the reason for it. Everything above this
               // line is recorded; the effect is not, because nothing re-reads

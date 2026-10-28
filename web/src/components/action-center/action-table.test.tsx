@@ -98,6 +98,25 @@ describe('ActionTable row menu', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('asks why before dismissing, and dismisses with the reason, or none (learning A5)', async () => {
+    render();
+    let items = await openMenu();
+    await act(async () => items[2].click());
+    expect(onStatusChange).not.toHaveBeenCalled();
+    const dialog = () => document.querySelector('[role="dialog"]')!;
+    expect(dialog().textContent).toContain('Why dismiss it?');
+    const choice = (label: string) =>
+      [...dialog().querySelectorAll('button')].find((b) => b.textContent?.startsWith(label))!;
+    await act(async () => choice("It's already done").click());
+    expect(onStatusChange).toHaveBeenCalledWith(action, 'dismissed', 'already_done');
+
+    onStatusChange.mockClear();
+    items = await openMenu();
+    await act(async () => items[2].click());
+    await act(async () => choice('Dismiss without saying why').click());
+    expect(onStatusChange).toHaveBeenCalledWith(action, 'dismissed', null);
+  });
+
   it('asks before deleting, and deletes on Delete', async () => {
     render();
     const items = await openMenu();
