@@ -3,6 +3,8 @@
 import { useTranslations } from 'next-intl';
 import type { AuditAutoStatus, AuditQuota } from '@/lib/actions/audits';
 import { autoRunStates } from '@/lib/audit-auto-runs';
+import { isNoPlan } from '@/lib/billing/no-plan';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -121,7 +123,9 @@ export function EmptyPoolMessage({
   className?: string;
 }) {
   const t = useTranslations('audit.quota');
-  const shares = quota ? quotaShares(quota) : null;
+  const { isLocked } = useUpgradeGate();
+  // Without an active plan nothing is used up (and no run is scheduled).
+  const shares = quota && !isNoPlan(quota, isLocked) ? quotaShares(quota) : null;
   if (!quota || !shares || quota.remaining > 0 || shares.autoScheduled === 0) return null;
   return (
     <p className={cn('text-xs text-destructive', className)}>
