@@ -2317,7 +2317,7 @@ export default function PromptsPage() {
                     <CardTitle className="text-sm font-medium">Prompt Volumes</CardTitle>
                     <p className="text-xs text-muted-foreground">
                       Total estimated AI-answered queries across all topic clusters, split by
-                      answer-engine share. Weights include Google AI Overview (~35% of Google
+                      answer-engine share. Weights include Google AI Overviews (~35% of Google
                       searches), Google AI Mode, and standalone chatbots.
                     </p>
                   </CardHeader>
