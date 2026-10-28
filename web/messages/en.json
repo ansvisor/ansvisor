@@ -7274,6 +7274,12 @@
     "gaps": "Content Gaps",
     "suggestions": {
       "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
+      "catalog": {
+        "badge": "Your catalog",
+        "tooltip": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}.",
+        "tooltipPrice": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}, most under {price}.",
+        "filter": "Shopping"
+      },
       "addAll": "Add All",
       "addingAll": "Adding…",
       "addAllTitle": "Add every suggestion listed below to your tracked prompts",
