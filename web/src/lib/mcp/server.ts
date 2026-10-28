@@ -76,6 +76,8 @@ import {
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
+import { getContentPlanFor } from './content-plan';
+import { PLAN_CARDS, PLAN_PERIODS } from '@/lib/content/plan';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -1762,6 +1764,41 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         };
       }
       return result ? json(result) : notFound('Draft');
+    },
+  );
+
+  // ─── The Content plan and pages ready for a CMS (B5) ───
+
+  server.registerTool(
+    'get_content_plan',
+    {
+      title: 'Content plan',
+      description:
+        "The brand's Content plan, as the Content › Plan page ranks it: what to write or fix next, by the Priority Score (0–100: severity 40, opportunity 30, page value 20, citations 10; `score_parts` says what each row's is made of). Each row: `action` (create a new page, optimize a page losing citations or with an opportunity on it, protect a top page), title, the page (null for a new one), page_type, `why` (competitors cited instead, an opportunity's prompts, a citation drop and its platforms, or a top page's citations and AI visits), opportunity_id, the draft already being written for it (with its assignee and editor path) and whether a person marked it a priority (those come first). `counts` per card and `hidden` (rows a person hid). Over `days` 7, 30 or 90 (default 30); `card` narrows to create, optimize, protect or priority. At most 50 rows.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        days: z
+          .union([
+            z.literal(PLAN_PERIODS[0]),
+            z.literal(PLAN_PERIODS[1]),
+            z.literal(PLAN_PERIODS[2]),
+          ])
+          .optional()
+          .describe('The period the plan reads: 7, 30 (default) or 90 days.'),
+        card: z
+          .enum(PLAN_CARDS)
+          .optional()
+          .describe('Only this card: create, optimize, protect or priority.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const plan = await getContentPlanFor(auth, {
+        brandId: args.brand_id,
+        days: args.days ?? 30,
+        card: args.card,
+      });
+      return plan ? json(plan) : notFound('Brand');
     },
   );
 
