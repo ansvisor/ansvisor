@@ -2,8 +2,7 @@
 
 import { useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowUpRight, Check, CreditCard, Lock, Mail, Play, Tag, X } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { ArrowUpRight, CreditCard, Lock, Mail, Play, Tag, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import {
@@ -14,33 +13,30 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { aiUsageMultiple, usePlanFeatures } from '@/components/settings/plan-features';
+import { aiUsageMultiple } from '@/components/settings/plan-features';
 import {
   CONTACT_SALES_URL,
   CUSTOM_PLAN_STARTING_PRICE,
-  PLANS,
   PRICING_URL,
   SUBSCRIBABLE_PLANS,
   firstMonthOfferOn,
 } from '@/config/plans';
 import { useUserRole } from '@/hooks/use-user-role';
-import {
-  FIRST_MONTH_CODE,
-  annualSaving,
-  periodPrice,
-  takesPromoCode,
-  type BillingInterval,
-} from '@/lib/billing/plan-purchase';
-import type { PromoOffer } from '@/lib/billing/promo-code';
+import { FIRST_MONTH_CODE, choicePeriod, periodPrice } from '@/lib/billing/plan-purchase';
 import type { DemoOffer } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
 import {
-  PlanPrice,
-  PlanStartButtons,
+  PlanDetailsList,
+  PlanDetailsStack,
+  PlanDetailsToggle,
+  PlanStart,
+  PlanStartCard,
+  StartChoicePicker,
   checkPromoCode,
   money,
   offerValues,
   useFirstMonthOffer,
+  useStartChoice,
   useStartCheckout,
 } from './plan-start';
 
@@ -59,19 +55,21 @@ const PROMO_NOTE_ID = 'upgrade-promo-note';
 
 /**
  * "Choose a plan to keep going", for a workspace whose plan ended: Starter
- * and Growth with Billing's own features and prices, monthly or a year up
- * front, and Custom through sales. An admin can apply a promotion code
- * (checked with Stripe, monthly plans only) and opens Stripe Checkout for a
- * new subscription from a card; another member is asked to turn to an admin
- * and sees the plain prices. ×, Escape or a click outside close it.
+ * and Growth with Billing's own features and prices, and Custom through
+ * sales. One choice above the cards says how the plan starts, and each card
+ * then shows what is due today and one button to Stripe Checkout, from a
+ * card. An admin can apply a promotion code behind "Have a code?" (checked
+ * with Stripe, monthly plans only); another member is asked to turn to an
+ * admin and sees the plain prices. ×, Escape or a click outside close it.
  *
- * Two ways to start, each with a card. Buy now: the full plan from day one,
- * with the first-month offer on a monthly plan (FIRST_MONTH_OFFER): an admin
- * finds its code already applied, and without it (the offer off, a year, a
- * code Stripe refused) the button is the plain Choose {plan}. And, for a
- * workspace that never had a subscription (`pitch.offer` 'trial'), the free
- * trial, with no offer and limited AI usage. A `pitch` also says where the
- * dialog was opened from: the demo brand, or a brand never tracked.
+ * The ways to start, each with a card. Monthly or a year up front: the full
+ * plan from day one, with the first-month offer on a monthly plan
+ * (FIRST_MONTH_OFFER), applied for an admin from the first frame; without it
+ * (the offer off, a year, a code Stripe refused) the button is the plain
+ * Choose {plan}. And, for a workspace that never had a subscription
+ * (`pitch.offer` 'trial'), the free trial, with no offer and limited AI
+ * usage. A `pitch` also says where the dialog was opened from: the demo
+ * brand, or a brand never tracked.
  */
 export function ChoosePlanDialog({
   open,
@@ -95,36 +93,39 @@ export function ChoosePlanDialog({
   const t = useTranslations('readOnly');
   const tPlans = useTranslations('readOnly.plans');
   const tSettings = useTranslations('settings');
-  const tCards = useTranslations('settings.planCards');
   const tOffer = useTranslations('planOffer');
-  const planFeatures = usePlanFeatures();
   const { canAdmin } = useUserRole();
 
-  const [period, setPeriod] = useState<BillingInterval>('month');
   const [codeInput, setCodeInput] = useState('');
+  // The code field, behind "Have a code?" until asked for.
+  const [codeOpen, setCodeOpen] = useState(false);
+  // A code the admin typed (not the first-month offer applied for them):
+  // its note says what it does.
+  const [codeTyped, setCodeTyped] = useState(false);
   const [checking, setChecking] = useState(false);
   const [codeError, setCodeError] = useState<CodeError | null>(null);
-  // The code Stripe took, with what it takes off. Only an admin enters one.
-  const [offer, setOffer] = useState<PromoOffer | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const demo = pitch?.from === 'demo';
   // The free trial: for a workspace that never had a subscription.
   const trialOffered = pitch?.offer === 'trial';
-  const offerOn = firstMonthOfferOn();
 
-  // The first-month offer's code is tried once, the first time the dialog opens.
-  useFirstMonthOffer(open && offerOn && canAdmin, setOffer);
-
-  const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
-  // The code lowers this period's prices: a monthly plan, for an admin.
-  const discounted = canAdmin && offer != null && takesPromoCode(period) ? offer : null;
-  const { checkout, start } = useStartCheckout({
+  // The code the prices are shown with: for an admin, the first-month offer
+  // from the first frame, its code tried once the first time the dialog opens.
+  const [shownOffer, setOffer] = useFirstMonthOffer(firstMonthOfferOn() && canAdmin, open);
+  // Only an admin buys, so only an admin's prices take a code.
+  const offer = canAdmin ? shownOffer : null;
+  const [choice, setChoice] = useStartChoice(trialOffered && canAdmin);
+  const period = choicePeriod(choice);
+  // The plans' details (what each is for and includes), in the cards.
+  const [details, setDetails] = useState(false);
+  const { checkout, failed, start } = useStartCheckout({
     organizationId,
     period,
     // The code stopped working since it was applied: say so by the field.
     onCodeRefused: (code) => {
       setOffer(null);
       setCodeInput(code);
+      setCodeOpen(true);
       setCodeError({ kind: 'invalid', code: code.toUpperCase() });
     },
   });
@@ -141,32 +142,43 @@ export function ChoosePlanDialog({
     const found = await checkPromoCode(typed);
     if (found === 'invalid') setCodeError({ kind: 'invalid', code: typed.toUpperCase() });
     else if (found === 'failed') setCodeError({ kind: 'failed' });
-    else setOffer(found);
+    else {
+      setOffer(found);
+      setCodeTyped(true);
+    }
     setChecking(false);
+  }
+
+  /** "Have a code?": the field, ready to type in. */
+  function openCode() {
+    setCodeOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   function removeCode() {
     setOffer(null);
+    setCodeTyped(false);
     setCodeInput('');
     // The field is back once the chip is gone.
-    setTimeout(() => inputRef.current?.focus(), 0);
+    openCode();
   }
 
-  // The line under the controls: the code's word for this period, or why
-  // the code typed was refused.
+  // The line under the controls, for a code typed: what it does with the
+  // choice made, or why it was refused. The first-month offer applied for
+  // the admin says so on the choice itself.
   const note =
-    offer && !takesPromoCode(period) ? (
+    offer && codeTyped && choice !== 'month' ? (
       <p className="flex flex-wrap items-center gap-x-1.5 text-amber-700 dark:text-amber-400">
         {tPlans('promo.monthlyOnly', offerValues(offer))}
         <button
           type="button"
-          onClick={() => setPeriod('month')}
+          onClick={() => setChoice('month')}
           className="rounded-sm text-foreground underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {tPlans('promo.switchToMonthly')}
         </button>
       </p>
-    ) : offer ? (
+    ) : offer && codeTyped ? (
       <p className="text-emerald-700 dark:text-emerald-400">
         {tPlans('promo.appliedNote', offerValues(offer))}
       </p>
@@ -191,11 +203,13 @@ export function ChoosePlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-5 sm:max-w-[min(62.5rem,calc(100%-2rem))] sm:p-7">
+      {/* Sized to show everything at once on a laptop (1024×768 and up): the
+          plans' details open inside the cards, never below them. */}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-5 sm:max-w-[min(62.5rem,calc(100%-2rem))] sm:p-6">
         <DialogHeader className="gap-1 pr-8">
           <span
             data-slot="upgrade-action"
-            className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"
+            className="mb-1.5 inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"
           >
             {demo ? (
               <Play className="size-3" aria-hidden />
@@ -232,35 +246,14 @@ export function ChoosePlanDialog({
           </p>
         )}
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          {/* Billing period: a year up front saves 20% */}
-          <div
-            role="group"
-            aria-label={tSettings('billingPeriod')}
-            className="inline-flex rounded-lg border bg-muted/40 p-0.5"
-          >
-            {(['month', 'year'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={period === value}
-                onClick={() => setPeriod(value)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-                  period === value
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {value === 'month' ? tSettings('monthly') : tSettings('annual')}
-                {value === 'year' && saving > 0 && (
-                  <span className="rounded-full bg-emerald-100 px-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                    {tSettings('savePercent', { percent: saving })}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          {/* How the plan starts: the trial, monthly with the offer, or a year */}
+          <StartChoicePicker
+            choice={choice}
+            onChange={setChoice}
+            trialOffered={trialOffered && canAdmin}
+            offer={offer}
+          />
 
           {canAdmin &&
             (offer ? (
@@ -279,6 +272,15 @@ export function ChoosePlanDialog({
                   <X className="size-3" aria-hidden />
                 </button>
               </span>
+            ) : !codeOpen ? (
+              <button
+                type="button"
+                data-slot="have-code"
+                onClick={openCode}
+                className="rounded-sm text-xs text-muted-foreground underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {tOffer('haveCode')}
+              </button>
             ) : (
               <form onSubmit={applyCode} autoComplete="off" className="flex items-center gap-2">
                 <label htmlFor={PROMO_INPUT_ID} className="text-xs text-muted-foreground">
@@ -311,121 +313,87 @@ export function ChoosePlanDialog({
           </div>
         )}
 
-        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {SUBSCRIBABLE_PLANS.map((planId) => {
-            const plan = PLANS[planId];
-            const busy = periodPrice(planId, period) == null || !organizationId || checkout != null;
-
-            return (
-              <section
-                key={planId}
-                data-plan={planId}
-                aria-labelledby={`upgrade-plan-${planId}`}
-                className={cn(
-                  'relative flex flex-col gap-4 rounded-xl border bg-card p-5',
-                  plan.highlighted && 'border-primary ring-1 ring-primary',
-                )}
-              >
-                {plan.highlighted && (
-                  <Badge className="absolute -top-2.5 left-5">{tSettings('popular')}</Badge>
-                )}
-                <div>
-                  <h3 id={`upgrade-plan-${planId}`} className="text-base font-semibold">
-                    {plan.name}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-muted-foreground lg:min-h-8">
-                    {tCards(`${planId}.tagline`)}
-                  </p>
-                </div>
-
-                <PlanPrice planId={planId} period={period} discounted={discounted} />
-
-                {canAdmin ? (
-                  <PlanStartButtons
-                    planId={planId}
-                    period={period}
-                    discounted={discounted}
-                    trialOffered={trialOffered}
-                    opening={checkout?.planId === planId ? checkout.mode : null}
-                    disabled={busy}
-                    // A code goes with buying now only: the trial comes without an offer.
-                    onStart={(mode) =>
-                      void start(planId, mode, mode === 'buy' ? discounted?.code : undefined)
-                    }
-                  />
-                ) : (
-                  <p
-                    data-slot="ask-admin"
-                    className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-1.5 text-center text-xs text-muted-foreground"
-                  >
-                    <Lock className="size-3.5 shrink-0" aria-hidden />
-                    {tPlans('askAdmin')}
-                  </p>
-                )}
-
-                <ul className="space-y-1.5 text-sm">
-                  {planFeatures(planId).map((feature) => (
-                    <li key={feature.text} className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      <span
-                        title={feature.hint}
-                        className={
-                          feature.hint
-                            ? 'cursor-help underline decoration-dotted underline-offset-4'
-                            : undefined
-                        }
-                      >
-                        {feature.text}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {SUBSCRIBABLE_PLANS.map((planId) => (
+            <PlanStartCard
+              key={planId}
+              planId={planId}
+              choice={choice}
+              offer={offer}
+              details={details}
+            >
+              {canAdmin ? (
+                <PlanStart
+                  planId={planId}
+                  choice={choice}
+                  offer={offer}
+                  trialOffered={trialOffered}
+                  opening={checkout?.planId === planId ? checkout.mode : null}
+                  disabled={
+                    periodPrice(planId, period) == null || !organizationId || checkout != null
+                  }
+                  error={failed?.planId === planId ? failed.message : null}
+                  // A code goes with buying monthly only: the trial comes without an offer.
+                  onStart={(mode) =>
+                    void start(
+                      planId,
+                      mode,
+                      mode === 'buy' && choice === 'month' ? offer?.code : undefined,
+                    )
+                  }
+                />
+              ) : (
+                <p
+                  data-slot="ask-admin"
+                  className="flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-1.5 text-center text-xs text-muted-foreground"
+                >
+                  <Lock className="size-3.5 shrink-0" aria-hidden />
+                  {tPlans('askAdmin')}
+                </p>
+              )}
+            </PlanStartCard>
+          ))}
 
           {/* Custom: priced with sales, from the pricing page's points */}
           <section
             data-plan="custom"
             aria-labelledby="upgrade-plan-custom"
-            className="flex flex-col gap-4 rounded-xl border bg-muted/30 p-5"
+            className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4"
           >
-            <div>
-              <h3 id="upgrade-plan-custom" className="text-base font-semibold">
-                {tPlans('customName')}
-              </h3>
-              <p className="mt-0.5 text-xs text-muted-foreground lg:min-h-8">
-                {tPlans('customTagline')}
-              </p>
-            </div>
-            <div className="flex flex-wrap content-end items-baseline gap-x-1.5 lg:min-h-20">
-              <span className="w-full text-sm text-muted-foreground">{tPlans('startingAt')}</span>
-              <span className="text-3xl font-bold tracking-tight">
-                {money(CUSTOM_PLAN_STARTING_PRICE)}
-              </span>
-              <span className="text-sm text-muted-foreground">/{tSettings('month')}</span>
-            </div>
-            <a
-              href={CONTACT_SALES_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(buttonVariants({ variant: 'outline' }), 'h-9 w-full')}
+            <h3 id="upgrade-plan-custom" className="text-base font-semibold">
+              {tPlans('customName')}
+            </h3>
+            <PlanDetailsStack
+              details={details}
+              info={
+                <PlanDetailsList
+                  tagline={tPlans('customTagline')}
+                  points={customFeatures.map((text) => ({ text }))}
+                />
+              }
             >
-              <Mail aria-hidden />
-              {tPlans('contactUs')}
-            </a>
-            <ul className="space-y-1.5 text-sm">
-              {customFeatures.map((point) => (
-                <li key={point} className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <span>{point}</span>
-                </li>
-              ))}
-            </ul>
+              <div className="flex flex-wrap content-end items-baseline gap-x-1.5 lg:min-h-20">
+                <span className="w-full text-sm text-muted-foreground">{tPlans('startingAt')}</span>
+                <span className="text-3xl font-bold tracking-tight">
+                  {money(CUSTOM_PLAN_STARTING_PRICE)}
+                </span>
+                <span className="text-sm text-muted-foreground">/{tSettings('month')}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{tPlans('customTagline')}</p>
+              <a
+                href={CONTACT_SALES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(buttonVariants({ variant: 'outline' }), 'h-9 w-full')}
+              >
+                <Mail aria-hidden />
+                {tPlans('contactUs')}
+              </a>
+            </PlanDetailsStack>
           </section>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
           <span className="inline-flex flex-wrap items-center gap-x-1.5">
             {canAdmin && (
               <span data-slot="card-note" className="inline-flex items-center gap-1.5">
@@ -435,15 +403,18 @@ export function ChoosePlanDialog({
             )}
             {tPlans('pricesInUsd')}
           </span>
-          <a
-            href={PRICING_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-foreground underline-offset-4 hover:underline"
-          >
-            {tSettings('seeAllPlanFeatures')}
-            <ArrowUpRight className="size-3.5" aria-hidden />
-          </a>
+          <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+            <PlanDetailsToggle open={details} onToggle={() => setDetails((open) => !open)} />
+            <a
+              href={PRICING_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-foreground underline-offset-4 hover:underline"
+            >
+              {tSettings('seeAllPlanFeatures')}
+              <ArrowUpRight className="size-3.5" aria-hidden />
+            </a>
+          </span>
         </div>
       </DialogContent>
     </Dialog>

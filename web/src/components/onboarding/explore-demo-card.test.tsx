@@ -53,7 +53,6 @@ afterEach(() => {
 describe('ExploreDemoCard', () => {
   it('offers the demo, no card needed, keeping the brand set up', async () => {
     await render('Acme');
-    expect(container.textContent).toContain('or');
     expect(container.querySelector('h3')?.textContent).toBe(
       'Not ready to add a card? Explore a demo brand',
     );

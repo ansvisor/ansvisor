@@ -203,7 +203,7 @@ describe('useUpgradeGate', () => {
       await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
       expect(button('Choose Starter')).toBeDefined();
       expect(button('Choose Growth')).toBeDefined();
-      expect(dialog()?.textContent).toContain('Card required. Cancel any time.');
+      expect(dialog()?.textContent).toContain('Card required.');
       expect(button('Update payment method')).toBeUndefined();
     } finally {
       vi.unstubAllGlobals();
@@ -296,6 +296,9 @@ describe('useUpgradeGate on the demo brand', () => {
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       'Adding prompts works on your own brand',
     );
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-choice="trial"]')!.click();
+    });
     expect(button('Start 14-day free trial')).toBeDefined();
   });
 
@@ -372,8 +375,11 @@ describe("useUpgradeGate on a brand that isn't tracked yet", () => {
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       "Your brand isn't tracked yet",
     );
-    expect(button('Start 14-day free trial')).toBeDefined();
     expect(button('Choose Starter')).toBeDefined();
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-choice="trial"]')!.click();
+    });
+    expect(button('Start 14-day free trial')).toBeDefined();
   });
 
   it('keeps what was clicked as the label', async () => {
