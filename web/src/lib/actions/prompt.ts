@@ -1171,11 +1171,14 @@ async function includedPositionPlatforms(
   // dbClient: the member's session, or the service role the MCP's
   // get_prompt_locations scopes it with (withDbClient), the brand checked.
   const supabase = await dbClient();
-  const { data: brand } = await supabase
+  const { data: brand, error } = await supabase
     .from('brands')
     .select(`organization_id, organizations!brands_organization_id_fkey(${ORG_PLAN_COLUMNS})`)
     .eq('id', brandId)
     .maybeSingle();
+  // The column then reads —: said here, so a broken read doesn't pass for no data.
+  if (error)
+    console.error('[prompts] brand plan read failed, positions without engines:', error.message);
   if (!brand?.organization_id) return null;
   const org = Array.isArray(brand.organizations) ? brand.organizations[0] : brand.organizations;
   const plan = planFromOrgRow(org ?? null);

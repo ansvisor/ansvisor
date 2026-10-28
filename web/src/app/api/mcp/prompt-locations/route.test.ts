@@ -39,6 +39,13 @@ describe('GET /api/mcp/prompt-locations', () => {
     });
   });
 
+  it('passes every code listed on, for the tool to read and say which it left out', async () => {
+    getPromptLocationsFor.mockResolvedValue({ locations: [], prompts: [] });
+    const codes = Array.from({ length: 13 }, (_, i) => `C${i}`);
+    await get(`?brand_id=brand-1&locations=us,%20de,${codes.join(',')}`);
+    expect(getPromptLocationsFor.mock.calls[0][1].locations).toEqual(['us', ' de', ...codes]);
+  });
+
   it('refuses a window it does not offer, and answers 404 for another brand', async () => {
     expect((await get('')).status).toBe(400);
     expect((await get('?brand_id=brand-1&days=14')).status).toBe(400);

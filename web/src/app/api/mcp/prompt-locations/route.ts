@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   try {
     const view = await getPromptLocationsFor(auth, {
       brandId,
-      locations: url.searchParams.get('locations')?.split(',').slice(0, 12),
+      locations: url.searchParams.get('locations')?.split(','),
       days,
       from,
       to,

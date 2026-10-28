@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLANS, type Plan } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
+import { planFromOrgRow } from '@/lib/guards/plan-guard';
 
 /**
  * setPromptActive meters resuming like adding (00128): only active prompts
@@ -26,6 +27,10 @@ let positionsNull = false;
 let jsonRpcMissing = false;
 /** The position RPC calls, and whether any asked for a slice. */
 let positionCalls: { fn: string; ranged: boolean }[] = [];
+/** The brand's organization, as its row embeds it for the Positions column's plan. */
+const ORG_ROW = { plan: 'growth', subscription_status: 'active', plan_overrides: null };
+/** When set, reading the brand's row fails with it. */
+let brandReadError: string | null = null;
 /** When set, each heavy read takes a moment, counted while it runs. */
 let slowReads: { running: number; most: number } | null = null;
 const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
@@ -95,7 +100,10 @@ vi.mock('@/lib/supabase/server', () => ({
             table === 'prompt_sets'
               ? { data: promptSetRows, error: null }
               : { data: null, error: { message: `unexpected ${table}` } },
-          maybeSingle: async () => ({ data: { organization_id: 'org-1' }, error: null }),
+          maybeSingle: async () =>
+            brandReadError
+              ? { data: null, error: { message: brandReadError } }
+              : { data: { organization_id: 'org-1', organizations: ORG_ROW }, error: null },
           single: async () =>
             promptRow
               ? {
@@ -239,6 +247,7 @@ describe('getPromptsPageData', () => {
   beforeEach(() => {
     plan = capped(50);
     promptRow = null;
+    brandReadError = null;
     promptSetRows = [
       {
         id: 'ps1',
@@ -293,6 +302,19 @@ describe('getPromptsPageData', () => {
 
     expect(page.positions.p1.avg).toBe(2);
     expect(page.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web']);
+    // The engines the plan includes, from the organization the brand's row embeds.
+    expect(planFromOrgRow).toHaveBeenCalledWith(ORG_ROW);
+  });
+
+  it('says when the brand’s plan could not be read, the column then reading —', async () => {
+    brandReadError = 'could not embed organizations';
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1.avg).toBeNull();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('brand plan read failed'),
+      'could not embed organizations',
+    );
   });
 
   /** 1000 rows of other prompts, which come before p1's in the RPC's order. */

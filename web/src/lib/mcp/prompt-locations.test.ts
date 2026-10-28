@@ -83,11 +83,21 @@ describe('getPromptLocationsFor', () => {
       { code: 'US', name: 'United States' },
       { code: 'DE', name: 'Germany' },
     ]);
+    expect(view.ignored_locations).toEqual([]);
     expect(view.averages.visibility).toEqual([50, 20]);
-    expect(view.insights).toMatchObject({
+    // The cards in the MCP's own snake_case names.
+    expect(view.insights).toEqual({
       weakest: { region: 'DE', average: 20, untracked: 1 },
-      strongest: { region: 'US', average: 50 },
-      widest: { promptId: 'p1', low: 20, lowAt: 'DE', high: 60, highAt: 'US' },
+      strongest: { region: 'US', average: 50, tracked: 2 },
+      widest: {
+        prompt_id: 'p1',
+        text: 'Best cold brew',
+        low: 20,
+        low_at: 'DE',
+        high: 60,
+        high_at: 'US',
+      },
+      overall: 40,
     });
     expect(view.prompts).toEqual([
       {
@@ -114,16 +124,41 @@ describe('getPromptLocationsFor', () => {
     expect(view.next_offset).toBeNull();
   });
 
-  it('compares the locations asked, valid ones only, at most twelve', async () => {
-    await getPromptLocationsFor(auth, {
+  it('compares the locations asked, valid ones only, at most twelve, and says which it left out', async () => {
+    const view = (await getPromptLocationsFor(auth, {
       brandId: 'brand-1',
-      locations: ['US-CA', 'nowhere', 'US-CA', 'TR'],
+      locations: ['US-CA', 'nowhere', 'US-CA', 'TR', ...Array.from({ length: 11 }, () => 'DE')],
       days: 7,
-    });
+    }))!;
     expect(getPromptLocationMatrix.mock.calls[0][1]).toMatchObject({
       days: 7,
-      regions: ['US-CA', 'TR'],
+      regions: ['US-CA', 'TR', 'DE'],
     });
+    expect(view.ignored_locations).toEqual(['nowhere']);
+
+    const many = ['US', 'DE', 'FR', 'GB', 'IT', 'ES', 'NL', 'SE', 'PL', 'TR', 'JP', 'BR', 'CA'];
+    const capped = (await getPromptLocationsFor(auth, { brandId: 'brand-1', locations: many }))!;
+    expect(capped.locations.map((l) => l.code)).toEqual(many.slice(0, 12));
+    expect(capped.ignored_locations).toEqual(['CA']);
+  });
+
+  it('reads a location code in any case, as the prompts keep it', async () => {
+    const view = (await getPromptLocationsFor(auth, {
+      brandId: 'brand-1',
+      locations: [' us ', 'de', 'US'],
+    }))!;
+    expect(getPromptLocationMatrix.mock.calls[0][1]).toMatchObject({ regions: ['US', 'DE'] });
+    expect(view.ignored_locations).toEqual([]);
+    expect(view.prompts[0]).toMatchObject({
+      tracked_in: ['US', 'DE'],
+      cells: { US: { visibility: 60 }, DE: { visibility: 20 } },
+    });
+  });
+
+  it('falls back to the most tracked when no code given names a location, and says so', async () => {
+    const view = (await getPromptLocationsFor(auth, { brandId: 'brand-1', locations: ['xx'] }))!;
+    expect(view.locations.map((l) => l.code)).toEqual(['US', 'DE']);
+    expect(view.ignored_locations).toEqual(['xx']);
   });
 
   it('pages the prompts, every location’s averages still over all of them', async () => {
@@ -131,6 +166,19 @@ describe('getPromptLocationsFor', () => {
     expect(view.prompts.map((p) => p.id)).toEqual(['p1']);
     expect(view.next_offset).toBe(1);
     expect(view.averages.visibility).toEqual([50, 20]);
+  });
+
+  it('gives at most 100 prompts a page', async () => {
+    promptRows = Array.from({ length: 150 }, (_, i) => ({
+      id: `p${i}`,
+      text: `Prompt ${i}`,
+      regions: ['US'],
+      is_active: true,
+    }));
+    const view = (await getPromptLocationsFor(auth, { brandId: 'brand-1', limit: 500 }))!;
+    expect(view.prompts).toHaveLength(100);
+    expect(view.next_offset).toBe(100);
+    expect(view.total).toBe(150);
   });
 
   it("answers null for another organization's brand, without reading it", async () => {

@@ -10,6 +10,7 @@ import {
   matrixLocations,
   metricValue,
   rowGap,
+  type MatrixInsights,
   type PromptLocationCell,
 } from '@/lib/prompt-location-matrix';
 import { isValidLocation, regionLabel } from '@/lib/region';
@@ -34,14 +35,35 @@ export interface McpLocationCell {
   runs: number;
 }
 
+/** The view's cards, on visibility. */
+export interface McpLocationInsights {
+  /** The location with the lowest average, and how many prompts don't track it. */
+  weakest: { region: string; average: number; untracked: number } | null;
+  /** The location with the highest average, and how many prompts track it. */
+  strongest: { region: string; average: number; tracked: number } | null;
+  /** The prompt whose visibility differs most between locations. */
+  widest: {
+    prompt_id: string;
+    text: string;
+    low: number;
+    low_at: string;
+    high: number;
+    high_at: string;
+  } | null;
+  /** Visibility across every location. */
+  overall: number | null;
+}
+
 export interface McpPromptLocations {
   window: { from: string; to: string | null };
   /** The locations compared: country, US state or city codes, with their names. */
   locations: { code: string; name: string }[];
+  /** The `locations` given that aren't compared: no location's code, or past the twelfth. */
+  ignored_locations: string[];
   /** Each metric's average per location, over the prompts with a value there (in `locations` order). */
   averages: Record<string, (number | null)[]>;
   /** The weakest and strongest location by visibility, and the prompt that differs most between them. */
-  insights: ReturnType<typeof matrixInsights>;
+  insights: McpLocationInsights;
   /** The brand's tracked prompts. */
   total: number;
   prompts: {
@@ -61,7 +83,24 @@ export interface McpPromptLocations {
 
 const PROMPTS_DEFAULT = 50;
 const PROMPT_PAGE = 1000;
-const PROMPTS_MAX = 200;
+const PROMPTS_MAX = 100;
+
+function mcpInsights(insights: MatrixInsights): McpLocationInsights {
+  const { widest } = insights;
+  return {
+    weakest: insights.weakest,
+    strongest: insights.strongest,
+    widest: widest && {
+      prompt_id: widest.promptId,
+      text: widest.text,
+      low: widest.low,
+      low_at: widest.lowAt,
+      high: widest.high,
+      high_at: widest.highAt,
+    },
+    overall: insights.overall,
+  };
+}
 
 function mcpCell(cell: PromptLocationCell): McpLocationCell {
   return {
@@ -75,8 +114,8 @@ function mcpCell(cell: PromptLocationCell): McpLocationCell {
 
 /**
  * The brand's prompts across its locations over `days` (or `from`–`to`):
- * the locations given (at most 12), else those its prompts track, the most
- * tracked first. Null for a brand outside the key's organization.
+ * the locations given (at most 12, any case), else those its prompts track,
+ * the most tracked first. Null for a brand outside the key's organization.
  */
 export async function getPromptLocationsFor(
   auth: McpAuthContext,
@@ -113,10 +152,11 @@ export async function getPromptLocationsFor(
     isActive: p.is_active !== false,
   }));
 
-  const asked = (params.locations ?? []).filter(isValidLocation);
-  const regions = asked.length
-    ? [...new Set(asked)].slice(0, MATRIX_REGIONS)
-    : matrixLocations(prompts);
+  // Codes as the prompts keep them: `de` or ` US-CA` name DE and US-CA.
+  const given = (params.locations ?? []).map((code) => code.trim()).filter(Boolean);
+  const valid = [...new Set(given.map((code) => code.toUpperCase()).filter(isValidLocation))];
+  const regions = valid.length ? valid.slice(0, MATRIX_REGIONS) : matrixLocations(prompts);
+  const ignored = [...new Set(given.filter((code) => !regions.includes(code.toUpperCase())))];
   const days = params.days ?? 30;
   const from = params.from ?? new Date(Date.now() - days * 86_400_000).toISOString();
   const matrix = regions.length
@@ -137,10 +177,11 @@ export async function getPromptLocationsFor(
   return {
     window: { from, to: params.to ?? null },
     locations: regions.map((code) => ({ code, name: regionLabel(code) })),
+    ignored_locations: ignored,
     averages: Object.fromEntries(
       LOCATION_METRICS.map((metric) => [metric, locationAverages(matrix, ids, regions, metric)]),
     ),
-    insights: matrixInsights(matrix, prompts, regions),
+    insights: mcpInsights(matrixInsights(matrix, prompts, regions)),
     total: prompts.length,
     prompts: page.map((p) => {
       const cells = matrix[p.id] ?? {};
