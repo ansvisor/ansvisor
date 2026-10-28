@@ -213,6 +213,7 @@ import {
   type PromptColumnId,
 } from '@/lib/prompt-table-columns';
 import {
+  awaitsFirstAnswers,
   matrixLocations,
   metricValue,
   type PromptLocationMatrix,
@@ -3952,6 +3953,14 @@ function AllPromptsTab({
                 const vol = volumeByPromptId.get(p.id);
                 const vis = visibility[p.id];
                 const status = promptStatus(p, now);
+                // Its empty location columns wait for their first answers only
+                // while it's new, or answered elsewhere (a location just added).
+                const awaiting = awaitsFirstAnswers(
+                  p,
+                  Boolean(vis) ||
+                    Object.values(locationMatrix?.[p.id] ?? {}).some((c) => c.runs > 0),
+                  now,
+                );
                 // No answers in the window yet: when they come, or why not, said
                 // once in the first answer column shown, the others a dash.
                 const pendingAt = pendingColumn(p, {
@@ -3965,6 +3974,7 @@ function AllPromptsTab({
                       prompt={p}
                       region={regionFilter || undefined}
                       window={positionsWindow}
+                      awaiting
                     />
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
@@ -4188,6 +4198,7 @@ function AllPromptsTab({
                               prompt={p}
                               region={loc.region}
                               window={positionsWindow}
+                              awaiting={awaiting}
                               className="font-normal"
                             />
                           ) : value === null ? (

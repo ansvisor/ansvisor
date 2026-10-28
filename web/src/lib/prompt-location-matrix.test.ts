@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { endOfDayIn } from '@/lib/time-zone';
 import {
+  awaitsFirstAnswers,
   reachesToday,
   cellShade,
   locationAverages,
@@ -120,5 +121,20 @@ describe('reachesToday', () => {
     expect(
       reachesToday({ to: endOfDayIn('2026-10-28', 'America/New_York') }, late, 'America/New_York'),
     ).toBe(true);
+  });
+});
+
+describe('awaitsFirstAnswers', () => {
+  const now = Date.parse('2026-10-28T12:00:00Z');
+  it('waits for a prompt added within two days, answered nowhere yet', () => {
+    expect(awaitsFirstAnswers({ createdAt: '2026-10-28T09:00:00Z' }, false, now)).toBe(true);
+    expect(awaitsFirstAnswers({ createdAt: '2026-10-26T12:00:01Z' }, false, now)).toBe(true);
+  });
+  it("doesn't for an older one answered nowhere in the window: a dash", () => {
+    expect(awaitsFirstAnswers({ createdAt: '2026-10-26T12:00:00Z' }, false, now)).toBe(false);
+    expect(awaitsFirstAnswers({ createdAt: '2026-09-01T00:00:00Z' }, false, now)).toBe(false);
+  });
+  it('waits at a place with no answers when the prompt has some elsewhere (just added)', () => {
+    expect(awaitsFirstAnswers({ createdAt: '2026-09-01T00:00:00Z' }, true, now)).toBe(true);
   });
 });
