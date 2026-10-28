@@ -6,6 +6,7 @@
  */
 
 import { onDemandMax, type ContentUsage } from '@/lib/content-usage';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import type { PromptSuggestionOutcome } from '@/lib/content-job';
 
 /** Every row on the page is selected (and there is at least one). */
@@ -30,13 +31,16 @@ export const FALLBACK_PER_REQUEST = 3;
  * when it can. It may ask for what one "+ New" request may (CONTENT-003):
  * Starter 3, Growth 5, never more than is left of the month. Nothing is asked
  * for while the quota is loading; if it can't be read, the smallest cap holds
- * and the server still keeps the month's limit.
+ * and the server still keeps the month's limit. Without an active plan
+ * (`noPlan`, 0 of 0, or a read-only workspace: `isLocked`) nothing blocks:
+ * the click opens the plan dialog.
  */
 export function bulkSuggestBlock(
   count: number,
   usage: ContentUsage | null,
-  { unavailable = false }: { unavailable?: boolean } = {},
+  { unavailable = false, isLocked = false }: { unavailable?: boolean; isLocked?: boolean } = {},
 ): string | null {
+  if (isNoPlan(usage, isLocked)) return null;
   if (!usage && !unavailable) return 'Checking your content quota…';
   const max = usage ? onDemandMax(usage) : FALLBACK_PER_REQUEST;
   if (max === 0) return 'Monthly limit reached';

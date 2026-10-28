@@ -14,6 +14,7 @@ import type {
   ShoppingProductCheck,
 } from '@/lib/content/shopping-check';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
+import { assertWritable } from '@/lib/subscription-guard';
 import {
   NO_PATH_REASONS,
   bestInStock,
@@ -81,6 +82,7 @@ export async function saveDraftShoppingPath(
   read: { builtAt: string; savedAt?: string | null },
   choices: ShoppingChoices,
 ): Promise<{ path: ShoppingPath } | { error: 'changed' }> {
+  await assertWritable();
   const at = readAt.safeParse(read);
   const chosen = shoppingChoicesSchema.safeParse(choices);
   if (!guid.safeParse(draftId).success || !at.success || !chosen.success) {

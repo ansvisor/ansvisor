@@ -48,6 +48,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   Dialog,
   DialogContent,
@@ -180,6 +181,10 @@ function GeneralTab({
 }) {
   const t = useTranslations('brands');
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): the settings show; Save opens
+  // the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [name, setName] = useState(brand.name);
   const [logoUrl, setLogoUrl] = useState(brand.logoUrl ?? '');
   const [industry, setIndustry] = useState(brand.industry ?? '');
@@ -371,7 +376,11 @@ function GeneralTab({
             </div>
           )}
 
-          <Button onClick={handleSave} disabled={isSaving || !name.trim()} className="gap-2">
+          <Button
+            onClick={guard(handleSave, { action: tActions('saveBrandSettings') })}
+            disabled={isSaving || !name.trim()}
+            className="gap-2"
+          >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {t('settings.saveChanges')}
           </Button>
@@ -402,6 +411,9 @@ function ShoppingModeCard({
   const tracked = canUse('shopping_analytics');
   const [enabled, setEnabled] = useState(brand.shoppingModeEnabled);
   const [saving, setSaving] = useState(false);
+  // A read-only workspace (plan not active): the box opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   async function handleToggle(next: boolean) {
     if (!canManage) return;
@@ -439,7 +451,9 @@ function ShoppingModeCard({
             id="shopping-mode"
             checked={enabled}
             disabled={saving || !canManage}
-            onCheckedChange={(v) => handleToggle(v === true)}
+            onCheckedChange={guard((v: boolean) => void handleToggle(v === true), {
+              action: tActions('changeShoppingMode'),
+            })}
           />
           <div className="space-y-1">
             <Label htmlFor="shopping-mode" className="font-medium">
@@ -480,6 +494,11 @@ function PauseBrandCard({
   const { canAdmin } = useUserRole();
   const paused = !brand.isActive;
   const [saving, setSaving] = useState(false);
+  // A read-only workspace (plan not active): Pause and Resume open the
+  // upgrade dialog instead. Nothing runs for it meanwhile: there is no cost
+  // for Pause to stop.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   async function handleToggle(nextActive: boolean) {
     if (!canAdmin) return;
@@ -525,7 +544,9 @@ function PauseBrandCard({
           <Button
             variant={paused ? 'default' : 'outline'}
             disabled={saving || !canAdmin}
-            onClick={() => handleToggle(paused)}
+            onClick={guard(() => void handleToggle(paused), {
+              action: tActions(paused ? 'resumeBrands' : 'pauseBrands'),
+            })}
             className="gap-2"
           >
             {saving ? (
@@ -557,6 +578,9 @@ function DomainsTab({
 }) {
   const t = useTranslations('brands');
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): Save opens the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [domains, setDomains] = useState<BrandDomain[]>(brand.domains);
   const [isSaving, setIsSaving] = useState(false);
   const [newDomain, setNewDomain] = useState('');
@@ -699,7 +723,7 @@ function DomainsTab({
           </div>
 
           <Button
-            onClick={handleSave}
+            onClick={guard(handleSave, { action: tActions('saveDomains') })}
             disabled={isSaving || domains.length === 0}
             className="gap-2"
           >
@@ -720,6 +744,10 @@ function DomainsTab({
 function CompetitorsTab({ brandId }: { brandId: string }) {
   const t = useTranslations('brands');
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): Add and Remove (before its
+  // confirm) open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -770,6 +798,7 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
       setIsAdding(false);
     }
   };
+  const submitAdd = guard(handleAdd, { action: tActions('addCompetitors') });
 
   const handleDelete = async (id: string) => {
     try {
@@ -831,7 +860,9 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                          onClick={() => setDeletingId(c.id)}
+                          onClick={guard(() => setDeletingId(c.id), {
+                            action: tActions('deleteCompetitors'),
+                          })}
                           aria-label="Delete competitor"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -876,19 +907,19 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
                     placeholder="Competitor name"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
+                    onKeyDown={(e) => e.key === 'Enter' && newName.trim() && submitAdd()}
                     className="flex-1"
                   />
                   <Input
                     placeholder="domain.com"
                     value={newDomain}
                     onChange={(e) => setNewDomain(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && newName.trim() && handleAdd()}
+                    onKeyDown={(e) => e.key === 'Enter' && newName.trim() && submitAdd()}
                     className="w-40"
                   />
                   <Button
                     variant="outline"
-                    onClick={handleAdd}
+                    onClick={submitAdd}
                     disabled={isAdding || !newName.trim()}
                     className="gap-1.5 shrink-0"
                   >
@@ -1059,6 +1090,8 @@ function DangerTab({
   const { canAdmin } = useUserRole();
   const [confirmValue, setConfirmValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  // Delete stays open on a read-only workspace (plan not active): it only
+  // removes what the person gave us (Ansvisor, 2026-10-27).
 
   const canDelete = confirmValue === brand.name;
 
