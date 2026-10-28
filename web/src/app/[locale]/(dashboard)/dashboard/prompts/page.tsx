@@ -197,7 +197,7 @@ import {
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
 import { ColumnsPanel } from './_columns-panel';
-import { LocationMatrix, loadLocationMatrix } from './_location-matrix';
+import { LocationMatrix, clearLocationMatrixCache, loadLocationMatrix } from './_location-matrix';
 import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
 import {
   effectiveView,
@@ -1557,8 +1557,10 @@ export default function PromptsPage() {
   }, [loadData, promptDataWanted]);
 
   // After prompts are added, paused, resumed, deleted or retargeted: reload
-  // the table and the usage cards together.
+  // the table and the usage cards together, and read the locations' figures
+  // (PROMPT-015b) anew.
   const reloadAfterChange = useCallback(() => {
+    clearLocationMatrixCache();
     setUsageVersion((v) => v + 1);
     return loadData();
   }, [loadData]);
