@@ -370,3 +370,64 @@ describe('sending a task (AC-004)', () => {
     expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Edit']);
   });
 });
+
+/** What Analyze competitor content found (learning C1), shown on the task. */
+describe('TaskDetailView with competitor findings', () => {
+  const findings = {
+    competitorPages: [
+      {
+        url: 'https://rival.com/kettles/',
+        domain: 'rival.com',
+        cited: 4,
+        words: 1200,
+        passes: ['faq-schema'],
+      },
+      {
+        url: 'https://blog.example/best',
+        domain: 'blog.example',
+        cited: 1,
+        words: null,
+        passes: [],
+      },
+    ],
+    yourPage: {
+      url: 'https://acme.com/kettles',
+      domain: 'acme.com',
+      cited: 1,
+      words: 1,
+      passes: [],
+    },
+    gaps: [{ key: 'faq-schema', label: 'FAQ schema', competitors: 2, of: 2 }],
+    capped: 1,
+    unreadable: 0,
+    reason: null,
+  };
+
+  it('says which checks their pages pass and yours does not, and the pages read', () => {
+    render(
+      <TaskDetailView details={null} disabled={false} onEdit={() => {}} competitor={findings} />,
+    );
+    const text = container.textContent!;
+    expect(text).toContain('What the pages AI cites instead of yours have');
+    expect(text).toContain('FAQ schema — on 2 of 2 of their pages, not on yours');
+    expect(text).toContain('The 2 pages read');
+    expect(text).toContain('rival.com/kettles1,200 words · cited in 4 answers');
+    expect(text).toContain('acme.com/kettles1 word · cited in 1 answer');
+    expect(text).toContain("1 more page waits for tomorrow's reads.");
+    expect(container.querySelector('a[href="https://rival.com/kettles/"]')).not.toBeNull();
+  });
+
+  it('says why nothing was compared', () => {
+    render(
+      <TaskDetailView
+        details={null}
+        disabled={false}
+        onEdit={() => {}}
+        competitor={{ ...findings, competitorPages: [], gaps: [], capped: 0, reason: 'none_cited' }}
+      />,
+    );
+    expect(container.textContent).toContain(
+      "No page was cited for these prompts in the last two weeks where your brand isn't named.",
+    );
+  });
+});

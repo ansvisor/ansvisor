@@ -19,6 +19,7 @@ import {
   withEntityCounts,
   type EntityCountRow,
 } from '@/lib/action-center/entity-counts';
+import { COMPETITOR_TASK_KEY, parseCompetitorFindings } from './competitor-findings';
 
 /**
  * Action Center rows → the shapes the dashboard reads, shared by its server
@@ -49,7 +50,7 @@ export const ACTION_COLUMNS =
   'id, action_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at';
 
 export const TASK_COLUMNS =
-  'id, position, task_key, title, status, skip_reason, title_params, depends_on, details';
+  'id, position, task_key, title, status, skip_reason, title_params, depends_on, details, output';
 
 export const EVENT_COLUMNS = 'id, event, data, actor_id, created_at';
 
@@ -104,6 +105,9 @@ export function taskFromRow(task: Record<string, unknown>): ActionTask {
     dependsOn: (task.depends_on ?? []) as string[],
     skipReason: (task.skip_reason as string | null) ?? null,
     details: parseTaskDetails(task.details),
+    // What Analyze competitor content found, once it ran (learning C1).
+    competitorFindings:
+      task.task_key === COMPETITOR_TASK_KEY ? parseCompetitorFindings(task.output) : null,
   };
 }
 
