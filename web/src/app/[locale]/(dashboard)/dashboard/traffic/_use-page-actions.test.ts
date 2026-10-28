@@ -13,6 +13,13 @@ describe('auditBlock', () => {
     expect(auditBlock({ used: 900, limit: -1, remaining: -1 }, 50)).toBeNull();
   });
 
+  it('never blocks without an active plan: 0 of 0 is no plan, not spent', () => {
+    expect(auditBlock({ used: 40, limit: 0, remaining: 0, noPlan: true }, 3)).toBeNull();
+    // A read-only workspace reads the same, marked or not.
+    expect(auditBlock({ used: 40, limit: 0, remaining: 0 }, 3, true)).toBeNull();
+    expect(auditBlock({ used: 40, limit: 0, remaining: 0 }, 3)).toEqual({ reason: 'noneLeft' });
+  });
+
   it('blocks when the month is spent, or fewer are left than pages', () => {
     expect(auditBlock({ used: 100, limit: 100, remaining: 0 }, 1)).toEqual({ reason: 'noneLeft' });
     // Running audits and the auto-audit share can take it below zero.

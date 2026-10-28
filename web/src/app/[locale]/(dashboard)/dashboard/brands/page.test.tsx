@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const profile = vi.hoisted(() => ({ organization_id: 'org-1', role: 'admin' }));
 vi.mock('@/lib/supabase/server', () => ({
@@ -21,8 +22,10 @@ vi.mock('@/config/plans', () => ({
   isCloud: () => cloud.on,
 }));
 vi.mock('@/i18n/navigation', () => ({
-  Link: ({ href, children }: { href: string; children?: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({ href, children, ...rest }: { href: string; children?: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 // The list and the menu beside the button have their own tests.
@@ -38,13 +41,18 @@ import BrandsPage from './page';
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
-async function render() {
+async function render(isLocked = false) {
   const ui = await BrandsPage();
   await act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        {ui}
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          {ui}
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     ),
   );
@@ -73,6 +81,36 @@ describe('the brands page', () => {
     expect(links()).toEqual(['/dashboard/brands/new']);
   });
 
+  it('adds no brand on a read-only workspace: Add Brand opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    await render(true);
+    const add = container.querySelector<HTMLAnchorElement>('a[href="/dashboard/brands/new"]')!;
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    await act(async () => add.dispatchEvent(click));
+    expect(click.defaultPrevented).toBe(true);
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding brands needs a plan');
+  });
+
+  it('follows Add Brand on an active plan', async () => {
+    openUpgrade.mockReset();
+    await render();
+    const add = container.querySelector<HTMLAnchorElement>('a[href="/dashboard/brands/new"]')!;
+    // jsdom can't follow a link: whether the page let the click through is
+    // read once it has bubbled past React's handler, then the link is stopped.
+    let prevented: boolean | undefined;
+    const seen = (e: Event) => {
+      prevented = e.defaultPrevented;
+      e.preventDefault();
+    };
+    document.addEventListener('click', seen);
+    await act(async () =>
+      add.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })),
+    );
+    document.removeEventListener('click', seen);
+    expect(prevented).toBe(false);
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
   it.each(['analyst', 'agency_partner'])('offers no Add Brand to an %s', async (role) => {
     profile.role = role;
     await render();
@@ -91,5 +129,19 @@ describe('the brands page', () => {
     profile.role = 'analyst';
     await render();
     expect(links()).toEqual([]);
+  });
+
+  it("opens the upgrade dialog from Add Brand at the plan's limit on a read-only workspace", async () => {
+    openUpgrade.mockReset();
+    brands.list = [{ id: 'b1' }, { id: 'b2' }];
+    cloud.on = true;
+    await render(true);
+    const add = container.querySelector<HTMLAnchorElement>(
+      'a[href="/dashboard/settings?tab=billing"]',
+    )!;
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    await act(async () => add.dispatchEvent(click));
+    expect(click.defaultPrevented).toBe(true);
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding brands needs a plan');
   });
 });

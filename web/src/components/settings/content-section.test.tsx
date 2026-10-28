@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const getContentSettings = vi.fn();
 const setBrandQualityHandoff = vi.fn();
@@ -22,12 +23,17 @@ const { ContentSection } = await import('./content-section');
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
-async function render() {
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ContentSection />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ContentSection />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -41,6 +47,7 @@ beforeEach(() => {
   });
   setBrandQualityHandoff.mockReset().mockResolvedValue(undefined);
   toast.error.mockReset();
+  openUpgrade.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
 });
@@ -57,6 +64,14 @@ describe('ContentSection', () => {
     expect(box().getAttribute('aria-checked')).toBe('true');
     // Saved: not read again.
     expect(getContentSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves nothing on a read-only workspace: the box opens the upgrade dialog', async () => {
+    await render(true);
+    await act(async () => box().click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Changing content settings needs a plan');
+    expect(setBrandQualityHandoff).not.toHaveBeenCalled();
+    expect(box().getAttribute('aria-checked')).toBe('false');
   });
 
   it('puts it back when the save fails', async () => {
