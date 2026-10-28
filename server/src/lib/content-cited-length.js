@@ -3,7 +3,7 @@ import { linkKey } from './content-links.js';
 import { logger } from './logger.js';
 import { MAX_CONTENT_LENGTH, extractPageContent, textLength } from './page-content.js';
 import { fetchPage } from './safe-fetch.js';
-import { FEATURE_CHECKS, pageFeatures } from './action-center/competitor-pages.js';
+import { FEATURE_CHECKS, pageFeatures } from './action-center/page-features.js';
 import { describeSignal } from './audit/rubric.js';
 
 /**
