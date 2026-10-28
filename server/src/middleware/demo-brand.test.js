@@ -22,6 +22,7 @@ vi.mock('../config/supabase.js', () => ({
         },
         in: (column, ids) => {
           read.ids = ids;
+          read.wanted = new Set(ids);
           return chain;
         },
         then: (resolve, reject) =>
@@ -29,7 +30,7 @@ vi.mock('../config/supabase.js', () => ({
             failWith
               ? { data: null, error: { message: failWith } }
               : {
-                  data: (rows[table] ?? []).filter((row) => read.ids.includes(row.id)),
+                  data: (rows[table] ?? []).filter((row) => read.wanted.has(row.id)),
                   error: null,
                 },
           ).then(resolve, reject),
