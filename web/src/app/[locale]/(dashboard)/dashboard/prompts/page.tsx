@@ -199,7 +199,12 @@ import {
 import { BulkActionBar } from './_bulk-action-bar';
 import { ColumnsPanel } from './_columns-panel';
 import { PromptLimitActions } from './_prompt-limit-actions';
-import { LocationMatrix, clearLocationMatrixCache, loadLocationMatrix } from './_location-matrix';
+import {
+  LocationMatrix,
+  LocationPending,
+  clearLocationMatrixCache,
+  loadLocationMatrix,
+} from './_location-matrix';
 import { AddLocationsDialog, type AddLocationsPreset } from './_add-locations-dialog';
 import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
 import {
@@ -209,6 +214,7 @@ import {
   type PromptColumnId,
 } from '@/lib/prompt-table-columns';
 import {
+  awaitsFirstAnswers,
   matrixLocations,
   metricValue,
   type PromptLocationMatrix,
@@ -3997,6 +4003,14 @@ function AllPromptsTab({
                 const vol = volumeByPromptId.get(p.id);
                 const vis = visibility[p.id];
                 const status = promptStatus(p, now);
+                // Its empty location columns wait for their first answers only
+                // while it's new, or answered elsewhere (a location just added).
+                const awaiting = awaitsFirstAnswers(
+                  p,
+                  Boolean(vis) ||
+                    Object.values(locationMatrix?.[p.id] ?? {}).some((c) => c.runs > 0),
+                  now,
+                );
                 const cells: Record<PromptColumnId, React.ReactNode> = {
                   topic: (
                     <TableCell key="topic">
@@ -4211,13 +4225,27 @@ function AllPromptsTab({
                     {columns.map((id) => {
                       const loc = parseLocationColumn(id);
                       if (!loc) return cells[id as PromptColumnId];
-                      const value = metricValue(locationMatrix?.[p.id]?.[loc.region], loc.metric);
+                      const located = locationMatrix?.[p.id]?.[loc.region];
+                      const value = metricValue(located, loc.metric);
+                      // Tracked there, no answers yet: when they'll come, or why not.
+                      const pending =
+                        locationMatrix !== null &&
+                        p.regions.includes(loc.region) &&
+                        (!located || located.runs === 0);
                       return (
                         <TableCell
                           key={id}
                           className="bg-muted/20 text-right text-sm font-semibold tabular-nums"
                         >
-                          {value === null ? (
+                          {pending ? (
+                            <LocationPending
+                              prompt={p}
+                              region={loc.region}
+                              window={positionsWindow}
+                              awaiting={awaiting}
+                              className="font-normal"
+                            />
+                          ) : value === null ? (
                             <span className="text-xs font-normal text-muted-foreground">—</span>
                           ) : loc.metric === 'position' ? (
                             `#${value.toFixed(1)}`

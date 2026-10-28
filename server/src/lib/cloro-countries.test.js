@@ -7,7 +7,7 @@ vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 import { fakeDb } from './catalog/__fixtures__/fake-db.js';
 import { logger } from './logger.js';
-import { CITY_SCRAPERS } from './locations.js';
+import { CITY_SCRAPERS, COUNTRY_ONLY_SCRAPERS } from './locations.js';
 import {
   CLORO_COUNTRY_MODELS,
   countryCodesIn,
@@ -218,6 +218,24 @@ describe('the provider models on both sides (PROMPT-015e)', () => {
     expect(labels).not.toBeNull();
     const named = [...labels[1].matchAll(/^\s*'?([a-z]+)'?:/gm)].map((m) => m[1]);
     expect(named.sort()).toEqual([...models].sort());
+  });
+
+  it("maps each engine to the provider's model as the API does", () => {
+    const mapped = web.match(/PLATFORM_MODELS[^=]*=\s*\{([^}]*)\}/);
+    expect(mapped).not.toBeNull();
+    const pairs = Object.fromEntries(
+      [...mapped[1].matchAll(/'([a-z-]+)':\s*'([a-z]+)'/g)].map((m) => [m[1], m[2]]),
+    );
+    expect(pairs).toEqual(CLORO_COUNTRY_MODELS);
+  });
+
+  it('leaves a US state to the models of the engines the API runs country-wide', () => {
+    const countryOnly = web.match(/COUNTRY_ONLY_MODELS[^=]*=\s*new Set\(\[([^\]]*)\]\)/);
+    expect(countryOnly).not.toBeNull();
+    const webModels = [...countryOnly[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(webModels.sort()).toEqual(
+      [...new Set([...COUNTRY_ONLY_SCRAPERS].map((id) => CLORO_COUNTRY_MODELS[id]))].sort(),
+    );
   });
 
   it("takes a city on the models of the API's city engines", () => {

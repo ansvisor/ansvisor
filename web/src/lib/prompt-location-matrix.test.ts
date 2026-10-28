@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { endOfDayIn } from '@/lib/time-zone';
 import {
+  awaitsFirstAnswers,
+  reachesToday,
   cellShade,
   locationAverages,
   matrixInsights,
@@ -91,5 +94,47 @@ describe('matrixInsights', () => {
       },
       overall: 43,
     });
+  });
+});
+
+describe('reachesToday', () => {
+  const now = Date.parse('2026-10-28T12:00:00Z');
+  it('holds for a preset, and a custom range that ends today', () => {
+    expect(reachesToday({}, now, 'UTC')).toBe(true);
+    expect(reachesToday({ to: '2026-10-28T23:59:59.999Z' }, now, 'UTC')).toBe(true);
+  });
+  it("doesn't for a range that ended before", () => {
+    expect(reachesToday({ to: '2026-10-20T23:59:59Z' }, now, 'UTC')).toBe(false);
+  });
+  it("doesn't for a range that ended yesterday, on the viewer's clock", () => {
+    // Yesterday's last moment in Istanbul is less than a day ago.
+    const yesterday = endOfDayIn('2026-10-27', 'Europe/Istanbul');
+    expect(reachesToday({ to: yesterday }, now, 'Europe/Istanbul')).toBe(false);
+    expect(
+      reachesToday({ to: endOfDayIn('2026-10-28', 'Europe/Istanbul') }, now, 'Europe/Istanbul'),
+    ).toBe(true);
+    // Past 21:00 UTC it is already the 29th in Istanbul, still the 28th in New York.
+    const late = Date.parse('2026-10-28T22:30:00Z');
+    expect(
+      reachesToday({ to: endOfDayIn('2026-10-28', 'Europe/Istanbul') }, late, 'Europe/Istanbul'),
+    ).toBe(false);
+    expect(
+      reachesToday({ to: endOfDayIn('2026-10-28', 'America/New_York') }, late, 'America/New_York'),
+    ).toBe(true);
+  });
+});
+
+describe('awaitsFirstAnswers', () => {
+  const now = Date.parse('2026-10-28T12:00:00Z');
+  it('waits for a prompt added within two days, answered nowhere yet', () => {
+    expect(awaitsFirstAnswers({ createdAt: '2026-10-28T09:00:00Z' }, false, now)).toBe(true);
+    expect(awaitsFirstAnswers({ createdAt: '2026-10-26T12:00:01Z' }, false, now)).toBe(true);
+  });
+  it("doesn't for an older one answered nowhere in the window: a dash", () => {
+    expect(awaitsFirstAnswers({ createdAt: '2026-10-26T12:00:00Z' }, false, now)).toBe(false);
+    expect(awaitsFirstAnswers({ createdAt: '2026-09-01T00:00:00Z' }, false, now)).toBe(false);
+  });
+  it('waits at a place with no answers when the prompt has some elsewhere (just added)', () => {
+    expect(awaitsFirstAnswers({ createdAt: '2026-09-01T00:00:00Z' }, true, now)).toBe(true);
   });
 });

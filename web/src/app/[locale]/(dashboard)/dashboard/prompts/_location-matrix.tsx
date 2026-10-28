@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Clock, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Table,
   TableBody,
@@ -12,7 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getPromptLocationMatrix } from '@/lib/actions/prompt';
+import {
+  getLocationQuota,
+  getPromptLocationMatrix,
+  type LocationQuota,
+} from '@/lib/actions/prompt';
 import { formatNumber } from '@/lib/format';
 import { createLimiter } from '@/lib/limiter';
 import { HEAT_SHADES } from '@/lib/insights-topics';
@@ -28,8 +34,12 @@ import {
   type LocationMetric,
   type PromptLocationCell,
   type PromptLocationMatrix,
+  awaitsFirstAnswers,
+  reachesToday,
 } from '@/lib/prompt-location-matrix';
 import { parseLocation, regionFlag, regionLabel } from '@/lib/region';
+import { answersFrom } from '@/lib/tracking-countries';
+import { useTrackingCountries } from '@/lib/use-tracking-countries';
 import { cn } from '@/lib/utils';
 import type { Prompt } from '@/types';
 
@@ -110,6 +120,84 @@ export function clearLocationMatrixCache() {
   regionCache.clear();
 }
 
+/**
+ * A location a prompt is tracked in that has no answers yet, and why: a
+ * paused prompt; none of its engines answering from there; or, usually,
+ * just added: the next daily run asks it, within 24 hours.
+ */
+export function LocationPending({
+  prompt,
+  region,
+  window,
+  awaiting,
+  className,
+}: {
+  prompt: Pick<Prompt, 'isActive' | 'platforms' | 'models'>;
+  region: string;
+  /** The table's window: one that ended before today just had no answers there. */
+  window: { to?: string };
+  /**
+   * Whether its first answers can still be on their way (awaitsFirstAnswers).
+   * If not, an active prompt just had none there in this window: a dash.
+   */
+  awaiting: boolean;
+  className?: string;
+}) {
+  const t = useTranslations('prompts.locations');
+  const countries = useTrackingCountries();
+  const tipId = useId();
+  const parsed = parseLocation(region);
+  const state = !reachesToday(window)
+    ? null
+    : !prompt.isActive
+      ? 'paused'
+      : parsed && !answersFrom(prompt, parsed, countries)
+        ? 'noEngine'
+        : awaiting
+          ? 'pending'
+          : null;
+  if (!state) {
+    return (
+      <span className={cn('text-xs text-muted-foreground', className)} title={t('noAnswers')}>
+        —
+      </span>
+    );
+  }
+  const tip = t(`${state}Tip`, { location: regionLabel(region) });
+  // Why, on hover and on keyboard focus; and for a screen reader, as the
+  // label's description.
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          delay={300}
+          closeDelay={0}
+          render={
+            <button
+              type="button"
+              aria-describedby={tipId}
+              className={cn(
+                'inline-flex cursor-help items-center justify-center gap-1 rounded-md text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                state === 'noEngine'
+                  ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-muted-foreground',
+                className,
+              )}
+            />
+          }
+        >
+          {state === 'pending' && <Clock className="h-3 w-3" aria-hidden />}
+          {t(state)}
+        </TooltipTrigger>
+        <TooltipContent className="max-w-72">{tip}</TooltipContent>
+      </Tooltip>
+      <span id={tipId} className="sr-only">
+        {tip}
+      </span>
+    </>
+  );
+}
+
 /** A location's kind, for its column's second line. */
 function locationKind(code: string): 'country' | 'state' | 'city' {
   const parsed = parseLocation(code);
@@ -151,6 +239,24 @@ export function LocationMatrix({
   const allRegions = matrixLocations(rows);
   const regions = allRegions.slice(0, MATRIX_REGIONS);
   const key = matrixKey(brandId, window, regions);
+  // The plan's prompt locations, so + Track says when they're used up.
+  const [quota, setQuota] = useState<LocationQuota | null>(null);
+  // Read again when the brand's tracked locations change, not on every render.
+  const canTrack = Boolean(onTrack);
+  const tracked = rows.reduce((n, p) => n + (p.isActive ? p.regions.length : 0), 0);
+  useEffect(() => {
+    if (!canTrack) return;
+    let cancelled = false;
+    getLocationQuota(brandId)
+      .then((q) => {
+        if (!cancelled) setQuota(q);
+      })
+      .catch((err) => console.error('Failed to read the plan usage:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, canTrack, tracked]);
+  const limitReached = quota !== null && quota.maxPrompts !== -1 && quota.used >= quota.maxPrompts;
   const [read, setRead] = useState<{ key: string; matrix: PromptLocationMatrix | 'failed' } | null>(
     null,
   );
@@ -337,6 +443,12 @@ export function LocationMatrix({
           {pageRows.map((p) => {
             const values = valuesOf(p);
             const gap = rowGap(values);
+            // Its empty locations wait for their first answers only while it's
+            // new, or answered elsewhere (a location just added).
+            const awaiting = awaitsFirstAnswers(
+              p,
+              Object.values(matrix[p.id] ?? {}).some((c) => c.runs > 0),
+            );
             return (
               <TableRow key={p.id}>
                 <TableCell className="max-w-[320px] pl-6 text-sm font-medium">
@@ -356,7 +468,24 @@ export function LocationMatrix({
                   if (!p.regions.includes(r)) {
                     return (
                       <TableCell key={r} className="px-1 py-1.5">
-                        {onTrack ? (
+                        {onTrack && limitReached ? (
+                          // The plan's locations are used up: the dialog says how to get more.
+                          <button
+                            type="button"
+                            aria-label={t('limitLabel', {
+                              prompt: p.text,
+                              location: where,
+                              used: quota!.used,
+                              max: quota!.maxPrompts,
+                            })}
+                            title={t('limitTip', { used: quota!.used, max: quota!.maxPrompts })}
+                            onClick={() => onTrack(p, r)}
+                            className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed py-1.5 text-[11px] text-amber-700 transition-colors hover:border-amber-500/60 dark:text-amber-400"
+                          >
+                            <Lock className="h-3 w-3" aria-hidden />
+                            {t('limit')}
+                          </button>
+                        ) : onTrack ? (
                           <button
                             type="button"
                             aria-label={t('trackLabel', { prompt: p.text, location: where })}
@@ -373,13 +502,14 @@ export function LocationMatrix({
                   }
                   if (!cell || cell.runs === 0) {
                     return (
-                      <TableCell key={r} className="px-1 py-1.5">
-                        <span
-                          className="block text-center text-xs text-muted-foreground"
-                          title={t('noAnswers')}
-                        >
-                          —
-                        </span>
+                      <TableCell key={r} className="px-1 py-1.5 text-center">
+                        <LocationPending
+                          prompt={p}
+                          region={r}
+                          window={window}
+                          awaiting={awaiting}
+                          className="w-full py-1.5"
+                        />
                       </TableCell>
                     );
                   }

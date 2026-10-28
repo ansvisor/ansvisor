@@ -1,4 +1,5 @@
 import { heatShade } from '@/lib/insights-topics';
+import { dayIn, startOfDayIn, viewerTimeZone } from '@/lib/time-zone';
 
 /**
  * The Tracked Prompts Locations view (PROMPT-015b): each tracked prompt in
@@ -34,6 +35,43 @@ export const MATRIX_REGIONS = 12;
 
 /** The matrix's database reads running at once, at most: each is a heavy aggregate. */
 export const MATRIX_READS_AT_ONCE = 3;
+
+/**
+ * Whether a window runs up to today on the viewer's clock, so a location
+ * with no answers in it can still get them from the next daily run. A
+ * custom range that ended earlier, yesterday included, can't.
+ */
+export function reachesToday(
+  window: { to?: string },
+  now = Date.now(),
+  timeZone = viewerTimeZone(),
+): boolean {
+  if (!window.to) return true;
+  return Date.parse(window.to) >= Date.parse(startOfDayIn(dayIn(now, timeZone), timeZone));
+}
+
+/**
+ * How long after it's added a prompt can still be waiting for its first
+ * answers: the next daily run comes within a day, and a second day spares
+ * a slow run.
+ */
+export const FIRST_ANSWERS_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Whether a place an active prompt is tracked in, with no answers there in
+ * a window reaching today, can still get its first ones from the next
+ * daily run ("Within 24h"): the prompt was added within FIRST_ANSWERS_MS,
+ * or it has answers elsewhere in the window, so the place was most likely
+ * just added. An older prompt with answers nowhere just had none in this
+ * window, a range without a run or a failed one: a dash.
+ */
+export function awaitsFirstAnswers(
+  prompt: { createdAt: string },
+  answeredElsewhere: boolean,
+  now = Date.now(),
+): boolean {
+  return answeredElsewhere || now - Date.parse(prompt.createdAt) < FIRST_ANSWERS_MS;
+}
 
 /** A cell's value for the metric; null without answers there (or, for position, never named). */
 export function metricValue(

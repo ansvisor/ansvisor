@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { X } from 'lucide-react';
 
 import { CITIES } from '@/config/cities';
@@ -13,14 +13,8 @@ import {
   parseLocation,
   regionLabel,
 } from '@/lib/region';
-import { getTrackingCountries } from '@/lib/actions/tracking-countries';
-import {
-  CITY_MODELS,
-  ENGINE_LABELS,
-  countryName,
-  missingEngines,
-  type TrackingCountry,
-} from '@/lib/tracking-countries';
+import { useTrackingCountries } from '@/lib/use-tracking-countries';
+import { CITY_MODELS, ENGINE_LABELS, countryName, missingEngines } from '@/lib/tracking-countries';
 import { Badge } from '@/components/ui/badge';
 import {
   Combobox,
@@ -62,28 +56,6 @@ export interface LocationPickerProps {
    * bulk dialog) has no such floor.
    */
   allowEmpty?: boolean;
-}
-
-/** The engines' countries, read once per page (PROMPT-015e); empty when none were read. */
-let countriesRead: Promise<TrackingCountry[]> | null = null;
-
-function useTrackingCountries(): TrackingCountry[] | null {
-  const [countries, setCountries] = useState<TrackingCountry[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    countriesRead ??= getTrackingCountries().catch((err) => {
-      console.error('Failed to read the tracking countries:', err);
-      countriesRead = null;
-      return [];
-    });
-    countriesRead.then((list) => {
-      if (!cancelled) setCountries(list);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return countries;
 }
 
 /** The brand regions first, as people look for them, then every other country by name. */

@@ -7467,7 +7467,16 @@
       "trackLabel": "Track “{prompt}” in {location}",
       "open": "{prompt} in {location}: open its positions",
       "notNamed": "Not named",
-      "noAnswers": "No answers in this location yet",
+      "noAnswers": "No answers here in this period",
+      "pending": "Within 24h",
+      "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
+      "paused": "Paused",
+      "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
+      "noEngine": "No engine here",
+      "noEngineTip": "None of this prompt's engines answers from {location}, so nothing is asked there. Add an engine that does, or remove the location.",
+      "limit": "Limit reached",
+      "limitTip": "Your plan's prompt locations are used up ({used} of {max}). Open to see how to track here.",
+      "limitLabel": "Limit reached: “{prompt}” in {location}. Your plan's prompt locations are used up ({used} of {max}); open to see how to track here.",
       "kind": {
         "country": "Country",
         "state": "US state",
@@ -7513,7 +7522,7 @@
       "noPrompts": "Choose the prompts to add these locations to.",
       "cancel": "Cancel",
       "submit": "Track in {count, plural, =0 {these locations} one {# location} other {# locations}}",
-      "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations."
+      "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations. The first results come with the next daily run, within 24 hours."
     },
     "performance": {
       "label": "Performance",
