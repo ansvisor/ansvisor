@@ -17,6 +17,7 @@ import {
   catalogIndex,
   catalogIndexCache,
   gtinKey,
+  matchBrandLater,
   matchBrandShoppingCards,
   matchCard,
   matchCards,
@@ -426,6 +427,52 @@ describe('matchBrandShoppingCards', () => {
       { id: 'c2', product_id: 'p-shoe', match: 'gtin' },
       { id: 'c3', product_id: 'p-shoe', match: 'gtin' },
     ]);
+  });
+});
+
+describe('matchBrandLater', () => {
+  it('matches a brand once more after the match running, not once per sync', async () => {
+    const runs = [];
+    let finish;
+    const match = vi.fn(
+      (brandId) =>
+        new Promise((resolve) => {
+          runs.push(brandId);
+          finish = resolve;
+        }),
+    );
+    const first = matchBrandLater('b1', { match });
+    // Two syncs while the first match runs: one more match after it.
+    const second = matchBrandLater('b1', { match });
+    matchBrandLater('b1', { match });
+    expect(second).toBe(first);
+    expect(runs).toEqual(['b1']);
+    finish();
+    await vi.waitFor(() => expect(runs).toEqual(['b1', 'b1']));
+    finish();
+    await first;
+    expect(match).toHaveBeenCalledTimes(2);
+    // Done: the next sync matches again.
+    const next = matchBrandLater('b1', { match });
+    expect(next).not.toBe(first);
+    finish();
+    await next;
+    expect(match).toHaveBeenCalledTimes(3);
+  });
+
+  it('logs a failed match and never throws', async () => {
+    logger.error.mockClear();
+    const match = vi.fn(async () => {
+      throw new Error('catalog_products read: down');
+    });
+    await expect(matchBrandLater('b2', { match })).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: { name: 'Error', message: 'catalog_products read: down' }, brandId: 'b2' },
+      '[card-match] match after sync failed',
+    );
+    // A brand whose match failed is matched again on its next sync.
+    await matchBrandLater('b2', { match });
+    expect(match).toHaveBeenCalledTimes(2);
   });
 });
 

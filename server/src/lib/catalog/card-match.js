@@ -26,7 +26,8 @@ import { readAllRpcRows } from '../rpc-pages.js';
  * A key two products share names neither. Cards are matched as they're
  * written (cloro-result-handler.js), against a catalog read at most every
  * INDEX_TTL_MS, and all of a brand's recent cards again after its catalog
- * syncs (sweepShoppingCardMatches), a slice at a time.
+ * syncs, a slice at a time: by the daily sweep (sweepShoppingCardMatches),
+ * and right after a sync the person asked for (matchBrandLater).
  */
 
 /** The share of two titles' words in common (Dice) a title match needs… */
@@ -439,6 +440,47 @@ export async function matchBrandShoppingCards(
     changed += Number(data ?? 0);
   }
   return { cards: cards.length, matched, changed };
+}
+
+/** Brands being matched by matchBrandLater: brandId → { again, done }. */
+const later = new Map();
+
+/**
+ * A brand's recent cards matched to its catalog after a sync the person
+ * asked for (a store or an account connected, a sync from Settings, a file
+ * uploaded), without waiting on it: the daily sweep matches them only the
+ * next day, and until then the Shelf counts none of the brand's products on
+ * it. A brand being matched already is matched once more after, against its
+ * catalog as it is then. A failure is logged, never thrown.
+ *
+ * @returns {Promise<void>} settled once the brand is matched (the tests wait on it)
+ */
+export function matchBrandLater(brandId, { match = matchBrandShoppingCards } = {}) {
+  const running = later.get(brandId);
+  if (running) {
+    running.again = true;
+    return running.done;
+  }
+  const entry = { again: true, done: null };
+  later.set(brandId, entry);
+  entry.done = (async () => {
+    try {
+      while (entry.again) {
+        entry.again = false;
+        try {
+          await match(brandId);
+        } catch (err) {
+          logger.error(
+            { err: { name: err?.name, message: err?.message }, brandId },
+            '[card-match] match after sync failed',
+          );
+        }
+      }
+    } finally {
+      later.delete(brandId);
+    }
+  })();
+  return entry.done;
 }
 
 /** Catalogs read again within this long are matched again by the daily sweep. */

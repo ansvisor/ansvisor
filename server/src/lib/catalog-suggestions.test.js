@@ -1,13 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 // The module reaches the supabase admin client at import time, whose config
 // hard-exits when SUPABASE_* env is absent (as in CI).
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 
-import { fakeDb } from './catalog/__fixtures__/fake-db.js';
 import {
   MAX_CANDIDATES,
-  composeCatalogCandidates,
+  MIN_PRODUCTS,
+  catalogCandidates,
   getCatalogSuggestionCandidates,
   roundPrice,
 } from './catalog-suggestions.js';
@@ -24,40 +25,38 @@ describe('roundPrice', () => {
   });
 });
 
-describe('composeCatalogCandidates', () => {
-  const categories = [
-    { id: 'packs', name: 'Bags > Hiking backpacks' },
-    { id: 'socks', name: 'Socks' },
-    { id: 'mixed', name: 'Gift cards' },
-    { id: 'one', name: 'Tents' },
-  ];
-  const links = [
-    ...['p1', 'p2', 'p3', 'p4'].map((product_id) => ({ product_id, category_id: 'packs' })),
-    ...['s1', 's2'].map((product_id) => ({ product_id, category_id: 'socks' })),
-    ...['g1', 'g2'].map((product_id) => ({ product_id, category_id: 'mixed' })),
-    { product_id: 't1', category_id: 'one' },
-  ];
-  const variant = (product_id, price, extra = {}) => ({
-    product_id,
-    price,
-    sale_price: null,
-    currency: 'USD',
-    ...extra,
-  });
-  const variants = [
-    variant('p1', 60),
-    variant('p1', 80),
-    variant('p2', 119),
-    variant('p3', 140, { sale_price: 129 }),
-    variant('p4', 180),
-    // Socks without prices; gift cards in two currencies.
-    variant('s1', null),
-    variant('g1', 25),
-    variant('g2', 25, { currency: 'EUR' }),
-  ];
-
-  it('offers each category with its products and price band, the biggest first', () => {
-    expect(composeCatalogCandidates({ categories, links, variants })).toEqual([
+describe('catalogCandidates', () => {
+  it("offers the database's categories in its order, with a band where they share a currency", () => {
+    expect(
+      catalogCandidates([
+        {
+          category: 'Bags > Hiking backpacks',
+          products: 4,
+          // PostgREST sends numeric as a number, or as a string when told to.
+          price_low: '60.00',
+          price_high: 180,
+          price_p75: 140,
+          currency: 'USD',
+        },
+        // Two currencies, or none priced: no band.
+        {
+          category: 'Gift cards',
+          products: 2,
+          price_low: null,
+          price_high: null,
+          price_p75: null,
+          currency: null,
+        },
+        {
+          category: 'Socks',
+          products: 2,
+          price_low: null,
+          price_high: null,
+          price_p75: null,
+          currency: 'USD',
+        },
+      ]),
+    ).toEqual([
       {
         category: 'Bags > Hiking backpacks',
         products: 4,
@@ -86,54 +85,35 @@ describe('composeCatalogCandidates', () => {
   });
 
   it(`offers ${MAX_CANDIDATES} categories at most`, () => {
-    const many = Array.from({ length: 12 }, (_, i) => ({ id: `c${i}`, name: `Cat ${i}` }));
-    const manyLinks = many.flatMap((c) =>
-      ['a', 'b'].map((p) => ({ product_id: `${c.id}${p}`, category_id: c.id })),
-    );
-    expect(
-      composeCatalogCandidates({ categories: many, links: manyLinks, variants: [] }),
-    ).toHaveLength(MAX_CANDIDATES);
+    const rows = Array.from({ length: 12 }, (_, i) => ({
+      category: `Cat ${i}`,
+      products: 2,
+      price_low: null,
+      price_high: null,
+      price_p75: null,
+      currency: null,
+    }));
+    expect(catalogCandidates(rows)).toHaveLength(MAX_CANDIDATES);
   });
 });
 
 describe('getCatalogSuggestionCandidates', () => {
-  it("reads the brand's live catalog, and nothing for a brand without one", async () => {
-    const fake = fakeDb();
-    expect(await getCatalogSuggestionCandidates('brand-1', { db: fake.db })).toEqual([]);
-    fake.rows('catalog_categories').push({ id: 'c1', brand_id: 'brand-1', name: 'Boots' });
-    fake
-      .rows('catalog_products')
-      .push(
-        { id: 'p1', brand_id: 'brand-1', removed_at: null },
-        { id: 'p2', brand_id: 'brand-1', removed_at: null },
-        { id: 'p3', brand_id: 'brand-1', removed_at: '2026-10-01T00:00:00Z' },
-      );
-    fake.rows('catalog_product_categories').push(
-      ...['p1', 'p2', 'p3'].map((product_id) => ({
-        brand_id: 'brand-1',
-        product_id,
-        category_id: 'c1',
-      })),
-    );
-    fake.rows('catalog_variants').push(
-      {
-        id: 'v1',
-        brand_id: 'brand-1',
-        product_id: 'p1',
-        price: 99,
-        currency: 'USD',
-        removed_at: null,
-      },
-      {
-        id: 'v2',
-        brand_id: 'brand-1',
-        product_id: 'p2',
-        price: 129,
-        currency: 'USD',
-        removed_at: null,
-      },
-    );
-    expect(await getCatalogSuggestionCandidates('brand-1', { db: fake.db })).toEqual([
+  it('asks the database for the categories offered only, not the whole catalog', async () => {
+    const from = vi.fn();
+    const rpc = vi.fn(async () => ({
+      data: [
+        {
+          category: 'Boots',
+          products: 2,
+          price_low: 99,
+          price_high: 129,
+          price_p75: 129,
+          currency: 'USD',
+        },
+      ],
+      error: null,
+    }));
+    expect(await getCatalogSuggestionCandidates('brand-1', { db: { from, rpc } })).toEqual([
       {
         category: 'Boots',
         products: 2,
@@ -143,16 +123,51 @@ describe('getCatalogSuggestionCandidates', () => {
         currency: 'USD',
       },
     ]);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith('catalog_suggestion_categories', {
+      p_brand_id: 'brand-1',
+      p_limit: MAX_CANDIDATES,
+      p_min_products: MIN_PRODUCTS,
+    });
+    expect(from).not.toHaveBeenCalled();
   });
 
-  it('returns nothing when the catalog cannot be read', async () => {
-    const db = {
-      from: () => ({
-        select: () => {
-          throw new Error('down');
-        },
-      }),
+  it('returns nothing for a brand without a catalog, or when it cannot be read', async () => {
+    const empty = { rpc: async () => ({ data: [], error: null }) };
+    expect(await getCatalogSuggestionCandidates('brand-1', { db: empty })).toEqual([]);
+    const missing = {
+      rpc: async () => ({ data: null, error: { message: 'Could not find the function' } }),
     };
-    expect(await getCatalogSuggestionCandidates('brand-1', { db })).toEqual([]);
+    expect(await getCatalogSuggestionCandidates('brand-1', { db: missing })).toEqual([]);
+    const down = {
+      rpc: () => {
+        throw new Error('down');
+      },
+    };
+    expect(await getCatalogSuggestionCandidates('brand-1', { db: down })).toEqual([]);
+  });
+});
+
+describe('catalog_suggestion_categories (00371)', () => {
+  const sql = readFileSync(
+    new URL(
+      '../../../supabase/migrations/00371_catalog_suggestion_categories.sql',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  it('prices a live product by its lowest live variant, sale price first, for the service role', () => {
+    // The brand's live products, as catalog_products_brand_live_idx (00278) reads them.
+    expect(sql).toMatch(
+      /join public\.catalog_products p\s+on p\.id = pc\.product_id and p\.brand_id = p_brand_id and p\.removed_at is null/,
+    );
+    // Its live variants, as catalog_variants_brand_live_idx (00281) reads them.
+    expect(sql).toMatch(/where v\.brand_id = p_brand_id\s+and v\.removed_at is null/);
+    expect(sql).toMatch(/order by v\.product_id, coalesce\(v\.sale_price, v\.price\), v\.id/);
+    // The "under" price: three quarters of the products at or under it.
+    expect(sql).toMatch(/percentile_disc\(0\.75\) within group \(order by pr\.amount\)/);
+    expect(sql).toMatch(
+      /revoke all on function public\.catalog_suggestion_categories\(uuid, integer, integer\)\s+from public, anon, authenticated;/,
+    );
   });
 });

@@ -23,7 +23,9 @@ import { syncCatalog } from './sync.js';
  * (sign-in.js), and the issues it reports per item are kept (issues.js).
  * On the managed cloud, the plan caps the workspace's live products
  * (ECOM-019): a source keeps what's left of it, and records how many it
- * couldn't.
+ * couldn't. A capped workspace's sources write one at a time
+ * (writeWithinCap), so two read at once can't both count the room the other
+ * takes.
  */
 
 /** Feeds and stores read again after this long, by the daily run. */
@@ -36,9 +38,19 @@ export const SWEEP_DEADLINE_MS = 10 * 60 * 1000;
 const ERRORS_KEPT = 5;
 /** A store's read stops calling it after this: one slow store can't hold the daily run. */
 export const STORE_READ_MS = 10 * 60 * 1000;
+/**
+ * A capped write waits this long at most for the one before it in its
+ * workspace's line (inLine): a write stuck past it can't hold the line.
+ */
+export const LINE_WAIT_MS = 5 * 60 * 1000;
 
 /** The sources being read in this process: a source isn't read twice at once. */
 const reading = new Set();
+/**
+ * Each workspace's line of capped writes in this process (writeWithinCap):
+ * the last write's promise, settled either way, by organization id.
+ */
+const capLines = new Map();
 
 /** The catalog's `source` for a catalog source: `src_` and its id without dashes. */
 export function sourceKey(id) {
@@ -172,6 +184,88 @@ export async function productRoom(
   return { room: Math.max(0, cap - (count ?? 0)), cap };
 }
 
+/**
+ * `work` run after the work in `key`'s line before it, alone, and its result.
+ * The line is dropped once it's empty. Work waits `waitMs` at most: if the
+ * work before it is still running then, it runs anyway (and the work after
+ * it waits for it), so one stuck write doesn't hold its workspace's line.
+ */
+export function inLine(key, work, lines = capLines, waitMs = LINE_WAIT_MS) {
+  const before = lines.get(key);
+  const waited = before ? waitAtMost(before, waitMs, key) : Promise.resolve();
+  const run = waited.then(() => work());
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  lines.set(key, tail);
+  tail.then(() => {
+    if (lines.get(key) === tail) lines.delete(key);
+  });
+  return run;
+}
+
+/** `before` settled, or `ms` gone by first: said in the log, as the line goes on without it. */
+function waitAtMost(before, ms, key) {
+  let timer;
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn({ line: key, waitMs: ms }, '[catalog] capped write stopped waiting in line');
+      resolve();
+    }, ms);
+    timer.unref?.();
+  });
+  return Promise.race([before, late]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Writes a source's items into its brand's catalog within the workspace's
+ * cap (ECOM-019), and says what changed and the cap (-1 for none).
+ *
+ * On the managed cloud, a workspace's sources write one at a time: the room
+ * a source has is its workspace's cap less the live products of its other
+ * sources, and two sources counting that at once (a sync from Settings
+ * while the daily run reads another store) would each count the other's
+ * products as they were before either wrote, and keep more than the cap
+ * between them. Only the count and the writes wait in line; the read of a
+ * store or a feed, the long part, doesn't. A workspace whose plan has no cap
+ * doesn't wait at all; one that waits recounts its room when its turn comes,
+ * and waits LINE_WAIT_MS at most. The line is this process's (as `reading`
+ * is): the API and the daily run both sync here.
+ *
+ * Products past the cap are marked removed (removed_at), as if gone from
+ * the source, and come back live when there's room again. A product marked
+ * so stays marked from the day it went over: the daily purge of products
+ * removed for more than 90 days (#1632) deletes it then, with its variants,
+ * images and category links, and its cards' match is cleared (00360, on
+ * delete set null). If there's room again later, the next sync adds it back
+ * as a new row, and the daily card match finds its cards again (90 days).
+ * Telling these apart from products gone from the source would take a
+ * column of its own (a removed reason), not added here.
+ */
+async function writeWithinCap(source, items, { db, now, capOf = getCatalogProductCap }) {
+  const write = async (known) => {
+    const { room, cap } = known ?? (await productRoom(source, { db, capOf }));
+    const counts = await syncCatalog(source.brand_id, sourceKey(source.id), items, {
+      db,
+      now,
+      room,
+    });
+    return { counts, cap };
+  };
+  const uncapped = { room: Infinity, cap: -1 };
+  if (!isCloud()) return write(uncapped);
+  const { data: brand, error } = await db
+    .from('brands')
+    .select('organization_id')
+    .eq('id', source.brand_id)
+    .maybeSingle();
+  if (error) throw new Error(`brands read: ${error.message}`);
+  // Nothing to count for a plan without a cap: its sources write at once.
+  if ((await capOf(brand?.organization_id ?? null)) < 0) return write(uncapped);
+  return inLine(brand?.organization_id ?? `brand:${source.brand_id}`, () => write());
+}
+
 async function record(db, id, at, outcome) {
   const { error } = await db
     .from('catalog_sources')
@@ -277,12 +371,7 @@ async function syncOnce(
       }
     }
     if (!outcome) {
-      const { room, cap } = await productRoom(source, { db, capOf });
-      const counts = await syncCatalog(source.brand_id, sourceKey(source.id), parsed.items, {
-        db,
-        now,
-        room,
-      });
+      const { counts, cap } = await writeWithinCap(source, parsed.items, { db, now, capOf });
       outcome = {
         status: 'ok',
         counts: {
