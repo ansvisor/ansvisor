@@ -76,14 +76,16 @@ export const US_STATE_NAMES = {
  * Scrapers with no sub-country targeting mechanism. Google AIO / AI Mode
  * locate through location/uule parameters Cloro's AI endpoints don't accept,
  * so a state code means nothing to them: they can only be run country-wide
- * (#691, carried over from #554).
+ * (#691, carried over from #554). The web's location picker lists the same
+ * engines (cities.test.js keeps them together).
  */
-const COUNTRY_ONLY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
+export const COUNTRY_ONLY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
 
 /**
  * Scrapers that can ask from a city (PROMPT-015d): Google's, through the
  * provider's `location`. The others answer per country (or US state), so a
- * city code is skipped for them rather than run again country-wide.
+ * city code is skipped for them rather than run again country-wide. The
+ * web's CITY_PLATFORMS is the same list (cities.test.js).
  */
 export const CITY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
 
