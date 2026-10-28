@@ -99,6 +99,17 @@ describe('AddLocationsDialog', () => {
     expect(onDone).toHaveBeenCalled();
   });
 
+  it("adds to no prompt when the cell's prompt is no longer shown, rather than to all", async () => {
+    const text = await render({ promptId: 'gone', locations: ['TR'] });
+    expect(scope('All 3 prompts shown').checked).toBe(false);
+    expect(text).toContain('152 → 152 of 200 tracked locations');
+    expect(text).toContain('Choose the prompts to add these locations to.');
+    expect(submit().disabled).toBe(true);
+    await act(async () => scope('All 3 prompts shown').click());
+    expect(document.body.textContent).toContain('152 → 155 of 200 tracked locations');
+    expect(submit().disabled).toBe(false);
+  });
+
   it('prices a topic and every prompt shown', async () => {
     await render({ locations: ['TR', 'DE'] });
     expect(scope('All 3 prompts shown').checked).toBe(true);

@@ -7077,6 +7077,7 @@
       "over": "This needs {adding, plural, one {# more tracked location} other {# more tracked locations}}; {left, plural, =0 {none are} one {# is} other {# are}} left on your {plan} plan.",
       "overHint": "Pick fewer prompts or places. {plan, select, starter {Or upgrade your plan, or contact us for a custom plan.} growth {Or contact us for a custom plan.} other {Or contact us to raise your limit.}}",
       "nothing": "These prompts are already tracked in these locations.",
+      "noPrompts": "Choose the prompts to add these locations to.",
       "cancel": "Cancel",
       "submit": "Track in {count, plural, =0 {these locations} one {# location} other {# locations}}",
       "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations."
