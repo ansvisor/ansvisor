@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { addDraftPrompts, getDraftSources, rebuildDraftBrief } from '@/lib/actions/content-drafts';
 import { builtFromCount, rebuildSources, type DraftBrief } from '@/lib/content/brief';
 import type { AgentRule } from '@/lib/content/agent-write';
@@ -45,6 +46,10 @@ export function useBriefRebuild({
   const t = useTranslations('contentEditor.editor.brief');
   const tCard = useTranslations('contentEditor.editor.agentCard');
   const [rebuilding, setRebuilding] = useState(false);
+  // A read-only workspace (plan not active): each way in (Brief, Sources,
+  // Impact, Next step's Build brief) opens the upgrade dialog instead.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const rebuild = async (
     options: {
@@ -52,6 +57,10 @@ export function useBriefRebuild({
       addPrompts?: string[];
     } = {},
   ): Promise<boolean> => {
+    if (isLocked) {
+      openUpgrade(tActions('buildBrief'));
+      return false;
+    }
     setRebuilding(true);
     try {
       const added = !!options.addPrompts?.length;

@@ -5,6 +5,7 @@ import { useRouter } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { createReport, getReports, deleteReport, type ReportListItem } from '@/lib/actions/reports';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,10 @@ function getDateRange(preset: DatePreset, custom: { from: string; to: string }) 
 export default function ReportsPage() {
   const t = useTranslations('reports');
   const tc = useTranslations('common');
+  // A read-only workspace (plan not active): Generate report and Delete open
+  // the upgrade dialog instead; reading and downloading reports stay open.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const brands = useBrandStore((s) => s.brands);
@@ -115,10 +120,13 @@ export default function ReportsPage() {
     });
   };
 
-  const openDialog = () => {
-    setReportBrandId(activeBrandId);
-    setDialogOpen(true);
-  };
+  const openDialog = guard(
+    () => {
+      setReportBrandId(activeBrandId);
+      setDialogOpen(true);
+    },
+    { action: tActions('generateReports') },
+  );
 
   const load = useCallback(async () => {
     if (!activeBrandId) return;
@@ -256,7 +264,9 @@ export default function ReportsPage() {
                             variant="ghost"
                             className="text-muted-foreground hover:text-destructive"
                             disabled={deletingId === report.id}
-                            onClick={() => setPendingConfirm(report.id)}
+                            onClick={guard(() => setPendingConfirm(report.id), {
+                              action: tActions('deleteReports'),
+                            })}
                           >
                             {deletingId === report.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />

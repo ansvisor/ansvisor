@@ -20,6 +20,8 @@ The **AI Traffic Analytics** page (`/dashboard/traffic`, **AI Referral Traffic**
 
 A section whose source isn't connected stays on the page with a **Needs …** tag and a **Connect** button, rather than hiding. Only admins and managers can connect a source.
 
+On Ansvisor Cloud, while the workspace's plan has ended ([read-only](/faq)), the snippet and your AI-bot connections are answered but nothing is stored, so your site keeps working and the sender doesn't retry: a beacon to `POST /track/{trackingCode}` gets `204`, and `POST /bots/ingest` gets `200` with `{ "received": 0, "verified": 0, "stored": 0, "inactive": true }`.
+
 ## Setup
 
 <Steps>

@@ -38,8 +38,15 @@ interface DraftContent {
  * save under way, and throws when the page isn't saved; discard() drops what
  * is waiting once the server's page has replaced it, and saves go on from
  * that version.
+ *
+ * `off` (a read-only workspace, plan not active): nothing is saved, so a
+ * change never waits to save, and leaving the page doesn't ask first.
  */
-export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; bodyHtml: string }) {
+export function useDraftAutosave(
+  draftId: string,
+  loaded: { updatedAt: string; bodyHtml: string },
+  { off = false }: { off?: boolean } = {},
+) {
   const [state, setState] = useState<SaveState>('saved');
   // When the page was last saved, from here or as loaded: the Page info strip's date.
   const [savedAt, setSavedAt] = useState(loaded.updatedAt);
@@ -57,6 +64,10 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
   const loadedBody = useRef(loaded.bodyHtml);
   // The page of a save sent whose answer never came back.
   const unconfirmed = useRef<string | null>(null);
+  const offNow = useRef(off);
+  useEffect(() => {
+    offNow.current = off;
+  });
 
   const baseVersion = useCallback(async () => {
     base.current.bodyHash ??= await bodyHash(loadedBody.current);
@@ -124,6 +135,7 @@ export function useDraftAutosave(draftId: string, loaded: { updatedAt: string; b
 
   const schedule = useCallback(
     (content: DraftContent) => {
+      if (offNow.current) return;
       pending.current = content;
       if (stopped.current) return;
       clearTimeout(timer.current);

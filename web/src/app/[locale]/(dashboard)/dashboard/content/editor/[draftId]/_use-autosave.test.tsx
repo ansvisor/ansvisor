@@ -26,8 +26,8 @@ const REAL = '<p><a href="https://acme.example/" target="_blank" rel="noopener">
 const BODIES = ['<p>a</p>', '<p>ab</p>', '<p>1</p>', '<p>12</p>', '<p>x</p>', '<p>last</p>'];
 
 /** The hook behind buttons, as the editor drives it: one per text, Retry, and settle. */
-function Harness() {
-  const autosave = useDraftAutosave('d1', LOADED);
+function Harness({ off = false }: { off?: boolean }) {
+  const autosave = useDraftAutosave('d1', LOADED, { off });
   const [settled, setSettled] = useState('');
   return (
     <div>
@@ -268,5 +268,26 @@ describe('the editor’s autosave', () => {
       base: loadedBase,
     });
     root = createRoot(container);
+  });
+});
+
+describe('the editor’s autosave on a read-only workspace (plan not active)', () => {
+  it('saves nothing, says nothing waits, and leaving the page asks nothing', async () => {
+    await act(async () => root.render(<Harness off />));
+    const leave = vi.spyOn(window, 'addEventListener');
+    edit('<p>a</p>');
+    expect(state()).toBe('saved');
+    await act(async () => vi.advanceTimersByTime(1500));
+    await retry();
+    await settle();
+    expect(settled()).toBe('saved');
+    expect(saveContentDraft).not.toHaveBeenCalled();
+    expect(leave).not.toHaveBeenCalledWith('beforeunload', expect.any(Function));
+    // Leaving the editor sends nothing either.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await act(async () => vi.advanceTimersByTime(1500));
+    expect(saveContentDraft).not.toHaveBeenCalled();
+    leave.mockRestore();
   });
 });

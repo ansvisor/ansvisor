@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useTransition } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import {
   dismissTopicSuggestion,
   type TopicSuggestion,
 } from '@/lib/actions/topic-suggestions';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 interface Props {
   brandId: string;
@@ -47,6 +49,10 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
   // restores the stored preference.
   const [expanded, setExpanded] = useState(false);
   const [, startTransition] = useTransition();
+  // A read-only workspace (plan not active): generating, adding and
+  // dismissing open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   useEffect(() => {
     try {
@@ -195,7 +201,7 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
           </button>
           {expanded && canManage && (
             <Button
-              onClick={handleRefresh}
+              onClick={guard(handleRefresh, { action: tActions('suggestTopics') })}
               disabled={refreshing}
               size="sm"
               variant="outline"
@@ -243,7 +249,12 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
                   : 'No topic suggestions have been generated for this brand yet.'}
               </p>
               {canManage && (
-                <Button onClick={handleRefresh} disabled={refreshing} size="sm" className="gap-2">
+                <Button
+                  onClick={guard(handleRefresh, { action: tActions('suggestTopics') })}
+                  disabled={refreshing}
+                  size="sm"
+                  className="gap-2"
+                >
                   {refreshing ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
@@ -274,7 +285,9 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
                           size="icon"
                           variant="outline"
                           className="h-8 w-8"
-                          onClick={() => handleAccept(s)}
+                          onClick={guard(() => handleAccept(s), {
+                            action: tActions('addTopics'),
+                          })}
                           disabled={busy}
                           title="Add to tracked topics"
                           aria-label="Add to tracked topics"
@@ -289,7 +302,9 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground"
-                          onClick={() => handleDismiss(s)}
+                          onClick={guard(() => handleDismiss(s), {
+                            action: tActions('dismissSuggestions'),
+                          })}
                           disabled={busy}
                           title="Dismiss suggestion"
                           aria-label="Dismiss suggestion"
