@@ -1990,10 +1990,6 @@ export async function getProductAiSays(
 const RECHECK_SINCE_DAYS = 60;
 /** The actions read at most, the latest done first. */
 const RECHECK_ACTIONS = 500;
-/** The questions read at most across the actions re-checked. */
-const RECHECK_PROMPTS = 400;
-/** Question ids one card read filters by: each request's address stays short. */
-const RECHECK_PROMPTS_PER_READ = 100;
 
 const recheckTargets = z
   .array(z.object({ type: z.enum(['product', 'category']), id: z.guid() }))
@@ -2002,8 +1998,10 @@ const recheckTargets = z
 /**
  * Each target's last done action from Products, 7 days on: the shelves of
  * its questions in the week before it was done beside the week after
- * (recheck.ts), by "product:<id>" / "category:<id>". Through the member's
- * session (RLS): only the brand's own actions and cards.
+ * (recheck.ts), by "product:<id>" / "category:<id>". Every question the
+ * actions name is read, IDS_PER_READ ids a read; a category's own products
+ * are what count on its shelves. Through the member's session (RLS): only
+ * the brand's own actions, cards and catalog.
  */
 async function readActionResults(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -2049,38 +2047,53 @@ async function readActionResults(
   }
   if (!actions.size) return {};
 
-  const promptIds = [...new Set([...actions.values()].flatMap((a) => a.promptIds))].slice(
-    0,
-    RECHECK_PROMPTS,
-  );
+  const promptIds = [...new Set([...actions.values()].flatMap((a) => a.promptIds))];
   const dones = [...actions.values()].map((a) => Date.parse(a.completedAt));
   const week = RECHECK_DAYS * 86_400_000;
   const from = new Date(Math.min(...dones) - week).toISOString();
   const to = new Date(Math.min(now, Math.max(...dones) + week)).toISOString();
-  const reads = [];
-  for (let i = 0; i < promptIds.length; i += RECHECK_PROMPTS_PER_READ) {
-    const some = promptIds.slice(i, i + RECHECK_PROMPTS_PER_READ);
-    reads.push(
+  const categoryIds = [...actions.values()].flatMap((a) =>
+    a.target.type === 'category' ? [a.target.id] : [],
+  );
+  const [rows, links] = await Promise.all([
+    readForIds(promptIds, (some) =>
       fetchAllCards<{
         created_at: string;
         platform: string;
-        matched_brand_role: string;
         catalog_product_id: string | null;
         prompt_results: { prompt_id: string } | null;
       }>(() =>
         supabase
           .from('prompt_result_shopping_cards')
-          .select(
-            'created_at, platform, matched_brand_role, catalog_product_id, prompt_results!inner ( prompt_id )',
-          )
+          .select('created_at, platform, catalog_product_id, prompt_results!inner ( prompt_id )')
           .eq('brand_id', brandId)
           .gte('created_at', from)
           .lt('created_at', to)
           .in('prompt_results.prompt_id', some),
       ),
-    );
+    ),
+    // A category's products: those its shelves count.
+    readForIds(categoryIds, (some) =>
+      readCatalogRows<{ product_id: string; category_id: string }>(
+        () =>
+          supabase
+            .from('catalog_product_categories')
+            .select('product_id, category_id')
+            .eq('brand_id', brandId)
+            .in('category_id', some)
+            .order('product_id')
+            .order('category_id'),
+        CARD_MAX_ROWS,
+      ),
+    ),
+  ]);
+  for (const action of actions.values()) {
+    if (action.target.type !== 'category') continue;
+    const id = action.target.id;
+    action.products = links
+      .filter((link) => link.category_id === id)
+      .map((link) => link.product_id);
   }
-  const rows = (await Promise.all(reads)).flat();
   const cards: RecheckCard[] = rows.flatMap((row) =>
     row.prompt_results
       ? [
@@ -2088,7 +2101,6 @@ async function readActionResults(
             promptId: row.prompt_results.prompt_id,
             platform: row.platform,
             at: row.created_at,
-            own: row.matched_brand_role === 'own',
             productId: row.catalog_product_id,
           },
         ]

@@ -286,7 +286,7 @@ describe('getProductAiSays (ECOM-012)', () => {
 });
 
 describe('the re-check read (ECOM-018)', () => {
-  it('reads the cards of many questions a hundred ids at a time', async () => {
+  it('reads the cards of every question, past 400, a hundred ids at a time', async () => {
     tables.catalog_products = [{ id: PRODUCT, title: 'Ridge 30L Backpack', description: null }];
     tables.actions = [
       {
@@ -295,7 +295,7 @@ describe('the re-check read (ECOM-018)', () => {
         completed_at: new Date(Date.now() - 86_400_000).toISOString(),
         payload: {
           target: { type: 'product', id: PRODUCT },
-          promptIds: Array.from({ length: 250 }, (_, i) => `q${i}`),
+          promptIds: Array.from({ length: 450 }, (_, i) => `q${i}`),
         },
       },
     ];
@@ -304,6 +304,48 @@ describe('the re-check read (ECOM-018)', () => {
       filtered
         .filter(([, column]) => column === 'prompt_results.prompt_id')
         .map(([, , count]) => count),
-    ).toEqual([100, 100, 50]);
+    ).toEqual([100, 100, 100, 100, 50]);
+  });
+
+  it("counts a category's own products on its shelves, not the brand's others", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T00:00:00Z'));
+    try {
+      const CATEGORY = '22222222-0000-0000-0000-000000000002';
+      tables.actions = [
+        {
+          id: 'a8',
+          action_no: 8,
+          completed_at: '2026-10-20T00:00:00Z',
+          payload: { target: { type: 'category', id: CATEGORY }, promptIds: ['q1'] },
+        },
+      ];
+      tables.catalog_product_categories = [{ product_id: 'boot', category_id: CATEGORY }];
+      const prompt = { prompt_id: 'q1' };
+      tables.prompt_result_shopping_cards = [
+        // Before: one of the brand's products, not of the category.
+        {
+          created_at: '2026-10-15T08:00:00Z',
+          platform: 'chatgpt-shopping',
+          catalog_product_id: 'tee',
+          prompt_results: prompt,
+        },
+        // After: the category's own.
+        {
+          created_at: '2026-10-22T08:00:00Z',
+          platform: 'chatgpt-shopping',
+          catalog_product_id: 'boot',
+          prompt_results: prompt,
+        },
+      ];
+      const results = await getShoppingActionResults(BRAND, [{ type: 'category', id: CATEGORY }]);
+      expect(results[`category:${CATEGORY}`]).toMatchObject({
+        before: { shelves: 1, on: 0 },
+        after: { shelves: 1, on: 1 },
+      });
+      expect(byIds).toContainEqual(['catalog_product_categories', 'category_id', [CATEGORY]]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -207,6 +207,19 @@ describe('ShoppingProductPage', () => {
     ).toBe('Open the action');
   });
 
+  it('says new, not better, when none of its shelves was read the week before', async () => {
+    getShoppingProductDetail.mockResolvedValue({
+      ...detail,
+      result: { ...result, before: { shelves: 0, on: 0 } },
+    });
+    const text = await render();
+    expect(text).toContain('New: nothing to compare');
+    expect(text).not.toContain('On more of its shelves');
+    expect(text).toContain(
+      'In the 7 days after it was done, on 2 of 4 shelves. None of its shelves was read in the 7 days before.',
+    );
+  });
+
   it('says when a done action’s result shows', async () => {
     getShoppingProductDetail.mockResolvedValue({ ...detail, result: { ...result, after: null } });
     const text = await render();
