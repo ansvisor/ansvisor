@@ -10,6 +10,7 @@ import type { Brand, BrandDomain, Industry } from '@/types';
 import { MAX_PINNED_COMPETITORS } from '@/lib/insights-trend';
 import { isSiteType, type SiteType } from '@/lib/content/page-types';
 import { isConversionsConsent, type ConversionsConsent } from '@/lib/conversion-tracking';
+import { assertWritable } from '@/lib/subscription-guard';
 
 function mapDomainRow(d: Record<string, unknown>): BrandDomain {
   return {
@@ -100,6 +101,7 @@ export type CreateBrandResult = { brand: Brand } | { error: string; code: 'plan_
  * meaningless digest message (same as #427 for prompts).
  */
 export async function createBrand(input: CreateBrandInput): Promise<CreateBrandResult> {
+  await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
   // The demo brand (sample data) takes none of the plan's brands.
@@ -179,6 +181,7 @@ interface UpdateBrandInput {
 }
 
 export async function updateBrand(id: string, updates: UpdateBrandInput): Promise<Brand> {
+  await assertWritable();
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -276,8 +279,19 @@ export async function setBrandShoppingMode(
   brandId: string,
   enabled: boolean,
 ): Promise<{ promptsUpdated: number }> {
-  const supabase = await createClient();
+  await assertWritable();
+  return applyShoppingMode(await createClient(), brandId, enabled);
+}
 
+/**
+ * setBrandShoppingMode's writes, without its plan check: markBrandAsEcommerce
+ * runs them in setup, where an organization that never subscribed may write.
+ */
+async function applyShoppingMode(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  enabled: boolean,
+): Promise<{ promptsUpdated: number }> {
   // RLS gates this — the calling user must already have write access to
   // the brand via their org membership. The updated row comes back, as in
   // setBrandActive, so a write RLS denied (an analyst) fails instead of
@@ -352,6 +366,7 @@ export async function setBrandShoppingMode(
 export async function markBrandAsEcommerce(
   brandId: string,
 ): Promise<{ industry: string | null; promptsUpdated: number }> {
+  await assertWritable({ onboarding: true });
   const supabase = await createClient();
   const { data: brand, error } = await supabase
     .from('brands')
@@ -376,7 +391,7 @@ export async function markBrandAsEcommerce(
     }
     industry = ecommerce;
   }
-  const { promptsUpdated } = await setBrandShoppingMode(brandId, true);
+  const { promptsUpdated } = await applyShoppingMode(supabase, brandId, true);
   return { industry, promptsUpdated };
 }
 
@@ -393,6 +408,7 @@ export async function markBrandAsEcommerce(
  * brand via their org membership.
  */
 export async function setBrandActive(brandId: string, isActive: boolean): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
 
   // Return the updated row so a no-op (invalid id, or RLS silently denying the
@@ -423,6 +439,7 @@ export async function setPinnedCompetitors(
   brandId: string,
   competitorIds: string[],
 ): Promise<string[]> {
+  await assertWritable();
   if (!Array.isArray(competitorIds) || competitorIds.some((id) => typeof id !== 'string')) {
     throw new Error('Pinned competitors must be a list of competitor ids.');
   }

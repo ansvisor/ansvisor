@@ -388,3 +388,30 @@ describe("useUpgradeGate on a brand that isn't tracked yet", () => {
     expect(button('Start free trial')).toBeUndefined();
   });
 });
+
+describe('a server action refused as read-only', () => {
+  /** A rejection no caller caught, as the browser reports it. */
+  async function reject(reason: unknown) {
+    const event = Object.assign(new Event('unhandledrejection', { cancelable: true }), { reason });
+    await act(async () => {
+      window.dispatchEvent(event);
+    });
+    return event;
+  }
+
+  it('opens the upgrade dialog when no caller caught it, though the page still thought the plan active', async () => {
+    await render({ active: true, status: 'active' });
+    const event = await reject(
+      Object.assign(new Error('masked in production'), { digest: 'subscription_inactive' }),
+    );
+    expect(event.defaultPrevented).toBe(true);
+    expect(dialog()?.textContent).toContain('Choose a plan to keep going');
+  });
+
+  it('leaves any other rejection alone', async () => {
+    await render({ active: false });
+    const event = await reject(new Error('Failed to fetch'));
+    expect(event.defaultPrevented).toBe(false);
+    expect(dialog()).toBeNull();
+  });
+});

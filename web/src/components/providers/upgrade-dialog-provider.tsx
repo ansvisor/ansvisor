@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
@@ -19,6 +19,7 @@ import {
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { useUserRole } from '@/hooks/use-user-role';
+import { isSubscriptionInactive } from '@/lib/api-failure';
 import {
   readOnlyReason,
   type ReadOnlyReason,
@@ -48,6 +49,10 @@ export { CHOOSE_PLAN_HREF, useUpgradeDialog, useUpgradeGate } from './upgrade-ga
  * its dialog makes the demo's offer (the free trial for a workspace that
  * never subscribed, 50% off the first month for one whose plan ended), or,
  * with a plan active, points back to the workspace's own brand.
+ *
+ * A server action the server refused (assertWritable: read-only, or the demo
+ * brand) that no caller caught opens the dialog too: the plan can end while
+ * a page is open, before its buttons know.
  */
 export function UpgradeDialogProvider({
   adminName = null,
@@ -69,6 +74,15 @@ export function UpgradeDialogProvider({
     setAction(typeof label === 'string' && label ? label : null);
     setOpen(true);
   }, []);
+  useEffect(() => {
+    const onRejection = (event: PromiseRejectionEvent) => {
+      if (!isSubscriptionInactive(event.reason)) return;
+      event.preventDefault();
+      openUpgrade();
+    };
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => window.removeEventListener('unhandledrejection', onRejection);
+  }, [openUpgrade]);
   const value = useMemo(() => {
     const lapsed = readOnlyReason(subscriptionStatus);
     // A payment being retried is fixed in Billing, demo brand or not: a plan

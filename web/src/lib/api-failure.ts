@@ -46,11 +46,16 @@ export function apiFailure(status: number, body: Record<string, unknown> = {}): 
   return 'failed';
 }
 
+/** The refusals that open the upgrade dialog: a read-only workspace, and the demo brand. */
+const UPGRADE_CODES = new Set(['subscription_inactive', 'demo_brand']);
+
 /**
  * Whether a response body is the server's subscription_inactive (a read-only
  * workspace) or demo_brand (the demo brand, where nothing runs), also when
  * it comes as text: the AI SDK's chat transport throws an error whose
- * message is the response body. Either opens the upgrade dialog.
+ * message is the response body. A server action refused by assertWritable
+ * (lib/subscription-guard.ts) throws an error whose digest is the code, the
+ * one thing production keeps of it. Either opens the upgrade dialog.
  */
 export function isSubscriptionInactive(body: unknown): boolean {
   let value = body;
@@ -61,9 +66,7 @@ export function isSubscriptionInactive(body: unknown): boolean {
       return false;
     }
   }
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    ['subscription_inactive', 'demo_brand'].includes(String((value as { code?: unknown }).code))
-  );
+  if (typeof value !== 'object' || value === null) return false;
+  const { code, digest } = value as { code?: unknown; digest?: unknown };
+  return UPGRADE_CODES.has(String(code)) || UPGRADE_CODES.has(String(digest));
 }

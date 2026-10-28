@@ -78,6 +78,15 @@ describe('isSubscriptionInactive', () => {
     expect(isSubscriptionInactive(JSON.stringify({ code: 'demo_brand' }))).toBe(true);
   });
 
+  it("reads a server action's refusal by its digest, all production keeps of it", () => {
+    const masked = 'An error occurred in the Server Components render.';
+    const refusal = Object.assign(new Error(masked), { digest: 'subscription_inactive' });
+    expect(isSubscriptionInactive(refusal)).toBe(true);
+    expect(isSubscriptionInactive(Object.assign(new Error(masked), { digest: '1234' }))).toBe(
+      false,
+    );
+  });
+
   it('is false for anything else', () => {
     expect(isSubscriptionInactive({ error: 'plan_limit' })).toBe(false);
     expect(isSubscriptionInactive('Failed to fetch the chat response.')).toBe(false);
