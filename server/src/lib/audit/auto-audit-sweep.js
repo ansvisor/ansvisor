@@ -17,6 +17,7 @@ import { AUTO_AUDIT, pickRunPages } from './auto-audit.js';
 import { sendAutoAuditEmail } from './auto-audit-email.js';
 import { opportunityKey } from './opportunities.js';
 import { pageKey } from './history.js';
+import { onBrandDomain } from './host.js';
 
 /**
  * @typedef {object} SweepDeps
@@ -183,7 +184,8 @@ const FIXED_PER_ACTION = 20;
  * Pages a Site Audit fix (an Action Center action of the fix category) was
  * completed on in the last 30 days and that no audit has read since, the
  * most recently fixed first (learning B7). Its targets name the pages, by
- * their addresses; one fixed twice counts from its last fix.
+ * their addresses, on the action's brand's own domains; one fixed twice
+ * counts from its last fix.
  *
  * @returns {Promise<Array<{ brandId: string, key: string, url: string, path: string }>>}
  */
@@ -201,14 +203,32 @@ export async function fixedPages(brands, now) {
     .order('completed_at', { ascending: false })
     .limit(200);
   if (error) throw new Error(error.message);
+  if (!actions?.length) return [];
+
+  // Only a brand's own pages: a fix's target on another site (a
+  // competitor's page, say) costs an audit and says nothing of the fix. A
+  // brand without a domain has none.
+  const { data: domainRows, error: domainsErr } = await supabaseAdmin
+    .from('brand_domains')
+    .select('brand_id, domain')
+    .in('brand_id', brandIds);
+  if (domainsErr) throw new Error(domainsErr.message);
+  const domains = new Map();
+  for (const row of domainRows ?? []) {
+    if (!domains.has(row.brand_id)) domains.set(row.brand_id, []);
+    domains.get(row.brand_id).push(row.domain);
+  }
 
   const pages = new Map();
-  for (const action of actions ?? []) {
+  for (const action of actions) {
+    const own = domains.get(action.brand_id) ?? [];
     const p = action.payload ?? {};
     const urls = [
       ...(Array.isArray(p.targets) ? p.targets.map((t) => t?.id) : []),
       ...(Array.isArray(p.targetIds) ? p.targetIds : []),
-    ].filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
+    ].filter(
+      (url) => typeof url === 'string' && /^https?:\/\//i.test(url) && onBrandDomain(url, own),
+    );
     for (const url of [...new Set(urls)].slice(0, FIXED_PER_ACTION)) {
       const key = opportunityKey(url);
       // Newest fix first: the first one read for a page is its last.

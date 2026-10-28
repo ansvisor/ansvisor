@@ -16,6 +16,7 @@ let triedRows;
 let failCounts;
 let fixedActions;
 let recentAudits;
+let domainRows;
 
 class PlanLimitError extends Error {}
 
@@ -58,6 +59,7 @@ function query(table) {
       ops.push(op);
       // Fix actions completed lately (learning B7), and the audits since.
       if (table === 'actions') return resolve({ data: fixedActions, error: null });
+      if (table === 'brand_domains') return resolve({ data: domainRows, error: null });
       if (table === 'site_audits' && op.select === 'url, final_url, created_at') {
         return resolve({ data: recentAudits, error: null });
       }
@@ -130,6 +132,10 @@ beforeEach(async () => {
   failCounts = {};
   fixedActions = [];
   recentAudits = [];
+  domainRows = [
+    { brand_id: 'brand-a', domain: 'acme.com' },
+    { brand_id: 'brand-b', domain: 'https://www.acme.com/' },
+  ];
   sendAutoAuditEmail = vi.fn().mockResolvedValue(true);
   readInbox = vi.fn(async (brandId) => ({ opportunities: inboxes[brandId] ?? [] }));
   startAudits = vi.fn(async (brandId, urls) => ({
@@ -349,5 +355,43 @@ describe('fixedPages', () => {
       ['brand-a', ['https://acme.com/a-fixed', 'https://acme.com/pinned', 'https://acme.com/a-90']],
       ['brand-b', ['https://acme.com/b-fixed', 'https://acme.com/b-80']],
     ]);
+  });
+
+  it("takes only the brand's own pages: another site's is left, a subdomain kept", async () => {
+    brandRows = [...brandRows, { id: 'brand-c', name: 'No Domain', organization_id: 'org-1' }];
+    fixedActions = [
+      {
+        brand_id: 'brand-a',
+        completed_at: '2026-10-09T10:00:00Z',
+        payload: {
+          targets: [
+            { id: 'https://rival.com/a-fixed' },
+            { id: 'https://acme.com.rival.io/a-fixed' },
+            { id: 'https://shop.acme.com/a-fixed' },
+            { id: 'https://acme.com/a-fixed' },
+          ],
+        },
+      },
+      // A brand without a domain has no page of its own.
+      {
+        brand_id: 'brand-c',
+        completed_at: '2026-10-09T09:00:00Z',
+        payload: { targets: [{ id: 'https://acme.com/c-fixed' }] },
+      },
+    ];
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+
+    expect((await fixedPages(brandRows, NOW)).map((p) => [p.brandId, p.url])).toEqual([
+      ['brand-a', 'https://shop.acme.com/a-fixed'],
+      ['brand-a', 'https://acme.com/a-fixed'],
+    ]);
+    const read = ops.find((op) => op.table === 'brand_domains');
+    expect(read.filters).toEqual([['in', 'brand_id', ['brand-a', 'brand-b', 'brand-c']]]);
+  });
+
+  it('reads nothing more when no fix was completed lately', async () => {
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+    expect(await fixedPages(brandRows, NOW)).toEqual([]);
+    expect(ops.map((op) => op.table)).toEqual(['actions']);
   });
 });
