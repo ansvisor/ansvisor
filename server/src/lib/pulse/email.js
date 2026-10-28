@@ -13,7 +13,7 @@ import { sendEmail } from '../email.js';
 // PLATFORM_LABELS in web/src/config/platform-labels.ts.
 const PLATFORM_LABELS = {
   'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
+  'google-aio': 'Google AI Overviews',
   'google-aimode': 'Google AI Mode',
   'copilot-web': 'Microsoft Copilot',
   'grok-web': 'Grok',

@@ -49,6 +49,9 @@ import { draftLanguage } from './content-language.js';
 import { editSpans } from './edit-spans.js';
 import { getLanguageName } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
+import { carefulLine, carefulRules } from './content-suggestion-stats.js';
+import { livePageLine, readLivePage } from './content-live-page.js';
+import { logger } from './logger.js';
 
 /**
  * Fix open rules with agent (Content Editor CE-018, spec §8): the Content
@@ -93,6 +96,15 @@ export const FANOUT_RULE = `- Fan-outs are the searches AI engines run for the p
 
 /** The links rule both agent prompts give the model: only the URLs listed, never invented. */
 export const LINK_RULE = `- Links: link only to a URL listed under the pages or sources you may link to, copied exactly, as <a href="URL">the words it explains</a>, in a replace's "after" or in an insert. Cite a source by linking the words it supports. Never invent a URL, never link a heading, and when no listed page fits, add no link.`;
+
+/**
+ * What a placeholder is for: each one holds a send to a CMS or an export
+ * until the person fills it (CE-044, CE-057), so only for a fact they must
+ * find. A page, a document or a competitor is written as words: the agent
+ * wrote "[About]", "[OpenAI release notes]" and "[competitor]" where plain
+ * words do, and a page waited on six.
+ */
+export const PLACEHOLDER_RULE = `- A placeholder in square brackets is only for a fact the person must find: a number, a price, a date, a person's name, a customer's name or a quote. Never put a page, a document, a link, a product, a brand, a company or a competitor in brackets: write it in plain words ("your About page", "OpenAI's release notes"), name the competitors given, or write "competitors". Each placeholder holds the page back until the person fills it, so write as few as the facts need.`;
 
 /** What the agent may say of a source, and the names a list keeps (editor test 2026-10-25). */
 export const ATTRIBUTION_RULE = `- Never give a claim to a source that neither the page nor Your input gives ("According to X…", "X says…", "X found that…"): you don't see what a cited page or a link says. A link goes on the words it explains, never as a source for a claim. Keep every name a list has (products, brands, people): never drop one.`;
@@ -183,6 +195,7 @@ ${LINK_RULE}
 ${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Use only facts from the page, the brand and your data. Never invent numbers, prices, dates, names, sources or quotes. When a rule needs a fact you don't have, write a placeholder in square brackets, e.g. [figure, source, year].
+${PLACEHOLDER_RULE}
 ${SOURCES_RULE}
 ${ATTRIBUTION_RULE}
 - Keep the page's voice and change as little as each rule needs. At most ${MAX_AGENT_SUGGESTIONS} suggestions.
@@ -1114,6 +1127,8 @@ export function buildFixPrompt({
   linkTargets = '',
   sources = '',
   handoff = false,
+  careful = '',
+  livePage = '',
 }) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
@@ -1133,7 +1148,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${over ? `${over}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${livePage ? `${livePage}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -1206,7 +1221,7 @@ export async function fixDraftRules({ draftId, brandId, input, handoff = null })
   const { data: draft, error: draftError } = await supabaseAdmin
     .from('content_drafts')
     .select(
-      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, agent_state, agent_state_at, shopping_path${handoff ? ', quality_handoff' : ''}`,
+      `id, brand_id, title, body_html, page_type, rules, action_id, status, source_url, published_url, agent_state, agent_state_at, shopping_path${handoff ? ', quality_handoff' : ''}`,
     )
     .eq('id', draftId)
     .maybeSingle();
@@ -1348,15 +1363,60 @@ async function fixWithRun({
   const modelId = contentBriefModelId();
   const lockedKeys = new Set(input.locked.map(passageKey));
   const ruleKeys = new Set(input.rules.map((r) => r.key));
+  // The rules here people at the brand mostly reject its changes for
+  // (learning B6): kept small, and named on the run's rules step, which the
+  // editor's agent card shows. Apply rules with Agent only: Quality's
+  // hand-off (CE-051), whose card doesn't show it, runs as it was. A read
+  // that fails leaves the run as it was.
+  const careful = handoff
+    ? []
+    : await carefulRules(brandId, { keys: ruleKeys }).catch((err) => {
+        logger.warn(
+          { err: { message: err?.message }, draftId },
+          '[content-agent] decisions not read',
+        );
+        return [];
+      });
+  if (careful.length && run?.steps?.[0]) {
+    run.steps[0] = { ...run.steps[0], careful: careful.map(({ key }) => key) };
+  }
   // The data it writes from, numbered, Brief › Your input last (CE-048);
   // the numbers it may write unmarked.
   await advanceRun(run, 1);
-  const [prompts, inputRow, shoppingPath] = await Promise.all([
+  const [prompts, inputRow, shoppingPath, livePage] = await Promise.all([
     readPrompts(brandId, input.sources?.promptIds ?? []),
     readDraftInputs(draftId),
     // Its shopping path, checked: none when it isn't one (shopping path, part 4).
     shoppingPathFor(draft),
+    // How the page it optimizes does now (learning B5), as the Live page
+    // tab reads it: at the address it was published at, else the one it
+    // optimizes. Apply rules with Agent only, as the careful rules. A read
+    // that fails leaves the run as it was.
+    handoff
+      ? null
+      : readLivePage(brandId, draft.published_url ?? draft.source_url).catch((err) => {
+          logger.warn(
+            { err: { message: err?.message }, draftId },
+            '[content-agent] live page not read',
+          );
+          return null;
+        }),
   ]);
+  // Named on the run's sources step, which the editor's agent card shows:
+  // only a page AI answers cited, as the card speaks of its citations. One
+  // with AI visits alone is still told to the agent.
+  const cited = livePage && (livePage.citations.cur > 0 || livePage.citations.prev > 0);
+  if (cited && run?.steps?.[1]) {
+    run.steps[1] = {
+      ...run.steps[1],
+      live: {
+        days: livePage.days,
+        citations: livePage.citations.cur,
+        before: livePage.citations.prev,
+        lost: livePage.prompts.lost,
+      },
+    };
+  }
   const numbered = numberSources({
     prompts,
     fanouts: input.sources?.fanouts,
@@ -1448,6 +1508,8 @@ async function fixWithRun({
           linkTargets: linkTargetsPrompt(targets, linkKeys),
           sources: sourcesPrompt(numbered),
           handoff,
+          careful: carefulLine(careful),
+          livePage: livePageLine(livePage),
         }),
         abortSignal,
       }),

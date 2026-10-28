@@ -10,6 +10,7 @@ import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
 import {
   shoppingLinks,
+  type PageCard,
   type ShoppingCheck,
   type ShoppingLinkState,
 } from '@/lib/content/shopping-check';
@@ -453,6 +454,102 @@ export function setToSave(rules: DraftRules, mine: SavedRuleSet | undefined): Sa
   };
 }
 
+/*
+ * The tag passes below read each '<' once, left to right, and give what the
+ * regex each names would, in time near the text's length however its tags
+ * are left open. The same as textLength's on the server
+ * (server/src/lib/page-content.js).
+ */
+
+/** ASCII letters lower-cased, nothing else: every index stays where it was. */
+const asciiLower = (text: string) => text.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
+
+/** A letter, digit or _, as \b reads a word. */
+const isWordChar = (code: number) =>
+  (code >= 48 && code <= 57) ||
+  (code >= 65 && code <= 90) ||
+  (code >= 97 && code <= 122) ||
+  code === 95;
+
+/** Each script and style element as a space: /<(script|style)\b[\s\S]*?<\/\1>/gi. */
+function withoutScripts(text: string): string {
+  const lower = asciiLower(text);
+  // A name with no closing tag left closes nowhere after it either.
+  const open = new Set(['script', 'style']);
+  let out = '';
+  let kept = 0;
+  for (let at = lower.indexOf('<'); at !== -1 && open.size; ) {
+    const name = [...open].find((tag) => lower.startsWith(tag, at + 1));
+    const after = name ? at + 1 + name.length : 0;
+    if (name && !isWordChar(lower.charCodeAt(after))) {
+      const close = lower.indexOf(`</${name}>`, after);
+      if (close !== -1) {
+        out += `${text.slice(kept, at)} `;
+        kept = close + name.length + 3;
+        at = lower.indexOf('<', kept);
+        continue;
+      }
+      open.delete(name);
+    }
+    at = lower.indexOf('<', at + 1);
+  }
+  return out + text.slice(kept);
+}
+
+const SPACED_TAGS = new Set([
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'li',
+  'td',
+  'th',
+  'blockquote',
+  'br',
+  'div',
+]);
+
+/** Each block tag, opening or closing, as a space: /<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi. */
+function withoutBlockTags(text: string): string {
+  const lower = asciiLower(text);
+  let out = '';
+  let kept = 0;
+  for (let at = lower.indexOf('<'); at !== -1; ) {
+    const from = lower[at + 1] === '/' ? at + 2 : at + 1;
+    let end = from;
+    while (isWordChar(lower.charCodeAt(end))) end += 1;
+    if (SPACED_TAGS.has(lower.slice(from, end))) {
+      const close = lower.indexOf('>', end);
+      // No '>' left: no tag after this one ends either.
+      if (close === -1) break;
+      out += `${text.slice(kept, at)} `;
+      kept = close + 1;
+      at = lower.indexOf('<', kept);
+      continue;
+    }
+    // The word holds no '<': the next tag starts after it.
+    at = lower.indexOf('<', Math.max(at + 1, end));
+  }
+  return out + text.slice(kept);
+}
+
+/** Every other tag dropped: /<[^>]*>/g. */
+function withoutTags(text: string): string {
+  let out = '';
+  let kept = 0;
+  for (let at = text.indexOf('<'); at !== -1; ) {
+    const close = text.indexOf('>', at + 1);
+    if (close === -1) break;
+    out += text.slice(kept, at);
+    kept = close + 1;
+    at = text.indexOf('<', kept);
+  }
+  return out + text.slice(kept);
+}
+
 /**
  * A page's text length in characters, about as the editor counts it: the
  * words without tags, runs of spaces as one (a space between blocks, where
@@ -460,10 +557,7 @@ export function setToSave(rules: DraftRules, mine: SavedRuleSet | undefined): Sa
  * to count: on the server, and before a draft opens.
  */
 export function pageTextLength(html: string): number {
-  return html
-    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<\/?(p|h[1-6]|li|td|th|blockquote|br|div)\b[^>]*>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
+  return withoutTags(withoutBlockTags(withoutScripts(html)))
     .replace(/&nbsp;/g, ' ')
     .replace(/&[#a-z0-9]+;/gi, 'x')
     .replace(/\s+/g, ' ')
@@ -573,6 +667,8 @@ export interface PageRead {
    * Shopping rules and Before you publish read (shopping path).
    */
   links?: string[];
+  /** The product cards in its HTML blocks, with the price each shows (Before you publish). */
+  cards?: PageCard[];
 }
 
 const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
@@ -603,6 +699,7 @@ export function readPage(html: string, characters: number): PageRead {
   const links = new Set(
     [...doc.body.querySelectorAll('a[href]')].map((a) => a.getAttribute('href') ?? ''),
   );
+  const cards: PageCard[] = [];
   for (const el of doc.body.querySelectorAll('[data-html-block]')) {
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (!inner) continue;
@@ -611,6 +708,11 @@ export function readPage(html: string, characters: number): PageRead {
       h.textContent?.trim(),
     ).length;
     for (const a of block.body.querySelectorAll('a[href]')) links.add(a.getAttribute('href') ?? '');
+    // A card's price is its span, after the name (product-block.ts).
+    for (const a of block.body.querySelectorAll('a.ansvisor-product[href]')) {
+      const price = a.querySelector('span')?.textContent?.trim();
+      cards.push({ href: a.getAttribute('href') ?? '', price: price || null });
+    }
   }
   return {
     blocks,
@@ -621,6 +723,7 @@ export function readPage(html: string, characters: number): PageRead {
     characters,
     htmlBlockH1s,
     links: [...links].filter((href) => href.trim()),
+    cards,
   };
 }
 
@@ -835,12 +938,14 @@ export const NOT_FOR_AGENT = new Set(['oneH1', 'feedMatch', 'shopLinksLive']);
 
 /**
  * What to do instead, for the open rules the agent doesn't fix: its
- * message's key, the extra H1s' first, then the feed's.
+ * message's key, the extra H1s' first, then the feed's and the shopping
+ * links', one message for both when both are open.
  */
 export const notForAgentMessage = (open: readonly { rule: { key: string } }[]) => {
   const has = (key: string) => open.some(({ rule }) => rule.key === key);
   if (has('oneH1')) return 'notForAgent';
-  return has('shopLinksLive') && !has('feedMatch') ? 'notForAgentShopping' : 'notForAgentFeed';
+  if (!has('shopLinksLive')) return 'notForAgentFeed';
+  return has('feedMatch') ? 'notForAgentFeedShopping' : 'notForAgentShopping';
 };
 
 /**

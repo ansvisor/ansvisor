@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 
 export type AIProviderKey =
@@ -11,65 +12,24 @@ export type AIProviderKey =
   | 'xai'
   | 'meta';
 
-const AI_PROVIDER_META: Record<
-  AIProviderKey,
-  { label: string; shortLabel: string; icon: string; fallbackClassName: string }
-> = {
-  openai: {
-    label: 'ChatGPT',
-    shortLabel: 'O',
-    icon: '/chatgpt.svg',
-    fallbackClassName: 'bg-emerald-500 text-white',
-  },
-  anthropic: {
-    label: 'Claude',
-    shortLabel: 'A',
-    icon: '/claude.svg',
-    fallbackClassName: 'bg-amber-500 text-white',
-  },
-  google: {
-    label: 'Gemini',
-    shortLabel: 'G',
-    icon: '/gemini.svg',
-    fallbackClassName: 'bg-blue-500 text-white',
-  },
-  googleAio: {
-    label: 'Google AI Overview',
-    shortLabel: 'G',
-    icon: '/ai_overview.svg',
-    fallbackClassName: 'bg-blue-500 text-white',
-  },
-  googleAiMode: {
-    label: 'Google AI Mode',
-    shortLabel: 'G',
-    icon: '/ai_mode.svg',
-    fallbackClassName: 'bg-blue-500 text-white',
-  },
-  perplexity: {
-    label: 'Perplexity',
-    shortLabel: 'P',
-    icon: '/perplexity.svg',
-    fallbackClassName: 'bg-indigo-500 text-white',
-  },
-  copilot: {
-    label: 'Microsoft Copilot',
-    shortLabel: 'C',
-    icon: '/copilot.svg',
-    fallbackClassName: 'bg-cyan-600 text-white',
-  },
-  xai: {
-    label: 'Grok',
-    shortLabel: 'X',
-    icon: '/grok.svg',
-    fallbackClassName: 'bg-zinc-800 text-white dark:bg-zinc-300 dark:text-zinc-900',
-  },
-  meta: {
-    label: 'Meta AI',
-    shortLabel: 'M',
-    icon: '',
-    fallbackClassName: 'bg-sky-500 text-white',
-  },
-};
+/**
+ * Each platform's mark lives in `/public/platforms/` as a one-colour SVG with
+ * a square viewBox cut to the mark's own bounds, so every logo fills its box
+ * the same way. Meta AI has no mark and keeps a letter badge.
+ */
+const AI_PROVIDER_META: Record<AIProviderKey, { label: string; shortLabel: string; icon: string }> =
+  {
+    openai: { label: 'ChatGPT', shortLabel: 'O', icon: '/platforms/chatgpt.svg' },
+    anthropic: { label: 'Claude', shortLabel: 'A', icon: '/platforms/claude.svg' },
+    google: { label: 'Gemini', shortLabel: 'G', icon: '/platforms/gemini.svg' },
+    googleAio: { label: 'Google AI Overviews', shortLabel: 'G', icon: '/platforms/google.svg' },
+    // AI Mode runs on Gemini, so it shows the Gemini mark.
+    googleAiMode: { label: 'Google AI Mode', shortLabel: 'G', icon: '/platforms/gemini.svg' },
+    perplexity: { label: 'Perplexity', shortLabel: 'P', icon: '/platforms/perplexity.svg' },
+    copilot: { label: 'Microsoft Copilot', shortLabel: 'C', icon: '/platforms/copilot.svg' },
+    xai: { label: 'Grok', shortLabel: 'X', icon: '/platforms/grok.svg' },
+    meta: { label: 'Meta AI', shortLabel: 'M', icon: '' },
+  };
 
 export function resolveAIProvider(model: string, platform?: string): AIProviderKey {
   const key = platform || model;
@@ -99,7 +59,12 @@ export function resolveAIProvider(model: string, platform?: string): AIProviderK
   if (key === 'Grok' || key === 'grok' || key === 'grok-web' || key.startsWith('grok-')) {
     return 'xai';
   }
-  if (key === 'Google AI Overview' || key === 'google-aio' || key === 'google-ai-overviews') {
+  if (
+    key === 'Google AI Overviews' ||
+    key === 'Google AI Overview' ||
+    key === 'google-aio' ||
+    key === 'google-ai-overviews'
+  ) {
     return 'googleAio';
   }
   if (
@@ -130,42 +95,39 @@ export function getAIProviderDisplayName(provider: AIProviderKey): string {
   return AI_PROVIDER_META[provider].label;
 }
 
+/**
+ * The logo as a CSS mask over the text colour, so every mark is drawn in one
+ * colour that follows the theme (black on light, white on dark).
+ */
+function logoMask(icon: string): CSSProperties {
+  const image = `url(${icon})`;
+  return {
+    maskImage: image,
+    WebkitMaskImage: image,
+    maskSize: 'contain',
+    WebkitMaskSize: 'contain',
+    maskPosition: 'center',
+    WebkitMaskPosition: 'center',
+    maskRepeat: 'no-repeat',
+    WebkitMaskRepeat: 'no-repeat',
+  };
+}
+
 export function AIProviderAvatar({
   provider,
   className,
   plain = false,
 }: {
   provider: AIProviderKey;
+  /** Size and colour; the logo takes the text colour (`text-foreground` by default). */
   className?: string;
   /**
-   * Just the logo, without the round badge, for rows where it stands beside
-   * the platform's name. The ChatGPT mark is drawn white for the dark badge,
-   * so it is inverted to black on a light background.
+   * Just the logo, filling the box, for rows where it stands beside the
+   * platform's name. Otherwise a round badge with the logo at 60% inside.
    */
   plain?: boolean;
 }) {
   const meta = AI_PROVIDER_META[provider];
-
-  if (plain && meta.icon) {
-    return (
-      <span
-        title={meta.label}
-        aria-label={meta.label}
-        className={cn('flex h-5 w-5 shrink-0 items-center justify-center', className)}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- same static logo files as the badge below */}
-        <img
-          src={meta.icon}
-          alt=""
-          aria-hidden="true"
-          className={cn(
-            'h-full w-full object-contain',
-            provider === 'openai' && 'invert dark:invert-0',
-          )}
-        />
-      </span>
-    );
-  }
 
   if (!meta.icon) {
     return (
@@ -173,8 +135,7 @@ export function AIProviderAvatar({
         title={meta.label}
         aria-label={meta.label}
         className={cn(
-          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
-          meta.fallbackClassName,
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border bg-background text-[10px] font-bold text-foreground',
           className,
         )}
       >
@@ -188,13 +149,16 @@ export function AIProviderAvatar({
       title={meta.label}
       aria-label={meta.label}
       className={cn(
-        'relative flex h-5 w-5 shrink-0 overflow-hidden rounded-full border',
-        provider === 'openai' ? 'bg-black dark:bg-background' : 'bg-background',
+        'flex h-5 w-5 shrink-0 items-center justify-center text-foreground',
+        !plain && 'rounded-full border bg-background',
         className,
       )}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- AI provider favicon URLs come from arbitrary remote domains; next/image remotePatterns would need an open-ended wildcard */}
-      <img src={meta.icon} alt="" className="h-full w-full object-cover" aria-hidden="true" />
+      <span
+        aria-hidden="true"
+        className={cn('block bg-current', plain ? 'h-full w-full' : 'h-3/5 w-3/5')}
+        style={logoMask(meta.icon)}
+      />
     </span>
   );
 }
