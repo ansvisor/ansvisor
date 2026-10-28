@@ -263,6 +263,7 @@ describe('embeds between tables joined more than once', () => {
     ]);
   });
 
+  // Reads every source file of both packages: seconds on a loaded machine.
   it('name the foreign key in the web app and the API server', () => {
     const unnamed = SOURCES.flatMap(sourceFiles).flatMap((path) =>
       selects(path).flatMap(({ table, select, line }) =>
@@ -274,5 +275,5 @@ describe('embeds between tables joined more than once', () => {
       ),
     );
     expect(unnamed).toEqual([]);
-  });
+  }, 30_000);
 });
