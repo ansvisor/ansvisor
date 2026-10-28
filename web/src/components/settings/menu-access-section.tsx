@@ -159,7 +159,7 @@ function MenuAccessSettingsView() {
               {/* Fixed shares, so the table fits Settings' column at 1024 px wide. */}
               <colgroup>
                 <col className="w-[20%]" />
-                <col className="w-[14%]" />
+                <col className="w-[15%]" />
                 {MENU_ROLES.map((role) => (
                   <col key={role} />
                 ))}
@@ -179,7 +179,7 @@ function MenuAccessSettingsView() {
                 </TableRow>
                 <TableRow>
                   <TableHead />
-                  <TableHead className="px-1 text-center text-xs font-normal text-muted-foreground">
+                  <TableHead className="px-1 text-center text-[11px] font-normal text-muted-foreground">
                     {t('everything')}
                   </TableHead>
                   {MENU_ROLES.map((role) => (
