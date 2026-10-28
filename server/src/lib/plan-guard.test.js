@@ -75,6 +75,14 @@ describe('applyPlanOverrides — the Enterprise AI budget', () => {
     }
   });
 
+  it('keeps the plan’s budget, its floor, for one set below it (#1598)', () => {
+    // 0 or -5 would answer every AI call "used up", -1 would read as unlimited.
+    for (const own of [0, -5, -1, 4.98]) {
+      expect(budget({ improveMonthlyBudgetUsd: own })).toBe(4.99);
+    }
+    expect(budget({ improveMonthlyBudgetUsd: 4.99 })).toBe(4.99);
+  });
+
   it('keeps the default without a usable contract value', () => {
     expect(budget({ maxPrompts: 900 })).toBe(4.99);
     expect(budget({ contractMonthlyUsd: 'n/a' })).toBe(4.99);
