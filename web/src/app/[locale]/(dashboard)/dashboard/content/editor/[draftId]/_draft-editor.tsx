@@ -33,6 +33,8 @@ import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-b
 import { PublishDialog } from '@/components/content/publish-dialog';
 import { readLiveUrl } from '@/lib/content/publish-client';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
+import { CmsSentChip } from '@/components/content/cms-sent-chip';
+import { readDraftCms, type DraftCms } from '@/lib/content/cms-send-client';
 import { updateBrand } from '@/lib/actions/brand';
 import {
   decideDraftSuggestions,
@@ -3106,6 +3108,19 @@ export function DraftEditor({
   // Quality is live.
   const { canManage } = useUserRole();
   const [sendOpen, setSendOpen] = useState<{ html: string } | null>(null);
+  // The page's last send to a CMS, for the header (#1331): read once, then as sent.
+  const [cmsLast, setCmsLast] = useState<DraftCms['last']>(null);
+  useEffect(() => {
+    let cancelled = false;
+    readDraftCms(draft.id)
+      .then((read) => {
+        if (!cancelled && read?.last) setCmsLast(read.last);
+      })
+      .catch((err) => console.error('Failed to read the page’s last send:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.id]);
   const [preparing, setPreparing] = useState(false);
   // HTML edited in the HTML view and not applied isn't in the page to save.
   const htmlUnapplied = htmlSource !== null && htmlEdited;
@@ -3171,7 +3186,8 @@ export function DraftEditor({
   };
   // The page to publish's shopping links against the catalog (shopping path,
   // part 6), as the Shopping rules read them: every link, a product grid's
-  // too, and the products the rule asks for (none with it off). Read fresh:
+  // too, and the products the rule asks for (none with it off); and its
+  // product cards' prices against the catalog's now. Read fresh:
   // 'reading' meanwhile, for a draft known to have a path. No row while
   // none is known to, so a draft without one never shows it.
   const shopRule = rules.rules.find(({ rule }) => rule.key === 'shopProductLinks')?.rule;
@@ -3181,7 +3197,8 @@ export function DraftEditor({
     if (!publishOpen || shopping === null || shopping === 'reading') return null;
     if (shoppingRefreshing) return 'reading';
     if (shopping === 'failed') return 'failed';
-    return shoppingLinks(readPage(publishOpen.html, 0).links ?? [], shopping, shopWant);
+    const page = readPage(publishOpen.html, 0);
+    return shoppingLinks(page.links ?? [], shopping, shopWant, page.cards ?? []);
   }, [publishOpen, shopping, shoppingRefreshing, shopWant]);
   // Read once per change (a link read landing, the title), not on every render.
   const readyToPaste = useMemo((): ReadyToPaste | null => {
@@ -3915,6 +3932,7 @@ export function DraftEditor({
           )}
           <DraftMethodBadge method={draft.method} />
           <DraftStatusBadge status={status} />
+          {cmsLast && <CmsSentChip last={cmsLast} />}
           <button
             type="button"
             onClick={() => openPanelTab('rules')}
@@ -4318,6 +4336,7 @@ export function DraftEditor({
             fillFirstPlaceholder();
           }}
           onClose={() => setSendOpen(null)}
+          onSent={setCmsLast}
         />
       )}
 

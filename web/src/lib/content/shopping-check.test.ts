@@ -29,6 +29,49 @@ const CHECK: ShoppingCheck = {
   merchantCenter: false,
 };
 
+describe('shoppingLinks, with the page’s product cards (#1610)', () => {
+  const priced: ShoppingCheck = {
+    ...CHECK,
+    products: [
+      { ...product('a', 'ok'), price: '$189.00' },
+      { ...product('d', 'ok'), price: null },
+      { ...product('c', 'sold_out'), price: null },
+      // Its price not read: never compared.
+      product('e', 'ok'),
+    ],
+  };
+  const card = (id: string, price: string | null) => ({
+    href: `https://shop.example/products/${id}`,
+    price,
+  });
+
+  it('lists each product once whose card shows a price the catalog no longer has', () => {
+    const read = shoppingLinks([], priced, 0, [
+      card('a', '$199.00'),
+      // A second card of it: listed once, by the first.
+      card('a', '$179.00'),
+      // No price in the catalog now.
+      card('d', '$50.00'),
+      // No longer sells: listed to remove, not for its price.
+      card('c', '$20.00'),
+      card('e', '$1.00'),
+      // Not one the path checks.
+      card('x', '$5.00'),
+    ]);
+    expect(read.prices).toEqual([
+      { title: 'A', page: '$199.00', now: '$189.00' },
+      { title: 'D', page: '$50.00', now: null },
+    ]);
+  });
+
+  it("leaves a card with today's price, or with none, alone", () => {
+    expect(shoppingLinks([], priced, 0, [card('a', '$189.00'), card('d', null)]).prices).toEqual(
+      [],
+    );
+    expect(shoppingLinks([], priced).prices).toEqual([]);
+  });
+});
+
 describe('shoppingLinks', () => {
   it('reads the category page and the products linked, each once, and those that no longer sell', () => {
     const read = shoppingLinks(

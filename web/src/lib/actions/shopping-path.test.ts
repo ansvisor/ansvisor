@@ -291,16 +291,18 @@ describe('getProductsForBlock', () => {
     };
   };
 
-  it("shows each one's cheapest variant in stock, however the feed spells it, its sale price first", async () => {
+  it("shows each one's best stock, then its cheapest variant there, however the feed spells it, a sale price counted", async () => {
     catalog({
       products: [row(1), row(2), row(4)],
       variants: {
         // The cheapest sold out; "In Stock" is in stock.
         [P1]: [variant(99, 'Out of Stock'), variant(189, 'in_stock'), variant(149, 'In Stock')],
-        // On sale, the cheapest it sells at.
+        // In stock before low stock, though the low-stock one sells for less
+        // (as the agent's grid picks it, #1607); on sale, the cheapest it sells at.
         [P4]: [
-          variant(120, 'in_stock'),
           variant(130, 'LIMITED AVAILABILITY', { sale_price: 110, currency: 'EUR' }),
+          variant(125, 'in_stock'),
+          variant(140, 'in_stock', { sale_price: 115, currency: 'EUR' }),
         ],
         // All sold out: no price, not in stock.
         [P2]: [variant(50, 'sold out'), variant(40, 'preorder')],
@@ -316,7 +318,7 @@ describe('getProductsForBlock', () => {
         currency: 'USD',
         inStock: true,
       },
-      { ...row(4), image: null, price: 130, salePrice: 110, currency: 'EUR', inStock: true },
+      { ...row(4), image: null, price: 140, salePrice: 115, currency: 'EUR', inStock: true },
       { ...row(2), image: null, price: null, salePrice: null, currency: null, inStock: false },
     ]);
   });
@@ -554,6 +556,23 @@ describe('getShoppingCheck', () => {
     };
   });
 
+  it('reads the price a card would show now, of the best stock, for each product that sells (#1610)', async () => {
+    db.catalog_variants = [
+      variant(1, 'limited_availability', { price: 149, sale_price: null, currency: 'USD' }),
+      variant(1, 'in_stock', { price: 199, sale_price: 179, currency: 'USD' }),
+      variant(2, 'in_stock', { price: null, sale_price: null, currency: 'USD' }),
+      variant(3, 'out_of_stock', { price: 50, sale_price: null, currency: 'USD' }),
+    ];
+    db.catalog_products = [row(1), row(2), row(3)];
+    draftRow().shopping_path = pathOf({ products: [1, 2, 3].map((n) => inPath(n)) });
+    const check = await getShoppingCheck(DRAFT);
+    expect(check?.products.map((p) => [p.state, p.price])).toEqual([
+      ['ok', '$179.00'],
+      ['ok', null],
+      ['sold_out', null],
+    ]);
+  });
+
   it('reads each product now: gone, sold out, refused only when every variant in stock is', async () => {
     const v1 = variant(1, 'In Stock');
     const v3a = variant(3, 'in_stock');
@@ -611,6 +630,8 @@ describe('getShoppingCheck', () => {
         title: `Boot ${n}`,
         state,
         inPath: true,
+        // No variant here has a price.
+        price: null,
       })),
       site: 'https://www.shop.example/',
       merchantCenter: false,
@@ -644,15 +665,28 @@ describe('getShoppingCheck', () => {
 
     const check = await getShoppingCheck(DRAFT);
     expect(check!.products).toEqual([
-      { key: 'shop.example/products/1', title: 'Boot 1', state: 'ok', inPath: true },
+      { key: 'shop.example/products/1', title: 'Boot 1', state: 'ok', inPath: true, price: null },
       // 11 still sells: linking it is fine.
-      { key: 'shop.example/products/10', title: 'Catalog 10', state: 'sold_out', inPath: false },
-      { key: 'shop.example/products/12', title: 'Catalog 12', state: 'gone', inPath: false },
+      {
+        key: 'shop.example/products/10',
+        title: 'Catalog 10',
+        state: 'sold_out',
+        inPath: false,
+        price: null,
+      },
+      {
+        key: 'shop.example/products/12',
+        title: 'Catalog 12',
+        state: 'gone',
+        inPath: false,
+        price: null,
+      },
       {
         key: 'shop.example/products/13?variant=1',
         title: 'Left Boot',
         state: 'refused',
         inPath: false,
+        price: null,
       },
     ]);
   });

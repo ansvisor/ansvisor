@@ -96,6 +96,7 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
 const {
   WRITE_SYSTEM_PROMPT,
   buildWritePrompt,
+  headingCase,
   briefText,
   renderPage,
   rewriteSystemPrompt,
@@ -109,7 +110,11 @@ const { WRITING_GUARDRAIL } = await import('./content-brief.js');
 const { REWRITE_SYSTEM_PROMPT } = await import('./content-rewrite.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { textLength } = await import('./content-rewrite.js');
-const { passageKey } = await import('./content-agent.js');
+const {
+  PLACEHOLDER_RULE,
+  SYSTEM_PROMPT: AGENT_SYSTEM_PROMPT,
+  passageKey,
+} = await import('./content-agent.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -194,6 +199,34 @@ describe('renderPage', () => {
         '<h2>Step by step</h2><p>Rinse, bloom, pour.</p>' +
         '<h2>FAQ</h2><h3>How long?</h3><p>[time] minutes.</p>',
     );
+  });
+
+  it('starts each heading with a capital, as a fan-out’s words come lowercase', () => {
+    const html = renderPage({
+      ...page,
+      sections: [{ heading: 'latest news ChatGPT', paragraphs: ['News.'], bullets: [] }],
+      faqHeading: 'questions',
+      faq: [{ question: 'how long does it take?', answer: 'Four minutes.' }],
+    });
+    expect(html).toContain('<h2>Latest news ChatGPT</h2>');
+    expect(html).toContain('<h2>Questions</h2><h3>How long does it take?</h3>');
+  });
+});
+
+describe('headingCase', () => {
+  it('capitalizes a lowercase first word, in the page’s language', () => {
+    expect(headingCase('latest news ChatGPT', 'en')).toBe('Latest news ChatGPT');
+    expect(headingCase('istanbul’da kahve', 'tr')).toBe('İstanbul’da kahve');
+    expect(headingCase('  çay rehberi ', 'tr')).toBe('Çay rehberi');
+  });
+
+  it('keeps a name written lowercase on purpose, a number and a heading already capitalized', () => {
+    expect(headingCase('iPhone tips for writers', 'en')).toBe('iPhone tips for writers');
+    expect(headingCase('eBay sellers', 'en')).toBe('eBay sellers');
+    expect(headingCase('2026 guide', 'en')).toBe('2026 guide');
+    expect(headingCase('Best CRM tools', 'en')).toBe('Best CRM tools');
+    // A language the runtime can't read still gets a capital.
+    expect(headingCase('latest news', 'not a locale!')).toBe('Latest news');
   });
 });
 
@@ -519,6 +552,36 @@ describe('runDraftWriting on a new page', () => {
     // What the person didn't give is still a placeholder.
     expect(written).not.toContain('Marco Rossi');
     expect(written).not.toContain('3,400');
+  });
+
+  it('saves the title as its H1 reads, a capital first, in the brand’s language', async () => {
+    generateObject.mockResolvedValue({
+      object: { ...page, title: 'latest news on pour-over coffee' },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await expect(run(draftRow())).resolves.toEqual({ written: true });
+    const saved = draftUpdates().find((u) => u.body_html);
+    expect(saved.title).toBe('Latest news on pour-over coffee');
+    expect(saved.body_html).toContain('<h1>Latest news on pour-over coffee</h1>');
+
+    // Turkish: "i" is "İ", in the title column as in the H1.
+    writes = [];
+    generateObject.mockResolvedValue({
+      object: { ...page, title: 'istanbul’da filtre kahve' },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await expect(
+      runDraftWriting({
+        draft: draftRow(),
+        brand: { ...brand, language: 'tr' },
+        model: 'model:m',
+        input: input(),
+        budget,
+      }),
+    ).resolves.toEqual({ written: true });
+    const tr = draftUpdates().find((u) => u.body_html);
+    expect(tr.title).toBe('İstanbul’da filtre kahve');
+    expect(tr.body_html).toContain('<h1>İstanbul’da filtre kahve</h1>');
   });
 
   /** A draft's shopping path as content_drafts.shopping_path keeps it. */
@@ -1230,6 +1293,20 @@ describe('the brief rules (2026) in the Content Agent', () => {
       ],
     },
   };
+
+  it('keeps placeholders for facts the person must find, never a page, a document or a competitor', () => {
+    // A page waited on "[About]", "[OpenAI release notes]" and "[competitor]".
+    for (const prompt of [
+      writeSystemPrompt(),
+      suggestSystemPrompt(),
+      rewriteSystemPrompt(),
+      AGENT_SYSTEM_PROMPT,
+    ]) {
+      expect(prompt).toContain(PLACEHOLDER_RULE);
+    }
+    expect(PLACEHOLDER_RULE).toContain('Never put a page, a document, a link');
+    expect(PLACEHOLDER_RULE).toContain('"OpenAI\'s release notes"');
+  });
 
   it('asks as before while they are off: the same prompts, the brief as version 1', () => {
     expect(writeSystemPrompt()).toBe(WRITE_SYSTEM_PROMPT);

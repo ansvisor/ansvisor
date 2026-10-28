@@ -266,17 +266,50 @@ describe('pageFields', () => {
     ).toBe('');
   });
 
-  it('cuts a long title’s slug at a word, up to 80 characters', () => {
+  it('cuts a long title’s slug at a word near 60 characters, without a leading "the" or a dangling word', () => {
     const slug = (title: string) =>
       pageFields({ title, html: '', sourceUrl: null, author: null, teamByline: '' }).slug;
     expect(
       slug(
         'Defend the coffee subscription comparison with up-to-date pricing and shipping details',
       ),
-    ).toBe('defend-the-coffee-subscription-comparison-with-up-to-date-pricing-and-shipping');
-    // A word that ends at 80 stays whole; one word longer than 80 is cut.
-    expect(slug(`${'a'.repeat(80)} b`)).toBe('a'.repeat(80));
-    expect(slug('b'.repeat(90))).toBe('b'.repeat(80));
+    ).toBe('defend-the-coffee-subscription-comparison-with-up-to-date');
+    // The page that went to Webflow with an 80-character address.
+    expect(
+      slug(
+        'The Ultimate Technical Guide to Unified Tracking Across ChatGPT, Gemini, and Google AIO',
+      ),
+    ).toBe('ultimate-technical-guide-to-unified-tracking-across-chatgpt');
+    // Never ending on a word that leads into what was cut.
+    expect(slug('Pour-over coffee guide for home baristas who brew with a kettle and a')).toBe(
+      'pour-over-coffee-guide-for-home-baristas-who-brew',
+    );
+    expect(slug('The Pour-over Guide')).toBe('pour-over-guide');
+    expect(slug('The')).toBe('the');
+    // One word longer than 60 is cut.
+    expect(slug('b'.repeat(90))).toBe('b'.repeat(60));
+    expect(slug(`${'a'.repeat(60)} b`)).toBe('a'.repeat(60));
+  });
+
+  it('never ends a Turkish title’s slug on a word that leads into what was cut, as the slug spells it', () => {
+    const slug = (title: string) =>
+      pageFields({ title, html: '', sourceUrl: null, author: null, teamByline: '' }).slug;
+    // "için" is "icin" in a slug: cut there, it goes too.
+    expect(slug('Yapay zekâ aramasında görünürlük isteyen yerel markalar için en iyi rehber')).toBe(
+      'yapay-zeka-aramasinda-gorunurluk-isteyen-yerel-markalar',
+    );
+    expect(slug('Yapay Zekâ Aramasında Görünürlük İsteyen Yerel Markalar İçin En İyi Rehber')).toBe(
+      'yapay-zeka-aramasinda-gorunurluk-isteyen-yerel-markalar',
+    );
+  });
+
+  it('drops "the", "a" or "an" only when it is the title’s first word, not a word’s start', () => {
+    const slug = (title: string) =>
+      pageFields({ title, html: '', sourceUrl: null, author: null, teamByline: '' }).slug;
+    expect(slug('A-Frame houses guide')).toBe('a-frame-houses-guide');
+    expect(slug('An-Najah alumni stories')).toBe('an-najah-alumni-stories');
+    expect(slug('A guide to A-Frame houses')).toBe('guide-to-a-frame-houses');
+    expect(slug('the pour-over guide')).toBe('pour-over-guide');
   });
 
   it('cuts a first sentence too long to fit at a word', () => {

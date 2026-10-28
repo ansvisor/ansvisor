@@ -35,6 +35,7 @@
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working.",
+      "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
       "otherLimits": "Other limits this month",
@@ -4078,9 +4079,10 @@
         "nothingToFix": "Content Agent found nothing it could change without new facts.",
         "breaks": "Would break {names}",
         "nothingToFixLocked": "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+        "notForAgentFeedShopping": "Content Agent doesn't change a price, GTIN or stock, or which products the page links: check which is right, the page or your product feed, and fix that one; then remove or replace the links to products that are out of stock, refused or gone.",
         "notForAgent": "Content Agent doesn't change heading levels: make the extra H1s H2s in the toolbar.",
         "notForAgentFeed": "Content Agent doesn't change a price, GTIN or stock: check which is right, the page or your product feed, and fix that one.",
-        "notForAgentShopping": "Content Agent doesn't change which products the page links: remove or replace the links to sold-out, refused or gone products yourself.",
+        "notForAgentShopping": "Content Agent doesn't change which products the page links: remove or replace the links to products that are out of stock, refused or gone yourself.",
         "decideFirst": "{count, plural, one {Review the open suggestion first, then run the agent.} other {Review the open suggestions first, then run the agent.}}",
         "citedLoading": "Reading which passages AI quotes, so the agent leaves them as they are…",
         "agentBusy": "Content Agent is already working on this page. Wait for it to finish.",
@@ -4508,7 +4510,7 @@
         "addThis": "Add {title}",
         "leftOut": "Left out",
         "reason": {
-          "sold_out": "sold out",
+          "sold_out": "not in stock",
           "refused": "Merchant Center refuses it",
           "no_link": "no page to link",
           "gone": "no longer in the catalog",
@@ -4523,7 +4525,7 @@
         "placeholder": "Product name…",
         "empty": "No product with that name.",
         "searchFailed": "Couldn't search the catalog. Try again.",
-        "soldOut": "Sold out",
+        "notInStock": "Not in stock",
         "noPage": "No page to link",
         "picked": "{count} of {max} picked",
         "unpick": "Remove {title}",
@@ -4675,6 +4677,20 @@
         "html": "Export HTML",
         "md": "Export Markdown",
         "failed": "Couldn't export the page. Try again."
+      },
+      "sentChip": {
+        "webflow": {
+          "queued": "Sending to Webflow…",
+          "sent": "In Webflow · draft",
+          "failed": "Webflow send failed",
+          "published": "Live"
+        },
+        "webhook": {
+          "queued": "Sending to your CMS…",
+          "sent": "Sent to your CMS",
+          "failed": "Send failed",
+          "published": "Live"
+        }
       },
       "send": {
         "button": "Send to CMS",
@@ -5062,11 +5078,14 @@
           "okDetail": "{count, plural, =0 {{category, select, yes {No product linked yet; the category page is.} other {No product linked yet.}}} one {# product linked, {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}.} other {# products linked, {merchantCenter, select, yes {in stock and accepted by Merchant Center} other {in stock}}.}}",
           "bad": "{count, plural, one {# product link to remove or replace} other {# product links to remove or replace}}",
           "badDetail": "{list}{more, plural, =0 {} other { +# more}}. Remove or replace these links on the page: Brief › Shopping path lists products that sell.",
-          "item": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+          "item": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
           "noCategory": "No link to the category page",
           "noCategoryDetail": "Link the category page in Brief › Shopping path, so readers reach the products.",
           "few": "{count} of {want} products linked",
-          "fewDetail": "Link more of the products in Brief › Shopping path that are in stock: a product card or grid counts."
+          "fewDetail": "Link more of the products in Brief › Shopping path that are in stock: a product card or grid counts.",
+          "prices": "{count, plural, one {# product card shows an old price} other {# product cards show an old price}}",
+          "pricesDetail": "{list}{more, plural, =0 {} other { +# more}}. A card keeps the price it was put in with. To show today's, replace the card: delete it and add the product again (Add › Products).",
+          "priceItem": "{title}: {page} on the page, {now, select, none {no price} other {{now}}} now"
         },
         "disclosure": {
           "ok": "Disclosure",
@@ -5094,6 +5113,7 @@
         },
         "jsonLd": "JSON-LD for this page",
         "copy": "Copy JSON-LD",
+        "showCode": "Show the JSON-LD, for a CMS that doesn't add it",
         "copied": "JSON-LD copied",
         "copyFailed": "Couldn't copy the JSON-LD. Select it and copy it yourself.",
         "fixFirst": "Fix first",
@@ -5537,7 +5557,7 @@
           "feedMatch": "Price, GTIN and stock match the feed",
           "shopCategoryLink": "Links its category page",
           "shopProductLinks": "Links the shopping path's products",
-          "shopLinksLive": "No sold-out or refused product linked",
+          "shopLinksLive": "No out-of-stock or refused product linked",
           "fitQuestions": "Answer fit and sizing questions",
           "first40Words": "Type + key attributes in the first 40 words",
           "introText": "Intro text above products",
@@ -5656,7 +5676,7 @@
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
-        "shopItem": "{title} ({state, select, sold_out {sold out} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
+        "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
         "fixTrace": "Fix",
         "fixTraceHint": "Content Agent rewrites only these phrases, for you to review",
         "agent": {
@@ -7806,11 +7826,11 @@
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",
-        "content": "Content Editor (briefs, Content Agent)",
+        "content": "Content Editor (briefs, Content Agent, quality checks)",
         "action_center": "Action Center task writing",
-        "quality": "Content Editor quality checks",
         "other": "Other"
       },
+      "none": "No AI usage yet this period.",
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
       "failed": "Couldn't read this period's AI usage. Try again later."
     },

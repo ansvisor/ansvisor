@@ -16,6 +16,8 @@ import type {
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import {
   NO_PATH_REASONS,
+  bestInStock,
+  priceText,
   shoppingChoicesSchema,
   shoppingPathSchema,
   type NoPathReason,
@@ -219,28 +221,6 @@ export interface BlockProductRead {
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>;
-interface VariantRead {
-  url: string | null;
-  price: number | null;
-  sale_price: number | null;
-  currency: string | null;
-  availability: string | null;
-}
-
-/**
- * The variant a card shows, as the API's path picks it (shopping-path.js
- * offerOf): the cheapest in stock, its sale price first; null with none in
- * stock.
- */
-function blockVariant(variants: VariantRead[]): VariantRead | null {
-  const inStock = variants.filter((v) => variantStock(v.availability) === 'in');
-  const sellsAt = (v: VariantRead) => v.sale_price ?? v.price ?? 0;
-  return (
-    inStock.filter((v) => v.price != null).sort((a, b) => sellsAt(a) - sellsAt(b))[0] ??
-    inStock[0] ??
-    null
-  );
-}
 
 /**
  * A product's live variants and, with `image`, its picture, read for it
@@ -274,7 +254,8 @@ function blockProduct(
   product: { id: string; title: string; url: string | null },
   details: Awaited<ReturnType<typeof readBlockDetails>>,
 ): BlockProductRead {
-  const variant = blockVariant(details.variants);
+  // As the API's path and the agent's grid pick it: the best stock, then the lowest price.
+  const variant = bestInStock(details.variants);
   return {
     id: product.id,
     title: product.title,
@@ -443,7 +424,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     readByIds(ids, (chunk, from, to) =>
       supabase
         .from('catalog_variants')
-        .select('id, product_id, external_id, url, availability')
+        .select('id, product_id, external_id, url, availability, price, sale_price, currency')
         .eq('brand_id', brandId)
         .in('product_id', chunk)
         .is('removed_at', null)
@@ -487,6 +468,17 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     if (list) list.push(v);
     else selling.set(v.product_id, [v]);
   }
+  // The price a card shows of it now, as one goes in (getProductsForBlock).
+  const priceOf = (id: string) => {
+    const variant = bestInStock(selling.get(id) ?? []);
+    return variant
+      ? priceText({
+          price: variant.price,
+          salePrice: variant.sale_price,
+          currency: variant.currency,
+        })
+      : null;
+  };
   const stateOf = (id: string): ShoppingLinkState => {
     const product = byId.get(id);
     if (!product || product.removed_at) return 'gone';
@@ -498,7 +490,11 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
   const pathProducts = path.products.flatMap((p): ShoppingProductCheck[] => {
     // A link the path couldn't keep (not http(s)) is null: nothing to check.
     const key = p.url ? linkKey(p.url) : null;
-    return key ? [{ key, title: p.title, state: stateOf(p.id), inPath: true }] : [];
+    if (!key) return [];
+    const state = stateOf(p.id);
+    return [
+      { key, title: p.title, state, inPath: true, price: state === 'ok' ? priceOf(p.id) : null },
+    ];
   });
   // Removed or left out: listed only when it no longer sells, at the
   // catalog's page for it (the path doesn't keep one).
@@ -510,7 +506,7 @@ export async function getShoppingCheck(draftId: string): Promise<ShoppingCheck |
     const url = product.url ?? variants.find((v) => v.product_id === id && v.url)?.url ?? null;
     const key = url ? linkKey(url) : null;
     const title = leftOutTitles.get(id) ?? product.title;
-    return key ? [{ key, title, state, inPath: false }] : [];
+    return key ? [{ key, title, state, inPath: false, price: null }] : [];
   });
   return {
     categories: path.categories
