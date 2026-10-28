@@ -213,13 +213,15 @@ export const CONTROL_MIN_COUNT = 5;
  * differences, for each metric both read: a rate in points (its move minus
  * theirs), a count in percent (its relative move minus theirs, so a basket
  * of 300 prompts weighs as one of 3), not from fewer than CONTROL_MIN_COUNT
- * before.
+ * before. Never AI sessions: they're read on pages, and a control of
+ * prompts has none.
  *
  * @returns {Array<{ metric: string, net: number, unit: 'points' | 'percent', control: { before: number, after: number } }>}
  */
 export function netEffect(metrics, controlValues) {
   const read = (before, after) => before != null && after != null;
   return metrics.flatMap((m) => {
+    if (m.unit === 'sessions') return [];
     const before = controlValues.before[m.metric];
     const after = controlValues.after[m.metric];
     if (!read(m.before, m.after) || !read(before, after)) return [];

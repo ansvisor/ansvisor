@@ -210,6 +210,26 @@ describe('HistoryDrawer', () => {
     );
   });
 
+  it('leaves the net line out when it names no metric it can show', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          controlNet: {
+            basis: 'brand',
+            prompts: 8,
+            net: [{ metric: 'unknown_metric', net: 1, unit: 'points' }],
+          },
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).not.toContain('Net of');
+  });
+
   it('says how a Site Audit fix’s pages read when audited again, or that none was yet (learning A2)', async () => {
     getActionSignals.mockResolvedValue([]);
     render(

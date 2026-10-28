@@ -186,6 +186,15 @@ describe('netEffect', () => {
     ).toEqual([]);
   });
 
+  it('never nets AI sessions: a control of prompts has no pages to read them on', () => {
+    expect(
+      netEffect([metric('ai_referral_traffic', 'sessions', 40, 80)], {
+        before: { ai_referral_traffic: 100 },
+        after: { ai_referral_traffic: 100 },
+      }),
+    ).toEqual([]);
+  });
+
   it('leaves out a count read from fewer than five before: one more is a swing, not a result', () => {
     const control = { before: { mentions: 100 }, after: { mentions: 100 } };
     expect(CONTROL_MIN_COUNT).toBe(5);

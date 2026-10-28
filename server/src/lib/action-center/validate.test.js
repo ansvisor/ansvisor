@@ -9,6 +9,7 @@ vi.mock('../logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+import { logger } from '../logger.js';
 import {
   MAX_GAP_DAYS,
   sweepActionValidation,
@@ -350,6 +351,10 @@ describe('validateAction', () => {
 
     const failed = await run(6, true);
     expect(failed.validation.control).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      { err: 'opportunity_basket_metrics: statement timeout', brandId: 'brand-1', actionId: 'a1' },
+      '[action-validation] control basket not read',
+    );
     expect(failed.outcome).toBe('improved');
     // The same as an action with no control to read.
     expect(failed).toEqual(await run(0, false));

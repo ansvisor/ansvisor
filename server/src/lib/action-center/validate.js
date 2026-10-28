@@ -463,7 +463,8 @@ export async function validateAction(action, { now = new Date() } = {}) {
  * Null with too few prompts to read, or a read that fails: the result
  * stands as it was.
  */
-async function controlOf(brandId, promptIds, { beforeWindow, afterWindow }) {
+async function controlOf(action, promptIds, { beforeWindow, afterWindow }) {
+  const brandId = action.brand_id;
   try {
     const scope = await controlScope(brandId, promptIds, beforeWindow.from);
     if (!scope) return null;
@@ -473,7 +474,10 @@ async function controlOf(brandId, promptIds, { beforeWindow, afterWindow }) {
     ]);
     return { basis: scope.basis, prompts: scope.promptIds.length, before, after };
   } catch (err) {
-    logger.warn({ err: err.message }, '[action-validation] control basket not read');
+    logger.warn(
+      { err: err.message, brandId, actionId: action.id },
+      '[action-validation] control basket not read',
+    );
     return null;
   }
 }
@@ -581,7 +585,7 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
     }));
     // Its aim: the first of its success metrics a basket reads, else its visibility.
     const primary = (action.kpi_keys ?? []).find((key) => key in BASKET_KPIS) ?? 'ai_visibility';
-    const control = await controlOf(action.brand_id, scope.promptIds, {
+    const control = await controlOf(action, scope.promptIds, {
       beforeWindow,
       afterWindow,
     });
@@ -643,7 +647,7 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
         before: brandBefore[metric] ?? null,
         after: brandAfter[metric] ?? null,
       }));
-      const control = await controlOf(action.brand_id, targets.promptIds, {
+      const control = await controlOf(action, targets.promptIds, {
         beforeWindow,
         afterWindow,
       });
