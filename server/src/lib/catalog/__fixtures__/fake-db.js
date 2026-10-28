@@ -49,6 +49,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
     if (table === 'catalog_source_credentials') return row.source_id;
     if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
+    if (table === 'cloro_countries') return `${row.model}|${row.country}`;
     if (table === 'content_shopping_checks') return row.draft_id;
     return `${row.brand_id}|${row.source}|${row.external_id}`;
   };
@@ -67,6 +68,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
       payload: null,
       returning: null,
       one: null,
+      count: null,
       order: [],
     };
     const run = () => {
@@ -84,6 +86,8 @@ export function fakeDb({ maxRows = Infinity } = {}) {
         });
       if (state.op === 'select') {
         const found = all.filter(match).sort(compareBy([...state.order, { column: 'id' }]));
+        // A count only, as `select(…, { count: 'exact', head: true })` asks.
+        if (state.count === 'head') return { data: null, count: found.length, error: null };
         const [start, end] = state.range ?? [0, found.length];
         const data = found.slice(start, end + 1).slice(0, state.one ? undefined : maxRows);
         if (state.one) return { data: data[0] ?? null, error: null };
@@ -137,9 +141,11 @@ export function fakeDb({ maxRows = Infinity } = {}) {
       throw new Error(`unexpected ${state.op}`);
     };
     const builder = {
-      // After a write, the rows it wrote, as PostgREST returns them.
-      select: () => {
+      // After a write, the rows it wrote, as PostgREST returns them. A
+      // `{ head: true }` select asks for the count only.
+      select: (_columns, options) => {
         if (state.op !== 'select') state.returning = true;
+        if (options?.head) state.count = 'head';
         return builder;
       },
       eq: (column, value) => {

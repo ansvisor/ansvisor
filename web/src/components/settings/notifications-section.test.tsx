@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * Settings › Notifications: the AI Traffic weekly digest (AT-013) is turned
@@ -23,6 +24,7 @@ const { NotificationsSection } = await import('./notifications-section');
 const fetchMock = vi.fn();
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
   canManage = true;
@@ -56,11 +58,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function render() {
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <NotificationsSection />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <NotificationsSection />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -69,6 +75,19 @@ async function render() {
 const checkbox = () => container.querySelector<HTMLButtonElement>('#traffic-digest-b1')!;
 
 describe('NotificationsSection', () => {
+  it('saves nothing on a read-only workspace: Save opens the upgrade dialog', async () => {
+    openUpgrade.mockClear();
+    await render(true);
+    const save = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Save changes',
+    )!;
+    await act(async () => save.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith(
+      'Saving notification settings needs a plan',
+    );
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+  });
+
   it('shows the weekly digest on, and saves it off with the pulse', async () => {
     await render();
     expect(container.textContent).toContain('AI Traffic weekly digest');
