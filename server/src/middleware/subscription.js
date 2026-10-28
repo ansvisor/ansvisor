@@ -17,7 +17,8 @@ import logger from '../lib/logger.js';
  *   - ONBOARDING_ROUTES, for an organization that never had a subscription:
  *     setup suggests the brand's topics, prompts and competitors before the
  *     plan step, and again when the person comes back from it, up to
- *     ONBOARDING_DAILY_CALLS a day for the organization (429 past them).
+ *     ONBOARDING_DAILY_CALLS a day for the person and for the organization
+ *     (429 past them).
  * A person's own profile and signing out are the web app's, through
  * Supabase; neither comes through this API. A request with no signed-in
  * person is refused too: decodeToken answers it first.
@@ -82,7 +83,9 @@ export const ONBOARDING_ROUTES = [
  * Onboarding's calls an organization that never subscribed may make a day
  * (UTC), all three routes together: a setup asks each once, so this leaves
  * room for several setups and retries, and bounds what a workspace without a
- * plan can spend on AI. Counted in this process's memory.
+ * plan can spend on AI. Counted for the person and for their organization,
+ * so neither one person nor an organization of several gets more. Counted
+ * in this process's memory.
  */
 export const ONBOARDING_DAILY_CALLS = 20;
 
@@ -112,7 +115,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Person id → until when their organization is taken as active. */
 const activeUntil = new Map();
 
-/** `org:<id>` (`user:<id>` before the organization exists) → { day, calls } */
+/** `user:<id>` and `org:<id>` → { day, calls } */
 const onboardingCalls = new Map();
 
 function matches(routes, { method, path }) {
@@ -124,24 +127,31 @@ function isOpen(req) {
 }
 
 /**
- * Counts one onboarding call for `key` today (UTC): false once the day's
- * ONBOARDING_DAILY_CALLS are used. A count from an earlier day starts over,
- * at the end of the map: the counts are kept in the order their day began,
- * so the oldest goes first when MAX_ENTRIES are kept.
+ * Counts one onboarding call today (UTC) for each of `keys`: false, counting
+ * none, once any of them has used the day's ONBOARDING_DAILY_CALLS. A count
+ * from an earlier day starts over, at the end of the map: the counts are
+ * kept in the order their day began, so the oldest goes first when
+ * MAX_ENTRIES are kept.
  */
-function takeOnboardingCall(key, now) {
+function takeOnboardingCall(keys, now) {
   const day = Math.floor(now / DAY_MS);
-  const kept = onboardingCalls.get(key);
-  if (kept?.day === day) {
-    if (kept.calls >= ONBOARDING_DAILY_CALLS) return false;
-    kept.calls += 1;
-    return true;
+  const usedUp = (key) => {
+    const kept = onboardingCalls.get(key);
+    return kept?.day === day && kept.calls >= ONBOARDING_DAILY_CALLS;
+  };
+  if (keys.some(usedUp)) return false;
+  for (const key of keys) {
+    const kept = onboardingCalls.get(key);
+    if (kept?.day === day) {
+      kept.calls += 1;
+      continue;
+    }
+    onboardingCalls.delete(key);
+    if (onboardingCalls.size >= MAX_ENTRIES) {
+      onboardingCalls.delete(onboardingCalls.keys().next().value);
+    }
+    onboardingCalls.set(key, { day, calls: 1 });
   }
-  onboardingCalls.delete(key);
-  if (onboardingCalls.size >= MAX_ENTRIES) {
-    onboardingCalls.delete(onboardingCalls.keys().next().value);
-  }
-  onboardingCalls.set(key, { day, calls: 1 });
   return true;
 }
 
@@ -224,7 +234,8 @@ export async function requireActiveSubscription(req, res, next) {
       return next();
     }
     if (access === 'never_subscribed' && matches(ONBOARDING_ROUTES, req)) {
-      if (takeOnboardingCall(orgId ? `org:${orgId}` : `user:${userId}`, now)) return next();
+      const keys = orgId ? [`user:${userId}`, `org:${orgId}`] : [`user:${userId}`];
+      if (takeOnboardingCall(keys, now)) return next();
       const tomorrow = (Math.floor(now / DAY_MS) + 1) * DAY_MS;
       res.set('Retry-After', String(Math.ceil((tomorrow - now) / 1000)));
       return res.status(429).json(ONBOARDING_LIMIT_REACHED);
