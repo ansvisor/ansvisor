@@ -252,6 +252,19 @@ describe('HistoryDrawer', () => {
     );
   });
 
+  it('says why a dismissed action was dismissed (learning A5)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, status: 'dismissed', dismissReason: 'wrong_data' }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain('Dismissed: The data behind it is wrong.');
+  });
+
   it('says a dismissed action was not measured, not that nothing could be read', async () => {
     getActionSignals.mockResolvedValue([]);
     for (const outcome of ['not_measurable', 'pending_measurement'] as const) {

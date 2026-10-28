@@ -40,6 +40,7 @@ import {
   type ActionTask,
 } from '@/lib/actions/action-center';
 import type { TeamMember } from '@/lib/actions/team';
+import { DismissReasonDialog } from './dismiss-reason-dialog';
 import {
   ACTION_STATUSES,
   TASK_STATUSES,
@@ -158,6 +159,8 @@ export function ActionDrawer({
   const tTaskCard = useTranslations('actionCenter.actionsPage.drawer.task');
   const missingText = useMissingText();
   const [checking, setChecking] = useState<string | null>(null);
+  // Dismissed from the status select: why, first (learning A5).
+  const [dismissing, setDismissing] = useState(false);
   // The drafts written for the action's writing tasks (CE-022), once read.
   const [drafts, setDrafts] = useState<ActionDraft[]>([]);
 
@@ -400,6 +403,17 @@ export function ActionDrawer({
 
   return (
     <Sheet open={Boolean(action)} onOpenChange={onOpenChange}>
+      {action && (
+        <DismissReasonDialog
+          open={dismissing}
+          onOpenChange={setDismissing}
+          onChoose={(reason) =>
+            void changeField({ status: 'dismissed' }, () =>
+              updateActionStatus(brandId, action.id, 'dismissed', reason),
+            )
+          }
+        />
+      )}
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         {/* pt-3: the top row's buttons line up with the sheet's close button. */}
         <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
@@ -469,9 +483,12 @@ export function ActionDrawer({
             <Select
               value={action.status}
               onValueChange={(value) =>
-                void changeField({ status: value as ActionStatus }, () =>
-                  updateActionStatus(brandId, action.id, value as ActionStatus),
-                )
+                // Dismissing asks why first (learning A5).
+                value === 'dismissed'
+                  ? setDismissing(true)
+                  : void changeField({ status: value as ActionStatus }, () =>
+                      updateActionStatus(brandId, action.id, value as ActionStatus),
+                    )
               }
               items={ACTION_STATUSES.map((status) => ({
                 value: status,

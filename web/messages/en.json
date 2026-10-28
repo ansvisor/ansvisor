@@ -133,6 +133,27 @@
     "toggleSubmenu": "Show or hide {label}"
   },
   "actionCenter": {
+    "dismissReason": {
+      "title": "Why dismiss it?",
+      "description": "This helps Ansvisor suggest the work that fits you.",
+      "not_relevant": {
+        "label": "It doesn't matter to us",
+        "hint": "What it's about isn't something the brand works on."
+      },
+      "already_done": {
+        "label": "It's already done",
+        "hint": "The work was done before, or somewhere Ansvisor doesn't see."
+      },
+      "wrong_data": {
+        "label": "The data behind it is wrong",
+        "hint": "The signals, prompts or pages it's built on don't hold."
+      },
+      "not_now": {
+        "label": "Not now",
+        "hint": "It's right, but other work comes first."
+      },
+      "skip": "Dismiss without saying why"
+    },
     "tabs": {
       "label": "Action Center sections",
       "review": "Needs review",
@@ -2594,6 +2615,7 @@
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
+        "dismissedBecause": "Dismissed: {reason}.",
         "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
         "brandWide": "Brand-wide over the same days: {list}",
         "primary": "Judged by {metric}, its main metric.",

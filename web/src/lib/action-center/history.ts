@@ -23,7 +23,13 @@
  * populating these, not reshaping them.
  */
 
-import type { ActionCategory, ActionOutcome, ActionStatus, TaskStatus } from './registry';
+import type {
+  ActionCategory,
+  ActionDismissReason,
+  ActionOutcome,
+  ActionStatus,
+  TaskStatus,
+} from './registry';
 import { highestPriorityLevel, type PriorityLevel } from './priority';
 import type { SignalSource } from '@/lib/signals/registry';
 import type { ImproveOutcome } from '@/lib/improve-outcome';
@@ -115,6 +121,8 @@ export interface ActionHistoryItem {
   affected: AffectedEntity[];
   /** Empty until something measures an action's effect. */
   results: ActionResultMetric[];
+  /** Why it was dismissed, when someone said (learning A5). */
+  dismissReason?: ActionDismissReason | null;
   /** Its signals when it was measured; absent before, or with no signal behind it. */
   signalsAfter?: SignalOutcome | null;
   /**

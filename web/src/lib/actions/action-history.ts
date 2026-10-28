@@ -16,7 +16,13 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { ActionCategory } from '@/lib/action-center/registry';
-import type { ActionOutcome, ActionStatus, TaskStatus } from '@/lib/action-center/registry';
+import {
+  ACTION_DISMISS_REASONS,
+  type ActionDismissReason,
+  type ActionOutcome,
+  type ActionStatus,
+  type TaskStatus,
+} from '@/lib/action-center/registry';
 import { SIGNAL_SOURCES, type SignalSource } from '@/lib/signals/registry';
 import { parseImproveOutcome } from '@/lib/improve-outcome';
 import { storedPriorityLevel } from '@/lib/action-center/priority';
@@ -50,10 +56,11 @@ interface HistoryRow {
   updated_at: string;
   priority_score: number | null;
   priority_level: string | null;
+  dismiss_reason: string | null;
 }
 
 const HISTORY_COLUMNS =
-  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level';
+  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level, dismiss_reason';
 
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
@@ -322,6 +329,11 @@ export async function getActionHistory(
       triggerSignals,
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
+      dismissReason: (ACTION_DISMISS_REASONS as readonly string[]).includes(
+        row.dismiss_reason ?? '',
+      )
+        ? (row.dismiss_reason as ActionDismissReason)
+        : null,
       signalsAfter: signalsFrom(row.validation),
       measuredOn: measuredOnFrom(row.validation),
       auditAfter: auditFrom(row.validation),

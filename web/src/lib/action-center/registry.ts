@@ -157,6 +157,19 @@ export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
   'not_measurable',
 ];
 
+/**
+ * Why an action was dismissed, as the person says it (00366, learning A5):
+ * it doesn't matter to the brand, the work is already done, the data behind
+ * it is wrong, or not now.
+ */
+export const ACTION_DISMISS_REASONS = [
+  'not_relevant',
+  'already_done',
+  'wrong_data',
+  'not_now',
+] as const;
+export type ActionDismissReason = (typeof ACTION_DISMISS_REASONS)[number];
+
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
 

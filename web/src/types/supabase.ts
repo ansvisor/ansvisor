@@ -243,6 +243,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           dedup_key: string
+          dismiss_reason: string | null
           due_date: string | null
           id: string
           impact: string
@@ -271,6 +272,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact: string
@@ -299,6 +301,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key?: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact?: string
