@@ -97,6 +97,12 @@ describe('postJson', () => {
       res.end('x'.repeat(MAX_ANSWER_BYTES * 3));
     },
     '/slow': (_req, res) => setTimeout(() => res.end('late'), 300),
+    // The status and the start of the answer, then nothing until the time limit.
+    '/stalled': (_req, res) => {
+      res.writeHead(200, { 'content-length': '100' });
+      res.write('accepted');
+      setTimeout(() => res.end(), 300);
+    },
   };
 
   beforeAll(async () => {
@@ -164,6 +170,13 @@ describe('postJson', () => {
 
   it('gives up on a slow webhook', async () => {
     await expect(post('/slow', { timeoutMs: 50 })).rejects.toMatchObject({ code: 'timeout' });
+  });
+
+  it('keeps a status that arrived before the time limit, with what was read (#1605)', async () => {
+    await expect(post('/stalled', { timeoutMs: 100 })).resolves.toEqual({
+      status: 200,
+      answer: 'accepted',
+    });
   });
 
   afterEach(() => vi.unstubAllEnvs());
