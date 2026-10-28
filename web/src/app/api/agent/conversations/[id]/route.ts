@@ -45,6 +45,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  * DELETE /api/agent/conversations/[id]
  *
  * Drop a conversation (cascades to its messages). Ownership-check first.
+ * Open while the workspace is read-only: deleting a conversation starts no cost.
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await resolveAgentAuth();

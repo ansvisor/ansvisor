@@ -11,6 +11,14 @@ export type BillingInterval = 'month' | 'year';
  */
 export const FIRST_MONTH_CODE = 'SAVE50';
 
+/**
+ * Whether a promotion code goes with this billing period: a monthly plan
+ * only, since a year up front has its own discount.
+ */
+export function takesPromoCode(interval: BillingInterval): boolean {
+  return interval === 'month';
+}
+
 /** A plan's price for one billing period, from the config; null when it has none. */
 export function periodPrice(planId: PlanId, interval: BillingInterval): number | null {
   const pricing = PLANS[planId].pricing;
@@ -65,7 +73,7 @@ export function planChange(
     if (current.status !== 'trialing') {
       return { kind: 'refused', error: 'Only a free trial can be bought now' };
     }
-    const promoCode = interval === 'month' ? request.promoCode || null : null;
+    const promoCode = takesPromoCode(interval) ? request.promoCode || null : null;
     return { kind: 'buy_now', planId, interval, promoCode };
   }
 
@@ -73,4 +81,21 @@ export function planChange(
     return { kind: 'refused', error: 'Already on this plan' };
   }
   return { kind: 'change', planId, interval };
+}
+
+/**
+ * Stripe statuses with a subscription still there to change or fix: billing
+ * on it, a payment being retried (`past_due`, `unpaid`; the card is updated
+ * in Stripe's billing page), or a trial paused for a card.
+ */
+const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
+
+/**
+ * Whether the organization has no subscription left to change — a canceled
+ * plan, an expired first payment, or none ever — so choosing a plan starts a
+ * new one through Checkout instead of changing the old one, which Stripe
+ * refuses once it has ended.
+ */
+export function subscriptionEnded(status: string | null | undefined): boolean {
+  return !status || !LIVE_STATUSES.has(status);
 }

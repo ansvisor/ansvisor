@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Brand } from '@/types';
 import { ConversionsCard } from './_conversions-card';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 const updateBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({
@@ -42,6 +43,7 @@ const brand = (over: Partial<Brand> = {}): Brand => ({
 let container: HTMLDivElement;
 let root: Root;
 const onUpdate = vi.fn();
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
   container = document.createElement('div');
@@ -59,11 +61,15 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(over: Partial<Brand> = {}) {
+async function render(over: Partial<Brand> = {}, isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ConversionsCard brand={brand(over)} onUpdate={onUpdate} />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ConversionsCard brand={brand(over)} onUpdate={onUpdate} />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -115,6 +121,17 @@ describe('ConversionsCard', () => {
     // Each copy button says what it copies.
     expect(container.querySelector('button[aria-label="Copy the tag"]')).not.toBeNull();
     expect(container.textContent).toContain("What it can't see");
+  });
+
+  it('turns nothing on on a read-only workspace: the box opens the upgrade dialog', async () => {
+    openUpgrade.mockReset();
+    await render({}, true);
+    await click(checkbox());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith(
+      'Changing conversion tracking needs a plan',
+    );
+    expect(updateBrand).not.toHaveBeenCalled();
+    expect(codes()).toEqual([]);
   });
 
   it('turns back what it couldn’t save, and says so', async () => {
