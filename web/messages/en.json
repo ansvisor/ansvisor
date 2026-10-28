@@ -7254,6 +7254,88 @@
     "label": "{range} a month, estimated, {level} confidence",
     "perMonth": "/mo"
   },
+  "promptDemand": {
+    "title": "Demand · is this asked for real?",
+    "keyword": "Read for “{keyword}”",
+    "loadFailed": "Couldn't load this prompt's demand.",
+    "measured": "Measured",
+    "measuredTitle": "Measured from real searches, not estimated.",
+    "kpiTitle": "Demand · {signals} of {total} signals",
+    "level": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "note": {
+      "high": "Demand level <b>High</b> raises the Priority Score of Action Center actions about this prompt.",
+      "medium": "Demand level <b>Medium</b> raises the Priority Score of Action Center actions about this prompt a little.",
+      "low": "Demand level <b>Low</b> leaves the Priority Score of Action Center actions about this prompt as it is.",
+      "none": "Once a signal is read, the demand level feeds the Priority Score of Action Center actions about this prompt."
+    },
+    "readOn": "{source} · read {date}",
+    "gsc": {
+      "title": "Search Console",
+      "window": "Measured · last 28 days",
+      "source": "Your Search Console",
+      "totals": "<b>{impressions}</b> impressions · <b>{clicks}</b> clicks",
+      "queries": "{count, plural, one {# matching query} other {# matching queries}}, e.g. “{query}”",
+      "noQueries": "None of your Search Console queries in the last 28 days matches this prompt.",
+      "notConnected": "Connect Search Console to see real clicks.",
+      "notConnectedBody": "The searches that brought people to your site are matched to this prompt every night.",
+      "connect": "Connect Search Console",
+      "connectNotAllowed": "Ask an admin or a manager to connect Search Console.",
+      "unmapped": "Pick this brand's Search Console property to see real clicks.",
+      "manage": "Manage in Settings",
+      "syncing": "Search Console is syncing. Its queries are matched to this prompt the night after the first sync.",
+      "notConfigured": "Search Console isn't set up on this server.",
+      "notRead": "Not read yet. Matching queries are read every night."
+    },
+    "trends": {
+      "title": "Google Trends",
+      "window": "12 months",
+      "source": "Google Trends via DataForSEO",
+      "rising": "Rising",
+      "steady": "Steady",
+      "falling": "Falling",
+      "change": "<b>{trend}</b> · {change} vs a year ago",
+      "risingFromNone": "<b>Rising</b> · from no search interest a year ago",
+      "label": "<b>{trend}</b>",
+      "noData": "Too little search interest to draw a line."
+    },
+    "paa": {
+      "title": "People Also Ask",
+      "window": "Google",
+      "source": "Google results via DataForSEO",
+      "track": "+ Track",
+      "trackLabel": "Track “{question}”",
+      "tracked": "Tracked",
+      "trackedLabel": "“{question}” is tracked",
+      "tracking": "Adding…",
+      "trackNotAllowed": "Only admins and managers can add prompts.",
+      "trackedToast": "“{question}” is now a tracked prompt.",
+      "alreadyTrackedToast": "“{question}” is already a tracked prompt.",
+      "planLimit": "Your plan's prompt limit is reached. Upgrade to track more prompts.",
+      "trackFailed": "Couldn't track this question.",
+      "none": "Google shows no People Also Ask questions for this keyword."
+    },
+    "youtube": {
+      "title": "YouTube",
+      "window": "Top results",
+      "source": "YouTube results via DataForSEO",
+      "totals": "<b>{views}</b> views across the top <b>{videos}</b> videos",
+      "top": "Top: “{title}” · {views} views",
+      "results": "YouTube lists about {count} results.",
+      "none": "YouTube shows no videos for this keyword."
+    },
+    "paid": {
+      "pending": "Being read. Ready within a day.",
+      "noVolume": "Analyze volume first. Trends, People Also Ask and YouTube are read for the keyword the volume analysis finds.",
+      "noVolumeLink": "Open Prompts Insights",
+      "noKeyword": "Nothing to read: Google shows no searches for this prompt's keywords.",
+      "off": "Not read yet. Weekly reads aren't turned on yet.",
+      "notRead": "Not read yet. It's read about once a week."
+    }
+  },
   "mentions": {
     "title": "Mentions & Sentiment",
     "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",

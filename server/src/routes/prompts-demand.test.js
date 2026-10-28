@@ -9,10 +9,13 @@ import express from 'express';
 
 let demand;
 let profileOrg;
+/** The brand's prompts, as a list read gets them. */
+let brandPrompts;
 
 function table(name) {
-  const result = () => {
+  const result = (list = false) => {
     if (name === 'prompts') {
+      if (list) return { data: brandPrompts, error: null };
       return { data: { id: 'p1', text: 'best crm', prompt_sets: { brand_id: 'b1' } }, error: null };
     }
     if (name === 'brands') return { data: { id: 'b1', organization_id: 'o1' }, error: null };
@@ -36,7 +39,7 @@ function table(name) {
     {
       get: (_t, prop) => {
         if (prop === 'then') {
-          return (resolve, reject) => Promise.resolve(result()).then(resolve, reject);
+          return (resolve, reject) => Promise.resolve(result(true)).then(resolve, reject);
         }
         if (prop === 'single' || prop === 'maybeSingle') return async () => result();
         return () => chain;
@@ -69,6 +72,7 @@ let baseUrl;
 beforeEach(async () => {
   demand = null;
   profileOrg = 'o1';
+  brandPrompts = [{ id: 'p1', text: 'best crm', prompt_sets: { brand_id: 'b1' } }];
   vi.stubEnv('DEMAND_SIGNALS', 'false');
   const app = express();
   app.use((req, _res, next) => {
@@ -119,6 +123,34 @@ describe('GET /api/prompts/:promptId/demand', () => {
       hasKeyword: true,
       paidSignals: false,
     });
+  });
+
+  it('says which People Also Ask questions the brand already tracks, however they are written', async () => {
+    brandPrompts.push({
+      id: 'p2',
+      text: '  what is the BEST crm for startups ',
+      prompt_sets: { brand_id: 'b1' },
+    });
+    demand = {
+      prompt_id: 'p1',
+      brand_id: 'b1',
+      keyword: 'best crm',
+      paa: {
+        questions: [
+          { question: 'What is the best CRM for startups?', url: null, domain: null },
+          { question: 'Is HubSpot CRM free?', url: null, domain: null },
+        ],
+        at: '2026-10-27T07:00:00Z',
+      },
+      level: 'medium',
+      signals: 1,
+    };
+    const res = await fetch(`${baseUrl}/p1/demand`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).demand.paa.questions).toEqual([
+      { question: 'What is the best CRM for startups?', url: null, domain: null, tracked: true },
+      { question: 'Is HubSpot CRM free?', url: null, domain: null, tracked: false },
+    ]);
   });
 
   it('answers an empty card for a prompt nothing was read for', async () => {

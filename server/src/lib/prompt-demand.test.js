@@ -172,6 +172,7 @@ const {
   paaSignal,
   pickDue,
   postDemandTasks,
+  questionKey,
   sweepOrder,
   sweepPromptDemand,
   topKeyword,
@@ -596,6 +597,26 @@ describe('paaSignal', () => {
     expect(paaSignal({ items: [SERP_RESULT.items[0]] }, AT)).toEqual({ questions: [], at: AT });
     expect(paaSignal(null, AT)).toEqual({ questions: [], at: AT });
   });
+
+  it('keeps no link that is not an http(s) URL', () => {
+    const element = (url) => ({
+      type: 'people_also_ask_element',
+      title: `Question ${url}`,
+      expanded_element: [{ url, domain: 'example.org' }],
+    });
+    const result = {
+      items: [
+        {
+          type: 'people_also_ask',
+          items: [element('javascript:alert(1)'), element('https://example.org/a')],
+        },
+      ],
+    };
+    expect(paaSignal(result, AT).questions.map((q) => q.url)).toEqual([
+      null,
+      'https://example.org/a',
+    ]);
+  });
 });
 
 describe('youtubeSignal', () => {
@@ -613,6 +634,16 @@ describe('youtubeSignal', () => {
       },
       at: AT,
     });
+  });
+
+  it('keeps no link that is not an http(s) URL', () => {
+    const video = { type: 'youtube_video', title: 'A video', views_count: 10 };
+    for (const url of ['javascript:alert(1)', 'data:text/html,hi', '/watch?v=x', 42]) {
+      expect(youtubeSignal({ items: [{ ...video, url }] }, AT).top.url).toBeNull();
+    }
+    expect(youtubeSignal({ items: [{ ...video, url: 'http://youtu.be/x' }] }, AT).top.url).toBe(
+      'http://youtu.be/x',
+    );
   });
 });
 
@@ -1252,6 +1283,18 @@ describe('collecting the tasks whose ids were lost', () => {
   });
 });
 
+describe('questionKey', () => {
+  it('reads the same question written differently as one', () => {
+    expect(questionKey('How do I track my brand in ChatGPT?')).toBe(
+      questionKey('  how do I track  my brand in chatgpt'),
+    );
+    expect(questionKey('Café-crème: what is it?')).toBe('cafe creme what is it');
+    expect(questionKey('What is AI search monitoring?')).not.toBe(
+      questionKey('What is AI search?'),
+    );
+  });
+});
+
 describe('demandResponse', () => {
   it("says what the card needs about the signals that aren't there", () => {
     expect(demandResponse(null, null, { paid: false })).toEqual({
@@ -1285,5 +1328,20 @@ describe('demandResponse', () => {
       hasKeyword: true,
       paidSignals: true,
     });
+  });
+
+  it('marks the People Also Ask questions the brand already tracks', () => {
+    const row = {
+      level: 'medium',
+      signals: 1,
+      paa: { questions: paaSignal(SERP_RESULT, AT).questions, at: AT },
+    };
+    const keys = new Set([questionKey('how do i track my brand in chatgpt')]);
+    const { paa } = demandResponse(row, null, { paid: true, trackedKeys: keys });
+    expect(paa.questions.map((q) => [q.question, q.tracked])).toEqual([
+      ['How do I track my brand in ChatGPT?', true],
+      ['What is AI search monitoring?', false],
+      ['Is there a tool to monitor AI answers?', false],
+    ]);
   });
 });

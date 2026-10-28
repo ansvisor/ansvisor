@@ -287,6 +287,17 @@ export function trendsSignal(result, at) {
   return { ...base, trend, change };
 }
 
+/** A link the provider gave, kept only when it's an http(s) URL; null otherwise. */
+export function webUrl(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'https:' || protocol === 'http:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * People Also Ask on Google's first page (SERP organic, advanced): each
  * question (people_also_ask_element's title) and the page Google answers it
@@ -311,7 +322,7 @@ export function paaSignal(result, at) {
         : element.expanded_element;
       questions.push({
         question,
-        url: typeof expanded?.url === 'string' ? expanded.url : null,
+        url: webUrl(expanded?.url),
         domain: typeof expanded?.domain === 'string' ? expanded.domain : null,
       });
     }
@@ -334,7 +345,7 @@ export function youtubeSignal(result, at) {
     if (!top || count > top.views) {
       top = {
         title: String(video.title ?? '').slice(0, 300),
-        url: typeof video.url === 'string' ? video.url : null,
+        url: webUrl(video.url),
         channel: typeof video.channel_name === 'string' ? video.channel_name : null,
         views: count,
         published: typeof video.timestamp === 'string' ? video.timestamp : null,
@@ -932,13 +943,55 @@ export function scheduleDemandCollect(delayMs = COLLECT_DELAY_MS) {
 // ─── What the card reads ────────────────────────────────────────────────────
 
 /**
+ * A prompt's text as compared for "already tracked": case, accents,
+ * punctuation and spacing don't count ("How do I track my brand in
+ * ChatGPT?" is "how do i track my brand in chatgpt"). The web's +Track
+ * makes the same check before it adds a question (web/src/lib/prompt-demand.ts).
+ */
+export function questionKey(text) {
+  return String(text ?? '')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/** The brand's prompts' texts, active or paused, as questionKey reads them. */
+export async function brandPromptKeys(brandId) {
+  const rows = await selectAll(() =>
+    supabaseAdmin
+      .from('prompts')
+      .select('id, text, prompt_sets!inner(brand_id)')
+      .eq('prompt_sets.brand_id', brandId)
+      .order('id', { ascending: true }),
+  );
+  return new Set(rows.map((r) => questionKey(r.text)).filter(Boolean));
+}
+
+/**
  * What GET /api/prompts/:id/demand answers: the signals read, the level,
  * which tasks are still waiting, and what the card needs to say about a
  * missing signal: whether the prompt has a volume analysis and a keyword to
  * read the paid signals for, and whether they're read at all on this server.
+ * Each People Also Ask question says whether the brand already tracks it
+ * (`trackedKeys`, from brandPromptKeys), so its +Track isn't offered twice.
  */
-export function demandResponse(row, volume, { paid = paidSignalsEnabled() } = {}) {
+export function demandResponse(
+  row,
+  volume,
+  { paid = paidSignalsEnabled(), trackedKeys = new Set() } = {},
+) {
   const keyword = topKeyword(volume);
+  const paa = row?.paa
+    ? {
+        ...row.paa,
+        questions: (row.paa.questions ?? []).map((q) => ({
+          ...q,
+          tracked: trackedKeys.has(questionKey(q.question)),
+        })),
+      }
+    : null;
   return {
     level: row?.level ?? null,
     signals: row?.signals ?? 0,
@@ -948,7 +1001,7 @@ export function demandResponse(row, volume, { paid = paidSignalsEnabled() } = {}
     languageCode: row?.keyword ? (row.language_code ?? null) : (keyword?.languageCode ?? null),
     gsc: row?.gsc ?? null,
     trends: row?.trends ?? null,
-    paa: row?.paa ?? null,
+    paa,
     youtube: row?.youtube ?? null,
     pending: Object.fromEntries(PAID_SIGNALS.map((name) => [name, Boolean(row?.tasks?.[name])])),
     hasVolume: Boolean(volume),
