@@ -13,16 +13,18 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 
 let profile: Record<string, unknown> | null;
 let org: Record<string, unknown> | null;
+/** A read that fails, by table. */
+let failing: string | null = null;
 
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from: (table: string) => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({
-            data: table === 'profiles' ? profile : org,
-            error: null,
-          }),
+          maybeSingle: async () =>
+            failing === table
+              ? { data: null, error: { message: `${table} read failed` } }
+              : { data: table === 'profiles' ? profile : org, error: null },
         }),
       }),
     }),
@@ -42,6 +44,7 @@ const auth: McpAuthContext = {
 describe('getMeFor', () => {
   beforeEach(() => {
     org = { name: 'Acme' };
+    failing = null;
   });
 
   it('names the role, the work areas and that a manager may change menus', async () => {
@@ -83,6 +86,14 @@ describe('getMeFor', () => {
       can_manage_menus: false,
     });
   });
+
+  it('fails rather than answer a role it could not read', async () => {
+    profile = { role: 'admin', work_areas: [], can_manage_menus: false };
+    failing = 'profiles';
+    await expect(getMeFor(auth)).rejects.toThrow('profiles read failed');
+    failing = 'organizations';
+    await expect(getMeFor(auth)).rejects.toThrow('organizations read failed');
+  });
 });
 
 describe('getAiUsageFor', () => {
@@ -92,6 +103,7 @@ describe('getAiUsageFor', () => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('CRON_SECRET', 'secret');
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   });
 
   afterEach(() => {
@@ -158,6 +170,17 @@ describe('getAiUsageFor', () => {
     await expect(getAiUsageFor(auth)).rejects.toThrow('boom');
   });
 
+  it('answers unlimited self-hosted, without asking the server', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(await getAiUsageFor(auth)).toMatchObject({
+      active_plan: true,
+      plan: 'self_hosted',
+      unlimited: true,
+      percent_used: null,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('asks nothing without an organization, or without the internal secret', async () => {
     expect(await getAiUsageFor({ ...auth, organizationId: null })).toBeNull();
     vi.stubEnv('CRON_SECRET', '');
@@ -170,6 +193,7 @@ describe('the get_me and get_ai_usage tools', () => {
   it('list as read-only tools with a title, and answer as JSON', async () => {
     profile = { role: 'admin', work_areas: ['aeo'], can_manage_menus: false };
     org = { name: 'Acme' };
+    failing = null;
     const server = createMcpServer(auth);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);

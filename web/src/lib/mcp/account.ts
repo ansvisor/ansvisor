@@ -2,6 +2,7 @@ import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { API_BASE_URL } from '@/config/api';
+import { isCloud } from '@/config/plans';
 import { aiUsageFromApi, type AiUsage, type AiUsageFeature } from '@/lib/billing/ai-usage';
 import { canManageMenus, workAreasOf, type WorkAreaId } from '@/lib/menu-access';
 import type { UserRole } from '@/types';
@@ -31,20 +32,23 @@ function workAreaName(id: WorkAreaId): string {
 }
 
 export async function getMeFor(auth: McpAuthContext): Promise<McpMe> {
-  const [{ data: profile }, { data: org }] = await Promise.all([
-    supabaseAdmin
-      .from('profiles')
-      .select('role, work_areas, can_manage_menus')
-      .eq('id', auth.userId)
-      .maybeSingle(),
-    auth.organizationId
-      ? supabaseAdmin
-          .from('organizations')
-          .select('name')
-          .eq('id', auth.organizationId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const [{ data: profile, error: profileError }, { data: org, error: orgError }] =
+    await Promise.all([
+      supabaseAdmin
+        .from('profiles')
+        .select('role, work_areas, can_manage_menus')
+        .eq('id', auth.userId)
+        .maybeSingle(),
+      auth.organizationId
+        ? supabaseAdmin
+            .from('organizations')
+            .select('name')
+            .eq('id', auth.organizationId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+  if (profileError) throw new Error(profileError.message);
+  if (orgError) throw new Error(orgError.message);
   const role = (profile?.role as UserRole | null | undefined) ?? null;
   return {
     user_id: auth.userId,
@@ -82,6 +86,19 @@ export interface McpAiUsage {
   features: { feature: AiUsageFeature; percent: number }[];
 }
 
+/** Self-hosted: nothing is metered. */
+const SELF_HOSTED: McpAiUsage = {
+  active_plan: true,
+  plan: 'self_hosted',
+  plan_name: null,
+  trial: false,
+  period_start: null,
+  period_end: null,
+  unlimited: true,
+  percent_used: null,
+  features: [],
+};
+
 const NO_PLAN: McpAiUsage = {
   active_plan: false,
   plan: null,
@@ -112,8 +129,10 @@ function mcpAiUsage(usage: AiUsage): McpAiUsage {
  * The org's AI usage this period, from the server's getAiUsage through the
  * CRON_SECRET internal endpoint, so the numbers are the Billing meter's own.
  * A workspace without an active plan has no allowance: active_plan false.
+ * Self-hosted meters nothing, so it answers unlimited without asking.
  */
 export async function getAiUsageFor(auth: McpAuthContext): Promise<McpAiUsage | null> {
+  if (!isCloud()) return SELF_HOSTED;
   if (!auth.organizationId) return null;
 
   const cronSecret = process.env.CRON_SECRET;
@@ -135,7 +154,7 @@ export async function getAiUsageFor(auth: McpAuthContext): Promise<McpAiUsage | 
   } | null;
 
   if (!res.ok) {
-    if (body?.error === 'plan_limit') return NO_PLAN;
+    if (res.status === 402 && body?.error === 'plan_limit') return NO_PLAN;
     throw new Error(body?.message ?? `Internal ai-usage endpoint returned ${res.status}`);
   }
   if (!body?.usage) throw new Error('Internal ai-usage endpoint returned no usage');

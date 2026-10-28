@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { z } from 'zod';
 import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -519,11 +520,11 @@ app.get('/api/internal/ai-usage', async (req, res) => {
 
   try {
     const raw = req.query.orgId;
-    const orgId = Array.isArray(raw) ? raw[0] : raw;
-    if (!orgId) {
-      return res.status(400).json({ success: false, message: 'orgId is required' });
+    const orgId = z.guid().safeParse(Array.isArray(raw) ? raw[0] : raw);
+    if (!orgId.success) {
+      return res.status(400).json({ success: false, message: 'orgId must be a UUID' });
     }
-    return res.json({ success: true, usage: await getAiUsage(orgId) });
+    return res.json({ success: true, usage: await getAiUsage(orgId.data) });
   } catch (err) {
     if (err instanceof PlanLimitError) {
       return res
