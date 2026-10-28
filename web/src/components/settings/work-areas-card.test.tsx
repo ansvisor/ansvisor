@@ -13,9 +13,6 @@ import type { MyMenu } from '@/lib/actions/menu-access';
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
-const refresh = vi.fn();
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
-
 let canAdmin = false;
 vi.mock('@/hooks/use-user-role', () => ({
   useUserRole: () => ({ role: canAdmin ? 'admin' : 'analyst', canManage: canAdmin, canAdmin }),
@@ -104,17 +101,17 @@ describe('WorkAreasCard', () => {
     await act(async () => chip('Founders & leaders').click());
     expect(actions.setMyWorkAreas).toHaveBeenCalledWith(['leaders', 'brand']);
     expect(chip('Founders & leaders').getAttribute('aria-pressed')).toBe('true');
-    expect(refresh).toHaveBeenCalled();
 
     await act(async () => chip('Everything').click());
     expect(actions.setMyWorkAreas).toHaveBeenLastCalledWith([]);
     expect(container.textContent).toContain('11 of 11 sections');
   });
 
-  it('puts the areas back when the save fails', async () => {
+  it('reads the menu again when a save fails', async () => {
     actions.setMyWorkAreas.mockRejectedValueOnce(new Error('nope'));
     await render(menu());
     await act(async () => chip('Growth').click());
+    expect(actions.getMyMenu).toHaveBeenCalledTimes(2);
     expect(chip('Growth').getAttribute('aria-pressed')).toBe('false');
     expect(toast.error).toHaveBeenCalledWith("Couldn't save the menu. Try again.");
   });
