@@ -16,6 +16,8 @@ const reserveAiBudget = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
+    // A function's rows, by its name (content_suggestion_decisions, 00367).
+    rpc: async (name) => ({ data: rows[name] ?? [], error: null }),
     from: (table) => {
       const result = () => ({ data: rows[table] ?? null, error: null });
       const chain = {
@@ -1713,6 +1715,48 @@ describe('cleanInsertHtml', () => {
 });
 
 describe('fixDraftRules', () => {
+  it('keeps small the changes for rules people at the brand mostly reject, and says so on the run (learning B6)', async () => {
+    rows.content_suggestion_decisions = [
+      // One of this run's rules, mostly rejected.
+      { rule_key: 'faq', accepted: 1, rejected: 7, drafts: 3 },
+      // More rejected, more than five, but not rules here: none takes its place.
+      ...Array.from({ length: 6 }, (_, i) => ({
+        rule_key: `other${i}`,
+        accepted: 0,
+        rejected: 9 + i,
+        drafts: 2,
+      })),
+      // A rule here people take.
+      { rule_key: 'dated', accepted: 6, rejected: 1, drafts: 4 },
+    ];
+    const run = {
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 2 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    };
+    runs.startRun = async () => run;
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_suggestion_decisions;
+    }
+    const prompt = generateObject.mock.calls[0][0].prompt;
+    expect(prompt).toContain(
+      'People at this brand reject most of the changes suggested for these rules: faq (7 of 8 rejected).',
+    );
+    expect(prompt).not.toMatch(/other\d \(/);
+    expect(run.steps[0]).toMatchObject({ key: 'read_rules', careful: ['faq'] });
+  });
+
   it("knows the shopping path's prices and names, a product's number only beside its name, and links its pages", async () => {
     rows.content_drafts = {
       ...rows.content_drafts,
@@ -2214,6 +2258,48 @@ describe('Quality’s hand-off (CE-051)', () => {
     expect(writes.find((w) => w.table === 'content_draft_suggestions').value[0].after_text).toBe(
       'good coffee and water at 94 degrees',
     );
+  });
+
+  it('runs as it was for the checks people at the brand mostly reject: Apply rules with Agent only (learning B6)', async () => {
+    rows.content_suggestion_decisions = [
+      { rule_key: 'trust:claimsSourced', accepted: 0, rejected: 9, drafts: 3 },
+    ];
+    const run = () => ({
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 1 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    });
+    const handedOff = run();
+    const fixed = run();
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      runs.startRun = async () => handedOff;
+      await fixDraftRules({
+        draftId: DRAFT,
+        brandId: BRAND,
+        input: handoff(),
+        handoff: { origin: 'person' },
+      });
+      // The same rules in Apply rules with Agent are kept small.
+      runs.startRun = async () => fixed;
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: handoff() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_suggestion_decisions;
+    }
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('People at this brand reject');
+    expect(handedOff.steps[0]).not.toHaveProperty('careful');
+    expect(generateObject.mock.calls[1][0].prompt).toContain(
+      'People at this brand reject most of the changes suggested for these rules: trust:claimsSourced (9 of 9 rejected).',
+    );
+    expect(fixed.steps[0]).toMatchObject({ careful: ['trust:claimsSourced'] });
   });
 
   it('runs an automatic one only on a draft its brand hands off', async () => {

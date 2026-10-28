@@ -25,6 +25,11 @@ export interface RunStep {
   count: number | null;
   /** Why its writing step left nothing (content-agent.js emptyWhy), once done. */
   why?: 'none' | 'locked' | 'dropped';
+  /**
+   * Its rules step's rules whose changes people at the brand mostly reject,
+   * kept small (learning B6), as rule keys.
+   */
+  careful?: string[];
 }
 
 export type AgentRunKind = 'fix' | 'rewrite' | 'write' | 'brief' | 'handoff';
@@ -60,6 +65,9 @@ export function agentRunFrom(row: Record<string, unknown> | null): AgentRun | nu
             count: Number.isInteger(s.count) ? (s.count as number) : null,
             ...(s.why === 'none' || s.why === 'locked' || s.why === 'dropped'
               ? { why: s.why }
+              : {}),
+            ...(Array.isArray(s.careful) && s.careful.some((k) => typeof k === 'string' && k)
+              ? { careful: s.careful.filter((k) => typeof k === 'string' && k).slice(0, 5) }
               : {}),
           },
         ]

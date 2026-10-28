@@ -36,6 +36,15 @@ describe('agent runs', () => {
     expect(agentRunFrom(null)).toBeNull();
   });
 
+  it('reads the rules its rules step kept small, keys only, five at most (learning B6)', () => {
+    const steps = [
+      { key: 'read_rules', count: 2, careful: ['faq', 3, '', 'a', 'b', 'c', 'd', 'e'] },
+      { key: 'write_changes', count: null },
+    ];
+    expect(agentRunFrom(row({ steps }))!.steps[0].careful).toEqual(['faq', 'a', 'b', 'c', 'd']);
+    expect(agentRunFrom(row())!.steps[0]).not.toHaveProperty('careful');
+  });
+
   it('is under way until it ends, or until a stopped server’s run goes stale', () => {
     const run = agentRunFrom(row())!;
     const started = Date.parse('2026-10-23T10:00:00Z');

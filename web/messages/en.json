@@ -4065,6 +4065,7 @@
         }
       },
       "agentCard": {
+        "careful": "Keeping its changes small for rules people here mostly reject: {rules}.",
         "breaks": "would break {names}",
         "runFailed": "Content Agent couldn't finish",
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
