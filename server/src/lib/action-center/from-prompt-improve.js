@@ -13,7 +13,12 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { IMPROVE_PLATFORM_LABELS } from '../prompt-improve.js';
-import { compareOutcome, outcomeWindow, readPlatformStates } from './improve-outcome.js';
+import {
+  OUTCOME_WINDOW_DAYS,
+  compareOutcome,
+  outcomeWindow,
+  readPlatformStates,
+} from './improve-outcome.js';
 import { priorityOnCreate } from './priority-data.js';
 
 export const IMPROVE_ACTION_KIND = 'prompt_improve';
@@ -108,24 +113,41 @@ export function improveBaseline(snapshots, capturedAt, window) {
 /** Earlier Improve rounds on a prompt the next generation is shown (learning B5). */
 export const IMPROVE_PAST_ROUNDS = 2;
 
+const DAY_MS = 86_400_000;
+
 /**
  * One earlier Improve round on a prompt, as the next generation reads it
- * (learning B5): when it was sent, whether it's still open, how each of its
- * platforms moved since (final a month after it was completed), and the
- * suggestions it carried, each with whether it was done.
+ * (learning B5): when it was sent and how many days before `now`, whether
+ * it's still open, how each of its platforms moved since (final a month
+ * after it was completed), and the suggestions it carried, each with whether
+ * it was done.
+ *
+ * Until its read is OUTCOME_WINDOW_DAYS past the send, the read's days still
+ * overlap the baseline's (on the day it's sent, every platform is
+ * "unchanged"), so its platforms are `too_early` rather than a verdict.
  *
  * @param {{ created_at?: string, status: string, position_outcome?: object | null }} action
  * @param {Array<{ title?: string | null, status: string, details?: { platform?: string } | null }>} tasks
+ * @param {Date} [now]
  */
-export function improveRound(action, tasks) {
+export function improveRound(action, tasks, now = new Date()) {
   const outcome = action.position_outcome ?? {};
+  const sentMs = typeof action.created_at === 'string' ? Date.parse(action.created_at) : NaN;
+  const sent = Number.isFinite(sentMs);
+  const readMs = Date.parse(outcome.measuredAt);
+  const tooEarly =
+    sent && (!Number.isFinite(readMs) || readMs - sentMs < OUTCOME_WINDOW_DAYS * DAY_MS);
   return {
-    sent: typeof action.created_at === 'string' ? action.created_at.slice(0, 10) : null,
+    sent: sent ? action.created_at.slice(0, 10) : null,
+    daysAgo: sent ? Math.max(0, Math.floor((now.getTime() - sentMs) / DAY_MS)) : null,
     open: action.status !== 'completed',
     final: outcome.final === true,
     platforms: (Array.isArray(outcome.platforms) ? outcome.platforms : [])
       .filter((p) => typeof p?.platform === 'string')
-      .map((p) => ({ id: p.platform, verdict: p.verdict ?? 'not_enough_data' })),
+      .map((p) => ({
+        id: p.platform,
+        verdict: tooEarly ? 'too_early' : (p.verdict ?? 'not_enough_data'),
+      })),
     suggestions: tasks
       .filter((task) => typeof task.title === 'string' && task.title.trim())
       .map((task) => ({
@@ -142,7 +164,12 @@ export function improveRound(action, tasks) {
  *
  * @returns {Promise<ReturnType<typeof improveRound>[]>}
  */
-export async function loadImproveRounds({ promptId, brandId, limit = IMPROVE_PAST_ROUNDS }) {
+export async function loadImproveRounds({
+  promptId,
+  brandId,
+  limit = IMPROVE_PAST_ROUNDS,
+  now = new Date(),
+}) {
   const { data: actions, error } = await supabaseAdmin
     .from('actions')
     .select('id, status, created_at, position_outcome')
@@ -169,6 +196,7 @@ export async function loadImproveRounds({ promptId, brandId, limit = IMPROVE_PAS
     improveRound(
       action,
       (tasks ?? []).filter((task) => task.action_id === action.id),
+      now,
     ),
   );
 }

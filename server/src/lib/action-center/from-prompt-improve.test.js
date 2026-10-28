@@ -182,6 +182,8 @@ describe('improveKpiKeys', () => {
  * generation is told each one did, and how its platforms moved.
  */
 describe('improveRound', () => {
+  const now = new Date('2026-10-28T09:00:00Z');
+
   it('reads how its platforms moved and which suggestions were done', () => {
     expect(
       improveRound(
@@ -189,6 +191,7 @@ describe('improveRound', () => {
           created_at: '2026-09-10T08:00:00Z',
           status: 'completed',
           position_outcome: {
+            measuredAt: '2026-10-20T03:00:00Z',
             final: true,
             platforms: [
               { platform: 'chatgpt-web', verdict: 'improved' },
@@ -205,9 +208,11 @@ describe('improveRound', () => {
           { title: 'Pitch seriouseats.com', status: 'todo', details: { platform: 'gemini-web' } },
           { title: ' ', status: 'todo', details: null },
         ],
+        now,
       ),
     ).toEqual({
       sent: '2026-09-10',
+      daysAgo: 48,
       open: false,
       final: true,
       platforms: [
@@ -222,13 +227,53 @@ describe('improveRound', () => {
   });
 
   it('reads an open round with no read yet', () => {
-    expect(improveRound({ status: 'in_progress', position_outcome: null }, [])).toEqual({
+    expect(improveRound({ status: 'in_progress', position_outcome: null }, [], now)).toEqual({
       sent: null,
+      daysAgo: null,
       open: true,
       final: false,
       platforms: [],
       suggestions: [],
     });
+  });
+
+  /**
+   * Its first read is the baseline itself, and for 7 days the read's days
+   * overlap the baseline's: every platform reads "unchanged" whatever the
+   * suggestions do, so the round is too early to read, not a failure.
+   */
+  it('reads a round whose read is still within 7 days of the send as too early', () => {
+    const sentToday = {
+      created_at: '2026-10-28T08:00:00Z',
+      status: 'new',
+      position_outcome: {
+        measuredAt: '2026-10-28T08:00:00Z',
+        final: false,
+        platforms: [{ platform: 'gemini-web', verdict: 'unchanged' }],
+      },
+    };
+    expect(improveRound(sentToday, [], now)).toMatchObject({
+      sent: '2026-10-28',
+      daysAgo: 0,
+      platforms: [{ id: 'gemini-web', verdict: 'too_early' }],
+    });
+    const sixDaysIn = {
+      ...sentToday,
+      created_at: '2026-10-21T08:00:00Z',
+      position_outcome: { ...sentToday.position_outcome, measuredAt: '2026-10-27T20:00:00Z' },
+    };
+    expect(improveRound(sixDaysIn, [], now)).toMatchObject({
+      daysAgo: 7,
+      platforms: [{ id: 'gemini-web', verdict: 'too_early' }],
+    });
+    // A full window after the send, the read is the platform's own.
+    const weekIn = {
+      ...sixDaysIn,
+      position_outcome: { ...sixDaysIn.position_outcome, measuredAt: '2026-10-28T08:00:00Z' },
+    };
+    expect(improveRound(weekIn, [], now).platforms).toEqual([
+      { id: 'gemini-web', verdict: 'unchanged' },
+    ]);
   });
 });
 
