@@ -21,6 +21,7 @@ import {
 import { categoryRows, type CategoryCardRow, type CategoryRow } from '@/lib/shopping/categories';
 import {
   comparison,
+  detailPrompts,
   focusShelf,
   productShelves,
   type ComparisonRow,
@@ -1687,7 +1688,19 @@ export interface ShoppingProductDetail {
   result: ActionResult | null;
 }
 
-/** A product of the brand's catalog, on the AI shelves of the questions it belongs on. Null when it isn't the brand's. */
+/** The brand's questions read at most, to find those a product belongs on. */
+const DETAIL_PROMPTS_READ = 5_000;
+
+/**
+ * A product of the brand's catalog, on the AI shelves of the questions it
+ * belongs on. Null when it isn't the brand's, or the id can't be a product's.
+ *
+ * Reads only what the page shows: the product's own cards (the questions it
+ * was on, its rating as the answers showed it), the brand's questions, then
+ * the shelves of those it may belong on (detailPrompts), and AI's searches
+ * for each shelf's latest answer, not every card of the window with its
+ * answer's searches.
+ */
 export async function getShoppingProductDetail(
   brandId: string,
   productId: string,
@@ -1695,9 +1708,9 @@ export async function getShoppingProductDetail(
   /** The shelf to explain first: the Shelf's "Why not you?" (a question, its channel). */
   focusOn: { promptId: string; platform?: string | null } | null = null,
 ): Promise<ShoppingProductDetail | null> {
-  if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(productId).success) {
-    throw new Error('invalid');
-  }
+  if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
+  // An address with no product's id in it: the page says it isn't in the catalog.
+  if (!z.guid().safeParse(productId).success) return null;
   const asked = focusOn && z.guid().safeParse(focusOn.promptId).success ? focusOn : null;
   const supabase = await createClient();
   // Read beside the rest; a re-check that can't be read leaves the page as it is.
@@ -1708,33 +1721,30 @@ export async function getShoppingProductDetail(
     return {} as Record<string, ActionResult>;
   });
   const { from } = resolveDateRange(filters);
-  const [[product], cards, stats, domain] = await Promise.all([
+  const [[product], ownCards, prompts, stats, domain] = await Promise.all([
     readCatalogProducts(supabase, brandId, [productId]),
     fetchAllCards<{
-      prompt_result_id: string;
-      position: number;
       created_at: string;
-      platform: string;
-      product_title: string | null;
-      price_amount: number | null;
-      price_currency: string | null;
       rating: number | null;
       review_count: number | null;
-      merchant_domain: string | null;
-      image_url: string | null;
-      matched_brand_role: string;
       catalog_product_id: string | null;
-      prompt_results: {
-        search_queries: unknown;
-        prompt: { id: string; text: string } | null;
-      } | null;
+      prompt_results: { prompt_id: string } | null;
     }>(() =>
       cardsInWindow(
         supabase,
         brandId,
         filters,
-        'prompt_result_id, position, created_at, platform, product_title, price_amount, price_currency, rating, review_count, merchant_domain, image_url, matched_brand_role, catalog_product_id, prompt_results:prompt_result_id ( search_queries, prompt:prompt_id ( id, text ) )',
-      ),
+        'created_at, rating, review_count, catalog_product_id, prompt_results:prompt_result_id ( prompt_id )',
+      ).eq('catalog_product_id', productId),
+    ),
+    readCatalogRows<{ id: string; text: string }>(
+      () =>
+        supabase
+          .from('prompts')
+          .select('id, text, prompt_sets!inner(brand_id)')
+          .eq('prompt_sets.brand_id', brandId)
+          .order('id'),
+      DETAIL_PROMPTS_READ,
     ),
     // Its own row only (00361), none without AI visits or orders.
     supabase.rpc('catalog_product_ai_stats', {
@@ -1752,13 +1762,67 @@ export async function getShoppingProductDetail(
   if (!product) return null;
   if (stats.error) throw new Error(stats.error.message);
 
+  const own = ownCards.filter((card) => card.catalog_product_id === productId);
+  const promptIds = detailPrompts(product, prompts, {
+    appeared: new Set(own.flatMap((card) => card.prompt_results?.prompt_id ?? [])),
+    include: asked?.promptId ?? null,
+  });
+  const cards = await readForIds(promptIds, (some) =>
+    fetchAllCards<{
+      prompt_result_id: string;
+      position: number;
+      created_at: string;
+      platform: string;
+      product_title: string | null;
+      price_amount: number | null;
+      price_currency: string | null;
+      rating: number | null;
+      review_count: number | null;
+      merchant_domain: string | null;
+      image_url: string | null;
+      matched_brand_role: string;
+      catalog_product_id: string | null;
+      prompt_results: { prompt_id: string; prompt: { text: string } | null } | null;
+    }>(() =>
+      cardsInWindow(
+        supabase,
+        brandId,
+        filters,
+        'prompt_result_id, position, created_at, platform, product_title, price_amount, price_currency, rating, review_count, merchant_domain, image_url, matched_brand_role, catalog_product_id, prompt_results!inner ( prompt_id, prompt:prompt_id ( text ) )',
+      ).in('prompt_results.prompt_id', some),
+    ),
+  );
+  // AI's searches for each shelf's latest answer, the one the page explains.
+  const latestRun = new Map<string, { id: string; at: string }>();
+  for (const card of cards) {
+    const key = `${card.prompt_results?.prompt_id}:${card.platform}`;
+    const kept = latestRun.get(key);
+    if (!kept || card.created_at > kept.at) {
+      latestRun.set(key, { id: card.prompt_result_id, at: card.created_at });
+    }
+  }
+  const runs = await readForIds(
+    [...new Set([...latestRun.values()].map((run) => run.id))],
+    async (some) => {
+      const { data, error } = await supabase
+        .from('prompt_results')
+        .select('id, search_queries')
+        .eq('brand_id', brandId)
+        .in('id', some);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as { id: string; search_queries: unknown }[];
+    },
+  );
+  const searchesOfRun = new Map(runs.map((run) => [run.id, searchesOf(run.search_queries)]));
+
   const detailCards: DetailCard[] = cards.flatMap((card) => {
-    const prompt = card.prompt_results?.prompt;
-    if (!prompt || !card.product_title?.trim()) return [];
+    const promptId = card.prompt_results?.prompt_id;
+    const promptText = card.prompt_results?.prompt?.text;
+    if (!promptId || !promptText || !card.product_title?.trim()) return [];
     return [
       {
-        promptId: prompt.id,
-        promptText: prompt.text,
+        promptId,
+        promptText,
         platform: card.platform,
         promptResultId: card.prompt_result_id,
         at: card.created_at,
@@ -1772,14 +1836,12 @@ export async function getShoppingProductDetail(
         image: card.image_url,
         role: card.matched_brand_role,
         productId: card.catalog_product_id,
-        searches: searchesOf(card.prompt_results?.search_queries),
+        searches: searchesOfRun.get(card.prompt_result_id) ?? [],
       },
     ];
   });
   // How the answers showed it, its latest card first: its rating there.
-  const shown = detailCards
-    .filter((card) => card.productId === productId)
-    .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  const shown = [...own].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
   const results = await resultsRead;
   const shelves = productShelves(product, detailCards, { include: asked?.promptId ?? null });
   const focus = focusShelf(shelves, asked);
@@ -1791,7 +1853,7 @@ export async function getShoppingProductDetail(
     focus,
     comparison: focus
       ? comparison(product, focus, {
-          own: shown ? { rating: shown.rating, reviews: shown.reviews } : null,
+          own: shown ? { rating: shown.rating, reviews: shown.review_count } : null,
           price: priceText,
           storeDomain: domain.data?.domain ?? null,
         })

@@ -267,4 +267,11 @@ describe('ShoppingProductPage', () => {
     gate.allowed = false;
     expect(await render()).toContain('Product Visibility comes with the Growth plan.');
   });
+
+  it('reads nothing while the plan locks the page', async () => {
+    gate.allowed = false;
+    expect(await render()).toContain('Product Visibility comes with the Growth plan.');
+    expect(getShoppingProductDetail).not.toHaveBeenCalled();
+    expect(getProductAiSays).not.toHaveBeenCalled();
+  });
 });

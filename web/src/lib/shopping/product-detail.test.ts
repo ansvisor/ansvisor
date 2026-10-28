@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   comparison,
+  detailPrompts,
   focusShelf,
   productShelves,
   productText,
@@ -108,6 +109,28 @@ describe('productShelves', () => {
     expect(lines.find((line) => line.promptId === 'q2')!.winner).toBeNull();
   });
 
+  it("never names one of the brand's own products the winner", () => {
+    const own = (over: Partial<DetailCard>) =>
+      card({ promptId: 'q5', promptResultId: 'r5', role: 'own', ...over });
+    const shelf = (...on: DetailCard[]) =>
+      productShelves(product, on, { include: 'q5' }).find((line) => line.promptId === 'q5')!;
+    // Its sister product first, a rival second, the product absent: the rival.
+    expect(
+      shelf(
+        own({ title: 'Ridge 40L Backpack', productId: 'ridge-40' }),
+        card({ promptId: 'q5', promptResultId: 'r5', position: 1, title: 'TrailCo Lite 28' }),
+      ).winner?.title,
+    ).toBe('TrailCo Lite 28');
+    // Only its own above it: nothing to beat.
+    const second = shelf(
+      own({ title: 'Ridge 40L Backpack', productId: 'ridge-40' }),
+      own({ position: 1, title: 'Ridge 30L Backpack', productId: 'ridge' }),
+      card({ promptId: 'q5', promptResultId: 'r5', position: 2, title: 'TrailCo Lite 28' }),
+    );
+    expect(second.rank).toBe(2);
+    expect(second.winner).toBeNull();
+  });
+
   it('reads the title and the first 40 words of the description', () => {
     expect(productText({ ...product, description: 'word '.repeat(60) }).split(' ')).toHaveLength(
       3 + 40,
@@ -126,6 +149,28 @@ describe('focusShelf', () => {
     ];
     expect(focusShelf(behind)?.promptId).toBe('x');
     expect(focusShelf([{ ...lines[0], rank: 1, winner: null }])).toBeNull();
+  });
+});
+
+describe('detailPrompts', () => {
+  const prompts = [
+    { id: 'q3', text: 'best trail running shoes' },
+    { id: 'q1', text: 'lightweight 30L hiking backpack for women' },
+    { id: 'q4', text: 'backpack for school' },
+    { id: 'q2', text: 'durable 30 litre daypack' },
+    { id: 'q9', text: 'gifts for runners' },
+  ];
+
+  it('reads the shelves asked for, it was on, of its category, then those sharing its words', () => {
+    expect(detailPrompts(product, prompts, { appeared: new Set(['q2']), include: 'q9' })).toEqual([
+      'q9',
+      'q2',
+      'q1',
+      'q4',
+    ]);
+    // Not a word in common, nor asked for: not read.
+    expect(detailPrompts(product, prompts, { appeared: new Set() })).not.toContain('q3');
+    expect(detailPrompts(product, prompts, { appeared: new Set(), max: 1 })).toEqual(['q1']);
   });
 });
 

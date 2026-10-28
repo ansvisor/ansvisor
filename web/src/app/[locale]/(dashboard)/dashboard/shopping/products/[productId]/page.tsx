@@ -33,6 +33,8 @@ export default function ShoppingProductPage() {
   const platform = search.get('platform');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { canUse } = useFeatureGate();
+  // A plan without Product Visibility reads nothing: the page says it's locked.
+  const allowed = canUse('shopping_analytics');
   const [read, setRead] = useState<{
     key: string;
     detail: ShoppingProductDetail | null | 'failed';
@@ -42,7 +44,7 @@ export default function ShoppingProductPage() {
   const saysKey = `${activeBrandId}:${productId}`;
 
   useEffect(() => {
-    if (!activeBrandId || !productId) return;
+    if (!allowed || !activeBrandId || !productId) return;
     let cancelled = false;
     getShoppingProductDetail(
       activeBrandId,
@@ -60,10 +62,10 @@ export default function ShoppingProductPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, productId, key, prompt, platform]);
+  }, [allowed, activeBrandId, productId, key, prompt, platform]);
 
   useEffect(() => {
-    if (!activeBrandId || !productId) return;
+    if (!allowed || !activeBrandId || !productId) return;
     let cancelled = false;
     getProductAiSays(activeBrandId, productId, { datePreset: '30d' })
       .then((read) => {
@@ -76,7 +78,7 @@ export default function ShoppingProductPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId, productId, saysKey]);
+  }, [allowed, activeBrandId, productId, saysKey]);
 
   const back = (
     <Link
@@ -89,16 +91,12 @@ export default function ShoppingProductPage() {
   );
   const detail = read?.key === key ? read.detail : undefined;
 
-  if (!canUse('shopping_analytics') || detail === null || detail === 'failed') {
+  if (!allowed || detail === null || detail === 'failed') {
     return (
       <div className="space-y-6">
         {back}
         <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-          {!canUse('shopping_analytics')
-            ? t('locked')
-            : detail === 'failed'
-              ? t('failed')
-              : t('notFound')}
+          {!allowed ? t('locked') : detail === 'failed' ? t('failed') : t('notFound')}
         </p>
       </div>
     );
