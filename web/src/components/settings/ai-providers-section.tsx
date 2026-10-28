@@ -12,6 +12,7 @@ import { CheckCircle2, Cloud, Loader2, Lock, Route, Sparkles, Trash2 } from 'luc
 import { useTranslations } from 'next-intl';
 import { AIProviderAvatar } from '@/components/ai-provider-avatar';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { formatDate } from '@/lib/format';
 import {
   AI_PROVIDERS,
@@ -82,6 +83,11 @@ export function AiProvidersSection() {
   const [confirmRemove, setConfirmRemove] = useState<AiProvider | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
+  // A read-only workspace (plan not active): Add key, Replace and Use for
+  // Chat open the upgrade dialog instead. Removing a key stays open: it takes
+  // back the access to the person's own AI account.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const name = (provider: AiProvider) => t(`agent_providers.${provider}.name`);
 
@@ -209,7 +215,9 @@ export function AiProvidersSection() {
                               variant="outline"
                               size="sm"
                               disabled={switching !== null}
-                              onClick={() => void handleUse(provider)}
+                              onClick={guard(() => void handleUse(provider), {
+                                action: tActions('switchAiProvider'),
+                              })}
                             >
                               {switching === provider && (
                                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -217,7 +225,13 @@ export function AiProvidersSection() {
                               {t('agent_useForChat')}
                             </Button>
                           )}
-                          <Button variant="outline" size="sm" onClick={() => setEditing(provider)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={guard(() => setEditing(provider), {
+                              action: tActions('saveAiKeys'),
+                            })}
+                          >
                             {row ? t('agent_replace') : t('agent_addKey')}
                           </Button>
                           {row && (

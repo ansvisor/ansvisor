@@ -4,13 +4,15 @@
     "workspace": "This brand isn't in your workspace. Switch to one of your brands.",
     "not_found": "This no longer exists. Reload the page and start again.",
     "plan": "Your plan doesn't include this. Upgrade to use it.",
+    "subscription": "Your workspace's plan isn't active, so changes are paused. Choose a plan to use Ansvisor again.",
     "limit": "You've used this month's allowance. Upgrade, or wait until it resets.",
     "busy": "Too many requests. Wait a minute and try again.",
     "failed": "Something went wrong. Try again.",
     "signIn": "Sign in",
     "yourBrands": "Your brands",
     "reload": "Reload",
-    "upgrade": "Upgrade"
+    "upgrade": "Upgrade",
+    "choosePlan": "Choose a plan"
   },
   "aiUsage": {
     "meter": {
@@ -51,6 +53,202 @@
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
       "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
+    }
+  },
+  "readOnly": {
+    "banner": {
+      "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
+      "payment_failed": "Your last payment didn't go through, so your workspace is read-only. You can look around; adding, running and AI need the payment method updated.",
+      "seePlans": "See plans"
+    },
+    "dialog": {
+      "title": {
+        "ended": "Choose a plan to keep going",
+        "payment_failed": "Update your payment method to keep going"
+      },
+      "body": {
+        "ended": "Your workspace has no active plan, so it's read-only. Everything you set up is still here: pick a plan to track, write and run your agents again.",
+        "payment_failed": "Your last payment didn't go through, so your workspace is read-only. Everything you set up is still here: update the payment method to track, write and run your agents again."
+      },
+      "notNow": "Not now",
+      "readOnlyLabel": "Your workspace is read-only",
+      "memberNote": "Only an admin can choose a plan for your workspace."
+    },
+    "ask": {
+      "ended": "Ask your admin to choose a plan.",
+      "endedNamed": "Ask {name}, your workspace admin, to choose a plan.",
+      "payment_failed": "Ask your workspace admin to update the payment method.",
+      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method."
+    },
+    "choosePlan": "Choose a plan",
+    "updatePayment": "Update payment method",
+    "portalFailed": "Couldn't open the billing page. Try again.",
+    "plans": {
+      "perMonthBilledYearly": "{price} a month, billed yearly",
+      "chooseToday": "Choose {plan} · {price} today",
+      "openingCheckout": "Opening checkout…",
+      "payByCard": "You'll pay by card on Stripe's checkout.",
+      "askAdmin": "Ask your admin to choose a plan",
+      "customName": "Custom",
+      "customTagline": "For large companies and agencies managing AI visibility at scale.",
+      "startingAt": "Starting at",
+      "customAiUsage": "Custom AI usage, from {count}x",
+      "contactUs": "Contact us",
+      "pricesInUsd": "Prices in USD.",
+      "promo": {
+        "apply": "Apply",
+        "checking": "Checking…",
+        "remove": "Remove the code",
+        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
+        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
+        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
+        "then": "then {price}/mo",
+        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
+        "monthlyOnly": "{code} is for monthly plans: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
+        "switchToMonthly": "Switch to Monthly",
+        "invalid": "“{code}” isn’t a valid code.",
+        "failed": "Couldn't check the code. Try again."
+      }
+    },
+    "noPlan": "No active plan",
+    "actions": {
+      "addPrompts": "Adding prompts needs a plan",
+      "editPrompts": "Editing prompts needs a plan",
+      "deletePrompts": "Deleting prompts needs a plan",
+      "pausePrompts": "Pausing prompts needs a plan",
+      "resumePrompts": "Resuming prompts needs a plan",
+      "trackPrompts": "Tracking prompts needs a plan",
+      "generatePrompts": "Generating prompts needs a plan",
+      "analyzePrompts": "Analyzing prompts needs a plan",
+      "runPrompts": "Running prompts needs a plan",
+      "testPrompt": "Testing a prompt needs a plan",
+      "improvePrompt": "Improving a prompt needs a plan",
+      "changeLocations": "Changing locations needs a plan",
+      "setWorkStatus": "Setting a work status needs a plan",
+      "refreshVolumes": "Refreshing volumes needs a plan",
+      "suggestPrompts": "Suggesting prompts needs a plan",
+      "dismissSuggestions": "Dismissing suggestions needs a plan",
+      "suggestContent": "Suggesting content needs a plan",
+      "createContent": "Creating content needs a plan",
+      "optimizeContent": "Optimizing content needs a plan",
+      "sendAction": "Sending actions needs a plan",
+      "addTopics": "Adding topics needs a plan",
+      "editTopics": "Editing topics needs a plan",
+      "deleteTopics": "Deleting topics needs a plan",
+      "suggestTopics": "Suggesting topics needs a plan",
+      "addCompetitors": "Adding competitors needs a plan",
+      "deleteCompetitors": "Deleting competitors needs a plan",
+      "suggestCompetitors": "Suggesting competitors needs a plan",
+      "pinCompetitors": "Pinning competitors needs a plan",
+      "generateOpportunities": "Generating opportunities needs a plan",
+      "sendToWorkflow": "Sending to your workflow needs a plan",
+      "saveWorkflow": "Saving the workflow settings needs a plan",
+      "testWorkflow": "Testing the workflow needs a plan",
+      "markOpportunitiesDone": "Marking opportunities done needs a plan",
+      "markOpportunityReviewed": "Marking an opportunity reviewed needs a plan",
+      "dismissOpportunities": "Dismissing opportunities needs a plan",
+      "deleteOpportunities": "Deleting opportunities needs a plan",
+      "restoreOpportunities": "Restoring opportunities needs a plan",
+      "generateBrief": "Generating a brief needs a plan",
+      "prioritizeContent": "Marking priorities needs a plan",
+      "assignContent": "Assigning content needs a plan",
+      "hidePlanRows": "Hiding rows needs a plan",
+      "showPlanRows": "Showing hidden rows needs a plan",
+      "importPage": "Importing a page needs a plan",
+      "changeContentStatus": "Changing a page's status needs a plan",
+      "markReady": "Marking a page ready needs a plan",
+      "markPublished": "Marking a page published needs a plan",
+      "sendToCms": "Sending to your CMS needs a plan",
+      "archiveContent": "Archiving content needs a plan",
+      "restoreContent": "Restoring content needs a plan",
+      "deleteContent": "Deleting content needs a plan",
+      "editContent": "Editing the page needs a plan",
+      "runAgent": "Running the Content Agent needs a plan",
+      "fixRules": "Fixing rules needs a plan",
+      "rewritePage": "Rewriting the page needs a plan",
+      "reviewSuggestions": "Reviewing suggestions needs a plan",
+      "restoreVersion": "Restoring a version needs a plan",
+      "setPageType": "Changing the page type needs a plan",
+      "setSiteType": "Changing the site type needs a plan",
+      "setAuthor": "Setting the author needs a plan",
+      "setReviewer": "Setting the reviewer needs a plan",
+      "confirmDetails": "Confirming page details needs a plan",
+      "keepSources": "Keeping sources needs a plan",
+      "addSources": "Adding sources needs a plan",
+      "changeSources": "Changing sources needs a plan",
+      "addImages": "Adding images needs a plan",
+      "buildBrief": "Building the brief needs a plan",
+      "editBrief": "Editing the brief needs a plan",
+      "changeShoppingPath": "Changing the shopping path needs a plan",
+      "editRules": "Changing rules needs a plan",
+      "saveInput": "Saving your input needs a plan",
+      "runAudit": "Running an audit needs a plan",
+      "auditPages": "Auditing pages needs a plan",
+      "pinPages": "Pinning pages needs a plan",
+      "unpinPages": "Unpinning pages needs a plan",
+      "excludePages": "Excluding pages needs a plan",
+      "restorePages": "Restoring pages needs a plan",
+      "deleteAudits": "Deleting an audit needs a plan",
+      "saveAuditSettings": "Saving the audit settings needs a plan",
+      "checkSiteTrust": "Checking site trust again needs a plan",
+      "startGettingStarted": "Starting Getting started needs a plan",
+      "skipGettingStarted": "Skipping Getting started needs a plan",
+      "skipSteps": "Skipping a step needs a plan",
+      "changeActionStatus": "Changing an action's status needs a plan",
+      "deleteActions": "Deleting actions needs a plan",
+      "assignActions": "Assigning actions needs a plan",
+      "setDueDate": "Setting a due date needs a plan",
+      "changeTaskStatus": "Changing a task's status needs a plan",
+      "addTasks": "Adding tasks needs a plan",
+      "editTasks": "Editing tasks needs a plan",
+      "deleteTasks": "Deleting tasks needs a plan",
+      "sendTasks": "Sending tasks needs a plan",
+      "checkTasks": "Checking a task needs a plan",
+      "regenerateTasks": "Regenerating tasks needs a plan",
+      "approveTasks": "Approving tasks needs a plan",
+      "dismissTasks": "Dismissing tasks needs a plan",
+      "changeSignalStatus": "Changing a signal's status needs a plan",
+      "editKpis": "Editing KPIs needs a plan",
+      "removeKpis": "Removing KPIs needs a plan",
+      "correctSentiment": "Correcting sentiment needs a plan",
+      "connectBotLogs": "Connecting bot logs needs a plan",
+      "connectIntegrations": "Connecting an integration needs a plan",
+      "mapProperties": "Choosing a property needs a plan",
+      "setProductFeed": "Changing the product feed setting needs a plan",
+      "generateReports": "Generating reports needs a plan",
+      "deleteReports": "Deleting reports needs a plan",
+      "startChat": "Starting a chat needs a plan",
+      "sendChat": "Chatting with the agent needs a plan",
+      "addBrands": "Adding brands needs a plan",
+      "saveBrandSettings": "Saving brand settings needs a plan",
+      "saveDomains": "Saving domains needs a plan",
+      "changeShoppingMode": "Changing the shopping mode needs a plan",
+      "pauseBrands": "Pausing a brand needs a plan",
+      "resumeBrands": "Resuming a brand needs a plan",
+      "changeConversions": "Changing conversion tracking needs a plan",
+      "reviewBrandFacts": "Reviewing brand facts needs a plan",
+      "readBrandFacts": "Reading brand facts again needs a plan",
+      "renameOrganization": "Renaming the organization needs a plan",
+      "inviteMembers": "Inviting members needs a plan",
+      "resendInvitations": "Resending invitations needs a plan",
+      "changeRoles": "Changing roles needs a plan",
+      "saveAiKeys": "Saving an AI key needs a plan",
+      "switchAiProvider": "Switching Chat's AI provider needs a plan",
+      "addCatalogSources": "Adding catalog sources needs a plan",
+      "syncCatalog": "Syncing the catalog needs a plan",
+      "removeCatalogSources": "Removing catalog sources needs a plan",
+      "connectStores": "Connecting a store needs a plan",
+      "updateStoreSignIn": "Updating a store's sign-in needs a plan",
+      "changeCategoryPages": "Changing a category's page needs a plan",
+      "connectCms": "Connecting your CMS needs a plan",
+      "saveCmsSettings": "Saving the CMS settings needs a plan",
+      "saveNotifications": "Saving notification settings needs a plan",
+      "addAuthors": "Adding authors needs a plan",
+      "editAuthors": "Editing authors needs a plan",
+      "removeAuthors": "Removing authors needs a plan",
+      "setDefaultAuthor": "Setting a default author needs a plan",
+      "setByline": "Changing the byline setting needs a plan",
+      "changeContentSettings": "Changing content settings needs a plan"
     }
   },
   "common": {
@@ -235,6 +433,7 @@
       "presets": {
         "setUp": "We set up these KPIs for you. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. Change or remove them any time.",
         "preview": "Suggested KPIs. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. They're saved the first time an admin or manager opens this tab.",
+        "previewReadOnly": "Suggested KPIs. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. They're saved the first time an admin or manager opens this tab on an active plan.",
         "dismiss": "Dismiss"
       }
     },
@@ -915,6 +1114,7 @@
         "prioritySub": "Across open actions"
       },
       "allActions": "All",
+      "fromProducts": "From Products",
       "filters": {
         "priority": "Priority",
         "status": "Status",
@@ -2283,6 +2483,20 @@
         "optimizeTitle": "Optimize: {title}",
         "description": "Sent from the Content Editor: a draft for someone on the team to write, with its page type and the prompts it should answer.",
         "goal": "Publish the page and get the brand into AI answers for these prompts."
+      },
+      "shopping_product": {
+        "title": "Get a product on the AI shelf for {targets}",
+        "titleGeneric": "Get a product on the AI shelf",
+        "namedTitle": "Get {name} on the shelf",
+        "description": "Sent from Product Visibility: a product of your catalog that AI leaves off the shelf, with the work to get it there.",
+        "goal": "Get the product into AI shopping answers for these questions."
+      },
+      "shopping_category": {
+        "title": "Win a category in AI answers for {targets}",
+        "titleGeneric": "Win a category in AI answers",
+        "namedTitle": "Win “{name}” in AI answers",
+        "description": "Sent from Product Visibility: a category of your catalog where rivals hold the AI shelf, with the work to win it.",
+        "goal": "Raise your share of the AI shelf for this category's questions."
       },
       "shopping_links": {
         "title": "Swap the products that no longer sell on {targets}",
@@ -6050,7 +6264,8 @@
       "plan": "{plan} plan",
       "resets": "Resets {date}",
       "upgrade": "Upgrade plan",
-      "tooltip": "Every new opportunity counts once, whether Ansvisor suggested it or you asked for it; dismissed and deleted ones still count, merged duplicates don't. Generating a brief counts separately. Unused allowance doesn't carry over. Both reset on {date}, when your subscription renews."
+      "tooltip": "Every new opportunity counts once, whether Ansvisor suggested it or you asked for it; dismissed and deleted ones still count, merged duplicates don't. Generating a brief counts separately. Unused allowance doesn't carry over.",
+      "tooltipResets": "Both reset on {date}, when your subscription renews."
     },
     "kpi": {
       "total": "Total Opportunities",
@@ -7090,6 +7305,12 @@
     "gaps": "Content Gaps",
     "suggestions": {
       "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
+      "catalog": {
+        "badge": "Your catalog",
+        "tooltip": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}.",
+        "tooltipPrice": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}, most under {price}.",
+        "filter": "Shopping"
+      },
       "addAll": "Add All",
       "addingAll": "Adding…",
       "addAllTitle": "Add every suggestion listed below to your tracked prompts",
@@ -7205,6 +7426,44 @@
     },
     "columns": {
       "added": "Added",
+      "labels": {
+        "topic": "Topic",
+        "status": "Status",
+        "work": "Work",
+        "visibility": "Visibility",
+        "mentions": "Mentions",
+        "citations": "Citations",
+        "positions": "Positions",
+        "volume": "Volume",
+        "competition": "Competition",
+        "runs": "Runs",
+        "added": "Added",
+        "lastRun": "Last run"
+      },
+      "picker": {
+        "button": "Columns · {count}",
+        "title": "Columns",
+        "mine": "Drag, or use the arrows, to reorder. Saved for you only.",
+        "fromBrand": "Showing the view shared on {brand}. Your changes are saved for you only.",
+        "sharedMine": "Drag, or use the arrows, to reorder. Shared on {brand}: your changes also update the brand's view.",
+        "promptColumn": "Prompt",
+        "always": "Always shown",
+        "moveUp": "Move {column} up",
+        "moveDown": "Move {column} down",
+        "share": "Share with everyone on {brand}",
+        "shareHint": "Your columns become the brand's view. Each person can still change their own, or go back to the brand's with Reset.",
+        "managersShare": "Admins and managers can share a view with everyone on the brand.",
+        "reset": "Reset to default",
+        "resetToBrand": "Reset to the brand's view",
+        "failed": "Couldn't save your columns. Try again.",
+        "forbidden": "Only admins and managers can share a view with the brand.",
+        "remove": "Remove {column}",
+        "addLocation": "Add a location column",
+        "metric": "Metric",
+        "location": "Location",
+        "add": "Add",
+        "locationLimit": "{count} location columns at most."
+      },
       "tips": {
         "status": "New: added in the last 24 hours. Active: being tracked. Paused: not tracked.",
         "work": "Your content work on this prompt.",
@@ -7218,6 +7477,83 @@
         "added": "When this prompt was added.",
         "lastRun": "When this prompt was last checked."
       }
+    },
+    "locations": {
+      "view": "View",
+      "table": "Table",
+      "locations": "Locations",
+      "metric": "Metric",
+      "metrics": {
+        "visibility": "Visibility",
+        "position": "Position",
+        "mentions": "Mentions",
+        "citations": "Citations"
+      },
+      "prompt": "Prompt",
+      "topic": "Topic",
+      "average": "All prompts · average",
+      "gap": "Gap",
+      "gapTip": "Best minus worst tracked location, for the metric shown.",
+      "track": "+ Track",
+      "trackLabel": "Track “{prompt}” in {location}",
+      "open": "{prompt} in {location}: open its positions",
+      "notNamed": "Not named",
+      "noAnswers": "No answers here in this period",
+      "pending": "Within 24h",
+      "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
+      "paused": "Paused",
+      "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
+      "noEngine": "No engine here",
+      "noEngineTip": "None of this prompt's engines answers from {location}, so nothing is asked there. Add an engine that does, or remove the location.",
+      "limit": "Limit reached",
+      "limitTip": "Your plan's prompt locations are used up ({used} of {max}). Open to see how to track here.",
+      "limitLabel": "Limit reached: “{prompt}” in {location}. Your plan's prompt locations are used up ({used} of {max}); open to see how to track here.",
+      "kind": {
+        "country": "Country",
+        "state": "US state",
+        "city": "City"
+      },
+      "cityEngines": "AI Mode · AIO · APIs",
+      "cityEnginesTip": "Google AI Mode, AI Overview and the API models answer from this city. ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country.",
+      "weakest": "Weakest location",
+      "weakestBody": "Visibility, against {overall} across all locations · {untracked, plural, =0 {every prompt tracked there} one {# prompt not tracked there} other {# prompts not tracked there}}",
+      "strongest": "Strongest location",
+      "strongestBody": "Visibility across its {tracked, plural, one {# tracked prompt} other {# tracked prompts}}",
+      "widest": "Biggest gap between locations",
+      "widestBody": "{low} in {lowAt}, {high} in {highAt}",
+      "low": "Low",
+      "high": "High",
+      "late": "Named late",
+      "first": "Named first",
+      "legend": "A cell opens the prompt's Positions panel for that location.",
+      "none": "Your prompts aren't tracked in a location yet.",
+      "failed": "Couldn't read the locations right now. Try again in a moment.",
+      "capped": "Showing the {count} locations your prompts track most."
+    },
+    "addLocations": {
+      "button": "+ Add location",
+      "title": "Track in more locations",
+      "lead": "The same prompts, asked from each place you add. Each place gets its own column in the Locations view.",
+      "locations": "Locations to add",
+      "picked": "picked",
+      "scope": "Ask these prompts there",
+      "selected": "The {count, plural, one {# prompt} other {# prompts}} selected",
+      "topic": "Topic",
+      "allShown": "All {count, plural, one {# prompt} other {# prompts}} shown",
+      "promptsCount": "{count, plural, one {# prompt} other {# prompts}}",
+      "usage": "Plan usage",
+      "usageLine": "{used} → {after} of {max} tracked locations",
+      "unlimited": "{used} → {after} tracked locations · no limit on your plan",
+      "usageHint": "Each prompt in each location is one tracked location on your plan, checked every day. Paused prompts don't count.",
+      "over": "This needs {adding, plural, one {# more tracked location} other {# more tracked locations}}; {left, plural, =0 {none are} one {# is} other {# are}} left on your {plan} plan.",
+      "overHint": "Pick fewer prompts or places. {plan, select, starter {Or upgrade your plan, or contact us for a custom plan.} growth {Or contact us for a custom plan.} other {Or contact us to raise your limit.}}",
+      "nothing": "These prompts are already tracked in these locations.",
+      "cityBlocked": "None of these prompts runs an engine that answers from a city (Google AI Mode, AI Overview or an API model). Add one of those engines to the prompts first.",
+      "cityPartly": "{count, plural, one {# of these prompts doesn't} other {# of these prompts don't}} run an engine that answers from a city; a city counts on the plan for them but isn't asked there.",
+      "noPrompts": "Choose the prompts to add these locations to.",
+      "cancel": "Cancel",
+      "submit": "Track in {count, plural, =0 {these locations} one {# location} other {# locations}}",
+      "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations. The first results come with the next daily run, within 24 hours."
     },
     "performance": {
       "label": "Performance",
@@ -7750,15 +8086,378 @@
   },
   "shopping": {
     "title": "Product Visibility",
-    "description": "Product cards AI engines surface — your products versus the competitive set.",
-    "kpiCardRate": "Shopping card rate",
-    "kpiCardRateSub": "Tracked prompts that returned ≥1 card",
-    "kpiOwnProducts": "Your products surfaced",
-    "kpiOwnProductsSub": "Cards matched to your brand",
-    "kpiSov": "Shopping share of voice",
-    "kpiSovSub": "Your cards ÷ all cards in card-bearing prompts",
-    "kpiTopMerchant": "Top merchant for your products",
-    "kpiTopMerchantSub": "Most frequent merchant domain",
+    "description": "Which of your products AI recommends, why, and what it sells.",
+    "why": {
+      "button": "Why Ansvisor Product Visibility?",
+      "eyebrow": "Why Ansvisor Product Visibility?",
+      "title": "From AI shelf to cart",
+      "lead": "AI assistants now pick products for your shoppers. See which of yours make the shelf, fix the ones that don't, and know what it sells.",
+      "steps": {
+        "shelf": {
+          "title": "See your AI shelf",
+          "body": "For every shopping question, the products AI shows, in order. Yours and your competitors'."
+        },
+        "why": {
+          "title": "Know why you lost",
+          "body": "Your product next to the one AI picked, attribute by attribute: fit, weight, rating, delivery, data."
+        },
+        "fix": {
+          "title": "Fix it, then push",
+          "body": "The agent rewrites titles, feed fields and schema. You approve, we send it to Shopify."
+        },
+        "sell": {
+          "title": "See what it sells",
+          "body": "Orders and revenue from AI, per product, tied to the questions that brought them."
+        }
+      },
+      "closing": "Most tools tell you if you're visible. Ansvisor shows why, fixes it and shows the sales.",
+      "gotIt": "Got it",
+      "connectGa": "Connect Google Analytics",
+      "ga": "Google Analytics"
+    },
+    "shelf": {
+      "label": "AI shelves",
+      "kpis": {
+        "share": "AI shelf share",
+        "shareSub": "of product slots in AI answers",
+        "products": "Products on the shelf",
+        "productsOf": "{count} of {total}",
+        "productsSub": "shown at least once",
+        "productsTitlesSub": "shown at least once · connect your catalog to count them against it",
+        "revenue": "AI revenue · 30d",
+        "orders": "{count, plural, one {# order} other {# orders}} from AI visits",
+        "noOrders": "No orders from AI visits yet",
+        "connectSales": "Connect to see sales",
+        "channel": "Top AI channel",
+        "channelOrders": "{percent}% of AI orders",
+        "channelSlots": "{percent}% of your products on the shelf",
+        "channelNone": "None of your products on a shelf yet"
+      },
+      "allChannels": "All channels",
+      "you": "You",
+      "via": "via {place}",
+      "absent": "You're not on this shelf",
+      "whyNot": {
+        "yours": "Yours, not here",
+        "link": "Why not you?",
+        "linkLabel": "Why not you? Open {product} beside the product AI picked on this shelf"
+      },
+      "rank": "You: #{rank}",
+      "rankWeek": "You: #{rank} · {own} of {count} shelves this week",
+      "price": {
+        "label": "Price",
+        "all": "All",
+        "under": "Under {price}",
+        "between": "{from}–{to}",
+        "over": "{price} and up"
+      },
+      "empty": "No shopping answers in this period. Track shopping questions on a channel that shows products.",
+      "emptyBand": "No shelf in this price range.",
+      "more": "Show {count} more",
+      "trends": "Trends",
+      "failed": "Couldn't read the shelves right now. The other tabs still work."
+    },
+    "readiness": {
+      "title": "AI shopping readiness",
+      "lead": "What Ansvisor can read of your catalog, your feed and the answers. Each check says where its fix starts.",
+      "channelsLabel": "AI shopping channels",
+      "market": {
+        "us": "Market: United States. In the US, ChatGPT picks products from OpenAI's own product index, built from feeds.",
+        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so your Merchant Center feed decides ChatGPT too."
+      },
+      "channels": {
+        "showing": "Showing your products",
+        "notShowing": "Tracked, yours not shown",
+        "notTracked": "Not tracked",
+        "unread": "Couldn't read"
+      },
+      "sources": {
+        "chatgpt_us": "OpenAI product index",
+        "chatgpt_europe": "Google Shopping · via Merchant Center",
+        "google-aio": "Via Merchant Center",
+        "google-aimode": "Google Shopping Graph",
+        "gemini-web": "Google Shopping Graph",
+        "copilot-web": "Microsoft Merchant Center"
+      },
+      "view": "View products",
+      "connect": "Connect",
+      "unread": {
+        "sources": "Couldn't read your catalog sources right now, so the score waits until they can be. Try again in a moment.",
+        "products": "Couldn't read your catalog's products right now, so their checks and the score wait until they can be. Try again in a moment."
+      },
+      "checks": {
+        "catalog": {
+          "title": "Catalog connected",
+          "pass": "{count, plural, one {# product} other {# products}} from your feed, file or store.",
+          "fail": "Connect your catalog: Product Visibility counts your products against it.",
+          "unknown": "Couldn't read your catalog sources right now."
+        },
+        "merchantCenter": {
+          "title": "Google Merchant Center feed connected",
+          "pass": "Feeds Google AI Overviews and AI Mode shopping results.",
+          "warn": "Connect it to feed Google AI Overviews and AI Mode shopping results.",
+          "fail": "In Europe it decides ChatGPT too: connect it.",
+          "unknown": "Couldn't read your catalog sources right now."
+        },
+        "openAiIndex": {
+          "title": "Catalog in OpenAI's product index",
+          "pass": "You send OpenAI a direct product feed.",
+          "warn": "Found in ChatGPT's answers, source unknown. A direct feed or Shopify is the safer way in.",
+          "fail": "Not found in tracked answers. Send OpenAI a direct product feed, or connect a Shopify store."
+        },
+        "verifiedSeller": {
+          "title": "Verified seller in ChatGPT · unknown",
+          "unknown": "Shops without it can be left out of results. How OpenAI grants it isn't public yet; a direct feed is the best bet."
+        },
+        "firstWords": {
+          "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
+          "pass": "Every description says what the product is in its first 40 words.",
+          "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
+          "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
+          "unknown": "Your products have no product type to look for, so this isn't checked or scored. Add product types to your feed."
+        },
+        "feedFields": {
+          "title": "Feed fields complete · {percent}%",
+          "pass": "GTIN, photo, price, brand and category on almost every product.",
+          "warn": "GTIN missing on {gtin}, photo on {image} products.",
+          "fail": "GTIN missing on {gtin}, photo on {image} products."
+        },
+        "feedLinks": {
+          "title": "Feed links tagged utm_medium=feed",
+          "pass": "ChatGPT Shopping visits and sales are counted apart.",
+          "warn": "{count, plural, one {# product link isn't} other {# product links aren't}} tagged. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links.",
+          "fail": "Without it, ChatGPT Shopping sales can't be told apart from other AI visits. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links."
+        },
+        "wrongPrice": {
+          "title": "{count, plural, =0 {Prices in AI answers match yours} other {Wrong price in AI answers · # products}}",
+          "pass": "Every price AI showed for your products matches your catalog.",
+          "fail": "AI shows {seen} for {product}, your price is {yours}."
+        },
+        "resellerCheaper": {
+          "title": "{count, plural, =0 {No reseller cheaper than you} other {Reseller cheaper than you · # products}}",
+          "pass": "AI links to no reseller selling your products for less.",
+          "fail": "AI links to a reseller selling your product for less. See Shelf › Where AI sends shoppers."
+        },
+        "amazonShare": {
+          "title": "Amazon's share in AI answers fell {from}% → {to}% this week",
+          "warn": "Possibly OpenAI's “No Amazon” test. Your own store link matters more."
+        }
+      }
+    },
+    "plan": {
+      "types": {
+        "optimize_page": "Optimize page",
+        "create_content": "Create content",
+        "get_listed": "Get listed",
+        "technical": "Technical"
+      },
+      "lines": {
+        "optimizeWords": "Rewrite the page for what AI asked for: {words}",
+        "optimizeQuestion": "Rewrite the page to answer “{prompt}” first",
+        "compare": "A comparison, {product} vs {winner}, with an FAQ",
+        "guide": "A buying guide that features {product}",
+        "listed": "Ask the review sites AI quotes to include {product}",
+        "gtinSchema": "Add the GTIN to the feed, and Product and AggregateRating structured data",
+        "schema": "Check the product's Product, Offer and AggregateRating structured data",
+        "categoryPage": "Category page: an answer-first intro, filters named as attributes, an FAQ",
+        "buyingGuide": "Buying guide: how to choose {category}",
+        "bestLists": "Get into the “best {category}” lists AI quotes",
+        "feedFields": "Fill the feed fields AI reads for the category's {count, plural, one {# product} other {# products}}"
+      },
+      "where": {
+        "productMode": "Content Editor · the product's page",
+        "categoryMode": "Content Editor · the category page",
+        "newPage": "Content Editor · a new page",
+        "newPost": "Content Editor · a new post",
+        "outreach": "Outreach drafts · you send them",
+        "feed": "Your store's feed and the page's code"
+      },
+      "who": "Who does it",
+      "whos": {
+        "me": "Me",
+        "agent": "Agent"
+      },
+      "personOnly": "A person does this one.",
+      "pick": "Send {type}",
+      "send": "Send {count, plural, one {# action} other {# actions}} to Action Center",
+      "sending": "Sending to Action Center…",
+      "sent": "Sent to Action Center as #{number}",
+      "alreadySent": "Already in Action Center as #{number}",
+      "open": "Open",
+      "failed": "Couldn't send to Action Center. Try again."
+    },
+    "recheck": {
+      "title": "After action #{number}",
+      "pending": "Done {done}. Its result shows on {ready}, 7 days on.",
+      "result": "In the 7 days after it was done, on {after} of {afterShelves, plural, one {# shelf} other {# shelves}}. In the 7 days before, on {before} of {beforeShelves}.",
+      "noRuns": "Done {done}. No shopping answers were read in the 7 days after it, so there's nothing to compare.",
+      "tooMany": "Done {done}. Its questions have too many answers to read them all, so the 7 days before and after aren't compared.",
+      "resultNew": "In the 7 days after it was done, on {after} of {afterShelves, plural, one {# shelf} other {# shelves}}. None of its shelves was read in the 7 days before.",
+      "trend": {
+        "better": "On more of its shelves",
+        "worse": "On fewer of its shelves",
+        "same": "No change",
+        "new": "New: nothing to compare"
+      },
+      "open": "Open the action",
+      "short": "#{number}: {before}/{beforeShelves} → {after}/{afterShelves} shelves",
+      "shortNew": "#{number}: new · {after}/{afterShelves} shelves",
+      "shortNoRuns": "#{number} done · not run in the 7 days after",
+      "shortTooMany": "#{number} done · too many answers to compare",
+      "shortPending": "#{number} done · result {ready}"
+    },
+    "detail": {
+      "back": "Products",
+      "onShelves": "On {count} of {total} shelves",
+      "readiness": "Readiness {score}",
+      "viewPage": "View product page",
+      "ai": {
+        "visits": "AI clicks · 30d",
+        "orders": "AI orders · 30d",
+        "revenue": "AI revenue · 30d"
+      },
+      "why": {
+        "title": "Why not your product?",
+        "picked": "“{prompt}” · {platform} picked {winner}",
+        "leads": "Your product leads every shelf it's on. Nothing to explain here.",
+        "noQuestions": "No shopping question you track matches this product yet. Track a few questions shoppers would ask for it.",
+        "you": "You",
+        "winner": "Winner",
+        "rows": {
+          "score": "Match with the question",
+          "price": "Price",
+          "rating": "Rating · reviews",
+          "firstWords": "Key info in the first 40 words",
+          "gtin": "GTIN in the feed",
+          "photo": "Photo in the feed",
+          "stock": "In stock",
+          "merchant": "Sold by"
+        },
+        "states": {
+          "match": "in place",
+          "missing": "missing",
+          "weaker": "weaker than the winner",
+          "info": "for comparison"
+        }
+      },
+      "notes": {
+        "missingWords": "Missing: {words}",
+        "close": "Close",
+        "higher": "{percent}% higher",
+        "lower": "{percent}% lower",
+        "firstWords": "ChatGPT reads about 40 words",
+        "noType": "No product type to look for"
+      },
+      "says": {
+        "title": "What AI says",
+        "lead": "In the answers' own words: the last 30 days' {count, plural, one {# answer} other {# answers}} that showed it, and the sources they cited.",
+        "none": "No answer showed it in the last 30 days.",
+        "unnamed": "The answers showed it as a card, without naming it in their text.",
+        "asked": "“{prompt}”",
+        "sources": "Sources they cited",
+        "cited": "{count, plural, one {# answer} other {# answers}}",
+        "failed": "Couldn't read what AI says right now."
+      },
+      "actions": {
+        "title": "Actions to get on the shelf",
+        "lead": "Grouped by type. Choose who does each one, then send them to Action Center."
+      },
+      "shelves": {
+        "title": "Where it shows",
+        "question": "Shopping question",
+        "place": "Place",
+        "match": "Match",
+        "missing": "Missing words",
+        "absent": "Not on the shelf"
+      },
+      "locked": "Product Visibility comes with the Growth plan.",
+      "failed": "Couldn't read this product right now. Try again in a moment.",
+      "notFound": "This product isn't in your catalog anymore."
+    },
+    "categories": {
+      "columns": {
+        "category": "Category",
+        "share": "Shelf share",
+        "onShelf": "On shelf",
+        "rival": "Top rival",
+        "revenue": "AI revenue",
+        "plan": "Actions"
+      },
+      "plan": "Plan actions",
+      "planFor": "Plan actions for {category}",
+      "planTitle": "Category actions · {category}",
+      "planLead": "Shelf share {share}% · {onShelf} of {products} products on the shelf · {prompts, plural, one {# shopping question} other {# shopping questions}}.",
+      "prompts": "{count, plural, one {# shopping question} other {# shopping questions}}",
+      "attention": "needs attention",
+      "empty": "Your catalog has no categories yet. Categories come from your feed's product type or Google product category, or your store's collections.",
+      "failed": "Couldn't read your catalog's categories right now. Try again in a moment."
+    },
+    "products": {
+      "label": "Your products",
+      "viewsLabel": "Product views",
+      "views": {
+        "all": "All",
+        "never": "Never shown",
+        "notClicked": "Shown, not clicked",
+        "notBought": "Clicked, not bought",
+        "topSellers": "Top sellers from AI"
+      },
+      "columns": {
+        "product": "Product",
+        "shelves": "On shelf",
+        "winRate": "Win rate",
+        "avgRank": "Avg pos.",
+        "aiVisits": "AI clicks",
+        "orders": "AI orders",
+        "revenue": "AI revenue",
+        "readiness": "Readiness"
+      },
+      "readiness": {
+        "label": "Readiness {score} of 100",
+        "missing": "Missing: {check} (−{points})",
+        "unknown": "Not checked: {check}. It needs a product type.",
+        "complete": "Everything the catalog can tell is in place.",
+        "checks": {
+          "gtin": "a GTIN",
+          "image": "a photo",
+          "inStock": "in stock",
+          "price": "a price",
+          "description": "a description of 25 words or more",
+          "typeFirst": "what the product is, in the description's first 40 words",
+          "category": "a category",
+          "brand": "a brand"
+        }
+      },
+      "empty": {
+        "all": "No products in the catalog.",
+        "never": "Every product was on an AI shelf in this period.",
+        "notClicked": "No product was shown without an AI visit to its page.",
+        "notBought": "No product had AI visits without an order.",
+        "topSellers": "No orders from AI visits started on a product page in this period."
+      },
+      "capped": "Showing {shown} of {total} products: every one AI showed or sent visits to, then the rest.",
+      "more": "Show {count} more",
+      "failed": "Couldn't read your catalog's products right now. These are the products AI showed, by title."
+    },
+    "sources": {
+      "label": "Data sources",
+      "catalog": "Product catalog",
+      "catalogLine": "{count, plural, one {# product} other {# products}} · synced {when}",
+      "catalogNotSynced": "{count, plural, one {# product} other {# products}} · not synced yet",
+      "catalogNone": "Not connected · your products, from a feed, a file or your store",
+      "catalogFailed": "Couldn't be read right now",
+      "ga": "Google Analytics",
+      "gsc": "Google Search Console",
+      "gaPitch": "Not connected · see the path from AI visit to order",
+      "gscPitch": "Not connected · shopping questions from your real searches",
+      "googleFailed": "Couldn't be read right now",
+      "marketplaces": "Marketplaces & feeds",
+      "connected": "Connected",
+      "connect": "Connect",
+      "notConnected": "Not connected",
+      "soon": "Soon",
+      "manage": "Manage"
+    },
     "platformBreakdownTitle": "Card rate by platform",
     "trendTitle": "Your shopping presence — last 30 days",
     "seriesCardRate": "Card rate",
@@ -7781,8 +8480,11 @@
     "emptyTitle": "No shopping cards yet",
     "emptyDescription": "Perplexity, Google AI Mode, and Microsoft Copilot return shopping cards on commercial-intent prompts (\"best running shoes for marathon training\"). Once tracking runs against a card-eligible prompt, results show up here.",
     "lockedTitle": "Upgrade for full shopping analytics",
-    "lockedDescription": "Free and Starter plans see the shopping card rate. Growth unlocks the My Products tab, competitor breakdown, card-eligible prompts, and merchant analytics.",
-    "tabOverview": "Overview",
+    "lockedDescription": "Growth unlocks your AI shelf, your products and categories on it, where AI sends shoppers, and what it sells.",
+    "tabShelf": "Shelf",
+    "tabCategories": "Categories",
+    "tabReadiness": "Readiness",
+    "tabProducts": "Products",
     "tabMyProducts": "My Products",
     "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",
@@ -7805,24 +8507,10 @@
     "compSov": "Shopping SOV",
     "compSummaryTitle": "Competitor Summary",
     "competitorName": "Competitor",
-    "tabPrompts": "Card-eligible prompts",
-    "kpiTriggerRate": "Trigger rate",
-    "kpiTriggerRateSub": "% of tracked prompts returning ≥1 card",
     "searchPrompts": "Search prompts...",
-    "tablePrompt": "Prompt",
-    "tableTopic": "Topic",
-    "tablePlatforms": "Platforms with cards",
-    "tableTotalCards": "Total cards",
-    "tableSplitBar": "Own / Competitor / Other",
-    "tableLastSeen": "Last seen",
-    "noPromptsFound": "No card-eligible prompts found",
-    "noPromptsFoundSub": "Try widening your date range or removing filters.",
-    "drawerTitle": "Shopping Card Appearances",
-    "drawerSubtitle": "Occurrences of product cards for this prompt",
     "drawerTimestamp": "Timestamp",
     "drawerPlatform": "Platform",
     "drawerRegion": "Region",
-    "drawerCardsTitle": "Cards returned",
     "matchScore": {
       "title": "Match with each prompt",
       "estimate": "Ansvisor estimate",
@@ -8257,6 +8945,10 @@
     "regularPrice": "Regular price",
     "firstMonthOffer": "50% off your first month with code {code}",
     "buyPlanNow": "Buy {plan} now",
+    "choosePlanTitle": "Choose a plan",
+    "choosePlanFor": "Choose {plan}",
+    "planEnded": "Your plan isn't active. Choose one to start it again; you'll pay on Stripe's secure checkout.",
+    "checkoutFailed": "Couldn't open the checkout. Try again.",
     "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
     "seeAllPlanFeatures": "See everything each plan includes",
     "switchToAnnual": "Switch to annual billing",
@@ -8472,6 +9164,8 @@
       "issues": "{count, plural, one {# with an issue} other {# with issues}}",
       "repeated": "{count, plural, one {# listed again, kept once} other {# listed again, kept once}}",
       "skipped": "{count, plural, one {# product was skipped} other {# products were skipped}}",
+      "overLimit": "{count, plural, one {# product isn't} other {# products aren't}} in the catalog: your plan tracks up to {limit, plural, one {# product} other {# products}} across your brands.",
+      "upgrade": "Upgrade",
       "syncNow": "Sync now",
       "remove": "Remove",
       "removeConfirm": "Remove this source? Its products leave the catalog.",
@@ -8919,7 +9613,9 @@
       "back": "Back",
       "next": "Next",
       "finish": "Finish Setup",
-      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings."
+      "ecommerceDetected": "{brand} looks like an online store, so we turned on Product Visibility: ChatGPT Shopping is tracked for your prompts on plans that include it. You can turn it off in brand settings.",
+      "suggestionsUsedUp": "Setup suggestions are used up for today. Try again tomorrow, or add your own.",
+      "promptSuggestionsUsedUp": "Setup suggestions are used up for today. Add your own prompts to each topic below to continue."
     },
     "settings": {
       "facts": {

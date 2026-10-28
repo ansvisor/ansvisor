@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /** Each provider's status as the API answers it: an Error is a failed read. */
 const statuses: Record<string, string | Error> = {};
@@ -11,12 +12,8 @@ vi.mock('@/config/plans', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/config/plans')>()),
   isCloud: () => cloud.on,
 }));
-vi.mock('@/lib/actions/integrations', () => ({
-  getIntegrationStatus: async (provider: string) => {
-    const status = statuses[provider] ?? 'not_connected';
-    if (status instanceof Error) throw status;
-    return { status };
-  },
+const integrations = vi.hoisted(() => ({
+  getIntegrationStatus: vi.fn(),
   disconnectIntegration: vi.fn(),
   getGscProperties: vi.fn(),
   getGscBrandMappings: vi.fn(),
@@ -25,6 +22,7 @@ vi.mock('@/lib/actions/integrations', () => ({
   getGaBrandMappings: vi.fn(),
   setBrandGaProperty: vi.fn(),
 }));
+vi.mock('@/lib/actions/integrations', () => integrations);
 vi.mock('@/hooks/use-integration-connect', () => ({
   useIntegrationConnect: () => ({ connecting: false, connect: vi.fn() }),
 }));
@@ -58,10 +56,17 @@ const { toast } = await import('sonner');
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 beforeEach(() => {
+  vi.clearAllMocks();
   for (const key of Object.keys(statuses)) delete statuses[key];
   cloud.on = false;
+  integrations.getIntegrationStatus.mockImplementation(async (provider: string) => {
+    const status = statuses[provider] ?? 'not_connected';
+    if (status instanceof Error) throw status;
+    return { status };
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -69,13 +74,19 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  document.body.replaceChildren();
 });
 
-async function render() {
+/** `isLocked`: a read-only workspace (plan not active). */
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <IntegrationsSection />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <IntegrationsSection />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -212,5 +223,71 @@ describe('IntegrationsSection', () => {
     expect(key()).toBe('1');
     await report({ brandId: 'b2', sources: [] });
     expect(key()).toBe('2');
+  });
+});
+
+/** Picks a property for the nth brand row's picker. */
+async function pick(row: number, label: string) {
+  await act(async () => {
+    container.querySelectorAll<HTMLElement>('[role="combobox"]')[row].click();
+  });
+  // A picker with a value keeps its list mounted: the one just opened is the last.
+  const option = [
+    ...[...document.querySelectorAll('[role="listbox"]')]
+      .at(-1)!
+      .querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((o) => o.textContent === label)!;
+  await act(async () => {
+    option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+  });
+  await act(async () => option.click());
+}
+
+/**
+ * A connected Search Console on a read-only workspace (plan not active): no
+ * brand is mapped to a property by itself, and picking one opens the upgrade
+ * dialog instead of saving it. On an active plan both save.
+ */
+describe('IntegrationsSection property mapping', () => {
+  beforeEach(() => {
+    integrations.getIntegrationStatus.mockImplementation(async (provider: string) => ({
+      configured: provider === 'google-search-console',
+      status: provider === 'google-search-console' ? 'connected' : 'not_configured',
+    }));
+    integrations.getGscProperties.mockResolvedValue([
+      { siteUrl: 'https://acme.com/', permissionLevel: 'siteOwner' },
+      { siteUrl: 'https://other.example/', permissionLevel: 'siteOwner' },
+    ]);
+    // Acme matches one property by its domain; Beta matches none.
+    integrations.getGscBrandMappings.mockResolvedValue([
+      { brandId: 'b1', brandName: 'Acme', gscProperty: null, domains: ['acme.com'] },
+      { brandId: 'b2', brandName: 'Beta', gscProperty: null, domains: ['beta.test'] },
+    ]);
+    integrations.setBrandGscProperty.mockResolvedValue(undefined);
+  });
+
+  it('maps nothing on a read-only workspace: no auto-match, and a pick opens the upgrade dialog', async () => {
+    await render(true);
+    expect(container.querySelectorAll('[role="combobox"]')).toHaveLength(2);
+    expect(integrations.setBrandGscProperty).not.toHaveBeenCalled();
+
+    await pick(1, 'https://other.example/');
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Choosing a property needs a plan');
+    expect(integrations.setBrandGscProperty).not.toHaveBeenCalled();
+  });
+
+  it('maps a matching brand by itself and saves a pick on an active plan', async () => {
+    await render(false);
+    expect(integrations.setBrandGscProperty).toHaveBeenCalledExactlyOnceWith(
+      'b1',
+      'https://acme.com/',
+    );
+
+    await pick(1, 'https://other.example/');
+    expect(integrations.setBrandGscProperty).toHaveBeenLastCalledWith(
+      'b2',
+      'https://other.example/',
+    );
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 });
