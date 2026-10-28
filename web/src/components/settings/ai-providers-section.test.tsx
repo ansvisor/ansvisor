@@ -3,10 +3,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 /**
  * Settings › AI Providers: a row per provider with its saved key, the one
  * Chat uses, and — for admins — adding, replacing, switching and removing.
+ * On a read-only workspace (plan not active) adding, replacing and switching
+ * open the upgrade dialog; removing a key stays open.
  */
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
@@ -26,6 +29,7 @@ let container: HTMLDivElement;
 let root: Root;
 const fetchMock = vi.fn();
 let saved: unknown[];
+const openUpgrade = vi.fn();
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -67,11 +71,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function render() {
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <AiProvidersSection />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <AiProvidersSection />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -161,6 +169,28 @@ describe('AiProvidersSection', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/settings/ai-providers?provider=openai', {
       method: 'DELETE',
     });
+  });
+
+  it('on a read-only workspace, saves and switches nothing, and still removes a key', async () => {
+    await render(true);
+    act(() => button(row('azure'), 'Add key').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Saving an AI key needs a plan');
+    expect(row('azure').querySelector('form')).toBeNull();
+    await act(async () => button(row('openai'), 'Use for Chat').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith("Switching Chat's AI provider needs a plan");
+    // Only the read went out.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    act(() =>
+      (
+        row('openai').querySelector('button[aria-label="Remove key: OpenAI"]') as HTMLElement
+      ).click(),
+    );
+    await act(async () => button(document.body, 'Remove').click());
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings/ai-providers?provider=openai', {
+      method: 'DELETE',
+    });
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
   });
 
   it('shows members the keys without the buttons that change them', async () => {

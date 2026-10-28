@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { Editor } from '@tiptap/core';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { PlanProvider } from '@/components/providers/plan-provider';
+import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { ContentDraft } from '@/lib/content/drafts';
 import type { DraftSuggestion } from '@/lib/content/suggestions';
 import { passageKey, type CitedPassage } from '@/lib/content/cited-passages';
@@ -3437,6 +3440,46 @@ describe('the side panel', () => {
     afterEach(() => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
       vi.useRealTimers();
+    });
+
+    it('asks the API nothing by itself while the workspace is read-only (plan not active)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            bodyHtml:
+              readable.bodyHtml + '<p>See <a href="https://example.com/guide">the guide</a>.</p>',
+          }),
+        );
+        await act(async () => {
+          root.render(
+            <NextIntlClientProvider locale="en" messages={messages}>
+              <PlanProvider
+                planId="starter"
+                subscriptionActive={false}
+                subscriptionStatus="canceled"
+              >
+                <RoleProvider role="admin">
+                  <UpgradeDialogProvider>
+                    <ContentEditorPage />
+                  </UpgradeDialogProvider>
+                </RoleProvider>
+              </PlanProvider>
+            </NextIntlClientProvider>,
+          );
+        });
+        await act(async () => {});
+        await act(async () => void (await vi.advanceTimersByTimeAsync(CLAIMS_EVERY_MS + 3_000)));
+        // The page opens with what is stored; no link, claim or proof read is asked for.
+        expect(container.querySelector('.ProseMirror')).not.toBeNull();
+        expect(readDraftPage).not.toHaveBeenCalled();
+        expect(checkDraftClaims).not.toHaveBeenCalled();
+        expect(checkDraftLinks).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
 
     it('weighs the checks by the page type in phase 3, and follows a type changed from Quality (CE-052)', async () => {
@@ -8585,5 +8628,152 @@ describe('the side panel', () => {
     root = createRoot(container);
     await renderPage();
     expect(panel()).toBeNull();
+  });
+});
+
+describe('the editor on a read-only workspace (plan not active)', () => {
+  const openUpgrade = vi.fn();
+  async function renderLocked(isLocked = true) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <RoleProvider role="admin">
+            <UpgradeDialogContext.Provider
+              value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+            >
+              <ContentEditorPage />
+            </UpgradeDialogContext.Provider>
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    await act(async () => {});
+  }
+  const editorOf = () =>
+    (container.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }).editor;
+
+  beforeEach(() => openUpgrade.mockReset());
+
+  it('opens the page read-only and saves nothing; the toolbar opens the upgrade dialog', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      getContentDraft.mockResolvedValue(draft());
+      await renderLocked();
+      expect(container.querySelector('.ProseMirror')!.getAttribute('contenteditable')).toBe(
+        'false',
+      );
+      expect(editorOf().isEditable).toBe(false);
+      // A change that reaches the page all the same (a command) waits for no save.
+      await act(async () => void editorOf().commands.insertContentAt(2, 'x'));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+      expect(saveContentDraft).not.toHaveBeenCalled();
+      expect(container.querySelector('header')!.textContent).toContain('Saved');
+
+      const html = editorOf().getHTML();
+      await act(async () => button('Bold')!.click());
+      expect(openUpgrade).toHaveBeenLastCalledWith('Editing the page needs a plan');
+      expect(editorOf().getHTML()).toBe(html);
+      // The HTML view still shows the source, which can't be edited.
+      await act(async () => button('Edit as HTML')!.click());
+      expect(container.querySelector('textarea')!.readOnly).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens the upgrade dialog from Mark ready, Send to CMS, History and the title', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    getDraftVersions.mockResolvedValue([
+      { id: 'v1', origin: 'import', title: 'Old title', createdAt: '2026-10-12T09:42:00Z' },
+    ]);
+    await renderLocked();
+    await act(async () => button('Mark ready')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Marking a page ready needs a plan');
+    await act(async () => button('Send to CMS')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Sending to your CMS needs a plan');
+    await act(async () => container.querySelector<HTMLButtonElement>('header h1 button')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Editing the page needs a plan');
+
+    const trigger = button('History')!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    await act(async () => {});
+    const versions = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    await act(async () => versions[0].click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Restoring a version needs a plan');
+
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
+    expect(markContentDraftReady).not.toHaveBeenCalled();
+    expect(restoreDraftVersion).not.toHaveBeenCalled();
+    expect(saveContentDraft).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('runs no agent and decides no suggestion', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        status: 'draft',
+        agentState: 'failed',
+        bodyHtml: '<h1>Pipeline forecasting</h1><p>Our forecasting is very accurate.</p>',
+      }),
+    );
+    getDraftSuggestions.mockResolvedValue([
+      {
+        id: 's1',
+        batchId: 'b1',
+        actionId: 'a1',
+        actionNo: 214,
+        kind: 'replace',
+        blockText: 'Our forecasting is very accurate.',
+        beforeText: 'Our forecasting is very accurate.',
+        afterText: 'Accuracy is shown per team, each week.',
+        reason: 'answer fan-out',
+        ruleKeys: [],
+        status: 'open',
+      },
+    ]);
+    await renderLocked();
+    await act(async () => button('Try again')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Running the Content Agent needs a plan');
+    const bar = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+    await act(async () =>
+      [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Accept all')!.click(),
+    );
+    expect(openUpgrade).toHaveBeenLastCalledWith('Reviewing suggestions needs a plan');
+    expect(startAgentWriting).not.toHaveBeenCalled();
+    expect(decideDraftSuggestions).not.toHaveBeenCalled();
+    expect(keepAgentBeforeVersion).not.toHaveBeenCalled();
+  });
+
+  it('changes no rule', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    await renderLocked();
+    // The header's rules chip opens the panel on Rules: reading them stays open.
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!.click(),
+    );
+    const sentence = container.querySelector<HTMLElement>(
+      'aside [role="switch"][aria-label="Max sentence length: on or off"]',
+    )!;
+    await act(async () => sentence.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Changing rules needs a plan');
+    expect(saveDraftRules).not.toHaveBeenCalled();
+  });
+
+  it('is written and saved as before on an active plan', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      getContentDraft.mockResolvedValue(draft());
+      await renderLocked(false);
+      expect(editorOf().isEditable).toBe(true);
+      await act(async () => void editorOf().commands.insertContentAt(2, 'x'));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
+      expect(saveContentDraft).toHaveBeenCalledTimes(1);
+      expect(openUpgrade).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
