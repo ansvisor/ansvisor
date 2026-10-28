@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
 import { htmlBlockElement } from './html-allowlist';
+import { productBlockHtml } from './product-block';
 import type { ShoppingCheck, ShoppingLinkState } from './shopping-check';
 import {
   NO_DRAFT_RULES,
@@ -524,6 +525,20 @@ describe('shopping path rules (shopping path, part 6)', () => {
     ]);
     expect(status('shopProductLinks', read)).toEqual({ state: 'ok' });
     expect(status('shopCategoryLink')).toEqual({ state: 'ok' });
+  });
+
+  it('read the product cards with the price each shows, from the editor’s own markup (#1610)', () => {
+    const block = productBlockHtml([
+      { title: 'Summit', url: 'https://shop.example/products/p1', image: null, price: '$189.00' },
+      { title: 'Trail', url: 'https://shop.example/products/p2', image: null, price: null },
+    ]);
+    const read = page(`<p>Intro</p>${htmlBlockElement(block)}`);
+    expect(read.cards).toEqual([
+      { href: 'https://shop.example/products/p1', price: '$189.00' },
+      { href: 'https://shop.example/products/p2', price: null },
+    ]);
+    // A link in the text is no card.
+    expect(page('<p><a href="https://shop.example/products/p1">Summit</a></p>').cards).toEqual([]);
   });
 
   it('count only the products that sell towards the number, and name the ones that don’t', () => {

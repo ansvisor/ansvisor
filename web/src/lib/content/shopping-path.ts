@@ -63,6 +63,30 @@ export function priceAmount({
   return sale != null && sale < regular ? sale : regular;
 }
 
+/**
+ * A price as a product card shows it ("$189.00", priceAmount's), in its
+ * currency; null without one. Before you publish compares a card's with
+ * the catalog's now (shopping-check.ts).
+ */
+export function priceText(product: {
+  price: number | null;
+  salePrice: number | null;
+  currency: string | null;
+}): string | null {
+  const amount = priceAmount(product);
+  if (amount == null) return null;
+  try {
+    return product.currency
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: product.currency }).format(
+          amount,
+        )
+      : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(amount);
+  } catch {
+    // A currency code Intl doesn't know: the amount and the code as the catalog has them.
+    return `${amount} ${product.currency}`;
+  }
+}
+
 /** In stock before low stock (limited availability): the better stock, the lower. */
 function inStockRank(availability: string | null): number {
   return (availability ?? '').toLowerCase().replace(/[\s-]+/g, '_') === 'limited_availability'

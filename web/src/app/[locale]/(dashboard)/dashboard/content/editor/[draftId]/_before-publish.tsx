@@ -27,7 +27,7 @@ import {
 } from '@/lib/content/page-schema';
 import { qualityPhase } from '@/lib/content/quality';
 import { checksOff } from '@/lib/content/quality-profiles';
-import { listed, type ShoppingLinks } from '@/lib/content/shopping-check';
+import { listed, type CardPrice, type ShoppingLinks } from '@/lib/content/shopping-check';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from './_html-block';
 import { trustSuggestions, type QualityRead } from './_quality-tab';
@@ -367,6 +367,9 @@ export function BeforePublish({
         ]
       : []),
     ...(shopping ? [shoppingRow(t, shopping)] : []),
+    ...(typeof shopping === 'object' && shopping?.prices?.length
+      ? [cardPricesRow(t, shopping.prices)]
+      : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
   // Nothing to ask about as Send opens it: straight on to the Send dialog.
@@ -648,6 +651,24 @@ function readyRow(t: T, paste: ReadyToPaste, linksPending: number): Row {
     };
   }
   return { state: 'ok', title: t('paste.title'), detail: t('paste.ok') };
+}
+
+/**
+ * The product cards that show a price the catalog no longer has (#1610): a
+ * card's price is written when it goes in. Put in again, it shows today's.
+ */
+function cardPricesRow(t: T, prices: CardPrice[]): Row {
+  const { shown, more } = listed(prices);
+  return {
+    state: 'check',
+    title: t('shopping.prices', { count: prices.length }),
+    detail: t('shopping.pricesDetail', {
+      list: shown
+        .map((p) => t('shopping.priceItem', { title: p.title, page: p.page, now: p.now ?? 'none' }))
+        .join('; '),
+      more,
+    }),
+  };
 }
 
 /**

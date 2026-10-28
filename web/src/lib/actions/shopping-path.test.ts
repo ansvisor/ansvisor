@@ -555,6 +555,23 @@ describe('getShoppingCheck', () => {
     };
   });
 
+  it('reads the price a card would show now, of the best stock, for each product that sells (#1610)', async () => {
+    db.catalog_variants = [
+      variant(1, 'limited_availability', { price: 149, sale_price: null, currency: 'USD' }),
+      variant(1, 'in_stock', { price: 199, sale_price: 179, currency: 'USD' }),
+      variant(2, 'in_stock', { price: null, sale_price: null, currency: 'USD' }),
+      variant(3, 'out_of_stock', { price: 50, sale_price: null, currency: 'USD' }),
+    ];
+    db.catalog_products = [row(1), row(2), row(3)];
+    draftRow().shopping_path = pathOf({ products: [1, 2, 3].map((n) => inPath(n)) });
+    const check = await getShoppingCheck(DRAFT);
+    expect(check?.products.map((p) => [p.state, p.price])).toEqual([
+      ['ok', '$179.00'],
+      ['ok', null],
+      ['sold_out', null],
+    ]);
+  });
+
   it('reads each product now: gone, sold out, refused only when every variant in stock is', async () => {
     const v1 = variant(1, 'In Stock');
     const v3a = variant(3, 'in_stock');
@@ -612,6 +629,8 @@ describe('getShoppingCheck', () => {
         title: `Boot ${n}`,
         state,
         inPath: true,
+        // No variant here has a price.
+        price: null,
       })),
       site: 'https://www.shop.example/',
     });
@@ -644,15 +663,28 @@ describe('getShoppingCheck', () => {
 
     const check = await getShoppingCheck(DRAFT);
     expect(check!.products).toEqual([
-      { key: 'shop.example/products/1', title: 'Boot 1', state: 'ok', inPath: true },
+      { key: 'shop.example/products/1', title: 'Boot 1', state: 'ok', inPath: true, price: null },
       // 11 still sells: linking it is fine.
-      { key: 'shop.example/products/10', title: 'Catalog 10', state: 'sold_out', inPath: false },
-      { key: 'shop.example/products/12', title: 'Catalog 12', state: 'gone', inPath: false },
+      {
+        key: 'shop.example/products/10',
+        title: 'Catalog 10',
+        state: 'sold_out',
+        inPath: false,
+        price: null,
+      },
+      {
+        key: 'shop.example/products/12',
+        title: 'Catalog 12',
+        state: 'gone',
+        inPath: false,
+        price: null,
+      },
       {
         key: 'shop.example/products/13?variant=1',
         title: 'Left Boot',
         state: 'refused',
         inPath: false,
+        price: null,
       },
     ]);
   });
