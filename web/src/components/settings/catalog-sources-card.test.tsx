@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { CatalogSource } from '@/lib/catalog';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { CatalogSourcesRead } from './catalog-sources-card';
 
 const listCatalogSources = vi.fn();
@@ -35,6 +36,13 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 const { CatalogSourcesCard } = await import('./catalog-sources-card');
 
@@ -45,6 +53,7 @@ const { CatalogSourcesCard } = await import('./catalog-sources-card');
 
 let container: HTMLDivElement;
 let root: Root;
+const openUpgrade = vi.fn();
 
 const FEED: CatalogSource = {
   id: 's1',
@@ -117,11 +126,23 @@ const ACME = {
   ],
 };
 
-async function render(refreshKey?: number, onSources?: (read: CatalogSourcesRead | null) => void) {
+async function render({
+  isLocked = false,
+  refreshKey,
+  onSources,
+}: {
+  isLocked?: boolean;
+  refreshKey?: number;
+  onSources?: (read: CatalogSourcesRead | null) => void;
+} = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <CatalogSourcesCard refreshKey={refreshKey} onSources={onSources} />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <CatalogSourcesCard refreshKey={refreshKey} onSources={onSources} />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -213,6 +234,54 @@ describe('CatalogSourcesCard', () => {
     expect(listCatalogSources).toHaveBeenCalledTimes(2);
   });
 
+  it('adds, syncs, uploads and removes nothing on a read-only workspace', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    openUpgrade.mockClear();
+    await render({ isLocked: true });
+    const input = container.querySelector<HTMLInputElement>('input[type="url"]')!;
+    await type(input, 'https://shop.example/meta.csv');
+    await act(async () => {
+      container
+        .querySelector('form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding catalog sources needs a plan');
+    await act(async () => button('Upload a file')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Adding catalog sources needs a plan');
+    await act(async () => button('Sync now')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Syncing the catalog needs a plan');
+    await act(async () => button('Remove')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Removing catalog sources needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(4);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(addFeedSource).not.toHaveBeenCalled();
+    expect(syncCatalogSource).not.toHaveBeenCalled();
+    expect(removeCatalogSource).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it('still removes a store on a read-only workspace (a disconnect), but not a feed', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    openUpgrade.mockClear();
+    listStoreConnectors.mockResolvedValue({ connectors: [ACME], ready: true, signIns: [] });
+    listCatalogSources.mockResolvedValue([FEED, STORE]);
+    await render({ isLocked: true });
+    const removeIn = (text: string) =>
+      [...container.querySelectorAll('li')]
+        .find((li) => li.textContent?.includes(text))!
+        .querySelector<HTMLButtonElement>('button[aria-label="Remove"]')!;
+
+    await act(async () => removeIn('acme-shop.example').click());
+    expect(removeStore).toHaveBeenCalledWith('st1');
+    expect(openUpgrade).not.toHaveBeenCalled();
+
+    await act(async () => removeIn('https://shop.example/feed.xml').click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Removing catalog sources needs a plan');
+    expect(removeCatalogSource).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
+  });
+
   it("says why a feed couldn't be added, or read", async () => {
     addFeedSource.mockResolvedValue({ ok: false, code: 'duplicate' });
     await render();
@@ -240,6 +309,25 @@ describe('CatalogSourcesCard', () => {
     expect(toast.error).toHaveBeenLastCalledWith(
       "This isn't a Google product feed: it has no <rss> or <feed> element.",
     );
+  });
+
+  it("says how many products the plan's cap left out, with Upgrade for managers (ECOM-019)", async () => {
+    // Starter's cap (5,000).
+    const capped = { ...FEED, lastCounts: { ...FEED.lastCounts!, overLimit: 1240, limit: 5000 } };
+    listCatalogSources.mockResolvedValue([capped]);
+    await render();
+    expect(container.textContent).toContain(
+      "1,240 products aren't in the catalog: your plan tracks up to 5,000 products across your brands. Upgrade",
+    );
+    expect(container.querySelector('a[href="/dashboard/settings/billing"]')?.textContent).toBe(
+      'Upgrade',
+    );
+    act(() => root.unmount());
+    root = createRoot(container);
+    role.canManage = false;
+    await render();
+    expect(container.textContent).toContain("1,240 products aren't in the catalog");
+    expect(container.querySelector('a[href="/dashboard/settings/billing"]')).toBeNull();
   });
 
   it("shows the sources, not to change, to members who aren't admins or managers", async () => {
@@ -408,15 +496,15 @@ describe('CatalogSourcesCard', () => {
   });
 
   it('reads the sources again when the page asks (an account added above)', async () => {
-    await render(0);
+    await render({ refreshKey: 0 });
     expect(listCatalogSources).toHaveBeenCalledTimes(1);
-    await render(1);
+    await render({ refreshKey: 1 });
     expect(listCatalogSources).toHaveBeenCalledTimes(2);
   });
 
   it('tells the page what it read, for the brand', async () => {
     const onSources = vi.fn();
-    await render(0, onSources);
+    await render({ refreshKey: 0, onSources });
     expect(onSources).toHaveBeenLastCalledWith(
       expect.objectContaining({ brandId: 'b1', sources: [FEED] }),
     );

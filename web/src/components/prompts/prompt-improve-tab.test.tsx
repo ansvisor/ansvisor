@@ -1,11 +1,27 @@
-import { act } from 'react';
+import { act, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import type { PlanId } from '@/config/plans';
 import type { ImproveQuota, ImproveSet } from '@/lib/prompt-improve';
-import { ImproveTab, type ImproveController } from './prompt-improve-tab';
+import { ImproveTab, useImprove, type ImproveController } from './prompt-improve-tab';
+
+// The set's read and its generation, as the API answers them.
+const actions = vi.hoisted(() => ({
+  getImproveSuggestions: vi.fn(),
+  generateImproveSuggestions: vi.fn(),
+  sendImproveToActionCenter: vi.fn(),
+}));
+vi.mock('@/lib/actions/prompt-improve', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/actions/prompt-improve')>()),
+  ...actions,
+}));
+// The workspace's plan: active unless a test says it's read-only.
+const gate = vi.hoisted(() => ({ isLocked: false, openUpgrade: vi.fn() }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => gate,
+}));
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -164,5 +180,57 @@ describe('the Improve tab’s dates', () => {
     });
     expect(container.textContent).toMatch(/Generated Oct \d{1,2}, 2026, \d{1,2}:\d{2}\s(AM|PM)/);
     expect(container.textContent).toMatch(/Sent Oct \d{1,2}, 2026 · AC-12/);
+  });
+});
+
+describe('useImprove on a read-only workspace (plan not active)', () => {
+  const range = { preset: '30d', from: '2026-09-27' };
+  let improve: ImproveController;
+  const keep = (value: ImproveController) => {
+    improve = value;
+  };
+  function Probe({ onImprove }: { onImprove: (value: ImproveController) => void }) {
+    const value = useImprove({ promptId: 'prompt-1', range, planId: 'growth' });
+    useEffect(() => onImprove(value));
+    return null;
+  }
+  const mount = () =>
+    act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <Probe onImprove={keep} />
+        </NextIntlClientProvider>,
+      );
+    });
+
+  beforeEach(() => {
+    actions.getImproveSuggestions.mockReset().mockResolvedValue({ improve: null, quota: null });
+    actions.generateImproveSuggestions.mockReset();
+    gate.openUpgrade.mockReset();
+  });
+
+  afterEach(() => {
+    gate.isLocked = false;
+  });
+
+  it('reads the stored set while the plan is active', async () => {
+    await mount();
+    expect(actions.getImproveSuggestions).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the API nothing by itself, opens empty, and Generate opens the upgrade dialog', async () => {
+    gate.isLocked = true;
+    await mount();
+    expect(actions.getImproveSuggestions).not.toHaveBeenCalled();
+    expect(improve.status).toBe('ready');
+    expect(improve.set).toBeNull();
+    await act(async () => improve.generate());
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(1);
+    expect(gate.openUpgrade).toHaveBeenCalledWith('Improving a prompt needs a plan');
+    expect(actions.generateImproveSuggestions).not.toHaveBeenCalled();
+    // Send Actions writes to the Action Center: the dialog too, and nothing sent.
+    await act(async () => improve.send());
+    expect(gate.openUpgrade).toHaveBeenLastCalledWith('Sending actions needs a plan');
+    expect(actions.sendImproveToActionCenter).not.toHaveBeenCalled();
   });
 });

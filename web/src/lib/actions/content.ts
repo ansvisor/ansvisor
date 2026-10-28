@@ -5,6 +5,8 @@ import type { ContentBrief, ContentOpportunity, OpportunityBasket, WebhookConfig
 import { API_BASE_URL } from '@/config/api';
 import { apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ContentUsage } from '@/lib/content-usage';
+import { assertWritable } from '@/lib/subscription-guard';
+import type { NoPlanMark } from '@/lib/billing/no-plan';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -338,7 +340,7 @@ export async function getOpportunityBasket(id: string): Promise<OpportunityBaske
   return res.json();
 }
 
-export interface BriefQuota {
+export interface BriefQuota extends NoPlanMark {
   used: number;
   limit: number;
   remaining: number;
@@ -632,6 +634,7 @@ export async function saveWebhookConfig(
     isActive?: boolean;
   },
 ): Promise<WebhookConfig> {
+  await assertWritable();
   const supabase = await createClient();
   const allowedEvents = [
     'opportunity.sent',

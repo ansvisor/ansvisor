@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseLocation, locationsForScraper, userLocationFor } from './locations.js';
+import {
+  isUnknownCity,
+  locationsForModels,
+  locationsForScraper,
+  parseLocation,
+  userLocationFor,
+} from './locations.js';
 
 describe('parseLocation', () => {
   it('splits a US state code into country and state', () => {
@@ -70,5 +76,52 @@ describe('userLocationFor', () => {
   it('is null for untargeted runs so the tool config stays untouched', () => {
     expect(userLocationFor(null)).toBeNull();
     expect(userLocationFor('')).toBeNull();
+  });
+});
+
+describe('cities (PROMPT-015d)', () => {
+  it('reads a city code as its country and city, and an unknown city as its country', () => {
+    expect(parseLocation('tr~istanbul')).toMatchObject({
+      country: 'TR',
+      state: null,
+      city: { name: 'Istanbul', google: 'Istanbul,Istanbul,Turkiye' },
+    });
+    expect(parseLocation('TR~NOWHERE')).toEqual({ country: 'TR', state: null, city: null });
+    expect(parseLocation('T1~ISTANBUL')).toEqual({ country: null, state: null });
+  });
+
+  it("runs a city only on Google's engines, and never twice", () => {
+    const codes = ['TR', 'TR~ISTANBUL', 'TR~ANKARA'];
+    expect(locationsForScraper(codes, 'chatgpt-web')).toEqual(['TR']);
+    expect(locationsForScraper(codes, 'google-aimode')).toEqual(['TR', 'TR~ISTANBUL', 'TR~ANKARA']);
+    expect(locationsForScraper(['US-CA', 'US~NEW_YORK'], 'google-aio')).toEqual([
+      'US',
+      'US~NEW_YORK',
+    ]);
+    // A prompt tracked only in cities: nothing for the engines that can't ask from one.
+    expect(locationsForScraper(['TR~ISTANBUL'], 'perplexity-web')).toEqual([]);
+  });
+
+  it('runs a city no list names on no engine, rather than country-wide under its name', () => {
+    expect(isUnknownCity('TR~NOWHERE')).toBe(true);
+    expect(isUnknownCity('TR~ISTANBUL')).toBe(false);
+    expect(isUnknownCity('TR')).toBe(false);
+    const codes = ['TR~NOWHERE', 'TR~ISTANBUL'];
+    expect(locationsForScraper(codes, 'google-aimode')).toEqual(['TR~ISTANBUL']);
+    expect(locationsForScraper(['TR~NOWHERE'], 'google-aio')).toEqual([]);
+    expect(locationsForModels(codes)).toEqual(['TR~ISTANBUL']);
+    expect(locationsForModels(['TR~NOWHERE'])).toEqual([]);
+    // No locations at all is still one untargeted run.
+    expect(locationsForModels([])).toEqual([null]);
+    expect(locationsForModels(['DE', 'US-CA'])).toEqual(['DE', 'US-CA']);
+  });
+
+  it('gives the API models the city and its region', () => {
+    expect(userLocationFor('TR~ISTANBUL')).toEqual({
+      type: 'approximate',
+      country: 'TR',
+      region: 'Istanbul',
+      city: 'Istanbul',
+    });
   });
 });
