@@ -20,6 +20,8 @@ import {
   type LocationQuota,
 } from '@/lib/actions/prompt';
 import { planBulkLocationChange } from '@/lib/prompt-locations';
+import { CITY_PLATFORMS } from '@/config/cities';
+import { parseLocation } from '@/lib/region';
 import { cn } from '@/lib/utils';
 import type { Prompt } from '@/types';
 import { PromptLimitActions } from './_prompt-limit-actions';
@@ -106,6 +108,12 @@ export function AddLocationsDialog({
     'add',
     locations,
   );
+  // A city is asked only by Google's engines and the API models (PROMPT-015d).
+  const askingCity = locations.some((code) => parseLocation(code)?.city);
+  const asksFromCity = (p: Prompt) =>
+    (p.platforms ?? []).some((id) => CITY_PLATFORMS.has(id)) || (p.models?.length ?? 0) > 0;
+  const noCityEngine = askingCity ? targets.filter((p) => !asksFromCity(p)).length : 0;
+  const cityBlocked = askingCity && targets.length > 0 && noCityEngine === targets.length;
   const unlimited = quota === null || quota.maxPrompts === -1;
   const after = (quota?.used ?? 0) + change.delta;
   const over = !unlimited && quota !== null && after > quota.maxPrompts;
@@ -252,6 +260,14 @@ export function AddLocationsDialog({
               </div>
             </div>
           )}
+          {noCityEngine > 0 && (
+            <p
+              role={cityBlocked ? 'alert' : undefined}
+              className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground"
+            >
+              {cityBlocked ? t('cityBlocked') : t('cityPartly', { count: noCityEngine })}
+            </p>
+          )}
           {locations.length > 0 && change.changes.length === 0 && (
             <p className="text-xs text-muted-foreground">{t('nothing')}</p>
           )}
@@ -267,7 +283,7 @@ export function AddLocationsDialog({
           </Button>
           <Button
             onClick={() => void save()}
-            disabled={saving || over || change.changes.length === 0}
+            disabled={saving || over || cityBlocked || change.changes.length === 0}
           >
             {saving && <Loader2 className="animate-spin" />}
             {t('submit', { count: locations.length })}

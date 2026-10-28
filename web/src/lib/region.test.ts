@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cityCode,
   formatRegionDisplay,
   isValidLocation,
   locationCode,
@@ -64,6 +65,16 @@ describe('location codes', () => {
     expect(isValidLocation('US')).toBe(true);
     expect(isValidLocation('US-TX')).toBe(true);
     expect(isValidLocation('ZZ')).toBe(false);
+  });
+
+  it('reads a city as its country and city, by its own name (PROMPT-015d)', () => {
+    expect(parseLocation('tr~istanbul')).toEqual({ country: 'TR', state: null, city: 'ISTANBUL' });
+    expect(isValidLocation('TR~ISTANBUL')).toBe(true);
+    expect(isValidLocation('TR~NOWHERE')).toBe(false);
+    expect(isValidLocation('DE~ISTANBUL')).toBe(false);
+    expect(regionLabel('TR~ISTANBUL')).toBe('İstanbul');
+    expect(regionFlag('TR~ISTANBUL')).toBe(regionFlag('TR'));
+    expect(cityCode('tr', 'izmir')).toBe('TR~IZMIR');
   });
 
   it('takes the tracking countries beyond the brand regions (PROMPT-015c)', () => {

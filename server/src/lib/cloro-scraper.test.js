@@ -435,3 +435,24 @@ describe('cloro-scraper – buildRequestBody state targeting (#554)', () => {
     expect(buildRequestBody('p', 'chatgpt-web', null, 'NY').state).toBe('NY');
   });
 });
+
+describe('cloro-scraper – buildRequestBody city targeting (PROMPT-015d)', () => {
+  it("sends a city's Google name to the Google engines, beside the country", () => {
+    const location = 'Istanbul,Istanbul,Turkey';
+    expect(buildRequestBody('p', 'google-aimode', 'TR', undefined, location)).toMatchObject({
+      country: 'TR',
+      location,
+    });
+    expect(buildRequestBody('p', 'google-aio', 'TR', undefined, location)).toMatchObject({
+      country: 'TR',
+      location,
+    });
+    expect(buildRequestBody('p', 'google-aio', 'TR')).not.toHaveProperty('location');
+  });
+
+  it('never sends it to the other engines', () => {
+    expect(
+      buildRequestBody('p', 'chatgpt-web', 'TR', undefined, 'Istanbul,Istanbul,Turkey'),
+    ).not.toHaveProperty('location');
+  });
+});

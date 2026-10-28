@@ -96,6 +96,18 @@ describe('LocationMatrix', () => {
     expect(text).toContain('Biggest gap between locations');
   });
 
+  it('marks a city column with the engines that answer from it (PROMPT-015d)', async () => {
+    rows[0] = prompt('p1', 'best specialty coffee subscription', ['US', 'TR', 'TR~ISTANBUL']);
+    getPromptLocationMatrix.mockResolvedValue({
+      p1: { US: cell(62), TR: cell(35), 'TR~ISTANBUL': cell(41) },
+    });
+    const text = await render();
+    expect(text).toContain('İstanbul');
+    expect(text).toContain('City');
+    expect(text).toContain('AI Mode · AIO · APIs');
+    rows[0] = prompt('p1', 'best specialty coffee subscription', ['US', 'TR']);
+  });
+
   it('switches the metric, and reads a prompt never named there as such', async () => {
     await render();
     const position = [...container.querySelectorAll('button')].find(

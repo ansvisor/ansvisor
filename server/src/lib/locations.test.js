@@ -72,3 +72,36 @@ describe('userLocationFor', () => {
     expect(userLocationFor('')).toBeNull();
   });
 });
+
+describe('cities (PROMPT-015d)', () => {
+  it('reads a city code as its country and city, and an unknown city as its country', () => {
+    expect(parseLocation('tr~istanbul')).toMatchObject({
+      country: 'TR',
+      state: null,
+      city: { name: 'Istanbul', google: 'Istanbul,Istanbul,Turkey' },
+    });
+    expect(parseLocation('TR~NOWHERE')).toEqual({ country: 'TR', state: null, city: null });
+    expect(parseLocation('T1~ISTANBUL')).toEqual({ country: null, state: null });
+  });
+
+  it("runs a city only on Google's engines, and never twice", () => {
+    const codes = ['TR', 'TR~ISTANBUL', 'TR~ANKARA'];
+    expect(locationsForScraper(codes, 'chatgpt-web')).toEqual(['TR']);
+    expect(locationsForScraper(codes, 'google-aimode')).toEqual(['TR', 'TR~ISTANBUL', 'TR~ANKARA']);
+    expect(locationsForScraper(['US-CA', 'US~NEW_YORK'], 'google-aio')).toEqual([
+      'US',
+      'US~NEW_YORK',
+    ]);
+    // A prompt tracked only in cities: nothing for the engines that can't ask from one.
+    expect(locationsForScraper(['TR~ISTANBUL'], 'perplexity-web')).toEqual([]);
+  });
+
+  it('gives the API models the city and its region', () => {
+    expect(userLocationFor('TR~ISTANBUL')).toEqual({
+      type: 'approximate',
+      country: 'TR',
+      region: 'Istanbul',
+      city: 'Istanbul',
+    });
+  });
+});

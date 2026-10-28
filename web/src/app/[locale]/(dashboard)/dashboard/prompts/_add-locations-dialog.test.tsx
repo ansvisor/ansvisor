@@ -142,6 +142,21 @@ describe('AddLocationsDialog', () => {
     expect(document.body.querySelector('a[href="/dashboard/settings?tab=billing"]')).not.toBeNull();
   });
 
+  it('turns a city off for prompts no engine of which answers from one (PROMPT-015d)', async () => {
+    let text = await render({ locations: ['TR~ISTANBUL'] });
+    expect(text).toContain('İstanbul');
+    expect(text).toContain('None of these prompts runs an engine that answers from a city');
+    expect(submit().disabled).toBe(true);
+    // One prompt asks Google AI Mode: the city can be added, with a note for the rest.
+    prompts[0] = { ...prompts[0], platforms: ['google-aimode'] } as Prompt;
+    act(() => root.unmount());
+    root = createRoot(container);
+    text = await render({ locations: ['TR~ISTANBUL'] });
+    expect(text).toContain("2 of these prompts don't run an engine that answers from a city");
+    expect(submit().disabled).toBe(false);
+    prompts[0] = prompt('p1', ['US']);
+  });
+
   it("says what the server refused, and changes nothing it didn't save", async () => {
     actions.bulkUpdatePromptLocations.mockResolvedValue({
       error: 'Your Growth plan allows up to 200 active prompt locations',

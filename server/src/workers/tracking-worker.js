@@ -304,9 +304,11 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
   const allowedPlatformsFor = (prompt) => runnablePlatforms(prompt.platforms, { shoppingEnabled });
 
-  // A prompt's tracked locations (#691): country codes and US state codes
-  // (`US-CA`) alike. No locations means one untargeted run, which is what an
-  // empty list has always meant here.
+  // A prompt's tracked locations (#691): country codes, US state codes
+  // (`US-CA`) and city codes (`TR~ISTANBUL`, PROMPT-015d) alike. No locations
+  // means one untargeted run, which is what an empty list has always meant
+  // here. locationsForScraper keeps a city only for Google's engines; the API
+  // models take every code (userLocationFor).
   const locationsFor = (prompt) =>
     prompt.regions && prompt.regions.length > 0 ? prompt.regions : [null];
 
@@ -394,10 +396,11 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // brand's single state column (#691): different prompts can target
         // different places, and a brand-wide override would silently win
         // over them.
-        const { country, state } = parseLocation(t.region);
+        const { country, state, city } = parseLocation(t.region);
         return submitScraperTask(t.prompt.text, t.scraperId, country, {
           webhookUrl,
           state,
+          location: city?.google,
         }).then((res) => ({
           ...res,
           meta: t,
