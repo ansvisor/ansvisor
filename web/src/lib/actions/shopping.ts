@@ -369,6 +369,17 @@ async function fetchAllCards<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
   build: () => any,
 ): Promise<T[]> {
+  return (await readCardPages<T>(build)).rows;
+}
+
+/**
+ * fetchAllCards' read, and whether it stopped at CARD_MAX_ROWS with every
+ * page full (`cut`): the oldest cards past it may not have been read.
+ */
+async function readCardPages<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
+  build: () => any,
+): Promise<{ rows: T[]; cut: boolean }> {
   const rows: T[] = [];
   for (let start = 0; start < CARD_MAX_ROWS; start += CARD_PAGE_SIZE) {
     const { data, error } = await build()
@@ -378,9 +389,9 @@ async function fetchAllCards<T>(
     if (error) throw new Error(error.message);
     const batch = (data ?? []) as T[];
     rows.push(...batch);
-    if (batch.length < CARD_PAGE_SIZE) break;
+    if (batch.length < CARD_PAGE_SIZE) return { rows, cut: false };
   }
-  return rows;
+  return { rows, cut: true };
 }
 
 /**
@@ -2000,8 +2011,10 @@ const recheckTargets = z
  * its questions in the week before it was done beside the week after
  * (recheck.ts), by "product:<id>" / "category:<id>". Every question the
  * actions name is read, IDS_PER_READ ids a read; a category's own products
- * are what count on its shelves. Through the member's session (RLS): only
- * the brand's own actions, cards and catalog.
+ * are what count on its shelves. A read that stops at CARD_MAX_ROWS leaves
+ * its oldest cards (the week before, first) unread: an action with one of
+ * its questions is `partial`, and isn't compared. Through the member's
+ * session (RLS): only the brand's own actions, cards and catalog.
  */
 async function readActionResults(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -2055,9 +2068,11 @@ async function readActionResults(
   const categoryIds = [...actions.values()].flatMap((a) =>
     a.target.type === 'category' ? [a.target.id] : [],
   );
+  // The questions of a read cut at CARD_MAX_ROWS.
+  const cutPrompts = new Set<string>();
   const [rows, links] = await Promise.all([
-    readForIds(promptIds, (some) =>
-      fetchAllCards<{
+    readForIds(promptIds, async (some) => {
+      const { rows: read, cut } = await readCardPages<{
         created_at: string;
         platform: string;
         catalog_product_id: string | null;
@@ -2070,8 +2085,10 @@ async function readActionResults(
           .gte('created_at', from)
           .lt('created_at', to)
           .in('prompt_results.prompt_id', some),
-      ),
-    ),
+      );
+      if (cut) for (const id of some) cutPrompts.add(id);
+      return read;
+    }),
     // A category's products: those its shelves count.
     readForIds(categoryIds, (some) =>
       readCatalogRows<{ product_id: string; category_id: string }>(
@@ -2108,7 +2125,11 @@ async function readActionResults(
       : [],
   );
   return Object.fromEntries(
-    [...actions].map(([key, action]) => [key, actionResult(action, cards, now)]),
+    [...actions].map(([key, action]) => {
+      const result = actionResult(action, cards, now);
+      if (action.promptIds.some((id) => cutPrompts.has(id))) result.partial = true;
+      return [key, result];
+    }),
   );
 }
 

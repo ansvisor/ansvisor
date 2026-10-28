@@ -58,16 +58,18 @@ export function ActionResultCard({ result }: { result: ActionResult }) {
         <p className="text-sm text-muted-foreground">
           {result.after === null
             ? t('pending', { done, ready: formatDate(result.readyAt) })
-            : result.after.shelves === 0
-              ? t('noRuns', { done })
-              : trend === 'new'
-                ? t('resultNew', { after: result.after.on, afterShelves: result.after.shelves })
-                : t('result', {
-                    after: result.after.on,
-                    afterShelves: result.after.shelves,
-                    before: result.before.on,
-                    beforeShelves: result.before.shelves,
-                  })}
+            : result.partial
+              ? t('tooMany', { done })
+              : result.after.shelves === 0
+                ? t('noRuns', { done })
+                : trend === 'new'
+                  ? t('resultNew', { after: result.after.on, afterShelves: result.after.shelves })
+                  : t('result', {
+                      after: result.after.on,
+                      afterShelves: result.after.shelves,
+                      before: result.before.on,
+                      beforeShelves: result.before.shelves,
+                    })}
         </p>
         <Link
           href={actionHref(result)}
@@ -100,21 +102,23 @@ export function ActionResultLine({ result }: { result: ActionResult | undefined 
     >
       {result.after === null
         ? t('shortPending', { number: result.actionNo, ready: formatDate(result.readyAt) })
-        : result.after.shelves === 0
-          ? t('shortNoRuns', { number: result.actionNo })
-          : trend === 'new'
-            ? t('shortNew', {
-                number: result.actionNo,
-                after: result.after.on,
-                afterShelves: result.after.shelves,
-              })
-            : t('short', {
-                number: result.actionNo,
-                before: result.before.on,
-                beforeShelves: result.before.shelves,
-                after: result.after.on,
-                afterShelves: result.after.shelves,
-              })}
+        : result.partial
+          ? t('shortTooMany', { number: result.actionNo })
+          : result.after.shelves === 0
+            ? t('shortNoRuns', { number: result.actionNo })
+            : trend === 'new'
+              ? t('shortNew', {
+                  number: result.actionNo,
+                  after: result.after.on,
+                  afterShelves: result.after.shelves,
+                })
+              : t('short', {
+                  number: result.actionNo,
+                  before: result.before.on,
+                  beforeShelves: result.before.shelves,
+                  after: result.after.on,
+                  afterShelves: result.after.shelves,
+                })}
     </Link>
   );
 }

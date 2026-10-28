@@ -109,6 +109,21 @@ describe('resultTrend', () => {
     expect(result([0, 0], [2, 3])).toBe('new');
     expect(result([0, 0], [0, 3])).toBe('new');
   });
+
+  it("reads no trend when not every answer could be read: a missing week isn't new", () => {
+    const partial = (before: [number, number], after: [number, number]) =>
+      resultTrend({
+        actionId: 'a1',
+        actionNo: 1,
+        completedAt: DONE,
+        readyAt: DONE,
+        before: { on: before[0], shelves: before[1] },
+        after: { on: after[0], shelves: after[1] },
+        partial: true,
+      });
+    expect(partial([0, 0], [2, 3])).toBeNull();
+    expect(partial([1, 4], [2, 2])).toBeNull();
+  });
 });
 
 it('keys a result by its target', () => {

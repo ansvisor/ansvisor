@@ -48,6 +48,11 @@ export interface ActionResult {
   before: ShelfPresence;
   /** Null until the 7 days after have passed. */
   after: ShelfPresence | null;
+  /**
+   * True when its questions had more answers than a read takes: the oldest
+   * weren't read, so the two weeks aren't compared.
+   */
+  partial?: boolean;
 }
 
 /**
@@ -97,11 +102,13 @@ export function actionResult(
 /**
  * Which way it went: the share of shelves it was on, after beside before;
  * 'new' when no shelf was read in the week before, so nothing to compare.
- * Null while the week after runs, or when no answer was read in it.
+ * Null while the week after runs, when no answer was read in it, or when
+ * not every answer could be read (partial): a week missing in the read
+ * would read as 'new' or 'better'.
  */
 export function resultTrend(result: ActionResult): 'better' | 'worse' | 'same' | 'new' | null {
   const { before, after } = result;
-  if (!after?.shelves) return null;
+  if (result.partial || !after?.shelves) return null;
   if (!before.shelves) return 'new';
   const share = (p: ShelfPresence) => (p.shelves ? p.on / p.shelves : 0);
   const change = share(after) - share(before);

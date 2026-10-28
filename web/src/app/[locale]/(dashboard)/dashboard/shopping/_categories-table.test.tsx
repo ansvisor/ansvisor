@@ -164,6 +164,30 @@ describe('CategoriesTable', () => {
     ]);
   });
 
+  it('says a category whose answers were too many to read all is not compared', () => {
+    render(
+      <CategoriesTable
+        categories={[row({})]}
+        loading={false}
+        failed={false}
+        results={{
+          'category:shoes': {
+            actionId: 'a9',
+            actionNo: 9,
+            completedAt: '2026-10-12T09:00:00Z',
+            readyAt: '2026-10-19T09:00:00Z',
+            before: { shelves: 0, on: 0 },
+            after: { shelves: 3, on: 2 },
+            partial: true,
+          },
+        }}
+      />,
+    );
+    const link = container.querySelector('tbody a')!;
+    expect(link.textContent).toBe('#9 done · too many answers to compare');
+    expect(link.className).toContain('text-muted-foreground');
+  });
+
   it("plans a category's actions in a dialog, measured on its questions", async () => {
     sendShoppingActions.mockResolvedValue({ actionId: 'a1', actionNo: 302, created: true });
     render(

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resultTrend } from '@/lib/shopping/recheck';
 
 /** A product's page read (ECOM-011). */
 
@@ -344,6 +345,44 @@ describe('the re-check read (ECOM-018)', () => {
         after: { shelves: 1, on: 1 },
       });
       expect(byIds).toContainEqual(['catalog_product_categories', 'category_id', [CATEGORY]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("doesn't compare an action whose questions' cards stopped at the read's limit", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T00:00:00Z'));
+    try {
+      tables.actions = [
+        {
+          id: 'a9',
+          action_no: 9,
+          completed_at: '2026-10-20T00:00:00Z',
+          payload: { target: { type: 'product', id: PRODUCT }, promptIds: ['q1'] },
+        },
+      ];
+      // Only the week after's cards fit in the read, the newest first.
+      const after = {
+        created_at: '2026-10-22T08:00:00Z',
+        platform: 'chatgpt-shopping',
+        catalog_product_id: PRODUCT,
+        prompt_results: { prompt_id: 'q1' },
+      };
+      const key = `product:${PRODUCT}`;
+      tables.prompt_result_shopping_cards = Array.from({ length: 50_000 }, () => after);
+      const cut = (await getShoppingActionResults(BRAND, [{ type: 'product', id: PRODUCT }]))[key];
+      // The week before wasn't reached: not "new", nor "better".
+      expect(cut).toMatchObject({ before: { shelves: 0 }, after: { shelves: 1, on: 1 } });
+      expect(cut.partial).toBe(true);
+      expect(resultTrend(cut)).toBeNull();
+      // One card short of the limit: every card was read.
+      tables.prompt_result_shopping_cards = Array.from({ length: 49_999 }, () => after);
+      const whole = (await getShoppingActionResults(BRAND, [{ type: 'product', id: PRODUCT }]))[
+        key
+      ];
+      expect(whole.partial).toBeUndefined();
+      expect(resultTrend(whole)).toBe('new');
     } finally {
       vi.useRealTimers();
     }
