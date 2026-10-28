@@ -35,11 +35,12 @@ const logged = [];
 vi.mock('../logger.js', () => ({
   logger: { warn: (...args) => logged.push(JSON.stringify(args)) },
 }));
-const webflow = { createItem: vi.fn(), updateItem: vi.fn() };
+const webflow = { createItem: vi.fn(), updateItem: vi.fn(), getItem: vi.fn() };
 vi.mock('./webflow.js', async (importOriginal) => ({
   ...(await importOriginal()),
   createItem: (...args) => webflow.createItem(...args),
   updateItem: (...args) => webflow.updateItem(...args),
+  getItem: (...args) => webflow.getItem(...args),
 }));
 
 const { sendToWebflow } = await import('./webflow-delivery.js');
@@ -76,6 +77,14 @@ beforeEach(() => {
   logged.length = 0;
   webflow.createItem.mockReset().mockResolvedValue('item-new');
   webflow.updateItem.mockReset().mockResolvedValue('item-old');
+  // The item as sent before: dated.
+  webflow.getItem.mockReset().mockResolvedValue({
+    id: 'item-old',
+    slug: 'cold-brew-at-home',
+    live: false,
+    lastPublished: null,
+    filledFields: ['name', 'slug', 'date'],
+  });
 });
 
 describe('sendToWebflow', () => {
@@ -153,6 +162,59 @@ describe('sendToWebflow', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('dates an item sent again that has no date, as one sent before the date was mapped (#1600)', async () => {
+    vi.useFakeTimers({ now: new Date('2026-10-28T08:00:00Z') });
+    try {
+      const dated = { ...connection, field_map: { ...connection.field_map, date: 'date' } };
+      const sendDated = () =>
+        sendToWebflow({
+          delivery: { id: 'd2345678-0000-0000-0000-000000000000' },
+          page: { draftId: 'dr1', title: 'Cold brew at home', slug: 'cold-brew-at-home' },
+          html: '<p>Smooth.</p>',
+          jsonLd: [],
+          connection: dated,
+        });
+      previous = 'item-old';
+      webflow.getItem.mockResolvedValueOnce({
+        id: 'item-old',
+        slug: 'cold-brew-at-home',
+        live: true,
+        lastPublished: '2026-10-01T00:00:00Z',
+        filledFields: ['name', 'slug', 'post-body'],
+      });
+      expect(await sendDated()).toMatchObject({ taken: true, updated: true });
+      expect(webflow.getItem).toHaveBeenCalledWith(account, 'c1', 'item-old');
+      expect(webflow.updateItem.mock.calls[0][3]).toHaveProperty(
+        'date',
+        '2026-10-28T08:00:00.000Z',
+      );
+
+      // An item that can't be read is updated without a date, not refused.
+      webflow.getItem.mockRejectedValueOnce(new WebflowError('failed', 'busy'));
+      expect(await sendDated()).toMatchObject({ taken: true, updated: true });
+      expect(webflow.updateItem.mock.calls[1][3]).not.toHaveProperty('date');
+
+      // A read that didn't see the item's fields keeps its date.
+      webflow.getItem.mockResolvedValueOnce({
+        id: 'item-old',
+        slug: null,
+        live: true,
+        lastPublished: null,
+        filledFields: [],
+      });
+      expect(await sendDated()).toMatchObject({ taken: true, updated: true });
+      expect(webflow.updateItem.mock.calls[2][3]).not.toHaveProperty('date');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reads the item only when the map gives a date', async () => {
+    previous = 'item-old';
+    await send();
+    expect(webflow.getItem).not.toHaveBeenCalled();
   });
 
   it('gives Webflow a slug it takes, from the title when the page’s has nothing left', async () => {
