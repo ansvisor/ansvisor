@@ -76,6 +76,17 @@ describe('shouldShowDashboardNavItem', () => {
   it('shows Shopping when the active brand enables shopping mode', () => {
     expect(shouldShowDashboardNavItem(shopping, { shoppingModeEnabled: true })).toBe(true);
   });
+
+  it('hides a section off the viewer’s menu, by its route', () => {
+    const content = dashboardNav
+      .flatMap((group) => group.items)
+      .find((item) => item.href === '/dashboard/content')!;
+    const prefs = { shoppingModeEnabled: true };
+
+    expect(shouldShowDashboardNavItem(content, prefs, new Set(['content']))).toBe(false);
+    expect(shouldShowDashboardNavItem(content, prefs, new Set(['audit']))).toBe(true);
+    expect(shouldShowDashboardNavItem(shopping, prefs, new Set(['shopping']))).toBe(false);
+  });
 });
 
 describe('the Mentions item', () => {

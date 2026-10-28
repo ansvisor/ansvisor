@@ -199,6 +199,25 @@ describe('getActionFor', () => {
     }
   });
 
+  it('gives a task planned while its template was Automatic its Manual check (AC-010)', async () => {
+    taskRows = [
+      {
+        id: 't4',
+        position: 1,
+        task_key: 'improve_cta_path',
+        title: null,
+        status: 'todo',
+        details: { check: 'auto', source: 'template' },
+      },
+    ];
+    try {
+      const action = await getActionFor(auth, 'a1');
+      expect(action?.tasks[0].details).toMatchObject({ check: 'manual' });
+    } finally {
+      taskRows = [];
+    }
+  });
+
   it('gives the action its priority', async () => {
     const action = await getActionFor(auth, 'a1');
     expect(action?.priority).toEqual({
