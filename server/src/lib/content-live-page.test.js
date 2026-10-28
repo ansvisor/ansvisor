@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../config/supabase.js', () => ({ default: {} }));
+const rpc = vi.fn();
+vi.mock('../config/supabase.js', () => ({ default: { rpc: (...args) => rpc(...args) } }));
 
-const { livePageLine, livePageSummary } = await import('./content-live-page.js');
+const { livePageLine, livePageSummary, readLivePage } = await import('./content-live-page.js');
 
 /**
  * How the live page does now, as the Content Agent is told (learning B5):
@@ -35,6 +36,73 @@ describe('livePageSummary', () => {
       livePageSummary({ citations: { cur: 0, prev: 0 }, aiVisits: { cur: 0, prev: 0 } }),
     ).toBeNull();
     expect(livePageSummary(null)).toBeNull();
+  });
+});
+
+describe('readLivePage', () => {
+  const BRAND = '33333333-3333-3333-3333-333333333333';
+  const PAGE = 'https://acme.example/guide';
+
+  it("reads the brand's page over the tab's 30 days, or the window it is given", async () => {
+    rpc.mockReset().mockResolvedValue({ data: impact, error: null });
+    expect(await readLivePage(BRAND, PAGE)).toMatchObject({
+      days: 30,
+      citations: { cur: 12, prev: 20 },
+    });
+    expect(rpc).toHaveBeenCalledWith('content_page_impact', {
+      p_brand_id: BRAND,
+      p_page: PAGE,
+      p_days: 30,
+    });
+    expect(await readLivePage(BRAND, PAGE, 7)).toMatchObject({ days: 7 });
+    expect(rpc).toHaveBeenLastCalledWith('content_page_impact', {
+      p_brand_id: BRAND,
+      p_page: PAGE,
+      p_days: 7,
+    });
+  });
+
+  it('names three lost prompts, the most cited before first', async () => {
+    rpc.mockReset().mockResolvedValue({
+      data: {
+        ...impact,
+        promptCounts: { cur: 1, prev: 5, lost: 4 },
+        prompts: [
+          { text: 'kept', cur: 3, prev: 1 },
+          { text: 'lost 2', cur: 0, prev: 2 },
+          { text: 'lost 9', cur: 0, prev: 9 },
+          { text: 'lost 1', cur: 0, prev: 1 },
+          { text: 'lost 5', cur: 0, prev: 5 },
+          { text: 'new', cur: 2, prev: 0 },
+        ],
+      },
+      error: null,
+    });
+    const summary = await readLivePage(BRAND, PAGE);
+    expect(summary.lostPrompts).toEqual(['lost 9', 'lost 5', 'lost 2']);
+    // The count is all it lost, past the three named.
+    expect(summary.prompts.lost).toBe(4);
+  });
+
+  it('tells nothing without a page, or of a page neither cited nor visited', async () => {
+    rpc.mockReset();
+    expect(await readLivePage(BRAND, null)).toBeNull();
+    expect(await readLivePage(BRAND, '')).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+    rpc.mockResolvedValue({
+      data: { citations: { cur: 0, prev: 0 }, aiVisits: { cur: 0, prev: 0 }, prompts: [] },
+      error: null,
+    });
+    expect(await readLivePage(BRAND, PAGE)).toBeNull();
+    rpc.mockResolvedValue({ data: null, error: null });
+    expect(await readLivePage(BRAND, PAGE)).toBeNull();
+  });
+
+  it('throws when the read fails, for its caller to go on without it', async () => {
+    rpc.mockReset().mockResolvedValue({ data: null, error: { message: 'statement timeout' } });
+    await expect(readLivePage(BRAND, PAGE)).rejects.toThrow(
+      'live page read failed: statement timeout',
+    );
   });
 });
 
