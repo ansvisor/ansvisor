@@ -27,7 +27,13 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
-import { BASKET_KPIS, basketScope, measureBasket } from './basket-metrics.js';
+import {
+  BASKET_KPIS,
+  basketScope,
+  controlScope,
+  measureBasket,
+  netEffect,
+} from './basket-metrics.js';
 import { auditOutcome, auditRecheck } from './audit-recheck.js';
 
 const DAY_MS = 86_400_000;
@@ -416,7 +422,10 @@ export async function validateAction(action, { now = new Date() } = {}) {
 
   // Each reading due, in order; the action keeps the last one's figures and
   // verdict, every reading's verdict and metrics, and whether it's final.
+  // The control's prompts and its week before (B2) are the same for each:
+  // read for the first, kept for the rest.
   const readings = [...previous];
+  const controlReads = {};
   let last = null;
   for (const day of due) {
     last = await measureReading(action, {
@@ -425,6 +434,7 @@ export async function validateAction(action, { now = new Date() } = {}) {
       signals,
       audit,
       now,
+      controlReads,
     });
     readings.push({
       day,
@@ -450,13 +460,59 @@ export async function validateAction(action, { now = new Date() } = {}) {
 }
 
 /**
+ * A basket's control (learning B2): the brand's prompts it didn't touch,
+ * read over the same windows, its values as read. The basket's change net
+ * of theirs is taken when the reading finishes, its counts on the same
+ * scale as the result's (A6). Kept beside the result, not in its verdict.
+ * Null with too few prompts to read, or a read that fails: the result
+ * stands as it was. Its prompts and week before, the same for every
+ * reading of the action, are read once into `shared`.
+ */
+async function controlOf(action, promptIds, { beforeWindow, afterWindow }, shared = {}) {
+  const brandId = action.brand_id;
+  try {
+    shared.scope ??= controlScope(brandId, promptIds, beforeWindow.from);
+    const scope = await shared.scope;
+    if (!scope) return null;
+    shared.before ??= measureBasket(brandId, scope, beforeWindow.from, beforeWindow.to);
+    const [before, after] = await Promise.all([
+      shared.before,
+      measureBasket(brandId, scope, afterWindow.from, afterWindow.to),
+    ]);
+    return { basis: scope.basis, prompts: scope.promptIds.length, before, after };
+  } catch (err) {
+    logger.warn(
+      { err: err.message, brandId, actionId: action.id },
+      '[action-validation] control basket not read',
+    );
+    return null;
+  }
+}
+
+/** The control's values with its counts at a full window's worth, as the result's are (A6). */
+function fullWindowControl({ before, after }, nights) {
+  const scaled = fullWindowCounts(
+    Object.keys(before).map((metric) => ({ metric, before: before[metric], after: after[metric] })),
+    nights,
+  );
+  return {
+    before: Object.fromEntries(scaled.map((m) => [m.metric, m.before])),
+    after: Object.fromEntries(scaled.map((m) => [m.metric, m.after])),
+  };
+}
+
+/**
  * One reading of a closed action (learning B1): what it keeps and its
  * verdict, over the week `afterWindow` against the week before it was raised.
  */
-async function measureReading(action, { beforeWindow, afterWindow, signals, audit, now }) {
+async function measureReading(
+  action,
+  { beforeWindow, afterWindow, signals, audit, now, controlReads },
+) {
   // The verdict from the metrics kept, by its main metric; given `aims`,
-  // only the metrics the action names count (see deriveOutcome).
-  const finish = async (validation, aims = null) => {
+  // only the metrics the action names count (see deriveOutcome). Given its
+  // `control` (B2), its change net of the control's kept beside.
+  const finish = async (validation, aims = null, control = null) => {
     // Nights tracking missed in either window (A6), when a count was read.
     // Up to MAX_GAP_DAYS, its counts are read at a full window's worth; past
     // it, too few nights ran to scale from: the counts stay as read and
@@ -487,14 +543,21 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
               : {}),
           }
         : validation;
-    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}), ...gaps };
-    const kept =
-      read || Object.keys(beside).length
-        ? { measuredAt: now.toISOString(), ...(read ?? {}), ...beside }
-        : null;
     const comparable = tooMany
       ? read?.metrics.filter((m) => !COUNT_METRICS.has(m.metric))
       : read?.metrics;
+    // Net of the control (B2) on the result's scale: its counts read at a
+    // full week's worth over the same nights, or, past MAX_GAP_DAYS, left
+    // out with the result's.
+    const net = read && control ? netEffect(comparable, fullWindowControl(control, nights)) : [];
+    const measured = net.length
+      ? { ...read, control: { basis: control.basis, prompts: control.prompts, net } }
+      : read;
+    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}), ...gaps };
+    const kept =
+      measured || Object.keys(beside).length
+        ? { measuredAt: now.toISOString(), ...(measured ?? {}), ...beside }
+        : null;
     const outcome =
       !read || (tooMany && COUNT_METRICS.has(read.primary))
         ? 'not_measurable'
@@ -532,6 +595,12 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
     }));
     // Its aim: the first of its success metrics a basket reads, else its visibility.
     const primary = (action.kpi_keys ?? []).find((key) => key in BASKET_KPIS) ?? 'ai_visibility';
+    const control = await controlOf(
+      action,
+      scope.promptIds,
+      { beforeWindow, afterWindow },
+      controlReads,
+    );
     return finish(
       {
         measuredAt: now.toISOString(),
@@ -542,6 +611,7 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
       },
       action.kpi_keys ?? [],
+      control,
     );
   }
 
@@ -589,6 +659,12 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
         before: brandBefore[metric] ?? null,
         after: brandAfter[metric] ?? null,
       }));
+      const control = await controlOf(
+        action,
+        targets.promptIds,
+        { beforeWindow, afterWindow },
+        controlReads,
+      );
       return finish(
         {
           measuredAt: now.toISOString(),
@@ -600,6 +676,7 @@ async function measureReading(action, { beforeWindow, afterWindow, signals, audi
           ...(brandWide.length ? { brandWide } : {}),
         },
         asked,
+        control,
       );
     }
     // Read already, for the brand-wide measure below.

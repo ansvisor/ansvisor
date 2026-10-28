@@ -183,6 +183,53 @@ describe('HistoryDrawer', () => {
     expect(result).toMatch(/Brand-wide over the same days: \S.* 100 → 104/);
   });
 
+  /** Its change net of the brand's prompts it didn't touch (learning B2). */
+  it("says the result net of the brand's other prompts over the same days", async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          controlNet: {
+            basis: 'topics',
+            prompts: 6,
+            net: [
+              { metric: 'ai_visibility', net: 6, unit: 'points' },
+              { metric: 'mentions', net: -12.5, unit: 'percent' },
+              { metric: 'unknown_metric', net: 1, unit: 'points' },
+            ],
+          },
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toMatch(
+      /Net of the 6 other prompts in its topics over the same days: \S.* \+6 pts · \S.* −12\.5%$/,
+    );
+  });
+
+  it('leaves the net line out when it names no metric it can show', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          controlNet: {
+            basis: 'brand',
+            prompts: 8,
+            net: [{ metric: 'unknown_metric', net: 1, unit: 'points' }],
+          },
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).not.toContain('Net of');
+  });
+
   it('says how a Site Audit fix’s pages read when audited again, or that none was yet (learning A2)', async () => {
     getActionSignals.mockResolvedValue([]);
     render(

@@ -137,6 +137,8 @@ export function HistoryDrawer({
   );
   const date = item.completedAt ?? item.createdAt;
   const measured = item.results.length > 0;
+  // Its net of the brand's prompts it didn't touch (learning B2), in the metrics it can name.
+  const controlNet = item.controlNet?.net.filter((m) => tRegistry.has(`${m.metric}.name`)) ?? [];
   const completedTasks = item.tasks.filter((task) => task.status === 'completed').length;
   const countedTasks = item.tasks.filter(
     (task) => !UNCOUNTED_TASK_STATUSES.includes(task.status),
@@ -299,6 +301,23 @@ export function HistoryDrawer({
                 {t('drawer.brandWide', {
                   list: item.brandWideResults
                     .map((m) => `${tRegistry(`${m.metric}.name`)} ${m.before} → ${m.after}`)
+                    .join(' · '),
+                })}
+              </p>
+            )}
+            {item.controlNet && controlNet.length > 0 && (
+              // Net of the brand's prompts it didn't touch (learning B2).
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('drawer.controlNet', {
+                  basis: item.controlNet.basis,
+                  prompts: item.controlNet.prompts,
+                  list: controlNet
+                    .map((m) =>
+                      t(m.unit === 'points' ? 'drawer.netPoints' : 'drawer.netPercent', {
+                        metric: tRegistry(`${m.metric}.name`),
+                        value: `${m.net > 0 ? '+' : m.net < 0 ? '−' : ''}${Math.abs(m.net)}`,
+                      }),
+                    )
                     .join(' · '),
                 })}
               </p>
