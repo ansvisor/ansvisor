@@ -484,6 +484,15 @@ describe('AgentCard', () => {
     expect(container.textContent).toContain(
       'Keeping what the live page earns: cited 12 times in 30 days (20 before), 2 prompts lost.',
     );
+    // Thousands as the citations are, before as now.
+    run.steps[1] = {
+      ...run.steps[1],
+      live: { days: 30, citations: 1500, before: 1200, lost: 1 },
+    };
+    await show(false);
+    expect(container.textContent).toContain(
+      'Keeping what the live page earns: cited 1,500 times in 30 days (1,200 before), 1 prompt lost.',
+    );
   });
 
   it('stops all of its motion with reduced motion, in every state', async () => {
