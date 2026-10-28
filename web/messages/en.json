@@ -70,10 +70,12 @@
         "ended": "Your workspace has no active plan, so it's read-only. Everything you set up is still here: pick a plan to track, write and run your agents again.",
         "payment_failed": "Your last payment didn't go through, so your workspace is read-only. Everything you set up is still here: update the payment method to track, write and run your agents again."
       },
-      "notNow": "Not now"
+      "notNow": "Not now",
+      "readOnlyLabel": "Your workspace is read-only",
+      "memberNote": "Only an admin can choose a plan for your workspace."
     },
     "ask": {
-      "ended": "Ask your workspace admin to choose a plan.",
+      "ended": "Ask your admin to choose a plan.",
       "endedNamed": "Ask {name}, your workspace admin, to choose a plan.",
       "payment_failed": "Ask your workspace admin to update the payment method.",
       "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method."
@@ -81,6 +83,33 @@
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
     "portalFailed": "Couldn't open the billing page. Try again.",
+    "plans": {
+      "perMonthBilledYearly": "{price} a month, billed yearly",
+      "chooseToday": "Choose {plan} · {price} today",
+      "openingCheckout": "Opening checkout…",
+      "payByCard": "You'll pay by card on Stripe's checkout.",
+      "askAdmin": "Ask your admin to choose a plan",
+      "customName": "Custom",
+      "customTagline": "For large companies and agencies managing AI visibility at scale.",
+      "startingAt": "Starting at",
+      "customAiUsage": "Custom AI usage, from {count}x",
+      "contactUs": "Contact us",
+      "pricesInUsd": "Prices in USD.",
+      "promo": {
+        "apply": "Apply",
+        "checking": "Checking…",
+        "remove": "Remove the code",
+        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
+        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
+        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
+        "then": "then {price}/mo",
+        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
+        "monthlyOnly": "{code} is for monthly plans: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
+        "switchToMonthly": "Switch to Monthly",
+        "invalid": "“{code}” isn’t a valid code.",
+        "failed": "Couldn't check the code. Try again."
+      }
+    },
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
       "editPrompts": "Editing prompts needs a plan",

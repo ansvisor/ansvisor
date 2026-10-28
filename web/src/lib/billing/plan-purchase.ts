@@ -11,6 +11,14 @@ export type BillingInterval = 'month' | 'year';
  */
 export const FIRST_MONTH_CODE = 'SAVE50';
 
+/**
+ * Whether a promotion code goes with this billing period: a monthly plan
+ * only, since a year up front has its own discount.
+ */
+export function takesPromoCode(interval: BillingInterval): boolean {
+  return interval === 'month';
+}
+
 /** A plan's price for one billing period, from the config; null when it has none. */
 export function periodPrice(planId: PlanId, interval: BillingInterval): number | null {
   const pricing = PLANS[planId].pricing;
@@ -65,7 +73,7 @@ export function planChange(
     if (current.status !== 'trialing') {
       return { kind: 'refused', error: 'Only a free trial can be bought now' };
     }
-    const promoCode = interval === 'month' ? request.promoCode || null : null;
+    const promoCode = takesPromoCode(interval) ? request.promoCode || null : null;
     return { kind: 'buy_now', planId, interval, promoCode };
   }
 

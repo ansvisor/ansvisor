@@ -29,12 +29,14 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: vi.fn() } }));
 const stripeApi = vi.hoisted(() => ({
   createSession: vi.fn(),
   listSubscriptions: vi.fn(),
+  listCodes: vi.fn(),
   annual: true,
 }));
 vi.mock('@/lib/stripe', () => ({
   stripe: {
     checkout: { sessions: { create: stripeApi.createSession } },
     subscriptions: { list: stripeApi.listSubscriptions },
+    promotionCodes: { list: stripeApi.listCodes },
     customers: { create: vi.fn() },
   },
   PRICE_IDS: {},
@@ -68,7 +70,30 @@ beforeEach(() => {
   stripeApi.createSession.mockResolvedValue({ url: 'https://checkout.stripe.com/c/1' });
   // A customer who had a subscription before: no second trial.
   stripeApi.listSubscriptions.mockResolvedValue({ data: [{ id: 'sub_old' }] });
+  stripeApi.listCodes.mockResolvedValue({ data: [save50] });
 });
+
+/** SAVE50 as Stripe lists it: 50% off the first invoice. */
+const save50 = {
+  id: 'promo_save50',
+  code: 'SAVE50',
+  active: true,
+  customer: null,
+  expires_at: null,
+  max_redemptions: null,
+  times_redeemed: 0,
+  promotion: {
+    type: 'coupon',
+    coupon: {
+      valid: true,
+      percent_off: 50,
+      amount_off: null,
+      currency: null,
+      duration: 'once',
+      duration_in_months: null,
+    },
+  },
+};
 
 describe('POST /api/stripe/checkout', () => {
   it("bills monthly and returns to onboarding's plan step by default", async () => {
@@ -144,6 +169,70 @@ describe('POST /api/stripe/checkout', () => {
         .status,
     ).toBe(400);
     expect((await post({ planId: 'enterprise', organizationId: 'org1' })).status).toBe(400);
+    expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+
+  it("leaves a code to Stripe's own box when none was applied", async () => {
+    await post({ planId: 'starter', organizationId: 'org1', returnTo: 'billing' });
+    expect(session().allow_promotion_codes).toBe(true);
+    expect(session().discounts).toBeUndefined();
+    expect(stripeApi.listCodes).not.toHaveBeenCalled();
+  });
+
+  it('opens Checkout with a code it checked with Stripe again, on a monthly plan', async () => {
+    const res = await post({
+      planId: 'growth',
+      organizationId: 'org1',
+      interval: 'month',
+      returnTo: 'billing',
+      promotionCode: 'save50',
+    });
+    expect(res.status).toBe(200);
+    expect(stripeApi.listCodes).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'save50', active: true, limit: 1 }),
+    );
+    expect(session().discounts).toEqual([{ promotion_code: 'promo_save50' }]);
+    // Stripe refuses a code applied and its own code box together.
+    expect(session().allow_promotion_codes).toBeUndefined();
+    expect(session().line_items).toEqual([{ price: 'price_growth_month', quantity: 1 }]);
+  });
+
+  it('refuses a code Stripe does not take, before opening anything', async () => {
+    stripeApi.listCodes.mockResolvedValue({ data: [] });
+    const res = await post({ planId: 'starter', organizationId: 'org1', promotionCode: 'NOPE' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "That promo code isn't valid",
+      code: 'invalid_promo_code',
+    });
+    expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a code kept for another customer', async () => {
+    stripeApi.listCodes.mockResolvedValue({ data: [{ ...save50, customer: 'cus_other' }] });
+    const res = await post({ planId: 'starter', organizationId: 'org1', promotionCode: 'SAVE50' });
+    expect(res.status).toBe(400);
+    expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps a code to monthly plans: a year has its own discount', async () => {
+    const res = await post({
+      planId: 'starter',
+      organizationId: 'org1',
+      interval: 'year',
+      promotionCode: 'SAVE50',
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'promo_code_monthly_only' });
+    expect(stripeApi.listCodes).not.toHaveBeenCalled();
+    expect(stripeApi.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a code that is not a string, or too long', async () => {
+    for (const promotionCode of [50, '', 'X'.repeat(65)]) {
+      const res = await post({ planId: 'starter', organizationId: 'org1', promotionCode });
+      expect(res.status).toBe(400);
+    }
     expect(stripeApi.createSession).not.toHaveBeenCalled();
   });
 
