@@ -15,7 +15,7 @@ import { expandDateToEndOfDay } from '@/lib/dates';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
-import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
 import {
   fetchPromptUsageRow,
@@ -32,7 +32,11 @@ import {
   withEntityCounts,
   withoutTargetIds,
 } from '@/lib/action-center/entity-counts';
-import { parseTaskDetails, withTemplateDoneWhen } from '@/lib/action-center/task-details';
+import {
+  parseTaskDetails,
+  withTemplateCheck,
+  withTemplateDoneWhen,
+} from '@/lib/action-center/task-details';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
@@ -1174,7 +1178,8 @@ export async function getPromptUsageFor(
   ]);
   if (orgError) throw new Error(orgError.message);
   if (!row) return null;
-  return toPromptUsageSummary(row, planFromOrgRow(org));
+  const { plan, ended } = usagePlanFromOrgRow(org);
+  return toPromptUsageSummary(row, plan, new Date(), { ended });
 }
 
 /**
@@ -3005,7 +3010,10 @@ const templateDoneWhen = (taskKey: string) =>
 
 /** A task's details in the snake_case the rest of the MCP output uses. */
 function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
-  const d = withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen);
+  const d = withTemplateCheck(
+    withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen),
+    taskKey,
+  );
   if (!d) return null;
   return {
     // The exact page, the change to make there and how we check it (AC-010).
@@ -3254,6 +3262,13 @@ export interface ActionHistoryRow {
   completed_at: string | null;
   /** Before/after pairs the validation sweep measured; empty until it runs. */
   results: Array<{ metric: string; unit: string; before: number; after: number }>;
+  /**
+   * Whether `outcome` is the result rather than a reading so far (learning
+   * B1): the day-30 reading is in, or it was measured once, before readings.
+   */
+  final: boolean;
+  /** The day after closing its latest reading was taken on; null before one. */
+  reading_day: number | null;
 }
 
 interface ValidationMetric {
@@ -3261,6 +3276,13 @@ interface ValidationMetric {
   unit: string;
   before: number | null;
   after: number | null;
+}
+
+interface ValidationSnapshot {
+  metrics?: ValidationMetric[];
+  /** Its readings a week, two weeks and a month after it closed (learning B1). */
+  readings?: { day?: unknown }[];
+  final?: boolean;
 }
 
 export async function listActionHistoryFor(
@@ -3283,7 +3305,12 @@ export async function listActionHistoryFor(
   if (error) throw new Error(error.message);
 
   return (data ?? []).map((r) => {
-    const metrics = (r.validation as { metrics?: ValidationMetric[] } | null)?.metrics ?? [];
+    const validation = r.validation as ValidationSnapshot | null;
+    const metrics = validation?.metrics ?? [];
+    const days = (Array.isArray(validation?.readings) ? validation.readings : [])
+      .map((reading) => reading?.day)
+      .filter((day): day is number => Number.isInteger(day));
+    const outcome = r.outcome ?? null;
     return {
       id: r.id,
       action_no: Number(r.action_no),
@@ -3291,7 +3318,7 @@ export async function listActionHistoryFor(
       kind: r.kind,
       impact: r.impact,
       status: r.status,
-      outcome: r.outcome ?? null,
+      outcome,
       created_at: r.created_at,
       completed_at: r.completed_at ?? null,
       // A metric missing either half was not measured; dropped, as on the dashboard.
@@ -3303,6 +3330,12 @@ export async function listActionHistoryFor(
           before: m.before as number,
           after: m.after as number,
         })),
+      // A reading so far until the day-30 one; one measured once before the
+      // readings came keeps its result, as History reads it.
+      final:
+        validation?.final === true ||
+        (days.length === 0 && outcome != null && outcome !== 'pending_measurement'),
+      reading_day: days.length ? Math.max(...days) : null,
     };
   });
 }
