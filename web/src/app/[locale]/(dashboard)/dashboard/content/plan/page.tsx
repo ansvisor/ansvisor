@@ -17,6 +17,7 @@ import {
 } from '@/lib/actions/content-plan';
 import { listMembers, type TeamMember } from '@/lib/actions/team';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useRouter } from '@/i18n/navigation';
 import { contentEditorPath, type PageType } from '@/lib/content/drafts';
 import { pageTypeMix } from '@/lib/content/plan-mix';
@@ -39,6 +40,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { AssignDialog } from './_assign-dialog';
 import { AiResultsStrip, PageTypeMix } from './_plan-insights';
 import { PlanTable } from './_plan-table';
+import { ShoppingOpportunities } from './_shopping-opportunities';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 type PlanRead = {
@@ -88,7 +90,8 @@ function presetFor(row: PlanRow): DialogPreset {
  * assigns it to a teammate, and lets admins and managers mark it as a
  * priority or hide it; hidden rows can be shown again below the list. The
  * period lives in the URL (?days=7). Getting started's content steps open
- * the Plan on its top Create or Optimize row (?start=create, 00234).
+ * the Plan on its top Create or Optimize row (?start=create, 00234). A shop
+ * with a catalog sees its Shopping opportunities above the list.
  */
 export default function ContentPlanPage() {
   const t = useTranslations('contentEditor.plan');
@@ -106,6 +109,11 @@ export default function ContentPlanPage() {
   const [starting, setStarting] = useState(false);
   const [preset, setPreset] = useState<DialogPreset | null>(null);
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): New content, Start, Assign and
+  // the row menu open the upgrade dialog instead; the cards, the mix and the
+  // period still filter.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [assigning, setAssigning] = useState<PlanRow | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -228,14 +236,15 @@ export default function ContentPlanPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one start per visit from Getting started
     setStartFrom(null);
     setCard(startFrom);
-    if (!row) return;
+    // Read-only: the plan opens on the step's card, and nothing starts by itself.
+    if (!row || isLocked) return;
     if (row.draft) {
       router.push(contentEditorPath(row.draft.id));
       return;
     }
     setPreset(presetFor(row));
     setStarting(true);
-  }, [startFrom, plan, router]);
+  }, [startFrom, plan, router, isLocked]);
 
   const reload = () => setAttempt((n) => n + 1);
 
@@ -319,10 +328,13 @@ export default function ContentPlanPage() {
             </div>
             <Button
               className="gap-2"
-              onClick={() => {
-                setPreset(null);
-                setStarting(true);
-              }}
+              onClick={guard(
+                () => {
+                  setPreset(null);
+                  setStarting(true);
+                },
+                { action: tActions('createContent') },
+              )}
             >
               <Plus className="h-4 w-4" />
               {t('newContent')}
@@ -388,7 +400,15 @@ export default function ContentPlanPage() {
               onSelect={setMixType}
             />
           )}
-
+        </>
+      )}
+      {/* Its own read, of the catalog: kept through another period's read,
+          hidden while that loads, so the page still opens in its final layout. */}
+      {siteType === 'ecommerce' && (
+        <ShoppingOpportunities brandId={activeBrandId} hidden={loading} />
+      )}
+      {!loading && (
+        <>
           <div className="space-y-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-sm font-medium">{t('listTitle')}</h2>
@@ -439,10 +459,21 @@ export default function ContentPlanPage() {
                     rows={rows}
                     days={current?.days ?? 30}
                     canManage={canManage}
-                    onStart={startRow}
-                    onAssign={assignRow}
-                    onPriority={(row, priority) => void markRow(row, priority)}
-                    onHide={(row) => void hideRow(row)}
+                    onStart={(row) =>
+                      guard(startRow, {
+                        action: tActions(
+                          row.action === 'create' ? 'createContent' : 'optimizeContent',
+                        ),
+                      })(row)
+                    }
+                    onAssign={guard(assignRow, { action: tActions('assignContent') })}
+                    onPriority={guard(
+                      (row: PlanRow, priority: boolean) => void markRow(row, priority),
+                      { action: tActions('prioritizeContent') },
+                    )}
+                    onHide={guard((row: PlanRow) => void hideRow(row), {
+                      action: tActions('hidePlanRows'),
+                    })}
                   />
                 )}
               </CardContent>
@@ -468,7 +499,13 @@ export default function ContentPlanPage() {
                           {row.title}
                         </span>
                         {canManage && (
-                          <Button size="sm" variant="outline" onClick={() => void showRow(row)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={guard(() => void showRow(row), {
+                              action: tActions('showPlanRows'),
+                            })}
+                          >
                             {t('hidden.show')}
                           </Button>
                         )}

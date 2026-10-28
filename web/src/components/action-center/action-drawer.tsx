@@ -6,6 +6,7 @@ import { useRouter } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ import {
   type ActionTask,
 } from '@/lib/actions/action-center';
 import type { TeamMember } from '@/lib/actions/team';
+import { DismissReasonDialog } from './dismiss-reason-dialog';
 import {
   ACTION_STATUSES,
   TASK_STATUSES,
@@ -74,6 +76,7 @@ import { TopicOpportunityContext } from './topic-opportunity-context';
 import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
+import { ShoppingLinksContext } from './shopping-links-context';
 import {
   TaskDetailForm,
   TaskDetailView,
@@ -91,6 +94,8 @@ import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
   hasTaskSpec,
+  pageCheckable,
+  withTemplateCheck,
   withTemplateDoneWhen,
   withoutTemplateDoneWhen,
   type TaskDetailsEdit,
@@ -151,10 +156,17 @@ export function ActionDrawer({
   const [detail, setDetail] = useState<ActionDetail | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const tSend = useTranslations('actionCenter.actionsPage.drawer.send');
+  // A read-only workspace (plan not active): the status, assignee and due
+  // date, and the Tasks tab's changes, sends and drafts, open the upgrade
+  // dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // Check now (AC-010): the task being checked, and the card's words.
   const tTaskCard = useTranslations('actionCenter.actionsPage.drawer.task');
   const missingText = useMissingText();
   const [checking, setChecking] = useState<string | null>(null);
+  // Dismissed from the status select: why, first (learning A5).
+  const [dismissing, setDismissing] = useState(false);
   // The drafts written for the action's writing tasks (CE-022), once read.
   const [drafts, setDrafts] = useState<ActionDraft[]>([]);
 
@@ -397,6 +409,17 @@ export function ActionDrawer({
 
   return (
     <Sheet open={Boolean(action)} onOpenChange={onOpenChange}>
+      {action && (
+        <DismissReasonDialog
+          open={dismissing}
+          onOpenChange={setDismissing}
+          onChoose={(reason) =>
+            void changeField({ status: 'dismissed' }, () =>
+              updateActionStatus(brandId, action.id, 'dismissed', reason),
+            )
+          }
+        />
+      )}
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         {/* pt-3: the top row's buttons line up with the sheet's close button. */}
         <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
@@ -465,11 +488,16 @@ export function ActionDrawer({
             </Label>
             <Select
               value={action.status}
-              onValueChange={(value) =>
-                void changeField({ status: value as ActionStatus }, () =>
-                  updateActionStatus(brandId, action.id, value as ActionStatus),
-                )
-              }
+              onValueChange={guard(
+                (value: string | null) =>
+                  // Dismissing asks why first (learning A5).
+                  value === 'dismissed'
+                    ? setDismissing(true)
+                    : void changeField({ status: value as ActionStatus }, () =>
+                        updateActionStatus(brandId, action.id, value as ActionStatus),
+                      ),
+                { action: tActions('changeActionStatus') },
+              )}
               items={ACTION_STATUSES.map((status) => ({
                 value: status,
                 label: t(`status.${status}`),
@@ -493,12 +521,15 @@ export function ActionDrawer({
             </Label>
             <Select
               value={action.assignee?.id ?? 'unassigned'}
-              onValueChange={(value) => {
-                const assigneeId = value === 'unassigned' ? null : value;
-                void changeField({ assignee: pickedAssignee(assigneeId, members) }, () =>
-                  assignAction(brandId, action.id, assigneeId),
-                );
-              }}
+              onValueChange={guard(
+                (value: string | null) => {
+                  const assigneeId = value === 'unassigned' ? null : value;
+                  void changeField({ assignee: pickedAssignee(assigneeId, members) }, () =>
+                    assignAction(brandId, action.id, assigneeId),
+                  );
+                },
+                { action: tActions('assignActions') },
+              )}
               items={[
                 { value: 'unassigned', label: t('filters.unassigned') },
                 ...members.map((member) => ({
@@ -531,15 +562,18 @@ export function ActionDrawer({
               min={DUE_DATE_MIN}
               max={DUE_DATE_MAX}
               value={dueDraft ?? action.dueDate ?? ''}
-              onChange={(e) => {
-                const { value, validity } = e.target;
-                setDueDraft(value);
-                clearTimeout(dueTimer.current);
-                // Cleared, or a whole date in range: saved once it settles.
-                if (validity.valid) {
-                  dueTimer.current = setTimeout(() => commitDueDate(value), DUE_DATE_SETTLE_MS);
-                }
-              }}
+              onChange={guard(
+                (e: React.ChangeEvent<HTMLInputElement>) => {
+                  const { value, validity } = e.target;
+                  setDueDraft(value);
+                  clearTimeout(dueTimer.current);
+                  // Cleared, or a whole date in range: saved once it settles.
+                  if (validity.valid) {
+                    dueTimer.current = setTimeout(() => commitDueDate(value), DUE_DATE_SETTLE_MS);
+                  }
+                },
+                { action: tActions('setDueDate') },
+              )}
               onBlur={(e) => {
                 if (dueDraft === null) return;
                 // Leaving the field saves what it holds now; a half-typed or
@@ -673,6 +707,11 @@ export function ActionDrawer({
                   <Separator />
                   <ContentDraftContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'shopping_links' ? (
+                <>
+                  <Separator />
+                  <ShoppingLinksContext payload={action.payload ?? {}} />
+                </>
               ) : opportunityId ? (
                 <>
                   <Separator />
@@ -700,7 +739,11 @@ export function ActionDrawer({
                         method,
                         pages: method === 'optimize' ? actionPages(action.payload) : [],
                         drafts,
-                        onStart: (page) => void startDraft(task.id, page),
+                        onStart: guard((page: string | null) => void startDraft(task.id, page), {
+                          action: tActions(
+                            method === 'optimize' ? 'optimizeContent' : 'createContent',
+                          ),
+                        }),
                       }
                     : undefined;
                   return (
@@ -724,14 +767,22 @@ export function ActionDrawer({
                         // A content task, unless the action itself came from Content.
                         content: task.details?.type === 'content' && !opportunityId,
                         webhook: webhookReady,
-                        onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
+                        onSend: guard(
+                          (to: 'content' | 'webhook') =>
+                            void sendTask(task.id, taskText(task, tTasks), to),
+                          { action: tActions('sendTasks') },
+                        ),
                       }}
-                      // An open task checked automatically, with its page (AC-010).
+                      // An open task the API checks on its page (AC-010).
                       check={
                         (task.status === 'todo' || task.status === 'in_progress') &&
-                        task.details?.check === 'auto' &&
-                        task.details.url
-                          ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
+                        pageCheckable(task, action.kind)
+                          ? {
+                              onCheck: guard(() => void checkTask(task.id), {
+                                action: tActions('checkTasks'),
+                              }),
+                              busy: checking === task.id,
+                            }
                           : undefined
                       }
                       draftWork={draftWork}
@@ -777,9 +828,11 @@ export function ActionDrawer({
                           ? t('drawer.noSignalsMentionReview')
                           : action.kind === 'traffic_pages'
                             ? t('drawer.noSignalsTrafficPages')
-                            : opportunityId
-                              ? t('drawer.noSignalsOpportunity')
-                              : t('drawer.noSignals')}
+                            : action.kind === 'shopping_links'
+                              ? t('drawer.noSignalsShoppingLinks')
+                              : opportunityId
+                                ? t('drawer.noSignalsOpportunity')
+                                : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
@@ -877,15 +930,23 @@ function TaskRow({
     () => !!task.details && !hasTaskSpec(task.details) && !!task.details.body,
   );
   const [editing, setEditing] = useState(false);
-  // A library task's Done when is its template's until someone writes one (AC-010).
+  // A library task's Done when is its template's until someone writes one,
+  // and its How we check Manual when its template is now (AC-010).
   const tDoneWhen = useTranslations('actionCenter.taskDoneWhen');
-  const details = withTemplateDoneWhen(task.details, task.taskKey, (key) =>
-    tDoneWhen.has(key) ? tDoneWhen(key) : null,
+  const details = withTemplateCheck(
+    withTemplateDoneWhen(task.details, task.taskKey, (key) =>
+      tDoneWhen.has(key) ? tDoneWhen(key) : null,
+    ),
+    task.taskKey,
   );
   // Choosing Skipped opens a reason field rather than committing: a skip
   // without a reason cannot be told apart from an abandoned task later.
   const [skipDraft, setSkipDraft] = useState<string | null>(null);
   const locked = disabled || editing || skipDraft !== null;
+  // A read-only workspace (plan not active): a status, Delete and Edit open
+  // the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   return (
     <div className="rounded-md border">
@@ -923,11 +984,14 @@ function TaskRow({
         </div>
         <Select
           value={task.status}
-          onValueChange={(value) => {
-            const next = value as TaskStatus;
-            if (next === 'skipped') setSkipDraft('');
-            else onStatusChange(next);
-          }}
+          onValueChange={guard(
+            (value: string | null) => {
+              const next = value as TaskStatus;
+              if (next === 'skipped') setSkipDraft('');
+              else onStatusChange(next);
+            },
+            { action: tActions('changeTaskStatus') },
+          )}
           disabled={locked}
           items={TASK_STATUSES.map((status) => ({ value: status, label: statusLabel(status) }))}
         >
@@ -947,7 +1011,7 @@ function TaskRow({
           variant="ghost"
           size="icon"
           disabled={locked}
-          onClick={onDelete}
+          onClick={guard(onDelete, { action: tActions('deleteTasks') })}
           aria-label={t('drawer.deleteTask')}
           className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
         >
@@ -974,7 +1038,7 @@ function TaskRow({
           <TaskDetailView
             details={details}
             disabled={disabled || skipDraft !== null}
-            onEdit={() => setEditing(true)}
+            onEdit={guard(() => setEditing(true), { action: tActions('editTasks') })}
             send={send}
             check={check}
             draftWork={draftWork}
@@ -1048,6 +1112,9 @@ function AddTaskForm({
   onAdd: (title: string) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  // A read-only workspace (plan not active): the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   if (draft === null) {
     return (
@@ -1056,7 +1123,7 @@ function AddTaskForm({
         variant="outline"
         size="sm"
         disabled={disabled}
-        onClick={() => setDraft('')}
+        onClick={guard(() => setDraft(''), { action: tActions('addTasks') })}
         className="mt-3 h-8 w-full text-xs"
       >
         <Plus className="mr-1.5 h-3.5 w-3.5" />

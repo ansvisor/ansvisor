@@ -70,6 +70,8 @@ import { siteTypeOf } from '@/lib/content/page-types';
 import { getOpportunityDrafts } from '@/lib/actions/content-drafts';
 import { getPlanPriorities, setPlanRowPriority } from '@/lib/actions/content-plan';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { OpportunityActions } from '@/components/content/opportunity-actions';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
@@ -156,6 +158,11 @@ export function OpportunityDetail({
   const failureToast = useFailureToast();
   const assetTypeLabel = useAssetTypeLabel();
   const locale = useLocale();
+  // A read-only workspace (plan not active): every action here opens the
+  // upgrade dialog instead; Copy, Export and Open draft stay open.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const tReadOnly = useTranslations('readOnly');
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -439,7 +446,10 @@ export function OpportunityDetail({
   const primaryType = assetTypeLabel(sd.assets?.[0]?.type);
   const canSendToActionCenter = !['dismissed', 'archived', 'done'].includes(opportunity.status);
   const quotaLimited = quota !== null && quota.limit !== -1;
-  const quotaExhausted = quotaLimited && quota.remaining <= 0;
+  // Without an active plan the quota reads 0 of 0: not used up. Generate
+  // stays clickable, and opens the plan dialog.
+  const noPlan = isNoPlan(quota, isLocked);
+  const quotaExhausted = quotaLimited && !noPlan && quota.remaining <= 0;
   const actionId = sd.actions?.all ?? Object.values(sd.actions ?? {})[0];
   const canSendToWorkflow = !['dismissed', 'archived'].includes(opportunity.status);
 
@@ -559,7 +569,9 @@ export function OpportunityDetail({
               ? {
                   sending: sendingAction === 'all',
                   disabled: sendingAction !== null,
-                  onSend: () => void handleSendToActionCenter(),
+                  onSend: guard(() => void handleSendToActionCenter(), {
+                    action: tActions('sendAction'),
+                  }),
                 }
               : null
           }
@@ -567,7 +579,9 @@ export function OpportunityDetail({
             generated: !!brief,
             generating: generatingBrief,
             blockedReason: quotaExhausted ? t('briefLimitReached') : null,
-            onGenerate: () => void handleGenerateBrief(),
+            onGenerate: guard(() => void handleGenerateBrief(), {
+              action: tActions('generateBrief'),
+            }),
           }}
           content={{
             draftId:
@@ -575,14 +589,18 @@ export function OpportunityDetail({
             lookupFailed: draft?.opportunityId === opportunity.id && draft.failed,
             onRetry: retryDraft,
             canStart: canWriteOpportunity(opportunity),
-            onStart: () => setContentPreset(opportunityStart(opportunity)),
+            onStart: guard(() => setContentPreset(opportunityStart(opportunity)), {
+              action: tActions('createContent'),
+            }),
             onOpenDraft: (draftId) => router.push(contentEditorPath(draftId)),
           }}
           plan={
             canManage && canWriteOpportunity(opportunity)
               ? {
                   prioritized: priority?.opportunityId === opportunity.id ? priority.on : undefined,
-                  onSend: () => void handleSendToPlan(),
+                  onSend: guard(() => void handleSendToPlan(), {
+                    action: tActions('prioritizeContent'),
+                  }),
                   onOpen: () => router.push('/dashboard/content/plan'),
                 }
               : null
@@ -591,7 +609,12 @@ export function OpportunityDetail({
           // from the Action Center (AC-004) has neither.
           alternative={
             opportunity.source !== 'action'
-              ? { running: alternativeRunning, onOpen: () => setAlternativeOpen(true) }
+              ? {
+                  running: alternativeRunning,
+                  onOpen: guard(() => setAlternativeOpen(true), {
+                    action: tActions('generateOpportunities'),
+                  }),
+                }
               : null
           }
           workflow={
@@ -599,15 +622,27 @@ export function OpportunityDetail({
               ? {
                   sending,
                   sentBefore: !!opportunity.webhookSentAt,
-                  onSend: () => void handleSend(),
+                  onSend: guard(() => void handleSend(), { action: tActions('sendToWorkflow') }),
                 }
               : null
           }
           onCopy={() => void handleCopy()}
           onExport={(format) => void handleExport(format)}
-          onReviewed={opportunity.status === 'new' ? () => void handleReviewed() : undefined}
-          onRestore={opportunity.status === 'archived' ? () => void handleRestore() : undefined}
-          onDismiss={opportunity.status === 'new' ? () => setDismissOpen(true) : undefined}
+          onReviewed={
+            opportunity.status === 'new'
+              ? guard(() => void handleReviewed(), { action: tActions('markOpportunityReviewed') })
+              : undefined
+          }
+          onRestore={
+            opportunity.status === 'archived'
+              ? guard(() => void handleRestore(), { action: tActions('restoreOpportunities') })
+              : undefined
+          }
+          onDismiss={
+            opportunity.status === 'new'
+              ? guard(() => setDismissOpen(true), { action: tActions('dismissOpportunities') })
+              : undefined
+          }
         />
       </div>
       <AiUsageBanner />
@@ -649,7 +684,11 @@ export function OpportunityDetail({
             )}
             <AssetsCard
               sourceData={sd}
-              onSend={canSendToActionCenter ? handleSendToActionCenter : undefined}
+              onSend={
+                canSendToActionCenter
+                  ? guard(handleSendToActionCenter, { action: tActions('sendAction') })
+                  : undefined
+              }
               sendingKey={sendingAction}
             />
             <OpportunityBasketCard basket={basket} failed={basketFailed} />
@@ -865,7 +904,7 @@ export function OpportunityDetail({
                     keywords, and competitor insights.
                   </p>
                   <Button
-                    onClick={handleGenerateBrief}
+                    onClick={guard(handleGenerateBrief, { action: tActions('generateBrief') })}
                     disabled={generatingBrief}
                     className="gap-2"
                   >
@@ -874,7 +913,9 @@ export function OpportunityDetail({
                   </Button>
                   {quotaLimited && (
                     <p className="text-xs text-muted-foreground mt-3 tabular-nums">
-                      {quota.remaining}/{quota.limit} briefs remaining this billing period
+                      {noPlan
+                        ? tReadOnly('noPlan')
+                        : `${quota.remaining}/${quota.limit} briefs remaining this billing period`}
                     </p>
                   )}
                 </>

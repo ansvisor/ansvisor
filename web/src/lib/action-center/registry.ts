@@ -32,6 +32,8 @@ export type ActionStatus = 'new' | 'in_progress' | 'on_hold' | 'completed' | 'di
 export type ActionOutcome =
   | 'pending_measurement'
   | 'improved'
+  // One metric up and another down, or a fix's pages only partly passing (learning A4).
+  | 'mixed'
   | 'no_meaningful_change'
   | 'declined'
   | 'not_measurable';
@@ -114,7 +116,10 @@ export type ActionKind =
   // Sent by a person from AI Traffic's Pages section (AT-006).
   | 'traffic_pages'
   // Sent by a person from the Content Editor's Start, as Team (CE-015).
-  | 'content_draft';
+  | 'content_draft'
+  // Raised by the catalog check for a live page linking products that no
+  // longer sell (shopping path, part 7), and closed by it once fixed.
+  | 'shopping_links';
 
 export type TaskStatus =
   | 'todo'
@@ -146,10 +151,24 @@ export const OPEN_ACTION_STATUSES: readonly ActionStatus[] = ['new', 'in_progres
 export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
   'pending_measurement',
   'improved',
+  'mixed',
   'no_meaningful_change',
   'declined',
   'not_measurable',
 ];
+
+/**
+ * Why an action was dismissed, as the person says it (00366, learning A5):
+ * it doesn't matter to the brand, the work is already done, the data behind
+ * it is wrong, or not now.
+ */
+export const ACTION_DISMISS_REASONS = [
+  'not_relevant',
+  'already_done',
+  'wrong_data',
+  'not_now',
+] as const;
+export type ActionDismissReason = (typeof ACTION_DISMISS_REASONS)[number];
 
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
@@ -251,6 +270,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'mention_review',
   'traffic_pages',
   'content_draft',
+  'shopping_links',
 ];
 
 /**

@@ -127,7 +127,7 @@ describe('ProductBlockDialog', () => {
     ]);
     await render();
     await search('boot');
-    expect(hit('Boot 1')!.textContent).toBe('Boot 1Sold out');
+    expect(hit('Boot 1')!.textContent).toBe('Boot 1Not in stock');
     expect(hit('Boot 1')!.disabled).toBe(true);
     expect(hit('Boot 2')!.textContent).toBe('Boot 2No page to link');
     expect(hit('Boot 2')!.disabled).toBe(true);

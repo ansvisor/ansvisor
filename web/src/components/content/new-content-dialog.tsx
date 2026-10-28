@@ -82,6 +82,7 @@ import {
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 type SourceKind = 'opportunity' | 'prompt' | 'topic';
 const SOURCE_KINDS: SourceKind[] = ['opportunity', 'prompt', 'topic'];
@@ -202,6 +203,11 @@ export function NewContentDialog({
   const tTypes = useTranslations('contentEditor.pageTypes');
   const router = useRouter();
   const describeRule = useRuleDescriber();
+  // A read-only workspace (plan not active): what opens this dialog opens the
+  // upgrade dialog instead; should it be open, reading a page by its URL and
+  // Open editor do too.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const [options, setOptions] = useState<DraftStartOptions | null>(null);
   const [optionsFailed, setOptionsFailed] = useState(false);
@@ -534,8 +540,9 @@ export function NewContentDialog({
   /**
    * Agent: the Content Agent does the page in the background — a new page
    * written, an existing one's suggestions left — and the editor opens at
-   * once, showing the agent at work until the page is there to review. It
-   * stays in the Library as a draft if it can't start.
+   * once, showing the agent at work until the page is there to review; the
+   * dialog stays until it does. It stays in the Library as a draft if it
+   * can't start.
    */
   const sendToAgent = async (id: string, bodyHtml: string | undefined) => {
     const openDraft = {
@@ -564,12 +571,14 @@ export function NewContentDialog({
       console.error('Failed to hand the draft to the Content Agent:', err);
       started = { error: 'failed' };
     }
-    changeOpen(false);
     onSent?.();
     if ('error' in started) {
+      changeOpen(false);
       toast.error(t(`start.agentErrors.${started.error}`), { action: openDraft });
       return;
     }
+    // As Me does: the dialog stays, its button busy, until the editor shows
+    // the agent at work, rather than the page under it for a few seconds.
     router.push(contentEditorPath(id));
   };
 
@@ -612,9 +621,11 @@ export function NewContentDialog({
       {/*
         One column no wider than the dialog: a long title or pick truncates
         instead of widening it. No taller than the window: Start scrolls,
-        its buttons kept in view.
+        its buttons kept in view. Held at the top, not centred: what Start
+        reads after it opens (the Overview) grows it downwards, and the
+        choices above don't move.
       */}
-      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="top-[6dvh] max-h-[88dvh] translate-y-0 grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-2xl">
         {start ? (
           <>
             <DialogHeader>
@@ -665,23 +676,11 @@ export function NewContentDialog({
                 </p>
               )}
             </div>
-            {overlapKey && (
-              <OverlapCheck
-                read={overlapRead?.key === overlapKey ? overlapRead : null}
-                choice={start.choice}
-                given={start.givenPage ?? null}
-                givenCited={start.source.kind === 'prompt'}
-                onChoose={(choice) => {
-                  optimizeOnce.current = false;
-                  setStart(withChoice(start, choice, siteType));
-                }}
-                onRetry={() => {
-                  optimizeOnce.current = false;
-                  setOverlapRead(null);
-                  setOverlapAttempt((n) => n + 1);
-                }}
-              />
-            )}
+            {/*
+              Who does it comes before the Overview: the Overview is read
+              after the dialog opens and grows as it lands, and nothing the
+              person may be about to click sits under it.
+            */}
             <div className="space-y-2">
               <Label id="start-who">{t('who.label')}</Label>
               <div
@@ -743,12 +742,36 @@ export function NewContentDialog({
                 </div>
               )}
             </div>
+            {overlapKey && (
+              <OverlapCheck
+                read={overlapRead?.key === overlapKey ? overlapRead : null}
+                choice={start.choice}
+                given={start.givenPage ?? null}
+                givenCited={start.source.kind === 'prompt'}
+                onChoose={(choice) => {
+                  optimizeOnce.current = false;
+                  setStart(withChoice(start, choice, siteType));
+                }}
+                onRetry={() => {
+                  optimizeOnce.current = false;
+                  setOverlapRead(null);
+                  setOverlapAttempt((n) => n + 1);
+                }}
+              />
+            )}
             <DialogFooter className="sticky -bottom-4 z-10 bg-muted">
               <Button variant="ghost" onClick={() => setStart(null)} disabled={opening}>
                 <ArrowLeft className="h-4 w-4" />
                 {t('back')}
               </Button>
-              <Button onClick={() => void openEditor()} disabled={opening}>
+              <Button
+                onClick={guard(() => void openEditor(), {
+                  action: tActions(
+                    startMethod === 'optimize' ? 'optimizeContent' : 'createContent',
+                  ),
+                })}
+                disabled={opening}
+              >
                 {opening && <LoadingDots />}
                 {t(
                   who === 'team'
@@ -929,7 +952,7 @@ export function NewContentDialog({
                       className="flex gap-2"
                       onSubmit={(e) => {
                         e.preventDefault();
-                        void readPage();
+                        guard(() => void readPage(), { action: tActions('importPage') })();
                       }}
                     >
                       <Input

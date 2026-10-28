@@ -291,16 +291,18 @@ describe('getProductsForBlock', () => {
     };
   };
 
-  it("shows each one's cheapest variant in stock, however the feed spells it, its sale price first", async () => {
+  it("shows each one's best stock, then its cheapest variant there, however the feed spells it, a sale price counted", async () => {
     catalog({
       products: [row(1), row(2), row(4)],
       variants: {
         // The cheapest sold out; "In Stock" is in stock.
         [P1]: [variant(99, 'Out of Stock'), variant(189, 'in_stock'), variant(149, 'In Stock')],
-        // On sale, the cheapest it sells at.
+        // In stock before low stock, though the low-stock one sells for less
+        // (as the agent's grid picks it, #1607); on sale, the cheapest it sells at.
         [P4]: [
-          variant(120, 'in_stock'),
           variant(130, 'LIMITED AVAILABILITY', { sale_price: 110, currency: 'EUR' }),
+          variant(125, 'in_stock'),
+          variant(140, 'in_stock', { sale_price: 115, currency: 'EUR' }),
         ],
         // All sold out: no price, not in stock.
         [P2]: [variant(50, 'sold out'), variant(40, 'preorder')],
@@ -316,7 +318,7 @@ describe('getProductsForBlock', () => {
         currency: 'USD',
         inStock: true,
       },
-      { ...row(4), image: null, price: 130, salePrice: 110, currency: 'EUR', inStock: true },
+      { ...row(4), image: null, price: 140, salePrice: 115, currency: 'EUR', inStock: true },
       { ...row(2), image: null, price: null, salePrice: null, currency: null, inStock: false },
     ]);
   });
@@ -533,6 +535,7 @@ describe('getShoppingCheck', () => {
       catalog_products: [],
       catalog_variants: [],
       catalog_item_issues: [],
+      catalog_sources: [],
     };
     answer = (call) => {
       if (down[call.table]) return { data: null, error: { message: down[call.table] } };
@@ -551,6 +554,23 @@ describe('getShoppingCheck', () => {
       const single = call.table === 'content_drafts' || call.table === 'brand_domains';
       return { data: single ? (rows[0] ?? null) : rows, error: null };
     };
+  });
+
+  it('reads the price a card would show now, of the best stock, for each product that sells (#1610)', async () => {
+    db.catalog_variants = [
+      variant(1, 'limited_availability', { price: 149, sale_price: null, currency: 'USD' }),
+      variant(1, 'in_stock', { price: 199, sale_price: 179, currency: 'USD' }),
+      variant(2, 'in_stock', { price: null, sale_price: null, currency: 'USD' }),
+      variant(3, 'out_of_stock', { price: 50, sale_price: null, currency: 'USD' }),
+    ];
+    db.catalog_products = [row(1), row(2), row(3)];
+    draftRow().shopping_path = pathOf({ products: [1, 2, 3].map((n) => inPath(n)) });
+    const check = await getShoppingCheck(DRAFT);
+    expect(check?.products.map((p) => [p.state, p.price])).toEqual([
+      ['ok', '$179.00'],
+      ['ok', null],
+      ['sold_out', null],
+    ]);
   });
 
   it('reads each product now: gone, sold out, refused only when every variant in stock is', async () => {
@@ -610,8 +630,11 @@ describe('getShoppingCheck', () => {
         title: `Boot ${n}`,
         state,
         inPath: true,
+        // No variant here has a price.
+        price: null,
       })),
       site: 'https://www.shop.example/',
+      merchantCenter: false,
     });
     // The refusals of the variants in stock alone.
     expect(of('catalog_item_issues').flatMap(inList).sort()).toEqual(
@@ -642,15 +665,28 @@ describe('getShoppingCheck', () => {
 
     const check = await getShoppingCheck(DRAFT);
     expect(check!.products).toEqual([
-      { key: 'shop.example/products/1', title: 'Boot 1', state: 'ok', inPath: true },
+      { key: 'shop.example/products/1', title: 'Boot 1', state: 'ok', inPath: true, price: null },
       // 11 still sells: linking it is fine.
-      { key: 'shop.example/products/10', title: 'Catalog 10', state: 'sold_out', inPath: false },
-      { key: 'shop.example/products/12', title: 'Catalog 12', state: 'gone', inPath: false },
+      {
+        key: 'shop.example/products/10',
+        title: 'Catalog 10',
+        state: 'sold_out',
+        inPath: false,
+        price: null,
+      },
+      {
+        key: 'shop.example/products/12',
+        title: 'Catalog 12',
+        state: 'gone',
+        inPath: false,
+        price: null,
+      },
       {
         key: 'shop.example/products/13?variant=1',
         title: 'Left Boot',
         state: 'refused',
         inPath: false,
+        price: null,
       },
     ]);
   });
@@ -684,6 +720,43 @@ describe('getShoppingCheck', () => {
     expect(of('catalog_item_issues').map((c) => inList(c).length)).toEqual([100, 100, 100]);
   });
 
+  it('says whether the brand has a Merchant Center account it read, none when it can’t be read', async () => {
+    draftRow().shopping_path = pathOf({ products: [inPath(1)] });
+    db.catalog_sources = [
+      { id: 's1', brand_id: SHOP, kind: 'feed_url', last_status: 'ok' },
+      { id: 's2', brand_id: BRAND, kind: 'merchant_center', last_status: 'ok' },
+      { id: 's3', brand_id: SHOP, kind: 'merchant_center', last_status: 'auth_failed' },
+      { id: 's4', brand_id: SHOP, kind: 'merchant_center', last_status: null },
+    ];
+    // A feed, another brand's Merchant Center, and this brand's never read
+    // (its syncs failed, or none ran yet): none to claim it for.
+    expect((await getShoppingCheck(DRAFT))!.merchantCenter).toBe(false);
+    expect(of('catalog_sources').at(-1)!.filters).toEqual([
+      ['eq', 'brand_id', SHOP],
+      ['eq', 'kind', 'merchant_center'],
+      ['eq', 'last_status', 'ok'],
+    ]);
+    db.catalog_sources.push({
+      id: 's5',
+      brand_id: SHOP,
+      kind: 'merchant_center',
+      last_status: 'ok',
+    });
+    expect((await getShoppingCheck(DRAFT))!.merchantCenter).toBe(true);
+
+    // Unread: none said, and the rest of the check stands.
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      down = { catalog_sources: 'down' };
+      expect(await getShoppingCheck(DRAFT)).toMatchObject({
+        products: [{ key: 'shop.example/products/1' }],
+        merchantCenter: false,
+      });
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('reads a relative link against the live page, the page it optimizes, else the brand’s site', async () => {
     draftRow().published_url = 'https://shop.example/blog/boots';
     draftRow().source_url = 'https://shop.example/old';
@@ -711,7 +784,7 @@ describe('getShoppingCheck', () => {
     draftRow().shopping_path = null;
     expect(await getShoppingCheck(DRAFT)).toBeNull();
     draftRow().shopping_path = pathOf();
-    expect(await getShoppingCheck(DRAFT)).toMatchObject({ products: [] });
+    expect(await getShoppingCheck(DRAFT)).toMatchObject({ products: [], merchantCenter: false });
     expect(calls.some((c) => c.table.startsWith('catalog_'))).toBe(false);
 
     await expect(getShoppingCheck('nope')).rejects.toThrow('invalid');

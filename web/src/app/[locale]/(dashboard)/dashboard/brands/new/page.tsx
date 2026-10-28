@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { createBrand, markBrandAsEcommerce, updateBrand } from '@/lib/actions/brand';
@@ -13,6 +14,7 @@ import { addCompetitorChoice, mergeCompetitorSuggestions } from '@/lib/competito
 import { triggerTrackingCheck } from '@/lib/actions/tracking';
 import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { getFaviconUrl } from '@/lib/favicon';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
@@ -57,7 +59,12 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
+import {
+  BRAND_SETUP_LIMITS,
+  suggestTopics,
+  generatePromptsFromTopics,
+  suggestCompetitors,
+} from '@/lib/ai-brand-setup';
 import { DASHBOARD_HOME } from '@/config/home';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
@@ -229,6 +236,10 @@ const TOTAL_STEPS = 5;
 export default function NewBrandPage() {
   const router = useRouter();
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
+  // A read-only workspace (plan not active), also when this page is opened
+  // directly: the brand isn't created, the upgrade dialog opens instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -903,7 +914,11 @@ export default function NewBrandPage() {
               </Select>
             </div>
 
-            <Button className="w-full" onClick={handleCreateBrand} disabled={isLoading}>
+            <Button
+              className="w-full"
+              onClick={guard(handleCreateBrand, { action: tActions('addBrands') })}
+              disabled={isLoading}
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1006,6 +1021,7 @@ export default function NewBrandPage() {
                   <div className="flex items-center gap-2 pt-2">
                     <Input
                       placeholder="Add custom topic..."
+                      maxLength={BRAND_SETUP_LIMITS.topic}
                       value={customTopic}
                       onChange={(e) => setCustomTopic(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && addCustomTopic()}
