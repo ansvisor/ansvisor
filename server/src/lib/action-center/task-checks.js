@@ -34,7 +34,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
 import { checkShoppingDraft } from '../shopping-check.js';
-import { furnitureNamed } from '../page-content.js';
+import { classIdWords, furnitureNamed } from '../page-content.js';
 import { onBrandDomain } from '../audit/host.js';
 import { aiBotAccess } from '../audit/signals/trust.js';
 import {
@@ -79,9 +79,53 @@ export const CHANGED_BELOW = 0.9;
 /**
  * …and at least this many of its runs changed: on a short page a date and
  * a price moving are a large share, never this many runs (each word is in
- * up to four).
+ * up to four). A rotated 28-word testimonial or a new 50-word review is
+ * 41–66; a rewritten 60-word paragraph 117 or more, a 150-word FAQ 146.
  */
-export const MIN_CHANGED_RUNS = 40;
+export const MIN_CHANGED_RUNS = 80;
+/**
+ * Words in a block's class or id that name what changes by itself (a
+ * sidebar, testimonials, the latest posts): left out of the words a change
+ * is measured on, as furniture is, unless they hold most of the page. Not
+ * left out of the words a written task's text is looked for in. "widget"
+ * and "popular" alone aren't such words: Elementor and HubSpot name each of
+ * the page's blocks a widget, and a pricing page its "Most popular" plan.
+ */
+const SELF_CHANGING = new Set([
+  'sidebar',
+  'promo',
+  'announcement',
+  'pagination',
+  'tags',
+  'testimonial',
+  'testimonials',
+  'latest',
+  'recent',
+  'trending',
+]);
+/** …and two words, one after the other, that do: a theme's widget area, a popular posts list. */
+const SELF_CHANGING_PAIRS = new Set([
+  'widget area',
+  'widgets area',
+  'footer widgets',
+  'popular posts',
+  'popular post',
+  'popular articles',
+]);
+
+/** Whether an element's class or id names what changes by itself. */
+function selfChanging(attribs) {
+  const names = classIdWords(attribs);
+  return names.some(
+    (word, i) => SELF_CHANGING.has(word) || SELF_CHANGING_PAIRS.has(`${word} ${names[i + 1]}`),
+  );
+}
+/**
+ * The way a sketch reads a page. A first look kept by another (before
+ * SELF_CHANGING was left out, 2026-10-28) isn't compared: the page gets a
+ * new first look, so a block left out now doesn't read as the change.
+ */
+export const SKETCH_VERSION = 2;
 /** The 4-word runs' hashes a sketch keeps, the smallest: about 2.5 KB. */
 const SKETCH_SIZE = 256;
 /** A page with fewer visible words than this isn't read: an empty shell, or bot protection's page. */
@@ -232,12 +276,14 @@ function textLengths(start) {
  * A block left out as furniture, or a form, that holds most of the body's
  * words is the page (an <article class="category-social-media">, a page in
  * one <form>), and is read. Two passes over the body, as stacks: linear on
- * any page, never out of stack.
+ * any page, never out of stack. With `steady`, what changes by itself
+ * (selfChanging) is left out too: the words a change is measured on.
  *
  * @param {string} html
  * @param {import('cheerio').CheerioAPI} [$] the page, when it is parsed already
+ * @param {{ steady?: boolean }} [opts]
  */
-export function visibleText(html, $ = loadPage(html)) {
+export function visibleText(html, $ = loadPage(html), { steady = false } = {}) {
   const head = [$('title').first().text(), $('meta[name="description"]').attr('content')];
   const start = $('body')[0] ?? $.root()[0];
   if (!start) return head.filter(Boolean).join(' ');
@@ -252,7 +298,10 @@ export function visibleText(html, $ = loadPage(html)) {
       continue;
     }
     if (node.type !== 'tag' || CODE.has(node.name)) continue;
-    const aside = AROUND.has(node.name) || furnitureNamed(node.attribs);
+    const aside =
+      AROUND.has(node.name) ||
+      furnitureNamed(node.attribs) ||
+      (steady && selfChanging(node.attribs));
     if (aside && (lengths.get(node) ?? 0) <= most) continue;
     // A block's words start and end with it: "Pricing" and "Plans" never run together.
     out.push(' ');
@@ -276,7 +325,7 @@ export function sketch(visible) {
   const seen = new Set();
   for (let i = 0; i + 4 <= w.length; i += 1)
     seen.add(hash(`${w[i]} ${w[i + 1]} ${w[i + 2]} ${w[i + 3]}`));
-  return { hashes: [...seen].sort().slice(0, SKETCH_SIZE), runs: seen.size };
+  return { hashes: [...seen].sort().slice(0, SKETCH_SIZE), runs: seen.size, v: SKETCH_VERSION };
 }
 
 /** The share two pages' 4-word runs have in common, estimated from their sketches. */
@@ -313,7 +362,12 @@ export function changedRuns(first, now) {
 function changedSince(previous, url, visible) {
   const now = sketch(visible);
   const first = previous?.sketch;
-  if (!Array.isArray(first?.hashes) || !Number.isFinite(first?.runs) || previous.url !== url) {
+  if (
+    !Array.isArray(first?.hashes) ||
+    !Number.isFinite(first?.runs) ||
+    first.v !== SKETCH_VERSION ||
+    previous.url !== url
+  ) {
     return { passed: false, missing: ['first_look'], sketch: now };
   }
   const changed =
@@ -429,14 +483,16 @@ export async function checkPage(
     }
     return { passed: true, missing: [] };
   }
+  // A change is measured without what changes by itself.
+  const steady = () => visibleText(page.html, $, { steady: true });
   if (kind === 'published') {
     // Not there before, never seen live, and answers now: published.
     if (previous?.wasMissing && !previous.sketch && previous.url === url) {
       return { passed: true, missing: [] };
     }
-    return changedSince(previous, url, visible);
+    return changedSince(previous, url, steady());
   }
-  if (kind === 'changed') return changedSince(previous, url, visible);
+  if (kind === 'changed') return changedSince(previous, url, steady());
   return null;
 }
 

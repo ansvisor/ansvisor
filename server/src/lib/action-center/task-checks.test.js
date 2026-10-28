@@ -56,6 +56,7 @@ vi.mock('../shopping-check.js', () => ({ checkShoppingDraft }));
 const {
   CHANGED_BELOW,
   MIN_CHANGED_RUNS,
+  SKETCH_VERSION,
   SWEEP_PER_BRAND,
   changedRuns,
   checkKind,
@@ -387,6 +388,96 @@ describe('checkPage', () => {
     const moved = await look(essay(12, { 3: '2027', 9: 'usd19' }), { ...first, url: PAGE });
     // A large share of a short page's runs moved, but far fewer than MIN_CHANGED_RUNS.
     expect(moved).toMatchObject({ passed: false, missing: ['not_changed'] });
+  });
+
+  describe('what changes by itself (#1565 A)', () => {
+    const run = (prefix, n) => Array.from({ length: n }, (_, i) => `${prefix}${i}`).join(' ');
+    const block = (attrs, prefix, n) => `<div ${attrs}><p>${run(prefix, n)}</p></div>`;
+    /** A 200-word page, with its testimonials and its latest posts. */
+    const page = (quotes, posts, extra = '', body = essay(200)) =>
+      `<html><head><title>Pricing</title></head><body><main><h1>Pricing</h1><p>${body}</p>` +
+      `${block('class="testimonials"', quotes, 28)}${extra}</main>` +
+      `${block('id="sidebar" class="latest-posts"', posts, 30)}</body></html>`;
+    const look = (body, previous = null) =>
+      checkPage('changed', PAGE, { previous, fetch: fetchOf({ [PAGE]: body }) });
+
+    it('never passes a testimonial rotated, the latest posts moved on, or a new short review', async () => {
+      const first = await look(page('quoteA', 'postA'));
+      const kept = { ...first, url: PAGE };
+      expect(await look(page('quoteB', 'postB'), kept)).toMatchObject({
+        passed: false,
+        missing: ['not_changed'],
+      });
+      // A 50-word review in a block of its own: fewer than MIN_CHANGED_RUNS runs.
+      expect(
+        await look(page('quoteA', 'postA', `<p>${run('review', 50)}</p>`), kept),
+      ).toMatchObject({ passed: false, missing: ['not_changed'] });
+    });
+
+    it('passes a rewritten 60-word paragraph on the same short page', async () => {
+      const first = await look(page('quoteA', 'postA'));
+      const rewritten = essay(
+        200,
+        Object.fromEntries(Array.from({ length: 60 }, (_, i) => [70 + i, `new${i}`])),
+      );
+      expect(
+        (await look(page('quoteA', 'postA', '', rewritten), { ...first, url: PAGE })).passed,
+      ).toBe(true);
+    });
+
+    it('still finds a written task’s text in a testimonial', async () => {
+      const fetch = fetchOf({ [PAGE]: page('quoteA', 'postA') });
+      expect(await checkPage('text', PAGE, { after: 'quoteA3 quoteA4', fetch })).toMatchObject({
+        passed: true,
+      });
+    });
+
+    it.each([
+      [
+        'Elementor',
+        '<div class="elementor-widget-wrap">',
+        (text) =>
+          `<div class="elementor-element elementor-widget elementor-widget-text-editor">` +
+          `<div class="elementor-widget-container"><p>${text}</p></div></div>`,
+      ],
+      [
+        'HubSpot',
+        '<div class="row-fluid">',
+        (text) =>
+          `<div class="span12 widget-span widget-type-rich_text">` +
+          `<div class="cell-wrapper"><p>${text}</p></div></div>`,
+      ],
+    ])('passes a %s page rewritten in its widgets', async (_, wrap, widget) => {
+      const built = (prefix) =>
+        `<html><head><title>Pricing</title></head><body>${wrap}` +
+        `${[0, 1, 2, 3].map((i) => widget(run(`${prefix}${i}x`, 50))).join('')}</div></body></html>`;
+      const first = await look(built('old'));
+      expect((await look(built('new'), { ...first, url: PAGE })).passed).toBe(true);
+    });
+
+    it('counts a pricing page’s “Most popular” plan, and still leaves out a sidebar', () => {
+      const read = visibleText(
+        `<html><body><main><h1>Pricing</h1><div class="plan popular"><p>Growth plan words</p></div>` +
+          `<p>${FILLER}</p></main><aside class="sidebar"><p>Sidebar words</p></aside>` +
+          `<div class="widget-area"><p>Widget area words</p></div>` +
+          `<div class="popular-posts"><p>Popular posts words</p></div></body></html>`,
+        undefined,
+        { steady: true },
+      );
+      expect(read).toContain('Growth plan words');
+      expect(read).not.toContain('Sidebar words');
+      expect(read).not.toContain('Widget area words');
+      expect(read).not.toContain('Popular posts words');
+    });
+
+    it('takes a new first look over one kept before these were left out', async () => {
+      const first = await look(page('quoteA', 'postA'));
+      expect(first.sketch.v).toBe(SKETCH_VERSION);
+      const { hashes, runs } = first.sketch;
+      const again = await look(page('quoteA', 'postA'), { url: PAGE, sketch: { hashes, runs } });
+      expect(again).toMatchObject({ passed: false, missing: ['first_look'] });
+      expect(again.sketch.v).toBe(SKETCH_VERSION);
+    });
   });
 
   it('reads a page with too few words as no answer: an empty shell, or bot protection’s', async () => {
