@@ -165,6 +165,12 @@ async function deleteKeys(db, table, columns, rows, run) {
  * rows in `scopes[table]`: [its column, the written table that column points
  * at], e.g. prompts: ['prompt_set_id', 'prompt_sets'].
  *
+ * A table whose rows have no key of their own (an identity id the database
+ * gives, and no other unique columns) is written with
+ * `write(table, rows, { generated: true })`: inserted, then, on a rebuild,
+ * the brand's rows that were there before deleted at once. Nothing is empty
+ * meanwhile; for a moment both are there.
+ *
  * @param {{ db: object, brandId: string, rebuild?: boolean,
  *   keys?: Record<string, string>, scopes?: Record<string, [string, string]>,
  *   concurrency?: number }} args
@@ -186,9 +192,15 @@ export function demoWriter({
     /**
      * @param {string} table
      * @param {object[]} rows
-     * @param {{ chunk?: number }} [options]
+     * @param {{ chunk?: number, generated?: boolean }} [options]
      */
-    async write(table, rows, { chunk } = {}) {
+    async write(table, rows, { chunk, generated = false } = {}) {
+      if (generated) {
+        const before = rebuild ? await readKeys(db, table, ['id'], 'brand_id', brandId) : [];
+        await insertChunks(db, table, rows, { chunk, run });
+        if (before.length > 0) await deleteKeys(db, table, ['id'], before, run);
+        return;
+      }
       const columns = columnsOf(table);
       if (rebuild) {
         if (!written.has(table)) written.set(table, new Set());
