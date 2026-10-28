@@ -412,6 +412,20 @@ describe('actionEventText', () => {
     ).toBe('30-day result: not enough data to compare positions');
   });
 
+  it('names a checked task once: its title when renamed, else its library name (#1565)', () => {
+    expect(
+      actionEventText(event('task_checked', { task: 'refresh_content', title: null }), tPage, t),
+    ).toBe('Checked automatically and done: Refresh outdated content');
+    // A line written before the API sent one name carries both: the title alone.
+    expect(
+      actionEventText(
+        event('task_checked', { task: 'refresh_content', title: 'Refresh the pricing page' }),
+        tPage,
+        t,
+      ),
+    ).toBe('Checked automatically and done: Refresh the pricing page');
+  });
+
   it("passes a task's own title and the measured verdict", () => {
     expect(actionEventText(event('task_added', { title: 'Ask the agency' }), tPage, t)).toBe(
       'Task added: “Ask the agency”',
@@ -419,6 +433,20 @@ describe('actionEventText', () => {
     expect(actionEventText(event('outcome_measured', { outcome: 'improved' }), tPage, t)).toBe(
       'Result: metrics improved after this action closed',
     );
+  });
+
+  /** Read three times after the close, each result names its day (learning B1). */
+  it('names the reading a result came from, and the final one', () => {
+    expect(
+      actionEventText(event('outcome_measured', { outcome: 'improved', day: 14 }), tPage, t),
+    ).toBe('Day 14 · Result: metrics improved after this action closed');
+    expect(
+      actionEventText(
+        event('outcome_measured', { outcome: 'mixed', day: 30, final: true }),
+        tPage,
+        t,
+      ),
+    ).toBe('Day 30, final · Result: mixed after this action closed');
   });
 });
 
@@ -466,6 +494,8 @@ describe('History events', () => {
     title: 'Ask the agency',
     outcome: 'improved',
     reviews: 0,
+    day: 0,
+    final: 'no',
   };
   const eventText = (event: string, data: Partial<typeof values> = {}) =>
     tPage(`drawer.events.${event}` as Parameters<typeof tPage>[0], { ...values, ...data });
