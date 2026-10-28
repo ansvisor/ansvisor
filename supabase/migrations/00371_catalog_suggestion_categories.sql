@@ -17,6 +17,9 @@
 --     would name);
 --   * the most products first, then by name, p_limit of them.
 --
+-- Products and variants are read by brand, live only, so their brand
+-- indexes (00278, 00281) serve the read, not every brand's rows.
+--
 -- The service role calls it, as 00350's catalog_category_counts.
 
 create or replace function public.catalog_suggestion_categories(
@@ -49,8 +52,9 @@ as $$
            coalesce(v.sale_price, v.price) as amount,
            v.currency
     from public.catalog_variants v
-    where v.product_id in (select l.product_id from live l)
+    where v.brand_id = p_brand_id
       and v.removed_at is null
+      and v.product_id in (select l.product_id from live l)
       and coalesce(v.sale_price, v.price) > 0
     order by v.product_id, coalesce(v.sale_price, v.price), v.id
   ),
