@@ -83,9 +83,9 @@ export function ProductBlockDialog({
   }, [query, brandId]);
 
   const isPicked = (id: string) => picked.some((p) => p.id === id);
-  /** Why a product can't go in a block, or null: sold out, or no page to link. */
+  /** Why a product can't go in a block, or null: not in stock, or no page to link. */
   const blocked = (p: BlockProductRead) =>
-    !p.inStock ? t('soldOut') : !productHref(p.url) ? t('noPage') : null;
+    !p.inStock ? t('notInStock') : !productHref(p.url) ? t('noPage') : null;
   const toggle = (hit: BlockProductRead) =>
     setPicked((now) =>
       now.some((p) => p.id === hit.id)
