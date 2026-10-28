@@ -3512,6 +3512,30 @@
         "published": "Published",
         "empty": "No page in this tab matches the Last send filter."
       },
+      "shopping": {
+        "label": "Shopping path",
+        "filters": {
+          "all": "All",
+          "attention": "Needs attention",
+          "ok": "OK",
+          "none": "None"
+        },
+        "empty": "No page listed here has a shopping path like this.",
+        "none": "None",
+        "unchecked": "Not checked yet",
+        "uncheckedHint": "Its links are checked against your catalog after the next catalog sync.",
+        "ok": "OK",
+        "soldOut": "{count} sold out",
+        "notForSale": "{count} not for sale",
+        "linked": "Links {categoriesLinked} of {categories, plural, one {# category page} other {# category pages}} and {productsLinked} of {products, plural, one {# product} other {# products}} in its shopping path.",
+        "states": {
+          "sold_out": "{title}: sold out",
+          "refused": "{title}: refused by Google Merchant Center",
+          "gone": "{title}: no longer in your catalog"
+        },
+        "checkedPage": "Checked on the live page after the catalog sync of {when}.",
+        "checkedDraft": "Checked in the draft after the catalog sync of {when}."
+      },
       "title": "Library",
       "description": "Everything you and the agents wrote or changed.",
       "selectBrand": "Select a brand to see its content.",
@@ -3532,7 +3556,8 @@
         "status": "Status",
         "created": "Created",
         "updated": "Updated",
-        "menu": "Row actions"
+        "menu": "Row actions",
+        "shopping": "Shopping path"
       },
       "rowMenu": {
         "label": "Actions for {title}",

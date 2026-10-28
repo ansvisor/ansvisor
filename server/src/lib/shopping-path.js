@@ -263,7 +263,7 @@ async function readRows(what, page, limit = Infinity) {
  * (chunked-in.js), each read to its end in `order` (a unique key, so no
  * row is read twice or missed across pages).
  */
-async function readIn(db, table, columns, column, ids, { order, more = (q) => q }) {
+export async function readIn(db, table, columns, column, ids, { order, more = (q) => q }) {
   const { data, error } = await selectInChunks(ids, (chunk) =>
     readAllRpcRows(table, (from, to) =>
       more(db.from(table).select(columns).in(column, chunk)).order(order).range(from, to),

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { linkKey } from '@/lib/content/link-targets';
 
 /**
@@ -6,7 +7,8 @@ import { linkKey } from '@/lib/content/link-targets';
  * products as the catalog has them now. Read for the Rules tab's Shopping
  * rules and for Before you publish. A product the page links is checked
  * when it's one of the page's shopping path, or one the person removed from
- * it or the path left out: the page may still link it.
+ * it or the path left out: the page may still link it. The check after each
+ * catalog sync (00352) keeps the same for the Content Library.
  */
 
 /**
@@ -154,4 +156,83 @@ export const LISTED_MAX = 3;
 /** The first few of a list to name, and how many more there are. */
 export function listed<T>(items: readonly T[], max = LISTED_MAX): { shown: T[]; more: number } {
   return { shown: items.slice(0, max), more: Math.max(0, items.length - max) };
+}
+
+/** A linked product that no longer sells, as the check after a catalog sync keeps it (00352). */
+export interface ShoppingBadLink {
+  id: string;
+  title: string;
+  state: Exclude<ShoppingLinkState, 'ok'>;
+}
+
+/**
+ * A draft's shopping path in the Content Library (00352): none, not checked
+ * since it was built (the next catalog sync checks it), or what the last
+ * check found on the live page or in the draft.
+ */
+export type DraftShopping =
+  | { state: 'none' }
+  | { state: 'unchecked' }
+  | {
+      state: 'ok' | 'attention';
+      readFrom: 'page' | 'draft';
+      checkedAt: string;
+      categories: number;
+      categoriesLinked: number;
+      products: number;
+      productsLinked: number;
+      bad: ShoppingBadLink[];
+    };
+
+/** The Library's Shopping path filter (?shopping=attention). */
+export const SHOPPING_FILTERS = ['all', 'attention', 'ok', 'none'] as const;
+export type ShoppingFilter = (typeof SHOPPING_FILTERS)[number];
+
+const checkRowSchema = z.object({
+  read_from: z.enum(['page', 'draft']),
+  checked_at: z.string(),
+  categories: z.number(),
+  categories_linked: z.number(),
+  products: z.number(),
+  products_linked: z.number(),
+  bad: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        state: z.enum(['sold_out', 'refused', 'gone']),
+      }),
+    )
+    .catch([]),
+});
+
+/**
+ * A Library row's shopping path: `builtAt` its path's (null for none), and
+ * `check` its content_shopping_checks row, read on its own or as PostgREST
+ * embeds it.
+ */
+export function draftShopping(builtAt: string | null, check: unknown): DraftShopping {
+  if (!builtAt) return { state: 'none' };
+  const parsed = checkRowSchema.safeParse(Array.isArray(check) ? check[0] : check);
+  if (!parsed.success) return { state: 'unchecked' };
+  const row = parsed.data;
+  return {
+    state: row.bad.length ? 'attention' : 'ok',
+    readFrom: row.read_from,
+    checkedAt: row.checked_at,
+    categories: row.categories,
+    categoriesLinked: row.categories_linked,
+    products: row.products,
+    productsLinked: row.products_linked,
+    bad: row.bad,
+  };
+}
+
+/** The drafts the Shopping path filter lists: a path not checked yet only under All. */
+export function draftsByShopping<T extends { shopping?: DraftShopping }>(
+  drafts: T[],
+  filter: ShoppingFilter,
+): T[] {
+  if (filter === 'all') return drafts;
+  return drafts.filter((draft) => (draft.shopping?.state ?? 'none') === filter);
 }
