@@ -3,7 +3,9 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import {
+  MAX_LOCATION_COLUMNS,
   PROMPT_COLUMNS,
+  isLocationColumn,
   readColumnsView,
   type PromptColumnsView,
 } from '@/lib/prompt-table-columns';
@@ -15,9 +17,11 @@ import {
  * Failures come back as a value: production masks a thrown error's message.
  */
 
+const columnId = z.union([z.enum(PROMPT_COLUMNS), z.string().refine(isLocationColumn)]);
+const MAX_IDS = PROMPT_COLUMNS.length + MAX_LOCATION_COLUMNS;
 const viewSchema = z.object({
-  order: z.array(z.enum(PROMPT_COLUMNS)).max(PROMPT_COLUMNS.length),
-  hidden: z.array(z.enum(PROMPT_COLUMNS)).max(PROMPT_COLUMNS.length),
+  order: z.array(columnId).max(MAX_IDS),
+  hidden: z.array(columnId).max(MAX_IDS),
 });
 
 export interface PromptTableViews {
@@ -75,7 +79,7 @@ export async function savePromptTableView(
       {
         brand_id: brandId,
         user_id: scope === 'brand' ? null : user.id,
-        columns: parsed.data,
+        columns: { order: [...parsed.data.order], hidden: [...parsed.data.hidden] },
         updated_by: user.id,
         updated_at: new Date().toISOString(),
       },

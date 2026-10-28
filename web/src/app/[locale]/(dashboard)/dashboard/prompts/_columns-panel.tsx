@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronUp, Columns3, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronUp, Columns3, GripVertical, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
@@ -13,14 +13,21 @@ import {
   type PromptTableViews,
 } from '@/lib/actions/prompt-table-views';
 import {
+  MAX_LOCATION_COLUMNS,
+  addLocationColumn,
   effectiveView,
+  isLocationColumn,
   moveColumn,
+  parseLocationColumn,
+  removeColumn,
   sameView,
   toggleColumn,
   visibleColumns,
-  type PromptColumnId,
   type PromptColumnsView,
+  type TableColumnId,
 } from '@/lib/prompt-table-columns';
+import { LOCATION_METRICS, type LocationMetric } from '@/lib/prompt-location-matrix';
+import { regionLabel } from '@/lib/region';
 import { cn } from '@/lib/utils';
 
 /** Changes are saved this long after the last one, so a few clicks save once. */
@@ -30,7 +37,8 @@ const SAVE_AFTER_MS = 600;
  * The Tracked Prompts table's Columns panel (PROMPT-015a): show, hide and
  * order the columns, saved for the person; an admin or manager can share
  * theirs with everyone on the brand. Reset goes back to the brand's shared
- * view, or the default.
+ * view, or the default. A metric in one of the brand's locations can be
+ * added as a column (PROMPT-015b).
  */
 export function ColumnsPanel({
   brandId,
@@ -38,21 +46,33 @@ export function ColumnsPanel({
   canManage,
   views,
   onViewsChange,
+  locations,
 }: {
   brandId: string;
   brandName: string;
   canManage: boolean;
   views: PromptTableViews;
   onViewsChange: (views: PromptTableViews) => void;
+  /** The locations the brand's prompts track, for location columns. */
+  locations: string[];
 }) {
   const t = useTranslations('prompts.columns.picker');
   const tLabels = useTranslations('prompts.columns.labels');
+  const tMetrics = useTranslations('prompts.locations.metrics');
   const view = effectiveView(views.mine, views.brand);
   // Linked to the brand's view only once an admin or manager shared their
   // own: someone just looking at the brand's view changes theirs alone.
   const shared =
     canManage && views.mine !== null && views.brand !== null && sameView(views.brand, views.mine);
-  const [dragging, setDragging] = useState<PromptColumnId | null>(null);
+  const [dragging, setDragging] = useState<TableColumnId | null>(null);
+  const [newMetric, setNewMetric] = useState<LocationMetric>('visibility');
+  const [newRegion, setNewRegion] = useState('');
+  const region = locations.includes(newRegion) ? newRegion : (locations[0] ?? '');
+  const locationCount = view.order.filter(isLocationColumn).length;
+  const labelOf = (id: TableColumnId) => {
+    const loc = parseLocationColumn(id);
+    return loc ? `${tMetrics(loc.metric)} · ${regionLabel(loc.region)}` : tLabels(id);
+  };
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const report = (result: Awaited<ReturnType<typeof savePromptTableView>>) => {
@@ -115,7 +135,8 @@ export function ColumnsPanel({
             <span className="text-xs">{t('always')}</span>
           </li>
           {view.order.map((id, i) => {
-            const label = tLabels(id);
+            const label = labelOf(id);
+            const location = isLocationColumn(id);
             const visible = !view.hidden.includes(id);
             return (
               <li
@@ -174,10 +195,66 @@ export function ColumnsPanel({
                 >
                   <ChevronDown />
                 </Button>
+                {location && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t('remove', { column: label })}
+                    onClick={() => change(removeColumn(view, id))}
+                  >
+                    <X />
+                  </Button>
+                )}
               </li>
             );
           })}
         </ul>
+        {locations.length > 0 && (
+          <div className="space-y-2 border-t pt-3">
+            <p className="text-xs font-medium text-muted-foreground">{t('addLocation')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                aria-label={t('metric')}
+                value={newMetric}
+                onChange={(e) => setNewMetric(e.target.value as LocationMetric)}
+                className="h-8 flex-1 rounded-md border bg-background px-2 text-xs"
+              >
+                {LOCATION_METRICS.map((m) => (
+                  <option key={m} value={m}>
+                    {tMetrics(m)}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label={t('location')}
+                value={region}
+                onChange={(e) => setNewRegion(e.target.value)}
+                className="h-8 flex-1 rounded-md border bg-background px-2 text-xs"
+              >
+                {locations.map((r) => (
+                  <option key={r} value={r}>
+                    {regionLabel(r)}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8"
+                disabled={!region || locationCount >= MAX_LOCATION_COLUMNS}
+                onClick={() => change(addLocationColumn(view, newMetric, region))}
+              >
+                {t('add')}
+              </Button>
+            </div>
+            {locationCount >= MAX_LOCATION_COLUMNS && (
+              <p className="text-xs text-muted-foreground">
+                {t('locationLimit', { count: MAX_LOCATION_COLUMNS })}
+              </p>
+            )}
+          </div>
+        )}
         {canManage ? (
           <div className="flex items-start gap-2.5 rounded-lg border bg-muted/30 p-3">
             <Checkbox

@@ -41,6 +41,7 @@ function render() {
           canManage={canManage}
           views={views}
           onViewsChange={onViewsChange}
+          locations={['US', 'TR']}
         />
       </NextIntlClientProvider>,
     );
@@ -132,6 +133,26 @@ describe('ColumnsPanel', () => {
     await act(async () => reset.click());
     expect(actions.removePromptTableView).toHaveBeenCalledWith(BRAND, 'mine');
     expect(views).toEqual({ mine: null, brand });
+  });
+
+  it('adds a metric in one of the brand’s locations as a column, and removes it (PROMPT-015b)', async () => {
+    await open();
+    const [metric, location] = [...document.querySelectorAll('select')] as HTMLSelectElement[];
+    await act(async () => {
+      metric.value = 'position';
+      metric.dispatchEvent(new Event('change', { bubbles: true }));
+      location.value = 'TR';
+      location.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const add = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Add')!;
+    await act(async () => add.click());
+    expect(views.mine?.order.at(-1)).toBe('loc:position:TR');
+    expect(item('Position · Turkey')).toBeDefined();
+    const remove = document.querySelector(
+      'button[aria-label="Remove Position · Turkey"]',
+    ) as HTMLButtonElement;
+    await act(async () => remove.click());
+    expect(views.mine?.order).not.toContain('loc:position:TR');
   });
 
   it("keeps a member's change off the brand's view when they have none of their own", async () => {

@@ -7425,7 +7425,13 @@
         "reset": "Reset to default",
         "resetToBrand": "Reset to the brand's view",
         "failed": "Couldn't save your columns. Try again.",
-        "forbidden": "Only admins and managers can share a view with the brand."
+        "forbidden": "Only admins and managers can share a view with the brand.",
+        "remove": "Remove {column}",
+        "addLocation": "Add a location column",
+        "metric": "Metric",
+        "location": "Location",
+        "add": "Add",
+        "locationLimit": "{count} location columns at most."
       },
       "tips": {
         "status": "New: added in the last 24 hours. Active: being tracked. Paused: not tracked.",
@@ -7440,6 +7446,47 @@
         "added": "When this prompt was added.",
         "lastRun": "When this prompt was last checked."
       }
+    },
+    "locations": {
+      "view": "View",
+      "table": "Table",
+      "locations": "Locations",
+      "metric": "Metric",
+      "metrics": {
+        "visibility": "Visibility",
+        "position": "Position",
+        "mentions": "Mentions",
+        "citations": "Citations"
+      },
+      "prompt": "Prompt",
+      "topic": "Topic",
+      "average": "All prompts · average",
+      "gap": "Gap",
+      "gapTip": "Best minus worst tracked location, for the metric shown.",
+      "track": "+ Track",
+      "trackLabel": "Track “{prompt}” in {location}",
+      "open": "{prompt} in {location}: open its positions",
+      "notNamed": "Not named",
+      "noAnswers": "No answers in this location yet",
+      "kind": {
+        "country": "Country",
+        "state": "US state",
+        "city": "City"
+      },
+      "weakest": "Weakest location",
+      "weakestBody": "Visibility, against {overall} across all locations · {untracked, plural, =0 {every prompt tracked there} one {# prompt not tracked there} other {# prompts not tracked there}}",
+      "strongest": "Strongest location",
+      "strongestBody": "Visibility across its {tracked, plural, one {# tracked prompt} other {# tracked prompts}}",
+      "widest": "Biggest gap between locations",
+      "widestBody": "{low} in {lowAt}, {high} in {highAt}",
+      "low": "Low",
+      "high": "High",
+      "late": "Named late",
+      "first": "Named first",
+      "legend": "A cell opens the prompt's Positions panel for that location.",
+      "none": "Your prompts aren't tracked in a location yet. Add one from a prompt's Edit.",
+      "failed": "Couldn't read the locations right now. Try again in a moment.",
+      "capped": "Showing the {count} locations your prompts track most."
     },
     "performance": {
       "label": "Performance",

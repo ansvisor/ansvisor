@@ -157,7 +157,7 @@ import {
 } from '@/config/prompt-options';
 import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
-import { formatRegionDisplay, isValidLocation, locationCode } from '@/lib/region';
+import { formatRegionDisplay, isValidLocation, locationCode, regionLabel } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
 import { CONTACT_SALES_URL, PLANS } from '@/config/plans';
 import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
@@ -199,8 +199,20 @@ import {
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
 import { ColumnsPanel } from './_columns-panel';
+import { LocationMatrix, clearLocationMatrixCache, loadLocationMatrix } from './_location-matrix';
 import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
-import { effectiveView, visibleColumns, type PromptColumnId } from '@/lib/prompt-table-columns';
+import {
+  effectiveView,
+  parseLocationColumn,
+  visibleColumns,
+  type PromptColumnId,
+} from '@/lib/prompt-table-columns';
+import {
+  matrixLocations,
+  metricValue,
+  type PromptLocationMatrix,
+} from '@/lib/prompt-location-matrix';
+import { readUrlChoice } from '@/lib/url-state';
 import { promptsTableState } from './table-state';
 import { formatCompactNumber, formatDate, formatNumber } from '@/lib/format';
 import {
@@ -1556,8 +1568,10 @@ export default function PromptsPage() {
   }, [loadData, promptDataWanted]);
 
   // After prompts are added, paused, resumed, deleted or retargeted: reload
-  // the table and the usage cards together.
+  // the table and the usage cards together, and read the locations' figures
+  // (PROMPT-015b) anew.
   const reloadAfterChange = useCallback(() => {
+    clearLocationMatrixCache();
     setUsageVersion((v) => v + 1);
     return loadData();
   }, [loadData]);
@@ -2908,6 +2922,53 @@ function AllPromptsTab({
   const tableViews =
     columnViews?.brandId === activeBrandId ? columnViews.views : { mine: null, brand: null };
   const columns = visibleColumns(effectiveView(tableViews.mine, tableViews.brand));
+  const tLocations = useTranslations('prompts.locations');
+  const tMetrics = useTranslations('prompts.locations.metrics');
+  // Table, or the Locations view (PROMPT-015b), kept in the URL (?layout=locations).
+  const [layout, setLayout] = useState<'table' | 'locations'>('table');
+  useEffect(() => {
+    setLayout(readUrlChoice('layout', ['table', 'locations'] as const, 'table'));
+  }, []);
+  const prefetchLocations = () => {
+    const regions = matrixLocations(filtered);
+    if (layout === 'table' && regions.length) {
+      loadLocationMatrix(activeBrandId, positionsWindow, regions).catch(() => {});
+    }
+  };
+  const changeLayout = (next: 'table' | 'locations') => {
+    setLayout(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === 'table') params.delete('layout');
+    else params.set('layout', next);
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  };
+  // The locations the prompts track, for the Locations view and location columns.
+  const trackedLocations = useMemo(() => matrixLocations(allRows), [allRows]);
+  // Location columns in the Table view read their figures, once per location shown.
+  const columnRegions = [
+    ...new Set(columns.map((id) => parseLocationColumn(id)?.region).filter(Boolean)),
+  ] as string[];
+  const columnMatrixKey = `${activeBrandId}:${positionsWindow.from}:${positionsWindow.to ?? ''}:${columnRegions.join(',')}`;
+  const [columnMatrix, setColumnMatrix] = useState<{
+    key: string;
+    matrix: PromptLocationMatrix;
+  } | null>(null);
+  useEffect(() => {
+    if (layout !== 'table' || !columnRegions.length) return;
+    let cancelled = false;
+    loadLocationMatrix(activeBrandId, positionsWindow, columnRegions)
+      .then((matrix) => {
+        if (!cancelled) setColumnMatrix({ key: columnMatrixKey, matrix });
+      })
+      .catch((err) => console.error('Failed to read the location columns:', err));
+    return () => {
+      cancelled = true;
+    };
+    // `columnRegions` and the window are in the key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout, columnMatrixKey]);
+  const locationMatrix = columnMatrix?.key === columnMatrixKey ? columnMatrix.matrix : null;
   // Rows deleted from the row menu or the bulk bar, hidden at once and
   // deleted for real after the Undo window (PROMPT-006). There is no soft
   // delete for prompts — a delete drops their history — so the delay is the
@@ -3319,8 +3380,15 @@ function AllPromptsTab({
   if (!loading && positionsId && !openPositions) setPositionsId(null);
 
   // The panel opens on the table's window; changing it there only moves the panel.
+  // A Locations view cell opens the panel on its location (PROMPT-015b).
+  const [panelRegion, setPanelRegion] = useState<string | null>(null);
   const openPositionsPanel = useCallback(
-    (promptId: string, tab: 'platforms' | 'improve' = 'platforms') => {
+    (
+      promptId: string,
+      tab: 'platforms' | 'improve' = 'platforms',
+      region: string | null = null,
+    ) => {
+      setPanelRegion(region);
       setPositionsTab(tab);
       setPositionsRange(panelRangeFromTable(positionsPreset, positionsWindow, viewerTimeZone()));
       setPositionsId(promptId);
@@ -3754,7 +3822,32 @@ function AllPromptsTab({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              role="group"
+              aria-label={tLocations('view')}
+              className="inline-flex gap-0.5 rounded-full bg-muted p-0.5"
+            >
+              {(['table', 'locations'] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  aria-pressed={layout === l}
+                  onClick={() => changeLayout(l)}
+                  // Read ahead, so the Locations view opens on its data.
+                  onPointerEnter={l === 'locations' ? prefetchLocations : undefined}
+                  onFocus={l === 'locations' ? prefetchLocations : undefined}
+                  className={cn(
+                    'h-7 rounded-full px-3 text-xs transition-colors',
+                    layout === l
+                      ? 'bg-background font-medium text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {tLocations(l)}
+                </button>
+              ))}
+            </div>
             <Select
               value={statusFilter}
               onValueChange={(v) => onStatusFilterChange((v as PromptStatusFilter | null) ?? 'all')}
@@ -3817,13 +3910,16 @@ function AllPromptsTab({
                 className="pl-8 h-8 text-xs"
               />
             </div>
-            <ColumnsPanel
-              brandId={activeBrandId}
-              brandName={brandName}
-              canManage={canManage}
-              views={tableViews}
-              onViewsChange={(views) => setColumnViews({ brandId: activeBrandId, views })}
-            />
+            {layout === 'table' && (
+              <ColumnsPanel
+                brandId={activeBrandId}
+                brandName={brandName}
+                canManage={canManage}
+                views={tableViews}
+                onViewsChange={(views) => setColumnViews({ brandId: activeBrandId, views })}
+                locations={trackedLocations}
+              />
+            )}
           </div>
         </div>
       </CardHeader>
@@ -3859,292 +3955,333 @@ function AllPromptsTab({
             onClear={() => setSelectedIds(new Set())}
           />
         )}
-        <Table stickyHeader stickyFirstColumn>
-          {latenessOrder && (
-            <TableCaption className="sr-only">{tPerformance('order')}</TableCaption>
-          )}
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-6">
-                {onEditPrompt ? (
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      checked={allSelected(pageIds, selectedIds)}
-                      onCheckedChange={() => setSelectedIds(toggleAll(pageIds, selectedIds))}
-                      aria-label="Select every prompt on this page"
-                    />
-                    Prompt
-                  </div>
-                ) : (
-                  'Prompt'
-                )}
-              </TableHead>
-              {columns.map((id) => headCells[id])}
-              {onEditPrompt && (
-                <TableHead className="text-right pr-6 w-[60px]">
-                  <span className="sr-only">Actions</span>
+        {layout === 'locations' ? (
+          <LocationMatrix
+            brandId={activeBrandId}
+            rows={filtered}
+            pageRows={pageRows}
+            window={positionsWindow}
+            onOpenCell={(promptId, region) => openPositionsPanel(promptId, 'platforms', region)}
+            onTrack={onEditPrompt ? (prompt) => onEditPrompt(prompt) : undefined}
+          />
+        ) : (
+          <Table stickyHeader stickyFirstColumn>
+            {latenessOrder && (
+              <TableCaption className="sr-only">{tPerformance('order')}</TableCaption>
+            )}
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-6">
+                  {onEditPrompt ? (
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={allSelected(pageIds, selectedIds)}
+                        onCheckedChange={() => setSelectedIds(toggleAll(pageIds, selectedIds))}
+                        aria-label="Select every prompt on this page"
+                      />
+                      Prompt
+                    </div>
+                  ) : (
+                    'Prompt'
+                  )}
                 </TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pageRows.map((p) => {
-              const vol = volumeByPromptId.get(p.id);
-              const vis = visibility[p.id];
-              const status = promptStatus(p, now);
-              const cells: Record<PromptColumnId, React.ReactNode> = {
-                topic: (
-                  <TableCell key="topic">
-                    {p.category?.trim() ? (
-                      <ClampedText
-                        handle={fullText}
-                        text={p.category}
-                        render={
-                          <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle" />
-                        }
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground inline-block align-middle">
-                        —
+                {columns.map((id) => {
+                  const loc = parseLocationColumn(id);
+                  return loc ? (
+                    <TableHead key={id} className="bg-muted/40 text-right">
+                      <span className="block text-xs font-medium">{tMetrics(loc.metric)}</span>
+                      <span className="block text-[11px] font-normal text-muted-foreground">
+                        {regionLabel(loc.region)}
                       </span>
-                    )}
-                  </TableCell>
-                ),
-                status: (
-                  <TableCell key="status" className="text-center">
-                    <Badge
-                      variant="outline"
-                      className={cn('text-xs', STATUS_BADGE[status])}
-                      title={status === 'new' ? tStatus('newHint') : undefined}
-                    >
-                      {tStatus(status)}
-                    </Badge>
-                  </TableCell>
-                ),
-                work: (
-                  <TableCell key="work" className="text-center">
-                    <div className="inline-flex flex-col items-center gap-0.5">
-                      <WorkStatusBadge
-                        status={statusOf(p)}
-                        onChange={
-                          onEditPrompt
-                            ? guard((s: PromptWorkStatus | null) => handleStatusChange(p, s), {
-                                action: tActions('setWorkStatus'),
-                              })
-                            : undefined
-                        }
-                      />
-                      {p.targetUrlCount > 0 && (
-                        <span
-                          className={cn(
-                            'text-[10px] tabular-nums',
-                            p.citedUrlCount > 0
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-muted-foreground',
-                          )}
-                          title={`${p.citedUrlCount} of ${p.targetUrlCount} target URLs cited in AI answers`}
-                        >
-                          {p.citedUrlCount}/{p.targetUrlCount} cited
+                    </TableHead>
+                  ) : (
+                    headCells[id as PromptColumnId]
+                  );
+                })}
+                {onEditPrompt && (
+                  <TableHead className="text-right pr-6 w-[60px]">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageRows.map((p) => {
+                const vol = volumeByPromptId.get(p.id);
+                const vis = visibility[p.id];
+                const status = promptStatus(p, now);
+                const cells: Record<PromptColumnId, React.ReactNode> = {
+                  topic: (
+                    <TableCell key="topic">
+                      {p.category?.trim() ? (
+                        <ClampedText
+                          handle={fullText}
+                          text={p.category}
+                          render={
+                            <span className="text-xs text-muted-foreground truncate inline-block max-w-[140px] align-middle" />
+                          }
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground inline-block align-middle">
+                          —
                         </span>
                       )}
-                    </div>
-                  </TableCell>
-                ),
-                visibility: (
-                  <TableCell key="visibility" className="text-right">
-                    {vis ? (
-                      <div
-                        className="inline-flex items-center gap-2 justify-end min-w-[110px]"
-                        title={`Mentioned in ${vis.mentionAnswers} of ${vis.runs} answers (${rangeLabel}) · cited in ${vis.citationAnswers}${
-                          vis.positionFactor !== null
-                            ? ` · position factor ${vis.positionFactor.toFixed(2)}`
-                            : ''
-                        } · coverage ${vis.visibilityRate}% (${vis.visibleRuns}/${vis.runs} runs)`}
+                    </TableCell>
+                  ),
+                  status: (
+                    <TableCell key="status" className="text-center">
+                      <Badge
+                        variant="outline"
+                        className={cn('text-xs', STATUS_BADGE[status])}
+                        title={status === 'new' ? tStatus('newHint') : undefined}
                       >
-                        <span
-                          className={cn(
-                            'text-sm font-semibold tabular-nums',
-                            visibilityColorClass(vis.score ?? 0),
-                          )}
-                        >
-                          {vis.score ?? 0}
-                        </span>
-                        <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
-                          <div
+                        {tStatus(status)}
+                      </Badge>
+                    </TableCell>
+                  ),
+                  work: (
+                    <TableCell key="work" className="text-center">
+                      <div className="inline-flex flex-col items-center gap-0.5">
+                        <WorkStatusBadge
+                          status={statusOf(p)}
+                          onChange={
+                            onEditPrompt
+                              ? guard((s: PromptWorkStatus | null) => handleStatusChange(p, s), {
+                                  action: tActions('setWorkStatus'),
+                                })
+                              : undefined
+                          }
+                        />
+                        {p.targetUrlCount > 0 && (
+                          <span
                             className={cn(
-                              'h-full rounded-full',
-                              visibilityBarClass(vis.score ?? 0),
+                              'text-[10px] tabular-nums',
+                              p.citedUrlCount > 0
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-muted-foreground',
                             )}
-                            style={{
-                              width: `${Math.min(100, Math.max(0, vis.score ?? 0))}%`,
-                            }}
-                          />
+                            title={`${p.citedUrlCount} of ${p.targetUrlCount} target URLs cited in AI answers`}
+                          >
+                            {p.citedUrlCount}/{p.targetUrlCount} cited
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                  ),
+                  visibility: (
+                    <TableCell key="visibility" className="text-right">
+                      {vis ? (
+                        <div
+                          className="inline-flex items-center gap-2 justify-end min-w-[110px]"
+                          title={`Mentioned in ${vis.mentionAnswers} of ${vis.runs} answers (${rangeLabel}) · cited in ${vis.citationAnswers}${
+                            vis.positionFactor !== null
+                              ? ` · position factor ${vis.positionFactor.toFixed(2)}`
+                              : ''
+                          } · coverage ${vis.visibilityRate}% (${vis.visibleRuns}/${vis.runs} runs)`}
+                        >
+                          <span
+                            className={cn(
+                              'text-sm font-semibold tabular-nums',
+                              visibilityColorClass(vis.score ?? 0),
+                            )}
+                          >
+                            {vis.score ?? 0}
+                          </span>
+                          <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={cn(
+                                'h-full rounded-full',
+                                visibilityBarClass(vis.score ?? 0),
+                              )}
+                              style={{
+                                width: `${Math.min(100, Math.max(0, vis.score ?? 0))}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  ),
+                  mentions: (
+                    <TableCell key="mentions" className="text-right tabular-nums text-sm">
+                      {vis ? (
+                        formatNumber(vis.totalMentions)
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  ),
+                  citations: (
+                    <TableCell key="citations" className="text-right tabular-nums text-sm">
+                      {vis ? (
+                        formatNumber(vis.totalCitations)
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  ),
+                  positions: (
+                    <TableCell key="positions" className="pl-8">
+                      {/* Fixed widths so the value, dots and See line up on every row. */}
+                      <div className="inline-flex items-center gap-2">
+                        <div className="w-[5.5rem] whitespace-nowrap">
+                          <PositionValue cell={positions[p.id]} vis={vis} />
+                        </div>
+                        <div className="w-6">
+                          {/* Whenever it has answers: a prompt never named is the one to open. */}
+                          {opensPositionsPanel(vis) && (
+                            <Button
+                              type="button"
+                              size="icon-xs"
+                              variant="outline"
+                              aria-label={`View positions for ${p.text}`}
+                              title="See positions"
+                              onClick={() => openPositionsPanel(p.id)}
+                            >
+                              <BarChart3 />
+                            </Button>
+                          )}
                         </div>
                       </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                ),
-                mentions: (
-                  <TableCell key="mentions" className="text-right tabular-nums text-sm">
-                    {vis ? (
-                      formatNumber(vis.totalMentions)
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                ),
-                citations: (
-                  <TableCell key="citations" className="text-right tabular-nums text-sm">
-                    {vis ? (
-                      formatNumber(vis.totalCitations)
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                ),
-                positions: (
-                  <TableCell key="positions" className="pl-8">
-                    {/* Fixed widths so the value, dots and See line up on every row. */}
-                    <div className="inline-flex items-center gap-2">
-                      <div className="w-[5.5rem] whitespace-nowrap">
-                        <PositionValue cell={positions[p.id]} vis={vis} />
-                      </div>
-                      <div className="w-6">
-                        {/* Whenever it has answers: a prompt never named is the one to open. */}
-                        {opensPositionsPanel(vis) && (
-                          <Button
-                            type="button"
-                            size="icon-xs"
-                            variant="outline"
-                            aria-label={`View positions for ${p.text}`}
-                            title="See positions"
-                            onClick={() => openPositionsPanel(p.id)}
-                          >
-                            <BarChart3 />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </TableCell>
-                ),
-                volume: (
-                  <TableCell key="volume" className="text-right">
-                    {vol ? (
-                      <EstimateRange
-                        estimate={estimateByPromptId.get(p.id)!}
-                        handle={volumeNote}
-                        className="text-sm font-semibold"
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                ),
-                competition: (
-                  <TableCell key="competition" className="text-center">
-                    <div className="flex justify-center">
-                      <CompetitionBars
-                        index={vol?.competitionIndex ?? null}
-                        label={vol?.competition ?? null}
-                      />
-                    </div>
-                  </TableCell>
-                ),
-                runs: (
-                  <TableCell key="runs" className="text-right tabular-nums text-sm">
-                    {vis ? (
-                      formatNumber(vis.runs)
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                ),
-                added: (
-                  <TableCell
-                    key="added"
-                    className="text-right text-xs whitespace-nowrap text-muted-foreground"
-                    title={new Date(p.createdAt).toLocaleString('en-US', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    })}
-                  >
-                    {formatDate(p.createdAt)}
-                  </TableCell>
-                ),
-                lastRun: (
-                  <TableCell key="lastRun" className="text-right text-xs text-muted-foreground">
-                    {formatRelative(vis?.lastRunAt, tCommon)}
-                  </TableCell>
-                ),
-              };
-              return (
-                <TableRow key={p.id} className="hover:bg-muted/50">
-                  <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
-                    <div className="flex items-start gap-3">
-                      {onEditPrompt && (
-                        <Checkbox
-                          className="mt-0.5"
-                          checked={selectedIds.has(p.id)}
-                          onCheckedChange={(v) => toggleRow(p.id, v === true)}
-                          aria-label={`Select ${p.text}`}
-                        />
-                      )}
-                      <ClampedText
-                        handle={fullText}
-                        text={p.text}
-                        render={
-                          <Link
-                            href={`/dashboard/prompts/${p.id}`}
-                            className="line-clamp-2 transition-colors hover:text-primary hover:underline"
-                          />
-                        }
-                      />
-                    </div>
-                  </TableCell>
-                  {columns.map((id) => cells[id])}
-                  {onEditPrompt && (
-                    <TableCell className="text-right pr-6">
-                      <RowActionsMenu
-                        prompt={p}
-                        brandId={activeBrandId}
-                        onEdit={() => onEditPrompt(p)}
-                        onToggleActive={guard(() => void toggleActive(p), {
-                          action: tActions(p.isActive ? 'pausePrompts' : 'resumePrompts'),
-                        })}
-                        onImprove={() => openPositionsPanel(p.id, 'improve')}
-                        onSuggestContent={guard(() => void suggestContent(p), {
-                          action: tActions('suggestContent'),
-                        })}
-                        onOpenSuggestion={openOpportunity}
-                        suggesting={suggestingIds.has(p.id)}
-                        noPlan={contentNoPlan}
-                        suggestDisabledReason={
-                          suggestDisabledReason ??
-                          (bulkSuggesting ? 'Wait for the selected prompts' : null)
-                        }
-                        onCreateContent={guard(
-                          () =>
-                            setContentPreset({
-                              kind: 'prompt',
-                              id: p.id,
-                              text: p.text,
-                              method: 'create',
-                            }),
-                          { action: tActions('createContent') },
-                        )}
-                        onDelete={guard(() => setConfirmDelete([p]), {
-                          action: tActions('deletePrompts'),
-                        })}
-                      />
                     </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                  ),
+                  volume: (
+                    <TableCell key="volume" className="text-right">
+                      {vol ? (
+                        <EstimateRange
+                          estimate={estimateByPromptId.get(p.id)!}
+                          handle={volumeNote}
+                          className="text-sm font-semibold"
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  ),
+                  competition: (
+                    <TableCell key="competition" className="text-center">
+                      <div className="flex justify-center">
+                        <CompetitionBars
+                          index={vol?.competitionIndex ?? null}
+                          label={vol?.competition ?? null}
+                        />
+                      </div>
+                    </TableCell>
+                  ),
+                  runs: (
+                    <TableCell key="runs" className="text-right tabular-nums text-sm">
+                      {vis ? (
+                        formatNumber(vis.runs)
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  ),
+                  added: (
+                    <TableCell
+                      key="added"
+                      className="text-right text-xs whitespace-nowrap text-muted-foreground"
+                      title={new Date(p.createdAt).toLocaleString('en-US', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                    >
+                      {formatDate(p.createdAt)}
+                    </TableCell>
+                  ),
+                  lastRun: (
+                    <TableCell key="lastRun" className="text-right text-xs text-muted-foreground">
+                      {formatRelative(vis?.lastRunAt, tCommon)}
+                    </TableCell>
+                  ),
+                };
+                return (
+                  <TableRow key={p.id} className="hover:bg-muted/50">
+                    <TableCell className="pl-6 font-medium text-sm max-w-[320px]">
+                      <div className="flex items-start gap-3">
+                        {onEditPrompt && (
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={selectedIds.has(p.id)}
+                            onCheckedChange={(v) => toggleRow(p.id, v === true)}
+                            aria-label={`Select ${p.text}`}
+                          />
+                        )}
+                        <ClampedText
+                          handle={fullText}
+                          text={p.text}
+                          render={
+                            <Link
+                              href={`/dashboard/prompts/${p.id}`}
+                              className="line-clamp-2 transition-colors hover:text-primary hover:underline"
+                            />
+                          }
+                        />
+                      </div>
+                    </TableCell>
+                    {columns.map((id) => {
+                      const loc = parseLocationColumn(id);
+                      if (!loc) return cells[id as PromptColumnId];
+                      const value = metricValue(locationMatrix?.[p.id]?.[loc.region], loc.metric);
+                      return (
+                        <TableCell
+                          key={id}
+                          className="bg-muted/20 text-right text-sm font-semibold tabular-nums"
+                        >
+                          {value === null ? (
+                            <span className="text-xs font-normal text-muted-foreground">—</span>
+                          ) : loc.metric === 'position' ? (
+                            `#${value.toFixed(1)}`
+                          ) : (
+                            formatNumber(Math.round(value))
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                    {onEditPrompt && (
+                      <TableCell className="text-right pr-6">
+                        <RowActionsMenu
+                          prompt={p}
+                          brandId={activeBrandId}
+                          onEdit={() => onEditPrompt(p)}
+                          onToggleActive={guard(() => void toggleActive(p), {
+                            action: tActions(p.isActive ? 'pausePrompts' : 'resumePrompts'),
+                          })}
+                          onImprove={() => openPositionsPanel(p.id, 'improve')}
+                          onSuggestContent={guard(() => void suggestContent(p), {
+                            action: tActions('suggestContent'),
+                          })}
+                          onOpenSuggestion={openOpportunity}
+                          suggesting={suggestingIds.has(p.id)}
+                          noPlan={contentNoPlan}
+                          suggestDisabledReason={
+                            suggestDisabledReason ??
+                            (bulkSuggesting ? 'Wait for the selected prompts' : null)
+                          }
+                          onCreateContent={guard(
+                            () =>
+                              setContentPreset({
+                                kind: 'prompt',
+                                id: p.id,
+                                text: p.text,
+                                method: 'create',
+                              }),
+                            { action: tActions('createContent') },
+                          )}
+                          onDelete={guard(() => setConfirmDelete([p]), {
+                            action: tActions('deletePrompts'),
+                          })}
+                        />
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
         <ClampedTextTooltip handle={fullText} />
         <EstimateNoteTooltip handle={volumeNote} />
         <TablePager
@@ -4192,7 +4329,7 @@ function AllPromptsTab({
         range={positionsRange}
         window={panelWindow}
         onRangeChange={setPositionsRange}
-        region={regionFilter}
+        region={panelRegion ?? regionFilter}
         initialTab={positionsTab}
         // Escape and a click outside belong to Start while it is open over the
         // panel: they close Start, and the panel stays.
