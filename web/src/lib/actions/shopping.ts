@@ -1832,13 +1832,18 @@ export async function getProductAiSays(
   }
   const supabase = await createClient();
   const [cards, product] = await Promise.all([
-    cardsInWindow(supabase, brandId, filters, 'prompt_result_id, product_title, created_at')
+    cardsInWindow(
+      supabase,
+      brandId,
+      filters,
+      'prompt_result_id, product_title, product_brand, created_at',
+    )
       .eq('catalog_product_id', productId)
       .order('created_at', { ascending: false })
       .limit(AI_SAYS_CARDS),
     supabase
       .from('catalog_products')
-      .select('title')
+      .select('title, product_brand')
       .eq('brand_id', brandId)
       .eq('id', productId)
       .maybeSingle(),
@@ -1846,15 +1851,20 @@ export async function getProductAiSays(
   if (cards.error) throw new Error(cards.error.message);
   if (product.error) throw new Error(product.error.message);
 
-  // The answers, the latest first, with how each one's cards titled the product.
+  // The answers, the latest first, with how each one's cards titled the
+  // product, and the brand they named, to look for the product's own name.
   const titlesOf = new Map<string, string[]>();
+  const brands = new Set<string>();
+  if (product.data?.product_brand) brands.add(product.data.product_brand);
   for (const card of (cards.data ?? []) as unknown as {
     prompt_result_id: string;
     product_title: string | null;
+    product_brand: string | null;
   }[]) {
     const titles = titlesOf.get(card.prompt_result_id) ?? [];
     if (card.product_title?.trim()) titles.push(card.product_title.trim());
     titlesOf.set(card.prompt_result_id, titles);
+    if (card.product_brand?.trim()) brands.add(card.product_brand.trim());
   }
   const ids = [...titlesOf.keys()];
   if (!ids.length) return { answers: 0, quotes: [], sources: [] };
@@ -1908,6 +1918,7 @@ export async function getProductAiSays(
     ),
     product.data?.title ? [product.data.title] : [],
     ids.length,
+    [...brands],
   );
 }
 

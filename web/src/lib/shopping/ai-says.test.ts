@@ -17,6 +17,50 @@ describe('productNames', () => {
   });
 });
 
+describe('productNames, beside its brand', () => {
+  it("looks for the product's own name, never the brand's alone", () => {
+    const brands = ['The North Face'];
+    expect(productNames(['The North Face | Borealis Backpack'], brands)).toEqual([
+      'The North Face | Borealis Backpack',
+      'Borealis Backpack',
+    ]);
+    // The brand opening the title, or after it, or the title being the brand.
+    expect(productNames(['The North Face Borealis Backpack - Black'], brands)).toContain(
+      'Borealis Backpack',
+    );
+    expect(productNames(['Borealis Backpack | The North Face'], brands)).toContain(
+      'Borealis Backpack',
+    );
+    expect(productNames(['the north face'], brands)).toEqual([]);
+    // Unknown, the brand is the title's head as before.
+    expect(productNames(['The North Face | Borealis Backpack'])).toContain('The North Face');
+  });
+
+  it("doesn't quote a sentence about the brand as the product's", () => {
+    const response =
+      'The North Face makes dependable gear. For school, the Borealis Backpack has a laptop sleeve.';
+    const says = productAiSays(
+      [
+        {
+          promptResultId: 'r1',
+          platform: 'chatgpt-shopping',
+          at: '2026-10-27T08:00:00Z',
+          promptText: 'best school backpack',
+          response,
+          titles: ['The North Face | Borealis Backpack'],
+        },
+      ],
+      [],
+      [],
+      1,
+      ['The North Face'],
+    );
+    expect(says.quotes.map((quote) => quote.text)).toEqual([
+      'For school, the Borealis Backpack has a laptop sleeve.',
+    ]);
+  });
+});
+
 describe('productQuote', () => {
   const response = [
     '## Best 30L packs',
