@@ -7826,6 +7826,62 @@
     "general": "General",
     "apiKeys": "API Keys",
     "team": "Team",
+    "menuAccess": {
+      "title": "Menu access",
+      "new": "New",
+      "notAllowed": "Only admins, and managers an admin lets, choose what each role sees on the menu.",
+      "note": "Hiding a section only takes it off the menu. Its pages still open from a link, and what each role can do there doesn't change. Nobody can take a section off an admin's menu (only their own work areas narrow it), and Action Center is on everyone's menu.",
+      "rolesTitle": "Sections each role sees",
+      "rolesDescription": "Pick what's on the left menu for everyone with a role. Start from a ready-made set, then adjust.",
+      "section": "Section",
+      "everything": "Everything",
+      "useSet": "Use a set…",
+      "useSetLabel": "Fill {role} from a ready-made set",
+      "sees": "{role} sees {section}",
+      "alwaysOn": "Everyone sees {section}",
+      "adminSees": "Admins see {section}",
+      "otherGroup": "Other",
+      "saveFailed": "Couldn't save the menu. Try again.",
+      "loadFailed": "Couldn't load menu access.",
+      "areas": {
+        "leaders": {
+          "title": "Founders & leaders",
+          "text": "Founders, C-level and team leads: whether AI recommends you, what it brings, and what the team ships."
+        },
+        "aeo": {
+          "title": "AEO/GEO & Audit",
+          "text": "Pages AI can read and cite, fixes, and the traffic they bring."
+        },
+        "content": {
+          "title": "Content",
+          "text": "Pages to write and improve, and the prompts they answer."
+        },
+        "brand": {
+          "title": "Brand & PR",
+          "text": "How AI talks about the brand, what it cites, and how that changes."
+        },
+        "growth": {
+          "title": "Growth",
+          "text": "AI visits, key events and signups, and the prompts and pages that bring them."
+        },
+        "product": {
+          "title": "Product Development",
+          "text": "What buyers ask AI about your category, how it compares you, and needs nobody meets."
+        },
+        "bizdev": {
+          "title": "Business Development",
+          "text": "Markets and segments where AI picks you or a rival, and the sources it trusts."
+        },
+        "developers": {
+          "title": "Developers",
+          "text": "Answer data through the API and MCP (keys in Settings), the site's AI checks and the tracking snippet."
+        },
+        "analytics": {
+          "title": "Analytics",
+          "text": "Where the brand stands in AI search, by prompt, engine and market."
+        }
+      }
+    },
     "content": {
       "title": "Content",
       "description": "How the Content Editor works for each brand.",
