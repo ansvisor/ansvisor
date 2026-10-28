@@ -637,8 +637,26 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
 /* Home v3 (2026-10-28): Inbox link in the greeting, composer always in view, archived chats */
 .hlnk{color:var(--ink);text-decoration:underline;text-decoration-color:#d6d3cf;text-underline-offset:2px}.hlnk:hover{text-decoration-color:var(--ink)}
 #s-home .cwrap{position:sticky;bottom:0;z-index:3;padding-top:14px;background:linear-gradient(rgba(250,250,249,0),var(--bg) 14px)}
+/* Home v4 (2026-10-28): greeting higher, more room above the composer, dated “since” cards */
+#s-home .hero{margin:6px 0 12px}#s-home .since{margin-bottom:12px}#s-home .skgrid{margin:10px 0 14px}
+.since small{display:flex;align-items:baseline;gap:6px}.since small .when{margin-left:auto;text-transform:none;letter-spacing:0;color:var(--mut2)}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .archbar{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:8px 10px 8px 12px;font-size:13px;color:var(--mut);margin:0 0 14px}.archbar b{color:var(--ink);font-weight:500}.archbar .btn{margin-left:auto}
+/* Create a skill (CHAT-13): menu, chat flow with question chips and a draft card, upload/URL review */
+.skex{max-width:720px;width:calc(100% - 40px);margin:0 auto 8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.skex .chip{font-size:12.5px;padding:3px 11px}
+.opts .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.skq{margin:10px 0 0}.skq>b{display:block;font-size:13px;font-weight:600}.skq .opts{margin-top:4px}
+.skf{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px 12px;font-size:13px;padding:10px 0;align-items:baseline}.skf>span:nth-child(odd){color:var(--mut)}.skf code{font-size:12.5px}
+.mdp{border:1px solid var(--line);border-radius:10px;background:var(--soft);padding:10px 14px;font-size:13px;line-height:1.55}.mdp h4{margin:0 0 4px;font-size:14px}.mdp h5{margin:10px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut2)}.mdp p,.mdp ol,.mdp ul{margin:0}.mdp ol,.mdp ul{padding-left:18px}
+.skdraft [contenteditable=true]{outline:2px solid var(--ink);outline-offset:2px;border-radius:6px}
+.sknote{font-size:12px;color:var(--mut);margin-top:10px}
+.drop{border:1.5px dashed #cfcac2;border-radius:12px;padding:22px;text-align:center;color:var(--mut);font-size:13px;margin-top:12px}.drop b{display:block;color:var(--ink);font-weight:500;margin-bottom:2px}.drop.ok{border-color:#bfe6cf;background:var(--posbg);color:#14532d}
+.urlin{width:100%;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;margin-top:12px;font-size:13px}
+.skrv{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:1000px){.skrv{grid-template-columns:1fr}}
+.sktxt{margin:0;padding:12px 14px;font:12.5px/1.6 'Geist Mono',ui-monospace,monospace;white-space:pre-wrap;color:#292524;max-height:440px;overflow:auto}
+.scan{list-style:none;margin:0;padding:0;font-size:13px}.scan li{display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px dashed var(--line)}.scan li:last-child{border-bottom:0}.scan .ok{color:var(--postx);font-weight:600;width:40px;flex:none}.scan .wn{color:var(--amtx);font-weight:600;width:40px;flex:none}.scan em{font-style:normal;color:var(--mut);font-size:12px;margin-left:auto;text-align:right}
 </style>
 </head>
 <body>
@@ -707,7 +725,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
   <div class="sec awh">Agents at work <span class="awn" title="Across your team">24</span><button data-action="chatMenu.dotLegend" class="q" id="awQ" aria-label="What the colors mean">?</button><a data-action="chatMenu.openAgents" href="CHAT-mockup-v2-governance.html#g-agents" title="Agents: skill + mode + connections + model">Agents</a><button data-action="chatMenu.toggleAgentsAtWork" class="cnt" id="awTog" aria-label="Show or hide agents at work" aria-expanded="true">▴</button></div>
   <div class="aw" id="aw">
    <div data-action="runs.open" class="li2" data-go="need" id="rowTasks"><span class="sd need"></span><div class="tx"><b>Action Center tasks</b><em class="amt">Needs your OK · step 4 of 6</em></div></div>
-   <div data-action="runs.open" class="li2" data-run="winback-f"><span class="sd run"><i></i></span><div class="tx"><b>Win back citations · /features</b><em>Step 2 of 5 · comparing cited pages</em><div class="mini"><i style="width:30%"></i></div></div></div>
+   <div data-action="runs.open" class="li2" data-run="winback-f"><span class="sd run"><i></i></span><div class="tx"><b>Win back citations · /coffee/espresso-roast</b><em>Step 2 of 5 · comparing cited pages</em><div class="mini"><i style="width:30%"></i></div></div></div>
    <div data-action="runs.open" class="li2 unread" data-report><span class="sd ok">✓</span><div class="tx"><b>Weekly citations report</b><em>Done · 08:02 · 3 files</em></div></div>
    <div class="awmore" id="awMore"></div>
    <button data-action="chatMenu.seeAllRuns" class="awbtn" id="awAll">See all · 24</button>
@@ -724,11 +742,11 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Blog ideas for Q4</b><em>Sent 3 to Content</em></div></div>
    <div class="sec">Yesterday</div>
    <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Why did Google AI Overviews citations drop?</b><em>2 pages lost citations</em></div></div>
-   <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Schema for /features</b><em>JSON-LD · published by Sam Lee</em></div></div>
+   <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Schema for /coffee/espresso-roast</b><em>JSON-LD · published by Sam Lee</em></div></div>
    <div class="sec">Previous 7 days</div>
    <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Onboarding: what should I track?</b><em>12 prompts added</em></div></div>
-   <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Reddit threads for “AEO tools”</b><em>List · 18 threads</em></div></div>
-   <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>llms.txt for ansvisor.com</b><em>File · 1</em></div></div>
+   <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>Reddit threads for “coffee subscriptions”</b><em>List · 18 threads</em></div></div>
+   <div data-action="chatMenu.openChat" class="li2"><span class="sd"></span><div class="tx"><b>llms.txt for brewline.example</b><em>File · 1</em></div></div>
    <button data-action="chatMenu.openAllChats" class="allc" data-go="allchats">All chats · 148 ›</button>
    <button data-action="chatMenu.openArchived" class="allc" id="archLink">Archived · <span id="archN">2</span> ›</button>
   </div>
@@ -740,7 +758,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
     <div class="runs"><button data-action="runs.toggleTray" class="runsbtn" id="runsBtn" aria-label="Your runs" aria-expanded="false"><span class="tdots" style="color:var(--ink)"><i></i><i></i><i></i></span><span id="runsTx">1 running</span><span class="n" title="Needs you">1</span></button>
      <div class="tray" id="tray"><div class="trh">Your runs<span style="margin-left:auto" id="trayCnt">1 running · 1 needs you</span></div>
       <button data-action="runs.open" class="tr" data-go="need"><span class="av wait s26"><svg><use href="#bot"/></svg></span><span class="tx">Action Center tasks<em>Needs your OK · step 4 of 6</em></span><span class="btn sm">Review</span></button>
-      <button data-action="runs.open" class="tr" data-run="winback-f"><span class="av work s26" id="trWinAv"><svg><use href="#bot"/></svg></span><span class="tx">Win back citations · /features<em id="trWinSub">Step 2 of 5 · comparing cited pages</em></span><span class="prog"><i style="width:30%"></i></span></button>
+      <button data-action="runs.open" class="tr" data-run="winback-f"><span class="av work s26" id="trWinAv"><svg><use href="#bot"/></svg></span><span class="tx">Win back citations · /coffee/espresso-roast<em id="trWinSub">Step 2 of 5 · comparing cited pages</em></span><span class="prog"><i style="width:30%"></i></span></button>
       <button data-action="runs.open" class="tr" data-report><span class="av done s26"><svg><use href="#bot"/></svg></span><span class="tx">Weekly citations report<em>Done 08:02 · emailed to 3 teammates</em></span><span class="btn sm">Open</span></button>
      </div></div>
     <button data-action="header.more" class="btn sm ghost ib" id="topMore" aria-label="More">⋯</button><button data-action="account.openMenu" class="uav" data-umenu aria-haspopup="true" aria-label="Your account and role" title="Alex Kim · your role and access">AK</button></div>
@@ -750,7 +768,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
   <div class="body scr on" id="s-home"><div class="thread"><div class="col" style="flex:0">
    <div class="hero"><h1>Good afternoon, Alex</h1><p id="heroP">Your agents worked while you were away. <button data-action="home.openInbox" class="hlnk" data-go="inbox">1 thing needs you</button>.</p></div></div>
    <div class="homew">
-    <div class="since"><div><small>Since you left</small><div class="big"><span><img class="eng" data-e="Google AI Overviews" alt="">Google AI Overviews citations</span><span class="num neg2" data-count="-20" aria-label="down 20"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10"/><path d="M17 9v8H9"/></svg>20</span><span style="color:var(--mut)">· 2 pages</span><a data-action="why.open" class="chip why" href="CHAT-mockup-v2-signature.html#f-why">Why?</a></div></div><div><small>One win</small><div class="big"><span><img class="eng" data-e="ChatGPT" alt="">ChatGPT citations</span><span class="num pos2" data-count="14" aria-label="up 14"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg>14</span></div></div></div>
+    <div class="since"><div><small>Since you left<span class="when" data-since title="Your last visit was Mon, Oct 19">Oct 19 → today</span></small><div class="big"><span><img class="eng" data-e="Google AI Overviews" alt="">Google AI Overviews citations</span><span class="num neg2" data-count="-20" aria-label="down 20"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10"/><path d="M17 9v8H9"/></svg>20</span><span style="color:var(--mut)">· 2 pages</span><a data-action="why.open" class="chip why" href="CHAT-mockup-v2-signature.html#f-why">Why?</a></div></div><div><small>One win<span class="when" data-since>Oct 19 → today</span></small><div class="big"><span><img class="eng" data-e="ChatGPT" alt="">ChatGPT citations</span><span class="num pos2" data-count="14" aria-label="up 14"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg>14</span><span style="color:var(--mut)">· 3 pages</span><a data-action="win.open" class="chip why" href="CHAT-mockup-v2-signature.html#f-win">Which ones?</a></div></div></div>
     <div class="sec" style="margin-left:2px">For you now</div>
     <div class="scut">
      <button data-action="home.askAnything" class="sc0" data-go="ask">Ask anything</button>
@@ -761,11 +779,11 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
      <button data-action="home.runShortcut" data-skill="report">Weekly report <b>Mon</b></button>
      <button data-action="home.moreShortcuts" class="more" data-slash>More ▾</button>
     </div>
-    <div class="sec" style="margin-left:2px;margin-top:16px">Ansvisor skills</div>
+    <div class="sec" style="margin-left:2px;margin-top:12px">Skills</div>
     <div class="skgrid" id="homeSkills"></div>
    </div>
    <div style="flex:1"></div>
-   <div class="cwrap" data-comp data-ctx="Ansvisor|Last 30 days" data-text="Complete this week’s Action Center tasks. Have them ready by Friday." data-send="plan:tasks" data-hint="/ skills · @ data · Tab to accept"></div>
+   <div class="cwrap" data-comp data-ctx="Brewline Coffee|Last 30 days" data-text="Complete this week’s Action Center tasks. Have them ready by Friday." data-send="plan:tasks" data-hint="/ skills · @ data · Tab to accept"></div>
   </div></div>
 
   <!-- INBOX (off Home since 2026-10-28; opened from the chat menu and from Home’s “needs you” link) -->
@@ -773,8 +791,8 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="pgh"><h1>Inbox</h1><div class="r"><button data-action="inbox.notifySettings" class="btn" data-go="settings">Notification settings</button></div></div>
    <p class="ibsub" id="inboxSub">1 needs you · 1 running · 1 done today. Results from your agents and scheduled jobs land here.</p>
    <div class="inbox ibpage" id="inboxList">
-     <div data-action="inbox.openItem" class="ib need" data-go="need"><span class="k am"></span><div class="tx">Action Center tasks need your OK on one change<em>Step 4 of 6 · a cited passage on /pricing (cited 12× last month)</em></div><span class="p">10 min ago</span><button data-action="inbox.review" class="btn pri sm" data-go="need">Review</button></div>
-     <div data-action="inbox.openItem" class="ib" data-run="winback-f"><span class="k run"></span><div class="tx">Win back citations · /features<em>Step 2 of 5 · comparing cited pages</em></div><div class="prog"><i style="width:30%"></i></div><button data-action="inbox.watch" class="btn sm" data-run="winback-f">Watch</button></div>
+     <div data-action="inbox.openItem" class="ib need" data-go="need"><span class="k am"></span><div class="tx">Action Center tasks need your OK on one change<em>Step 4 of 6 · a cited passage on /subscriptions (cited 12× last month)</em></div><span class="p">10 min ago</span><button data-action="inbox.review" class="btn pri sm" data-go="need">Review</button></div>
+     <div data-action="inbox.openItem" class="ib" data-run="winback-f"><span class="k run"></span><div class="tx">Win back citations · /coffee/espresso-roast<em>Step 2 of 5 · comparing cited pages</em></div><div class="prog"><i style="width:30%"></i></div><button data-action="inbox.watch" class="btn sm" data-run="winback-f">Watch</button></div>
      <div data-action="inbox.openItem" class="ib" data-report><span class="k ok"></span><div class="tx">Weekly citations report sent<em>ChatGPT +14 citations, Google AI Overviews −20 · emailed to 3 teammates at 08:02</em></div><span class="p">Today</span><button data-action="inbox.openReport" class="btn sm" data-report>Open</button></div>
    </div>
   </div></div>
@@ -797,48 +815,48 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
 
   <!-- PRODUCT DEVELOPMENT · example answer (CHAT-24) -->
   <div class="body scr" id="s-pdans"><div class="thread"><div class="col">
-   <div class="um">What do buyers ask AI about integrations?</div>
+   <div class="um">What do buyers ask AI about coffee subscriptions?</div>
    <div class="amsg"><div class="ahead"><span class="av"><svg><use href="#bot"/></svg></span><span>Answered in 9 s</span></div>
-    Buyers ask about three things most: <b>calendar and email sync</b>, <b>deal alerts in Slack</b> and <b>importing contacts</b>. Across 12 prompts (about 24k searches a month), AI recommends Kestrel CRM 7 times and Northwind CRM 3 times. The reason it gives most often is “native two-way Outlook sync”<span data-action="answer.openCitation" class="sm2" data-src="pd1">1</span>.
+    Buyers ask about three things most: <b>which subscription is best</b>, <b>gift subscriptions</b> and <b>pausing or skipping a delivery</b>. Across the 4 subscription prompts (about 19k searches a month), AI recommends Northbound Roasters most often. The reason it gives most often is “small-batch single origins”<span data-action="answer.openCitation" class="sm2" data-src="pd1">1</span>.
     <table class="atb"><thead><tr><th>Buyer question</th><th>Searches / mo</th><th>AI recommends</th><th>Reason AI gives</th></tr></thead><tbody>
-     <tr><td>Which CRM syncs with Outlook calendars?</td><td class="n">6.2k</td><td>Kestrel CRM</td><td>“native two-way Outlook sync”</td></tr>
-     <tr><td>CRM that works with Gmail for small teams</td><td class="n">5.1k</td><td>Kestrel CRM</td><td>“Gmail sidebar extension”</td></tr>
-     <tr><td>Best CRM with Slack alerts for deals</td><td class="n">4.8k</td><td>Northwind CRM</td><td>“deal alerts in Slack out of the box”</td></tr>
-     <tr><td>How do I import contacts from a spreadsheet into a CRM?</td><td class="n">3.9k</td><td><span class="gp">No clear leader</span></td><td>No brand is named in most answers</td></tr>
+     <tr><td>What are the best coffee subscriptions in 2026?</td><td class="n">8.1k</td><td>Northbound Roasters</td><td>“small-batch single origins”</td></tr>
+     <tr><td>What is a good coffee subscription gift for a coffee lover?</td><td class="n">6.6k</td><td>Morning Ritual Co.</td><td>“gift boxes and brewing kits”</td></tr>
+     <tr><td>Is a coffee bean subscription worth it?</td><td class="n">3.6k</td><td>Kettle &amp; Crate</td><td>“affordable bundles and frequent discounts”</td></tr>
+     <tr><td>Which coffee subscription lets you pause or skip a delivery?</td><td class="n">0.5k</td><td>Brewline Coffee</td><td>“a subscription you can pause or skip anytime”</td></tr>
     </tbody></table>
-    <b>What this means for the roadmap</b>
-    <ul style="margin:6px 0 0;padding-left:18px"><li>Two-way Outlook sync is the reason AI names in 5 of Kestrel’s 7 wins.</li><li>Contact import has no clear leader yet. A clear help page and guide could win it before any build.</li><li>Slack alerts already work for you. Keep the page that AI cites up to date<span data-action="answer.openCitation" class="sm2" data-src="pd2">2</span>.</li></ul>
-    <div class="chips"><button data-action="answer.openSource" class="chip" data-src="prompts">Prompts · 12</button><button data-action="answer.openSource" class="chip" data-src="fanouts">Query fan-outs · 31</button><button data-action="answer.openSource" class="chip" data-src="answers">AI answers · 1,140</button></div>
+    <b>What this means for the product team</b>
+    <ul style="margin:6px 0 0;padding-left:18px"><li>Small-batch single origins is the reason AI gives in most of Northbound Roasters’ wins.</li><li>“Is a coffee bean subscription worth it?” goes to Kettle &amp; Crate on price per cup. A clear cost-per-cup page could win it.</li><li>Pause or skip already works for you. Keep the page that AI cites up to date<span data-action="answer.openCitation" class="sm2" data-src="pd2">2</span>.</li></ul>
+    <div class="chips"><button data-action="answer.openSource" class="chip" data-src="prompts">Prompts · 4</button><button data-action="answer.openSource" class="chip" data-src="fanouts">Query fan-outs · 31</button><button data-action="answer.openSource" class="chip" data-src="answers">AI answers · 1,140</button></div>
     <span class="ameta">Analyzed 1,140 answers · Auto · Haiku read · Sonnet wrote · 0.4% of monthly AI limit</span>
-    <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="buyer-questions-integrations" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · buyer-questions-integrations.md">Save to Files</button></div>
+    <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="buyer-questions-subscriptions" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · buyer-questions-subscriptions.md">Save to Files</button></div>
    </div>
    <div class="card"><div class="ch"><span class="av s22"><svg><use href="#bot"/></svg></span><b>Next moves for the product team</b></div>
-    <div class="cb" style="padding:12px 14px;font-size:13px;line-height:1.55">Track these 12 prompts so you see when AI changes its pick. Send the summary to your roadmap tool or share it with the team.</div>
-    <div class="cf"><span class="l">Nothing leaves Ansvisor without your click</span><div class="r"><button data-action="dept.copyRoadmapNote" class="btn" data-toast="Copied as a roadmap note · 3 findings, sources linked">Copy as roadmap note</button><button data-action="dept.createIssue" class="btn" data-toast="Connect Jira first · Integrations › Jira">Create Jira issue</button><button data-action="dept.trackPrompts" class="btn pri" data-toast="12 prompts added to Tracked Prompts · CRM integrations">Track 12 prompts</button></div></div></div>
+    <div class="cb" style="padding:12px 14px;font-size:13px;line-height:1.55">These 4 prompts are already tracked, so you see when AI changes its pick. Send the summary to your roadmap tool or share it with the team.</div>
+    <div class="cf"><span class="l">Nothing leaves Ansvisor without your click</span><div class="r"><button data-action="dept.copyRoadmapNote" class="btn" data-toast="Copied as a roadmap note · 3 findings, sources linked">Copy as roadmap note</button><button data-action="dept.createIssue" class="btn" data-toast="Connect Jira first · Integrations › Jira">Create Jira issue</button><button data-action="dept.trackPrompts" class="btn pri" data-toast="Opens Tracked Prompts · Coffee subscriptions">Open the 4 prompts</button></div></div></div>
   </div>
-  <div class="cwrap" data-comp data-ph="Ask a follow-up…" data-ghost="Show the same for pricing questions" data-hint="Tab to accept · / skills · @ data"></div>
+  <div class="cwrap" data-comp data-ph="Ask a follow-up…" data-ghost="Show the same for whole bean coffee" data-hint="Tab to accept · / skills · @ data"></div>
   </div></div>
 
   <!-- BUSINESS DEVELOPMENT · example answer (CHAT-24) -->
   <div class="body scr" id="s-bdans"><div class="thread"><div class="col">
-   <div class="um">Where in Germany does AI send buyers to rivals?</div>
+   <div class="um">Which sites send coffee buyers to our rivals?</div>
    <div class="amsg"><div class="ahead"><span class="av"><svg><use href="#bot"/></svg></span><span>Answered in 11 s</span></div>
-    In German-language CRM prompts, AI names <b>Kestrel CRM</b> first in 41% of answers and Northwind CRM in 18%. Two sources drive most of the gap: <b>capterra.de</b> and <b>omr.com</b>. AI cites both often, and neither lists you<span data-action="answer.openCitation" class="sm2" data-src="bd1">1</span>.
+    In subscription and gift prompts, AI names <b>Northbound Roasters</b> first in 41% of answers and you in 18%. Two sources drive most of the gap: <b>cupcompare.example</b> and <b>dailybrewnews.example</b>. AI cites both often, and neither lists you<span data-action="answer.openCitation" class="sm2" data-src="bd1">1</span>.
     <table class="atb"><thead><tr><th>Source AI cites</th><th>Answers citing it</th><th>Lists you</th><th>Next step</th></tr></thead><tbody>
-     <tr><td>g2.com/compare/crm</td><td class="n">48</td><td><span class="ok2">Listed</span></td><td>Ask DE customers for reviews</td></tr>
-     <tr><td>capterra.de/crm-software</td><td class="n">41</td><td><span class="gp">Not listed</span></td><td>Get listed</td></tr>
-     <tr><td>t3n.de/crm-vergleich</td><td class="n">22</td><td><span class="ok2">Listed</span></td><td>Update the profile and pricing</td></tr>
-     <tr><td>omr.com/de/reviews/crm</td><td class="n">17</td><td><span class="gp">Not listed</span></td><td>Get listed</td></tr>
+     <tr><td>beanbulletin.example/best-coffee-subscriptions-2026</td><td class="n">48</td><td><span class="ok2">Listed</span></td><td>Send the new decaf for the next update</td></tr>
+     <tr><td>cupcompare.example/coffee-subscriptions-compared</td><td class="n">41</td><td><span class="gp">Not listed</span></td><td>Get listed</td></tr>
+     <tr><td>roastnotes.example/guides/espresso-beans</td><td class="n">22</td><td><span class="ok2">Listed</span></td><td>Update the roast notes and prices</td></tr>
+     <tr><td>dailybrewnews.example/coffee-gifts</td><td class="n">17</td><td><span class="gp">Not listed</span></td><td>Get listed</td></tr>
     </tbody></table>
     <b>Where to start</b>
-    <ul style="margin:6px 0 0;padding-left:18px"><li>Capterra DE alone appears in 41 answers. A listing there is the fastest way into German answers.</li><li>“CRM for field sales teams” has no clear leader in Germany yet.</li></ul>
-    <div class="chips"><button data-action="answer.openSource" class="chip" data-src="cit">Citations · DE · 214 sources</button><button data-action="answer.openSource" class="chip" data-src="answers">AI answers · 2,360</button><button data-action="answer.openSource" class="chip" data-src="sov">Share of voice · DE</button></div>
+    <ul style="margin:6px 0 0;padding-left:18px"><li>Cup Compare alone appears in 41 answers. A listing there is the fastest way into subscription answers.</li><li>“Which coffee beans are best for a sensitive stomach?” has no clear leader yet.</li></ul>
+    <div class="chips"><button data-action="answer.openSource" class="chip" data-src="cit">Citations · US · 214 sources</button><button data-action="answer.openSource" class="chip" data-src="answers">AI answers · 2,360</button><button data-action="answer.openSource" class="chip" data-src="sov">Share of voice · US</button></div>
     <span class="ameta">Analyzed 2,360 answers · Auto · Haiku read · Sonnet wrote · 0.6% of monthly AI limit</span>
-    <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="germany-market-gaps" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · germany-market-gaps.md">Save to Files</button></div>
+    <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="source-gaps-subscriptions" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · source-gaps-subscriptions.md">Save to Files</button></div>
    </div>
    <div class="card"><div class="ch"><span class="av s22"><svg><use href="#bot"/></svg></span><b>Partner and listing shortlist · 4 sites</b></div>
     <div class="cb" style="padding:12px 14px;font-size:13px;line-height:1.55">Add the two listing gaps to Action Center with an owner, or draft outreach emails. Drafts stay in Chat; sending is always your click.</div>
-    <div class="cf"><span class="l">Nothing is sent without your click</span><div class="r"><button data-action="dept.exportShortlist" class="btn" data-toast="Downloaded · germany-partner-shortlist.csv">Download CSV</button><button data-action="dept.draftOutreach" class="btn" data-toast="2 outreach drafts ready · review before sending">Draft outreach</button><button data-action="dept.addToActionCenter" class="btn pri" data-toast="2 actions added to Action Center · owner: you">Add to Action Center</button></div></div></div>
+    <div class="cf"><span class="l">Nothing is sent without your click</span><div class="r"><button data-action="dept.exportShortlist" class="btn" data-toast="Downloaded · source-shortlist.csv">Download CSV</button><button data-action="dept.draftOutreach" class="btn" data-toast="2 outreach drafts ready · review before sending">Draft outreach</button><button data-action="dept.addToActionCenter" class="btn pri" data-toast="2 actions added to Action Center · owner: you">Add to Action Center</button></div></div></div>
   </div>
   <div class="cwrap" data-comp data-ph="Ask a follow-up…" data-ghost="Do the same for France" data-hint="Tab to accept · / skills · @ data"></div>
   </div></div>
@@ -854,7 +872,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
     <div id="aExtra"></div>
    </div>
   </div>
-  <div class="cwrap" data-comp data-id="a" data-ctx="Ansvisor|Google AI Overviews|Last 7 days" data-ph="…" data-hint="Answering · Esc to stop"></div>
+  <div class="cwrap" data-comp data-id="a" data-ctx="Brewline Coffee|Google AI Overviews|Last 7 days" data-ph="…" data-hint="Answering · Esc to stop"></div>
   </div></div>
 
   <!-- PLAN -->
@@ -876,7 +894,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
      <div class="cb" id="wsteps"></div>
     </div></div>
   </div>
-  <div class="cwrap" data-comp data-ph="Steer the agent: “skip /features”, “shorter answers”…" data-hint="/ skills · @ data · Esc stops the run"></div>
+  <div class="cwrap" data-comp data-ph="Steer the agent: “skip /coffee/espresso-roast”, “shorter answers”…" data-hint="/ skills · @ data · Esc stops the run"></div>
   </div>
   <div class="canvas"><div class="cvh"><span class="tabs" role="tablist"><button data-action="work.canvasTab" class="on" role="tab">FAQ draft</button><button data-action="work.canvasTab" role="tab">Schema</button><button data-action="work.canvasTab" role="tab">Plan</button></span><div class="r"><span class="pill run" id="cvPill">Writing live</span></div></div>
    <div class="cvb" id="cv"></div>
@@ -888,11 +906,11 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="amsg"><div class="ahead"><span class="av wait" id="nav"><svg><use href="#bot"/></svg></span><div><b id="nT">I need your OK on one change</b><br><span id="nS">Step 4 of 6 · Action Center tasks</span><br><span style="font-size:11.5px;color:var(--mut2)">The run waits up to 7 days for you, then stops. Nothing changes until you answer.</span></div></div>
     <div id="nDone1"></div>
     <div class="card need" id="nc1">
-     <div class="ch"><span class="tag ask">Step 4 of 6</span><b>Change a cited passage on /pricing</b><div class="r"><span class="pill am">Cited 12× last month</span></div></div>
+     <div class="ch"><span class="tag ask">Step 4 of 6</span><b>Change a cited passage on /subscriptions</b><div class="r"><span class="pill am">Cited 12× last month</span></div></div>
      <div class="cb">
-      <p style="margin:8px 0 4px;font-size:13px;color:var(--mut)">ChatGPT cites this passage, but it says “7 platforms” on Starter. Your pricing page says Starter covers ChatGPT and Copilot.<span data-action="answer.openCitation" class="sm2" data-src="brand">1</span></p>
-      <div class="diff"><div class="del">Every plan tracks all 7 AI platforms, including Claude.</div><div class="ins" id="nIns">Starter tracks ChatGPT and Copilot. Growth adds Gemini, Perplexity, AI Overviews and AI Mode. Claude is on Enterprise.</div></div>
-      <div class="chips"><button data-action="answer.openSource" class="chip" data-src="brand">Brand fact · Plans (approved)</button><button data-action="answer.openSource" class="chip" data-src="cited">Cited page · /pricing</button><button data-action="answer.openSource" class="chip" data-src="fan">Fan-out · ansvisor plans platforms</button></div>
+      <p style="margin:8px 0 4px;font-size:13px;color:var(--mut)">ChatGPT cites this passage, but it says beans ship “within 3 days”. Your brand facts say every bag ships within a day of roasting.<span data-action="answer.openCitation" class="sm2" data-src="brand">1</span></p>
+      <div class="diff"><div class="del">Every order ships within 3 days, in all roast levels.</div><div class="ins" id="nIns">Every bag ships within a day of roasting. Pause or skip a delivery from your account, anytime.</div></div>
+      <div class="chips"><button data-action="answer.openSource" class="chip" data-src="brand">Brand fact · Shipping (approved)</button><button data-action="answer.openSource" class="chip" data-src="cited">Cited page · /subscriptions</button><button data-action="answer.openSource" class="chip" data-src="fan">Fan-out · brewline subscription plans</button></div>
      </div>
      <div class="cf"><label class="l" style="display:flex;gap:6px;align-items:center" title="Only for you, and only where your Admin’s tool policy allows it"><input data-action="approval.dontAskAgain" type="checkbox"> Don’t ask again for brand-fact fixes</label><div class="r" id="nBtns1"><button data-action="approval.skip" class="btn" data-nskip="1">Skip</button><button data-action="approval.edit" class="btn" data-nedit>Edit</button><button data-action="approval.approve" class="btn pri" data-napprove="1">Approve</button></div></div>
     </div>
@@ -900,9 +918,9 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
      <div class="ch"><span class="tag ask">Step 5 of 6</span><b>Push to Webflow as a draft</b><div class="r"><span class="cchip"><i></i>Webflow connected</span></div></div>
      <div class="cb" style="font-size:13px">
       <div class="files nor" style="margin:8px 0 4px">
-       <div class="file"><span class="ic">≡</span><div>FAQ block · 6 questions<em>New section on /pricing</em></div></div>
+       <div class="file"><span class="ic">≡</span><div>FAQ block · 6 questions<em>New section on /subscriptions</em></div></div>
        <div class="file"><span class="ic">{ }</span><div>FAQPage schema<em>JSON-LD in the page head</em></div></div>
-       <div class="file"><span class="ic">↗</span><div>2 broken links fixed<em>/pricing → /plans, /features#api → /api</em></div></div>
+       <div class="file"><span class="ic">↗</span><div>2 broken links fixed<em>/subscriptions → /subscriptions/house-blend, /coffee/espresso-roast#roast → /coffee</em></div></div>
       </div>
      </div>
      <div class="cf"><span class="l">Draft only · nothing goes live</span><div class="r"><button data-action="approval.skip" class="btn" data-nskip="2">Skip</button><button data-action="approval.approve" class="btn pri" data-napprove="2">Approve</button></div></div>
@@ -920,7 +938,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
     <div class="card"><div class="cb" style="padding-top:12px">
      <div class="kpis"><button data-action="done.openSummary" class="kpi" data-src="tasks"><small>Tasks ready</small><b>4</b><em>of 4</em></button><button data-action="done.openSummary" class="kpi" data-src="pages"><small>Changes</small><b id="dChg">2</b><em id="dChgE">you approved 2</em></button><button data-action="done.openSummary" class="kpi" data-src="check"><small>First impact check</small><b>Nov 2</b><em>day 7 · 14 · 30 · 90</em></button></div>
      <div class="files">
-      <div class="file"><span class="ic">≡</span><div>FAQ block for /pricing<em>6 questions · HTML + Markdown · in Files</em></div><div class="r"><button data-action="deliverable.copy" class="btn sm" data-toast="Copied clean HTML">Copy</button><button data-action="deliverable.open" class="btn sm" data-toast="Opens the file">Open</button></div></div>
+      <div class="file"><span class="ic">≡</span><div>FAQ block for /subscriptions<em>6 questions · HTML + Markdown · in Files</em></div><div class="r"><button data-action="deliverable.copy" class="btn sm" data-toast="Copied clean HTML">Copy</button><button data-action="deliverable.open" class="btn sm" data-toast="Opens the file">Open</button></div></div>
       <div class="file"><span class="ic">{ }</span><div>FAQPage schema<em>JSON-LD · in the Webflow draft</em></div><div class="r"><button data-action="deliverable.copy" class="btn sm" data-toast="Copied">Copy</button><a data-action="deliverable.shipAsPr" class="btn sm" href="CHAT-mockup-v2-signature.html#f-pr" title="Copy as agent task: every plan and the trial · Open pull request: Growth and above">Ship as PR ↗</a></div></div>
       <div class="file"><span class="ic">▤</span><div>What I did and why<em>Report · 1 page</em></div><div class="r"><span></span><button data-action="deliverable.download" class="btn sm" data-dl="what-i-did-and-why" aria-haspopup="true">Download ▾</button></div></div>
      </div>
@@ -931,10 +949,10 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
     </div>
     <div class="cf"><span class="l">You close tasks in Action Center. I never mark them done.</span><div class="r"><button data-action="done.closeTasksInActionCenter" class="btn pri" data-toast="Opens Action Center with the 4 tasks">Close tasks in Action Center</button></div></div></div>
     <div class="sec" style="margin-left:2px">Next moves</div>
-    <div class="next"><button data-action="nextMove.runSkill" class="nx" data-skill="tasks">Do the same for /features<em>3 open tasks · ~4 min</em></button><button data-action="nextMove.runSkill" class="nx" data-skill="winback">Win back Google AI Overviews citations<em>−20 this week on 2 pages</em></button><button data-action="nextMove.schedule" class="nx" data-sched="tasks">Schedule this every Monday<em>Same plan · asks before changes</em></button></div>
+    <div class="next"><button data-action="nextMove.runSkill" class="nx" data-skill="tasks">Do the same for /coffee/espresso-roast<em>3 open tasks · ~4 min</em></button><button data-action="nextMove.runSkill" class="nx" data-skill="winback">Win back Google AI Overviews citations<em>−20 this week on 2 pages</em></button><button data-action="nextMove.schedule" class="nx" data-sched="tasks">Schedule this every Monday<em>Same plan · asks before changes</em></button></div>
    </div>
   </div>
-  <div class="cwrap" data-comp data-ph="Ask a follow-up…" data-ghost="Do the same for /features" data-send="plan:tasks" data-hint="Tab to accept · / skills · @ data"></div>
+  <div class="cwrap" data-comp data-ph="Ask a follow-up…" data-ghost="Do the same for /coffee/espresso-roast" data-send="plan:tasks" data-hint="Tab to accept · / skills · @ data"></div>
   </div></div>
 
   <!-- FOLLOW-UP CHECK -->
@@ -942,19 +960,19 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="um">Win back the Google AI Overviews citations we lost this week.</div>
    <div class="amsg"><div class="ahead"><span class="av done"><svg><use href="#bot"/></svg></span><div><b>Done. Both pages are refreshed and live.</b><br><span>5 of 5 steps · you approved 2 drafts and clicked Publish · 1% of monthly AI limit<br><span title="Generated Oct 26, 2026 14:05 GMT+3 · Data as of Oct 26, 2026 08:00 GMT+3">Generated Oct 26, 2026 · 14:05 · Data as of Oct 26, 08:00</span></span></div></div>
     <div class="card"><div class="cb" style="padding-top:10px">
-     <div class="mtab"><div><span>Page</span><span>Refreshed</span><span>Published</span></div><div><span>/blog/what-is-aeo</span><span>Answer-first intro · 2026 data</span><span>14:05 · by you</span></div><div><span>/features</span><span>New comparison table</span><span>14:05 · by you</span></div></div>
+     <div class="mtab"><div><span>Page</span><span>Refreshed</span><span>Published</span></div><div><span>/blog/how-fresh-should-coffee-beans-be</span><span>Answer-first intro · 2026 data</span><span>14:05 · by you</span></div><div><span>/coffee/espresso-roast</span><span>New comparison table</span><span>14:05 · by you</span></div></div>
      <div data-fu></div>
      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px"><a data-action="impact.openHistory" class="xl" href="CHAT-mockup-v2-signature.html#f-impact">Impact (Action Center › History) · Pending ↗</a><a data-action="impact.openReport" class="xl" href="CHAT-mockup-v2-signature.html#f-impact">Reports › What Ansvisor did for you ↗</a></div>
      <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="win-back-citations" data-table="1" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · win-back-citations.md">Save to Files</button></div>
     </div></div>
    </div>
   </div>
-  <div class="cwrap" data-comp data-ph="Ask a follow-up…" data-ghost="Do the same for /pricing" data-send="plan:winback" data-hint="Tab to accept · / skills · @ data"></div>
+  <div class="cwrap" data-comp data-ph="Ask a follow-up…" data-ghost="Do the same for /subscriptions" data-send="plan:winback" data-hint="Tab to accept · / skills · @ data"></div>
   </div></div>
 
   <!-- SKILLS -->
   <div class="body scr" id="s-skills"><div class="pg">
-   <div class="pgh"><h1>Skills</h1><div class="r"><a data-action="chatMenu.openAgents" class="btn" href="CHAT-mockup-v2-governance.html#g-agents">Agents ↗</a><button data-action="skills.create" class="btn" data-toast="Describe the skill in plain words. Chat writes it and you review it.">＋ Create a skill</button></div></div>
+   <div class="pgh"><h1>Skills</h1><div class="r"><a data-action="chatMenu.openAgents" class="btn" href="CHAT-mockup-v2-governance.html#g-agents">Agents ↗</a><button data-action="skills.create" class="btn" aria-haspopup="menu">＋ Create a skill</button></div></div>
    <div class="tabs2" role="tablist"><button data-action="skills.tab" class="on" data-tab2="sk-a">Ansvisor skills <i>9</i></button><button data-action="skills.tab" data-tab2="sk-l">Library <i>701 · MIT</i></button><button data-action="skills.tab" data-tab2="sk-m">My skills <i>2</i></button></div>
    <div class="fl" data-filter="#s-skills .skc"><input data-action="skills.search" class="srch2" placeholder="Search skills" aria-label="Search skills" data-search="#s-skills .skc"><button data-action="skills.filter" class="fc on" data-f="all">All</button><button data-action="skills.filter" class="fc" data-f="content">Content</button><button data-action="skills.filter" class="fc" data-f="visibility">Visibility</button><button data-action="skills.filter" class="fc" data-f="reports">Reports</button><button data-action="skills.filter" class="fc" data-f="product">Product Visibility</button></div>
    <div id="sk-a" class="grid3"></div>
@@ -970,14 +988,35 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="empty" id="skEmpty">No skills match.</div>
   </div></div>
 
+  <!-- CREATE A SKILL IN CHAT (CHAT-13) · Admins and Managers -->
+  <div class="body scr" id="s-skill-new"><div class="thread"><div class="col" id="sknCol"></div>
+   <div class="skex" id="sknEx"></div>
+   <div class="cwrap" id="sknComp" data-comp data-text="Create a skill that" data-send="skillnew" data-ph="Create a skill that…" data-hint="Pick an example, or finish the sentence · Enter to send"></div>
+  </div></div>
+
+  <!-- REVIEW AN UPLOADED OR IMPORTED SKILL (CHAT-13) -->
+  <div class="body scr" id="s-skill-review"><div class="pg">
+   <div class="pgh"><h1>Review skill</h1><div class="r"><span class="pill am" id="skrvPill">Not added yet</span></div></div>
+   <p class="ibsub" id="skrvSub"></p>
+   <div class="skrv">
+    <div class="card"><div class="ch"><b>SKILL.md · cleaned</b><div class="r"><span class="pill">Plain text · nothing runs</span></div></div><pre class="sktxt" id="skrvTxt"></pre></div>
+    <div>
+     <div class="card"><div class="ch"><b>Safety scan</b><div class="r"><span class="pill">7 checks</span></div></div><div class="cb"><ul class="scan" id="skrvScan"></ul></div></div>
+     <div class="card"><div class="ch"><b>Removed before review</b></div><div class="cb" style="font-size:13px;padding-top:10px">Removed: scripts/ (3 files), allowed-tools, 2 command lines</div></div>
+     <div class="card"><div class="ch"><b>Source</b></div><div class="cb"><div class="skf" id="skrvSrc"></div></div>
+      <div class="cf"><span class="l" id="skrvNote"></span><div class="r"><button data-action="skillReview.cancel" class="btn" data-go="skills">Cancel</button><span id="skrvAct"></span></div></div></div>
+    </div>
+   </div>
+  </div></div>
+
   <!-- SCHEDULED -->
   <div class="body scr" id="s-sched"><div class="pg">
    <div class="pgh"><h1>Scheduled</h1><div class="r"><a data-action="watch.open" class="btn" href="CHAT-mockup-v2-signature.html#f-watch">Watch rules ↗</a><a data-action="brief.open" class="btn" href="CHAT-mockup-v2-signature.html#f-brief">Morning brief ↗</a><button data-action="schedule.new" class="btn pri" data-sched="">＋ New schedule</button></div></div>
    <div class="tbl" id="schedTbl">
     <div class="tr2 th"><span>Job</span><span>When</span><span>Last run</span><span>Result goes to</span><span>Mode</span><span></span></div>
-    <div class="tr2" data-job><span><b>Weekly report</b><em>/report · Ansvisor</em></span><span>Every Mon 08:00<em data-next="Next: Nov 2">Next: Nov 2</em></span><span><i class="dt ok"></i>Today 08:02<em>sent to 3 teammates</em></span><span>Email · Files</span><span>Auto, ask before changes</span><span class="acts2"><button data-action="schedule.toggleJob" class="sw on" role="switch" aria-checked="true" aria-label="Weekly report on"></button><button data-action="schedule.openLast" class="btn sm" data-report>Open last</button></span></div>
-    <div class="tr2" data-job><span><b>Win back lost citations</b><em>/winback · Ansvisor</em></span><span>Every Thu 09:00<em data-next="Next: Oct 29">Next: Oct 29</em></span><span><i class="dt ok"></i>Oct 22<em>2 drafts · you published both</em></span><span>Inbox</span><span>Auto, ask before changes</span><span class="acts2"><button data-action="schedule.toggleJob" class="sw on" role="switch" aria-checked="true" aria-label="Win back on"></button><button data-action="schedule.openLast" class="btn sm" data-run="winback-f">Open last</button></span></div>
-    <div class="tr2" data-job><span><b>Impact checks for /pricing</b><em>Day 7 · 14 · 30 · 90 · set by you in Action Center tasks</em></span><span>Nov 2 · Nov 9 · Nov 25 · Jan 24<em data-next="Next: Nov 2 · day 7">Next: Nov 2 · day 7</em></span><span><i class="dt"></i>Not run yet<em>Scheduled tracking data · no extra cost</em></span><span>Inbox · Action Center › History</span><span>Auto, ask before changes</span><span class="acts2"><button data-action="schedule.toggleJob" class="sw on" role="switch" aria-checked="true" aria-label="Impact checks on"></button><button data-action="schedule.cancelJob" class="btn sm" data-cancelrow>Cancel</button></span></div>
+    <div class="tr2" data-job><span><b>Weekly report</b><em>/report · Brewline Coffee</em></span><span>Every Mon 08:00<em data-next="Next: Nov 2">Next: Nov 2</em></span><span><i class="dt ok"></i>Today 08:02<em>sent to 3 teammates</em></span><span>Email · Files</span><span>Auto, ask before changes</span><span class="acts2"><button data-action="schedule.toggleJob" class="sw on" role="switch" aria-checked="true" aria-label="Weekly report on"></button><button data-action="schedule.openLast" class="btn sm" data-report>Open last</button></span></div>
+    <div class="tr2" data-job><span><b>Win back lost citations</b><em>/winback · Brewline Coffee</em></span><span>Every Thu 09:00<em data-next="Next: Oct 29">Next: Oct 29</em></span><span><i class="dt ok"></i>Oct 22<em>2 drafts · you published both</em></span><span>Inbox</span><span>Auto, ask before changes</span><span class="acts2"><button data-action="schedule.toggleJob" class="sw on" role="switch" aria-checked="true" aria-label="Win back on"></button><button data-action="schedule.openLast" class="btn sm" data-run="winback-f">Open last</button></span></div>
+    <div class="tr2" data-job><span><b>Impact checks for /subscriptions</b><em>Day 7 · 14 · 30 · 90 · set by you in Action Center tasks</em></span><span>Nov 2 · Nov 9 · Nov 25 · Jan 24<em data-next="Next: Nov 2 · day 7">Next: Nov 2 · day 7</em></span><span><i class="dt"></i>Not run yet<em>Scheduled tracking data · no extra cost</em></span><span>Inbox · Action Center › History</span><span>Auto, ask before changes</span><span class="acts2"><button data-action="schedule.toggleJob" class="sw on" role="switch" aria-checked="true" aria-label="Impact checks on"></button><button data-action="schedule.cancelJob" class="btn sm" data-cancelrow>Cancel</button></span></div>
     <div class="tr2" data-job><span><b>Monthly board update</b><em>/board-update · team skill</em></span><span>1st of month 07:00<em data-next="Next: Nov 1">Paused</em></span><span><i class="dt ok"></i>Oct 1<em>PDF · 4 pages</em></span><span>Email · Files</span><span>Ask me first</span><span class="acts2"><button data-action="schedule.toggleJob" class="sw" role="switch" aria-checked="false" aria-label="Monthly board update off"></button><button data-action="schedule.runNow" class="btn sm" data-toast="Running now · shows up in your inbox">Run now</button></span></div>
    </div>
   </div></div>
@@ -985,11 +1024,11 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
   <!-- FILES -->
   <div class="body scr" id="s-files"><div class="pg">
    <div class="pgh"><h1>Files</h1><div class="r"><span class="use">2.1 GB of 25 GB</span><button data-action="files.upload" class="btn" data-toast="Pick files · up to 10 MB each">Upload</button></div></div>
-   <div class="finder"><span class="av s26"><svg><use href="#bot"/></svg></span><input data-action="files.findInput" placeholder="What are you looking for? e.g. “the FAQ we wrote for pricing”" aria-label="Find a file" data-search="#s-files .tr2.f:not(.th)"><button data-action="files.findSubmit" class="btn sm pri ib" aria-label="Find" data-toast="Chat finds the file and opens it">↑</button></div>
+   <div class="finder"><span class="av s26"><svg><use href="#bot"/></svg></span><input data-action="files.findInput" placeholder="What are you looking for? e.g. “the FAQ we wrote for subscriptions”" aria-label="Find a file" data-search="#s-files .tr2.f:not(.th)"><button data-action="files.findSubmit" class="btn sm pri ib" aria-label="Find" data-toast="Chat finds the file and opens it">↑</button></div>
    <div class="fl" data-filter="#s-files .tr2.f:not(.th)"><button data-action="files.filter" class="fc on" data-f="all">All</button><button data-action="files.filter" class="fc" data-f="drafts">Drafts</button><button data-action="files.filter" class="fc" data-f="reports">Reports</button><button data-action="files.filter" class="fc" data-f="code">Code</button><button data-action="files.filter" class="fc" data-f="tables">Tables</button><button data-action="files.filter" class="fc" data-f="images">Images</button><button data-action="files.filter" class="fc" data-f="me">From me</button><button data-action="files.filter" class="fc" data-f="agents">From agents</button></div>
    <div class="tbl files">
     <div class="tr2 th f"><span>Name</span><span>Made by</span><span>From chat</span><span>Updated</span><span></span></div>
-    <div class="tr2 f" data-f="drafts agents"><span><i class="fic">≡</i><b>FAQ block for /pricing</b><em>HTML · Markdown</em></span><span>Agent</span><span data-action="files.openSourceChat" class="lnk" data-go="done">Action Center tasks</span><span title="Oct 26, 2026 14:30 GMT+3">Oct 26, 2026 · 14:30<em>Data as of Oct 26, 08:00</em></span><span class="acts2"><button data-action="files.copy" class="btn sm" data-toast="Copied clean HTML">Copy</button><button data-action="files.open" class="btn sm" data-toast="Opens the file">Open</button><button data-action="files.download" class="btn sm" data-dl="faq-block-for-pricing" aria-haspopup="true">Download ▾</button></span></div>
+    <div class="tr2 f" data-f="drafts agents"><span><i class="fic">≡</i><b>FAQ block for /subscriptions</b><em>HTML · Markdown</em></span><span>Agent</span><span data-action="files.openSourceChat" class="lnk" data-go="done">Action Center tasks</span><span title="Oct 26, 2026 14:30 GMT+3">Oct 26, 2026 · 14:30<em>Data as of Oct 26, 08:00</em></span><span class="acts2"><button data-action="files.copy" class="btn sm" data-toast="Copied clean HTML">Copy</button><button data-action="files.open" class="btn sm" data-toast="Opens the file">Open</button><button data-action="files.download" class="btn sm" data-dl="faq-block-for-subscriptions" aria-haspopup="true">Download ▾</button></span></div>
     <div class="tr2 f" data-f="code agents"><span><i class="fic">{ }</i><b>FAQPage schema</b><em>JSON-LD</em></span><span>Agent</span><span data-action="files.openSourceChat" class="lnk" data-go="done">Action Center tasks</span><span title="Oct 26, 2026 14:31 GMT+3">Oct 26, 2026 · 14:31<em>Data as of Oct 26, 08:00</em></span><span class="acts2"><button data-action="files.copy" class="btn sm" data-toast="Copied">Copy</button><button data-action="files.open" class="btn sm" data-toast="Opens the file">Open</button><span></span></span></div>
     <div class="tr2 f" data-f="reports agents"><span><i class="fic">▤</i><b>Weekly citations report</b><em>PDF · 3 pages</em></span><span>Scheduled</span><span data-action="files.openSourceChat" class="lnk" data-report>Weekly citations report</span><span title="Oct 26, 2026 08:02 GMT+3">Oct 26, 2026 · 08:02<em>Data as of Oct 26, 00:00</em></span><span class="acts2"><span></span><button data-action="files.open" class="btn sm" data-report>Open</button><button data-action="files.download" class="btn sm" data-dl="weekly-citations-report" data-table="1" aria-haspopup="true">Download ▾</button></span></div>
     <div class="tr2 f" data-f="tables me"><span><i class="fic">▦</i><b>Share of voice vs competitors</b><em>Excel · CSV</em></span><span>Alex Kim</span><span data-action="files.openSourceChat" class="lnk">Share of voice vs competitors</span><span title="Oct 26, 2026 11:05 GMT+3">Oct 26, 2026 · 11:05<em>Data as of Oct 26, 08:00</em></span><span class="acts2"><span></span><button data-action="files.open" class="btn sm" data-toast="Opens the file">Open</button><button data-action="files.download" class="btn sm" data-dl="share-of-voice-vs-competitors" data-table="1" aria-haspopup="true">Download ▾</button></span></div>
@@ -1006,13 +1045,13 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="tbl chats">
     <div class="tr2 th c"><span></span><span>Chat</span><span>Skill</span><span>Owner</span><span>Updated</span></div>
     <div data-action="allChats.openChat" class="tr2 c" data-go="need" data-f="need mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt am"></i><b>Action Center tasks</b><em class="amt">Needs your OK · step 4 of 6</em></span><span><code>/tasks</code></span><span>AK</span><span>10 min</span></div>
-    <div data-action="allChats.openChat" class="tr2 c" data-run="winback-f" data-f="run mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt run"></i><b>Win back citations · /features</b><em>Step 2 of 5 · comparing cited pages</em></span><span><code>/winback</code></span><span>AK</span><span>now</span></div>
+    <div data-action="allChats.openChat" class="tr2 c" data-run="winback-f" data-f="run mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt run"></i><b>Win back citations · /coffee/espresso-roast</b><em>Step 2 of 5 · comparing cited pages</em></span><span><code>/winback</code></span><span>AK</span><span>now</span></div>
     <div data-action="allChats.openChat" class="tr2 c" data-report data-f="done team"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt ok"></i><b>Weekly citations report</b><em>Done · emailed to 3 teammates</em></span><span><code>/report</code></span><span>Scheduled</span><span>08:02</span></div>
     <div class="tr2 c" data-action="allChats.openChat" data-f="done mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Share of voice vs competitors</b><em>Table · 2 files</em></span><span>—</span><span>AK</span><span>Today</span></div>
-    <div class="tr2 c" data-action="allChats.openChat" data-f="done team"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Schema for /features</b><em>JSON-LD · published by Sam Lee</em></span><span><code>/publish</code></span><span>SL</span><span>Yesterday</span></div>
+    <div class="tr2 c" data-action="allChats.openChat" data-f="done team"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Schema for /coffee/espresso-roast</b><em>JSON-LD · published by Sam Lee</em></span><span><code>/publish</code></span><span>SL</span><span>Yesterday</span></div>
     <div class="tr2 c" data-action="allChats.openChat" data-f="done mine"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Onboarding: what should I track?</b><em>12 prompts added</em></span><span>—</span><span>AK</span><span>Oct 19</span></div>
     <div class="tr2 c" data-action="allChats.openChat" data-f="done mine" data-arch="Oct 2"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Q3 content plan</b><em>12 drafts planned · archived Oct 2</em></span><span><code>/tasks</code></span><span>AK</span><span>Sep 14</span></div>
-    <div class="tr2 c" data-action="allChats.openChat" data-f="done team" data-arch="Sep 28"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Northwind pricing check</b><em>Table · 1 file · archived Sep 28</em></span><span>—</span><span>SL</span><span>Sep 21</span></div>
+    <div class="tr2 c" data-action="allChats.openChat" data-f="done team" data-arch="Sep 28"><span><input data-action="allChats.select" type="checkbox" aria-label="Select chat"></span><span><i class="dt"></i><b>Northbound Roasters price check</b><em>Table · 1 file · archived Sep 28</em></span><span>—</span><span>SL</span><span>Sep 21</span></div>
     <div class="empty" id="acEmpty">No chats match.</div>
    </div>
   </div></div>
@@ -1023,9 +1062,9 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="tabs2" role="tablist"><button data-action="integrations.tab" class="on" data-ctab="all">All <i>18</i></button><button data-action="integrations.tab" data-ctab="on">Connected <i>3</i></button><button data-action="integrations.tab" data-ctab="off">Not connected <i>15</i></button></div>
    <div class="fl" data-filter="#cgrid .cc"><input data-action="integrations.search" class="srch2" placeholder="Search integrations" aria-label="Search integrations" data-search="#cgrid .cc"><button data-action="integrations.filter" class="fc on" data-f="all">All</button><button data-action="integrations.filter" class="fc" data-f="search">Search &amp; analytics</button><button data-action="integrations.filter" class="fc" data-f="cms">CMS</button><button data-action="integrations.filter" class="fc" data-f="shop">Product Visibility</button><button data-action="integrations.filter" class="fc" data-f="crm">CRM &amp; revenue</button><button data-action="integrations.filter" class="fc" data-f="team">Team &amp; data</button></div>
    <div class="grid3" id="cgrid">
-    <div class="cc" data-st="on" data-f="search"><div class="cct"><span class="clg">G</span><div><b>Google Search Console</b><em>Search &amp; analytics</em></div><span class="okk">✓ Connected</span></div><p>ansvisor.com · by Sam Lee · Oct 2 · read-only</p><div class="cu">Used by /winback · /report · Content Editor Sources</div><div class="ska"><button data-action="integrations.disconnect" class="btn sm" data-disc="Google Search Console|/winback, /report and Content Editor Sources">Disconnect</button><button data-action="integrations.settings" class="btn sm" data-toast="Opens this integration’s settings">Settings</button></div></div>
-    <div class="cc" data-st="on" data-f="search"><div class="cct"><span class="clg">A</span><div><b>Google Analytics</b><em>Search &amp; analytics</em></div><span class="okk">✓ Connected</span></div><p>Ansvisor web · by Sam Lee · Oct 2 · read-only</p><div class="cu">Used by AI Referral Traffic · /report · <a data-action="impact.openHistory" href="CHAT-mockup-v2-signature.html#f-impact">Impact (Action Center › History)</a></div><div class="ska"><button data-action="integrations.disconnect" class="btn sm" data-disc="Google Analytics|AI Referral Traffic, /report and Impact (Action Center › History)">Disconnect</button><button data-action="integrations.settings" class="btn sm" data-toast="Opens this integration’s settings">Settings</button></div></div>
-    <div class="cc" data-st="on" data-f="cms"><div class="cct"><span class="clg">W</span><div><b>Webflow</b><em>CMS</em></div><span class="okk">✓ Connected</span></div><p>Ansvisor site · by Sam Lee · Oct 9 · read + write drafts · publish needs a click</p><div class="cu">Used by /publish · Export · Content Editor</div><div class="ska"><button data-action="integrations.disconnect" class="btn sm" data-disc="Webflow|/publish, Export and Content Editor pushes">Disconnect</button><button data-action="integrations.settings" class="btn sm" data-toast="Opens this integration’s settings">Settings</button></div></div>
+    <div class="cc" data-st="on" data-f="search"><div class="cct"><span class="clg">G</span><div><b>Google Search Console</b><em>Search &amp; analytics</em></div><span class="okk">✓ Connected</span></div><p>brewline.example · by Sam Lee · Oct 2 · read-only</p><div class="cu">Used by /winback · /report · Content Editor Sources</div><div class="ska"><button data-action="integrations.disconnect" class="btn sm" data-disc="Google Search Console|/winback, /report and Content Editor Sources">Disconnect</button><button data-action="integrations.settings" class="btn sm" data-toast="Opens this integration’s settings">Settings</button></div></div>
+    <div class="cc" data-st="on" data-f="search"><div class="cct"><span class="clg">A</span><div><b>Google Analytics</b><em>Search &amp; analytics</em></div><span class="okk">✓ Connected</span></div><p>Brewline web · by Sam Lee · Oct 2 · read-only</p><div class="cu">Used by AI Referral Traffic · /report · <a data-action="impact.openHistory" href="CHAT-mockup-v2-signature.html#f-impact">Impact (Action Center › History)</a></div><div class="ska"><button data-action="integrations.disconnect" class="btn sm" data-disc="Google Analytics|AI Referral Traffic, /report and Impact (Action Center › History)">Disconnect</button><button data-action="integrations.settings" class="btn sm" data-toast="Opens this integration’s settings">Settings</button></div></div>
+    <div class="cc" data-st="on" data-f="cms"><div class="cct"><span class="clg">W</span><div><b>Webflow</b><em>CMS</em></div><span class="okk">✓ Connected</span></div><p>Brewline site · by Sam Lee · Oct 9 · read + write drafts · publish needs a click</p><div class="cu">Used by /publish · Export · Content Editor</div><div class="ska"><button data-action="integrations.disconnect" class="btn sm" data-disc="Webflow|/publish, Export and Content Editor pushes">Disconnect</button><button data-action="integrations.settings" class="btn sm" data-toast="Opens this integration’s settings">Settings</button></div></div>
     <div class="cc" data-st="off" data-f="shop"><div class="cct"><span class="clg">S</span><div><b>Shopify</b><em>Product Visibility</em></div><span class="sug">Suggested</span></div><p>Product pages, collections and feed for AI shopping.</p><div class="cu">Would unlock /shopping · product page checks</div><div class="ska"><button data-action="integrations.connect" class="btn sm pri">Connect</button></div></div>
     <div class="cc" data-st="off" data-f="crm"><div class="cct"><span class="clg">H</span><div><b>HubSpot</b><em>CRM &amp; revenue</em></div><span class="sug">Suggested</span></div><p>Ties AI visits to deals and revenue.</p><div class="cu">Would unlock revenue in Reports › What Ansvisor did for you</div><div class="ska"><button data-action="integrations.connect" class="btn sm pri">Connect</button></div></div>
     <div class="cc" data-st="off" data-f="cms"><div class="cct"><span class="clg">W</span><div><b>WordPress</b><em>CMS</em></div></div><p>Push drafts as Gutenberg blocks.</p><div class="cu">Used by /publish · Export</div><div class="ska"><button data-action="integrations.connect" class="btn sm">Connect</button></div></div>
@@ -1093,7 +1132,7 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="tbl mem" id="mem-w" style="display:none">
     <div class="tr2 th f"><span>Memory</span><span>Saved by</span><span>Source</span><span>Updated</span><span></span></div>
     <div class="tr2 f"><span><b>Brand voice: plain, no hype, no exclamation marks</b><em>Approved by Sam Lee (Admin)</em></span><span>Admin</span><span>Settings</span><span>Oct 3</span><span class="acts2"><button data-action="memory.forget" class="btn sm" data-forget>Forget</button></span></div>
-    <div class="tr2 f"><span><b>Starter tracks ChatGPT and Copilot; Claude is Enterprise only</b><em>Brand fact · Plans</em></span><span>Admin</span><span>Brand facts</span><span>Oct 1</span><span class="acts2"><button data-action="memory.forget" class="btn sm" data-forget>Forget</button></span></div>
+    <div class="tr2 f"><span><b>Every bag ships within a day of roasting</b><em>Brand fact · Shipping</em></span><span>Admin</span><span>Brand facts</span><span>Oct 1</span><span class="acts2"><button data-action="memory.forget" class="btn sm" data-forget>Forget</button></span></div>
    </div>
   </div></div>
 
@@ -1118,12 +1157,12 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
   <!-- ANALYST: read-only (Agency partner variant: only shared brands) -->
   <div class="body scr" id="s-viewer"><div class="thread"><div class="col">
    <div class="tabs2" role="tablist" style="margin-bottom:14px"><button data-action="demo.previewRole" data-vrole="analyst" class="on">Analyst</button><button data-action="demo.previewRole" data-vrole="agency">Agency partner</button></div>
-   <div class="follow" id="vScope" style="display:none"><span class="rolep">Agency partner</span><div>You see only the brands shared with you<em>Shared with you: Ansvisor · other brands in this workspace stay hidden</em></div><a data-action="access.see" class="btn sm" href="CHAT-mockup-v2-governance.html#g-roles">See your access ↗</a></div>
+   <div class="follow" id="vScope" style="display:none"><span class="rolep">Agency partner</span><div>You see only the brands shared with you<em>Shared with you: Brewline Coffee · other brands in this workspace stay hidden</em></div><a data-action="access.see" class="btn sm" href="CHAT-mockup-v2-governance.html#g-roles">See your access ↗</a></div>
    <div class="um">Why did our Google AI Overviews citations drop this week?</div>
    <div class="amsg"><div class="ahead"><span class="av"><svg><use href="#bot"/></svg></span><span>Answered in 6 s</span></div>
-    Two pages lost most of it. <b>/blog/what-is-aeo</b> lost 14 citations<span data-action="answer.openCitation" class="sm2" data-src="s1">1</span> and <b>/features</b> lost 6<span data-action="answer.openCitation" class="sm2" data-src="s2">2</span>. Google AI Overviews now cites newer 2026 guides for the same prompts<span data-action="answer.openCitation" class="sm2" data-src="s3">3</span>.
+    Two pages lost most of it. <b>/blog/how-fresh-should-coffee-beans-be</b> lost 14 citations<span data-action="answer.openCitation" class="sm2" data-src="s1">1</span> and <b>/coffee/espresso-roast</b> lost 6<span data-action="answer.openCitation" class="sm2" data-src="s2">2</span>. Google AI Overviews now cites newer 2026 guides for the same prompts<span data-action="answer.openCitation" class="sm2" data-src="s3">3</span>.
     <div class="chips"><a data-action="why.open" class="chip why" href="CHAT-mockup-v2-signature.html#f-why">Why did it move?</a><button data-action="answer.openSource" class="chip" data-src="pplx">Google AI Overviews answers · 3,180</button><button data-action="answer.openSource" class="chip" data-src="pages">Cited pages · 2</button></div>
-    <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="why-perplexity-dropped" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · why-perplexity-dropped.md">Save to Files</button></div>
+    <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="why-ai-overviews-dropped" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · why-ai-overviews-dropped.md">Save to Files</button></div>
    </div>
    <div class="card"><div class="ch"><span class="av s22"><svg><use href="#bot"/></svg></span><b>/winback can fix this · 5 steps</b></div>
     <div class="cb" id="vSteps"></div>
@@ -1163,17 +1202,17 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="um">How do I add a competitor?</div>
    <div class="amsg"><div class="ahead"><span class="av"><svg><use href="#bot"/></svg></span><span>Answered in 1 s</span></div>
     <ol style="margin:0 0 6px;padding-left:20px;line-height:1.7">
-     <li>Go to <b>Brands › Ansvisor › Competitors</b>.</li>
+     <li>Go to <b>Brands › Brewline Coffee › Competitors</b>.</li>
      <li>Click <b>Add competitor</b> and enter the name and domain.</li>
      <li>Ansvisor tracks it in your prompts from the next tracking run.</li>
     </ol>
-    <div class="navc"><span class="ic">↗</span><div>Brands › Ansvisor › Competitors<em>Open it, or let me add the competitor for you</em></div><div class="r"><button data-action="help.openPage" class="btn sm" data-toast="Opens Brands › Ansvisor › Competitors">Open</button><button data-action="help.doItForMe" class="btn sm pri" data-toast="Tell me the name and domain · I add it and you confirm">Do it for me</button></div></div>
+    <div class="navc"><span class="ic">↗</span><div>Brands › Brewline Coffee › Competitors<em>Open it, or let me add the competitor for you</em></div><div class="r"><button data-action="help.openPage" class="btn sm" data-toast="Opens Brands › Brewline Coffee › Competitors">Open</button><button data-action="help.doItForMe" class="btn sm pri" data-toast="Tell me the name and domain · I add it and you confirm">Do it for me</button></div></div>
     <div class="kb"><span style="font-size:11px;color:var(--mut2);text-transform:uppercase;letter-spacing:.4px">From Ansvisor Help</span><a data-action="help.openArticle" data-toast="Opens the Help article">Adding and removing competitors · updated Oct 20</a><a data-action="capabilities.open" href="CHAT-mockup-v2-governance.html#g-capabilities">What Chat can do in each area ↗</a></div>
     <div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="how-to-add-a-competitor" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · how-to-add-a-competitor.md">Save to Files</button></div>
     <span class="mused">Answered from Ansvisor Help · Claude Haiku 5.5 · 0.01% of monthly AI limit</span>
    </div>
   </div>
-  <div class="cwrap" data-comp data-ghost="Add Northwind as a competitor" data-hint="/ skills · @ data · Tab to accept"></div>
+  <div class="cwrap" data-comp data-ghost="Add Daybreak Beans as a competitor" data-hint="/ skills · @ data · Tab to accept"></div>
   </div></div>
  </div>
 </div>
@@ -1204,9 +1243,9 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
    <div class="amsg" style="font-size:13.5px">
     <div class="ahead" style="margin-bottom:4px"><span class="av s22"><svg><use href="#bot"/></svg></span><span>Answered in 4 s</span></div>
     <div class="tools" style="margin:0 0 8px"><div class="tool ok"><span class="ti">✓</span>Analyzed 3,180 answers <em>· Google AI Overviews, last 7 days</em></div><div class="tool ok"><span class="ti">✓</span>2 pages lost citations <em>· vs the 7 days before</em></div></div>
-    Two pages lost most of it: <b>/blog/what-is-aeo</b> (−14 citations<span data-action="answer.openCitation" class="sm2" data-src="s1">1</span>) and <b>/features</b> (−6<span data-action="answer.openCitation" class="sm2" data-src="s2">2</span>). Google AI Overviews now cites newer 2026 guides for the same prompts.
+    Two pages lost most of it: <b>/blog/how-fresh-should-coffee-beans-be</b> (−14 citations<span data-action="answer.openCitation" class="sm2" data-src="s1">1</span>) and <b>/coffee/espresso-roast</b> (−6<span data-action="answer.openCitation" class="sm2" data-src="s2">2</span>). Google AI Overviews now cites newer 2026 guides for the same prompts.
     <div class="chips"><a data-action="why.open" class="chip why" href="CHAT-mockup-v2-signature.html#f-why">Why did it move?</a><button data-action="answer.openSource" class="chip" data-src="pplx">Google AI Overviews answers · 3,180</button><button data-action="answer.openSource" class="chip" data-src="pages">Cited pages · 2</button></div>
-    <div class="acts" style="margin-top:6px"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="why-perplexity-dropped" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · why-perplexity-dropped.md">Save to Files</button><button data-action="answer.retry" data-toast="Answering again">Retry</button><button data-action="answer.sendToActionCenter" data-sendac>Send to Action Center</button></div>
+    <div class="acts" style="margin-top:6px"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="why-ai-overviews-dropped" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · why-ai-overviews-dropped.md">Save to Files</button><button data-action="answer.retry" data-toast="Answering again">Retry</button><button data-action="answer.sendToActionCenter" data-sendac>Send to Action Center</button></div>
     <span class="mused">Auto · <b>Claude Haiku 5.5</b> read · <b>Claude Sonnet 5.5</b> wrote · 0.2% of monthly AI limit</span>
    </div>
    <div class="card" style="margin-bottom:10px" id="pPlan"><div class="ch" style="padding:10px 12px"><span class="av s22"><svg><use href="#bot"/></svg></span><b style="font-size:13px">I can fix this · <code style="font:12px 'Geist Mono',monospace;color:var(--mut)">/winback</code></b><div class="r"><span class="pill" id="pPlanPill" style="display:none"></span></div></div>
@@ -1231,8 +1270,8 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
  <button data-action="refMenu.pick" class="mi2" data-tm="@Visibility by platform added"><span class="ck2">▤</span><div>Visibility by platform<em>Chart</em></div></button>
  <button data-action="refMenu.pick" class="mi2" data-tm="@Share of voice added"><span class="ck2">◔</span><div>Share of voice<em>Metric</em></div></button>
  <button data-action="refMenu.pick" class="mi2" data-tm="@Citations · Google AI Overviews added"><span class="ck2">▦</span><div>Citations · Google AI Overviews<em>Table</em></div></button>
- <button data-action="refMenu.pick" class="mi2" data-tm="@ansvisor.com/pricing added"><span class="ck2">⌁</span><div>ansvisor.com/pricing<em>Page</em></div></button>
- <button data-action="refMenu.pick" class="mi2" data-tm="@Add FAQ block to /pricing added"><span class="ck2">◎</span><div>Add FAQ block to /pricing<em>Action Center task</em></div></button>
+ <button data-action="refMenu.pick" class="mi2" data-tm="@brewline.example/subscriptions added"><span class="ck2">⌁</span><div>brewline.example/subscriptions<em>Page</em></div></button>
+ <button data-action="refMenu.pick" class="mi2" data-tm="@Add FAQ block to /subscriptions added"><span class="ck2">◎</span><div>Add FAQ block to /subscriptions<em>Action Center task</em></div></button>
 </div>
 <div class="pop2" id="topmenu" style="width:250px"></div>
 <div class="pop2 umenu" id="usermenu" style="width:300px" role="menu" aria-label="Your account"></div>
@@ -1293,6 +1332,23 @@ img.eng{width:14px;height:14px;vertical-align:-2px;margin-right:4px;border-radiu
  <div class="mhd"><h3 id="cfT">Delete this chat?</h3><button data-action="modal.close" class="x" data-x aria-label="Close">✕</button></div>
  <p class="mp2" id="cfP"></p>
  <div class="mft"><button data-action="modal.cancel" class="btn" data-x>Cancel</button><button data-action="confirm.ok" class="btn danger" id="cfOk">Delete</button></div>
+</div></div>
+<div class="pop2" id="skcmenu" style="width:290px" role="menu" aria-label="Create a skill">
+ <button data-action="skills.createInChat" class="mi2" role="menuitem" data-skc="chat"><span class="ck2">✎</span><div>Create in chat<em>Describe it, Chat writes it</em></div></button>
+ <button data-action="skills.upload" class="mi2" role="menuitem" data-skc="upload"><span class="ck2">⇪</span><div>Upload<em>SKILL.md or .zip</em></div></button>
+ <button data-action="skills.importUrl" class="mi2" role="menuitem" data-skc="url"><span class="ck2">↗</span><div>Import from URL<em>GitHub or a skills directory</em></div></button>
+</div>
+<div class="scrim2" id="skUpM" role="dialog" aria-modal="true" aria-labelledby="skUpT"><div class="modal2" style="width:480px">
+ <div class="mhd"><h3 id="skUpT">Upload a skill</h3><button data-action="modal.close" class="x" data-x aria-label="Close">✕</button></div>
+ <p class="mp2">A SKILL.md file, or a .zip with SKILL.md at the top. Up to 5 MB. Nothing runs: you review the text first.</p>
+ <div class="drop" id="skDrop"><b>Drop SKILL.md or a .zip here</b>or <button data-action="skillUpload.choose" class="btn sm" id="skUpPick">Choose file</button></div>
+ <div class="mft"><button data-action="modal.cancel" class="btn" data-x>Cancel</button><button data-action="skillUpload.continue" class="btn pri" id="skUpGo" disabled>Continue to review</button></div>
+</div></div>
+<div class="scrim2" id="skUrlM" role="dialog" aria-modal="true" aria-labelledby="skUrlT"><div class="modal2" style="width:480px">
+ <div class="mhd"><h3 id="skUrlT">Import from URL</h3><button data-action="modal.close" class="x" data-x aria-label="Close">✕</button></div>
+ <p class="mp2">A GitHub link to a skill folder or SKILL.md, or a page in a skills directory. Ansvisor reads the text only.</p>
+ <input data-action="skillImport.url" class="urlin" id="skUrlIn" placeholder="https://github.com/…/SKILL.md" aria-label="Skill URL">
+ <div class="mft"><button data-action="skillImport.useExample" class="btn ghost" id="skUrlEx">Use an example</button><button data-action="modal.cancel" class="btn" data-x>Cancel</button><button data-action="skillImport.continue" class="btn pri" id="skUrlGo">Continue to review</button></div>
 </div></div>
 <div class="scrim2" id="schedM" role="dialog" aria-modal="true" aria-labelledby="smT"><div class="modal2" style="width:480px">
  <div class="mhd"><h3 id="smT">New schedule</h3><button data-action="modal.close" class="x" data-x aria-label="Close">✕</button></div>
@@ -1360,19 +1416,19 @@ function fullAuto(){return MODE=='Full auto'&&growthPlus()}
 var SK={
  tasks:{code:'/tasks',name:'Action Center tasks',card:'Complete this week’s tasks',desc:'Works through Action Center by priority. You close the tasks.',badge:'4 due',f:'content visibility',mode:'Auto, ask before changes',conns:['Google Search Console','Webflow'],
   ask:'Complete this week’s Action Center tasks. Have them ready by Friday.',title:'Action Center tasks · 4 due',due:'Due Fri, Oct 30',uses:'Action Center · 52 sources · 2 live pages',time:'6 min',ai:'~2%',out:'FAQ draft, schema code, report',hub:true,
-  steps:[['Read the 4 tasks and rank them by impact','Action Center · citations last 30 days','read'],['Check /pricing and /features as AI engines see them','Live page read · schema check','read'],['Write an FAQ block for /pricing from 18 fan-outs','Draft in this chat · your brand facts','read'],['Change one cited passage on /pricing','Cited 12× · I show you the change first','write'],['Push the FAQ, FAQPage schema and 2 link fixes to Webflow as a draft','Webflow draft · nothing goes live','write'],['Publish the Webflow draft','Goes live on ansvisor.com/pricing','exec']]},
+  steps:[['Read the 4 tasks and rank them by impact','Action Center · citations last 30 days','read'],['Check /subscriptions and /coffee/espresso-roast as AI engines see them','Live page read · schema check','read'],['Write an FAQ block for /subscriptions from 18 fan-outs','Draft in this chat · your brand facts','read'],['Change one cited passage on /subscriptions','Cited 12× · I show you the change first','write'],['Push the FAQ, FAQPage schema and 2 link fixes to Webflow as a draft','Webflow draft · nothing goes live','write'],['Publish the Webflow draft','Goes live on brewline.example/subscriptions','exec']]},
  winback:{code:'/winback',name:'Win back citations',card:'Win back lost citations',desc:'Finds pages that lost citations and refreshes them against what AI cites now.',badge:'2 pages',f:'visibility content',mode:'Auto, ask before changes',conns:['Google Search Console','Webflow'],
   ask:'Win back the Google AI Overviews citations we lost this week.',title:'Win back citations · 2 pages',uses:'Citations · 3,180 answers · 2 pages',time:'3 min',ai:'~1%',out:'2 refreshed drafts, before/after table',
-  steps:[['Find pages that lost citations','Citations · Google Search Console · last 7 days','read'],['Compare with the 2026 guides AI engines cite now','Same prompts · cited pages','read'],['Refresh both pages in Content Editor','Saved as drafts','write'],['Push the refreshed drafts to Webflow','Webflow drafts · nothing goes live','write'],['Publish both pages','Goes live on ansvisor.com','exec']]},
+  steps:[['Find pages that lost citations','Citations · Google Search Console · last 7 days','read'],['Compare with the 2026 guides AI engines cite now','Same prompts · cited pages','read'],['Refresh both pages in Content Editor','Saved as drafts','write'],['Push the refreshed drafts to Webflow','Webflow drafts · nothing goes live','write'],['Publish both pages','Goes live on brewline.example','exec']]},
  quality:{code:'/quality',name:'Quality pass',card:'Quality pass',desc:'E-E-A-T, Trust and Readability fixes. Leaves only what you alone can give.',badge:'3 drafts',f:'content',mode:'Auto, ask before changes',conns:[],
   ask:'Run a quality pass on the 3 drafts under 60.',title:'Quality pass · 3 drafts',uses:'Content · 3 drafts',time:'4 min',ai:'~1%',out:'3 improved drafts, your to-do list',
   steps:[['Score the 3 drafts under 60','E-E-A-T · Trust · Readability','read'],['Fix what I can fix','Sentences, structure, sources','read'],['Save the fixes to the drafts','Content Editor drafts','write'],['List what only you can add','Quotes, first-hand data, author','read']]},
  faq:{code:'/faq',name:'FAQ from fan-outs',card:'FAQ from fan-outs',desc:'An FAQ block from the top fan-outs and your brand facts, with FAQPage schema.',f:'content visibility',mode:'Auto, ask before changes',conns:[],
-  ask:'Write an FAQ for /features from the top fan-outs.',title:'FAQ for /features',uses:'Query Fan-outs · brand facts',time:'2 min',ai:'~0.5%',out:'FAQ block, FAQPage schema',
+  ask:'Write an FAQ for /coffee/espresso-roast from the top fan-outs.',title:'FAQ for /coffee/espresso-roast',uses:'Query Fan-outs · brand facts',time:'2 min',ai:'~0.5%',out:'FAQ block, FAQPage schema',
   steps:[['Pick the top fan-outs for the page','Query Fan-outs','read'],['Write the answers from brand facts','Every number linked to a source','read'],['Save the FAQ and FAQPage schema as a draft','Content Editor draft','write']]},
  publish:{code:'/publish',name:'Ready to publish',card:'Ready to publish',desc:'Checks, page fields and a Webflow draft. Going live is always your click.',badge:'2 ready',f:'content',mode:'Ask me first',conns:['Webflow'],
   ask:'Get the 2 ready drafts published.',title:'Ready to publish · 2 drafts',uses:'Content · 2 drafts',time:'2 min',ai:'~0.5%',out:'2 Webflow drafts, live pages after your click',
-  steps:[['Check the 2 ready drafts','Links, schema, brand facts','read'],['Fill page fields and push to Webflow as drafts','Webflow drafts · nothing goes live','write'],['Publish','Goes live on ansvisor.com','exec']]},
+  steps:[['Check the 2 ready drafts','Links, schema, brand facts','read'],['Fill page fields and push to Webflow as drafts','Webflow drafts · nothing goes live','write'],['Publish','Goes live on brewline.example','exec']]},
  report:{code:'/report',name:'Weekly report',card:'Weekly report',desc:'Citations, mentions and share of voice: what changed and why. Emailed to your team.',f:'reports',mode:'Auto, ask before changes',conns:[],sched:'Mon 08:00',
   ask:'Write this week’s citations report.',title:'Weekly report',uses:'7 days · all tracked platforms',time:'2 min',ai:'~0.5%',out:'PDF report, email to 3 teammates',
   steps:[['Read 7 days of answers','All tracked platforms','read'],['Compare with last week','Citations, mentions, share of voice','read'],['Write the report and email it to 3 teammates','PDF · inside your workspace','write']]},
@@ -1380,8 +1436,8 @@ var SK={
   ask:'Find and fix wrong claims AI engines make about us.',title:'Fix wrong claims',uses:'All tracked platforms · brand facts',time:'5 min',ai:'~1.5%',out:'Fix drafts, outreach list',
   steps:[['Find AI answers with wrong facts about you','All tracked platforms','read'],['Check each claim against your brand facts','Brand facts (approved)','read'],['Draft fixes for your pages','Content Editor drafts','write'],['Build an outreach list for third-party pages','Source pages and contacts','read'],['Send the outreach emails','Leaves your workspace','exec']]},
  compare:{code:'/compare',name:'Comparison page',card:'Beat a competitor on a prompt',desc:'Compares cited pages and drafts a balanced comparison with dated facts.',f:'content visibility',mode:'Ask me first',conns:['Webflow'],
-  ask:'Help us beat Northwind on “ai visibility tool”.',title:'Ansvisor vs Northwind',uses:'Tracked Prompts · Citations',time:'5 min',ai:'~1.5%',out:'Comparison draft, cited-page notes',
-  steps:[['Pick the prompt and the competitor','Tracked Prompts · Citations','read'],['Compare the pages AI engines cite','Cited pages · same prompts','read'],['Draft the comparison page','Content Editor draft · dated facts','write'],['Push it to Webflow as a draft','Webflow draft · nothing goes live','write'],['Publish','Goes live on ansvisor.com','exec']]},
+  ask:'Help us beat Northbound Roasters on “best coffee subscription”.',title:'Brewline Coffee vs Northbound Roasters',uses:'Tracked Prompts · Citations',time:'5 min',ai:'~1.5%',out:'Comparison draft, cited-page notes',
+  steps:[['Pick the prompt and the competitor','Tracked Prompts · Citations','read'],['Compare the pages AI engines cite','Cited pages · same prompts','read'],['Draft the comparison page','Content Editor draft · dated facts','write'],['Push it to Webflow as a draft','Webflow draft · nothing goes live','write'],['Publish','Goes live on brewline.example','exec']]},
  shopping:{code:'/shopping',name:'AI shopping readiness',card:'AI shopping readiness',desc:'Checks product pages and feed for ChatGPT Shopping (US) and Google Shopping (EU).',f:'product',mode:'Auto, ask before changes',conns:[],needConn:'Shopify',
   ask:'Check our products for AI shopping.',title:'AI shopping readiness · 48 products',uses:'Product Visibility · 48 products',time:'6 min',ai:'~2%',out:'Fix list, feed changes',
   steps:[['Read product pages and feed','Shopify · 48 products','read'],['Check against ChatGPT Shopping and Google Shopping','Product Visibility','read'],['Draft fixes for titles and attributes','Fix list','read'],['Save the fixes as drafts','Shopify drafts','write'],['Prepare the feed update','Google Merchant Center','write'],['Push the feed','Leaves your workspace','exec']]}
@@ -1400,9 +1456,9 @@ function ico(n){return '<svg><use href="#i-'+n+'"/></svg>'}
 function renderNav(){
  $('#rail').innerHTML='<button data-action="rail.toggle" class="lg" id="railTog" aria-label="Expand the Ansvisor menu" aria-expanded="false" title="Ansvisor · hover or click to expand"></button>'+NAV.map(function(n){if(n.length==1)return '<span class="rs" data-g="'+(n[0]=='-'?'':n[0])+'"></span>';var on=n[0]=='Chat';
   return '<button data-action="rail.navigate" class="ri'+(on?' on':'')+'" data-nav="'+n[0]+'" aria-label="'+n[0]+(on?' · 1 needs you':'')+'" title="'+n[0]+'"'+(on?' aria-current="page"':'')+'>'+ico(n[1])+'<span class="rl">'+n[0]+'</span>'+(on?'<span class="dot"></span>':'')+'</button>'}).join('')+'<span class="rgrow"></span><button data-action="rail.openSettings" class="ri" data-nav="Settings" aria-label="Settings" title="Settings">'+ico('settings')+'<span class="rl">Settings</span></button>';
- $('#appSide').innerHTML='<div class="logo"><i></i>Ansvisor</div><button data-action="rail.switchBrand" class="bsw" data-toast="Switch brand">Ansvisor<span>⌄</span></button>'+NAV.map(function(n){if(n[0]=='-')return '<div class="sep"></div>';if(n.length==1)return '<div class="grp">'+n[0]+'</div>';var on=n[0]=='Visibility';
+ $('#appSide').innerHTML='<div class="logo"><i></i>Ansvisor</div><button data-action="rail.switchBrand" class="bsw" data-toast="Switch brand">Brewline Coffee<span>⌄</span></button>'+NAV.map(function(n){if(n[0]=='-')return '<div class="sep"></div>';if(n.length==1)return '<div class="grp">'+n[0]+'</div>';var on=n[0]=='Visibility';
   return '<button data-action="rail.navigate" class="nv'+(on?' on':'')+'" data-nav="'+n[0]+'"'+(on?' aria-current="page"':'')+'>'+ico(n[1])+n[0]+(['Action Center','Mentions'].indexOf(n[0])>-1?'<span class="newp">New</span>':'')+'</button>'+(n[3]?n[3].map(function(s){return '<button data-action="rail.navigate" class="nv subn" data-nav="'+s+'">'+s+(s=='Plan'?'<span class="newp">New</span>':'')+(s=='Tracked Prompts'?'<span class="cnt2">733</span>':'')+'</button>'}).join(''):'')}).join('')+'<div class="grow"></div><button data-action="rail.openSettings" class="nv" data-nav="Settings">'+ico('settings')+'Settings</button><button data-action="account.openMenu" class="user" data-umenu aria-haspopup="true" aria-label="Your account and role"><span>AK</span>Alex Kim<em>⌃</em></button>'}
-function renderUmenu(){var r=curRole();$('#usermenu').innerHTML='<div class="uh"><span class="uav" style="margin:0">AK</span><div>Alex Kim<em>Ansvisor workspace</em></div><span class="rolep" style="margin-left:auto">'+ROLES[r]+'</span></div>'+
+function renderUmenu(){var r=curRole();$('#usermenu').innerHTML='<div class="uh"><span class="uav" style="margin:0">AK</span><div>Alex Kim<em>Brewline Coffee workspace</em></div><span class="rolep" style="margin-left:auto">'+ROLES[r]+'</span></div>'+
  '<a data-action="access.see" class="mi2" href="'+GOV+'#g-roles"><span class="ck2">◎</span><div>Your role: '+ROLES[r]+' · See what you can do<em>Settings › Team › Roles &amp; access</em></div><span class="ext">↗</span></a>'+
  '<button data-action="account.openSettings" class="mi2" data-tm="Opens Settings: '+SETTABS+'"><span class="ck2">⚙</span><div>Settings<em>Account · Team · Billing · Chat …</em></div></button>'+
  '<button data-action="account.openPlan" class="mi2" data-tm="Opens Billing › Plans · your plan: '+planName()+'"><span class="ck2">◇</span><div>Your plan: '+planName()+'<em>Compare plans in Billing</em></div></button>'+
@@ -1496,14 +1552,14 @@ function renderPlan(k){CURSK=k=SK[k]?k:'tasks';var s=SK[k];$('#planQ').textConte
 function renumber(box){var i=0;box.querySelectorAll('.step[data-cls]').forEach(function(st){st.querySelector('.sn').textContent=++i})}
 /* ---------- working (pause / stop / resume / retry change state) ---------- */
 var W={i:0,state:'idle'};
-var WSUB=[['read <b>action_center</b> · 4 tasks due this week','rank by citations · /pricing first (12× cited)'],['fetch <b>ansvisor.com/pricing</b> · 200 OK','schema: Product ✓ · FAQPage ✗','2 broken links found'],['pick top 6 fan-outs','write answers from brand facts','every number linked to a source'],['found a claim that conflicts with brand facts'],['FAQ + FAQPage schema + 2 link fixes','Webflow draft “Pricing” saved'],[]];
-var FAQ=['How much does Ansvisor cost?','Starter is $49 a month, Growth $249 a month. Enterprise is custom.','Is there a free trial?','Yes, 14 days on the Growth plan.','Which AI platforms does each plan track?'];
+var WSUB=[['read <b>action_center</b> · 4 tasks due this week','rank by citations · /subscriptions first (12× cited)'],['fetch <b>brewline.example/subscriptions</b> · 200 OK','schema: Product ✓ · FAQPage ✗','2 broken links found'],['pick top 6 fan-outs','write answers from brand facts','every number linked to a source'],['found a claim that conflicts with brand facts'],['FAQ + FAQPage schema + 2 link fixes','Webflow draft “Subscriptions” saved'],[]];
+var FAQ=['How much is a Brewline Coffee subscription?','The House Blend Subscription is $18 a bag. Single origins and decaf cost a little more.','Can I pause or skip a delivery?','Yes. Pause or skip any delivery from your account, anytime.','How fresh are the beans when they arrive?'];
 function wSet(state){W.state=state;var b=$('#wBtns');
  b.innerHTML=state=='run'?'<button data-action="run.pause" class="btn sm" data-wpause>Pause</button><button data-action="run.stop" class="btn sm" data-wstop>Stop</button>':state=='paused'?'<button data-action="run.resume" class="btn sm pri" data-wresume>Resume</button><button data-action="run.stop" class="btn sm" data-wstop>Stop</button>':state=='stopped'?'<button data-action="run.retry" class="btn sm pri" data-wretry>Retry</button>':'';
  var p={run:['Working','run'],paused:['Paused',''],stopped:['Stopped','red'],need:['Needs you','am']}[state];if(p&&CUR=='work'){TT.work=['Action Center tasks',p];setTitle('work')}}
 function runWork(from){var st=SK.tasks.steps,box=$('#wsteps');W.i=from;
  if(from==0){box.innerHTML=st.map(function(s,i){return '<div class="step" id="ws'+i+'" data-cls="'+s[2]+'"><span class="sn">'+(i+1)+'</span><div class="tx">'+s[0]+'<div class="sub"></div></div>'+tagFor(s[2])+'</div>'}).join('');
-  $('#cv').innerHTML='<h2>Pricing FAQ</h2><p style="color:var(--mut);font-size:12.5px">For ansvisor.com/pricing · from 18 fan-outs and your brand facts</p><div id="cvw"><div class="gl" style="width:90%"></div><div class="gl" style="width:72%"></div><div class="gl" style="width:84%"></div></div>';$('#cvPill').textContent='Writing live'}
+  $('#cv').innerHTML='<h2>Subscriptions FAQ</h2><p style="color:var(--mut);font-size:12.5px">For brewline.example/subscriptions · from 18 fan-outs and your brand facts</p><div id="cvw"><div class="gl" style="width:90%"></div><div class="gl" style="width:72%"></div><div class="gl" style="width:84%"></div></div>';$('#cvPill').textContent='Writing live'}
  else{var el=$('#ws'+from);el.classList.remove('now','fail');el.querySelector('.sn').textContent=from+1;el.querySelector('.sub').innerHTML=''}
  $('#wav').className='av work';$('#wbar').style.display='block';$('#wtitle').innerHTML='Working on it<span class="tdots"><i></i><i></i><i></i></span>';wSet('run');
  var t=0;
@@ -1524,12 +1580,12 @@ function wPause(){clearT();var el=$('#ws'+W.i);if(el){el.classList.remove('now')
 function wStop(){clearT();var el=$('#ws'+W.i);if(el){el.classList.remove('now');el.classList.add('fail');el.querySelector('.sn').textContent='■'}$('#wav').className='av fail';$('#wbar').style.display='none';$('#wtitle').textContent='Stopped at step '+(W.i+1)+' of 6. Done steps stay in History.';wSet('stopped');toast('Stopped · done steps stay in History, nothing else changes')}
 /* ---------- streaming answer ---------- */
 var OPTS='<div class="chips opts"><span class="optl">Options</span><button data-action="nextMove.runSkill" class="chip" data-skill="winback">Start the fix for both pages</button><button data-action="answer.openSource" class="chip" data-src="s3">See the 2026 guides Google AI Overviews cites</button><button data-action="nextMove.schedule" class="chip" data-sched="winback">Check this every Thursday</button></div>';
-var ANS='Two pages lost most of it. /blog/what-is-aeo lost 14 citations[1] and /features lost 6[2]. For the same prompts, Google AI Overviews now cites newer 2026 guides from two publishers[3]. Both of your pages were last updated in March.';
+var ANS='Two pages lost most of it. /blog/how-fresh-should-coffee-beans-be lost 14 citations[1] and /coffee/espresso-roast lost 6[2]. For the same prompts, Google AI Overviews now cites newer 2026 guides from two publishers[3]. Both of your pages were last updated in March.';
 function runAsk(){var tl=$('#newItem');tl.style.display='flex';$$('.list .li').forEach(function(x){x.classList.remove('on')});
  $('#newTitle').innerHTML='<span class="shim">New chat</span>';$('#newSub').textContent='Thinking…';var nsd=$('#newItem .sd');nsd.className='sd run';nsd.innerHTML='<i></i>';
  $('#aav').className='av work';$('#aTitle').innerHTML='<span class="shim">Thinking</span> <span class="eta">~8 s</span>';$('#aThink').style.display='none';$('#aTools').innerHTML='';$('#aTools').style.opacity='1';$('#aStream').innerHTML='';$('#aExtra').innerHTML='';
  var full=USE>=100;if(!full){$('#aIn').innerHTML='<span class="ph0">Steer while I work: “only blog pages”…</span>';var b=$('#aBtn');b.className='stop';b.innerHTML='<i></i>';b.setAttribute('aria-label','Stop');$('#aUnder').textContent='Answering · Esc to stop'}
- var tools=[['Analyzing Google AI Overviews data · 3,180 answers','last 7 days · 12 prompts','~3 s','Analyzed 3,180 answers · 2 pages lost citations'],['Reading the answers that cite your pages','/blog/what-is-aeo · /features','~2 s','Found what changed on 2 pages'],['Checking who Google AI Overviews cites now','same 12 prompts','~1 s','2 newer guides found']];
+ var tools=[['Analyzing Google AI Overviews data · 3,180 answers','last 7 days · 12 prompts','~3 s','Analyzed 3,180 answers · 2 pages lost citations'],['Reading the answers that cite your pages','/blog/how-fresh-should-coffee-beans-be · /coffee/espresso-roast','~2 s','Found what changed on 2 pages'],['Checking who Google AI Overviews cites now','same 12 prompts','~1 s','2 newer guides found']];
  var ST=['Working','Working','Working'];
  at(1400,function(){$('#aThink').style.display='inline-flex';$('#newSub').textContent='Analyzing Google AI Overviews data…';$('#aTitle').innerHTML='<span class="shim">Working</span> <span class="eta">~6 s left</span>'});
  tools.forEach(function(tt,i){
@@ -1543,8 +1599,8 @@ function runAsk(){var tl=$('#newItem');tl.style.display='flex';$$('.list .li').f
   s.insertAdjacentHTML('beforeend','<span class="w">'+html+' </span>')})});
  var t1=t0+words.length*70+300;
  at(t1,function(){var c=$('#aStream .caret');if(c)c.remove();
-  $('#aExtra').innerHTML='<div class="mtab"><div><span>Page</span><span>Last week</span><span>This week</span></div><div><span>/blog/what-is-aeo</span><span>31</span><span>17 <span class="neg">▼ 14</span></span></div><div><span>/features</span><span>12</span><span>6 <span class="neg">▼ 6</span></span></div></div><div class="chips"><a data-action="why.open" class="chip why" href="'+SIG+'#f-why">Why did it move?</a><button data-action="answer.openSource" class="chip" data-src="pplx">Google AI Overviews answers · 3,180</button><button data-action="answer.openSource" class="chip" data-src="pages">Cited pages · 2</button><button data-action="answer.openSource" class="chip" data-src="s3">Competitor guides · 2</button></div>'});
- at(t1+500,function(){$('#aav').className='av';$('#aTitle').innerHTML='<span style="color:var(--mut);font-weight:400">Answered in 8 s</span>';$('#aExtra').insertAdjacentHTML('beforeend','<div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="why-perplexity-dropped" data-table="1" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · why-perplexity-dropped.md">Save to Files</button><button data-action="answer.retry" data-toast="Answering again">Retry</button><button data-action="answer.sendToActionCenter" data-sendac>Send to Action Center</button></div><span class="mused">Analyzed 3,180 answers · Auto · <b>Claude Haiku 5.5</b> read · <b>Claude Sonnet 5.5</b> wrote · 0.3% of monthly AI limit</span>'+OPTS);
+  $('#aExtra').innerHTML='<div class="mtab"><div><span>Page</span><span>Last week</span><span>This week</span></div><div><span>/blog/how-fresh-should-coffee-beans-be</span><span>31</span><span>17 <span class="neg">▼ 14</span></span></div><div><span>/coffee/espresso-roast</span><span>12</span><span>6 <span class="neg">▼ 6</span></span></div></div><div class="chips"><a data-action="why.open" class="chip why" href="'+SIG+'#f-why">Why did it move?</a><button data-action="answer.openSource" class="chip" data-src="pplx">Google AI Overviews answers · 3,180</button><button data-action="answer.openSource" class="chip" data-src="pages">Cited pages · 2</button><button data-action="answer.openSource" class="chip" data-src="s3">Competitor guides · 2</button></div>'});
+ at(t1+500,function(){$('#aav').className='av';$('#aTitle').innerHTML='<span style="color:var(--mut);font-weight:400">Answered in 8 s</span>';$('#aExtra').insertAdjacentHTML('beforeend','<div class="acts"><button data-action="answer.copy" data-toast="Copied">Copy</button><button data-action="answer.download" data-dl="why-ai-overviews-dropped" data-table="1" aria-haspopup="true">Download ▾</button><button data-action="answer.saveToFiles" data-toast="Saved to Files · why-ai-overviews-dropped.md">Save to Files</button><button data-action="answer.retry" data-toast="Answering again">Retry</button><button data-action="answer.sendToActionCenter" data-sendac>Send to Action Center</button></div><span class="mused">Analyzed 3,180 answers · Auto · <b>Claude Haiku 5.5</b> read · <b>Claude Sonnet 5.5</b> wrote · 0.3% of monthly AI limit</span>'+OPTS);
   if($('#aBtn')){$('#aIn').innerHTML='<span data-action="composer.acceptGhost" class="ghosttx" contenteditable="false">Start the fix for both pages<kbd>Tab</kbd></span>';var b=$('#aBtn');b.className='send';b.textContent='↑';b.setAttribute('aria-label','Send');b.dataset.send='plan:winback';$('#aUnder').textContent='Tab to accept · / skills · @ data'}
   $('#newSub').textContent='2 pages lost citations';var sd=$('#newItem .sd');sd.className='sd ok';sd.textContent='✓';$('#st').textContent='Answered';$('#st').className='pill ok'})}
 function stopAsk(){clearT();var c=$('#aStream .caret');if(c)c.remove();$('#aTitle').textContent='Stopped · what you see is kept';$('#aav').className='av';var b=$('#aBtn');if(b){b.className='send';b.textContent='↑';b.setAttribute('aria-label','Send')}$('#newSub').textContent='Stopped';$('#aUnder')&&($('#aUnder').textContent='Stopped · / skills · @ data');toast('Stopped · what you see is kept')}
@@ -1561,15 +1617,15 @@ function renderDone(){var full=PUB;
  $('#dT').textContent=full?'Done. 4 tasks are ready for you to close.':'Ready to go live. Publishing needs your click.';
  $('#dS').innerHTML=(full?'6 of 6':'5 of 6')+' steps · 5 min 40 s · Auto (Haiku 5.5 + Sonnet 5.5) · 2% of monthly AI limit<br><span title="Generated Oct 26, 2026 14:32 GMT+3 · Data as of Oct 26, 2026 08:00 GMT+3">Generated Oct 26, 2026 · 14:32 · Data as of Oct 26, 08:00</span>';
  $('#dChg').textContent=CHG;$('#dChgE').textContent='you approved '+CHG;
- $('#dExe').innerHTML=full?'<div class="follow okline"><span class="tk anim"></span><div>Published to ansvisor.com/pricing · 14:32 · by you<em><a data-action="activity.open" href="'+GOV+'#g-activity">In the Activity log ↗</a></em></div></div>':
-  '<div class="card exe"><div class="ch"><span class="tag exe">Needs your click</span><b>Publish the Webflow draft for /pricing</b><div class="r"><span class="pill">Step 6 of 6</span></div></div><div class="cb" style="font-size:13px;padding-top:10px">FAQ block (6 questions), FAQPage schema, '+(CHG>1?'1 changed passage and 2 link fixes':'2 link fixes')+' · Webflow draft “Pricing”</div><div class="cf"><span class="l">Goes live on ansvisor.com/pricing · same in every mode</span><div class="r"><button data-action="exec.preview" class="btn" data-toast="Opens the draft preview in Webflow">Preview in Webflow</button><button data-action="exec.publish" class="btn pri" data-publish>Publish</button></div></div></div>';
+ $('#dExe').innerHTML=full?'<div class="follow okline"><span class="tk anim"></span><div>Published to brewline.example/subscriptions · 14:32 · by you<em><a data-action="activity.open" href="'+GOV+'#g-activity">In the Activity log ↗</a></em></div></div>':
+  '<div class="card exe"><div class="ch"><span class="tag exe">Needs your click</span><b>Publish the Webflow draft for /subscriptions</b><div class="r"><span class="pill">Step 6 of 6</span></div></div><div class="cb" style="font-size:13px;padding-top:10px">FAQ block (6 questions), FAQPage schema, '+(CHG>1?'1 changed passage and 2 link fixes':'2 link fixes')+' · Webflow draft “Subscriptions”</div><div class="cf"><span class="l">Goes live on brewline.example/subscriptions · same in every mode</span><div class="r"><button data-action="exec.preview" class="btn" data-toast="Opens the draft preview in Webflow">Preview in Webflow</button><button data-action="exec.publish" class="btn pri" data-publish>Publish</button></div></div></div>';
  TT.done=['Action Center tasks',full?['Done','ok']:['Needs your click','exe']];renderFU();
  $('#memCard').outerHTML='<div class="follow" id="memCard"><span class="sli">☰</span><div>Save to memory?<em>“Weekly Action Center tasks should be ready by Friday.” · only you</em></div><button data-action="memory.suggestNotNow" class="btn sm" data-mem="no">Not now</button><button data-action="memory.suggestSave" class="btn sm pri" data-mem="save">Save</button></div>'}
 function setTasksRow(state){var r=$('#rowTasks');if(!r)return;var sd=r.querySelector('.sd'),em=r.querySelector('em');
  if(state=='done'){sd.className='sd ok';sd.textContent='✓';em.className='';em.textContent='Done · published 14:32';r.classList.add('unread');inboxBadge();$('.runsbtn .n').style.display='none';$('#trayCnt').textContent='1 running'}}
 /* ---------- follow-up check: one click in Ask modes, auto + logged + Undo in Full auto ---------- */
 var CPS='<div class="cps"><span title="Day 7 · Nov 2 · Pending, early signal"><b>Day 7 · Nov 2</b>Early signal</span><span title="Day 14 · Nov 9 · first verdict"><b>Day 14 · Nov 9</b>First verdict</span><span title="Day 30 · Nov 25 · confirmed"><b>Day 30 · Nov 25</b>Confirmed</span><span title="Day 90 · Jan 24, 2027 · lasting effect"><b>Day 90 · Jan 24</b>Lasting effect</span></div>';
-function fuHTML(){var what='Compares citations for the 6 /pricing prompts on Google AI Overviews and ChatGPT with the 14 days before · uses scheduled tracking data · No extra cost';
+function fuHTML(){var what='Compares citations for the 6 /subscriptions prompts on Google AI Overviews and ChatGPT with the 14 days before · uses scheduled tracking data · No extra cost';
  if(fullAuto()){if(FUS=='undone')return '<div class="follow"><span class="tag auto">Undone</span><div>Follow-up checks removed<em>Logged in the <a data-action="activity.open" href="'+GOV+'#g-activity">Activity log</a></em></div><button data-action="followup.setAgain" class="btn sm" data-fu="redo">Set them again</button></div>';
   return '<div class="follow okline"><span class="av s26">'+BOT+'</span><div>I set follow-up checks at 7, 14, 30 and 90 days<em>'+what+' · logged in the <a data-action="activity.open" href="'+GOV+'#g-activity">Activity log</a></em>'+CPS+'</div><button data-action="followup.undo" class="btn sm" data-fu="undo">Undo</button></div>'}
  if(FUS=='set')return '<div class="follow okline"><span class="tk anim"></span><div>Checks set: day 7, 14, 30 and 90<em>In Scheduled · results go to your inbox and Impact (Action Center › History)</em></div><button data-action="followup.undo" class="btn sm" data-fu="undo">Undo</button></div>';
@@ -1587,21 +1643,21 @@ function mt(h,rows){return '<div class="mtab"><div>'+h.map(function(x){return '<
 function fileRow(ic,name,meta,sl,tb){return '<div class="file"><span class="ic">'+ic+'</span><div>'+name+'<em>'+meta+'</em></div><div class="r"><button data-action="deliverable.open" class="btn sm" data-toast="Opens the file">Open</button><button data-action="deliverable.download" class="btn sm" data-dl="'+sl+'"'+(tb?' data-table="1"':'')+' aria-haspopup="true">Download ▾</button></div></div>'}
 var PASTC={
  'Why did Google AI Overviews citations drop?':{q:'Why did our Google AI Overviews citations drop this week?',d:'Oct 25',t:'16:20',tb:1,
-  a:'Two pages lost most of it. <b>/blog/what-is-aeo</b> lost 14 citations<span data-action="answer.openCitation" class="sm2" data-src="s1">1</span> and <b>/features</b> lost 6<span data-action="answer.openCitation" class="sm2" data-src="s2">2</span>. For the same prompts, Google AI Overviews now cites newer 2026 guides from two publishers<span data-action="answer.openCitation" class="sm2" data-src="s3">3</span>. Both of your pages were last updated in March.'+mt(['Page','Last week','This week'],[['/blog/what-is-aeo','31','17 <span class="neg">▼ 14</span>'],['/features','12','6 <span class="neg">▼ 6</span>']]),
+  a:'Two pages lost most of it. <b>/blog/how-fresh-should-coffee-beans-be</b> lost 14 citations<span data-action="answer.openCitation" class="sm2" data-src="s1">1</span> and <b>/coffee/espresso-roast</b> lost 6<span data-action="answer.openCitation" class="sm2" data-src="s2">2</span>. For the same prompts, Google AI Overviews now cites newer 2026 guides from two publishers<span data-action="answer.openCitation" class="sm2" data-src="s3">3</span>. Both of your pages were last updated in March.'+mt(['Page','Last week','This week'],[['/blog/how-fresh-should-coffee-beans-be','31','17 <span class="neg">▼ 14</span>'],['/coffee/espresso-roast','12','6 <span class="neg">▼ 6</span>']]),
   chips:1,after:'<div class="follow"><span class="av s26">'+BOT+'</span><div>/winback can refresh both pages<em>5 steps · drafts first · publishing needs your click</em></div><button data-action="nextMove.runSkill" class="btn sm pri" data-skill="winback">Plan the fix</button></div>'},
- 'Share of voice vs competitors':{q:'Compare our share of voice with Northwind, Contoso and Fabrikam for the last 30 days.',d:'Oct 26',t:'11:05',tb:1,
-  a:'Ansvisor holds <b>31%</b> share of voice, up 2.4 points. Northwind leads with 34%. Your gain came from ChatGPT; Google AI Overviews is flat.'+mt(['Brand','Share of voice','Change'],[['Northwind','34%','<span class="pos2">▲ 0.8 pts</span>'],['Ansvisor','31%','<span class="pos2">▲ 2.4 pts</span>'],['Contoso','21%','<span class="neg">▼ 1.9 pts</span>'],['Fabrikam','14%','<span class="neg">▼ 1.3 pts</span>']]),
+ 'Share of voice vs competitors':{q:'Compare our share of voice with Northbound Roasters, Kettle & Crate and Morning Ritual Co. for the last 30 days.',d:'Oct 26',t:'11:05',tb:1,
+  a:'Brewline Coffee holds <b>31%</b> share of voice, up 2.4 points. Northbound Roasters leads with 34%. Your gain came from ChatGPT; Google AI Overviews is flat.'+mt(['Brand','Share of voice','Change'],[['Northbound Roasters','34%','<span class="pos2">▲ 0.8 pts</span>'],['Brewline Coffee','31%','<span class="pos2">▲ 2.4 pts</span>'],['Kettle & Crate','21%','<span class="neg">▼ 1.9 pts</span>'],['Morning Ritual Co.','14%','<span class="neg">▼ 1.3 pts</span>']]),
   files:fileRow('▦','Share of voice vs competitors','Excel · CSV · 2 files','share-of-voice-vs-competitors',1)},
  'Blog ideas for Q4':{q:'Give me blog ideas for Q4 where AI engines don’t cite a strong page yet.',d:'Oct 26',t:'10:12',tb:1,
-  a:'6 ideas come from fan-outs with no strong cited page yet. You sent the top 3 to Content.'+mt(['Idea','Fan-outs','Status'],[['AEO vs SEO in 2026','14','In Content'],['How AI engines pick sources','11','In Content'],['llms.txt: does it matter?','9','In Content'],['Track your brand in Google AI Overviews','7','Idea']])},
- 'Schema for /features':{q:'Write schema for /features.',d:'Oct 25',t:'15:12',
-  a:'I added SoftwareApplication and FAQPage schema to the /features draft. Sam Lee published it on Oct 25 at 15:40.',files:fileRow('{ }','Schema for /features','JSON-LD · SoftwareApplication + FAQPage','schema-for-features')},
+  a:'6 ideas come from fan-outs with no strong cited page yet. You sent the top 3 to Content.'+mt(['Idea','Fan-outs','Status'],[['Swiss water decaf, explained','14','In Content'],['Coffee subscription vs buying beans','11','In Content'],['Low-acid coffee beans for a sensitive stomach','9','In Content'],['How long do coffee beans stay fresh?','7','Idea']])},
+ 'Schema for /coffee/espresso-roast':{q:'Write schema for /coffee/espresso-roast.',d:'Oct 25',t:'15:12',
+  a:'I added Product and FAQPage schema to the /coffee/espresso-roast draft. Sam Lee published it on Oct 25 at 15:40.',files:fileRow('{ }','Schema for /coffee/espresso-roast','JSON-LD · SoftwareApplication + FAQPage','schema-for-features')},
  'Onboarding: what should I track?':{q:'We just started. What should we track?',d:'Oct 19',t:'09:30',tb:1,
-  a:'Start with 12 prompts across 3 topics. You added all 12 to Tracked Prompts.'+mt(['Topic','Prompts','Example'],[['AI visibility tools','5','best ai visibility tool'],['AEO','4','what is aeo'],['Pricing questions','3','ansvisor pricing']])},
- 'Reddit threads for “AEO tools”':{q:'Find Reddit threads about “AEO tools”.',d:'Oct 21',t:'13:40',tb:1,
-  a:'18 threads from the last 90 days mention AEO tools. 5 mention Ansvisor and 9 mention Northwind.',files:fileRow('▦','Reddit threads · AEO tools','CSV · 18 threads','reddit-threads-aeo-tools',1)},
- 'llms.txt for ansvisor.com':{q:'Draft an llms.txt for ansvisor.com.',d:'Oct 20',t:'17:05',
-  a:'I drafted llms.txt with your 24 key pages, grouped by product, pricing, guides and docs.',files:fileRow('≡','llms.txt','24 links · plain text','llms-txt-for-ansvisor-com')},
+  a:'Start with 12 prompts across 3 topics. You added all 12 to Tracked Prompts.'+mt(['Topic','Prompts','Example'],[['Coffee subscriptions','4','What are the best coffee subscriptions in 2026?'],['Whole bean coffee','4','What are the best whole bean coffees for espresso at home?'],['Buying better coffee','4','How fresh should coffee beans be when they arrive?']])},
+ 'Reddit threads for “coffee subscriptions”':{q:'Find Reddit threads about “coffee subscriptions”.',d:'Oct 21',t:'13:40',tb:1,
+  a:'18 threads from the last 90 days ask about coffee subscriptions. 5 mention Brewline Coffee and 9 mention Northbound Roasters.',files:fileRow('▦','Reddit threads · coffee subscriptions','CSV · 18 threads','reddit-threads-coffee-subscriptions',1)},
+ 'llms.txt for brewline.example':{q:'Draft an llms.txt for brewline.example.',d:'Oct 20',t:'17:05',
+  a:'I drafted llms.txt with your 24 key pages, grouped by coffee, subscriptions, gifts and brew guides.',files:fileRow('≡','llms.txt','24 links · plain text','llms-txt-for-brewline-example')},
  'Monthly board update':{q:'Write the monthly board update.',d:'Oct 1',t:'07:00',
   a:'October update: visibility score 64 (+5), share of voice 31% (+2.4 pts), AI visits +18%. Scheduled for the 1st of every month; paused now.',files:fileRow('▤','Board update · October','PDF · 4 pages','board-update-october')}};
 function pastBody(nm,ln){var c=PASTC[nm];if(!c)c={q:nm,d:'Oct 26',t:(ln.match(/\d\d:\d\d/)||['16:20'])[0],a:(ln?ln.replace(/^Done · /,'Done. ')+'.':'Done.')+' Here is the result.',files:fileRow('▤',nm,ln||'Result','') .replace('data-dl=""','data-dl="'+slug(nm)+'"')};
@@ -1619,8 +1675,8 @@ function resetFailed(){$('#fAv').className='av fail';$('#fT').textContent='Stopp
 function setLimit(v){$$('[data-lim]').forEach(function(x){x.classList.toggle('on',x.dataset.lim==v)});
  if(v=='trial'){PLAN='trial';USE=100}else if(v=='starter'){PLAN='starter';USE=40;if(MODE=='Full auto')MODE='Auto, ask before changes'}else{PLAN='growth';USE=100}
  var b=$('#limBody');
- if(v=='limit')b.innerHTML='<div class="um">Refresh /blog/what-is-aeo for 2026</div><div class="amsg"><div class="ahead"><span class="av">'+BOT+'</span><div><b>Paused · limit reached</b><br><span>Your plan: Growth · 100% of this month’s AI limit · resets Nov 1</span></div></div><div class="card"><div class="cb" style="padding-top:8px"><div class="step"><span class="sn">■</span><div class="tx">Win back citations · /features<em>Paused at step 2 of 5 · resumes when credits are added</em></div><span class="tag auto">Paused</span></div><div class="step"><span class="sn">■</span><div class="tx">Weekly report · Mon 08:00<em>Scheduled · paused until Nov 1</em></div><span class="tag auto">Paused</span></div><div class="step"><span class="sn">■</span><div class="tx">Win back lost citations · Thu 09:00<em>Scheduled · paused until Nov 1</em></div><span class="tag auto">Paused</span></div></div></div>'+usageCard()+'</div>';
- else if(v=='trial')b.innerHTML='<div class="um">Write a comparison page for Northwind</div><div class="amsg"><div class="ahead"><span class="av">'+BOT+'</span><div><b>Your trial AI limit is used up</b><br><span>Your plan: Trial · day 5 of 14 · 9 days left · runs are paused</span></div></div>'+usageCard()+gatesHTML('trial')+'</div>';
+ if(v=='limit')b.innerHTML='<div class="um">Refresh /blog/how-fresh-should-coffee-beans-be for 2026</div><div class="amsg"><div class="ahead"><span class="av">'+BOT+'</span><div><b>Paused · limit reached</b><br><span>Your plan: Growth · 100% of this month’s AI limit · resets Nov 1</span></div></div><div class="card"><div class="cb" style="padding-top:8px"><div class="step"><span class="sn">■</span><div class="tx">Win back citations · /coffee/espresso-roast<em>Paused at step 2 of 5 · resumes when credits are added</em></div><span class="tag auto">Paused</span></div><div class="step"><span class="sn">■</span><div class="tx">Weekly report · Mon 08:00<em>Scheduled · paused until Nov 1</em></div><span class="tag auto">Paused</span></div><div class="step"><span class="sn">■</span><div class="tx">Win back lost citations · Thu 09:00<em>Scheduled · paused until Nov 1</em></div><span class="tag auto">Paused</span></div></div></div>'+usageCard()+'</div>';
+ else if(v=='trial')b.innerHTML='<div class="um">Write a comparison page for Northbound Roasters</div><div class="amsg"><div class="ahead"><span class="av">'+BOT+'</span><div><b>Your trial AI limit is used up</b><br><span>Your plan: Trial · day 5 of 14 · 9 days left · runs are paused</span></div></div>'+usageCard()+gatesHTML('trial')+'</div>';
  else b.innerHTML='<div class="um">Run this week’s tasks in Full auto</div><div class="amsg"><div class="ahead"><span class="av">'+BOT+'</span><div><b>Full auto needs Growth</b><br><span>Your plan: Starter · I ask before every change</span></div></div>'+usageCard()+gatesHTML('starter')+'</div>';
  applyState();TT.limits=['AI limit',v=='trial'?['Trial','am']:v=='starter'?['Starter','']:['Limit reached','red']];setTitle('limits')}
 /* plan gates for MCP and Ship as PR (Addendum 2 · E) */
@@ -1638,8 +1694,8 @@ function setVRole(r){VROLE=r;$$('[data-vrole]').forEach(function(x){x.classList.
  var w=$('#vComp');w.dataset.role=r;w.innerHTML=compHTML(w.dataset);TT.viewer=['Why did Google AI Overviews citations drop?',[ROLES[r]+' · read-only','']];if(CUR=='viewer')setTitle('viewer')}
 /* out-of-permission answer: what was asked · why not (exact rule) · who can (roles) · what next */
 var DN={
- role:{t:'Add 5 prompts to tracking',p:['Needs Manager or Admin','am'],q:'Add these 5 prompts to tracking: “best aeo tools”, “aeo vs seo”, “ai visibility tracker”, “track brand in perplexity”, “llms.txt generator”',h:'I can’t add these prompts for you',
-  ask:'Add 5 prompts to Tracked Prompts for Ansvisor.<div class="pl"><span>best aeo tools</span><span>aeo vs seo</span><span>ai visibility tracker</span><span>track brand in perplexity</span><span>llms.txt generator</span></div>',
+ role:{t:'Add 5 prompts to tracking',p:['Needs Manager or Admin','am'],q:'Add these 5 prompts to tracking: “coffee subscription box”, “swiss water decaf”, “best espresso beans”, “low acid coffee beans”, “coffee roast date”',h:'I can’t add these prompts for you',
+  ask:'Add 5 prompts to Tracked Prompts for Brewline Coffee.<div class="pl"><span>coffee subscription box</span><span>swiss water decaf</span><span>best espresso beans</span><span>low acid coffee beans</span><span>coffee roast date</span></div>',
   why:'Your role is Analyst. Adding prompts needs Manager or Admin.<em>Role rule · Settings › Team › Roles &amp; access</em>',who:'Admins and Managers can do this.',
   next:'<button data-action="access.askAdmin" class="btn sm pri" data-askadmin>Ask your Admin</button><a data-action="access.see" class="btn sm" href="'+GOV+'#g-roles">See your access ↗</a><button data-action="denied.saveToFiles" class="btn sm" data-toast="Saved to Files · prompts-to-add-2026-10-26.md · only you">Save the list to Files</button>',dl:'add-5-prompts-to-tracking'},
  plan:{t:'Win back citations in Full auto',p:['Needs Growth','am'],q:'Run Win back citations in Full auto.',h:'Full auto needs Growth',
@@ -1690,24 +1746,24 @@ function openPop(id,el,place){var p=$(id),was=p.classList.contains('on');closePo
  var f=p.querySelector('input,button');if(f&&id!='#slash')setTimeout(function(){try{f.focus({preventScroll:true})}catch(e){}},0)}
 function openSlash(el){var c=el.closest('.comp')||el;openPop('#slash',c,'left');var p=$('#slash');p.style.width=Math.min(520,c.offsetWidth||520)+'px';var r=c.getBoundingClientRect();p.style.left=Math.max(8,r.left)+'px';p.style.top=Math.max(8,r.top-p.offsetHeight-8)+'px';$$('#slash .slr').forEach(function(x,i){x.classList.toggle('on',i==0)})}
 /* ---------- source drawer ---------- */
-var SRC={s1:['/blog/what-is-aeo · −14 citations','Google AI Overviews · last 7 days vs the 7 days before',[['“what is aeo”','Oct 24 · now cites guide.northwind.example (2026)'],['“aeo vs seo”','Oct 23 · now cites contoso.example/aeo-2026'],['“answer engine optimization”','Oct 22 · still cites you, position 3']]],
- s2:['/features · −6 citations','Google AI Overviews · last 7 days',[['“ai visibility tool features”','Oct 25 · now cites fabrikam.example/features'],['“track brand in chatgpt”','Oct 24 · still cites you, position 2']]],
- s3:['Newer 2026 guides · 2','Who Google AI Overviews cites now for the same prompts',[['guide.northwind.example/aeo-2026','Published Oct 2 · cited 11×'],['contoso.example/aeo-2026','Published Sep 28 · cited 7×']]],
- pplx:['Perplexity answers · 3,180','All tracked prompts · last 7 days',[['3,180 answers analyzed','Oct 19 – Oct 25'],['96 cite ansvisor.com','−20 vs the 7 days before'],['Open in Citations','Filtered to Perplexity']]],
- pages:['Cited pages · 2','Pages that lost citations',[['/blog/what-is-aeo','31 → 17'],['/features','12 → 6']]],
- brand:['Brand fact · Plans','Approved by Sam Lee · Oct 1',[['Starter','ChatGPT and Copilot'],['Growth','Adds Gemini, Perplexity, AI Overviews and AI Mode'],['Enterprise','Adds Claude']]],
- cited:['Cited page · /pricing','Cited 12× last month',[['ChatGPT','9 citations'],['Microsoft Copilot','3 citations']]],
- fan:['Fan-out · ansvisor plans platforms','Query Fan-outs',[['“which platforms does ansvisor track”','Asked by ChatGPT 14×'],['“ansvisor starter plan”','Asked by Copilot 6×']]],
- tasks:['Tasks ready · 4','Action Center',[['Add FAQ block to /pricing','Ready to close'],['Fix wrong platform claim on /pricing','Ready to close'],['Add FAQPage schema','Ready to close'],['Fix 2 broken links','Ready to close']]],
- pages2:['',''],check:['Impact checks · /pricing','Scheduled tracking data · no extra cost',[['Day 7 · Nov 2','Pending · early signal'],['Day 14 · Nov 9','First verdict · vs the 14 days before ship'],['Day 30 · Nov 25','Confirmed'],['Day 90 · Jan 24, 2027','Lasting effect']]]};
-SRC.pages=SRC.pages;SRC.pagesD=['Changes','This run',[['Cited passage on /pricing','Approved by you'],['Webflow draft “Pricing”','Approved by you']]];
+var SRC={s1:['/blog/how-fresh-should-coffee-beans-be · −14 citations','Google AI Overviews · last 7 days vs the 7 days before',[['“how long do coffee beans stay fresh”','Oct 24 · now cites beanbulletin.example (2026)'],['“coffee roast date explained”','Oct 23 · now cites roastnotes.example/guides/espresso-beans'],['“fresh coffee beans”','Oct 22 · still cites you, position 3']]],
+ s2:['/coffee/espresso-roast · −6 citations','Google AI Overviews · last 7 days',[['“best espresso beans for home”','Oct 25 · now cites roastnotes.example/guides/espresso-beans'],['“whole bean espresso roast”','Oct 24 · still cites you, position 2']]],
+ s3:['Newer 2026 guides · 2','Who Google AI Overviews cites now for the same prompts',[['beanbulletin.example/best-coffee-subscriptions-2026','Published Oct 2 · cited 11×'],['roastnotes.example/guides/espresso-beans','Published Sep 28 · cited 7×']]],
+ pplx:['Google AI Overviews answers · 3,180','All tracked prompts · last 7 days',[['3,180 answers analyzed','Oct 19 – Oct 25'],['96 cite brewline.example','−20 vs the 7 days before'],['Open in Citations','Filtered to Google AI Overviews']]],
+ pages:['Cited pages · 2','Pages that lost citations',[['/blog/how-fresh-should-coffee-beans-be','31 → 17'],['/coffee/espresso-roast','12 → 6']]],
+ brand:['Brand fact · Shipping','Approved by Sam Lee · Oct 1',[['Roasting','Roasted to order'],['Shipping','Within a day of roasting'],['Subscription','Pause or skip anytime']]],
+ cited:['Cited page · /subscriptions','Cited 12× last month',[['ChatGPT','9 citations'],['Microsoft Copilot','3 citations']]],
+ fan:['Fan-out · brewline subscription plans','Query Fan-outs',[['“brewline coffee review”','Asked by ChatGPT 14×'],['“coffee subscription pause anytime”','Asked by Copilot 6×']]],
+ tasks:['Tasks ready · 4','Action Center',[['Add FAQ block to /subscriptions','Ready to close'],['Fix wrong shipping claim on /subscriptions','Ready to close'],['Add FAQPage schema','Ready to close'],['Fix 2 broken links','Ready to close']]],
+ pages2:['',''],check:['Impact checks · /subscriptions','Scheduled tracking data · no extra cost',[['Day 7 · Nov 2','Pending · early signal'],['Day 14 · Nov 9','First verdict · vs the 14 days before ship'],['Day 30 · Nov 25','Confirmed'],['Day 90 · Jan 24, 2027','Lasting effect']]]};
+SRC.pages=SRC.pages;SRC.pagesD=['Changes','This run',[['Cited passage on /subscriptions','Approved by you'],['Webflow draft “Subscriptions”','Approved by you']]];
 function openDrawer(k,label){var d=SRC[k];if(k=='pages'&&CUR=='done')d=SRC.pagesD;if(!d||!d[2])d=[label||'Sources','Behind this number',[['Source 1','Open in Sources'],['Source 2','Open in Sources']]];
  $('#drT').textContent=d[0];$('#drS').textContent=d[1];$('#drB').innerHTML=d[2].map(function(r){return '<div class="srow">'+r[0]+'<em>'+r[1]+'</em></div>'}).join('')+'<button data-action="sources.openInCitations" class="btn sm" data-toast="Opens Citations with these filters">Open in Citations</button>';$('#drawer').classList.add('on');$('#drX').focus()}
 function closeDrawer(){$('#drawer').classList.remove('on')}
 /* ---------- download menu: one menu for every answer and deliverable ---------- */
 function slug(t){return (t||'chat').toLowerCase().replace(/[“”"’']/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)||'chat'}
 /* absolute timestamps: every answer, deliverable and download says when it was generated and how fresh the data is */
-var GENT={'why-perplexity-dropped':'16:20','action-center-tasks-result':'14:32','what-i-did-and-why':'14:32','win-back-citations':'14:05','how-to-add-a-competitor':'15:48','weekly-citations-report':'08:02','share-of-voice-vs-competitors':'11:05'};
+var GENT={'why-ai-overviews-dropped':'16:20','action-center-tasks-result':'14:32','what-i-did-and-why':'14:32','win-back-citations':'14:05','how-to-add-a-competitor':'15:48','weekly-citations-report':'08:02','share-of-voice-vs-competitors':'11:05'};
 function asOf(sl){return sl=='how-to-add-a-competitor'?'':sl=='weekly-citations-report'?'00:00':'08:00'}
 function genLine(time,asof,dt){dt=dt||'Oct 26';return '<span class="gen" title="Generated '+dt+', 2026 '+time+' GMT+3'+(asof?' · Data as of '+dt+', 2026 '+asof+' GMT+3':'')+'">Generated '+dt+', 2026 · '+time+(asof?' · Data as of '+dt+', '+asof:'')+'</span>'}
 function stamp(){$$('.acts').forEach(function(a){if(a.querySelector('.gen'))return;var d=a.querySelector('[data-dl]'),sl=d?d.dataset.dl:'';a.insertAdjacentHTML('beforeend',genLine(a.dataset.gen||GENT[sl]||'16:20',(a.dataset.gen&&a.dataset.gen<'08:00')?'00:00':(sl?asOf(sl):'08:00'),a.dataset.date))});
@@ -1734,7 +1790,7 @@ function demo(k){closePops();if(k=='reset'){PLAN='growth';USE=18;ROLE='manager';
  if(k=='many'){['Intercom','Zendesk','Notion','Airtable','Jira'].forEach(function(n){if($('#cnBox').textContent.indexOf(n)<0)$('#cnBox').insertAdjacentHTML('beforeend','<div class="cn"><span class="cd"></span><span class="cnn">'+n+'</span><button data-action="integrations.connect" class="btn sm">Connect</button></div>')});$('#cnSearch').style.display='flex';var c=$('.conn');c.classList.remove('shut');$('#cnTog').textContent='▴';toast('23 integrations · search shows under Integrations');return}
  var p=k.split('/');go(p[0],p[1])}
 /* ---------- agents at work: extra rows (team-wide, 24 in all) ---------- */
-var AW=[['run','Win back citations · /blog/geo','Step 2 of 5 · comparing cited pages',40],['run','Quality pass · 3 drafts','Draft 2 of 3 · splitting long sentences',66],['need','Comparison: Ansvisor vs Northwind','Needs your OK · 2 competitor facts',0],['run','Refresh for 2026 · 12 pages','Page 5 of 12',42],['run','FAQ for /features','Writing 6 answers',30],['ok','Share of voice report','Done · 09:40 · 1 file',0],['run','Translate /pricing to DE, FR','Translating · DE done',50],['run','AI shopping readiness · US','Checking 48 products',20],['need','Wrong claim: “Ansvisor is paid only”','Needs your click · send outreach',0],['run','Schema for 8 blog posts','Post 3 of 8',37],['ok','Citation check for /features','Done · +4 citations',0],['run','Weekly report · team','Writing the summary',80],['run','Beat Contoso on “ai visibility tool”','Step 1 of 5',10],['run','Ready to publish · 2 drafts','Filling page fields',60],['run','Answer-first rewrite · /blog/aeo','3 of 9 H2s',33],['ok','llms.txt update','Done · published by Sam Lee',0],['run','Brand facts check','Comparing 14 drafts',25],['run','Complete tasks · /features','Step 1 of 6',12],['run','Images for Q4 guide','2 of 4 images',50],['fail','Merchant feed fix · EU','Failed · Google Merchant Center not connected',0],['ok','Reddit threads for “AEO tools”','Done · 18 threads',0]];
+var AW=[['run','Win back citations · /coffee/decaf','Step 2 of 5 · comparing cited pages',40],['run','Quality pass · 3 drafts','Draft 2 of 3 · splitting long sentences',66],['need','Comparison: Brewline Coffee vs Northbound Roasters','Needs your OK · 2 competitor facts',0],['run','Refresh for 2026 · 12 pages','Page 5 of 12',42],['run','FAQ for /coffee/espresso-roast','Writing 6 answers',30],['ok','Share of voice report','Done · 09:40 · 1 file',0],['run','Translate /subscriptions to Spanish','Translating · 2 of 4 sections',50],['run','AI shopping readiness · US','Checking 48 products',20],['need','Wrong claim: “Brewline only sells subscriptions”','Needs your click · send outreach',0],['run','Schema for 8 blog posts','Post 3 of 8',37],['ok','Citation check for /coffee/espresso-roast','Done · +4 citations',0],['run','Weekly report · team','Writing the summary',80],['run','Beat Kettle & Crate on “coffee subscription box”','Step 1 of 5',10],['run','Ready to publish · 2 drafts','Filling page fields',60],['run','Answer-first rewrite · /blog/single-origin-vs-blend','3 of 9 H2s',33],['ok','llms.txt update','Done · published by Sam Lee',0],['run','Brand facts check','Comparing 14 drafts',25],['run','Complete tasks · /coffee/espresso-roast','Step 1 of 6',12],['run','Images for Q4 guide','2 of 4 images',50],['fail','Merchant feed fix · EU','Failed · Google Merchant Center not connected',0],['ok','Reddit threads for “coffee subscriptions”','Done · 18 threads',0]];
 function awFill(){if($('#awMore').children.length)return;$('#awMore').innerHTML=AW.map(function(a){var dot=a[0]=='run'?'<span class="sd run"><i></i></span>':a[0]=='need'?'<span class="sd need"></span>':a[0]=='fail'?'<span class="sd fail"></span>':'<span class="sd ok">✓</span>';
  return '<div class="li2'+(a[0]=='ok'?' unread':'')+'">'+dot+'<div class="tx"><b>'+a[1]+'</b><em'+(a[0]=='need'?' class="amt"':a[0]=='fail'?' class="red"':'')+'>'+a[2]+'</em>'+(a[0]=='run'?'<div class="mini"><i style="width:'+a[3]+'%"></i></div>':'')+'</div></div>'}).join('');addDots();addSteps();a11y()}
 var curRow=null;
@@ -1745,7 +1801,7 @@ document.addEventListener('mouseover',function(e){var d=e.target.closest('.list 
  var row=d.closest('.li2'),line=row?row.querySelector('em'):null;tip.innerHTML='<b>'+TIPS[k][0]+'</b>'+(line&&k!='idle'?line.textContent:TIPS[k][1]);tip.style.display='block';var r=d.getBoundingClientRect();tip.style.left=(r.right+10)+'px';tip.style.top=(r.top-4)+'px'});
 function cnFilter(q){q=q.toLowerCase();$$('#cnBox .cn').forEach(function(r){r.style.display=r.textContent.toLowerCase().indexOf(q)>-1?'flex':'none'})}
 var AGSTEPS={'Action Center tasks':function(){return SK.tasks.steps.map(function(s,i){return [i<3?'g':i==3?'a':'',s[0],i==3?'waiting for your OK':s[2]=='exec'?'needs your click':'']})},
- 'Win back citations · /features':function(){return SK.winback.steps.map(function(s,i){return [i<1?'g':i==1?(USE>=100?'':'k'):'',s[0],s[2]=='exec'?'needs your click':'']})},
+ 'Win back citations · /coffee/espresso-roast':function(){return SK.winback.steps.map(function(s,i){return [i<1?'g':i==1?(USE>=100?'':'k'):'',s[0],s[2]=='exec'?'needs your click':'']})},
  'Weekly citations report':function(){return SK.report.steps.map(function(s){return ['g',s[0]]})},
  'Merchant feed fix · EU':function(){return [['g','Read 48 products'],['r','Update 12 titles in Google Merchant Center','Not connected · connect to retry'],['','Push the feed','needs your click']]}};
 function stepsFor(row){var nm=row.querySelector('b').textContent;if(AGSTEPS[nm])return AGSTEPS[nm]();var sd=row.querySelector('.sd'),em=row.querySelector('em')?row.querySelector('em').textContent:'';
@@ -1873,16 +1929,16 @@ document.addEventListener('click',function(e){var t=e.target,c;
  if((c=t.closest('[data-umenu]'))){renderUmenu();openPop('#usermenu',c,c.classList.contains('uav')?'below':'left');return}
  if((c=t.closest('[data-vrole]'))){setVRole(c.dataset.vrole);try{history.replaceState(null,'','#s-viewer'+(VROLE=='agency'?'/agency':''))}catch(e){}return}
  if((c=t.closest('[data-deny]'))){setDeny(c.dataset.deny);try{history.replaceState(null,'','#s-denied'+(DENY=='role'?'':'/'+DENY))}catch(e){}return}
- if(t.closest('[data-sendac]')){toast('Attached to the open Action Center action “Win back /blog/what-is-aeo” · no duplicate created');return}
+ if(t.closest('[data-sendac]')){toast('Attached to the open Action Center action “Win back /blog/how-fresh-should-coffee-beans-be” · no duplicate created');return}
  /* working */
  if(t.closest('[data-wpause]')){wPause();return}
  if(t.closest('[data-wresume]')){runWork(W.i);toast('Resumed at step '+(W.i+1));return}
  if(t.closest('[data-wstop]')){wStop();return}
  if(t.closest('[data-wretry]')){runWork(W.i);toast('Retrying step '+(W.i+1));return}
  if((c=t.closest('.cvh .tabs button'))){$$('.cvh .tabs button').forEach(function(x){x.classList.toggle('on',x==c)});var nn=c.textContent;
-  if(nn=='Schema')$('#cv').innerHTML='<h2>FAQPage schema</h2><pre style="font:12px Geist Mono,monospace;white-space:pre-wrap;color:#44403c">{"@context":"https://schema.org","@type":"FAQPage",\n "mainEntity":[{"@type":"Question","name":"How much does Ansvisor cost?",\n  "acceptedAnswer":{"@type":"Answer","text":"Starter is $49 a month…"}}]}</pre>';
+  if(nn=='Schema')$('#cv').innerHTML='<h2>FAQPage schema</h2><pre style="font:12px Geist Mono,monospace;white-space:pre-wrap;color:#44403c">{"@context":"https://schema.org","@type":"FAQPage",\n "mainEntity":[{"@type":"Question","name":"How much is a Brewline Coffee subscription?",\n  "acceptedAnswer":{"@type":"Answer","text":"The House Blend Subscription is $18 a bag…"}}]}</pre>';
   else if(nn=='Plan')$('#cv').innerHTML='<h2>Plan</h2><ol style="line-height:1.9;padding-left:18px">'+SK.tasks.steps.map(function(s){return '<li>'+s[0]+'</li>'}).join('')+'</ol>';
-  else $('#cv').innerHTML='<h2>Pricing FAQ</h2><div id="cvw">'+FAQ.map(function(q,k){return k%2?'<p>'+q+'</p>':'<h3>'+q+'</h3>'}).join('')+'</div>';return}
+  else $('#cv').innerHTML='<h2>Subscriptions FAQ</h2><div id="cvw">'+FAQ.map(function(q,k){return k%2?'<p>'+q+'</p>':'<h3>'+q+'</h3>'}).join('')+'</div>';return}
  /* needs you */
  if(t.closest('[data-nedit]')){var ins=$('#nIns');ins.innerHTML='<textarea data-action="approval.editText" aria-label="New text">'+ins.textContent+'</textarea>';ins.querySelector('textarea').focus();$('#nBtns1').innerHTML='<button data-action="approval.cancelEdit" class="btn" data-ncancel>Cancel</button><button data-action="approval.saveAndApprove" class="btn pri" data-nsave>Save &amp; approve</button>';return}
  if(t.closest('[data-ncancel]')){var i2=$('#nIns');i2.textContent=i2.querySelector('textarea').defaultValue;$('#nBtns1').innerHTML='<button data-action="approval.skip" class="btn" data-nskip="1">Skip</button><button data-action="approval.edit" class="btn" data-nedit>Edit</button><button data-action="approval.approve" class="btn pri" data-napprove="1">Approve</button>';return}
@@ -1890,7 +1946,7 @@ document.addEventListener('click',function(e){var t=e.target,c;
  if((c=t.closest('[data-napprove]'))){nNext(+c.dataset.napprove,false);return}
  if((c=t.closest('[data-nskip]'))){nNext(+c.dataset.nskip,true);return}
  /* done */
- if(t.closest('[data-publish]')){PUB=true;renderDone();setTitle('done');setTasksRow('done');toast('Published to ansvisor.com/pricing · logged in the Activity log');return}
+ if(t.closest('[data-publish]')){PUB=true;renderDone();setTitle('done');setTasksRow('done');toast('Published to brewline.example/subscriptions · logged in the Activity log');return}
  if((c=t.closest('[data-fu]'))&&c.tagName=='BUTTON'){var a2=c.dataset.fu;FUS=a2=='set'?'set':a2=='no'?'skipped':a2=='ask'?'none':a2=='redo'?'none':'undone';if(a2=='undo'&&!fullAuto())FUS='none';renderFU();toast({set:'Checks set · day 7, 14, 30, 90 · in Scheduled',no:'No checks set',undo:'Checks removed · logged in the Activity log',redo:'Checks set again · logged',ask:'Set the checks?'}[a2]);return}
  if((c=t.closest('[data-mem]'))){var mc=$('#memCard');mc.outerHTML=c.dataset.mem=='save'?'<div class="follow okline" id="memCard"><span class="sli">☰</span><div>Saved to your memory<em>Only you · edit it in Memory</em></div><button data-action="memory.openPage" class="btn sm" data-go="memory">Memory</button></div>':'<div id="memCard"></div>';return}
  if((c=t.closest('[data-forget]'))&&c.closest('#mem-w')&&ROLE!='admin'){toast('Admins change workspace memory · '+ASKED);return}
@@ -1942,7 +1998,7 @@ document.addEventListener('click',function(e){var t=e.target,c;
  if((c=t.closest('[data-addkey]'))&&ROLE!='admin'){toast('API keys are Admin only · '+ASKED);return}
  if((c=t.closest('[data-addkey]'))){c.closest('.krow2').insertAdjacentHTML('afterend','<div class="krow2" style="margin-top:-4px"><input data-action="keys.input" type="password" placeholder="Paste the key" aria-label="API key" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:6px 8px"><button data-action="keys.testAndSave" class="btn sm pri" data-toast="Key tested and saved · Connected">Test &amp; save</button></div>');c.remove();return}
  if((c=t.closest('.pk'))){$$('.pk').forEach(function(p){p.classList.toggle('on',p==c)});return}
- if((c=t.closest('[data-run]'))){openRun('winback',1,'Win back citations · /features');return}
+ if((c=t.closest('[data-run]'))){openRun('winback',1,'Win back citations · /coffee/espresso-roast');return}
  if(t.closest('[data-report]')){openReport();return}
  if(t.closest('.think')){var th=t.closest('.think');var ex=th.getAttribute('aria-expanded')=='true';th.setAttribute('aria-expanded',!ex);th.querySelector('.car').style.transform=ex?'':'rotate(90deg)';$('#aThinkTx').textContent=ex?'Thought for 3 s':'Read the answers, compared cited pages week over week, then checked who is cited now.';return}
  if((c=t.closest('[data-go]'))){var ts=c.dataset.toast;if(c.hasAttribute('data-libtab')){go('skills');$('[data-tab2="sk-l"]').click()}else go(c.dataset.go);if(ts)toast(ts);return}
@@ -1959,6 +2015,7 @@ function doSend(b,viaKey){var inp=b.closest('.comp').querySelector('.in'),txt=in
  /* owner rule: with only the ghost (or the placeholder) showing nothing sends; Tab first, then Enter or Send */
  if(gh||(inp&&inp.querySelector('.ph0'))){if(inp)inp.focus();return}
  var real=inp&&!inp.querySelector('.ph0,.ghosttx')&&txt;
+ if(act=='skillnew'&&real){if(/^create a skill that\s*$/i.test(txt)){toast('Finish the sentence, or pick an example');placeEnd(inp);return}skAsk(txt);return}
  if(act.indexOf('plan:')==0&&real){go('plan',act.split(':')[1]);return}
  if(act=='pstart'&&real){panelStart();setPh(inp);return}
  if(!real){if(inp)inp.focus();toast(inp&&inp.querySelector('.ghosttx')?'Press Tab to use the suggestion, or type your own':'Type a message, or press / for skills');return}
@@ -2032,27 +2089,27 @@ var DEPTS={
  lead:{name:'Big picture',hero:'Visibility is up 6.2 this month. 1 thing needs you.',
   sc:[['Monthly board summary','Mon'],['What changed this week','3'],['Competitor moves','2']],
   st:['Are we winning in AI search this month?','Which competitor does AI recommend instead of us?','What did last month’s work change?']},
- comp:{name:'Competitors',hero:'Kestrel CRM gained 4 points of share of voice this week.',
+ comp:{name:'Competitors',hero:'Northbound Roasters gained 4 points of share of voice this week.',
   sc:[['Competitor moves','3 this week'],['Prompts we lost','5'],['Cited for rivals, not us','12'],['Share of voice by platform','5']],
-  st:['Which competitor gained the most this month?','Why does AI recommend Kestrel CRM over us?','Which prompts did we lose this week?','Which sources cite our rivals but not us?']},
- growth:{name:'AI traffic',hero:'AI visits are up 18% this month. /pricing brought 38 signups.',
+  st:['Which competitor gained the most this month?','Why does AI recommend Northbound Roasters over us?','Which prompts did we lose this week?','Which sources cite our rivals but not us?']},
+ growth:{name:'AI traffic',hero:'AI visits are up 18% this month. /subscriptions brought 38 new subscribers.',
   sc:[['AI traffic report','Mon'],['Prompts that convert','6'],['Landing pages to fix','2']],
-  st:['Which AI answers bring us signups?','Which landing pages lose AI visitors?','Which prompts are rising in our category?']},
+  st:['Which AI answers bring us subscribers?','Which landing pages lose AI visitors?','Which prompts are rising in our category?']},
  seo:{name:'Prompts and citations',hero:null,
   sc:[['Win back citations','2 pages'],['Complete tasks','4 due'],['Site audit fixes','6'],['Weekly report','Mon']],
-  st:['Why did our Google AI Overviews citations drop this week?','Which pages should AI cite but doesn’t?','Which prompts did we lose to Kestrel CRM?']},
+  st:['Why did our Google AI Overviews citations drop this week?','Which pages should AI cite but doesn’t?','Which prompts did we lose to Northbound Roasters?']},
  content:{name:'Content',hero:'3 drafts are under the quality bar. 2 topics have no clear leader.',
   sc:[['What to write next','5'],['Quality pass','3 drafts under 60'],['Ready to publish','2']],
-  st:['What should we write or update next?','Which questions have no good answer yet?','Make a brief for “CRM for field sales”']},
+  st:['What should we write or update next?','Which questions have no good answer yet?','Make a brief for “low acid coffee beans”']},
  brand:{name:'Brand',hero:'Sentiment on ChatGPT dipped this week. 1 claim to fact-check.',
   sc:[['Fact check','1 claim to review'],['How AI describes us','Weekly'],['Sentiment by platform','5'],['Sources shaping our story','14']],
   st:['How does AI describe our brand?','Fact-check what AI says about our pricing','Why did sentiment drop on ChatGPT?','Which sources shape what AI says about us?']},
- pd:{name:'Product',hero:'14 new buyer questions this week. “Contact import” has no clear leader.',
+ pd:{name:'Product',hero:'14 new buyer questions this week. “Low-acid beans” has no clear leader.',
   sc:[['Buyer questions','14 new'],['How AI compares us','4 rivals'],['Unmet needs','3'],['Product digest','Mon']],
-  st:['What do buyers ask AI about integrations?','Which features does AI name for Kestrel CRM but not for us?','Which use cases have no clear winner yet?','Did AI pick up our call recording launch?'],ans:'pdans'},
- bd:{name:'Markets and sources',hero:'Kestrel CRM gained ground in Germany. 2 sites AI trusts don’t list you yet.',
-  sc:[['Market gaps','DE'],['Listing gaps','18'],['Publisher sites','36'],['Market snapshot','Mon']],
-  st:['Where in Germany does AI send buyers to rivals?','Which directories and review sites does AI trust in our category?','Which segments have no clear leader?','How do buyers in France ask about CRM?'],ans:'bdans'},
+  st:['What do buyers ask AI about coffee subscriptions?','What does AI praise Northbound Roasters for that it doesn’t say about us?','Which buyer questions have no clear winner yet?','Did AI pick up our new water process decaf?'],ans:'pdans'},
+ bd:{name:'Markets and sources',hero:'Northbound Roasters gained ground in gift prompts. 2 sites AI trusts don’t list you yet.',
+  sc:[['Source gaps','4'],['Listing gaps','18'],['Publisher sites','36'],['Market snapshot','Mon']],
+  st:['Which sites send coffee buyers to our rivals?','Which review sites and guides does AI trust in our category?','Which buyer questions have no clear leader?','How do gift buyers ask AI about coffee?'],ans:'bdans'},
 };
 var SCUT0=null,HERO0=null;
 function esc2(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
@@ -2087,13 +2144,13 @@ function renderNews(){var box=$('#deptNews');if(!box){$('#deptStart').insertAdja
  box.innerHTML=out.length?'<div class="sec" style="margin-left:2px;margin-top:16px">New for you</div><div class="nfy">'+out.map(function(x){return '<button data-action="dept.openNew" data-t="'+esc2(x[1])+'" data-k="'+x[0]+'"><span class="nk">'+x[0]+'</span><b>'+esc2(x[1])+'</b><em>'+esc2(x[2])+'</em></button>'}).join('')+'</div>':''}
 function syncPick(){$$('#dpk button').forEach(function(b){var on=FPICK.indexOf(b.dataset.dept)>-1;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});$('#dptGo').disabled=!FPICK.length;
  $('#dpCount').textContent=FPICK.length?FPICK.length+' selected · your access stays the same: what you can change still depends on your role.':'Pick at least one. Your access stays the same: what you can change still depends on your role.'}
-TT.dept=['Your focus',''];TT.pdans=['Buyer questions · integrations',['Done','ok']];TT.bdans=['Market gaps · Germany',['Done','ok']];
+TT.dept=['Your focus',''];TT.pdans=['Buyer questions · subscriptions',['Done','ok']];TT.bdans=['Source gaps · subscriptions and gifts',['Done','ok']];
 if(typeof CONV!='undefined'){CONV.push('pdans','bdans')}
-SRC.pd1=['Outlook sync reason','Quoted in 5 of 7 Kestrel CRM answers',[['ChatGPT · “Which CRM syncs with Outlook calendars?”','“Kestrel CRM offers native two-way Outlook sync…”'],['Gemini · same prompt','Names Kestrel CRM first, cites kestrelcrm.com/integrations']]];
-SRC.pd2=['Slack alerts page','The page AI cites for your Slack alerts',[['northwindcrm.io/integrations/slack','Cited 9× last 30 days'],['ChatGPT · Google AI Overviews','Both quote the first paragraph']]];
-SRC.bd1=['German review sites','Cited in German-language CRM answers',[['capterra.de/crm-software','41 answers · lists Kestrel CRM, Contoso Sales'],['omr.com/de/reviews/crm','17 answers · lists Harbor CRM, Fabrikam CRM']]];
-GENT['buyer-questions-integrations']='14:20';GENT['germany-market-gaps']='14:24';
-DEMO.push(['Focus areas (CHAT-24)',[['dept','Choose your focus · first open'],['dept:pd','Home · Product and buyer needs'],['dept:bd','Home · Markets and partners'],['dept:pd,bd','Home · Product + Markets (2 picked)'],['dept:comp,brand','Home · Competitors + Brand'],['pdans','Answer · buyer questions'],['bdans','Answer · market gaps'],['dept:none','Home · no focus chosen']]]);
+SRC.pd1=['Single-origin reason','Quoted in 5 of 7 Northbound Roasters answers',[['ChatGPT · “What are the best coffee subscriptions in 2026?”','“Northbound Roasters is a frequent pick for small-batch single origins…”'],['Gemini · same prompt','Names Northbound Roasters first, cites northboundroasters.example/single-origins']]];
+SRC.pd2=['Pause or skip page','The page AI cites for pausing your subscription',[['brewline.example/subscriptions','Cited 9× last 30 days'],['ChatGPT · Google AI Overviews','Both quote the first paragraph']]];
+SRC.bd1=['Review and gift sites','Cited in subscription and gift answers',[['cupcompare.example/coffee-subscriptions-compared','41 answers · lists Northbound Roasters, Kettle & Crate'],['dailybrewnews.example/coffee-gifts','17 answers · lists Morning Ritual Co., Daybreak Beans']]];
+GENT['buyer-questions-subscriptions']='14:20';GENT['source-gaps-subscriptions']='14:24';
+DEMO.push(['Focus areas (CHAT-24)',[['dept','Choose your focus · first open'],['dept:pd','Home · Product and buyer needs'],['dept:bd','Home · Markets and partners'],['dept:pd,bd','Home · Product + Markets (2 picked)'],['dept:comp,brand','Home · Competitors + Brand'],['pdans','Answer · buyer questions'],['bdans','Answer · source gaps'],['dept:none','Home · no focus chosen']]]);
 var go0=go;go=function(s,v){go0(s,v);if(s=="home"&&v!="empty"){var f=FOCUS.filter(function(x){return DEPTS[x].hero})[0];if(f)heroLine(DEPTS[f].hero)}if(s=='dept'){FPICK=FOCUS.slice();syncPick()}if(TT[s]&&typeof setTitle=='function')setTitle(s)};
 var demo0=demo;demo=function(k){if(k.indexOf('dept:')==0){var v=k.slice(5);FOCUS=v=='none'?[]:v.split(',');applyDept();go('home');toast(FOCUS.length?'Home focused on '+focusLabel():'No focus chosen · default Home');return}demo0(k)};
 document.addEventListener('click',function(e){var t=e.target,c;if(!t.closest)return;
@@ -2115,8 +2172,8 @@ function setMg(shut,save){var b=$('#mgBox'),h=$('#mgHead'),t=$('#mgTog');if(!b)r
  if(save){try{localStorage.setItem('ansvisor.chatMenuSection',shut?'off':'on')}catch(e){}}}
 try{if(localStorage.getItem('ansvisor.chatMenuSection')=='off')setMg(true,false)}catch(e){}
 var ACT=148,ARCHTAB=ARCHTAB||'active',ARCHD={};
-PASTC['Q3 content plan']={q:'Plan our Q3 content.',d:'Sep 14',t:'10:12',a:'I planned 12 drafts for Q3 across 3 topics: AI visibility tools, AEO and pricing questions. All 12 are in Content Plan.',files:fileRow('▤','Q3 content plan','12 drafts · 3 topics','q3-content-plan')};
-PASTC['Northwind pricing check']={q:'Compare Northwind’s pricing with ours.',d:'Sep 21',t:'16:40',tb:1,a:'Northwind has 3 plans. AI answers mention its free trial more often than ours.',files:fileRow('▦','Northwind pricing check','CSV · 3 plans','northwind-pricing-check',1)};
+PASTC['Q3 content plan']={q:'Plan our Q3 content.',d:'Sep 14',t:'10:12',a:'I planned 12 drafts for Q3 across 3 topics: coffee subscriptions, whole bean coffee and buying better coffee. All 12 are in Content Plan.',files:fileRow('▤','Q3 content plan','12 drafts · 3 topics','q3-content-plan')};
+PASTC['Northbound Roasters price check']={q:'Compare Northbound Roasters’ prices with ours.',d:'Sep 21',t:'16:40',tb:1,a:'Northbound Roasters’ Single Origin Subscription is $21 a bag, $3 more than our House Blend Subscription. AI answers mention its tasting notes more often than our roast dates.',files:fileRow('▦','Northbound Roasters price check','CSV · 3 plans','northbound-roasters-price-check',1)};
 function chatName(r){var b=r&&r.querySelector('b');return b?b.textContent:''}
 function menuRow(nm){return $$('.list .li2').filter(function(r){return r.id!='newItem'&&chatName(r)==nm})[0]}
 function allRow(nm){return $$('#s-allchats .tr2.c:not(.th)').filter(function(r){return chatName(r)==nm})[0]}
@@ -2161,6 +2218,73 @@ document.addEventListener('click',function(e){var t=e.target,c;if(!t.closest)ret
  if(t.closest('#topMore')&&CUR=='past'&&curPast()){var it=$$('#topmenu .mi2').filter(function(x){return x.dataset.action=='chat.archive'})[0];if(!it)return;it.removeAttribute('data-tm');
   if($('#archBar')){it.dataset.action='chat.unarchive';it.setAttribute('data-unarch','');it.querySelector('div').textContent='Unarchive'}else it.setAttribute('data-archcur','')}});
 archCounts();archTab(ARCHTAB);inboxBadge();
+/* the mockup’s “today”: every date on Home’s since-cards is counted from it (same constant in the signature mockup) */
+var DAY0=new Date(2026,9,26);
+function dayOff(n){var d=new Date(DAY0);d.setDate(d.getDate()+n);return d}
+function md(d){return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()}
+$$('[data-since]').forEach(function(e){e.textContent=md(dayOff(-7))+' → today';if(e.title)e.title='Your last visit was '+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOff(-7).getDay()]+', '+md(dayOff(-7))});
+/* ---------- Create a skill (CHAT-13): menu, chat flow, upload/URL review ---------- */
+TT['skill-new']=['New skill',['Draft','']];TT['skill-review']=['Review skill',['Not added yet','am']];SUBP.push('skill-review');CONV.push('skill-new');
+var SKEX=[
+ {chip:'…summarises Northbound Roasters’ new citations for the sales team every Monday',t:'summarises Northbound Roasters’ new citations for the sales team every Monday',name:'competitor-citations-digest',title:'Competitor citations digest',desc:'Every Monday, sums up the pages AI started citing for Northbound Roasters and sends the sales team a short digest.',reads:'Citations · Tracked Prompts · Share of voice',mode:'Auto, ask before changes',when:'Every Monday 08:00',out:'A short email'},
+ {chip:'…checks /subscriptions every Friday for claims AI gets wrong',t:'checks /subscriptions every Friday for claims AI gets wrong',name:'subscription-claims-check',title:'Subscription claims check',desc:'Every Friday, compares what AI answers say about /subscriptions with your brand facts and lists the wrong claims.',reads:'AI answers · Brand facts',mode:'Ask me first',when:'Every Friday 09:00',out:'A table in Files'},
+ {chip:'…turns the weekly report into three LinkedIn posts',t:'turns the weekly report into three LinkedIn posts',name:'weekly-report-posts',title:'Weekly report posts',desc:'Turns the weekly citations report into three short LinkedIn posts for the team to review.',reads:'Weekly report · Citations',mode:'Ask me first',when:'After the weekly report',out:'Drafts in Files'}];
+var SKN=null;
+function skSlug(t){return t.toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9]+/g,' ').trim().split(' ').slice(0,4).join('-')||'my-skill'}
+function skFrom(txt){var t=txt.replace(/^create a skill that\s*/i,'').replace(/[.\s]+$/,'');var ex=SKEX.filter(function(x){return x.t==t})[0];if(ex)return JSON.parse(JSON.stringify(ex));
+ return {t:t,name:skSlug(t),title:t.charAt(0).toUpperCase()+t.slice(1),desc:t.charAt(0).toUpperCase()+t.slice(1)+'.',reads:'Citations · Tracked Prompts',mode:'Auto, ask before changes',when:'When I ask',out:'A short email'}}
+function esc3(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
+function skillNew(v){if(readOnly()){toast(ROLES[ROLE]+'s can’t create skills · Admins and Managers can');go('skills');return}
+ SKN=null;$('#sknCol').innerHTML='<div class="hero" style="margin:22px 0 16px"><h1>Create a skill</h1><p>Say what it should do. Chat writes it, you review it. Nothing is saved until you click Save.</p></div>';
+ $('#sknEx').style.display='';$('#sknEx').innerHTML='<span class="optl">Examples</span>'+SKEX.map(function(x,i){return '<button data-action="skillNew.example" class="chip" data-skx="'+i+'">'+x.chip+'</button>'}).join('');
+ var w=$('#sknComp');w.innerHTML=compHTML(w.dataset);
+ if(v=='draft'){SKN=JSON.parse(JSON.stringify(SKEX[0]));skAsk('Create a skill that '+SKN.t);SKN.pick={when:SKN.when,out:SKN.out};$$('#sknCol [data-skq]').forEach(function(c){c.classList.toggle('on',c.textContent==SKN.pick[c.dataset.skq])});skDraft()}}
+function skAsk(txt){if($('#sknQ')){$('#sknCol').insertAdjacentHTML('beforeend','<div class="um">'+esc3(txt)+'</div>');toast('Added to the request · the draft keeps it');setPh($('#sknComp .in'));skScroll();return}
+ SKN=SKN&&SKN.t?SKN:skFrom(txt);SKN.pick={};$('#sknEx').style.display='none';
+ var q=function(k,l,o){o=o.filter(function(x,i){return o.indexOf(x)==i});return '<div class="skq"><b>'+l+'</b><div class="chips opts">'+o.map(function(x){return '<button data-action="skillNew.answer" class="chip" data-skq="'+k+'">'+x+'</button>'}).join('')+'</div></div>'};
+ $('#sknCol').insertAdjacentHTML('beforeend','<div class="um">'+esc3(txt)+'</div><div class="amsg" id="sknQ"><div class="ahead"><span class="av">'+BOT+'</span><span>Two quick questions, then I’ll write it</span></div>'+
+  q('when','When should it run?',[SKN.when,'When I ask','After each tracking run'])+q('out','What should it hand over?',[SKN.out,'A table in Files','A message in your Inbox'])+'</div>');
+ var inp=$('#sknComp .in');if(inp){inp.dataset.ph0='Answer above, or add details…';setPh(inp)}skScroll()}
+function skScroll(){var th=$('#s-skill-new .thread');if(th)th.scrollTop=th.scrollHeight}
+function skDraft(){var s=SKN,old=$('#skDraft');if(old)old.remove();var when=s.pick.when||s.when,out=s.pick.out||s.out,r1=s.reads.split(' · ')[0].toLowerCase();
+ $('#sknCol').insertAdjacentHTML('beforeend','<div class="card skdraft" id="skDraft"><div class="ch"><span class="av s22">'+BOT+'</span><b>Skill draft</b><div class="r"><span class="pill" id="skState">Not saved</span></div></div><div class="cb">'+
+  '<div class="skf"><span>name</span><span><code id="skName">'+s.name+'</code></span><span>description</span><span id="skDesc">'+esc3(s.desc)+'</span><span>Default mode</span><span><span class="pill">'+s.mode+'</span></span><span>Reads</span><span>'+s.reads+'</span></div>'+
+  '<div class="mdp" id="skIns"><h4>'+esc3(s.title)+'</h4><p>'+esc3(s.desc)+'</p><h5>When it runs</h5><p>'+when+'</p><h5>Steps</h5><ol><li>Read '+r1+' for the last 7 days.</li><li>Pick what changed and why it matters.</li><li>Hand it over: '+out.charAt(0).toLowerCase()+out.slice(1)+'.</li></ol><h5>Rules</h5><ul><li>Ask before any change. Nothing is published or sent without a click.</li></ul></div>'+
+  '<div class="sknote">Saved skills are private to you. Sharing one with the workspace needs an Admin’s OK.</div></div>'+
+  '<div class="cf"><span class="l">Nothing is saved until you click Save skill</span><div class="r" id="skBtns"><button data-action="skillDraft.edit" class="btn" data-skedit>Edit</button><button data-action="skillDraft.save" class="btn pri" data-sksave>Save skill</button></div></div></div>');skScroll()}
+function skSave(){var s=SKN;if(!s||s.saved)return;s.saved=1;$$('#skDraft [contenteditable]').forEach(function(e){e.removeAttribute('contenteditable')});
+ var tb=$('[data-tab2="sk-m"] i');if(tb)tb.textContent=(+tb.textContent||0)+1;
+ $('#sk-m').insertAdjacentHTML('afterbegin','<div class="skc" data-f="reports"><div class="skt"><span class="sli">✎</span><code>/'+s.name+'</code><span class="fd" style="background:#f1f0ee;color:#44403c">Private</span></div><b>'+esc3(s.title)+'</b><p>'+$('#skDesc').textContent+'</p><div class="skm">'+s.mode+' · '+(s.pick.when||s.when)+'</div><div class="ska"><button data-action="skills.edit" class="btn sm" data-toast="Opens the skill to edit">Edit</button><button data-action="skills.run" class="btn sm pri" data-toast="Starts the skill as a plan card">Run</button></div></div>');
+ $('#skState').textContent='Saved · private to you';$('#skState').className='pill ok';
+ $('#skBtns').innerHTML='<button data-action="skillDraft.openMySkills" class="btn" data-skmine>Open My skills</button>';toast('Saved to My skills · private to you')}
+var SKRV={
+ upload:{sub:'competitor-digest.zip · 14 KB · uploaded by Alex Kim',src:[['Source','Uploaded file · competitor-digest.zip'],['Commit SHA','— (uploaded, not from a repository)'],['License','MIT · LICENSE in the .zip']]},
+ url:{sub:'Imported from GitHub · read only, nothing ran',src:[['Source URL','<code>https://github.com/example-org/agent-skills/tree/main/competitor-digest</code>'],['Commit SHA','<code>3f9c2a1</code>'],['License','MIT']]}};
+var SKTXT='---\nname: competitor-digest\ndescription: Sums up a competitor’s new citations every week for the sales team.\n---\n\n# Competitor digest\n\n1. Read last week’s citations for the chosen competitor.\n2. List the new pages AI cites for them, with the prompt and the engine.\n3. Write a five-line summary the sales team can forward.\n\nOutput: a short email draft. Nothing is sent without a click.\nSee the format guide: https://docs.example.org/skills/format';
+function skillReview(v){v=SKRV[v]?v:'url';var d=SKRV[v],adm=ROLE=='admin';$('#skrvSub').textContent=d.sub;$('#skrvTxt').textContent=SKTXT;
+ $('#skrvScan').innerHTML=['Hidden Unicode','Base64','Role-override','Remote instructions','Secrets','Size'].map(function(n){return '<li><span class="ok">✓</span>'+n+'</li>'}).join('')+'<li><span class="wn">Warn</span>URLs<em>1 link · shown as text, never fetched</em></li>';
+ $('#skrvSrc').innerHTML=d.src.map(function(r){return '<span>'+r[0]+'</span><span>'+r[1]+'</span>'}).join('');
+ $('#skrvNote').textContent=adm?'Adds it to the workspace for everyone':'An Admin approves it before anyone can run it';
+ $('#skrvAct').innerHTML=adm?'<button data-action="skillReview.approve" class="btn pri" data-skrv="approve">Approve and add</button>':'<button data-action="skillReview.requestApproval" class="btn pri" data-skrv="request">Request approval</button>';
+ $('#skrvPill').textContent='Not added yet';$('#skrvPill').className='pill am'}
+var go4=go;go=function(s,v){go4(s,v);if(s=='skill-new')skillNew(v);if(s=='skill-review')skillReview(v)};
+document.addEventListener('click',function(e){var t=e.target,c;if(!t.closest)return;
+ if((c=t.closest('[data-action="skills.create"]'))){if(readOnly()){toast(ROLES[ROLE]+'s can’t create skills · Admins and Managers can');return}openPop('#skcmenu',c,'below');return}
+ if((c=t.closest('[data-skc]'))){closePops();var k=c.dataset.skc;if(k=='chat'){go('skill-new');setTimeout(function(){var i=$('#sknComp .in');if(i)placeEnd(i)},0)}
+  else if(k=='upload'){$('#skDrop').className='drop';$('#skDrop').innerHTML='<b>Drop SKILL.md or a .zip here</b>or <button data-action="skillUpload.choose" class="btn sm" id="skUpPick">Choose file</button>';$('#skUpGo').disabled=true;$('#skUpM').classList.add('on')}
+  else{$('#skUrlIn').value='';$('#skUrlM').classList.add('on');setTimeout(function(){$('#skUrlIn').focus()},0)}return}
+ if(t.closest('#skUpPick')){$('#skDrop').className='drop ok';$('#skDrop').innerHTML='<b>competitor-digest.zip · 14 KB</b>Selected · SKILL.md found at the top';$('#skUpGo').disabled=false;return}
+ if(t.closest('#skUpGo')){$('#skUpM').classList.remove('on');go('skill-review','upload');return}
+ if(t.closest('#skUrlEx')){$('#skUrlIn').value='https://github.com/example-org/agent-skills/tree/main/competitor-digest';return}
+ if(t.closest('#skUrlGo')){if(!/^https?:\/\/\S+/.test($('#skUrlIn').value.trim())){toast('Paste a GitHub URL, or use the example');$('#skUrlIn').focus();return}$('#skUrlM').classList.remove('on');go('skill-review','url');return}
+ if((c=t.closest('[data-skx]'))){var x=SKEX[+c.dataset.skx],inp=$('#sknComp .in');if(inp){inp.textContent='Create a skill that '+x.t;placeEnd(inp)}return}
+ if((c=t.closest('[data-skq]'))){if(!SKN||SKN.saved)return;$$('#sknQ [data-skq="'+c.dataset.skq+'"]').forEach(function(x){x.classList.toggle('on',x==c)});SKN.pick[c.dataset.skq]=c.textContent;if(SKN.pick.when&&SKN.pick.out)skDraft();return}
+ if(t.closest('[data-sksave]')){skSave();return}
+ if((c=t.closest('[data-skedit]'))){var on=c.textContent=='Edit';['#skDesc','#skIns'].forEach(function(s){var el=$(s);if(on)el.setAttribute('contenteditable','true');else el.removeAttribute('contenteditable')});c.textContent=on?'Done editing':'Edit';if(on)$('#skDesc').focus();toast(on?'Edit the description and instructions · Save keeps your changes':'Changes kept in the draft');return}
+ if(t.closest('[data-skmine]')){go('skills');var m=$('[data-tab2="sk-m"]');if(m)m.click();return}
+ if((c=t.closest('[data-skrv]'))){var ap=c.dataset.skrv=='approve';$('#skrvPill').textContent=ap?'Added · everyone can use it':'Waiting for an Admin';$('#skrvPill').className=ap?'pill ok':'pill am';c.disabled=true;toast(ap?'Approved and added · everyone in the workspace can use it':ASKED);return}});
+DEMO.push(['Create a skill (CHAT-13)',[['skill-new','Create in chat'],['skill-new/draft','Create in chat · draft card'],['skill-review/upload','Review · uploaded file'],['skill-review/url','Review · imported from URL']]]);renderDemo();
+if(/^#s-skill-/.test(location.hash))fromHash();
 </script>
 </body>
 </html>
