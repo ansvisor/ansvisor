@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { Check, ChevronRight, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -191,38 +191,56 @@ export function RunSteps({
   moving?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.agentCard.steps');
+  const tCard = useTranslations('contentEditor.editor.agentCard');
+  const tRules = useTranslations('contentEditor.editor.rules.names');
+  const format = useFormatter();
   const shown = shownSteps(run);
+  // The rules it keeps its changes small for (learning B6), by their names.
+  const careful = (run.steps[0]?.careful ?? [])
+    .filter((key) => tRules.has(key))
+    .map((key) => tRules(key));
+  // What the live page earns, kept in mind on its sources step (learning B5).
+  const live = run.steps.find((step) => step.key === 'gather_sources')?.live;
   return (
-    <ol className="mt-1 flex flex-wrap items-center gap-1 text-[12px]">
-      {shown.map(({ step, index }, i) => {
-        const { key, count } = stepMessage(step);
-        const done = index < run.step;
-        const now = index === run.step;
-        return (
-          <li key={step.key} className="flex items-center gap-1">
-            {i > 0 && (
-              <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-            )}
-            <span
-              aria-current={now ? 'step' : undefined}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5',
-                done &&
-                  'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
-                now && 'bg-background font-medium text-foreground',
-                now && moving && 'relative overflow-hidden',
-                !done && !now && 'border-dashed text-muted-foreground',
+    <>
+      <ol className="mt-1 flex flex-wrap items-center gap-1 text-[12px]">
+        {shown.map(({ step, index }, i) => {
+          const { key, count } = stepMessage(step);
+          const done = index < run.step;
+          const now = index === run.step;
+          return (
+            <li key={step.key} className="flex items-center gap-1">
+              {i > 0 && (
+                <ChevronRight aria-hidden className="h-3 w-3 shrink-0 text-muted-foreground/60" />
               )}
-            >
-              {now && moving && <StepSweep />}
-              {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
-              {t(key, count === undefined ? {} : { count })}
-              {now && moving && <WorkingDots className="ml-0.5" />}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+              <span
+                aria-current={now ? 'step' : undefined}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5',
+                  done &&
+                    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+                  now && 'bg-background font-medium text-foreground',
+                  now && moving && 'relative overflow-hidden',
+                  !done && !now && 'border-dashed text-muted-foreground',
+                )}
+              >
+                {now && moving && <StepSweep />}
+                {done && <Check aria-hidden className="h-3 w-3 shrink-0" />}
+                {t(key, count === undefined ? {} : { count })}
+                {now && moving && <WorkingDots className="ml-0.5" />}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {careful.length > 0 && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {tCard('careful', { rules: format.list(careful, { type: 'conjunction' }) })}
+        </p>
+      )}
+      {/* The live page it kept in mind (learning B5). */}
+      {live && <p className="mt-1 text-[11px] text-muted-foreground">{tCard('live', live)}</p>}
+    </>
   );
 }
 

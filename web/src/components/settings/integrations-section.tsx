@@ -42,9 +42,12 @@ import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
 import { isCloud } from '@/config/plans';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { CatalogCategoryPages } from './catalog-category-pages';
+import { FramerCard } from './framer-card';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
+import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 
 /**
  * Settings → Integrations (#577, Google Analytics added in #658).
@@ -128,6 +131,10 @@ export function IntegrationsSection() {
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}
         <IntegrationGroup title={t('integrations_cms')}>
           <WebflowCard />
+
+          <WordPressCard />
+
+          <FramerCard />
         </IntegrationGroup>
       </CardContent>
     </Card>
@@ -375,6 +382,10 @@ function PropertyMapping({
   const [loadFailed, setLoadFailed] = useState<string | null>(null);
   const [savingBrandId, setSavingBrandId] = useState<string | null>(null);
   const autoMatched = useRef(false);
+  // A read-only workspace (plan not active): picking a property opens the
+  // upgrade dialog instead, and nothing is matched by itself.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   const load = useCallback(async () => {
     setLoadFailed(null);
@@ -395,7 +406,7 @@ function PropertyMapping({
   // property. Runs once per mount; a failed save (e.g. member role) just
   // leaves the brand unmapped for a manual pick by an admin.
   useEffect(() => {
-    if (!options || !rows || autoMatched.current) return;
+    if (!options || !rows || autoMatched.current || isLocked) return;
     autoMatched.current = true;
     (async () => {
       for (const row of rows) {
@@ -413,7 +424,7 @@ function PropertyMapping({
         }
       }
     })();
-  }, [options, rows, save, sourceName]);
+  }, [options, rows, save, sourceName, isLocked]);
 
   const handlePick = async (brandId: string, picked: string) => {
     const value = picked === NONE_VALUE ? null : picked;
@@ -475,7 +486,10 @@ function PropertyMapping({
               <Select
                 items={selectItems}
                 value={row.value ?? null}
-                onValueChange={(v) => handlePick(row.brandId, v ?? NONE_VALUE)}
+                onValueChange={guard(
+                  (v: string | null) => void handlePick(row.brandId, v ?? NONE_VALUE),
+                  { action: tActions('mapProperties') },
+                )}
               >
                 <SelectTrigger className="h-8 w-64 text-xs">
                   <SelectValue placeholder={t('integrations_selectProperty')} />

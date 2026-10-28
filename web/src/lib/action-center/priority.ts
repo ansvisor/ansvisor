@@ -21,6 +21,12 @@ export interface PriorityReason {
   subject: { entity: string | null; count: number | null };
   /** Measured demand; null when nothing measures it. */
   demand: 'high' | 'medium' | 'low' | null;
+  /**
+   * The prompts' measured demand level (PROMPT-014: Search Console, Google
+   * Trends, People Also Ask, YouTube), the highest, when it raised the score:
+   * High or Medium. Null otherwise: Low raises nothing, so it's no reason.
+   */
+  realDemand: 'high' | 'medium' | null;
   commercial: boolean;
   /** Ground the brand held and lost. */
   heldBefore: boolean;
@@ -28,6 +34,12 @@ export interface PriorityReason {
   days: number | null;
   /** Independent data sources behind it. */
   sources: number;
+  /**
+   * How the brand's earlier actions of its kind turned out (learning B4):
+   * results with a verdict, how many improved, and the points that moved
+   * its score. Null with no history, or from a scorer before it.
+   */
+  pastSuccess?: { improved: number; results: number; points: number } | null;
 }
 
 /** How many actions the Top Actions card names (spec: at most five). */
@@ -83,11 +95,23 @@ export function parsePriorityReason(
       count: num(subject.count),
     },
     demand: r.demand === 'high' || r.demand === 'medium' || r.demand === 'low' ? r.demand : null,
+    realDemand: r.realDemand === 'high' || r.realDemand === 'medium' ? r.realDemand : null,
     commercial: r.commercial === true,
     heldBefore: r.heldBefore === true,
     days: daysSince(num(r.days), scoredAt, now),
     sources: num(r.sources) ?? 0,
+    pastSuccess: pastSuccessOf(r.pastSuccess),
   };
+}
+
+function pastSuccessOf(value: unknown): PriorityReason['pastSuccess'] {
+  if (!value || typeof value !== 'object') return null;
+  const p = value as Record<string, unknown>;
+  const [improved, results, points] = [p.improved, p.results, p.points].map((v) =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null,
+  );
+  if (improved === null || results === null || points === null || results < 1) return null;
+  return { improved, results, points };
 }
 
 function daysSince(days: number | null, scoredAt: string | null | undefined, now: Date) {
@@ -154,7 +178,7 @@ const SUBJECTS = new Set([
  * "Why this priority?": what changed, on what, how recently, and what makes
  * it matter — from the action's own facts, in the reader's language
  * (actionsPage.priority.reason). "Lost ground on 7 high-demand prompts
- * 2 days ago — commercial intent, previously visible."
+ * 2 days ago — measured demand High, commercial intent, previously visible."
  */
 export function priorityReasonText(reason: PriorityReason, t: Translator): string {
   const { entity, count } = reason.subject;
@@ -182,6 +206,7 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
 
   const extras: string[] = [];
   if (reason.demand === 'high' && !inSubject) extras.push(t('reason.highDemand'));
+  if (reason.realDemand) extras.push(t(`reason.realDemand.${reason.realDemand}`));
   if (reason.commercial) extras.push(t('reason.commercial'));
   if (
     reason.heldBefore &&
@@ -190,6 +215,16 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
     extras.push(t('reason.heldBefore'));
   }
   if (reason.sources >= 2) extras.push(t('reason.sources', { count: reason.sources }));
+  // Its kind's track here (learning B4), once it moved the score a point or more.
+  const past = reason.pastSuccess;
+  if (past && Math.abs(past.points) >= 1) {
+    extras.push(
+      t(past.points > 0 ? 'reason.pastSuccess.worked' : 'reason.pastSuccess.rarely', {
+        improved: past.improved,
+        results: past.results,
+      }),
+    );
+  }
 
   let text = when ? t('reason.sentence.withWhen', { what, when }) : what;
   if (extras.length) {

@@ -5,6 +5,8 @@
  * be a server action.
  */
 
+import type { NoPlanMark } from '@/lib/billing/no-plan';
+
 export type ImproveState =
   | 'no_runs'
   | 'not_mentioned'
@@ -76,7 +78,7 @@ export interface ImproveSet {
  * or more) and stays on the server; the panel gets an estimate of the
  * generations it still buys.
  */
-export interface ImproveQuota {
+export interface ImproveQuota extends NoPlanMark {
   unlimited: boolean;
   exhausted: boolean;
   generationsLeft: number | null;
