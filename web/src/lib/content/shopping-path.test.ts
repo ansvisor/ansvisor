@@ -9,6 +9,8 @@ import {
   withLocked,
   withRemoved,
   type ShoppingPath,
+  bestInStock,
+  priceAmount,
 } from './shopping-path';
 
 /** A draft's shopping path as the Brief tab holds it (shopping path, 00351). */
@@ -138,5 +140,33 @@ describe('shoppingPathSchema', () => {
       ['https://s.example/p/a', 'limited_availability', null],
       [null, 'in_stock', 'http://s.example/b.jpg'],
     ]);
+  });
+});
+
+describe('priceAmount', () => {
+  it('takes the sale price under the price, the sale price alone, and reads 0 as none', () => {
+    expect(priceAmount({ price: 199, salePrice: 149 })).toBe(149);
+    expect(priceAmount({ price: 199, salePrice: 249 })).toBe(199);
+    expect(priceAmount({ price: null, salePrice: 149 })).toBe(149);
+    expect(priceAmount({ price: 0, salePrice: 0 })).toBeNull();
+  });
+});
+
+describe('bestInStock', () => {
+  const variant = (price: number | null, availability: string | null, sale_price = null) => ({
+    price,
+    sale_price,
+    availability,
+  });
+
+  it('prefers in stock to low stock, as the agent’s grid does (#1607)', () => {
+    const inStock = variant(199, 'in stock');
+    expect(bestInStock([variant(149, 'limited availability'), inStock])).toBe(inStock);
+  });
+
+  it('takes the lowest price at the best stock, one with no price last, none when none is in stock', () => {
+    const cheap = variant(120, 'In Stock');
+    expect(bestInStock([variant(null, 'in_stock'), variant(180, 'in stock'), cheap])).toBe(cheap);
+    expect(bestInStock([variant(10, 'preorder'), variant(12, null)])).toBeNull();
   });
 });
