@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -129,6 +130,7 @@ export function LocationMatrix({
   window,
   onOpenCell,
   onTrack,
+  onAddLocations,
 }: {
   brandId: string;
   /** Every row the filters keep, for the averages and the cards. */
@@ -140,8 +142,11 @@ export function LocationMatrix({
   onOpenCell: (promptId: string, region: string) => void;
   /** Adds the location to the prompt; undefined for members who can't edit. */
   onTrack?: (prompt: Prompt, region: string) => void;
+  /** Opens Track in more locations; undefined for members who can't edit. */
+  onAddLocations?: () => void;
 }) {
   const t = useTranslations('prompts.locations');
+  const tAdd = useTranslations('prompts.addLocations');
   const [metric, setMetric] = useState<LocationMetric>('visibility');
   const allRegions = matrixLocations(rows);
   const regions = allRegions.slice(0, MATRIX_REGIONS);
@@ -168,8 +173,18 @@ export function LocationMatrix({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  const addButton = onAddLocations && (
+    <Button size="sm" className="h-8 text-xs" onClick={onAddLocations}>
+      {tAdd('button')}
+    </Button>
+  );
   if (!regions.length) {
-    return <p className="px-6 py-10 text-center text-sm text-muted-foreground">{t('none')}</p>;
+    return (
+      <div className="space-y-3 px-6 py-10 text-center">
+        <p className="text-sm text-muted-foreground">{t('none')}</p>
+        {addButton}
+      </div>
+    );
   }
   const matrix = read?.key === key ? read.matrix : undefined;
   if (matrix === undefined) {
@@ -227,6 +242,8 @@ export function LocationMatrix({
             {t('capped', { count: MATRIX_REGIONS })}
           </span>
         )}
+        <span className="flex-1" />
+        {addButton}
       </div>
 
       <div className="grid gap-3 px-6 sm:grid-cols-3">

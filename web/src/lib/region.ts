@@ -1,4 +1,4 @@
-import { REGIONS, US_STATES } from '@/config/prompt-options';
+import { TRACKING_COUNTRIES, US_STATES } from '@/config/prompt-options';
 
 /**
  * Tracking locations (#691).
@@ -13,7 +13,7 @@ import { REGIONS, US_STATES } from '@/config/prompt-options';
  */
 
 const REGION_LABELS: ReadonlyMap<string, string> = new Map(
-  REGIONS.map((region) => [region.code, region.label]),
+  TRACKING_COUNTRIES.map((region) => [region.code, region.label]),
 );
 
 const STATE_LABELS: ReadonlyMap<string, string> = new Map(

@@ -96,7 +96,6 @@ import {
   Sparkles,
   ArrowUp,
   ArrowDown,
-  ExternalLink,
   MoreHorizontal,
   Pause,
   Play,
@@ -159,7 +158,7 @@ import { DateRangeFilter } from '@/components/filters/date-range-filter';
 import { getBrandFilterOptions } from '@/lib/actions/tracking';
 import { formatRegionDisplay, isValidLocation, locationCode, regionLabel } from '@/lib/region';
 import { SuggestionsTab } from './_suggestions-tab';
-import { CONTACT_SALES_URL, PLANS } from '@/config/plans';
+import { PLANS } from '@/config/plans';
 import { getPromptUsage, isPromptLimitReached } from '@/lib/prompt-usage';
 import { getTopics } from '@/lib/actions/topic';
 import type { PromptVisibilitySummary } from '@/lib/actions/tracking';
@@ -199,7 +198,9 @@ import {
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
 import { ColumnsPanel } from './_columns-panel';
+import { PromptLimitActions } from './_prompt-limit-actions';
 import { LocationMatrix, clearLocationMatrixCache, loadLocationMatrix } from './_location-matrix';
+import { AddLocationsDialog, type AddLocationsPreset } from './_add-locations-dialog';
 import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt-table-views';
 import {
   effectiveView,
@@ -632,36 +633,6 @@ function brandLocation(region: string | undefined, state: string | undefined): s
 }
 
 // ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
-
-/**
- * Where to go when the limit is reached. Starter can upgrade to Growth in
- * billing; Growth and Enterprise (custom limits) are raised by Ansvisor.
- */
-function PromptLimitActions({ planId }: { planId: LocationQuota['planId'] }) {
-  const contact = (
-    <a
-      href={CONTACT_SALES_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={buttonVariants({
-        variant: planId === 'starter' ? 'outline' : 'default',
-        size: 'sm',
-      })}
-    >
-      Contact us
-      <ExternalLink />
-    </a>
-  );
-  if (planId !== 'starter') return contact;
-  return (
-    <>
-      <Link href="/dashboard/settings?tab=billing" className={buttonVariants({ size: 'sm' })}>
-        Upgrade plan
-      </Link>
-      {contact}
-    </>
-  );
-}
 
 /**
  * Quick-add dialog for the active brand (#460). Same mechanism as the Add
@@ -3380,6 +3351,11 @@ function AllPromptsTab({
   if (!loading && positionsId && !openPositions) setPositionsId(null);
 
   // The panel opens on the table's window; changing it there only moves the panel.
+  // Track in more locations (PROMPT-015c): from the Locations view, or a cell's + Track.
+  const [addLocations, setAddLocations] = useState<{
+    open: boolean;
+    preset: AddLocationsPreset | null;
+  }>({ open: false, preset: null });
   // A Locations view cell opens the panel on its location (PROMPT-015b).
   const [panelRegion, setPanelRegion] = useState<string | null>(null);
   const openPositionsPanel = useCallback(
@@ -3962,7 +3938,18 @@ function AllPromptsTab({
             pageRows={pageRows}
             window={positionsWindow}
             onOpenCell={(promptId, region) => openPositionsPanel(promptId, 'platforms', region)}
-            onTrack={onEditPrompt ? (prompt) => onEditPrompt(prompt) : undefined}
+            onTrack={
+              onEditPrompt
+                ? (prompt, region) =>
+                    setAddLocations({
+                      open: true,
+                      preset: { promptId: prompt.id, locations: [region] },
+                    })
+                : undefined
+            }
+            onAddLocations={
+              onEditPrompt ? () => setAddLocations({ open: true, preset: null }) : undefined
+            }
           />
         ) : (
           <Table stickyHeader stickyFirstColumn>
@@ -4324,6 +4311,21 @@ function AllPromptsTab({
             </div>
           ))}
       </CardContent>
+      {onEditPrompt && (
+        <AddLocationsDialog
+          open={addLocations.open}
+          onOpenChange={(open) => setAddLocations((prev) => ({ ...prev, open }))}
+          brandId={activeBrandId}
+          prompts={filtered}
+          selectedIds={selectedIds}
+          preset={addLocations.preset}
+          onDone={() => {
+            // The prompts' locations changed: read the matrix again.
+            clearLocationMatrixCache();
+            onChanged();
+          }}
+        />
+      )}
       <PromptPositionsSheet
         prompt={openPositions}
         range={positionsRange}
