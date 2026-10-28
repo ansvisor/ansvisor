@@ -90,18 +90,22 @@ Each brand connects its own project. **Replace key** takes a new key (the collec
 
 ## Connect Wix
 
-1. In Wix, the site's owner makes an API key: open **Account Settings → API Keys Manager**, click **Generate API Key**, name it (`Ansvisor`, for example), pick the site, give it the **Wix Blog** permissions, and copy the key. It's shown once.
+1. In Wix, the site's owner makes an API key: open **Account Settings → API Keys Manager**, click **Generate API Key**, name it (`Ansvisor`, for example), pick the site, give it the permissions below, and copy the key. It's shown once.
+   - **Manage Blog** (under **Wix Blog**): to write the draft posts.
+   - **Manage Ricos Document** (under **Ricos**): Wix's converter, which turns the page into the post's text.
+   - **Read Members** (under **Members**), only while the Blog has no post: to find a member to write the posts. Or write one post on the Blog first.
 2. The site's id is the long code after `manage.wix.com/dashboard/` in the address of the site's dashboard.
 3. In Ansvisor, open **Settings → Integrations** with the brand selected. In the **Wix** card, paste the **Site id** (or the whole dashboard address) and the **API key**, and click **Connect**.
 
-The site needs the **Wix Blog**: pages go there as draft posts. Before anything is kept, Ansvisor opens the site's Blog with the key, and finds the member the posts are written by: the author of the Blog's newest post, else the site's first member. A Blog with no post and a site with no member can't be connected yet: write one post on the Blog as the site's owner first. The API server encrypts the key before it's kept in Ansvisor's database, and it's never shown again. Only **admins and managers** can connect Wix, replace the key or disconnect; members see where the brand's pages go.
+The site needs the **Wix Blog**: pages go there as draft posts. Before anything is kept, Ansvisor opens the site's Blog with the key, tries Wix's converter on a line of text (nothing is written to the site), and finds the member the posts are written by: the author of the Blog's newest post, else the site's first member. A Blog with no post and a site with no member can't be connected yet: write one post on the Blog as the site's owner first. The API server encrypts the key before it's kept in Ansvisor's database, and it's never shown again. Only **admins and managers** can connect Wix, replace the key or disconnect; members see where the brand's pages go.
 
 If the check fails, a toast says why:
 
 | The toast says | What to do |
 |---|---|
 | Wix refused the API key | Check that you pasted the whole key, and that it's for this site. |
-| The API key isn't allowed to write the site's Blog | Give the key the **Wix Blog** permissions in the API Keys Manager. |
+| The API key isn't allowed to write the site's Blog | Give the key **Manage Blog** (under **Wix Blog**) in the API Keys Manager. |
+| The key needs the Ricos permission | Add **Manage Ricos Document** to the key in the API Keys Manager, then connect again. |
 | This site has no Wix Blog | Add the Blog to the site in Wix first. |
 | Wix needs a site member to own the posts | Write one post on the Blog as the site's owner, then connect again. |
 
@@ -187,7 +191,7 @@ Once you take the item out of draft and publish the site, the page becomes **Pub
 - Wix turns the page into its own rich text: headings, lists, links, tables and code go as they are.
 - No cover image or category is set: pick them in Wix.
 
-Sending the page again **updates** the same post. A published post keeps a draft version in Wix: sending the page again writes that draft, and the post people read stays as it was until you publish the changes in Wix. A post deleted in Wix gets a new one.
+Sending the page again **updates** the same post. A published post keeps a draft version in Wix: sending the page again writes that draft, and the post people read stays as it was until you publish the changes in Wix. A post deleted in Wix gets a new one. Sending again replaces the post's text, so images you added to it in Wix are removed: add them after your last send.
 
 Once you publish the post in Wix, the page becomes **Published** at the post's address. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A published post whose changes from a later send aren't published yet waits until they are. A post deleted in Wix reads "Removed in Wix"; send the page again to make a new post.
 
