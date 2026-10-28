@@ -148,6 +148,10 @@ vi.mock('./dataforseo.js', () => ({
   getTask,
 }));
 
+// The Action Center's priority reads the levels: a brand whose levels changed is scored again.
+const rescoreBrandActions = vi.fn();
+vi.mock('./action-center/priority-data.js', () => ({ rescoreBrandActions }));
+
 /** postTasks setting every task, each id `${path}#${tag}`, in one request. */
 async function setAll(path, tasks, { onChunk } = {}) {
   const ids = new Map(tasks.map((t) => [t.tag, `${path}#${t.tag}`]));
@@ -411,6 +415,7 @@ beforeEach(() => {
   postTasks.mockReset();
   readyTasks.mockReset().mockResolvedValue(new Map());
   getTask.mockReset();
+  rescoreBrandActions.mockReset().mockResolvedValue(3);
   vi.stubEnv('DEMAND_SIGNALS', 'false');
 });
 
@@ -1131,7 +1136,12 @@ describe('collectDemandTasks', () => {
 
   it('does nothing with DEMAND_SIGNALS off', async () => {
     tables.prompt_demand = [waiting({ posted_at: daysAgo(1), trends: 't1' })];
-    expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 0, waiting: 0, skipped: 'off' });
+    expect(await collectDemandTasks({ now: NOW })).toEqual({
+      read: 0,
+      waiting: 0,
+      brands: [],
+      skipped: 'off',
+    });
     expect(readyTasks).not.toHaveBeenCalled();
   });
 
@@ -1159,7 +1169,8 @@ describe('collectDemandTasks', () => {
       throw new Error(`unexpected ${path}`);
     });
 
-    expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 1, waiting: 1 });
+    // The level went from medium to high: the brand's actions are scored again.
+    expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 1, waiting: 1, brands: ['b1'] });
 
     const row = demandRow('p1');
     expect(row.trends).toMatchObject({ trend: 'rising', change: 64, at: AT });
@@ -1206,6 +1217,29 @@ describe('collectDemandTasks', () => {
   });
 });
 
+describe("the Action Center's priority", () => {
+  it("scores a brand's actions again when a level changed, once a night", async () => {
+    const outcome = await sweepPromptDemand({ now: NOW });
+    expect(outcome.rescored).toBe(3);
+    expect(rescoreBrandActions).toHaveBeenCalledTimes(1);
+    expect(rescoreBrandActions).toHaveBeenCalledWith('b1', { now: new Date(NOW) });
+  });
+
+  it('leaves them when no level changed', async () => {
+    await sweepPromptDemand({ now: NOW });
+    rescoreBrandActions.mockClear();
+    // The same queries the next night: new numbers' dates, the same levels.
+    const outcome = await sweepPromptDemand({ now: NOW + DAY });
+    expect(outcome.written).toBe(2);
+    expect(rescoreBrandActions).not.toHaveBeenCalled();
+  });
+
+  it('carries on when the scores cannot be saved', async () => {
+    rescoreBrandActions.mockRejectedValue(new Error('timeout'));
+    await expect(sweepPromptDemand({ now: NOW })).resolves.toMatchObject({ rescored: 0 });
+  });
+});
+
 describe('collecting the tasks whose ids were lost', () => {
   // A prompt's id is the tag its tasks are set with.
   const P1 = '6f1c2a3b-0d4e-4f5a-9b6c-7d8e9f0a1b2c';
@@ -1244,7 +1278,11 @@ describe('collecting the tasks whose ids were lost', () => {
     );
     getTask.mockResolvedValue({ status: 'done', result: SERP_RESULT });
 
-    expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 1, waiting: 0 });
+    expect(await collectDemandTasks({ now: NOW })).toEqual({
+      read: 1,
+      waiting: 0,
+      brands: ['b1'],
+    });
 
     expect(getTask.mock.calls).toEqual([['/v3/serp/google/organic/task_get/advanced/lost-paa']]);
     expect(demandRow(P1)).toMatchObject({ tasks: null, signals: 1 });
@@ -1271,7 +1309,11 @@ describe('collecting the tasks whose ids were lost', () => {
     );
     getTask.mockResolvedValue({ status: 'done', result: SERP_RESULT });
 
-    expect(await collectDemandTasks({ now: NOW })).toEqual({ read: 1, waiting: 1 });
+    expect(await collectDemandTasks({ now: NOW })).toEqual({
+      read: 1,
+      waiting: 1,
+      brands: ['b1'],
+    });
 
     expect(demandRow(P1).tasks).toEqual({
       posted_at: daysAgo(1),

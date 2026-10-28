@@ -25,7 +25,8 @@
  *
  * The level weighs the signals read (demandLevel). The Demand card on the
  * prompt's page shows all of it (GET /api/prompts/:id/demand), and the
- * Action Center's priority reads the level.
+ * Action Center's priority reads the level: a brand whose levels changed
+ * has its open actions scored again (rescoreDemandBrands).
  *
  * A workspace whose plan has ended is skipped (2026-10-27, #1608): nothing
  * is matched, set or read for it.
@@ -37,6 +38,7 @@ import { activeBrandFilter, activeOrgFilter } from './active-subscriptions.js';
 import { getTask, isDataForSeoConfigured, postTasks, readyTasks } from './dataforseo.js';
 import { matchPrompt, tokens } from './signals/library/classify.js';
 import { logger } from './logger.js';
+import { rescoreBrandActions } from './action-center/priority-data.js';
 
 const DAY_MS = 86_400_000;
 
@@ -567,7 +569,8 @@ export async function postDemandTasks(due, { now = Date.now() } = {}) {
   return rows.size;
 }
 
-const DEMAND_ROW_COLUMNS = 'prompt_id, brand_id, gsc, trends, paa, youtube, tasks, posted_at';
+const DEMAND_ROW_COLUMNS =
+  'prompt_id, brand_id, gsc, trends, paa, youtube, tasks, posted_at, level';
 
 /** The prompt_demand rows with tasks waiting, paged. */
 async function waitingRows() {
@@ -636,13 +639,13 @@ async function orphanRows(ready, waiting) {
  * each of ours on it, and the done ones no row knew (orphanRows). A task
  * older than TASK_EXPIRE_DAYS is read whether listed or not, and given up
  * if it still has nothing; the prompt is set again when it's next due. The
- * level is worked out again for each prompt read. Workspaces whose plan
- * has ended are left out.
+ * level is worked out again for each prompt read; `brands` are those where
+ * a level changed. Workspaces whose plan has ended are left out.
  *
- * @returns {Promise<{ read: number, waiting: number, skipped?: 'off' }>}
+ * @returns {Promise<{ read: number, waiting: number, brands: string[], skipped?: 'off' }>}
  */
 export async function collectDemandTasks({ now = Date.now() } = {}) {
-  if (!paidSignalsEnabled()) return { read: 0, waiting: 0, skipped: 'off' };
+  if (!paidSignalsEnabled()) return { read: 0, waiting: 0, brands: [], skipped: 'off' };
   const ready = {};
   for (const name of PAID_SIGNALS) {
     try {
@@ -657,13 +660,14 @@ export async function collectDemandTasks({ now = Date.now() } = {}) {
   }
   const waitingNow = await waitingRows();
   const rows = [...waitingNow, ...(await orphanRows(ready, waitingNow))];
-  if (rows.length === 0) return { read: 0, waiting: 0 };
+  if (rows.length === 0) return { read: 0, waiting: 0, brands: [] };
   const isActive = await activeBrandFilter(rows.map((r) => r.brand_id));
   const mine = rows.filter((r) => isActive(r.brand_id));
-  if (mine.length === 0) return { read: 0, waiting: 0 };
+  if (mine.length === 0) return { read: 0, waiting: 0, brands: [] };
 
   const at = new Date(now).toISOString();
   const writes = [];
+  const brands = new Set();
   let waiting = 0;
   await eachLimited(mine, READ_CONCURRENCY, async (row) => {
     const tasks = { ...row.tasks };
@@ -699,6 +703,7 @@ export async function collectDemandTasks({ now = Date.now() } = {}) {
     if (left) waiting += 1;
     if (!changed) return;
     const { level, signals } = demandLevel(next);
+    if (level !== (row.level ?? null)) brands.add(row.brand_id);
     writes.push({
       ...next,
       tasks: left ? tasks : null,
@@ -708,7 +713,30 @@ export async function collectDemandTasks({ now = Date.now() } = {}) {
     });
   });
   await upsertRows(writes);
-  return { read: writes.length, waiting };
+  return { read: writes.length, waiting, brands: [...brands] };
+}
+
+/**
+ * The brands whose demand levels changed, their open actions scored again
+ * (AC-006): the priority reads the levels, and shows the change the same
+ * night. Best effort, one brand at a time. An action whose score comes out
+ * as stored isn't written again (rescoreBrandActions).
+ *
+ * @returns {Promise<number>} actions whose scores changed
+ */
+export async function rescoreDemandBrands(brandIds, { now = Date.now() } = {}) {
+  let scored = 0;
+  for (const brandId of new Set(brandIds)) {
+    try {
+      scored += await rescoreBrandActions(brandId, { now: new Date(now) });
+    } catch (err) {
+      logger.warn(
+        { err: { message: err?.message }, brandId },
+        '[prompt-demand] actions not scored again',
+      );
+    }
+  }
+  return scored;
 }
 
 // ─── The nightly sweep ──────────────────────────────────────────────────────
@@ -764,11 +792,12 @@ async function promptVolumes(promptIds) {
 /**
  * One brand's night: each active prompt's Search Console demand and level
  * written where they changed, and the prompts whose paid signals are due.
- * Rows are only made for a prompt with something read.
+ * Rows are only made for a prompt with something read. `levelsChanged`:
+ * a prompt's level is not what it was.
  */
 export async function refreshBrandDemand(brand, { now = Date.now(), paid = false } = {}) {
   const prompts = await activePrompts(brand.id);
-  if (prompts.length === 0) return { written: 0, due: [] };
+  if (prompts.length === 0) return { written: 0, due: [], levelsChanged: false };
   const at = new Date(now).toISOString();
   const [existing, gsc, volumes] = await Promise.all([
     brandDemandRows(brand.id).then((rows) => new Map(rows.map((r) => [r.prompt_id, r]))),
@@ -780,6 +809,7 @@ export async function refreshBrandDemand(brand, { now = Date.now(), paid = false
 
   const writes = [];
   const due = [];
+  let levelsChanged = false;
   for (const prompt of prompts) {
     const row = existing.get(prompt.id);
     const signals = {
@@ -789,6 +819,7 @@ export async function refreshBrandDemand(brand, { now = Date.now(), paid = false
       youtube: row?.youtube ?? null,
     };
     const level = demandLevel(signals);
+    if (level.level !== (row?.level ?? null)) levelsChanged = true;
     // Search Console is read again every night, and says so (its `at`).
     const changed =
       signals.gsc !== null ||
@@ -818,7 +849,7 @@ export async function refreshBrandDemand(brand, { now = Date.now(), paid = false
     }
   }
   await upsertRows(writes);
-  return { written: writes.length, due };
+  return { written: writes.length, due, levelsChanged };
 }
 
 /**
@@ -846,14 +877,15 @@ export function sweepOrder(brands, updates) {
  * The night's demand (server.js daily run): last night's tasks read, every
  * active brand's prompts matched to its Search Console queries and their
  * levels kept, then the paid signals set for the prompts due, the
- * NIGHTLY_LIMIT waiting longest. Brands whose workspace's plan has ended
- * are skipped; one brand's failure is logged and the rest go on.
+ * NIGHTLY_LIMIT waiting longest. The brands whose levels changed have
+ * their actions scored again. Brands whose workspace's plan has ended are
+ * skipped; one brand's failure is logged and the rest go on.
  *
  * The brands go in sweepOrder, for SWEEP_DEADLINE_MS at most: the ones not
  * reached are `unfinished`, logged, and go first the next night. `due`:
  * the prompts whose paid signals were due, before the cap.
  *
- * @returns {Promise<{ brands: number, written: number, skipped: number, failed: number, unfinished: number, due: number, posted: number, read: number, paid: boolean }>}
+ * @returns {Promise<{ brands: number, written: number, skipped: number, failed: number, unfinished: number, due: number, posted: number, read: number, rescored: number, paid: boolean }>}
  */
 export async function sweepPromptDemand({
   now = Date.now(),
@@ -870,12 +902,16 @@ export async function sweepPromptDemand({
     due: 0,
     posted: 0,
     read: 0,
+    rescored: 0,
     paid,
   };
+  const changed = new Set();
 
   if (paid) {
     try {
-      outcome.read = (await collectDemandTasks({ now })).read;
+      const collected = await collectDemandTasks({ now });
+      outcome.read = collected.read;
+      for (const id of collected.brands) changed.add(id);
     } catch (err) {
       logger.error({ err: { message: err?.message } }, '[prompt-demand] tasks not collected');
     }
@@ -903,6 +939,7 @@ export async function sweepPromptDemand({
       outcome.brands += 1;
       outcome.written += result.written;
       due.push(...result.due);
+      if (result.levelsChanged) changed.add(brand.id);
     } catch (err) {
       outcome.failed += 1;
       logger.warn(
@@ -920,6 +957,7 @@ export async function sweepPromptDemand({
   }
   outcome.due = due.length;
   if (paid && due.length) outcome.posted = await postDemandTasks(pickDue(due, limit), { now });
+  outcome.rescored = await rescoreDemandBrands([...changed], { now });
   logger.info(outcome, '[prompt-demand] nightly sweep done');
   return outcome;
 }
@@ -932,9 +970,11 @@ export async function sweepPromptDemand({
 export function scheduleDemandCollect(delayMs = COLLECT_DELAY_MS) {
   if (!paidSignalsEnabled()) return null;
   const timer = setTimeout(() => {
-    collectDemandTasks().catch((err) =>
-      logger.error({ err: { message: err?.message } }, '[prompt-demand] late collect failed'),
-    );
+    collectDemandTasks()
+      .then(({ brands }) => rescoreDemandBrands(brands))
+      .catch((err) =>
+        logger.error({ err: { message: err?.message } }, '[prompt-demand] late collect failed'),
+      );
   }, delayMs);
   timer.unref?.();
   return timer;

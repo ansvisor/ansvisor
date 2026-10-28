@@ -15,6 +15,9 @@ let signalRows = [];
 let queries = [];
 let saved = [];
 let unsaved = new Set();
+let levelRows = [];
+let levelReads = [];
+let levelsFail = false;
 let rpcCalls = [];
 let rpcResult = { data: [], error: null };
 
@@ -39,6 +42,10 @@ vi.mock('../../config/supabase.js', () => ({
           if (table === 'prompt_volumes') {
             ids = values;
             reads.push(values);
+          }
+          if (table === 'prompt_demand') {
+            ids = values;
+            levelReads.push(values);
           }
           return chain;
         },
@@ -65,8 +72,15 @@ vi.mock('../../config/supabase.js', () => ({
           op.update = row;
           return chain;
         },
-        // An update, awaited after its .eq('id', …).
+        // An update, awaited after its .eq('id', …); or the demand levels' read.
         then: (resolve) => {
+          if (table === 'prompt_demand') {
+            if (levelsFail) return resolve({ data: null, error: { message: 'no such table' } });
+            return resolve({
+              data: levelRows.filter((r) => ids.includes(r.prompt_id)),
+              error: null,
+            });
+          }
           const id = op.filters.find(([, column]) => column === 'id')?.[2];
           if (unsaved.has(id)) return resolve({ error: { message: 'write failed' } });
           saved.push({ id, row: op.update });
@@ -91,6 +105,9 @@ beforeEach(() => {
   queries = [];
   saved = [];
   unsaved = new Set();
+  levelRows = [];
+  levelReads = [];
+  levelsFail = false;
   rpcCalls = [];
   rpcResult = { data: [], error: null };
   // Newest first, as the read orders them.
@@ -105,9 +122,29 @@ describe('loadPromptDemand', () => {
   it("takes each prompt's largest volume and newest intent", async () => {
     const demand = await loadPromptDemand(['p1', 'p2', 'p1']);
     expect(Object.fromEntries(demand)).toEqual({
-      p1: { volume: 900, intent: 'comparison' },
-      p2: { volume: null, intent: 'how-to' },
+      p1: { volume: 900, intent: 'comparison', level: null },
+      p2: { volume: null, intent: 'how-to', level: null },
     });
+  });
+
+  it("adds each prompt's measured demand level, also for a prompt with no volume", async () => {
+    levelRows = [
+      { prompt_id: 'p1', level: 'high' },
+      { prompt_id: 'p3', level: 'medium' },
+    ];
+    const demand = await loadPromptDemand(['p1', 'p2', 'p3']);
+    expect(levelReads).toEqual([['p1', 'p2', 'p3']]);
+    expect(Object.fromEntries(demand)).toEqual({
+      p1: { volume: 900, intent: 'comparison', level: 'high' },
+      p2: { volume: null, intent: 'how-to', level: null },
+      p3: { volume: null, intent: null, level: 'medium' },
+    });
+  });
+
+  it('keeps the volumes when the levels cannot be read', async () => {
+    levelsFail = true;
+    const demand = await loadPromptDemand(['p1']);
+    expect(demand.get('p1')).toEqual({ volume: 900, intent: 'comparison', level: null });
   });
 
   it('reads long lists in pieces', async () => {
@@ -127,12 +164,13 @@ describe('loadPromptDemand', () => {
       [0, 999],
       [1000, 1999],
     ]);
-    expect(demand.get('busy')).toEqual({ volume: 1199, intent: 'comparison' });
+    expect(demand.get('busy')).toEqual({ volume: 1199, intent: 'comparison', level: null });
   });
 
   it('reads nothing for no prompts', async () => {
     expect((await loadPromptDemand([])).size).toBe(0);
     expect(reads).toEqual([]);
+    expect(levelReads).toEqual([]);
   });
 });
 
@@ -267,6 +305,42 @@ describe('rescoreBrandActions', () => {
   it('reads nothing more for a brand with no actions', async () => {
     expect(await rescoreBrandActions('b1', { now: NOW })).toBe(0);
     expect(queries.map((q) => q.table)).toEqual(['actions']);
+  });
+
+  it('leaves an action whose score, level and reason are what is stored', async () => {
+    const signal = {
+      id: 's1',
+      action_id: 'a1',
+      kind: 'citation_lost',
+      impact: 'high',
+      payload: {},
+      detected_at: '2026-10-16T02:00:00Z',
+    };
+    actionRows = [recover('a1', { promptIds: ['p1'] }), recover('a2')];
+    signalRows = [signal];
+    expect(await rescoreBrandActions('b1', { now: NOW })).toBe(2);
+
+    // Scored again the same night (the demand sweep after the signal pass):
+    // a1 is as stored (read back as jsonb), a2's stored score is older.
+    const stored = Object.fromEntries(saved.map(({ id, row }) => [id, row]));
+    actionRows = [
+      {
+        ...recover('a1', { promptIds: ['p1'] }),
+        priority_score: stored.a1.priority_score,
+        priority_level: stored.a1.priority_level,
+        priority_reason: JSON.parse(JSON.stringify(stored.a1.priority_reason)),
+      },
+      {
+        ...recover('a2'),
+        priority_score: stored.a2.priority_score - 5,
+        priority_level: stored.a2.priority_level,
+        priority_reason: stored.a2.priority_reason,
+      },
+    ];
+    saved = [];
+
+    expect(await rescoreBrandActions('b1', { now: NOW })).toBe(1);
+    expect(saved.map(({ id }) => id)).toEqual(['a2']);
   });
 
   it('carries on past a score it cannot save, and without demand', async () => {

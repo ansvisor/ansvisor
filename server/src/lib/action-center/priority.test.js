@@ -399,6 +399,64 @@ describe('scorePriority', () => {
   });
 });
 
+describe('scorePriority with a measured demand level (PROMPT-014)', () => {
+  const gap = (prompts) =>
+    scorePriority(
+      {
+        action: action({
+          kind: 'close_visibility_gap',
+          category: 'growth',
+          impact: 'medium',
+          payload: { targetEntity: 'prompts', targetCount: 2 },
+        }),
+        signals: [signal({ kind: 'prompt_visibility_gap', payload: { promptIds: ['p1', 'p2'] } })],
+        prompts,
+      },
+      NOW,
+    );
+  const withLevels = (p1, p2) =>
+    new Map([
+      ['p1', { volume: 40, intent: 'informational', level: p1 }],
+      ['p2', { volume: 10, intent: 'informational', level: p2 }],
+    ]);
+
+  it('raises the score with High, a little with Medium, and leaves it with Low', () => {
+    const none = gap(withLevels(null, null));
+    const high = gap(withLevels('low', 'high'));
+    const medium = gap(withLevels('medium', null));
+    const low = gap(withLevels('low', 'low'));
+
+    expect(high.score).toBeGreaterThan(medium.score);
+    expect(medium.score).toBeGreaterThan(none.score);
+    expect(low.score).toBe(none.score);
+    // The demand factor is at least the level's.
+    expect(high.reason.factors.demand).toBe(0.85);
+    expect(medium.reason.factors.demand).toBe(0.55);
+    expect(low.reason.factors.demand).toBe(none.reason.factors.demand);
+  });
+
+  it('says the highest level in "Why this priority?", and calls the demand high', () => {
+    expect(gap(withLevels('low', 'high')).reason).toMatchObject({
+      realDemand: 'high',
+      demand: 'high',
+    });
+    // Low raises nothing, so it's no reason for the score.
+    expect(gap(withLevels('low', 'low')).reason.realDemand).toBeNull();
+    expect(gap(withLevels(null, null)).reason.realDemand).toBeNull();
+  });
+
+  it('never lowers a demand the volumes already put higher', () => {
+    const busy = new Map([['p1', { volume: 25_000, intent: 'comparison', level: 'medium' }]]);
+    const { reason } = gap(busy);
+    expect(reason.factors.demand).toBe(1);
+  });
+
+  it('counts a level for a prompt with no volume analysis', () => {
+    const { reason } = gap(new Map([['p2', { volume: null, intent: null, level: 'high' }]]));
+    expect(reason).toMatchObject({ realDemand: 'high', demand: 'high', searches: null });
+  });
+});
+
 /**
  * Past success (learning B4): a kind that has improved results at this
  * brand before sits a little higher, one that rarely has a little lower;
@@ -457,6 +515,38 @@ describe('past success', () => {
     );
     expect(other.score).toBe(scorePriority({ action: action(), signals }, NOW).score);
     expect(other.reason.pastSuccess).toBeNull();
+  });
+
+  it('adds to the measured demand level rather than replacing it', () => {
+    const gap = (prompts, track) =>
+      scorePriority(
+        {
+          action: action({
+            kind: 'close_visibility_gap',
+            category: 'growth',
+            impact: 'medium',
+            payload: { targetEntity: 'prompts', targetCount: 1 },
+          }),
+          signals: [signal({ kind: 'prompt_visibility_gap', payload: { promptIds: ['p1'] } })],
+          prompts,
+          track,
+        },
+        NOW,
+      );
+    const level = (l) => new Map([['p1', { volume: 40, intent: 'informational', level: l }]]);
+    const track = new Map([['close_visibility_gap', { improved: 3, results: 3 }]]);
+
+    const neither = gap(level(null), new Map());
+    const demand = gap(level('high'), new Map());
+    const both = gap(level('high'), track);
+
+    expect(demand.score).toBeGreaterThan(neither.score);
+    expect(both.score).toBeGreaterThan(demand.score);
+    expect(both.reason).toMatchObject({
+      realDemand: 'high',
+      pastSuccess: { improved: 3, results: 3, points: 3.75 },
+    });
+    expect(both.reason.factors.demand).toBe(0.85);
   });
 });
 

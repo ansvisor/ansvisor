@@ -1043,6 +1043,10 @@
             "days": "{days, plural, one {# day ago} other {# days ago}}"
           },
           "highDemand": "high search demand",
+          "realDemand": {
+            "high": "measured demand High",
+            "medium": "measured demand Medium"
+          },
           "commercial": "commercial intent",
           "heldBefore": "previously visible",
           "pastSuccess": {
