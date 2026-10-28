@@ -114,7 +114,9 @@ export async function assertWritable({
   const [{ data: profile, error }, brandRead] = await Promise.all([
     supabase
       .from('profiles')
-      .select('organization_id, organizations(subscription_status, stripe_subscription_id)')
+      .select(
+        'organization_id, organizations!profiles_organization_id_fkey(subscription_status, stripe_subscription_id)',
+      )
       .eq('id', user.id)
       .maybeSingle(),
     brandId

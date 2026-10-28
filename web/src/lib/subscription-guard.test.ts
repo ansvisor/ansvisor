@@ -82,7 +82,7 @@ describe('assertWritable', () => {
   it('reads the organization with the profile, in one query', async () => {
     await assertWritable().catch(() => {});
     expect(reads).toEqual([
-      'profiles: organization_id, organizations(subscription_status, stripe_subscription_id)',
+      'profiles: organization_id, organizations!profiles_organization_id_fkey(subscription_status, stripe_subscription_id)',
     ]);
   });
 
