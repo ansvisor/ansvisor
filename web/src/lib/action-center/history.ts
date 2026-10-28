@@ -117,6 +117,12 @@ export interface ActionHistoryItem {
   results: ActionResultMetric[];
   /** Its signals when it was measured; absent before, or with no signal behind it. */
   signalsAfter?: SignalOutcome | null;
+  /**
+   * The prompts or pages it named, when it was measured on them (learning
+   * A1), with the brand-wide figures kept as a second line.
+   */
+  measuredOn?: { entity: 'prompts' | 'pages'; count: number } | null;
+  brandWideResults?: ActionResultMetric[];
   /** Improve actions only: positions per platform against the baseline (PROMPT-008). */
   positionOutcome: ImproveOutcome | null;
   tasks: ActionHistoryTask[];

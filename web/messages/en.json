@@ -2590,6 +2590,8 @@
         "goal": "What was the goal?",
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
+        "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
+        "brandWide": "Brand-wide over the same days: {list}",
         "signalsAfter": "Of the {total, plural, one {signal} other {# signals}} that raised it, when measured: {ended} ended{replaced, plural, =0 {} other {, # turned into another}}{dismissed, plural, =0 {} other {, # dismissed}}{open, plural, =0 {} other {, # still open}}.",
         "result": "Result",
         "visibilityChange": "Visibility Change",

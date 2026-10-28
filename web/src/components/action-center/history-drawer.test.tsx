@@ -153,6 +153,36 @@ describe('HistoryDrawer', () => {
     expect(under('Result')).not.toContain('that raised it');
   });
 
+  it('says it was measured on the prompts it named, the brand-wide figures beside (learning A1)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    const metric = (id: string, before: number, after: number) => ({
+      id,
+      label: id,
+      metric: id as never,
+      before,
+      after,
+      delta: after - before,
+      unit: 'number' as const,
+      direction: 'higher_is_better' as const,
+    });
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          results: [metric('mentions', 2, 6)],
+          measuredOn: { entity: 'prompts', count: 2 },
+          brandWideResults: [metric('citations', 100, 104)],
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    const result = under('Result');
+    expect(result).toContain('Measured on the 2 prompts it named.');
+    expect(result).toMatch(/Brand-wide over the same days: \S.* 100 → 104/);
+  });
+
   it('keeps the general sentences when the signals cannot be read', async () => {
     getActionSignals.mockRejectedValue(new Error('offline'));
     render(<HistoryDrawer brandId="b1" item={item} onOpenChange={() => {}} />);
