@@ -27,7 +27,13 @@ import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
-import { BASKET_KPIS, basketScope, measureBasket } from './basket-metrics.js';
+import {
+  BASKET_KPIS,
+  basketScope,
+  controlScope,
+  measureBasket,
+  netEffect,
+} from './basket-metrics.js';
 import { auditOutcome, auditRecheck } from './audit-recheck.js';
 
 const DAY_MS = 86_400_000;
@@ -58,6 +64,32 @@ export const VALIDATION_WAIT_DAYS = MEASUREMENT_WINDOW_DAYS + 1;
  * week-to-week noise every one of these metrics carries.
  */
 export const MEANINGFUL_CHANGE_RATIO = validation.meaningfulChangeRatio;
+
+/** The days after closing an action's effect is read on; the last is final (learning B1). */
+export const FINAL_READING_DAY = validation.finalReadingDay;
+export const READING_DAYS = [
+  MEASUREMENT_WINDOW_DAYS,
+  2 * MEASUREMENT_WINDOW_DAYS,
+  FINAL_READING_DAY,
+];
+
+/** The window a reading `day` days after the close covers: the week ending that day. */
+export function readingWindow(closedAt, day) {
+  return windowStartingAfter(
+    new Date(closedAt + (day - MEASUREMENT_WINDOW_DAYS) * DAY_MS),
+    MEASUREMENT_WINDOW_DAYS,
+  );
+}
+
+/** Days a window may lack a tracking run and still be compared (learning A6). */
+export const MAX_GAP_DAYS = validation.maxGapDays;
+
+/**
+ * Metrics tracking's answers add up night by night: a night without a run
+ * reads low in them. The rates (visibility, share of voice, the lead over a
+ * competitor) are shares of the answers there were, and don't drift from one.
+ */
+const COUNT_METRICS = new Set(['mentions', 'citations']);
 
 /** Every metric here reads higher-is-better; a drop is a decline. */
 const MEASURABLE_KPIS = {
@@ -190,32 +222,100 @@ async function measureTraffic(brandId, from, to) {
 }
 
 /**
- * The verdict, from the measured pairs alone.
+ * The verdict, from the measured pairs alone (learning A4).
  *
  * A metric counts as moved only past MEANINGFUL_CHANGE_RATIO — these numbers
  * drift week to week on their own, and calling a 1% wobble an improvement
- * would make every outcome meaningless. Mixed movement reads as improved:
- * something the action aimed at did move, and reporting that as "no change"
- * would hide it.
+ * would make every outcome meaningless.
+ *
+ * The action's main metric (`primary`, the one its aim reads in) decides
+ * when it was measured: up is improved, down declined, still no meaningful
+ * change, whatever the others did beside it, but `mixed` when another moved
+ * the other way. Without one measured, every metric counts, and movement
+ * both ways is `mixed`: it used to read as improved, which taught that
+ * anything moving up was the work paying off.
+ *
+ * Given `aims` (the success metrics the action names), only those and the
+ * main metric count: a basket reads every metric it can, and one the action
+ * never aimed at drifting the other way isn't a mixed result. The others
+ * stay in `metrics`, to see.
  */
-export function deriveOutcome(metrics) {
-  const measured = metrics.filter((m) => m.before != null && m.after != null);
+export function deriveOutcome(metrics, primary = null, aims = null) {
+  const counted = aims ? new Set([...aims, ...(primary ? [primary] : [])]) : null;
+  const measured = metrics.filter(
+    (m) => m.before != null && m.after != null && (!counted || counted.has(m.metric)),
+  );
   if (measured.length === 0) return 'not_measurable';
 
-  let improved = 0;
-  let declined = 0;
-  for (const { before, after } of measured) {
+  const direction = ({ before, after }) => {
     const floor = Math.abs(before) * MEANINGFUL_CHANGE_RATIO;
     // A metric that was zero before has no ratio to scale by; any real
     // arrival counts as movement.
     const threshold = before === 0 ? Number.EPSILON : floor;
-    if (after - before > threshold) improved += 1;
-    else if (before - after > threshold) declined += 1;
-  }
+    if (after - before > threshold) return 1;
+    if (before - after > threshold) return -1;
+    return 0;
+  };
+  const moves = measured.map((m) => ({ metric: m.metric, dir: direction(m) }));
+  const up = moves.some((m) => m.dir > 0);
+  const down = moves.some((m) => m.dir < 0);
 
-  if (improved > 0) return 'improved';
-  if (declined > 0) return 'declined';
+  const main = primary ? moves.find((m) => m.metric === primary) : null;
+  if (main) {
+    if (main.dir > 0) return down ? 'mixed' : 'improved';
+    if (main.dir < 0) return up ? 'mixed' : 'declined';
+    return 'no_meaningful_change';
+  }
+  if (up && down) return 'mixed';
+  if (up) return 'improved';
+  if (down) return 'declined';
   return 'no_meaningful_change';
+}
+
+/**
+ * The days of a window (inclusive, UTC) with no stamped tracking run for the
+ * brand (learning A6): a night whose collection failed, or fell short and
+ * was discarded, leaves no stamped row.
+ */
+export async function missingDays(brandId, window) {
+  const end = new Date(Date.parse(`${window.to}T00:00:00Z`) + DAY_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('tracking_runs')
+    .select('completed_at')
+    .eq('brand_id', brandId)
+    .not('completed_at', 'is', null)
+    .gte('completed_at', `${window.from}T00:00:00Z`)
+    .lt('completed_at', end)
+    .limit(1000);
+  if (error) throw new Error(`tracking_runs: ${error.message}`);
+  const ran = new Set((data ?? []).map((r) => new Date(r.completed_at).toISOString().slice(0, 10)));
+  let missing = 0;
+  for (let t = Date.parse(`${window.from}T00:00:00Z`); t < Date.parse(end); t += DAY_MS) {
+    if (!ran.has(new Date(t).toISOString().slice(0, 10))) missing += 1;
+  }
+  return missing;
+}
+
+/**
+ * The counts read over windows tracking missed nights of, each at a full
+ * window's worth (learning A6): what the nights that ran read, per night,
+ * times the window's nights. Both windows on the same scale, a missed night
+ * no longer reads as a decline nobody caused. What was read stays as `raw`.
+ */
+export function fullWindowCounts(metrics, gaps) {
+  if (!metrics || !(gaps.before || gaps.after)) return metrics;
+  const full = (value, missing) => {
+    if (value == null || !missing) return value;
+    const ran = MEASUREMENT_WINDOW_DAYS - missing;
+    return ran > 0 ? Math.round(((value * MEASUREMENT_WINDOW_DAYS) / ran) * 10) / 10 : null;
+  };
+  return metrics.map((m) => {
+    if (!COUNT_METRICS.has(m.metric)) return m;
+    const before = full(m.before, gaps.before);
+    const after = full(m.after, gaps.after);
+    if (before === m.before && after === m.after) return m;
+    return { ...m, before, after, raw: { before: m.before, after: m.after } };
+  });
 }
 
 /** A target the night engine names that a basket can be measured on (learning A1). */
@@ -302,27 +402,168 @@ export async function validateAction(action, { now = new Date() } = {}) {
   if (!closedAt) return null;
 
   const beforeWindow = windowEndingBefore(new Date(action.created_at), MEASUREMENT_WINDOW_DAYS);
-  const afterWindow = windowStartingAfter(new Date(closedAt), MEASUREMENT_WINDOW_DAYS);
 
-  // The window has to be complete. Measuring a window whose last days have
+  // The readings due (learning B1): the days whose week is over, not read
+  // yet. A window has to be complete: measuring one whose last days have
   // not happened yet reads low for a reason that has nothing to do with the
   // action, and would file most recent work as a decline.
-  if (afterWindow.to >= utcDay(now)) return null;
+  const previous = Array.isArray(action.validation?.readings) ? action.validation.readings : [];
+  const taken = new Set(previous.map((r) => r.day));
+  const due = READING_DAYS.filter(
+    (day) => !taken.has(day) && readingWindow(closedAt, day).to < utcDay(now),
+  );
+  if (due.length === 0) return null;
 
   // What became of the signals that raised it (A3), and for a Site Audit
   // fix whether its pages pass when audited again (A2), kept beside the
   // metrics. A fix whose pages were audited again is judged by that: the
   // check passing is its aim.
   const [signals, audit] = await Promise.all([signalOutcome(action.id), auditRecheck(action)]);
-  const finish = async (validation, outcome) => {
-    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}) };
+
+  // Each reading due, in order; the action keeps the last one's figures and
+  // verdict, every reading's verdict and metrics, and whether it's final.
+  // The control's prompts and its week before (B2) are the same for each:
+  // read for the first, kept for the rest.
+  const readings = [...previous];
+  const controlReads = {};
+  let last = null;
+  for (const day of due) {
+    last = await measureReading(action, {
+      beforeWindow,
+      afterWindow: readingWindow(closedAt, day),
+      signals,
+      audit,
+      now,
+      controlReads,
+    });
+    readings.push({
+      day,
+      outcome: last.verdict,
+      ...(last.kept?.afterWindow ? { afterWindow: last.kept.afterWindow } : {}),
+      ...(last.kept?.metrics ? { metrics: last.kept.metrics } : {}),
+    });
+  }
+  const final = readings.some((r) => r.day === FINAL_READING_DAY);
+  await write(
+    action.id,
+    {
+      measuredAt: now.toISOString(),
+      ...(last.kept ?? {}),
+      readings,
+      ...(final ? { final: true } : {}),
+    },
+    last.verdict,
+    now,
+    { day: due[due.length - 1], final },
+  );
+  return last.verdict;
+}
+
+/**
+ * A basket's control (learning B2): the brand's prompts it didn't touch,
+ * read over the same windows, its values as read. The basket's change net
+ * of theirs is taken when the reading finishes, its counts on the same
+ * scale as the result's (A6). Kept beside the result, not in its verdict.
+ * Null with too few prompts to read, or a read that fails: the result
+ * stands as it was. Its prompts and week before, the same for every
+ * reading of the action, are read once into `shared`.
+ */
+async function controlOf(action, promptIds, { beforeWindow, afterWindow }, shared = {}) {
+  const brandId = action.brand_id;
+  try {
+    shared.scope ??= controlScope(brandId, promptIds, beforeWindow.from);
+    const scope = await shared.scope;
+    if (!scope) return null;
+    shared.before ??= measureBasket(brandId, scope, beforeWindow.from, beforeWindow.to);
+    const [before, after] = await Promise.all([
+      shared.before,
+      measureBasket(brandId, scope, afterWindow.from, afterWindow.to),
+    ]);
+    return { basis: scope.basis, prompts: scope.promptIds.length, before, after };
+  } catch (err) {
+    logger.warn(
+      { err: err.message, brandId, actionId: action.id },
+      '[action-validation] control basket not read',
+    );
+    return null;
+  }
+}
+
+/** The control's values with its counts at a full window's worth, as the result's are (A6). */
+function fullWindowControl({ before, after }, nights) {
+  const scaled = fullWindowCounts(
+    Object.keys(before).map((metric) => ({ metric, before: before[metric], after: after[metric] })),
+    nights,
+  );
+  return {
+    before: Object.fromEntries(scaled.map((m) => [m.metric, m.before])),
+    after: Object.fromEntries(scaled.map((m) => [m.metric, m.after])),
+  };
+}
+
+/**
+ * One reading of a closed action (learning B1): what it keeps and its
+ * verdict, over the week `afterWindow` against the week before it was raised.
+ */
+async function measureReading(
+  action,
+  { beforeWindow, afterWindow, signals, audit, now, controlReads },
+) {
+  // The verdict from the metrics kept, by its main metric; given `aims`,
+  // only the metrics the action names count (see deriveOutcome). Given its
+  // `control` (B2), its change net of the control's kept beside.
+  const finish = async (validation, aims = null, control = null) => {
+    // Nights tracking missed in either window (A6), when a count was read.
+    // Up to MAX_GAP_DAYS, its counts are read at a full window's worth; past
+    // it, too few nights ran to scale from: the counts stay as read and
+    // don't count toward the verdict, and an action whose main metric is a
+    // count can't be compared. The rates can.
+    const counted = [...(validation?.metrics ?? []), ...(validation?.brandWide ?? [])].some(
+      (m) => COUNT_METRICS.has(m.metric) && m.before != null && m.after != null,
+    );
+    const [gapBefore, gapAfter] = counted
+      ? await Promise.all([
+          missingDays(action.brand_id, beforeWindow),
+          missingDays(action.brand_id, afterWindow),
+        ])
+      : [0, 0];
+    const tooMany = Math.max(gapBefore, gapAfter) > MAX_GAP_DAYS;
+    const gaps =
+      gapBefore || gapAfter
+        ? { gaps: { before: gapBefore, after: gapAfter, ...(tooMany ? { tooMany: true } : {}) } }
+        : {};
+    const nights = { before: gapBefore, after: gapAfter };
+    const read =
+      validation && !tooMany
+        ? {
+            ...validation,
+            metrics: fullWindowCounts(validation.metrics, nights),
+            ...(validation.brandWide
+              ? { brandWide: fullWindowCounts(validation.brandWide, nights) }
+              : {}),
+          }
+        : validation;
+    const comparable = tooMany
+      ? read?.metrics.filter((m) => !COUNT_METRICS.has(m.metric))
+      : read?.metrics;
+    // Net of the control (B2) on the result's scale: its counts read at a
+    // full week's worth over the same nights, or, past MAX_GAP_DAYS, left
+    // out with the result's.
+    const net = read && control ? netEffect(comparable, fullWindowControl(control, nights)) : [];
+    const measured = net.length
+      ? { ...read, control: { basis: control.basis, prompts: control.prompts, net } }
+      : read;
+    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}), ...gaps };
     const kept =
-      validation || Object.keys(beside).length
-        ? { measuredAt: now.toISOString(), ...(validation ?? {}), ...beside }
+      measured || Object.keys(beside).length
+        ? { measuredAt: now.toISOString(), ...(measured ?? {}), ...beside }
         : null;
+    const outcome =
+      !read || (tooMany && COUNT_METRICS.has(read.primary))
+        ? 'not_measurable'
+        : deriveOutcome(comparable, read.primary, aims);
     const verdict = (audit && auditOutcome(audit)) ?? outcome;
-    await write(action.id, kept, verdict, now);
-    return verdict;
+    return { kept, verdict };
   };
 
   // An action sent from a content opportunity is measured on its own prompts
@@ -352,15 +593,25 @@ export async function validateAction(action, { now = new Date() } = {}) {
       before: before[metric],
       after: after[metric],
     }));
+    // Its aim: the first of its success metrics a basket reads, else its visibility.
+    const primary = (action.kpi_keys ?? []).find((key) => key in BASKET_KPIS) ?? 'ai_visibility';
+    const control = await controlOf(
+      action,
+      scope.promptIds,
+      { beforeWindow, afterWindow },
+      controlReads,
+    );
     return finish(
       {
         measuredAt: now.toISOString(),
         beforeWindow,
         afterWindow,
         metrics,
+        primary,
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
       },
-      deriveOutcome(metrics),
+      action.kpi_keys ?? [],
+      control,
     );
   }
 
@@ -370,11 +621,17 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // them (learning A1): "recover 6 prompts" moves those 6, which the whole
   // brand's numbers can bury. The brand-wide figures stay as a second line.
   // A basket that measured nothing (no answers, citations of prompts) leaves
-  // the action to the brand-wide measure below.
+  // the action to the brand-wide measure below, and so does one that can't
+  // read its main metric (citations of prompts): judged by another, a basket
+  // could read "improved" while its aim fell brand-wide.
+  let brand = null;
+  let fallback = null;
   const targets = await targetScope(action);
   if (targets) {
     const asked = (action.kpi_keys ?? []).filter((key) => key in BASKET_KPIS);
     const keys = asked.length ? asked : Object.keys(BASKET_KPIS);
+    // Its aim: the first metric it names, else what its targets read in.
+    const primary = asked[0] ?? (targets.entity === 'pages' ? 'citations' : 'ai_visibility');
     const [before, after, brandBefore, brandAfter] = await Promise.all([
       measureBasket(action.brand_id, targets, beforeWindow.from, beforeWindow.to),
       measureBasket(action.brand_id, targets, afterWindow.from, afterWindow.to),
@@ -389,41 +646,57 @@ export async function validateAction(action, { now = new Date() } = {}) {
       before: before[metric] ?? null,
       after: after[metric] ?? null,
     }));
-    if (metrics.some((m) => m.before != null && m.after != null)) {
+    const read = (m) => m.before != null && m.after != null;
+    const named = {
+      entity: targets.entity,
+      prompts: targets.promptIds.length,
+      pages: targets.pages.length,
+    };
+    if (metrics.some((m) => m.metric === primary && read(m))) {
       const brandWide = kpiKeys.map((metric) => ({
         metric,
         unit: MEASURABLE_KPIS[metric],
         before: brandBefore[metric] ?? null,
         after: brandAfter[metric] ?? null,
       }));
+      const control = await controlOf(
+        action,
+        targets.promptIds,
+        { beforeWindow, afterWindow },
+        controlReads,
+      );
       return finish(
         {
           measuredAt: now.toISOString(),
           beforeWindow,
           afterWindow,
           metrics,
-          scope: {
-            kind: 'targets',
-            entity: targets.entity,
-            prompts: targets.promptIds.length,
-            pages: targets.pages.length,
-          },
+          primary,
+          scope: { kind: 'targets', ...named },
           ...(brandWide.length ? { brandWide } : {}),
         },
-        deriveOutcome(metrics),
+        asked,
+        control,
       );
+    }
+    // Read already, for the brand-wide measure below.
+    if (kpiKeys.length) brand = { before: brandBefore, after: brandAfter };
+    if (metrics.some(read)) {
+      fallback = { kind: 'brand', reason: 'primary_not_in_basket', ...named };
     }
   }
 
   // An action with no success metrics has nothing to measure. That is a gap
   // in the rule that produced it, not a failure here — say so plainly rather
   // than inventing a metric it never claimed.
-  if (kpiKeys.length === 0) return finish(null, 'not_measurable');
+  if (kpiKeys.length === 0) return finish(null);
 
-  const [before, after] = await Promise.all([
-    measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
-    measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to),
-  ]);
+  const [before, after] = brand
+    ? [brand.before, brand.after]
+    : await Promise.all([
+        measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
+        measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to),
+      ]);
 
   const metrics = kpiKeys.map((metric) => ({
     metric,
@@ -432,13 +705,20 @@ export async function validateAction(action, { now = new Date() } = {}) {
     after: after[metric] ?? null,
   }));
 
-  return finish(
-    { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics },
-    deriveOutcome(metrics),
-  );
+  // Its aim: the first success metric its signals name. Measured here for a
+  // basket that couldn't read it, the scope says so.
+  const primary = kpiKeys[0];
+  return finish({
+    measuredAt: now.toISOString(),
+    beforeWindow,
+    afterWindow,
+    metrics,
+    primary,
+    ...(fallback ? { scope: fallback } : {}),
+  });
 }
 
-async function write(actionId, validation, outcome, now) {
+async function write(actionId, validation, outcome, now, { day = null, final = false } = {}) {
   const { error } = await supabaseAdmin
     .from('actions')
     .update({ validation, outcome, validated_at: now.toISOString() })
@@ -447,10 +727,18 @@ async function write(actionId, validation, outcome, now) {
 
   // The trail carries the verdict, so the drawer's History tab shows when the
   // measurement happened alongside the work that preceded it.
-  await supabaseAdmin
-    .from('action_events')
-    .insert({ action_id: actionId, event: 'outcome_measured', data: { outcome } });
+  await supabaseAdmin.from('action_events').insert({
+    action_id: actionId,
+    event: 'outcome_measured',
+    // Which reading (learning B1), and whether it's the final one.
+    data: { outcome, ...(day ? { day } : {}), ...(final ? { final: true } : {}) },
+  });
 }
+
+/** The actions the sweep reads, and how many at a time. */
+export const SWEEP_FILTER =
+  'outcome.eq.pending_measurement,and(validation->readings.not.is.null,validation->>final.is.null)';
+const SWEEP_PAGE = 500;
 
 /**
  * Nightly sweep: measure every closed action whose settling period has passed.
@@ -460,28 +748,40 @@ async function write(actionId, validation, outcome, now) {
  */
 export async function sweepActionValidation({ now = new Date() } = {}) {
   const cutoff = new Date(now.getTime() - VALIDATION_WAIT_DAYS * DAY_MS).toISOString();
-  const { data, error } = await supabaseAdmin
-    .from('actions')
-    .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at')
-    .eq('status', 'completed')
-    .eq('outcome', 'pending_measurement')
-    .not('completed_at', 'is', null)
-    .lte('completed_at', cutoff)
-    .limit(500);
-  if (error) {
-    logger.error({ err: error }, '[action-validation] could not list pending actions');
-    return { measured: 0, failed: 0 };
-  }
-
   let measured = 0;
   let failed = 0;
-  for (const action of data ?? []) {
-    try {
-      if (await validateAction(action, { now })) measured += 1;
-    } catch (err) {
-      failed += 1;
-      logger.error({ err, actionId: action.id }, '[action-validation] measurement failed');
+  // In pages by id: an action waiting for a later reading stays on the list
+  // night after night, and must not crowd out the ones due.
+  let afterId = null;
+  for (;;) {
+    let query = supabaseAdmin
+      .from('actions')
+      .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at, validation')
+      .eq('status', 'completed')
+      // Never measured, or read but not for the last time yet (learning B1).
+      // One measured once before the later readings came keeps its result.
+      .or(SWEEP_FILTER)
+      .not('completed_at', 'is', null)
+      .lte('completed_at', cutoff)
+      .order('id')
+      .limit(SWEEP_PAGE);
+    if (afterId) query = query.gt('id', afterId);
+    const { data, error } = await query;
+    if (error) {
+      logger.error({ err: error }, '[action-validation] could not list pending actions');
+      break;
     }
+
+    for (const action of data ?? []) {
+      try {
+        if (await validateAction(action, { now })) measured += 1;
+      } catch (err) {
+        failed += 1;
+        logger.error({ err, actionId: action.id }, '[action-validation] measurement failed');
+      }
+    }
+    if (!data || data.length < SWEEP_PAGE) break;
+    afterId = data[data.length - 1].id;
   }
 
   logger.info({ measured, failed }, '[action-validation] sweep complete');

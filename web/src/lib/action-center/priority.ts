@@ -28,6 +28,12 @@ export interface PriorityReason {
   days: number | null;
   /** Independent data sources behind it. */
   sources: number;
+  /**
+   * How the brand's earlier actions of its kind turned out (learning B4):
+   * results with a verdict, how many improved, and the points that moved
+   * its score. Null with no history, or from a scorer before it.
+   */
+  pastSuccess?: { improved: number; results: number; points: number } | null;
 }
 
 /** How many actions the Top Actions card names (spec: at most five). */
@@ -87,7 +93,18 @@ export function parsePriorityReason(
     heldBefore: r.heldBefore === true,
     days: daysSince(num(r.days), scoredAt, now),
     sources: num(r.sources) ?? 0,
+    pastSuccess: pastSuccessOf(r.pastSuccess),
   };
+}
+
+function pastSuccessOf(value: unknown): PriorityReason['pastSuccess'] {
+  if (!value || typeof value !== 'object') return null;
+  const p = value as Record<string, unknown>;
+  const [improved, results, points] = [p.improved, p.results, p.points].map((v) =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null,
+  );
+  if (improved === null || results === null || points === null || results < 1) return null;
+  return { improved, results, points };
 }
 
 function daysSince(days: number | null, scoredAt: string | null | undefined, now: Date) {
@@ -190,6 +207,16 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
     extras.push(t('reason.heldBefore'));
   }
   if (reason.sources >= 2) extras.push(t('reason.sources', { count: reason.sources }));
+  // Its kind's track here (learning B4), once it moved the score a point or more.
+  const past = reason.pastSuccess;
+  if (past && Math.abs(past.points) >= 1) {
+    extras.push(
+      t(past.points > 0 ? 'reason.pastSuccess.worked' : 'reason.pastSuccess.rarely', {
+        improved: past.improved,
+        results: past.results,
+      }),
+    );
+  }
 
   let text = when ? t('reason.sentence.withWhen', { what, when }) : what;
   if (extras.length) {

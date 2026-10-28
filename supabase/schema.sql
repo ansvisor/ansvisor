@@ -41861,6 +41861,66 @@ comment on table public.content_shopping_checks is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00365_action_outcome_mixed.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00365: an action's result can read "mixed" (learning A4)
+-- ============================================================================
+-- The validation sweep (server/src/lib/action-center/validate.js) compares an
+-- action's metrics before it was raised and after it closed. One metric up
+-- and another down used to read as "improved", which taught that anything
+-- moving up was the work paying off. It now reads "mixed", as does a Site
+-- Audit fix whose pages, audited again, only partly pass. The action's main
+-- metric decides when it was measured; see deriveOutcome.
+
+alter table public.actions
+  drop constraint if exists actions_outcome_check;
+
+alter table public.actions
+  add constraint actions_outcome_check
+  check (outcome in (
+    'pending_measurement',
+    'improved',
+    'mixed',
+    'no_meaningful_change',
+    'declined',
+    'not_measurable'
+  ));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00366_action_dismiss_reason.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00366: why an action was dismissed (learning A5)
+-- ============================================================================
+-- Dismissing an Action Center action asked nothing, so a dismissal taught
+-- nothing: the same definition could open again 14 days later for the same
+-- reason it was turned down. The person now says why, as a content
+-- opportunity's dismissal does (CONTENT-006): the reason is kept while the
+-- action stays dismissed, and cleared when it's set to another status.
+-- Nothing reads it to rank or rest actions yet (phase B).
+
+alter table public.actions
+  add column if not exists dismiss_reason text;
+
+alter table public.actions
+  drop constraint if exists actions_dismiss_reason_check;
+
+alter table public.actions
+  add constraint actions_dismiss_reason_check
+  check (
+    dismiss_reason is null
+    or dismiss_reason in ('not_relevant', 'already_done', 'wrong_data', 'not_now')
+  );
+
+comment on column public.actions.dismiss_reason is
+  'Why the action was dismissed (00366, learning A5): not_relevant, already_done, wrong_data or not_now; null when no reason was given or the action is not dismissed.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00367_content_suggestion_decisions.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -41914,6 +41974,111 @@ grant execute on function public.content_suggestion_decisions(uuid, timestamptz)
 
 comment on function public.content_suggestion_decisions(uuid, timestamptz) is
   'A brand''s accepted and rejected Content Agent suggestions since a day, by rule key, and the drafts they were rejected on; small changes only, not page rewrites (00367, learning B6). Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00368_action_scorecard.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00368: what worked at a brand, by kind of action (learning B3)
+-- ============================================================================
+-- Each completed action keeps its result (server action-center/validate.js,
+-- read a week, two weeks and a month after it closed) and a dismissed one
+-- why it was turned down (00366). Read one at a time, a brand can't see
+-- which kinds of work pay off for it. This sums the brand's actions raised
+-- since a day by kind: how many were completed, what their results read,
+-- the median change in each one's main metric, and how many were dismissed
+-- and why. One brand's own actions only, never another's: the History tab
+-- reads it with the member's session (RLS keeps it to their organization),
+-- the API with the service role.
+
+create or replace function public.action_scorecard(
+  p_brand_id uuid,
+  p_since timestamptz default null
+)
+returns table (
+  kind text,
+  completed integer,
+  improved integer,
+  mixed integer,
+  no_change integer,
+  declined integer,
+  not_measurable integer,
+  pending integer,
+  final integer,
+  median_change numeric,
+  dismissed integer,
+  dismiss_reasons jsonb
+)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with closed as (
+    select a.kind,
+           a.status,
+           a.outcome,
+           a.dismiss_reason,
+           a.validation->>'final' = 'true' as is_final,
+           -- The relative change in its main metric (learning A4), when the
+           -- metric was read before and after and had a before to scale by.
+           (select (m->>'after')::numeric / nullif((m->>'before')::numeric, 0) - 1
+              from jsonb_array_elements(
+                     case when jsonb_typeof(a.validation->'metrics') = 'array'
+                          then a.validation->'metrics' else '[]'::jsonb end
+                   ) as m
+             where m->>'metric' = a.validation->>'primary'
+               and jsonb_typeof(m->'before') = 'number'
+               and jsonb_typeof(m->'after') = 'number'
+             limit 1) as change
+      from public.actions a
+     where a.brand_id = p_brand_id
+       and a.deleted_at is null
+       and a.status in ('completed', 'dismissed')
+       and (p_since is null or a.created_at >= p_since)
+  )
+  select c.kind,
+         count(*) filter (where c.status = 'completed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'improved')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'mixed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'no_meaningful_change')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'declined')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'not_measurable')::integer,
+         count(*) filter (
+           where c.status = 'completed'
+             and (c.outcome is null or c.outcome = 'pending_measurement')
+         )::integer,
+         count(*) filter (where c.status = 'completed' and c.is_final)::integer,
+         -- The median, so one small page that went from 1 to 20 doesn't
+         -- read as the kind's typical result. Over the results with a
+         -- verdict only.
+         round(
+           (percentile_cont(0.5) within group (order by c.change) filter (
+             where c.status = 'completed'
+               and c.outcome in ('improved', 'mixed', 'no_meaningful_change', 'declined')
+           ))::numeric,
+           4
+         ),
+         count(*) filter (where c.status = 'dismissed')::integer,
+         coalesce(
+           (select jsonb_object_agg(r.reason, r.n)
+              from (select coalesce(d.dismiss_reason, 'none') as reason, count(*) as n
+                      from closed d
+                     where d.kind = c.kind and d.status = 'dismissed'
+                     group by 1) as r),
+           '{}'::jsonb
+         )
+    from closed c
+   group by c.kind;
+$$;
+
+revoke all on function public.action_scorecard(uuid, timestamptz) from public, anon;
+grant execute on function public.action_scorecard(uuid, timestamptz) to authenticated, service_role;
+
+comment on function public.action_scorecard(uuid, timestamptz) is
+  'A brand''s actions raised since a day, by kind: completed, results, median change in the main metric, dismissed and why (00368, learning B3). RLS applies to the caller.';
 
 notify pgrst, 'reload schema';
 
