@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import supabaseAdmin from '../../config/supabase.js';
+import { chunkIds } from '../chunked-in.js';
 
 /**
  * Writes a brand's catalog from one source (#1263, 00278): the one batch
@@ -20,6 +21,7 @@ import supabaseAdmin from '../../config/supabase.js';
  */
 
 const PAGE = 1000;
+/** Rows per write: they go in the request's body. */
 const CHUNK = 500;
 
 const clip = (value, max) => {
@@ -151,8 +153,10 @@ async function upsertRows(db, table, rows) {
   return ids;
 }
 
+// Ids in a filter go in the URL: chunkIds keeps each request near 4 kB,
+// where 500 uuids (~19 kB) could be refused before reaching PostgREST.
 async function markRemoved(db, table, ids, at) {
-  for (const chunk of chunks(ids)) {
+  for (const chunk of chunkIds(ids)) {
     const { error } = await db
       .from(table)
       .update({ removed_at: at, updated_at: at })
@@ -162,7 +166,7 @@ async function markRemoved(db, table, ids, at) {
 }
 
 async function replaceIn(db, table, productIds, rows) {
-  for (const chunk of chunks(productIds)) {
+  for (const chunk of chunkIds(productIds)) {
     const { error } = await db.from(table).delete().in('product_id', chunk);
     if (error) throw new Error(`${table} clear: ${error.message}`);
   }
