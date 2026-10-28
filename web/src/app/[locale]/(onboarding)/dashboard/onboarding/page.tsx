@@ -24,7 +24,7 @@ import {
   LANGUAGE_ITEMS,
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
-import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, type PlanId } from '@/config/plans';
+import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, toPlanId, type PlanId } from '@/config/plans';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
@@ -469,7 +469,7 @@ export default function OnboardingPage() {
               .select('subscription_status, plan')
               .eq('id', profile.organization_id)
               .single();
-            if (org?.plan) setCurrentPlanId(org.plan as PlanId);
+            if (org?.plan) setCurrentPlanId(toPlanId(org.plan));
             const subStatus = org?.subscription_status;
             if (subStatus !== 'active' && subStatus !== 'trialing') {
               setOrganizationId(profile.organization_id);

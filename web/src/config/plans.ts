@@ -327,6 +327,15 @@ export function isCloud(): boolean {
   return process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
 }
 
+/**
+ * A stored plan as a known one. A new sign-up's organization holds `free`
+ * (or nothing) until it picks a plan; the dashboard opens for it once it has
+ * the demo brand, and reads limits as Starter's until then.
+ */
+export function toPlanId(value: string | null | undefined): PlanId {
+  return value && value in PLANS ? (value as PlanId) : 'starter';
+}
+
 export function getPlan(planId: string | null | undefined): Plan {
   if (!isCloud()) return PLANS.self_hosted;
   return PLANS[(planId as PlanId) ?? 'starter'] ?? PLANS.starter;
