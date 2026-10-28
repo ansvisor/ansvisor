@@ -7,6 +7,7 @@ import { updateOpportunityStatus } from '@/lib/actions/content';
 import { readAssignees } from '@/lib/action-center/assignees';
 import { memberLabel } from '@/lib/action-center/display';
 import type { DraftMethod } from '@/lib/content/drafts';
+import type { PlanConversions } from '@/lib/content/conversions';
 import type { CitedAddress, PlanResults } from '@/lib/content/plan-mix';
 import {
   PLAN_PERIODS,
@@ -122,6 +123,9 @@ export async function getContentPlan(
     citations: { cur: Number(p.citations?.cur ?? 0), prev: Number(p.citations?.prev ?? 0) },
     platformsDown: Array.isArray(p.platformsDown) ? p.platformsDown : [],
     aiVisits: Number(p.aiVisits ?? 0),
+    // Null with conversions off (00291), or from a database before it.
+    conversions:
+      p.conversions === null || p.conversions === undefined ? null : Number(p.conversions),
   }));
 
   const marks = (marksRes.data ?? []).map(
@@ -374,16 +378,32 @@ export async function showPlanRow(brandId: string, rowKey: string): Promise<void
 export async function getContentPlanInsights(
   brandId: string,
   days: PlanPeriod,
-): Promise<{ citations: CitedAddress[]; totalCitations: number; results: PlanResults } | null> {
+): Promise<{
+  citations: CitedAddress[];
+  totalCitations: number;
+  results: PlanResults;
+  /** The snippet's conversions (CE-017, 00288): null when they couldn't be read. */
+  conversions: PlanConversions | null;
+} | null> {
   if (!planInput.safeParse({ brandId, days }).success) throw new Error('invalid');
   const supabase = await createClient();
-  const [{ data, error }, gaConnected] = await Promise.all([
+  const [{ data, error }, gaConnected, conversions] = await Promise.all([
     supabase.rpc('content_plan_insights', { p_brand_id: brandId, p_days: days }),
     getSuggestionSourceStates(brandId).then(
       (states) => googleSourceStatus(states.ga) === 'connected',
       // The property alone decides then, as before.
       () => null,
     ),
+    // Its own read: the strip goes on without it.
+    Promise.resolve(supabase.rpc('brand_ai_conversions', { p_brand_id: brandId, p_days: days }))
+      .then(({ data: read, error: readError }) => {
+        if (readError) throw new Error(readError.message);
+        return (read as PlanConversions | null) ?? null;
+      })
+      .catch((err) => {
+        console.error('Failed to read the conversions from AI journeys:', err);
+        return null;
+      }),
   ]);
   if (error) throw new Error(error.message);
   if (!data) return null;
@@ -409,5 +429,6 @@ export async function getContentPlanInsights(
       analytics: Boolean(r.analytics) && gaConnected !== false,
       purchases: Boolean(r.purchases),
     },
+    conversions,
   };
 }

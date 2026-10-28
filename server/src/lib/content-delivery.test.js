@@ -13,6 +13,12 @@ const db = {
   // What a callback that landed first left on the delivery.
   told: null,
   configs: [],
+  // The brand's Webflow connection (00283), and whether this server has Webflow set up.
+  webflow: null,
+  webflowConfigured: true,
+  // Its WordPress connection (00294), and whether this server can keep its sign-in.
+  wordpress: null,
+  wordpressConfigured: true,
   queued: [],
   updates: [],
   rpc: [],
@@ -32,14 +38,27 @@ function from(table) {
     }
     if (table === 'content_rule_sets') {
       const types = q.filters.find(([op]) => op === 'in')?.[2] ?? [];
-      return { data: db.ruleSets.filter((r) => types.includes(r.page_type)), error: null };
+      const site = q.filters.find(([op, col]) => op === 'eq' && col === 'site_type')?.[2];
+      return {
+        data: db.ruleSets.filter(
+          (r) => types.includes(r.page_type) && (!r.site_type || r.site_type === site),
+        ),
+        error: null,
+      };
     }
     if (table === 'content_drafts') {
       const ids = q.filters.find(([op]) => op === 'in')?.[2];
       return { data: db.drafts.filter((d) => !ids || ids.includes(d.id)), error: null };
     }
     if (table === 'webhook_configs') return { data: db.configs, error: null };
-    if (table === 'brands') return { data: db.brand, error: null };
+    if (table === 'brand_cms_connections') {
+      const provider = q.filters.find(([op, col]) => op === 'eq' && col === 'provider')?.[2];
+      return { data: provider === 'wordpress' ? db.wordpress : db.webflow, error: null };
+    }
+    if (table === 'brands') {
+      db.brandReads += 1;
+      return { data: db.brand, error: null };
+    }
     if (table === 'brand_domains') return { data: [{ domain: 'acme.example' }], error: null };
     return { data: null, error: null };
   };
@@ -52,6 +71,7 @@ function from(table) {
     limit: () => chain,
     single: async () => result(),
     maybeSingle: async () => {
+      if (table === 'brand_cms_connections') return result();
       const { data } = result();
       const id = q.filters.find(([op, col]) => op === 'eq' && col === 'id')?.[2];
       return { data: (data ?? []).find((d) => d.id === id) ?? null, error: null };
@@ -67,12 +87,24 @@ vi.mock('../config/supabase.js', () => ({
     from: (t) => from(t),
     rpc: async (fn, args) => {
       db.rpc.push({ fn, args });
-      return { data: db.queued, error: null };
+      return db.rpcError ? { data: null, error: db.rpcError } : { data: db.queued, error: null };
     },
   },
 }));
 const postJson = vi.fn();
 vi.mock('./safe-post.js', () => ({ postJson: (...args) => postJson(...args) }));
+vi.mock('./composio.js', () => ({ isWebflowConfigured: () => db.webflowConfigured }));
+const sendToWebflow = vi.fn();
+vi.mock('./cms/webflow-delivery.js', () => ({
+  sendToWebflow: (...args) => sendToWebflow(...args),
+}));
+vi.mock('./catalog/credentials.js', () => ({
+  credentialsConfigured: () => db.wordpressConfigured,
+}));
+const sendToWordPress = vi.fn();
+vi.mock('./cms/wordpress-delivery.js', () => ({
+  sendToWordPress: (...args) => sendToWordPress(...args),
+}));
 
 const { DAILY_DELIVERIES, DeliveryError, PAUSE_MS, cleanPublishHtml, sendContentPages, signBody } =
   await import('./content-delivery.js');
@@ -107,6 +139,7 @@ const draft = (id, over = {}) => ({
 
 beforeEach(() => {
   db.brand = { id: 'b1', name: 'Acme Coffee', industry: 'Coffee', language: null };
+  db.brandReads = 0;
   db.drafts = [draft(page().draftId)];
   db.ruleSets = [];
   db.told = null;
@@ -121,7 +154,14 @@ beforeEach(() => {
   db.queued = [row(page().draftId)];
   db.updates = [];
   db.rpc = [];
+  db.webflow = null;
+  db.webflowConfigured = true;
+  db.wordpress = null;
+  db.wordpressConfigured = true;
+  db.rpcError = null;
   postJson.mockReset().mockResolvedValue({ status: 200, answer: '{"ok":true}' });
+  sendToWebflow.mockReset();
+  sendToWordPress.mockReset();
 });
 
 afterEach(() => {
@@ -185,6 +225,7 @@ describe('sendContentPages', () => {
           p_batch_id: null,
           p_items: [{ draft_id: page().draftId, title: page().title, slug: 'best-aeo-tools' }],
           p_limit: DAILY_DELIVERIES,
+          p_target: 'webhook',
         },
       },
     ]);
@@ -305,14 +346,35 @@ describe('sendContentPages', () => {
   });
 
   it('reads the language from My rules for a draft no one has set rules on, as the editor does', async () => {
-    db.ruleSets = [{ page_type: 'blog_post', overrides: { language: { value: 'French' } } }];
+    // A set for each kind of site (00227): the brand's kind's is read.
+    db.ruleSets = [
+      {
+        page_type: 'blog_post',
+        site_type: 'ecommerce',
+        overrides: { language: { value: 'German' } },
+      },
+      { page_type: 'blog_post', site_type: 'b2b', overrides: { language: { value: 'French' } } },
+    ];
     await send();
     expect(JSON.parse(postJson.mock.calls[0][1]).page.language).toBe('fr');
+    // The brand read once, for the package and its kind of site (#1544 review).
+    expect(db.brandReads).toBe(1);
+
+    // A shop (Shopping mode on): the e-commerce set's.
+    db.brand = { ...db.brand, shopping_mode_enabled: true };
+    await send();
+    expect(JSON.parse(postJson.mock.calls[1][1]).page.language).toBe('de');
+
+    // The brand unread: no kind of site's set, never the B2B one.
+    db.brand = null;
+    await send();
+    expect(JSON.parse(postJson.mock.calls[2][1]).page.language).toBe('en');
 
     // The draft's own choices win once it has any.
+    db.brand = { id: 'b1', name: 'Acme Coffee', industry: 'Coffee', language: null };
     db.drafts[0].rules = { source: 'default', overrides: {}, textRules: [] };
     await send();
-    expect(JSON.parse(postJson.mock.calls[1][1]).page.language).toBe('en');
+    expect(JSON.parse(postJson.mock.calls[3][1]).page.language).toBe('en');
   });
 
   it('takes JSON-LD however its script type is written, as the clean keeps it', async () => {
@@ -429,5 +491,231 @@ describe('sendContentPages', () => {
     await expect(send()).rejects.toMatchObject({ code: 'webhook_not_subscribed', status: 409 });
     expect(db.rpc).toEqual([]);
     expect(postJson).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendContentPages to Webflow (phase 2)', () => {
+  const connection = {
+    brand_id: 'b1',
+    composio_account_id: 'ca_1',
+    composio_entity_id: 'brand_b1',
+    status: 'connected',
+    collection_id: 'c1',
+    field_map: { body: 'post-body' },
+  };
+  const toWebflow = (pages = [page()]) =>
+    sendContentPages({ orgId: 'o1', brandId: 'b1', userId: 'u1', pages, target: 'webflow' });
+
+  it('sends a page to the brand’s collection, not its webhooks, and keeps the item on the delivery', async () => {
+    db.webflow = connection;
+    sendToWebflow.mockResolvedValue({
+      taken: true,
+      externalId: 'item-1',
+      collectionId: 'c1',
+      updated: false,
+      changed: { tables: 0, images: 0 },
+    });
+    const sent = await toWebflow();
+    expect(db.rpc[0].args.p_target).toBe('webflow');
+    expect(postJson).not.toHaveBeenCalled();
+    expect(sendToWebflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connection,
+        html: '<h2>Why</h2><p>Because.</p>',
+        jsonLd: [],
+        page: expect.objectContaining({ draftId: page().draftId, slug: 'best-aeo-tools' }),
+      }),
+    );
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'sent',
+      error: null,
+      http_status: null,
+      external_id: 'item-1',
+      target_collection: 'c1',
+    });
+    expect(sent.deliveries[0]).toMatchObject({ status: 'sent', updated: false });
+  });
+
+  it('writes a page Webflow didn’t take as failed, with the reason', async () => {
+    db.webflow = connection;
+    sendToWebflow.mockResolvedValue({
+      taken: false,
+      failure: 'Another item in the collection has this slug',
+    });
+    const sent = await toWebflow();
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'failed',
+      error: 'Another item in the collection has this slug',
+    });
+    expect(write.update).not.toHaveProperty('external_id');
+    expect(sent.deliveries[0]).not.toHaveProperty('updated');
+  });
+
+  it('refuses before reserving when Webflow isn’t ready to take pages', async () => {
+    db.webflowConfigured = false;
+    await expect(toWebflow()).rejects.toMatchObject({
+      code: 'webflow_not_configured',
+      status: 503,
+    });
+    db.webflowConfigured = true;
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'no_webflow', status: 409 });
+    db.webflow = { ...connection, status: 'auth_failed' };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'webflow_refused', status: 409 });
+    db.webflow = { ...connection, collection_id: null };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'webflow_not_ready', status: 409 });
+    db.webflow = { ...connection, field_map: {} };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'webflow_not_ready' });
+    expect(db.rpc).toEqual([]);
+    expect(sendToWebflow).not.toHaveBeenCalled();
+  });
+
+  it('sends a batch one page after another, to Webflow', async () => {
+    vi.useFakeTimers();
+    db.webflow = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToWebflow.mockResolvedValue({ taken: true, externalId: 'i', collectionId: 'c1' });
+    await toWebflow([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToWebflow).toHaveBeenCalledTimes(2);
+    expect(postJson).not.toHaveBeenCalled();
+  });
+
+  it('refuses a page already on its way to Webflow', async () => {
+    db.webflow = connection;
+    db.rpcError = { message: 'delivery_in_progress' };
+    await expect(toWebflow()).rejects.toMatchObject({ code: 'in_progress', status: 409 });
+    expect(sendToWebflow).not.toHaveBeenCalled();
+  });
+
+  it('stops a batch once Webflow refuses the token, closing the rest with the reason', async () => {
+    vi.useFakeTimers();
+    db.webflow = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToWebflow.mockResolvedValue({
+      taken: false,
+      failure: 'Webflow refused the site token',
+      refused: true,
+    });
+    await toWebflow([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToWebflow).toHaveBeenCalledTimes(1);
+    const closed = db.updates.filter(
+      (u) =>
+        u.table === 'content_draft_deliveries' &&
+        u.update.error === 'Webflow refused the site token',
+    );
+    expect(closed).toHaveLength(2);
+  });
+
+  it('keeps the item’s id even when the delivery’s row was written meanwhile', async () => {
+    db.webflow = connection;
+    db.told = { status: 'failed', error: 'Not sent: interrupted', published_url: null };
+    sendToWebflow.mockResolvedValue({ taken: true, externalId: 'item-9', collectionId: 'c1' });
+    await toWebflow();
+    expect(db.updates.map((u) => u.update)).toContainEqual({
+      external_id: 'item-9',
+      target_collection: 'c1',
+    });
+  });
+});
+
+describe('sendContentPages to WordPress (phase 2, 00294)', () => {
+  const connection = {
+    id: 'cn1',
+    brand_id: 'b1',
+    status: 'connected',
+    site_url: 'https://blog.acme.example',
+  };
+  const toWordPress = (pages = [page()]) =>
+    sendContentPages({ orgId: 'o1', brandId: 'b1', userId: 'u1', pages, target: 'wordpress' });
+
+  it('sends a page to the brand’s site, not its webhooks, and keeps the post on the delivery', async () => {
+    db.wordpress = connection;
+    sendToWordPress.mockResolvedValue({
+      taken: true,
+      externalId: '41',
+      collectionId: 'blog.acme.example',
+      updated: false,
+      live: true,
+    });
+    const sent = await toWordPress();
+    expect(db.rpc[0].args.p_target).toBe('wordpress');
+    expect(postJson).not.toHaveBeenCalled();
+    expect(sendToWebflow).not.toHaveBeenCalled();
+    expect(sendToWordPress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connection,
+        html: '<h2>Why</h2><p>Because.</p>',
+        page: expect.objectContaining({ draftId: page().draftId, slug: 'best-aeo-tools' }),
+      }),
+    );
+    const write = db.updates.find((u) => u.table === 'content_draft_deliveries');
+    expect(write.update).toMatchObject({
+      status: 'sent',
+      external_id: '41',
+      target_collection: 'blog.acme.example',
+    });
+    // Its post was live: the page went as a new draft, and the answer says so.
+    expect(sent.deliveries[0]).toMatchObject({ status: 'sent', updated: false, live: true });
+  });
+
+  it('refuses before reserving when WordPress isn’t connected or set up', async () => {
+    db.wordpressConfigured = false;
+    await expect(toWordPress()).rejects.toMatchObject({
+      code: 'wordpress_not_configured',
+      status: 503,
+    });
+    db.wordpressConfigured = true;
+    await expect(toWordPress()).rejects.toMatchObject({ code: 'no_wordpress', status: 409 });
+    db.wordpress = { ...connection, status: 'auth_failed' };
+    await expect(toWordPress()).rejects.toMatchObject({ code: 'wordpress_refused', status: 409 });
+    // A Webflow connection isn't a WordPress one.
+    db.wordpress = null;
+    db.webflow = {
+      brand_id: 'b1',
+      status: 'connected',
+      collection_id: 'c1',
+      field_map: { body: 'b' },
+    };
+    await expect(toWordPress()).rejects.toMatchObject({ code: 'no_wordpress' });
+    expect(db.rpc).toEqual([]);
+    expect(sendToWordPress).not.toHaveBeenCalled();
+  });
+
+  it('refuses a page already on its way to WordPress, naming it', async () => {
+    db.wordpress = connection;
+    db.rpcError = { message: 'delivery_in_progress' };
+    await expect(toWordPress()).rejects.toMatchObject({
+      code: 'in_progress',
+      message: 'A page is already being sent to WordPress. Wait for it, then send again.',
+    });
+  });
+
+  it('stops a batch once WordPress refuses the sign-in, closing the rest with the reason', async () => {
+    vi.useFakeTimers();
+    db.wordpress = connection;
+    const second = page({ draftId: 'c0ffee00-0000-4000-8000-000000000002', slug: 'second' });
+    db.drafts = [draft(page().draftId), draft(second.draftId)];
+    db.queued = [row(page().draftId), row(second.draftId)];
+    sendToWordPress.mockResolvedValue({
+      taken: false,
+      failure: 'WordPress refused the user or the Application Password.',
+      refused: true,
+    });
+    await toWordPress([page(), second]);
+    await vi.runAllTimersAsync();
+    expect(sendToWordPress).toHaveBeenCalledTimes(1);
+    const closed = db.updates.filter(
+      (u) =>
+        u.table === 'content_draft_deliveries' &&
+        u.update.error === 'WordPress refused the user or the Application Password.',
+    );
+    expect(closed).toHaveLength(2);
   });
 });

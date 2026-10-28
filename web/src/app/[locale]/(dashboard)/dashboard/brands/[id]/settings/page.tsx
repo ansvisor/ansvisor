@@ -60,6 +60,8 @@ import { getPublicApiBaseUrl } from '@/config/api';
 import { SITE_TYPES, guessSiteType, isSiteType, type SiteType } from '@/lib/content/page-types';
 import { qualityPhase } from '@/lib/content/quality';
 import { BrandFactsTab } from './_brand-facts-tab';
+import { ConversionsCard } from './_conversions-card';
+import { trackingSnippetTag } from '@/lib/conversion-tracking';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -130,8 +132,12 @@ export default function BrandSettingsPage({ params, searchParams }: PageProps) {
           <DomainsTab brand={brand} onUpdate={(updated) => updateBrandStore(brand.id, updated)} />
         </TabsContent>
 
-        <TabsContent value="tracking">
+        <TabsContent value="tracking" className="space-y-6">
           <TrackingTab brand={brand} />
+          <ConversionsCard
+            brand={brand}
+            onUpdate={(updated) => updateBrandStore(brand.id, updated)}
+          />
         </TabsContent>
 
         <TabsContent value="competitors">
@@ -911,9 +917,13 @@ function CompetitorsTab({ brandId }: { brandId: string }) {
 function TrackingTab({ brand }: { brand: Brand }) {
   const [copied, setCopied] = useState<'code' | 'snippet' | null>(null);
   const apiUrl = getPublicApiBaseUrl();
-  const snippet = apiUrl
-    ? `<script src="${apiUrl}/t.js" data-t="${brand.trackingCode || ''}" defer></script>`
-    : '';
+  // With conversions on, the tag that follows AI visitors to them (CE-017).
+  const snippet =
+    trackingSnippetTag(
+      apiUrl,
+      brand.trackingCode,
+      brand.conversionsEnabled ? (brand.conversionsConsent ?? 'wait') : null,
+    ) ?? '';
 
   const copyToClipboard = (text: string, key: 'code' | 'snippet') => {
     navigator.clipboard.writeText(text);

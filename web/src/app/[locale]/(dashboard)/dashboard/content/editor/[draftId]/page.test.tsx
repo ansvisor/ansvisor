@@ -26,6 +26,7 @@ const checkDraftClaims = vi.fn();
 const readDraftPage = vi.fn();
 const getOwnImages = vi.fn();
 const getDraftConfirmations = vi.fn();
+const getCatalogMatch = vi.fn();
 const confirmDraftItem = vi.fn();
 const confirmOwnImage = vi.fn();
 const getBrandFacts = vi.fn();
@@ -45,7 +46,13 @@ vi.mock('@/lib/actions/content-draft-inputs', () => ({
   saveDraftInputs: (...args: unknown[]) => saveDraftInputs(...args),
 }));
 const getContentImpact = vi.fn();
+// Mark published (CE-013).
+const publishPage = vi.hoisted(() => vi.fn());
+const readPublishAddress = vi.hoisted(() => vi.fn(async () => 'https://acme.example.com/pipeline'));
+const readLiveUrl = vi.hoisted(() => vi.fn(async () => 'https://acme.example.com/pipeline'));
+vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress, readLiveUrl }));
 const getContentResults = vi.fn();
+const getContentConversions = vi.fn();
 const getDraftSources = vi.fn();
 const setDraftSourceIncluded = vi.fn();
 const readAgentRun = vi.fn();
@@ -66,6 +73,9 @@ const getDraftHandoffs = vi.fn();
 const restoreDraftVersion = vi.fn();
 const getCitedPassages = vi.fn();
 const getDraftSuggestions = vi.fn();
+const getLastRestoreAt = vi.fn();
+// What the page's last rewrite came to (Length's reach): none unless a test gives one.
+const getLastPageRewrite = vi.fn();
 const decideDraftSuggestions = vi.fn();
 const keepAgentBeforeVersion = vi.fn();
 const fixDraftRules = vi.fn();
@@ -81,6 +91,8 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   startAgentWriting: (...args: unknown[]) => startAgentWriting(...args),
   startPageRewrite: (...args: unknown[]) => startPageRewrite(...args),
   getDraftSuggestions: (...args: unknown[]) => getDraftSuggestions(...args),
+  getLastRestoreAt: (...args: unknown[]) => getLastRestoreAt(...args),
+  getLastPageRewrite: (...args: unknown[]) => getLastPageRewrite(...args),
   decideDraftSuggestions: (...args: unknown[]) => decideDraftSuggestions(...args),
   keepAgentBeforeVersion: (...args: unknown[]) => keepAgentBeforeVersion(...args),
   getCitedPassages: (...args: unknown[]) => getCitedPassages(...args),
@@ -96,6 +108,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   rebuildDraftBrief: (...args: unknown[]) => rebuildDraftBrief(...args),
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
   getContentResults: (...args: unknown[]) => getContentResults(...args),
+  getContentConversions: (...args: unknown[]) => getContentConversions(...args),
   getContentDraft: (...args: unknown[]) => getContentDraft(...args),
   markContentDraftReady: (...args: unknown[]) => markContentDraftReady(...args),
   unmarkContentDraftReady: (...args: unknown[]) => unmarkContentDraftReady(...args),
@@ -109,6 +122,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   readDraftPage: (...args: unknown[]) => readDraftPage(...args),
   getOwnImages: (...args: unknown[]) => getOwnImages(...args),
   getDraftConfirmations: (...args: unknown[]) => getDraftConfirmations(...args),
+  getCatalogMatch: (...args: unknown[]) => getCatalogMatch(...args),
   confirmDraftItem: (...args: unknown[]) => confirmDraftItem(...args),
   confirmOwnImage: (...args: unknown[]) => confirmOwnImage(...args),
   checkDraftLinks: (...args: unknown[]) => checkDraftLinks(...args),
@@ -151,6 +165,16 @@ const brandState = vi.hoisted(() => ({
 }));
 const updateBrand = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ updateBrand }));
+// Brief › Shopping path (shopping path, part 3) reads its own path: none here.
+const getShoppingCheck = vi.hoisted(() => vi.fn(async (): Promise<unknown> => null));
+vi.mock('@/lib/actions/shopping-path', () => ({
+  getDraftShoppingPath: vi.fn(async () => ({ path: null })),
+  buildDraftShoppingPath: vi.fn(),
+  saveDraftShoppingPath: vi.fn(),
+  searchCatalogProducts: vi.fn(async () => []),
+  getProductsForBlock: vi.fn(async () => []),
+  getShoppingCheck,
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: typeof brandState) => unknown) => selector(brandState),
 }));
@@ -171,6 +195,14 @@ vi.mock('@/lib/download', () => ({ saveBlob }));
 const readDraftCms = vi.hoisted(() => vi.fn());
 const sendPagesToCms = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-send-client', () => ({ readDraftCms, sendPagesToCms }));
+// The brand's Webflow connection (#1331, phase 2): none here.
+vi.mock('@/lib/webflow-client', () => ({
+  readWebflow: async () => ({ ok: true, configured: false, connection: null }),
+}));
+// Nor its WordPress site (00294).
+vi.mock('@/lib/wordpress-client', () => ({
+  readWordPress: async () => ({ ok: true, configured: false, connection: null }),
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -227,6 +259,7 @@ const draft = (over: Partial<ContentDraft> = {}): ContentDraft => ({
   pageTypeSource: 'user',
   siteType: 'b2b',
   sourceUrl: null,
+  publishedUrl: null,
   method: 'optimize',
   status: 'in_review',
   bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams trust it.</p>',
@@ -318,6 +351,7 @@ beforeEach(() => {
   readDraftPage.mockReset().mockResolvedValue({ error: 'off' });
   getOwnImages.mockReset().mockResolvedValue([]);
   getDraftConfirmations.mockReset().mockResolvedValue([]);
+  getCatalogMatch.mockReset().mockResolvedValue({ connected: false, product: null });
   confirmDraftItem.mockReset().mockResolvedValue('ok');
   confirmOwnImage.mockReset().mockResolvedValue('ok');
   getBrandFacts.mockReset().mockResolvedValue({
@@ -339,6 +373,9 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ ok: true, updatedAt: '2026-10-20T10:00:00Z', bodyHash: 'h0' });
   getContentImpact.mockReset().mockResolvedValue(null);
+  getContentConversions.mockReset().mockResolvedValue(null);
+  publishPage.mockReset();
+  readPublishAddress.mockReset().mockResolvedValue('https://acme.example.com/pipeline');
   getContentResults.mockReset().mockResolvedValue(null);
   getDraftSources.mockReset().mockResolvedValue(null);
   readAgentRun.mockReset().mockResolvedValue(null);
@@ -354,6 +391,8 @@ beforeEach(() => {
   restoreDraftVersion.mockReset();
   getCitedPassages.mockReset().mockResolvedValue([]);
   getDraftSuggestions.mockReset().mockResolvedValue([]);
+  getLastRestoreAt.mockReset().mockResolvedValue(null);
+  getLastPageRewrite.mockReset().mockResolvedValue(null);
   decideDraftSuggestions.mockReset().mockResolvedValue(1);
   keepAgentBeforeVersion.mockReset().mockResolvedValue(undefined);
   fixDraftRules.mockReset().mockResolvedValue({ count: 0 });
@@ -394,7 +433,7 @@ describe('the content editor', () => {
     await act(async () => {});
     expect(readDraftAiUsage).toHaveBeenCalledWith('d1');
     expect(document.querySelector('[data-slot="popover-content"]')!.textContent).toContain(
-      'This page this month3%',
+      'This page this month3.7%',
     );
   });
 
@@ -833,6 +872,201 @@ describe('the content editor', () => {
       expect(getContentDraft.mock.calls.length).toBe(reads + 1);
     });
 
+    it('moves while it works, with a line on what it does, and stands still with reduced motion (CE-026)', async () => {
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+      });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method: 'create',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r1',
+          kind: 'write',
+          steps: [
+            { key: 'read_rules', count: 9 },
+            { key: 'gather_sources', count: 52 },
+            { key: 'write_page', count: null },
+            { key: 'check_sources', count: null },
+          ],
+          step: 2,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        const status = container.querySelector('[role="status"]')!;
+        // The agent's tile breathes, the step under way has its sweep and dots.
+        expect(status.querySelector('.animate-agent-breathe')).not.toBeNull();
+        const now = status.querySelector('[aria-current="step"]')!;
+        expect(now.textContent).toBe('Writing the page');
+        expect(now.querySelector('.animate-agent-sweep')).not.toBeNull();
+        expect(now.querySelector('.animate-agent-dot')).not.toBeNull();
+        // One line at a time on what it does, with what its run read.
+        expect(status.textContent).toContain("Answering the page's main question first");
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Giving each section one question to answer');
+        expect(status.textContent).not.toContain("Answering the page's main question first");
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Keeping to 9 rules');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        expect(status.textContent).toContain('Drawing on 52 sources');
+        // The page drawn in, line by line.
+        expect(container.querySelectorAll('.animate-agent-fill').length).toBeGreaterThan(0);
+        // No spinning ring, and all of it still with reduced motion.
+        expect(container.querySelector('.animate-spin')).toBeNull();
+        const moving = [...container.querySelectorAll('[class*="animate-agent"], .animate-in')];
+        expect(
+          moving.every((el) =>
+            /motion-reduce:(animate-none|hidden)/.test(el.getAttribute('class')!),
+          ),
+        ).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says what it does on a live page', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            agentState: 'writing',
+            agentSince: new Date(Date.now() - 4_000).toISOString(),
+          }),
+        );
+        await renderPage();
+        const status = container.querySelector('[role="status"]')!;
+        // Optimize, its second line: the passages it keeps.
+        expect(status.textContent).toContain('Leaving passages AI quotes as they are');
+        expect(status.querySelector('[aria-current="step"] .animate-agent-sweep')).not.toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('says nothing of rules or sources its run read none of', async () => {
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+      });
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method: 'create',
+            agentState: 'writing',
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r1',
+          kind: 'write',
+          steps: [
+            { key: 'read_rules', count: 0 },
+            { key: 'gather_sources', count: 0 },
+            { key: 'write_page', count: null },
+          ],
+          step: 2,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        const status = container.querySelector('[role="status"]')!;
+        const said: string[] = [];
+        for (let i = 0; i < 5; i++) {
+          said.push(status.textContent!);
+          await act(async () => void (await vi.advanceTimersByTimeAsync(4_000)));
+        }
+        expect(said.join(' ')).toContain('Adding a [placeholder] for facts it lacks');
+        expect(said.join(' ')).not.toMatch(/Keeping to|Drawing on/);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows a live page’s Start, which runs as a Fix, and stops it', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
+      );
+      readAgentRun.mockResolvedValue({
+        id: 'r2',
+        kind: 'fix',
+        steps: [
+          { key: 'read_rules', count: 7 },
+          { key: 'gather_sources', count: 3 },
+          { key: 'write_changes', count: null },
+          { key: 'check_sources', count: null },
+        ],
+        step: 2,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        stoppedAt: null,
+        outcome: null,
+      });
+      await renderPage();
+      await act(async () => {});
+      const status = container.querySelector('[role="status"]')!;
+      // Its real steps, not the fixed list, and its Stop.
+      expect([...status.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Reading 7 rules',
+        'Gathering 3 sources',
+        'Writing changes',
+        'Checking sources',
+      ]);
+      await act(async () => button('Stop')!.click());
+      expect(stopAgentRun).toHaveBeenCalledWith('d1', 'b1', 'r2');
+    });
+
+    it('shows only the run the page waits on: a rewrite’s on a new page, never another kind’s', async () => {
+      for (const [method, agentRun, kind, shown] of [
+        // A new page's rewrite: its run is a rewrite, not the Start's write.
+        ['create', 'rewrite', 'rewrite', true],
+        ['create', 'rewrite', 'write', false],
+        ['create', 'write', 'fix', false],
+        ['optimize', 'rewrite', 'fix', false],
+      ] as const) {
+        getContentDraft.mockResolvedValue(
+          draft({
+            status: 'draft',
+            method,
+            agentState: 'writing',
+            agentRun,
+            agentSince: new Date().toISOString(),
+          }),
+        );
+        readAgentRun.mockResolvedValue({
+          id: 'r3',
+          kind,
+          steps: [{ key: 'check_sources', count: null }],
+          step: 0,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          stoppedAt: null,
+          outcome: null,
+        });
+        await renderPage();
+        await act(async () => {});
+        // Another run's: the fixed list stays, with no Stop for it.
+        expect(
+          container.querySelector('[role="status"]')!.textContent!.includes('Checking sources'),
+        ).toBe(shown);
+        expect(button('Stop') !== undefined).toBe(shown);
+        await act(async () => root.unmount());
+        root = createRoot(container);
+      }
+    });
+
     it('reads the draft at once when its run ends, its steps shown till then', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
@@ -950,15 +1184,152 @@ describe('the content editor', () => {
     unmarkContentDraftReady.mockResolvedValueOnce({ status: 'published', tasksReopened: 0 });
     await act(async () => button('Ready: click to move it back to review')!.click());
     expect(toast).toHaveBeenCalledWith('Its status is now Published, so it stays.');
-    expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
+    // Its live address, for the Live page tab.
+    expect(readLiveUrl).toHaveBeenCalledWith('d1');
+    // Published, a click opens its live address (CE-013).
+    expect(button('Published')!.getAttribute('aria-disabled')).not.toBe('true');
   });
 
-  it('says Published, not to be undone here, on a published page', async () => {
-    getContentDraft.mockResolvedValue(draft({ status: 'published' }));
+  it('says Published on a published page, a click away from its live address (CE-013)', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'published', publishedUrl: 'https://acme.example.com/pipeline' }),
+    );
     await renderPage();
     expect(button('Mark ready')).toBeUndefined();
-    // Disabled but focusable, so its tip says where to change it.
+    expect(button('Published')!.getAttribute('aria-disabled')).not.toBe('true');
+    await act(async () => button('Published')!.click());
+    expect(readPublishAddress).toHaveBeenCalledWith('d1');
+    expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Mark published');
+  });
+
+  it('holds Published on an archived page until it’s restored, as the Library does', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'published', archivedAt: '2026-10-25T10:00:00Z' }),
+    );
+    await renderPage();
     expect(button('Published')!.getAttribute('aria-disabled')).toBe('true');
+    await act(async () => button('Published')!.click());
+    expect(readPublishAddress).not.toHaveBeenCalled();
+  });
+
+  it('asks for the address of a page marked published without one on the Live page tab', async () => {
+    getContentDraft.mockResolvedValue(draft({ status: 'published', method: 'create' }));
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    try {
+      await renderPage();
+      await pickTab('Live page');
+      expect(container.textContent).toContain(
+        "This page is marked published without its live address, so there's nothing to measure.",
+      );
+      expect(getContentImpact).not.toHaveBeenCalled();
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it('measures the address a page went live at on the Live page tab, not the page it optimized', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({
+        status: 'published',
+        sourceUrl: 'https://acme.example.com/pricing',
+        publishedUrl: 'https://acme.example.com/pricing-2026',
+      }),
+    );
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    try {
+      await renderPage();
+      await pickTab('Live page');
+      expect(getContentImpact).toHaveBeenCalledWith(
+        'b1',
+        'https://acme.example.com/pricing-2026',
+        30,
+      );
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it('marks a ready page published from Next step, and the Live page tab measures its address', async () => {
+    getContentDraft.mockResolvedValue(draft({ status: 'ready', method: 'create' }));
+    publishPage.mockResolvedValue({
+      ok: true,
+      publishedUrl: 'https://acme.example.com/pipeline',
+      publishedAt: '2026-10-25T10:00:00Z',
+      onBrandDomain: true,
+      taskCompleted: false,
+    });
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    // Next step comes with Quality.
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      await renderPage();
+      // The header's Next step: Ready to publish, Mark published beside Export.
+      const next = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Next'),
+      )!;
+      await act(async () => {
+        next.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        next.click();
+      });
+      await act(async () => {
+        [...document.querySelectorAll<HTMLButtonElement>('button')]
+          .find((b) => b.textContent === 'Mark published')!
+          .click();
+      });
+      await act(async () => {
+        [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+          .find((b) => b.textContent === 'Mark published')!
+          .click();
+      });
+      expect(publishPage).toHaveBeenCalledWith('d1', 'https://acme.example.com/pipeline');
+      expect(button('Published')).toBeDefined();
+      await pickTab('Live page');
+      expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pipeline', 30);
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      window.innerWidth = width;
+    }
+  });
+
+  it('holds Next step’s Mark published on an archived page, saying why', async () => {
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'ready', method: 'create', archivedAt: '2026-10-25T10:00:00Z' }),
+    );
+    const width = window.innerWidth;
+    window.innerWidth = 1440;
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Acme' }],
+        me: { id: 'u1', role: 'analyst' },
+      });
+      await renderPage();
+      const next = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Next'),
+      )!;
+      await act(async () => {
+        next.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        next.click();
+      });
+      const mark = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === 'Mark published',
+      )!;
+      expect(mark.disabled).toBe(true);
+      const why = document.getElementById(mark.getAttribute('aria-describedby')!);
+      expect(why!.textContent).toBe('This page is archived. Restore it in the Library first.');
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+      window.innerWidth = width;
+    }
   });
 
   it("puts the caret at the end of the page's H1 when the title is clicked", async () => {
@@ -1147,6 +1518,419 @@ describe('the content editor', () => {
       expect(container.querySelector('header')!.textContent).toContain('Saved');
     });
 
+    it('restores once for two quick clicks', async () => {
+      getContentDraft.mockResolvedValue(draft());
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockReturnValue(new Promise(() => {}));
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => {
+        items[1].click();
+        items[1].click();
+      });
+      // One restore, one "Before a restore" (editor test 2026-10-25: two in a minute).
+      expect(restoreDraftVersion).toHaveBeenCalledTimes(1);
+    });
+
+    it('sets aside the agent’s open suggestions for the page before, and closes its card', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card()).not.toBeNull();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
+      // Its Undo all would undo nothing on the page restored.
+      expect(card()).toBeNull();
+      // Said, as they counted toward AI usage.
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Restored “.+”\. The agent’s open change was for the page before, so it was set aside\.$/,
+        ),
+      );
+    });
+
+    it('waits while a restore runs: the card’s buttons and the agent’s runs', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      let restored: (value: unknown) => void = () => {};
+      restoreDraftVersion.mockReturnValue(new Promise((r) => (restored = r)));
+      await renderPage();
+      const accept = () =>
+        [
+          ...container
+            .querySelector('[role="region"][aria-label="Agent suggestions"]')!
+            .querySelectorAll('button'),
+        ].find((b) => b.textContent === 'Accept all')!;
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      // The decision would land under the restore setting the same ones aside.
+      expect(accept().disabled || accept().hasAttribute('data-disabled')).toBe(true);
+      // The card on the page too.
+      const inPage = [
+        ...container
+          .querySelector('.ProseMirror [data-suggestion="n1"]')!
+          .querySelectorAll('button'),
+      ].find((b) => b.textContent === 'Accept')!;
+      await act(async () => inPage.click());
+      await act(async () =>
+        restored({
+          title: 'Old title',
+          bodyHtml: '<h1>Old title</h1><p>We delve into how teams forecast.</p>',
+          updatedAt: '2026-10-21T10:00:00Z',
+        }),
+      );
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledTimes(1);
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1'], 'rejected');
+    });
+
+    // A batch, decided or open, the agent left on 21 October.
+    const ranBefore = (status: 'accepted' | 'open') => [
+      {
+        id: 'a1',
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        blockText: 'Teams delve into how they forecast.',
+        beforeText: 'delve into',
+        afterText: 'look at',
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+        status,
+        createdAt: '2026-10-21T10:00:00Z',
+      },
+    ];
+    const agentCard = () =>
+      container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+
+    it('holds Try again while a restore runs', async () => {
+      getContentDraft.mockResolvedValue(draft({ status: 'draft', agentState: 'failed' }));
+      getDraftVersions.mockResolvedValue(versions);
+      restoreDraftVersion.mockReturnValue(new Promise(() => {}));
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      expect(button('Try again')!.disabled).toBe(true);
+      await act(async () => button('Try again')!.click());
+      expect(startAgentWriting).not.toHaveBeenCalled();
+    });
+
+    it('says how many open changes it set aside', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p><p>Teams trust it.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      const open = {
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+        status: 'open' as const,
+      };
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...open,
+          id: 'n1',
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+        },
+        {
+          ...open,
+          id: 'n2',
+          blockText: 'Teams trust it.',
+          beforeText: 'trust',
+          afterText: 'rely on',
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>As the live page had it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).toHaveBeenCalledWith(['n1', 'n2'], 'rejected');
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Restored “.+”\. The agent’s 2 open changes were for the page before, so they were set aside\.$/,
+        ),
+      );
+    });
+
+    it('sets nothing aside when the version is the page as it is', async () => {
+      const body = '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>';
+      getContentDraft.mockResolvedValue(draft({ bodyHtml: body }));
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      // The server left the draft as it was, and says so (00289).
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Pipeline forecasting',
+        bodyHtml: body,
+        updatedAt: '2026-10-20T10:00:00Z',
+        restored: false,
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]'),
+      ).not.toBeNull();
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(/^“.+” is the page as it is: nothing changed\.$/),
+      );
+    });
+
+    it('opens the card closed for a batch from before the page was last restored', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-22T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      // After a reload, or in another tab: its Undo all was for the page before.
+      expect(getLastRestoreAt).toHaveBeenCalledWith('d1');
+      expect(agentCard()).toBeNull();
+    });
+
+    it('still shows a batch from before the restore with open changes to decide', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams delve into how they forecast.</p>',
+        }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-22T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('open'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('shows a batch left after the last restore as ever', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockResolvedValue('2026-10-20T09:00:00Z');
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('shows the batch as ever when the last restore can’t be read', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({ bodyHtml: '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p>' }),
+      );
+      getLastRestoreAt.mockRejectedValue(new Error('offline'));
+      getDraftSuggestions.mockResolvedValue(ranBefore('accepted'));
+      await renderPage();
+      expect(agentCard()).not.toBeNull();
+    });
+
+    it('closes the card of a batch already decided: its Undo all and last run were for the page before', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml:
+            '<h1>Pipeline forecasting</h1><p>Teams look at how they forecast.</p><p>Teams trust it.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      const decided = {
+        batchId: 'b2',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace' as const,
+        reason: 'remove an AI trace (rule)',
+        ruleKeys: ['aiTraces'],
+      };
+      getDraftSuggestions.mockResolvedValue([
+        {
+          ...decided,
+          id: 'a1',
+          blockText: 'Teams delve into how they forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          status: 'accepted' as const,
+        },
+        // Its passage is on the version restored too.
+        {
+          ...decided,
+          id: 'r1',
+          blockText: 'Teams trust it.',
+          beforeText: 'trust',
+          afterText: 'rely on',
+          status: 'rejected' as const,
+        },
+      ]);
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml:
+          '<h1>Old title</h1><p>Teams delve into how they forecast.</p><p>Teams trust it.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const card = () => container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card()).not.toBeNull();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      // Nothing open to set aside.
+      expect(decideDraftSuggestions).not.toHaveBeenCalled();
+      expect(card()).toBeNull();
+    });
+
+    it('leaves the agent’s open suggestions on its card when they can’t be set aside', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftVersions.mockResolvedValue(versions);
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      decideDraftSuggestions.mockRejectedValue(new Error('offline'));
+      restoreDraftVersion.mockResolvedValue({
+        title: 'Old title',
+        bodyHtml: '<h1>Old title</h1><p>We delve into how teams forecast.</p>',
+        updatedAt: '2026-10-21T10:00:00Z',
+      });
+      await renderPage();
+      const items = await openHistory();
+      await act(async () => items[1].click());
+      await act(async () => {});
+      // Still open on the server: on the card to decide, never shown as set aside.
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(/^Restored “.+”\. The page before it is in History\.$/),
+      );
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]');
+      expect(card).not.toBeNull();
+      expect(
+        [...card!.querySelectorAll('button')].some((b) => b.textContent === 'Accept all'),
+      ).toBe(true);
+    });
+
+    it('waits while a decision on the agent’s changes saves', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+        }),
+      );
+      getDraftSuggestions.mockResolvedValue([
+        {
+          id: 'n1',
+          batchId: 'b2',
+          actionId: null,
+          actionNo: null,
+          kind: 'replace' as const,
+          blockText: 'We delve into how teams forecast.',
+          beforeText: 'delve into',
+          afterText: 'look at',
+          reason: 'remove an AI trace (rule)',
+          ruleKeys: ['aiTraces'],
+          status: 'open' as const,
+        },
+      ]);
+      let saved: () => void = () => {};
+      decideDraftSuggestions.mockReturnValueOnce(new Promise<void>((r) => (saved = r)));
+      await renderPage();
+      const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+      await act(async () =>
+        [...card.querySelectorAll('button')].find((b) => b.textContent === 'Accept all')!.click(),
+      );
+      // A restore now would set the same suggestions aside under the decision.
+      expect(button('History')!.title).toBe("Saving your decision on the agent's changes…");
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        true,
+      );
+      await act(async () => saved());
+      await act(async () => {});
+      expect(button('History')!.disabled || button('History')!.hasAttribute('data-disabled')).toBe(
+        false,
+      );
+    });
+
     it('keeps the page when the restore fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       getContentDraft.mockResolvedValue(draft());
@@ -1225,6 +2009,50 @@ describe('the content editor', () => {
         '✓ Cited by ChatGPT 14× and Perplexity 6× in 30 days · keep wording',
       );
       expect(container.querySelector('header')!.textContent).toContain('1 cited passage kept');
+    });
+
+    it('leaves long sentences only in quoted passages to the person, never sent to Fix', async () => {
+      // Sentences up to 60 characters: the quoted passage's is the only long one.
+      getContentDraft.mockResolvedValue(
+        draft({
+          ...page,
+          bodyHtml: `${page.bodyHtml}<p>We delve into it.</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { sentence: { value: '60' } },
+            textRules: [],
+          },
+        }),
+      );
+      getCitedPassages.mockResolvedValue(cited);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      const width = window.innerWidth;
+      window.innerWidth = 1024;
+      try {
+        await renderPage();
+        await act(async () =>
+          container
+            .querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!
+            .click(),
+        );
+        expect(container.querySelector('aside')!.textContent).toContain(
+          'Kept by AI citations · yours to decide',
+        );
+        await act(async () =>
+          [...container.querySelector('aside')!.querySelectorAll<HTMLButtonElement>('button')]
+            .find((b) => b.textContent === 'Run Agent')!
+            .click(),
+        );
+        await act(async () => {});
+        const keys = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
+        expect(keys).toContain('aiTraces');
+        expect(keys).not.toContain('sentence');
+        // Within its Length (none set here): no overLength.
+        expect(fixDraftRules.mock.calls[0][2]).not.toHaveProperty('overLength');
+      } finally {
+        window.innerWidth = width;
+      }
     });
 
     it('reads nothing for a new page', async () => {
@@ -2061,6 +2889,53 @@ describe('the side panel', () => {
     expect(rail()).not.toBeNull();
   });
 
+  // Brief › Shopping path (shopping path, part 3): an online shop's page that links products.
+  it.each([
+    [{ siteType: 'ecommerce', pageType: 'buying_guide' }, true],
+    [{ siteType: 'b2b', pageType: 'buying_guide' }, false],
+    [{ siteType: 'ecommerce', pageType: 'product_page' }, false],
+  ] as const)('shows the shopping path in Brief for %o: %s', async (over, shown) => {
+    getContentDraft.mockResolvedValue(draft(over));
+    window.innerWidth = 1440;
+    await renderPage();
+    await pickTab('Brief');
+    expect(panel()!.querySelector('section[aria-label="Shopping path"]') !== null).toBe(shown);
+  });
+
+  it('shows the Shopping rules once the path is read, and reads it again after a change in Brief', async () => {
+    let land!: (value: unknown) => void;
+    getShoppingCheck.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+    );
+    try {
+      getContentDraft.mockResolvedValue(draft({ siteType: 'ecommerce', pageType: 'buying_guide' }));
+      window.innerWidth = 1440;
+      await renderPage();
+      await pickTab('Rules');
+      // While it's first read: no Shopping rules, and no count that would change.
+      expect(panel()!.textContent).not.toContain('Links its category page');
+      expect(panel()!.textContent).toContain('Reading the rules…');
+      await act(async () =>
+        land({ categories: ['shop.example/collections/boots'], products: [], site: null }),
+      );
+      expect(panel()!.textContent).toContain('Links its category page');
+      expect(panel()!.textContent).toMatch(/\d+ of \d+ rules met/);
+
+      // Brief › Shopping path picks again: the rules read the path again.
+      const { buildDraftShoppingPath } = await import('@/lib/actions/shopping-path');
+      vi.mocked(buildDraftShoppingPath).mockResolvedValueOnce({ path: null, reason: 'no_match' });
+      await pickTab('Brief');
+      const reads = getShoppingCheck.mock.calls.length;
+      await act(async () => button('Pick from the catalog')!.click());
+      expect(getShoppingCheck.mock.calls.length).toBe(reads + 1);
+    } finally {
+      getShoppingCheck.mockReset().mockResolvedValue(null);
+    }
+  });
+
   it('points a page without fan-outs to Sources, where its prompts are added', async () => {
     getDraftSources.mockResolvedValue({
       data: {
@@ -2240,14 +3115,26 @@ describe('the side panel', () => {
     await pickTab('Sources');
     await act(async () => button('Rebuild with selection')!.click());
 
-    expect(rebuildDraftBrief).toHaveBeenCalledWith('d1', 'b1', {
-      promptIds: [],
-      fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
-      pages: [],
-      queries: [],
-      headings: [],
-      length: 3000,
-    });
+    expect(rebuildDraftBrief).toHaveBeenCalledWith(
+      'd1',
+      'b1',
+      {
+        promptIds: [],
+        fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'] }],
+        pages: [],
+        queries: [],
+        headings: [],
+        length: 3000,
+      },
+      // The rules in effect, as the agent reads them.
+      expect.any(Array),
+    );
+    const sent = (rebuildDraftBrief.mock.calls[0][3] as { key: string; name: string }[]).map(
+      (rule) => rule.key,
+    );
+    expect(sent).toContain('length');
+    // Not the editor's own (one H1), nor the brief's own keywords: a rebuild writes them anew.
+    for (const key of ['oneH1', 'feedMatch', 'keywords']) expect(sent).not.toContain(key);
     expect(toast.success).toHaveBeenCalledWith('Brief rebuilt from 1 source');
     expect(selectedTab()).toBe('Instructions');
     expect(selectedSegment()).toBe('Brief');
@@ -2399,6 +3286,15 @@ describe('the side panel', () => {
     await renderPage();
     await pickTab('Sources');
     expect(panel()!.textContent).toContain('Not used by Content Agent yet');
+  });
+
+  it('holds the rules chip’s count until the rule set and the fan-outs are read', async () => {
+    getContentDraft.mockResolvedValue(draft());
+    getDraftSources.mockReturnValue(new Promise(() => {}));
+    await renderPage();
+    // 8 of 12 then 11 of 15 on first paint (editor test 2026-10-25): no count until it stands.
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    expect(chip.getAttribute('aria-label')).toBe('Rules · reading');
   });
 
   it('shows how many rules the page meets, and opens them from the header', async () => {
@@ -2605,6 +3501,9 @@ describe('the side panel', () => {
       expect(text).toMatch(/1 page type rule not met: Specs table/);
       expect(text).toContain('Say how shipping and returns work');
       expect(text).not.toContain('Add an author for the page');
+      // No product feed yet (CE-053): the price and stock aren't checked, and it says so.
+      expect(getCatalogMatch).toHaveBeenCalledWith('d1', readable.title);
+      expect(text).toContain("Price and stock aren't checked: no product feed is connected");
     });
 
     it('leaves a date in the person’s words alone, and replaces only its own old line (#1495 review)', async () => {
@@ -3241,6 +4140,72 @@ describe('the side panel', () => {
       expect(link?.textContent).toBe('the fastest forecasting app');
     });
 
+    it('asks a category page to confirm its intro’s facts, kept by the facts, in phase 3 (CE-054)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const facts = ['Choose from 120+ daypacks for every trail.', 'Prices run $49–$199.'];
+      // One fact confirmed before, in other words.
+      getDraftConfirmations.mockResolvedValue([{ kind: 'intro_fact', key: 'intro:120+' }]);
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'category_page',
+        bodyHtml: `<h1>Daypacks</h1><p>${facts.join(' ')}</p><h2>All daypacks</h2><p>Packs for wet hikes.</p>`,
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith("Confirm the intro's facts"),
+        )!;
+      // Only the open one is quoted.
+      expect(row().textContent).toContain(`“${facts[1]}”`);
+      expect(row().textContent).not.toContain(`“${facts[0]}”`);
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      // One row for the facts not confirmed yet.
+      expect(confirmDraftItem).toHaveBeenCalledTimes(1);
+      expect(confirmDraftItem).toHaveBeenCalledWith('d1', 'intro_fact', 'intro:USD49-199');
+      expect(row().textContent).toContain("You confirmed the intro's facts");
+    });
+
+    it('takes an intro confirm back when it can’t be saved (CE-054)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      confirmDraftItem.mockResolvedValue('full');
+      getContentDraft.mockResolvedValue({
+        ...claimed,
+        pageType: 'category_page',
+        bodyHtml: '<h1>Daypacks</h1><p>Choose from 120+ daypacks.</p><h2>All</h2><p>Packs.</p>',
+      });
+      window.innerWidth = 1440;
+      await renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+      const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+        b.textContent?.startsWith('Quality'),
+      )!;
+      await act(async () => chip.click());
+      const row = () =>
+        [...panel()!.querySelectorAll('[aria-label="Your to-dos"] li')].find((li) =>
+          li.textContent?.startsWith("Confirm the intro's facts"),
+        )!;
+      await act(async () =>
+        [...row().querySelectorAll('button')].find((b) => b.textContent === 'Confirm')!.click(),
+      );
+      // Full: still open, Confirm there to try again.
+      expect(row().textContent).not.toContain("You confirmed the intro's facts");
+      expect([...row().querySelectorAll('button')].some((b) => b.textContent === 'Confirm')).toBe(
+        true,
+      );
+      vi.mocked(console.error).mockRestore();
+    });
+
     it('asks a feature page to confirm a customer case may be published, in phase 3 (CE-052)', async () => {
       process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '3';
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -3447,6 +4412,57 @@ describe('the side panel', () => {
       expect(fixDraftRules).not.toHaveBeenCalled();
       await act(async () => answer({ count: 1 }));
       await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+    });
+
+    it('tells a hand-off how far past its Length the page is, and only then (#1552 review)', async () => {
+      process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '2';
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      getContentAuthors.mockResolvedValue({
+        authors: [],
+        brands: [{ id: 'b1', name: 'Ledgerly' }],
+        me: { id: 'u1', role: 'admin' },
+      });
+      const long = `Teams ${Array.from({ length: 39 }, () => 'plan').join(' ')}.`;
+      const handOff = async (length: string) => {
+        getContentDraft.mockResolvedValue({
+          ...claimed,
+          bodyHtml: `${claimed.bodyHtml}<p>${long}</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { length: { value: length } },
+            textRules: [],
+          },
+        });
+        window.innerWidth = 1440;
+        await renderPage();
+        await act(async () => void (await vi.advanceTimersByTimeAsync(3_000)));
+        const chip = [...container.querySelectorAll<HTMLButtonElement>('header button')].find((b) =>
+          b.textContent?.startsWith('Quality'),
+        )!;
+        await act(async () => chip.click());
+        const card = panel()!.querySelector('[aria-label="Hand it off to Content Agent"]')!;
+        await act(async () =>
+          [...card.querySelectorAll<HTMLButtonElement>('button')]
+            .find((b) => b.textContent === 'Hand off')!
+            .click(),
+        );
+        await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+        return handOffDraft.mock.calls.at(-1)![2];
+      };
+      const again = async (length: string) => {
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        handOffDraft.mockClear();
+        return handOff(length);
+      };
+      // A Length of 100: the page is past its band's top, 120.
+      const first = await handOff('100');
+      expect(first).toMatchObject({ overLength: { count: expect.any(Number), max: 120 } });
+      // Its Length the page's own count: within its band, nothing said.
+      expect(await again(String(first.overLength.count))).not.toHaveProperty('overLength');
+      // A Length of 0 reads every page as long, at most 0: nothing said either.
+      expect(await again('0')).not.toHaveProperty('overLength');
     });
 
     it('hands an imported page off on its own once Quality is read, once a draft, when its brand does (CE-051)', async () => {
@@ -4479,10 +5495,11 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(
         draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
       );
+      // A Start on a live page runs as a Fix (content-writer.js startWritingRun).
       readAgentRun.mockResolvedValue({
         id: 'r1',
-        kind: 'write',
-        steps: [{ key: 'write_page', count: null }],
+        kind: 'fix',
+        steps: [{ key: 'write_changes', count: null }],
         step: 0,
         startedAt: new Date().toISOString(),
         finishedAt: null,
@@ -4751,6 +5768,78 @@ describe('the side panel', () => {
       expect(scrolled).toHaveBeenCalled();
     });
 
+    it("names the shopping links to remove from the page as published, a product grid's too (shopping path)", async () => {
+      const { htmlBlockElement } = await import('@/lib/content/html-allowlist');
+      const { productBlockHtml } = await import('@/lib/content/product-block');
+      const product = (n: number, title: string, state: string) => ({
+        key: `shop.example/products/${n}`,
+        title,
+        state,
+        inPath: true,
+      });
+      const check = (trail: string) => ({
+        categories: ['shop.example/collections/boots'],
+        products: [
+          product(1, 'Summit', 'ok'),
+          product(2, 'Trail', trail),
+          product(3, 'Ridge', 'ok'),
+        ],
+        site: 'https://shop.example/blog/boots',
+      });
+      getShoppingCheck.mockResolvedValue(check('ok'));
+      try {
+        getContentDraft.mockResolvedValue(
+          draft({
+            siteType: 'ecommerce',
+            pageType: 'buying_guide',
+            bodyHtml:
+              '<h1>Hiking boots</h1>' +
+              '<h2>Our <a href="/collections/boots">boots</a></h2>' +
+              htmlBlockElement(
+                productBlockHtml([
+                  {
+                    title: 'Summit',
+                    url: 'https://shop.example/products/1',
+                    image: null,
+                    price: null,
+                  },
+                  {
+                    title: 'Trail',
+                    url: 'https://shop.example/products/2',
+                    image: null,
+                    price: null,
+                  },
+                ]),
+              ),
+          }),
+        );
+        await renderPage();
+        const reads = getShoppingCheck.mock.calls.length;
+        // Read fresh when it opens: Trail sold out since.
+        let land!: (value: unknown) => void;
+        getShoppingCheck.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              land = resolve;
+            }),
+        );
+        await act(async () => button('Mark ready')!.click());
+        expect(getShoppingCheck.mock.calls.length).toBe(reads + 1);
+        expect(getShoppingCheck).toHaveBeenLastCalledWith('d1');
+        expect(dialogText()).toContain("Reading your catalog for the linked products' stock…");
+        expect(dialogText()).not.toContain('Trail');
+        await act(async () => land(check('sold_out')));
+        expect(dialogText()).not.toContain('Reading your catalog');
+        expect(dialogText()).toContain('1 product link to remove or replace');
+        expect(dialogText()).toContain(
+          'Trail (sold out). Remove or replace these links on the page',
+        );
+        expect(dialogText()).not.toContain('No link to the category page');
+      } finally {
+        getShoppingCheck.mockReset().mockResolvedValue(null);
+      }
+    });
+
     it('marks it ready at once while Quality is off', async () => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
       getContentDraft.mockResolvedValue(draft());
@@ -4792,16 +5881,20 @@ describe('the side panel', () => {
         'pipeline-forecasting',
       );
       await act(async () => inDialog('Send').click());
-      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
-        expect.objectContaining({
-          draftId: 'd1',
-          title: 'Pipeline forecasting',
-          slug: 'pipeline-forecasting',
-          html: '<p>Teams trust it.</p>',
-          // Authors come with Quality (CE-038): while it is off, none goes.
-          author: null,
-        }),
-      ]);
+      expect(sendPagesToCms).toHaveBeenCalledWith(
+        'b1',
+        [
+          expect.objectContaining({
+            draftId: 'd1',
+            title: 'Pipeline forecasting',
+            slug: 'pipeline-forecasting',
+            html: '<p>Teams trust it.</p>',
+            // Authors come with Quality (CE-038): while it is off, none goes.
+            author: null,
+          }),
+        ],
+        'webhook',
+      );
       expect(dialog()).toBeNull();
     });
 
@@ -4814,9 +5907,11 @@ describe('the side panel', () => {
         await act(async () => button('Send to CMS')!.click());
         await act(async () => inDialog('Continue to send').click());
         await act(async () => inDialog('Send').click());
-        expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
-          expect.objectContaining({ draftId: 'd1', author: 'Acme Ekibi' }),
-        ]);
+        expect(sendPagesToCms).toHaveBeenCalledWith(
+          'b1',
+          [expect.objectContaining({ draftId: 'd1', author: 'Acme Ekibi' })],
+          'webhook',
+        );
       } finally {
         brandState.brands = [{ id: 'b1' }, { id: 'b2' }];
       }
@@ -4837,9 +5932,11 @@ describe('the side panel', () => {
       await act(async () => inDialog('Continue to send').click());
       await act(async () => inDialog('Send').click());
       // The CMS keeps its own author.
-      expect(sendPagesToCms).toHaveBeenCalledWith('b1', [
-        expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' }),
-      ]);
+      expect(sendPagesToCms).toHaveBeenCalledWith(
+        'b1',
+        [expect.objectContaining({ draftId: 'd1', author: null, html: '<p>Teams trust it.</p>' })],
+        'webhook',
+      );
     });
 
     it('opens Before you publish first while Quality is on', async () => {
@@ -5315,7 +6412,7 @@ describe('the side panel', () => {
       expect(basket()).toBeNull();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Plan the page');
       await act(async () => nextButton()!.click());
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Plan the page');
       expect(JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!)).toEqual({
         plan: 'false',
@@ -5378,7 +6475,7 @@ describe('the side panel', () => {
       );
       await renderPage();
       expect(basket()).not.toBeNull();
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       expect(basket()).not.toBeNull();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Write the first draft');
 
@@ -5396,7 +6493,7 @@ describe('the side panel', () => {
         'The page is empty: write it, and the next step follows from what you write.',
       );
       expect(inBasket('Write with Agent')).toBeUndefined();
-      expect(inBasket('Skip')).toBeUndefined();
+      expect(inBasket('Skip this step')).toBeUndefined();
     });
 
     it('leaves focus where a click outside the basket put it', async () => {
@@ -5464,7 +6561,7 @@ describe('the side panel', () => {
       await renderPage();
       expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       await act(async () => nextButton()!.click());
-      await act(async () => inBasket('Skip')!.click());
+      await act(async () => inBasket('Skip this step')!.click());
       const skips = () => JSON.parse(localStorage.getItem('aeo:next-step-skips:d1')!);
       const skippedAt = skips().fixRules;
       expect(skippedAt).toContain('fanoutH2');
@@ -5528,6 +6625,612 @@ describe('the side panel', () => {
       expect(basket()!.textContent).toContain('Content Agent is working');
     });
 
+    describe('once the agent took Fix open rules (editor test 2026-10-26)', () => {
+      beforeEach(() => {
+        getDraftSources.mockResolvedValue({
+          data: {
+            prompts: [],
+            fanouts: [{ query: 'pipeline forecasting', platforms: ['copilot-web'], searched: 2 }],
+            citedPages: [],
+            gscQueries: [],
+            brandDomains: [],
+            competitorDomains: [],
+          },
+          choices: [],
+        });
+        getDraftBrief.mockResolvedValue({
+          brief: {
+            goal: 'Win forecasting searches',
+            audience: 'Sales leaders',
+            outline: [],
+            keywords: [],
+            origin: 'rebuild',
+            builtAt: '2026-10-21T10:00:00Z',
+            builtFrom: { prompts: 0, fanouts: 1, pages: 0, queries: 0 },
+          },
+        });
+        getContentDraft.mockResolvedValue(
+          draft({
+            method: 'create',
+            pageType: 'blog_post',
+            rules: {
+              set: null,
+              source: 'default',
+              overrides: { length: { on: false } },
+              textRules: [],
+            },
+          }),
+        );
+      });
+      // Where Next goes from Fix open rules on this page: step 4.
+      const MOVED_ON = 'Next · Add proof and author';
+      // A pass waits for the rules' read of the page (PAGE_READ_DELAY_MS and a beat).
+      const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 700)));
+      const stored = () => JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1') ?? 'null');
+      const LONG = {
+        method: 'create' as const,
+        pageType: 'blog_post',
+        bodyHtml: `<h1>Pipeline forecasting</h1>${'<p>Teams trust the forecast because it reads the pipeline every day.</p>'.repeat(30)}`,
+        rules: {
+          set: null,
+          source: 'default' as const,
+          overrides: { length: { value: '400' } },
+          textRules: [],
+        },
+      };
+      const runFix = async () => {
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        await act(async () => nextButton()!.click());
+        await act(async () => inBasket('Fix open rules')!.click());
+        await act(async () => {});
+      };
+
+      it('moves on once its changes are decided, with the rule still open', async () => {
+        getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValue([
+          {
+            id: 'n9',
+            batchId: 'b9',
+            actionId: null,
+            actionNo: null,
+            kind: 'replace' as const,
+            blockText: 'Teams trust it.',
+            beforeText: 'trust',
+            afterText: 'rely on',
+            reason: 'answer the AI search (rule)',
+            ruleKeys: ['fanoutH2'],
+            status: 'open' as const,
+          },
+        ]);
+        fixDraftRules.mockResolvedValue({ count: 1 });
+        await runFix();
+        // Its change waits for a decision: the step stays.
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+        await act(async () =>
+          [...card.querySelectorAll('button')].find((b) => b.textContent === 'Reject all')!.click(),
+        );
+        await settle();
+        // Rejected, the fan-out rule is still open, and Next moves on.
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        // The path says it was passed, not done.
+        await act(async () => nextButton()!.click());
+        expect(basket()!.textContent).toContain('Fix open rules· yours in the Rules tab');
+        // Passed with what the page read then: the rule left open.
+        expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1')!)).toEqual({
+          attempt: null,
+          passes: { fixRules: { rules: expect.arrayContaining(['fanoutH2']), length: '' } },
+        });
+      });
+
+      it('isn’t passed by a Fix of some of its rules only (#1550 review)', async () => {
+        getContentDraft.mockResolvedValue(
+          draft({
+            method: 'create',
+            pageType: 'blog_post',
+            bodyHtml: '<h1>Pipeline forecasting</h1><p>We delve into how teams forecast.</p>',
+            rules: {
+              set: null,
+              source: 'default',
+              overrides: { length: { on: false } },
+              textRules: [],
+            },
+          }),
+        );
+        getDraftSuggestions.mockResolvedValue([]);
+        // It finds nothing to change: a run of the whole step would pass it.
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        // The Rules tab's Fix on Remove AI traces alone isn't the step.
+        await act(async () =>
+          container
+            .querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!
+            .click(),
+        );
+        const fixTraces = [
+          ...container.querySelectorAll<HTMLButtonElement>('aside li button'),
+        ].find((b) => b.textContent === 'Fix');
+        expect(fixTraces).toBeDefined();
+        await act(async () => fixTraces!.click());
+        await act(async () => {});
+        expect(fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key)).toEqual([
+          'aiTraces',
+        ]);
+        // No attempt is kept for it, and once the page reads it, Next stays (#1556 review).
+        expect(stored()).toBeNull();
+        await settle();
+        expect(stored()).toBeNull();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+
+      it('on the Length step, isn’t passed by a Fix, and is by a rewrite once decided', async () => {
+        getContentDraft.mockResolvedValue(draft(LONG));
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        // The step's other button, Fix open rules: it takes Fix open rules, not the Length.
+        await act(async () => nextButton()!.click());
+        await act(async () => inBasket('Fix open rules')!.click());
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+        expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
+
+        // A rewrite begun on it, then the waiting page; its page decided.
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+            passes: {},
+          }),
+        );
+        getDraftSuggestions.mockResolvedValue([
+          {
+            id: 'p9',
+            batchId: 'b9',
+            actionId: null,
+            actionNo: null,
+            kind: 'page' as const,
+            blockText: 'Pipeline forecasting',
+            beforeText: '',
+            beforeHtml: LONG.bodyHtml,
+            afterText: LONG.bodyHtml,
+            reason: 'rewrote the page to the rules',
+            ruleKeys: ['length'],
+            status: 'rejected' as const,
+          },
+        ]);
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).not.toBe('Next · Shorten to your Length');
+        expect(stored().passes).toEqual({ length: expect.any(Object) });
+      });
+
+      it.each([
+        ['rewrite', 'stopped', { outcome: 'stopped' }],
+        ['rewrite', 'failed', { outcome: 'failed' }],
+        // A Stop writes stopped_at before the outcome.
+        ['rewrite', 'stopped, its outcome not yet written', { outcome: null }],
+        // A tab closed mid-run (#1556 review).
+        ['fix', 'stopped', { outcome: 'stopped' }],
+        ['fix', 'failed', { outcome: 'failed' }],
+      ] as const)(
+        'drops a %s attempt whose run was %s while the page was closed',
+        async (kind, _, ended) => {
+          const attempt = {
+            step: kind === 'rewrite' ? 'length' : 'fixRules',
+            kind,
+            at: new Date(Date.now() - 60_000).toISOString(),
+            batch: null,
+          };
+          localStorage.setItem(
+            'aeo:next-step-third-try:d1',
+            JSON.stringify({ attempt, passes: {} }),
+          );
+          readAgentRun.mockResolvedValue({
+            id: 'r1',
+            kind,
+            steps: [],
+            step: 0,
+            startedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+            stoppedAt: ended.outcome === 'failed' ? null : new Date().toISOString(),
+            ...ended,
+          });
+          // A batch from something else, decided: it mustn't pass the step.
+          getDraftSuggestions.mockResolvedValue([
+            {
+              id: 'n7',
+              batchId: 'b7',
+              actionId: null,
+              actionNo: null,
+              kind: 'replace' as const,
+              blockText: 'Teams trust it.',
+              beforeText: 'trust',
+              afterText: 'rely on',
+              reason: 'a Quality check (hand-off)',
+              ruleKeys: [],
+              status: 'rejected' as const,
+            },
+          ]);
+          await renderPage();
+          await settle();
+          expect(readAgentRun).toHaveBeenCalledWith('d1', [kind]);
+          expect(
+            JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1') ?? 'null'),
+          ).toBeNull();
+          expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        },
+      );
+
+      const doneRun = (writes: number) => ({
+        id: 'r1',
+        kind: 'fix',
+        steps: [
+          { key: 'read', count: null },
+          { key: 'rules', count: 1 },
+          { key: 'write', count: writes },
+        ],
+        step: 3,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        stoppedAt: null,
+        outcome: 'done',
+      });
+
+      it('passes a Fix that found nothing while the page was closed (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: {
+              step: 'fixRules',
+              kind: 'fix',
+              at: new Date(Date.now() - 60_000).toISOString(),
+              batch: null,
+            },
+            passes: {},
+          }),
+        );
+        // It left no batch: its row says it wrote nothing.
+        readAgentRun.mockResolvedValue(doneRun(0));
+        getDraftSuggestions.mockResolvedValue([]);
+        await renderPage();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('keeps a Fix begun while the read of an earlier run is still out (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: {
+              step: 'fixRules',
+              kind: 'fix',
+              at: new Date(Date.now() - 60_000).toISOString(),
+              batch: null,
+            },
+            passes: {},
+          }),
+        );
+        // The open-time read of the earlier run, alone: it lands after the new Fix.
+        let readRun!: (run: unknown) => void;
+        readAgentRun.mockImplementation((_id: string, kinds?: string[]) =>
+          kinds?.length === 1 && kinds[0] === 'fix'
+            ? new Promise((resolve) => (readRun = resolve))
+            : Promise.resolve(null),
+        );
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        // The earlier run failed: only its own attempt would go.
+        await act(async () => readRun({ ...doneRun(0), outcome: 'failed' }));
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('doesn’t put back an attempt found failed when a Fix begun meanwhile doesn’t run (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: {
+              step: 'fixRules',
+              kind: 'fix',
+              at: new Date(Date.now() - 60_000).toISOString(),
+              batch: null,
+            },
+            passes: {},
+          }),
+        );
+        let readRun!: (run: unknown) => void;
+        readAgentRun.mockImplementation((_id: string, kinds?: string[]) =>
+          kinds?.length === 1 && kinds[0] === 'fix'
+            ? new Promise((resolve) => (readRun = resolve))
+            : Promise.resolve(null),
+        );
+        getDraftSuggestions.mockResolvedValue([]);
+        let ran!: (result: unknown) => void;
+        fixDraftRules.mockReturnValue(new Promise((resolve) => (ran = resolve)));
+        await runFix();
+        // The earlier run failed; then the new one fails too: neither is an attempt.
+        await act(async () => readRun({ ...doneRun(0), outcome: 'failed' }));
+        await act(async () => ran({ error: 'failed' }));
+        await act(async () => {});
+        expect(stored()).toBeNull();
+      });
+
+      it('waits for the read of the rewrite shown now, not one before it (#1556 review)', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+            passes: {},
+          }),
+        );
+        // Its page decided: once read, the step passes.
+        getDraftSuggestions.mockResolvedValue([
+          {
+            id: 'p9',
+            batchId: 'b9',
+            actionId: null,
+            actionNo: null,
+            kind: 'page' as const,
+            blockText: 'Pipeline forecasting',
+            beforeText: '',
+            beforeHtml: draft().bodyHtml,
+            afterText: draft().bodyHtml,
+            reason: 'rewrote the page to the rules',
+            ruleKeys: [],
+            status: 'rejected' as const,
+          },
+        ]);
+        // Read before the rewrite showed, then again for it: that read is out.
+        let lastRead!: (last: null) => void;
+        getLastPageRewrite.mockImplementation(async (..._args: unknown[]) =>
+          getLastPageRewrite.mock.calls.length === 1
+            ? null
+            : new Promise((resolve) => (lastRead = resolve)),
+        );
+        await renderPage();
+        await settle();
+        expect(getLastPageRewrite).toHaveBeenCalledTimes(2);
+        expect(stored().passes).toEqual({});
+        await act(async () => lastRead(null));
+        await settle();
+        expect(stored()).toEqual({ attempt: null, passes: { length: expect.any(Object) } });
+      });
+
+      it('passes the step though a Quality read failed: it waits only for what it compares (#1556 review)', async () => {
+        // No authors: E-E-A-T, and the to-dos with it, never read.
+        getContentAuthors.mockRejectedValue(new Error('offline'));
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('waits for the last rewrite’s read, which the Length’s state reads (#1556 review)', async () => {
+        let lastRead!: (last: null) => void;
+        getLastPageRewrite.mockReturnValue(new Promise((resolve) => (lastRead = resolve)));
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(stored()).toMatchObject({ attempt: { step: 'fixRules', ended: true } });
+        expect(stored().passes).toEqual({});
+        await act(async () => lastRead(null));
+        await settle();
+        expect(stored()).toEqual({ attempt: null, passes: { fixRules: expect.any(Object) } });
+      });
+
+      it('clears the steps passed when a rewrite’s page is accepted, as Start does (#1556 review)', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
+        // A rewrite begun since, its page waiting.
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            ...stored(),
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+          }),
+        );
+        const body = draft().bodyHtml;
+        getDraftSuggestions.mockResolvedValue([
+          {
+            id: 'p9',
+            batchId: 'b9',
+            actionId: null,
+            actionNo: null,
+            kind: 'page' as const,
+            blockText: 'Pipeline forecasting',
+            beforeText: '',
+            beforeHtml: body,
+            afterText: body.replace('Teams trust it.', 'Teams rely on it.'),
+            reason: 'rewrote the page to the rules',
+            ruleKeys: [],
+            status: 'open' as const,
+          },
+        ]);
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        await act(async () => {});
+        expect(stored().passes).toEqual({ fixRules: expect.any(Object) });
+        const bar = container.querySelector('[role="region"][aria-label="Rewritten page"]')!;
+        await act(async () =>
+          [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Accept')!.click(),
+        );
+        await act(async () => {});
+        expect(decideDraftSuggestions).toHaveBeenCalledWith(['p9'], 'accepted');
+        // A page written again: what was passed on the page before is gone;
+        // the rewrite's own attempt stays, to pass its step.
+        expect(stored().passes).toEqual({});
+        expect(stored().attempt).toMatchObject({ step: 'length', kind: 'rewrite' });
+      });
+
+      it('drops a rewrite’s attempt when the page opens on that rewrite having failed', async () => {
+        localStorage.setItem(
+          'aeo:next-step-third-try:d1',
+          JSON.stringify({
+            attempt: { step: 'length', kind: 'rewrite', at: new Date().toISOString(), batch: null },
+            passes: {},
+          }),
+        );
+        getContentDraft.mockResolvedValue(
+          draft({ ...LONG, agentState: 'failed', agentRun: 'rewrite' }),
+        );
+        await renderPage();
+        await act(async () => {});
+        expect(stored()).toBeNull();
+      });
+
+      it('brings the step back once a rule opens that the agent never saw', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        // As if fanoutH2 had opened since the step was taken.
+        const key = 'aeo:next-step-third-try:d1';
+        const stored = JSON.parse(localStorage.getItem(key)!);
+        stored.passes.fixRules.rules = stored.passes.fixRules.rules.filter(
+          (rule: string) => rule !== 'fanoutH2',
+        );
+        localStorage.setItem(key, JSON.stringify(stored));
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        // The pass that no longer holds is dropped, as a stale skip is.
+        await settle();
+        expect(JSON.parse(localStorage.getItem(key) ?? 'null')).toBeNull();
+      });
+
+      it('takes the step when the answer was lost and its run says it found nothing', async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        // The run there was before it is none; once it was asked, its row says it found nothing.
+        const run = {
+          id: 'r9',
+          kind: 'fix',
+          steps: [
+            { key: 'read', count: null },
+            { key: 'rules', count: 1 },
+            { key: 'write', count: 0 },
+          ],
+          step: 3,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          stoppedAt: null,
+          outcome: 'done',
+        };
+        readAgentRun.mockImplementation(async () => (fixDraftRules.mock.calls.length ? run : null));
+        try {
+          await renderPage();
+          await act(async () => nextButton()!.click());
+          await act(async () => inBasket('Fix open rules')!.click());
+          await act(async () => void (await vi.advanceTimersByTimeAsync(6_000)));
+          await act(async () => void (await vi.advanceTimersByTimeAsync(1_000)));
+          expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('is the restored page’s again after a restore', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        getDraftVersions.mockResolvedValue([
+          { id: 'v1', origin: 'import', title: 'Old title', createdAt: '2026-10-12T09:42:00Z' },
+        ]);
+        restoreDraftVersion.mockResolvedValue({
+          title: 'Old title',
+          bodyHtml: '<h1>Old title</h1><p>As it was.</p>',
+          updatedAt: '2026-10-21T10:00:00Z',
+          restored: true,
+        });
+        const trigger = button('History')!;
+        await act(async () => {
+          trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+          trigger.click();
+        });
+        await act(async () => {});
+        const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+        await act(async () => items[items.length - 1].click());
+        await act(async () => {});
+        expect(restoreDraftVersion).toHaveBeenCalled();
+        expect(stored()).toBeNull();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+
+      it('moves on when it found nothing to change', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await runFix();
+        await settle();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+        // Opened again, it holds.
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe(MOVED_ON);
+      });
+
+      it('stays when the run failed, or never ran', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'failed' });
+        await runFix();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+        expect(localStorage.getItem('aeo:next-step-third-try:d1')).toBeNull();
+      });
+
+      it('stays when the changes it shows are another tab’s, decided here', async () => {
+        getDraftSuggestions.mockResolvedValueOnce([]).mockResolvedValue([
+          {
+            id: 'n8',
+            batchId: 'b8',
+            actionId: null,
+            actionNo: null,
+            kind: 'replace' as const,
+            blockText: 'Teams trust it.',
+            beforeText: 'trust',
+            afterText: 'rely on',
+            reason: 'answer the AI search (rule)',
+            ruleKeys: ['fanoutH2'],
+            status: 'open' as const,
+          },
+        ]);
+        // Another tab's run left changes to decide first: this one never ran.
+        fixDraftRules.mockResolvedValue({ error: 'open_suggestions' });
+        await runFix();
+        const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
+        await act(async () =>
+          [...card.querySelectorAll('button')].find((b) => b.textContent === 'Reject all')!.click(),
+        );
+        await act(async () => {});
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+
+      it('stays when the run is stopped', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'stopped' });
+        await runFix();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
+      });
+    });
+
     it('stays out of the header while Quality is off', async () => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
       getContentDraft.mockResolvedValue(
@@ -5570,6 +7273,38 @@ describe('the side panel', () => {
       [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
         (b) => b.textContent === label,
       )!;
+
+    it('says when a change would break a rule the page meets now, on it and on the card', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      // Its new words make the page's one sentence run past 150 characters.
+      getDraftSuggestions.mockResolvedValue([
+        { ...agentSuggestion, afterText: `look ${'very '.repeat(35)}closely at` },
+      ]);
+      await renderPage();
+      await act(async () => {});
+      expect(container.querySelector('.ProseMirror')!.textContent).toContain(
+        'Would break Max sentence length',
+      );
+      expect(
+        container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+      ).toContain('would break Max sentence length');
+    });
+
+    it('tells a Fix run how far past its Length the page is when it doesn’t send the Length (#1552 review)', async () => {
+      getContentDraft.mockResolvedValue({
+        ...traced,
+        rules: { set: null, source: null, overrides: { length: { value: '20' } }, textRules: [] },
+      });
+      getDraftSuggestions.mockResolvedValue([]);
+      fixDraftRules.mockResolvedValue({ count: 0 });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      const sent = fixDraftRules.mock.calls[0][2];
+      // Far past its 20 characters, the Length is held from Fix: the hint says how far off the page is.
+      expect(sent.rules.map((r: { key: string }) => r.key)).not.toContain('length');
+      expect(sent.overLength).toEqual({ count: expect.any(Number), max: 24 });
+    });
 
     it('says the month’s AI usage is used up before anything else, and runs nothing', async () => {
       aiUsage.usage = usageAt(100);
@@ -6243,6 +7978,96 @@ describe('the side panel', () => {
       }
     });
 
+    describe('when its answer is lost on the way', () => {
+      const ended = (over: Record<string, unknown>) => ({
+        id: 'r9',
+        kind: 'fix',
+        steps: [
+          { key: 'read_rules', count: 3 },
+          { key: 'gather_sources', count: 0 },
+          { key: 'write_changes', count: 0 },
+        ],
+        step: 3,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        stoppedAt: null,
+        outcome: 'done',
+        ...over,
+      });
+      /** Fix's runs as read: `earlier` before it was asked, `then` after. */
+      const runs = (earlier: unknown, then: unknown) => {
+        let read = 0;
+        readAgentRun.mockImplementation(async (_id: string, kinds?: string[]) =>
+          kinds ? (read++ === 0 ? earlier : then) : null,
+        );
+      };
+      async function run() {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+        getContentDraft.mockResolvedValue(traced);
+        getDraftSuggestions.mockResolvedValue([]);
+        fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
+        await openRules();
+        await act(async () => panelButton('Run Agent').click());
+        await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+        await act(async () => {});
+      }
+      afterEach(() => vi.useRealTimers());
+
+      it('says it found nothing when its run ended with none, and why, not that it couldn’t run', async () => {
+        // Done with nothing left, every change in a quoted passage (editor test 2026-10-25).
+        runs(
+          null,
+          ended({
+            steps: [
+              { key: 'read_rules', count: 3 },
+              { key: 'gather_sources', count: 0 },
+              { key: 'write_changes', count: 0, why: 'locked' },
+            ],
+          }),
+        );
+        await run();
+        expect(toast).toHaveBeenCalledWith(
+          "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+        );
+        expect(toast.error).not.toHaveBeenCalled();
+      });
+
+      it('says it stopped, or failed, as its row says, without waiting out the minute and a half', async () => {
+        runs(null, ended({ outcome: 'stopped' }));
+        await run();
+        expect(toast).toHaveBeenCalledWith('Stopped · nothing was changed');
+        expect(toast.error).not.toHaveBeenCalled();
+        vi.useRealTimers();
+        act(() => root.unmount());
+        root = createRoot(container);
+        toast.mockClear();
+        runs(null, ended({ outcome: 'failed' }));
+        await run();
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      });
+
+      it('never reads the run there was before it was asked as this one', async () => {
+        const earlier = ended({ id: 'r8', outcome: 'stopped' });
+        runs(earlier, earlier);
+        await run();
+        expect(toast).not.toHaveBeenCalledWith('Stopped · nothing was changed');
+        await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
+        await act(async () => {});
+        expect(toast.error).toHaveBeenCalledWith("Content Agent couldn't run. Try again.");
+      });
+    });
+
+    it('says what to do when every change it had was in a quoted passage', async () => {
+      getContentDraft.mockResolvedValue(traced);
+      fixDraftRules.mockResolvedValue({ count: 0, why: 'locked' });
+      await openRules();
+      await act(async () => panelButton('Run Agent').click());
+      await act(async () => {});
+      expect(toast).toHaveBeenCalledWith(
+        "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
+      );
+    });
+
     it('says the agent couldn’t run when no batch lands in time', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
@@ -6390,9 +8215,38 @@ describe('the side panel', () => {
       container.querySelector('[role="region"][aria-label="Rewritten page"]') as HTMLElement | null;
     const page = () => container.querySelector('.ProseMirror')!.textContent;
 
+    it('reads what the last rewrite came to as the toolbar counts it, shown or decided since', async () => {
+      getContentDraft.mockResolvedValue(
+        draft({
+          pageType: 'blog_post',
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${'Teams forecast from the pipeline. '.repeat(12).trim()}</p>`,
+          rules: {
+            set: null,
+            source: null,
+            overrides: { length: { value: '100' } },
+            textRules: [],
+          },
+        }),
+      );
+      // Decided since (a later Fix batch shows): the API counted it a little
+      // over; its page reads 1,200 as the editor counts it (4 + 1,196).
+      getLastPageRewrite.mockResolvedValue({
+        chars: 1250,
+        target: 100,
+        kept: 0,
+        html: `<h1>Plan</h1><p>${'x'.repeat(1196)}</p>`,
+      });
+      await openRules();
+      const text = panel()!.textContent;
+      expect(text).toContain('The last rewrite came to 1,200');
+      expect(text).not.toContain('1,250');
+    });
+
     it('sends the rules in effect, how the page reads against each, and the page waits', async () => {
       getContentDraft.mockResolvedValue(long);
       await openRules();
+      // What the last rewrite came to is read once, for Length's reach.
+      expect(getLastPageRewrite).toHaveBeenCalledWith('d1');
 
       // ▾ › Rewrite the whole page: the button says so, then runs it.
       await act(async () =>
@@ -6428,6 +8282,8 @@ describe('the side panel', () => {
       await act(async () => {});
 
       expect(bar()!.textContent).toContain('Content Agent rewrote the page to its rules');
+      // What the last rewrite came to is read on opening, and again for the one now shown.
+      expect(getLastPageRewrite).toHaveBeenCalledTimes(2);
       // A whole page is never a card in the page.
       expect(container.querySelector('[data-suggestion]')).toBeNull();
       await act(async () => button(bar()!, 'Compare').click());

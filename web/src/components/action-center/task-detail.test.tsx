@@ -87,6 +87,89 @@ describe('TaskDetailView', () => {
     expect(container.textContent).toContain('~2h · Content writer');
   });
 
+  it('shows the exact page, the change and how it is checked (AC-010)', () => {
+    render(
+      <TaskDetailView
+        details={parseTaskDetails({
+          url: 'https://acme.example/blog/best-tools',
+          where: 'acme.example/blog/best-tools',
+          change: { before: 'Our tools', after: 'The 2026 tools, compared' },
+          doneWhen: 'H2 present · answer under 60 words · page re-fetched',
+          check: 'auto',
+        })}
+        disabled={false}
+        onEdit={() => {}}
+      />,
+    );
+    const terms = [...container.querySelectorAll('dt')].map((dt) => dt.textContent);
+    expect(terms).toEqual(['URL', 'Where', 'Change', 'Done when', 'How we check']);
+    // A full URL opens the page.
+    expect(container.querySelector('a')!.getAttribute('href')).toBe(
+      'https://acme.example/blog/best-tools',
+    );
+    expect(container.textContent).toContain('Before: Our tools');
+    expect(container.textContent).toContain('After: The 2026 tools, compared');
+    expect(container.textContent).toContain('Automatic: we fetch the page again');
+  });
+
+  it('shows a path as text, and a change that adds as Add', () => {
+    render(
+      <TaskDetailView
+        details={parseTaskDetails({
+          url: '/pricing',
+          change: { before: '', after: 'A table of plans.' },
+        })}
+        disabled={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(container.querySelector('a')).toBeNull();
+    expect(container.textContent).toContain('/pricing');
+    expect(container.textContent).toContain('Add: A table of plans.');
+    expect(container.textContent).not.toContain('Before:');
+  });
+
+  it('shows the last automatic check, and checks now on a click (AC-010)', () => {
+    const onCheck = vi.fn();
+    render(
+      <TaskDetailView
+        details={parseTaskDetails({
+          url: '/pricing',
+          check: 'auto',
+          autoCheck: {
+            at: '2026-10-22T03:00:00Z',
+            passed: false,
+            missing: ['crawlers_blocked', 'noindex'],
+          },
+        })}
+        disabled={false}
+        onEdit={() => {}}
+        check={{ onCheck, busy: false }}
+      />,
+    );
+    expect(container.textContent).toContain(
+      'Checked Oct 22 · robots.txt blocks AI crawlers, the page asks not to be indexed',
+    );
+    act(() => button('Check now').click());
+    expect(onCheck).toHaveBeenCalled();
+  });
+
+  it('says a passed check, and offers no Check now for a task checked otherwise', () => {
+    render(
+      <TaskDetailView
+        details={parseTaskDetails({
+          check: 'rerun',
+          autoCheck: { at: '2026-10-22T03:00:00Z', passed: true, missing: [] },
+        })}
+        disabled={false}
+        onEdit={() => {}}
+        check={{ onCheck: () => {}, busy: false }}
+      />,
+    );
+    expect(container.textContent).toContain('Checked Oct 22 · passed');
+    expect(button('Check now')).toBeUndefined();
+  });
+
   it('asks for details when a task has none, and opens the editor', () => {
     const onEdit = vi.fn();
     render(<TaskDetailView details={null} disabled={false} onEdit={onEdit} />);
@@ -147,14 +230,48 @@ describe('TaskDetailForm', () => {
     act(() => button('Save').click());
     expect(onSave).toHaveBeenCalledWith({
       title: null,
+      url: '',
       where: 'acme.example/blog/best-tools · 3 prompts on ChatGPT',
       why: 'Cited #2 until Oct 8.',
+      before: '',
+      after: '',
       how: ['Add a table.', '', 'Update the title.'],
       doneWhen: 'Cited again on 2 of 3 platforms within 14 days.',
+      check: null,
       type: 'content',
       effort: '~2h',
       role: 'Editor',
     });
+  });
+
+  it('edits the exact page and the change, and keeps how it is checked (AC-010)', () => {
+    const onSave = vi.fn();
+    render(
+      <TaskDetailForm
+        text="Refresh /pricing"
+        details={parseTaskDetails({
+          url: '/pricing',
+          change: { before: 'Old intro', after: 'New intro' },
+          check: 'rerun',
+        })}
+        disabled={false}
+        onSave={onSave}
+        onCancel={() => {}}
+      />,
+    );
+    expect(field('URL').value).toBe('/pricing');
+    expect(field('Change · Before').value).toBe('Old intro');
+    type(field('URL'), '/pricing/plans');
+    type(field('Change · After'), 'A table of plans.');
+    act(() => button('Save').click());
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: '/pricing/plans',
+        before: 'Old intro',
+        after: 'A table of plans.',
+        check: 'rerun',
+      }),
+    );
   });
 
   it('saves a new text, and refuses an empty one', () => {

@@ -74,6 +74,7 @@ import { TablePager, usePagination } from '@/components/table-pager';
 import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels';
 import { groupByPlatform, type PlatformGroup } from './grouping';
 import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
+import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 // ─── Date range (kept in sync with the insights page filter bar) ─────────────
@@ -950,12 +951,12 @@ export default function PromptDetailPage() {
             />
             <KpiCard
               title="Mentions"
-              value={data.summary.totalMentions.toLocaleString()}
+              value={formatNumber(data.summary.totalMentions)}
               icon={MessageSquareText}
             />
             <KpiCard
               title="Citations"
-              value={data.summary.totalCitations.toLocaleString()}
+              value={formatNumber(data.summary.totalCitations)}
               icon={Quote}
             />
             {volume && (

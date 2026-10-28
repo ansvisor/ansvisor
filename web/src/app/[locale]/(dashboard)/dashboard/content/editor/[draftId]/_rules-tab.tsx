@@ -31,15 +31,22 @@ import { isPageType, type PageType } from '@/lib/content/drafts';
 import { SITE_PAGE_TYPES, type SiteType } from '@/lib/content/page-types';
 import {
   MAX_TEXT_RULE_LENGTH,
+  NO_HELD,
+  NO_REACH,
+  heldMessage,
   RULE_GROUPS,
+  notForAgentMessage,
   openRulesForAgent,
+  lengthBand,
   lengthOutOfReach,
   rewriteAdvice,
   splitRules,
   type ActiveRule,
+  type RewriteReach,
   type RuleStatus,
   type TextRule,
 } from '@/lib/content/rules';
+import { listed } from '@/lib/content/shopping-check';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -78,16 +85,21 @@ export interface AgentFix {
   running: boolean;
   /** Why it can't run now (suggestions still open), or null. */
   blocked: string | null;
+  /** Open rules no run can close here: held by what the page keeps (openRulesForAgent). */
+  held?: ReadonlySet<string>;
 }
 
 /** Rewrite the whole page to these rules, as the editor runs it: one suggestion. */
 export interface PageRewrite {
-  run: () => void;
+  /** `citedToo`: the passages AI answers quote are rewritten too. */
+  run: (options?: { citedToo?: boolean }) => void;
   running: boolean;
   /** Why it can't run now (suggestions still open), or null. */
   blocked: string | null;
-  /** The characters it keeps as they are (keptCharacters): a Length under them is out of reach. */
-  kept?: number;
+  /** What it keeps, the least it comes to and what the last one came to: a Length under them is out of reach. */
+  reach?: RewriteReach;
+  /** The passages AI answers quote that it keeps now (locked, not unlocked): how many, their characters. */
+  cited?: { count: number; chars: number };
 }
 
 /** Run Agent's two ways: the open rules fixed a few passages at a time, or the whole page. */
@@ -247,19 +259,36 @@ export function RulesTab({
   ];
 
   // Rewrite the page whole when small edits can't get there.
-  const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.kept ?? 0) : null;
-  // A Length the rewrite can't reach for what it keeps: said, never recommended.
-  const outOfReach = pageRewrite ? lengthOutOfReach(state.rules, pageRewrite.kept ?? 0) : null;
+  const held = agentFix?.held ?? NO_HELD;
+  const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.reach, held) : null;
+  // A Length the rewrite can't reach: said with a Length it can, never recommended.
+  const outOfReach = pageRewrite
+    ? lengthOutOfReach(state.rules, pageRewrite.reach ?? NO_REACH)
+    : null;
+  // Rewrite the cited passages too: offered when they are what holds the
+  // Length out of reach, the rest fitting without them.
+  const cited = pageRewrite?.cited;
+  const citedHold =
+    !!outOfReach &&
+    !!cited &&
+    cited.count > 0 &&
+    (pageRewrite?.reach ?? NO_REACH).floor - cited.chars <= lengthBand(outOfReach.target).max;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
-  const fixable = openRulesForAgent(state.rules).forAgent.length;
+  const { forAgent, notForAgent, held: heldOpen } = openRulesForAgent(state.rules, undefined, held);
+  const fixable = forAgent.length;
   // Run Agent's choice: the safe default, or the whole page (▾) while it is offered.
   const [picked, setPicked] = useState<RunMode>('fix');
   const mode: RunMode = picked === 'rewrite' && pageRewrite ? 'rewrite' : 'fix';
   const runner = mode === 'rewrite' ? pageRewrite : agentFix;
   // Why Run Agent can't run its choice now, said under the card.
   const blocked =
-    runner?.blocked ?? (mode === 'fix' && fixable === 0 ? tSuggestions('notForAgent') : null);
+    runner?.blocked ??
+    (mode === 'fix' && fixable === 0
+      ? notForAgent.length === 0 && heldOpen.length > 0
+        ? t(heldMessage(heldOpen))
+        : tSuggestions(notForAgentMessage(notForAgent))
+      : null);
 
   // A draft on My rules for a type the workspace has none for (its type
   // changed, or My rules couldn't be read) shows Ansvisor's set for it.
@@ -333,10 +362,50 @@ export function RulesTab({
             </p>
           )}
           {outOfReach && (
-            <p className="flex gap-1.5 text-xs" role="note">
+            <div className="flex gap-1.5 text-xs" role="note">
               <Info aria-hidden className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-              <span>{t('lengthOutOfReach', { ...outOfReach })}</span>
-            </p>
+              <div className="min-w-0 space-y-1.5">
+                <p>
+                  {t(
+                    outOfReach.why === 'reached'
+                      ? 'lengthOutOfReachRun'
+                      : outOfReach.kept > 0
+                        ? 'lengthOutOfReach'
+                        : 'lengthOutOfReachHeadings',
+                    {
+                      count: outOfReach.count,
+                      target: outOfReach.target,
+                      kept: outOfReach.kept,
+                      least: outOfReach.least,
+                      suggested: outOfReach.suggested,
+                    },
+                  )}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => state.change('length', { value: String(outOfReach.suggested) })}
+                  >
+                    {t('raiseLength', { suggested: outOfReach.suggested })}
+                  </Button>
+                  {/* The quoted passages kept are what holds it: rewritten too, compared first. */}
+                  {citedHold && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={pageRewrite.running || pageRewrite.blocked !== null}
+                      onClick={() => pageRewrite.run({ citedToo: true })}
+                    >
+                      {t('rewriteCitedToo')}
+                    </Button>
+                  )}
+                </div>
+                {citedHold && <p className="text-muted-foreground">{t('rewriteCitedTooHint')}</p>}
+              </div>
+            </div>
           )}
         </RunCard>
       )}
@@ -364,7 +433,9 @@ export function RulesTab({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground" role="status">
-          {t('met', { met: state.met, total: state.total })}
+          {state.settled === false
+            ? t('metReading')
+            : t('met', { met: state.met, total: state.total })}
         </p>
       </div>
 
@@ -390,7 +461,11 @@ export function RulesTab({
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
-                      : undefined
+                      : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
+                        ? t('heldSentence')
+                        : rule.key === 'shopLinksLive'
+                          ? shoppingNote(t, status)
+                          : undefined
                   }
                 />
               ))}
@@ -485,6 +560,22 @@ function TextRuleRow({
       </span>
     </li>
   );
+}
+
+/**
+ * The linked products that no longer sell, by name and why, the first few
+ * (No sold-out or refused product linked, shopping path); none while it's met.
+ */
+function shoppingNote(
+  t: (key: string, values?: Record<string, string | number>) => string,
+  status: RuleStatus,
+): string | undefined {
+  if (status.state !== 'bad' || status.code !== 'found' || !status.items?.length) return undefined;
+  const { shown, more } = listed(status.items);
+  return t('shopLinksLiveNote', {
+    list: shown.map((item) => t('shopItem', { title: item.title, state: item.state })).join(', '),
+    more,
+  });
 }
 
 /** Write a rule, or paste many: each line becomes a rule (bullets and numbering taken off). */

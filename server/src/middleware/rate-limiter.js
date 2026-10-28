@@ -131,6 +131,65 @@ export const catalogLimiter = rateLimit({
   },
 });
 
+// A catalog category's page set by hand, or put back to its match (shopping
+// path, 00350): a person goes down the table a row at a time, so a bucket
+// of its own, wider than the syncs'. Reading the table takes the API's.
+export const catalogCategoryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
+// A draft's shopping path built from the brand's catalog (shopping path,
+// 00351): each build reads up to 2,000 products and their details, and the
+// Brief tab asks on a person's click (Pick again, Swap, Add), so a bucket of
+// its own.
+export const shoppingPathLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
+// A brand's CMS connection (Send to CMS, #1331): each call reaches Webflow
+// through Composio, so a member's are few.
+export const cmsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
+// Test Webhook (#1568 review): each test posts to an address the caller
+// typed, so a member's are few, 10 a minute.
+export const webhookTestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 export const brandFactsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -160,6 +219,40 @@ export const trafficLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
   standardHeaders: true,
+  legacyHeaders: false,
+  message: '',
+  handler: (_req, res) => res.status(204).end(),
+});
+
+/** Whether a beacon is a journey's pageview or conversion (CE-017), as the route reads its body. */
+export function isJourneyBeacon(body) {
+  let read = body;
+  if (typeof read === 'string') {
+    try {
+      read = JSON.parse(read);
+    } catch {
+      return false;
+    }
+  }
+  return read?.k === 'pv' || read?.k === 'cv';
+}
+
+/** A journey event's bucket: its tracking code, whatever address sends it. */
+export function journeyEventKey(req) {
+  return 'journey:' + req.params.trackingCode;
+}
+
+// A brand's journey events (CE-017): 3,000 a minute per tracking code, beside
+// the 60 per address, so a sender cycling addresses can't fill the table. A
+// big shop's AI visitors send a few pageviews each, far below it. Visits
+// aren't counted here; past it, the events are dropped as the address
+// limiter drops beacons.
+export const journeyEventLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3000,
+  keyGenerator: journeyEventKey,
+  skip: (req) => !isJourneyBeacon(req.body),
+  standardHeaders: false,
   legacyHeaders: false,
   message: '',
   handler: (_req, res) => res.status(204).end(),

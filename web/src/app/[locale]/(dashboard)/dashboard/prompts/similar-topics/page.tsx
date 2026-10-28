@@ -19,7 +19,7 @@ import { getPromptVolumes } from '@/lib/actions/volumes';
 import { aggregatePromptVolumeClusters } from '@/lib/prompt-volume-clusters';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { PromptVolume } from '@/types';
-import { formatCompactNumber } from '@/lib/format';
+import { formatCompactNumber, formatNumber } from '@/lib/format';
 import { keywordVolumeEstimate, promptVolumeEstimate, sumEstimates } from '@/lib/volume-estimate';
 import { useTranslations } from 'next-intl';
 import {
@@ -117,7 +117,7 @@ export default function SimilarTopicsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-semibold tabular-nums">
-              {totals.clusters.toLocaleString()}
+              {formatNumber(totals.clusters)}
             </div>
             <p className="text-xs text-muted-foreground">unique keywords</p>
           </CardContent>

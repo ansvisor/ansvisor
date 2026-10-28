@@ -79,14 +79,22 @@ import {
   TaskDetailView,
   TaskTypeBadge,
   type TaskDraftWork,
+  type TaskCheckOptions,
   type TaskSendOptions,
+  useMissingText,
 } from './task-detail';
 import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
+import { checkActionTask } from '@/lib/actions/action-task-check';
 import { getActionDrafts, startDraftFromAction } from '@/lib/actions/content-drafts';
 import { actionPages, draftMethodForTask, type ActionDraft } from '@/lib/content/action-drafts';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
-import { hasTaskSpec, type TaskDetailsEdit } from '@/lib/action-center/task-details';
+import {
+  hasTaskSpec,
+  withTemplateDoneWhen,
+  withoutTemplateDoneWhen,
+  type TaskDetailsEdit,
+} from '@/lib/action-center/task-details';
 import { ImproveOutcomeCard } from './improve-outcome-card';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
@@ -143,6 +151,10 @@ export function ActionDrawer({
   const [detail, setDetail] = useState<ActionDetail | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const tSend = useTranslations('actionCenter.actionsPage.drawer.send');
+  // Check now (AC-010): the task being checked, and the card's words.
+  const tTaskCard = useTranslations('actionCenter.actionsPage.drawer.task');
+  const missingText = useMissingText();
+  const [checking, setChecking] = useState<string | null>(null);
   // The drafts written for the action's writing tasks (CE-022), once read.
   const [drafts, setDrafts] = useState<ActionDraft[]>([]);
 
@@ -277,6 +289,28 @@ export function ActionDrawer({
       onChanged();
     } finally {
       setIsBusy(false);
+    }
+  };
+
+  /**
+   * Check a task on its page now (AC-010), as the nightly sweep does: done,
+   * it's completed; else the card says what is missing. Then reload.
+   */
+  const checkTask = async (taskId: string) => {
+    setChecking(taskId);
+    try {
+      const result = await checkActionTask(taskId);
+      if ('error' in result) {
+        toast.error(tTaskCard('checkFailed'));
+        return;
+      }
+      if (!result.checked) toast(tTaskCard(`checkNot.${result.reason ?? 'no_answer'}`));
+      else if (result.checked.passed) toast.success(tTaskCard('checkPassed'));
+      else toast(tTaskCard('checkMissing', { missing: missingText(result.checked.missing) }));
+      await load();
+      onChanged();
+    } finally {
+      setChecking(null);
     }
   };
 
@@ -692,6 +726,14 @@ export function ActionDrawer({
                         webhook: webhookReady,
                         onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
                       }}
+                      // An open task checked automatically, with its page (AC-010).
+                      check={
+                        (task.status === 'todo' || task.status === 'in_progress') &&
+                        task.details?.check === 'auto' &&
+                        task.details.url
+                          ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
+                          : undefined
+                      }
                       draftWork={draftWork}
                     />
                   );
@@ -812,6 +854,7 @@ function TaskRow({
   onEdit,
   onDelete,
   send,
+  check,
   draftWork,
 }: {
   task: ActionTask;
@@ -824,6 +867,8 @@ function TaskRow({
   onEdit: (edit: TaskDetailsEdit & { title: string | null }) => Promise<boolean>;
   onDelete: () => void;
   send: TaskSendOptions;
+  /** Check now, for an open task checked automatically (AC-010). */
+  check?: TaskCheckOptions;
   draftWork?: TaskDraftWork;
 }) {
   // A task sent from the Improve tab opens on its suggestion, as it always
@@ -832,6 +877,11 @@ function TaskRow({
     () => !!task.details && !hasTaskSpec(task.details) && !!task.details.body,
   );
   const [editing, setEditing] = useState(false);
+  // A library task's Done when is its template's until someone writes one (AC-010).
+  const tDoneWhen = useTranslations('actionCenter.taskDoneWhen');
+  const details = withTemplateDoneWhen(task.details, task.taskKey, (key) =>
+    tDoneWhen.has(key) ? tDoneWhen(key) : null,
+  );
   // Choosing Skipped opens a reason field rather than committing: a skip
   // without a reason cannot be told apart from an abandoned task later.
   const [skipDraft, setSkipDraft] = useState<string | null>(null);
@@ -909,20 +959,24 @@ function TaskRow({
         (editing ? (
           <TaskDetailForm
             text={text}
-            details={task.details}
+            details={details}
             disabled={disabled}
             onSave={async (edit) => {
+              // The template's Done when, left as it was, stays the template's.
               // The form stays until the save lands, so a failure keeps what was typed.
-              if (await onEdit(edit)) setEditing(false);
+              if (await onEdit(withoutTemplateDoneWhen(edit, task.details, details))) {
+                setEditing(false);
+              }
             }}
             onCancel={() => setEditing(false)}
           />
         ) : (
           <TaskDetailView
-            details={task.details}
+            details={details}
             disabled={disabled || skipDraft !== null}
             onEdit={() => setEditing(true)}
             send={send}
+            check={check}
             draftWork={draftWork}
           />
         ))}

@@ -126,6 +126,18 @@ describe('ownPageOf', () => {
     );
     expect(ownPageOf('g2.com/categories/ai-rank-tracking', ['acme.example'])).toBeNull();
   });
+
+  it('reads a long Where in bounded time, up to the length the drawer keeps', () => {
+    ownPageOf('acme.example/pricing', ['acme.example']);
+    const started = Date.now();
+    expect(ownPageOf(`${'.'.repeat(100_000)}x`, ['acme.example'])).toBeNull();
+    expect(ownPageOf(`"${'“'.repeat(100_000)}`, ['acme.example'])).toBeNull();
+    expect(Date.now() - started).toBeLessThan(200);
+    // What the drawer keeps is read as before.
+    expect(ownPageOf(`${'a '.repeat(240)}acme.example/pricing`, ['acme.example'])).toBe(
+      'https://acme.example/pricing',
+    );
+  });
 });
 
 describe('opportunityFromTask', () => {
@@ -157,6 +169,43 @@ describe('opportunityFromTask', () => {
     ]);
     expect(row.source_data.actions).toEqual({ all: 'a1' });
     expect(row.source_data.fromAction).toMatchObject({ actionNo: 12, taskId: 't1' });
+  });
+
+  describe('with the exact page and the change (AC-010)', () => {
+    const fromTask = (over) =>
+      opportunityFromTask({
+        task: { ...db.action_tasks[0], details: { ...details, check: 'auto', ...over } },
+        title: 'Add a 2026 table',
+        action: db.actions[0],
+        brandDomains: ['acme.example'],
+      });
+    const replaces = { before: 'Old intro', after: 'A 2026 table of countries and costs.' };
+    const adds = { before: null, after: 'A 2026 table of countries and costs.' };
+
+    it('carries them, and works on the page Where names', () => {
+      const row = fromTask({ url: '/guides/shipping-costs', change: replaces });
+      expect(row.source_data.assets[0].pages).toEqual([
+        { url: 'https://acme.example/blog/shipping', title: '' },
+      ]);
+      expect(row.source_data.fromAction.task).toMatchObject({
+        url: '/guides/shipping-costs',
+        change: { before: 'Old intro', after: 'A 2026 table of countries and costs.' },
+      });
+    });
+
+    it('works on the URL when Where names no page and the change replaces its text', () => {
+      const row = fromTask({ where: 'Gemini · 3 prompts', url: '/pricing', change: replaces });
+      expect(row).toMatchObject({ decision: 'optimize' });
+      expect(row.source_data.assets[0].pages).toEqual([
+        { url: 'https://acme.example/pricing', title: '' },
+      ]);
+    });
+
+    it('makes a new page of a URL whose change only adds: it may not be there yet', () => {
+      const row = fromTask({ where: 'Gemini · 3 prompts', url: '/guides/new', change: adds });
+      expect(row).toMatchObject({ decision: 'create' });
+      expect(row.source_data.assets[0].pages).toEqual([]);
+    });
   });
 });
 
@@ -206,7 +255,15 @@ describe('sendTaskToWebhook', () => {
     expect(brandId).toBe('b1');
     expect(payload).toMatchObject({
       event: 'action_task.sent',
-      task: { id: 't1', type: 'content', done_when: 'Cited again within 14 days.' },
+      task: {
+        id: 't1',
+        type: 'content',
+        done_when: 'Cited again within 14 days.',
+        // AC-010's fields, null when the task has none.
+        url: null,
+        change: null,
+        check: null,
+      },
       action: { id: 'a1', action_no: 12, priority_score: 84 },
       brand: { name: 'Acme Coffee', domain: 'acme.example' },
     });

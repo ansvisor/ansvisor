@@ -80,4 +80,24 @@ describe('handOffDraft', () => {
       handoff: { origin: 'auto' },
     });
   });
+
+  it('passes on a page over its Length, so its checks add as little as they need', async () => {
+    const input = handOffInput.parse({
+      items: [{ key: 'readability:longSentences', detail: '' }],
+      overLength: { count: 17_683, max: 16_798 },
+    });
+    await handOffDraft({ draftId: 'd1', brandId: 'b1', input });
+    expect(fixDraftRules.mock.calls.at(-1)[0].input.overLength).toEqual({
+      count: 17_683,
+      max: 16_798,
+    });
+    // A Length of 0 (at most 0): dropped, and the hand-off runs as before.
+    const zero = handOffInput.parse({
+      items: [{ key: 'readability:longSentences', detail: '' }],
+      overLength: { count: 1_500, max: 0 },
+    });
+    expect(zero.overLength).toBeUndefined();
+    await handOffDraft({ draftId: 'd1', brandId: 'b1', input: zero });
+    expect(fixDraftRules.mock.calls.at(-1)[0].input).not.toHaveProperty('overLength');
+  });
 });

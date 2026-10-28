@@ -103,9 +103,15 @@ export function sourcesPrompt(numbered) {
 /** A source number written into the words in brackets ("(S2)", "[S1, S3]"): never the page's. */
 const SOURCE_ID = /\s?[([]S\d{1,3}(?:\s*[,;]\s*S\d{1,3})*[)\]]/g;
 
-/** Words with the source numbers the model wrote into them taken out. */
-export function stripSourceIds(text) {
-  return String(text ?? '').replace(SOURCE_ID, '');
+/**
+ * Words with the source numbers the model wrote into them taken out: with
+ * `count`, only S1 to S{count}, the numbers it was given, so a name with one
+ * ("Galaxy (S23)") stays.
+ */
+export function stripSourceIds(text, count = Infinity) {
+  return String(text ?? '').replace(SOURCE_ID, (ids) =>
+    ids.match(/\d+/g).every((n) => Number(n) <= count) ? '' : ids,
+  );
 }
 
 /**
@@ -117,6 +123,8 @@ const CURRENCY = /[$€£¥₺]/;
 /** What makes a lone digit a claim: a percent, a times, a scale. */
 const UNIT_AFTER =
   /^\s?(?:%|×|[xX]\b|[kKMB]\b|bn\b|mn\b|[Mm]illions?\b|[Bb]illions?\b|[Tt]housands?\b|[Tt]rillions?\b)/;
+/** UNIT_AFTER read at a place in the text, without slicing it off. */
+const UNIT_AT = new RegExp(UNIT_AFTER.source.slice(1), 'y');
 
 /** A percent written before its number, as Turkish does: "%40", "yüzde 40". */
 const PERCENT_BEFORE = /(?:%\s?|(?<!\p{L})yüzde\s)$/iu;
@@ -135,8 +143,12 @@ function unitOf(text, start, end) {
   if (unit === 'b' || unit === 'bn' || unit.startsWith('billion')) return 'billion';
   return 'trillion';
 }
-/** A placeholder the agent leaves ("[figure, source, 2025]"): it holds no claim. */
-const BRACKETS = /\[[^\]]*\]/g;
+/**
+ * A placeholder the agent leaves ("[figure, source, 2025]"): it holds no
+ * claim. Never one with another "[" in it, so an opening bracket with no
+ * closing one isn't read to the text's end from each "[" after it.
+ */
+const BRACKETS = /\[[^[\]]*\]/g;
 
 /**
  * A number's value as compared: thousands separators dropped ("1,299" and
@@ -169,6 +181,37 @@ export function knownNumbers(...texts) {
       numbersIn(text).flatMap((n) => (n.unit ? [n.value, unitKey(n)] : [n.value])),
     ),
   );
+}
+
+/**
+ * The known numbers with names that hold their own ("Trail 450", a
+ * shopping path's product: shopping-links.js): a name's numbers are known
+ * where the name is written whole, never alone. Kept on the set, as
+ * `named`; returns it.
+ */
+export function withNamedNumbers(known, names) {
+  const named = [
+    ...new Set(
+      (names ?? [])
+        .map((n) =>
+          String(n ?? '')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        )
+        .filter((n) => /\d/.test(n)),
+    ),
+  ].sort((a, b) => b.length - a.length);
+  if (!named.length) return known;
+  // Its spaces and apostrophes written any way: "Men’s  Trail 450".
+  const spelled = named.map((n) =>
+    n
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/ /g, '\\s+')
+      .replace(/['’]/g, "['’]"),
+  );
+  return Object.assign(known, {
+    named: new RegExp(`(?<![\\p{L}\\p{N}])(?:${spelled.join('|')})(?![\\p{L}\\p{N}])`, 'gu'),
+  });
 }
 
 /** Today as the agent may write it: its year alone ("23" on the 23rd would let "23%" through). */
@@ -230,7 +273,10 @@ export function textPieces(html) {
  * or a currency sign is a claim and counts.
  */
 export function addedNumbers(text, known) {
-  const s = String(text ?? '').replace(BRACKETS, (m) => ' '.repeat(m.length));
+  const blank = (m) => ' '.repeat(m.length);
+  const bare = String(text ?? '').replace(BRACKETS, blank);
+  // A name's own numbers, where it is written (withNamedNumbers).
+  const s = known.named ? bare.replace(known.named, blank) : bare;
   return numbersIn(s).filter((n) => {
     // A claim is known only with its unit or sign; a plain number as any.
     if (known.has(n.unit ? unitKey(n) : n.value)) return false;
@@ -324,20 +370,30 @@ export function sourceSuggestion({ named, marks, pieces, numbered, known }) {
 
 /** A text with each number it adds put as a placeholder: for a page written whole, with no marks. */
 export function placeholderNumbers(text, known) {
-  const added = addedNumbers(text, known);
-  let out = String(text ?? '');
-  for (const n of added.reverse()) {
-    // The sign and unit go with it: "$40", "40%" and "%40" become the placeholder.
+  const s = String(text ?? '');
+  // The text built once from its pieces, left to right: rebuilt per number,
+  // a line with thousands would take their count times its length (#1544 review).
+  // The sign and unit go with it: "$40", "40%" and "%40" become the placeholder.
+  const found = addedNumbers(s, known).map((n) => {
     let start = n.start;
-    let end = n.end;
-    if (CURRENCY.test(out[start - 1] ?? '')) start -= 1;
-    const percent = out.slice(Math.max(0, start - 2), start).match(/%\s?$/);
+    if (CURRENCY.test(s[start - 1] ?? '')) start -= 1;
+    const percent = s.slice(Math.max(0, start - 2), start).match(/%\s?$/);
     if (percent) start -= percent[0].length;
-    const unit = out.slice(end).match(UNIT_AFTER);
-    if (unit) end += unit[0].length;
-    out = `${out.slice(0, start)}${NUMBER_PLACEHOLDER}${out.slice(end)}`;
-  }
-  return out;
+    return { start, end: n.end };
+  });
+  let out = '';
+  let at = 0;
+  found.forEach((n, i) => {
+    let end = n.end;
+    UNIT_AT.lastIndex = end;
+    const unit = UNIT_AT.exec(s);
+    // A unit that runs into the next number's sign is that one's ("40 %50").
+    if (unit && end + unit[0].length <= (found[i + 1]?.start ?? Infinity)) end += unit[0].length;
+    const start = Math.max(n.start, at);
+    out += s.slice(at, start) + NUMBER_PLACEHOLDER;
+    at = Math.max(at, end);
+  });
+  return out + s.slice(at);
 }
 
 /** Tags whose text a page's placeholders never touch: code and what isn't words. */

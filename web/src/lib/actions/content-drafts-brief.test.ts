@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DraftBrief, RebuildSources } from '@/lib/content/brief';
+import v2 from '@/lib/content/__fixtures__/brief-v2.json';
 
 /** The Brief tab (CE-007): read, edit and rebuild a draft's brief. */
 
@@ -107,6 +108,26 @@ describe('getDraftBrief', () => {
     reads.content_drafts = null;
     expect(await getDraftBrief(DRAFT)).toBeNull();
   });
+
+  it('reads a brief of version 2 whole', async () => {
+    reads.content_drafts = { brief: v2, opportunity_id: null };
+    expect(await getDraftBrief(DRAFT)).toEqual({ brief: v2 });
+  });
+
+  it('says a brief of its own it can’t read as a failed read, never as the opportunity’s', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      reads.content_drafts = { brief: { goal: 42 }, opportunity_id: 'o1' };
+      reads.content_opportunities = {
+        brief: { outline: [{ heading: 'Why', keyPoints: [] }], targetKeywords: [] },
+      };
+      // So Edit brief, which shows on a read brief only, can't write over it.
+      expect(await getDraftBrief(DRAFT)).toBeNull();
+      expect(error).toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
+  });
 });
 
 describe('saveDraftBrief', () => {
@@ -120,6 +141,31 @@ describe('saveDraftBrief', () => {
       value: { brief: { ...brief, origin: 'edit' } },
       filters: [['id', DRAFT]],
     });
+  });
+
+  it('keeps version 2 through an edit, as the person’s', async () => {
+    reads['content_drafts:update'] = { id: DRAFT };
+    const saved = await saveDraftBrief(DRAFT, v2 as DraftBrief);
+    expect(saved).toMatchObject({ origin: 'edit', version: 2, tldr: v2.tldr });
+    expect(saved.outline[0].facts).toEqual(v2.outline[0].facts);
+  });
+
+  it('says a brief past the column’s 64 KB is too long', async () => {
+    const long = {
+      ...v2,
+      outline: Array.from({ length: 12 }, () => ({
+        heading: 'h'.repeat(300),
+        keyPoints: Array(8).fill('k'.repeat(500)),
+        fanout: null,
+        platform: null,
+        answer: 'a'.repeat(600),
+      })),
+      leftOut: Array(20).fill('l'.repeat(300)),
+    } as DraftBrief;
+    reads['content_drafts:update'] = { id: DRAFT };
+    await expect(saveDraftBrief(DRAFT, long)).rejects.toThrow('too_long');
+    // Nothing written.
+    expect(calls).toEqual([]);
   });
 
   it('refuses a brief over its limits, and says when the draft isn’t found', async () => {
@@ -138,6 +184,15 @@ describe('rebuildDraftBrief', () => {
     expect(url).toMatch(new RegExp(`/api/content-drafts/${DRAFT}/brief$`));
     expect(init.headers.Authorization).toBe('Bearer jwt');
     expect(JSON.parse(init.body)).toEqual({ brandId: BRAND, sources });
+  });
+
+  it('sends the rules in effect beside the sources, and none when there are none', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ brief }) });
+    const rules = [{ key: 'h2Answer', name: 'Answer under each H2', detail: 'aim: 60 words' }];
+    await rebuildDraftBrief(DRAFT, BRAND, sources, rules);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ brandId: BRAND, sources, rules });
+    await rebuildDraftBrief(DRAFT, BRAND, sources, []);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ brandId: BRAND, sources });
   });
 
   it('names why it didn’t, and anything unexpected as failed', async () => {

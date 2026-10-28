@@ -871,7 +871,7 @@ export interface CardEligiblePromptsResponse {
 
 function formatPrice(amount: number | null, currency: string | null): string {
   if (amount == null) return '—';
-  const formattedAmount = new Intl.NumberFormat(undefined, {
+  const formattedAmount = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);

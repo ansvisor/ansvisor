@@ -127,6 +127,47 @@ export type Database = {
           },
         ]
       }
+      action_task_reviews: {
+        Row: {
+          action_id: string
+          created_at: string
+          details: Json
+          id: string
+          missing: string[]
+          source: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          action_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          missing?: string[]
+          source?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          action_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          missing?: string[]
+          source?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_task_reviews_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_tasks: {
         Row: {
           action_id: string
@@ -647,6 +688,8 @@ export type Database = {
         Row: {
           content_byline: boolean
           content_quality_handoff: boolean
+          conversions_consent: string
+          conversions_enabled: boolean
           created_at: string
           description: string | null
           ga_property_id: string | null
@@ -674,6 +717,8 @@ export type Database = {
         Insert: {
           content_byline?: boolean
           content_quality_handoff?: boolean
+          conversions_consent?: string
+          conversions_enabled?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -701,6 +746,8 @@ export type Database = {
         Update: {
           content_byline?: boolean
           content_quality_handoff?: boolean
+          conversions_consent?: string
+          conversions_enabled?: boolean
           created_at?: string
           description?: string | null
           ga_property_id?: string | null
@@ -821,6 +868,121 @@ export type Database = {
           },
         ]
       }
+      catalog_images: {
+        Row: {
+          brand_id: string
+          id: string
+          position: number
+          product_id: string
+          url: string
+          variant_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          id?: string
+          position?: number
+          product_id: string
+          url: string
+          variant_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          id?: string
+          position?: number
+          product_id?: string
+          url?: string
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_images_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_images_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_item_issues: {
+        Row: {
+          attribute: string | null
+          brand_id: string
+          code: string
+          countries: string[]
+          created_at: string
+          description: string | null
+          detail: string | null
+          documentation: string | null
+          external_id: string
+          id: string
+          reporting_context: string | null
+          resolution: string | null
+          severity: string
+          source_id: string
+        }
+        Insert: {
+          attribute?: string | null
+          brand_id: string
+          code: string
+          countries?: string[]
+          created_at?: string
+          description?: string | null
+          detail?: string | null
+          documentation?: string | null
+          external_id: string
+          id?: string
+          reporting_context?: string | null
+          resolution?: string | null
+          severity: string
+          source_id: string
+        }
+        Update: {
+          attribute?: string | null
+          brand_id?: string
+          code?: string
+          countries?: string[]
+          created_at?: string
+          description?: string | null
+          detail?: string | null
+          documentation?: string | null
+          external_id?: string
+          id?: string
+          reporting_context?: string | null
+          resolution?: string | null
+          severity?: string
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_item_issues_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_item_issues_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_products: {
         Row: {
           brand_id: string
@@ -877,8 +1039,45 @@ export type Database = {
           },
         ]
       }
+      catalog_source_credentials: {
+        Row: {
+          secret: string
+          set_at: string
+          set_by: string | null
+          source_id: string
+        }
+        Insert: {
+          secret: string
+          set_at?: string
+          set_by?: string | null
+          source_id: string
+        }
+        Update: {
+          secret?: string
+          set_at?: string
+          set_by?: string | null
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_source_credentials_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_source_credentials_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: true
+            referencedRelation: "catalog_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_sources: {
         Row: {
+          account: string | null
           brand_id: string
           created_at: string
           created_by: string | null
@@ -893,6 +1092,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          account?: string | null
           brand_id: string
           created_at?: string
           created_by?: string | null
@@ -907,6 +1107,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          account?: string | null
           brand_id?: string
           created_at?: string
           created_by?: string | null
@@ -933,6 +1134,93 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_variants: {
+        Row: {
+          attributes: Json
+          availability: string | null
+          brand_id: string
+          condition: string | null
+          content_hash: string
+          currency: string | null
+          external_id: string
+          first_seen_at: string
+          gtin: string | null
+          id: string
+          marketplace_item_id: string | null
+          mpn: string | null
+          price: number | null
+          product_id: string
+          removed_at: string | null
+          sale_price: number | null
+          sku: string | null
+          source: string
+          title: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          attributes?: Json
+          availability?: string | null
+          brand_id: string
+          condition?: string | null
+          content_hash: string
+          currency?: string | null
+          external_id: string
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          marketplace_item_id?: string | null
+          mpn?: string | null
+          price?: number | null
+          product_id: string
+          removed_at?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          source: string
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          attributes?: Json
+          availability?: string | null
+          brand_id?: string
+          condition?: string | null
+          content_hash?: string
+          currency?: string | null
+          external_id?: string
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          marketplace_item_id?: string | null
+          mpn?: string | null
+          price?: number | null
+          product_id?: string
+          removed_at?: string | null
+          sale_price?: number | null
+          sku?: string | null
+          source?: string
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_variants_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_products"
             referencedColumns: ["id"]
           },
         ]
@@ -1126,11 +1414,13 @@ export type Database = {
           prompt_ids: string[]
           published_at: string | null
           published_url: string | null
+          restored_at: string | null
           reviewer_id: string | null
           rules: Json | null
           source_url: string | null
           score_after: number | null
           score_before: number | null
+          shopping_path: Json | null
           slug: string | null
           status: string
           title: string
@@ -1166,11 +1456,13 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          shopping_path?: Json | null
           slug?: string | null
           status?: string
           title?: string
@@ -1206,11 +1498,13 @@ export type Database = {
           prompt_ids?: string[]
           published_at?: string | null
           published_url?: string | null
+          restored_at?: string | null
           reviewer_id?: string | null
           rules?: Json | null
           source_url?: string | null
           score_after?: number | null
           score_before?: number | null
+          shopping_path?: Json | null
           slug?: string | null
           status?: string
           title?: string
@@ -1454,6 +1748,8 @@ export type Database = {
           sent_by: string | null
           slug: string | null
           status: string
+          target: string
+          target_collection: string | null
           title: string
         }
         Insert: {
@@ -1473,6 +1769,8 @@ export type Database = {
           sent_by?: string | null
           slug?: string | null
           status?: string
+          target?: string
+          target_collection?: string | null
           title: string
         }
         Update: {
@@ -1492,6 +1790,8 @@ export type Database = {
           sent_by?: string | null
           slug?: string | null
           status?: string
+          target?: string
+          target_collection?: string | null
           title?: string
         }
         Relationships: [
@@ -1685,6 +1985,7 @@ export type Database = {
       content_draft_suggestions: {
         Row: {
           action_id: string | null
+          after_chars: number | null
           after_links: Json | null
           after_text: string
           agent: string
@@ -1697,7 +1998,9 @@ export type Database = {
           decided_by: string | null
           draft_id: string
           id: string
+          kept_chars: number | null
           kind: string
+          length_target: number | null
           position: number
           reason: string
           rule_keys: string[]
@@ -1707,6 +2010,7 @@ export type Database = {
         }
         Insert: {
           action_id?: string | null
+          after_chars?: number | null
           after_links?: Json | null
           after_text: string
           agent?: string
@@ -1719,7 +2023,9 @@ export type Database = {
           decided_by?: string | null
           draft_id: string
           id?: string
+          kept_chars?: number | null
           kind: string
+          length_target?: number | null
           position?: number
           reason: string
           rule_keys?: string[]
@@ -1729,6 +2035,7 @@ export type Database = {
         }
         Update: {
           action_id?: string | null
+          after_chars?: number | null
           after_links?: Json | null
           after_text?: string
           agent?: string
@@ -1741,7 +2048,9 @@ export type Database = {
           decided_by?: string | null
           draft_id?: string
           id?: string
+          kept_chars?: number | null
           kind?: string
+          length_target?: number | null
           position?: number
           reason?: string
           rule_keys?: string[]
@@ -4265,6 +4574,14 @@ export type Database = {
         Returns: Json
       }
       apply_prompt_locations: { Args: { p_updates: Json }; Returns: number }
+      approve_action_task_review: {
+        Args: { p_details: Json; p_review_id: string; p_title: string }
+        Returns: string
+      }
+      brand_ai_conversions: {
+        Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
       citation_competitor_sources: {
         Args: {
           p_brand_domains: string[]
@@ -4567,6 +4884,8 @@ export type Database = {
           sent_by: string | null
           slug: string | null
           status: string
+          target: string
+          target_collection: string | null
           title: string
         }[]
         SetofOptions: {
@@ -4585,6 +4904,10 @@ export type Database = {
       content_draft_versions_prune: {
         Args: { p_before: string; p_limit: number }
         Returns: number
+      }
+      content_page_conversions: {
+        Args: { p_brand_id: string; p_days: number; p_page: string }
+        Returns: Json
       }
       content_page_impact: {
         Args: { p_brand_id: string; p_days: number; p_page: string }

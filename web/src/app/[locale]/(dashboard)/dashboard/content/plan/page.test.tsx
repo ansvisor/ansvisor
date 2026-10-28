@@ -68,6 +68,7 @@ const page = (path: string, over: Partial<PlanPage> = {}): PlanPage => ({
   citations: { cur: 2, prev: 2 },
   platformsDown: [],
   aiVisits: 0,
+  conversions: null,
   ...over,
 });
 const opportunity: PlanOpportunity = {
@@ -227,6 +228,21 @@ describe('the Content plan', () => {
         '3 citations this period: 1 of 10' +
         'Together: 48 of 100' +
         'This score ranks the Plan. The Action Center scores its tasks on its own.',
+    );
+  });
+
+  it('says the conversions a page took part in, with conversions on (00291)', async () => {
+    getContentPlan.mockResolvedValue({
+      ...PLAN,
+      pages: PLAN.pages.map((p) => ({ ...p, conversions: p.aiVisits ? 3 : 0 })),
+    });
+    await renderPage();
+    const scores = [...container.querySelectorAll('tbody tr')].map((tr) => tr.children[1]);
+    // The top page, with its 42 AI visits: the third row.
+    act(() => scores[2].querySelector('button')!.focus());
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+      '42 AI visits and 3 conversions this period',
     );
   });
 
@@ -418,6 +434,50 @@ describe('the Content plan', () => {
     await act(async () => clear.click());
     expect(rowTexts()).toHaveLength(3);
     expect(section().textContent).not.toContain('Priority list filtered to');
+  });
+
+  it('adds the four goals the snippet followed AI visitors to most, and the top journey (CE-017)', async () => {
+    getContentPlanInsights.mockResolvedValue({
+      ...INSIGHTS,
+      conversions: {
+        enabled: true,
+        goals: [
+          { goal: 'signup', count: 48 },
+          { goal: 'demo', count: 20 },
+          { goal: 'order', count: 10 },
+          { goal: 'newsletter', count: 3 },
+          { goal: 'custom', count: 1 },
+        ],
+        // A long journey: the first page, a gap and the last three.
+        journey: {
+          source: 'chatgpt.com',
+          pages: ['/blog/crm-data-hygiene', '/a', '/b', '/c', '/d', '/pricing'],
+          goal: 'demo',
+          count: 4,
+        },
+      },
+    });
+    await renderPage();
+    expect(container.textContent).toContain(
+      '1,240 visits · 48 key events · 12 orders · 3,210 revenue · 48 signups · 20 demo forms · 10 orders from journeys · 3 newsletter signups',
+    );
+    expect(container.textContent).not.toContain('other conversion');
+    expect(container.textContent).toContain(
+      'Top journey:ChatGPT/blog/crm-data-hygiene…/c/d/pricingDemo form· 4 conversions',
+    );
+  });
+
+  it('asks for Google Analytics beside the goals, without a journey line when there’s none', async () => {
+    getContentPlanInsights.mockResolvedValue({
+      ...INSIGHTS,
+      results: { ...INSIGHTS.results, analytics: false, purchases: false },
+      conversions: { enabled: true, goals: [{ goal: 'signup', count: 1 }], journey: null },
+    });
+    await renderPage();
+    expect(container.textContent).toContain(
+      '1,240 visits · 1 signupConnect Google Analytics for key events and revenue.',
+    );
+    expect(container.textContent).not.toContain('Top journey');
   });
 
   it('asks for Google Analytics to show what AI visitors did', async () => {

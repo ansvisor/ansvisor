@@ -106,3 +106,24 @@ describe('updateBrand site type (Content Editor CE-023)', () => {
     expect(updates).toEqual([]);
   });
 });
+
+describe('updateBrand conversions (CE-017)', () => {
+  beforeEach(() => {
+    updates = [];
+  });
+
+  it('saves conversions on or off and the consent mode', async () => {
+    await updateBrand('b1', { conversionsEnabled: true });
+    await updateBrand('b1', { conversionsConsent: 'always' });
+    expect(updates).toEqual([{ conversions_enabled: true }, { conversions_consent: 'always' }]);
+  });
+
+  it('refuses a consent mode it doesn’t know, before writing', async () => {
+    await expect(
+      updateBrand('b1', {
+        conversionsConsent: 'sometimes' as Parameters<typeof updateBrand>[1]['conversionsConsent'],
+      }),
+    ).rejects.toThrow('Unknown consent mode');
+    expect(updates).toEqual([]);
+  });
+});

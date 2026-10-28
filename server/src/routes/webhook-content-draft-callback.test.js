@@ -55,6 +55,8 @@ vi.mock('../middleware/rate-limiter.js', () => ({
   webhookCallbackLimiter: (_req, _res, next) => next(),
   webhookCallbackAuthFailureLimiter: (_req, _res, next) => next(),
 }));
+const isBrandActive = vi.hoisted(() => vi.fn());
+vi.mock('../lib/active-subscriptions.js', () => ({ isBrandActive }));
 
 const { default: router } = await import('./webhook-content-draft-callback.js');
 
@@ -63,12 +65,15 @@ let server;
 let baseUrl;
 
 beforeEach(async () => {
+  // Every brand's organization on a plan unless a test says otherwise.
+  isBrandActive.mockReset().mockResolvedValue(true);
   state.deliveries = [
     {
       id: DELIVERY,
       brand_id: 'b1',
       draft_id: 'd1',
       status: 'sent',
+      target: 'webhook',
       created_at: '2026-10-24T10:00:00Z',
     },
   ];
@@ -110,6 +115,35 @@ const call = (body, { id = DELIVERY, secret = 's3cret' } = {}) =>
 const published = (url, more = {}) => call({ status: 'published', url, ...more });
 
 describe('POST /webhooks/content-drafts/:deliveryId/status', () => {
+  /**
+   * Once the plan has ended (2026-10-27): a 2xx, so the workflow doesn't
+   * fail or retry, and the delivery, its page and History left as they are.
+   */
+  it("writes nothing for a brand whose organization's plan has ended, and answers 202", async () => {
+    isBrandActive.mockResolvedValue(false);
+    const res = await published('https://acme.example/live');
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({
+      success: false,
+      ignored: true,
+      code: 'subscription_inactive',
+    });
+    expect(isBrandActive).toHaveBeenCalledWith('b1');
+    expect(state.deliveries[0].status).toBe('sent');
+    expect(state.drafts[0].status).toBe('ready');
+    expect(state.rpcs).toEqual([]);
+
+    expect((await call({ status: 'failed', reason: 'CMS down' })).status).toBe(202);
+    expect(state.deliveries[0].status).toBe('sent');
+  });
+
+  it('asks about the plan only once the secret matched', async () => {
+    isBrandActive.mockResolvedValue(false);
+    const res = await call({ status: 'published', url: 'https://a.example' }, { secret: 'nope' });
+    expect(res.status).toBe(401);
+    expect(isBrandActive).not.toHaveBeenCalled();
+  });
+
   it('marks the delivery and its page published at the address, keeping a publish version', async () => {
     const res = await published('https://acme.example/blog/best-aeo-tools', { externalId: '812' });
     expect(res.status).toBe(200);
@@ -152,6 +186,7 @@ describe('POST /webhooks/content-drafts/:deliveryId/status', () => {
       brand_id: 'b1',
       draft_id: 'd1',
       status: 'sent',
+      target: 'webhook',
       created_at: '2026-10-24T12:00:00Z',
     });
     const res = await call(
@@ -274,12 +309,20 @@ describe('POST /webhooks/content-drafts/:deliveryId/status', () => {
     expect(state.rpcs).toHaveLength(1);
   });
 
+  it('answers a Webflow delivery’s id as it does an unknown one: the API writes those itself', async () => {
+    state.deliveries[0].target = 'webflow';
+    const res = await published('https://acme.example/live');
+    expect(res.status).toBe(401);
+    expect(state.deliveries[0].status).toBe('sent');
+  });
+
   it('moves the page’s address only for its latest delivery', async () => {
     state.deliveries.push({
       id: 'newer',
       brand_id: 'b1',
       draft_id: 'd1',
       status: 'sent',
+      target: 'webhook',
       created_at: '2026-10-24T11:00:00Z',
     });
     const res = await published('https://acme.example/old');

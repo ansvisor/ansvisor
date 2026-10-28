@@ -293,9 +293,14 @@ function ScorePartText({ part }: { part: PlanScorePart }) {
       case 'opportunity':
         return part.score === null ? t('opportunityNone') : t('opportunity', { score: part.score });
       case 'pageValue':
-        return part.reason === 'visits'
-          ? t('pageValue.visits', { visits: part.visits })
-          : t(`pageValue.${part.reason}`);
+        return part.reason !== 'visits'
+          ? t(`pageValue.${part.reason}`)
+          : part.conversions === null
+            ? t('pageValue.visits', { visits: part.visits })
+            : t('pageValue.visitsConversions', {
+                visits: part.visits,
+                conversions: part.conversions,
+              });
       case 'citations':
         return t('citations', { citations: part.citations });
     }

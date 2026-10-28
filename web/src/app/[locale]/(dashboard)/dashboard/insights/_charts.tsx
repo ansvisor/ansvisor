@@ -30,6 +30,7 @@ import type {
 import { getFaviconUrl } from '@/lib/favicon';
 import { trendAxisTop, type TrendLine, type TrendMarker } from '@/lib/insights-trend';
 import { numberFormat } from '@/lib/number-format';
+import { formatNumber } from '@/lib/format';
 import { dayLabel } from './kpi-format';
 
 // ─── Adaptive Y-axis ─────────────────────────────────────────────────────────
@@ -528,8 +529,8 @@ export function ShareOfVoicePlatformChart({
                       <div className="text-muted-foreground">
                         Your share of voice:{' '}
                         <span className="font-medium text-foreground">{p.sov.toFixed(1)}%</span> —
-                        your brand accounts for {p.brandMentions.toLocaleString()} of the{' '}
-                        {p.voiceMentions.toLocaleString()} brand + competitor mentions here
+                        your brand accounts for {formatNumber(p.brandMentions)} of the{' '}
+                        {formatNumber(p.voiceMentions)} brand + competitor mentions here
                       </div>
                       <div className="mt-1 text-muted-foreground">
                         {platformShare.toFixed(1)}% of all tracked mentions happened on {p.provider}{' '}

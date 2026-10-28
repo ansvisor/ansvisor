@@ -54,6 +54,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
+import { formatNumber } from '@/lib/format';
 import { compareNullsLast, type SortDir } from './prompt-sort';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -707,10 +708,10 @@ export function TopicsTab({
                       {topic.shareOfVoice > 0 ? `${topic.shareOfVoice}%` : '—'}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm">
-                      {topic.totalMentions.toLocaleString()}
+                      {formatNumber(topic.totalMentions)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm">
-                      {topic.totalCitations.toLocaleString()}
+                      {formatNumber(topic.totalCitations)}
                     </TableCell>
                     <TableCell>
                       {/* Under two days there is no line, only the change. */}

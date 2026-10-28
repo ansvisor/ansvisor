@@ -1180,7 +1180,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_action',
     {
       description:
-        'Get one Action Center action in full: its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `how` (the steps), `done_when` (the check that closes it), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
+        'Get one Action Center action in full: its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `url` (the exact page), `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `change` (`before`, null when it adds text, and `after`), `how` (the steps), `done_when` (the check that closes it), `check` (how it is checked: auto, the page fetched again; rerun, the prompts run again; manual, a person confirms), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
       inputSchema: {
         action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
         format: z
@@ -1579,7 +1579,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_content_draft',
     {
       description:
-        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
+        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
       },
@@ -1636,7 +1636,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       const impact = await getContentImpactFor(auth, args.draft_id, args.days);
       if (impact === 'no_page') {
         return {
-          content: [{ type: 'text' as const, text: 'This draft is a new page, not live yet' }],
+          content: [{ type: 'text' as const, text: 'This draft has no live address yet' }],
           isError: true,
         };
       }

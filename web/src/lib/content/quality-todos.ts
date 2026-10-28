@@ -35,7 +35,8 @@ export type QualityTodoId =
   | 'reviewer'
   | 'brandFacts'
   | 'shippingReturns'
-  | 'checkDate';
+  | 'checkDate'
+  | 'introFacts';
 
 /**
  * A to-do's one button: Show (the first placeholder, selected to type over),
@@ -54,7 +55,8 @@ export type QualityTodoAction =
   | 'pickReviewer'
   | 'reviewBrandFacts'
   | 'addCheckDate'
-  | 'confirmCase';
+  | 'confirmCase'
+  | 'confirmIntro';
 
 export interface QualityTodo {
   id: QualityTodoId;
@@ -85,6 +87,8 @@ export interface QualityTodo {
    * sentence is an unsourced claim until it is, confirmed or not.
    */
   trustGain?: number;
+  /** A category intro's sentences with a fact not confirmed yet (CE-054). */
+  facts?: string[];
   /** A check date the page has, over a year old: Add line's own line (it replaces it), or the person's words. */
   old?: 'line' | 'text';
 }
@@ -116,6 +120,7 @@ export function qualityTodos({
   shipping = null,
   checkDate = null,
   cases = null,
+  intro = null,
   off = NONE_OFF,
 }: {
   eeat: Score<EeatCheckId> | null;
@@ -175,6 +180,15 @@ export function qualityTodos({
    * before Phase 3, or before they're read.
    */
   cases?: ReadonlySet<string> | null;
+  /**
+   * Phase 3 (CE-054): a category page's intro facts (introFacts) and the
+   * facts the person confirmed (confirmedFacts); null elsewhere, or before
+   * the confirms are read.
+   */
+  intro?: {
+    facts: readonly { sentence: string; facts: readonly string[] }[];
+    confirmed: ReadonlySet<string>;
+  } | null;
   /**
    * Phase 3 (CE-052): the checks the page's type leaves out (checksOff): no
    * to-do asks for them (a product page has the brand's byline, no author).
@@ -253,6 +267,28 @@ export function qualityTodos({
         },
       ]
     : [];
+  // Only the person knows the category's counts and prices are right: one
+  // confirm for them all. A sentence is open while a fact in it is.
+  const unconfirmedFacts = intro
+    ? intro.facts.filter((fact) => fact.facts.some((f) => !intro.confirmed.has(f)))
+    : [];
+  const introTodo: QualityTodo[] =
+    intro && intro.facts.length
+      ? [
+          {
+            id: 'introFacts',
+            done: unconfirmedFacts.length === 0,
+            gain:
+              unconfirmedFacts.length && trust && trust.score !== null
+                ? scoreGain(trust, ['introFacts'])
+                : 0,
+            score: 'trust',
+            action: unconfirmedFacts.length ? 'confirmIntro' : null,
+            count: unconfirmedFacts.length,
+            facts: unconfirmedFacts.map((fact) => fact.sentence),
+          },
+        ]
+      : [];
   const review: QualityTodo[] = reviewer
     ? [
         {
@@ -266,7 +302,7 @@ export function qualityTodos({
       ]
     : [];
   if (!eeat || eeat.score === null) {
-    return [...fill, ...proofTodos, ...ships, ...review, ...facts].filter(
+    return [...fill, ...proofTodos, ...ships, ...introTodo, ...review, ...facts].filter(
       (todo) => !off.has(todo.id),
     );
   }
@@ -348,6 +384,7 @@ export function qualityTodos({
       : []),
     ...proofTodos,
     ...ships,
+    ...introTodo,
     ...review,
     ...facts,
   ];

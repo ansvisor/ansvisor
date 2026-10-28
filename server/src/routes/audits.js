@@ -28,6 +28,7 @@ import { normStoredDomain } from '../lib/audit/host.js';
 import {
   buildAuditPages,
   buildTrendPoints,
+  findPreviousCompletedAudit,
   pageKey,
   parseListPage,
   TREND_LIMIT,
@@ -47,6 +48,8 @@ import {
 import { AUTO_AUDIT } from '../lib/audit/auto-audit.js';
 import { rankOpportunities } from '../lib/audit/priority.js';
 import { readSiteTrust } from '../lib/site-trust.js';
+import { isOrgActive } from '../lib/active-subscriptions.js';
+import { SUBSCRIPTION_INACTIVE } from '../middleware/subscription.js';
 import { buildTemplates, templateOf, templateOpportunities } from '../lib/audit/templates.js';
 import { ENGINE_THRESHOLDS } from '../config/action-engine.js';
 import { runSignals } from '../lib/audit/engine.js';
@@ -460,7 +463,11 @@ router.post('/bulk', requireFeature('content_optimization'), async (req, res) =>
 router.get('/quota', async (req, res) => {
   try {
     const orgId = await getOrgIdForUser(req.user?.id);
-    const quota = await getSiteAuditQuotaStatus(orgId);
+    if (!orgId) {
+      return res.status(400).json({ success: false, message: 'No organization found for user.' });
+    }
+    // Read-only once the plan has ended (2026-10-27): no plan reads as a limit of 0.
+    const quota = await getSiteAuditQuotaStatus(orgId, { readOnly: true });
     return res.json({ success: true, quota });
   } catch (err) {
     if (err instanceof PlanLimitError) {
@@ -964,11 +971,12 @@ async function canChangeSettings(userId) {
 /**
  * Site Audit settings as the Settings dialog shows them (SA-006): the org's
  * auto-audit switch and e-mail, the brand's exclude patterns and pinned
- * pages.
+ * pages. Without an active plan (read-only, 2026-10-27), auto-audit reads as
+ * off with a limit of 0, and the rest as kept.
  */
 async function readAuditSettings(brandId, orgId) {
   const [quota, excludePatterns, { data: pinned, error }] = await Promise.all([
-    getSiteAuditQuotaStatus(orgId),
+    getSiteAuditQuotaStatus(orgId, { readOnly: true }),
     readExcludePatterns(brandId),
     supabaseAdmin
       .from('site_audit_page_prefs')
@@ -1165,15 +1173,21 @@ router.get('/auto-runs/latest', async (req, res) => {
 
 // GET /api/audits/site-trust?brandId=…&refresh=1 — the brand's five site
 // trust checks (Content Editor Quality, CE-043): the day's read, or a new
-// one when asked again (site-trust.js). Registered before /:id.
+// one when asked again (site-trust.js). Once the plan has ended, only the
+// kept read, however old: 402 when none is kept. Registered before /:id.
 router.get('/site-trust', async (req, res) => {
   const parsed = z.guid().safeParse(req.query.brandId);
   if (!parsed.success) {
     return res.status(400).json({ success: false, message: 'brandId is required' });
   }
   try {
-    await assertBrandAccess(parsed.data, req.user?.id);
-    const trust = await readSiteTrust(parsed.data, { refresh: req.query.refresh === '1' });
+    const { orgId } = await assertBrandAccess(parsed.data, req.user?.id);
+    const keptOnly = !(await isOrgActive(orgId));
+    const trust = await readSiteTrust(parsed.data, {
+      refresh: req.query.refresh === '1',
+      keptOnly,
+    });
+    if (!trust) return res.status(402).json(SUBSCRIPTION_INACTIVE);
     return res.json({ success: true, ...trust });
   } catch (err) {
     return sendAuditError(req, res, err, 'site trust read failed');
@@ -1197,12 +1211,37 @@ router.get('/:id', async (req, res) => {
 
     await assertBrandAccess(audit.brand_id, userId);
 
-    const { data: signalRows } = await supabaseAdmin
-      .from('audit_signal_results')
-      .select('*')
-      .eq('audit_id', id);
+    // The history read is best-effort and can run alongside the signal read.
+    // Its result uses the same page grouping as GET /pages.
+    const historyPromise =
+      audit.status === 'completed' && audit.total_score != null
+        ? readBrandAudits(audit.brand_id).catch((historyErr) => {
+            req.log.warn({ err: historyErr, auditId: id }, 'audit previous score lookup failed');
+            return null;
+          })
+        : Promise.resolve(null);
 
-    return res.json({ success: true, audit: assembleAudit(audit, signalRows ?? []) });
+    const [{ data: signalRows }, historyResult] = await Promise.all([
+      supabaseAdmin.from('audit_signal_results').select('*').eq('audit_id', id),
+      historyPromise,
+    ]);
+
+    if (historyResult?.error) {
+      req.log.warn({ err: historyResult.error, auditId: id }, 'audit previous score lookup failed');
+    }
+    const previous =
+      historyResult && !historyResult.error
+        ? findPreviousCompletedAudit(historyResult.data ?? [], id)
+        : null;
+
+    return res.json({
+      success: true,
+      audit: {
+        ...assembleAudit(audit, signalRows ?? []),
+        previousScore: previous?.totalScore ?? null,
+        previousCreatedAt: previous?.createdAt ?? null,
+      },
+    });
   } catch (err) {
     if (err.status) {
       return res.status(err.status).json({ success: false, message: err.message });

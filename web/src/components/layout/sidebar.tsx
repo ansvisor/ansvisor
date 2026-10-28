@@ -22,6 +22,7 @@ import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
+import { formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -427,6 +428,14 @@ export function Sidebar() {
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
                           <span className="flex-1 truncate">{label}</span>
+                          {effectiveBadge && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 shrink-0 px-1.5 text-[10px] font-normal"
+                            >
+                              {effectiveBadge}
+                            </Badge>
+                          )}
                           <ChevronDown
                             className={cn(
                               'h-3.5 w-3.5 shrink-0 transition-transform',
@@ -464,7 +473,7 @@ export function Sidebar() {
                                     )}
                                     {child.href.endsWith('/tracked') && trackedCount !== null && (
                                       <span className="text-[11px] tabular-nums text-muted-foreground">
-                                        {trackedCount.toLocaleString()}
+                                        {formatNumber(trackedCount)}
                                       </span>
                                     )}
                                   </Link>

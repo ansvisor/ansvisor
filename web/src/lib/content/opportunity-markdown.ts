@@ -92,8 +92,16 @@ export function opportunityDocument(
         ? `From a task in AC-${sd.fromAction.actionNo}`
         : 'From an Action Center task',
       [
+        task?.url && field('URL', task.url),
         task?.where && field('Where', task.where),
         task?.why && field('Why', task.why),
+        task?.change &&
+          field(
+            'Change',
+            task.change.before
+              ? `Before: ${task.change.before} → After: ${task.change.after}`
+              : `Add: ${task.change.after}`,
+          ),
         ...(task?.how ?? []).map(
           (step, i): OpportunityLine => ({ kind: 'step', n: i + 1, text: step, points: [] }),
         ),

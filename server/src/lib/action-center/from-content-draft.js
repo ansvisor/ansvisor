@@ -140,6 +140,7 @@ export async function sendContentDraftToActionCenter(brandId, { draftId, userId 
       permission: item.permission,
       depends_on: item.dependsOn,
       title_params: item.titleParams,
+      details: item.details,
       status: 'todo',
     })),
   );

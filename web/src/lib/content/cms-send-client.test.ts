@@ -39,8 +39,15 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { readCmsStatuses, readDeliveries, readDraftCms, readKeptFields, sendPagesToCms } =
-  await import('./cms-send-client');
+const {
+  readCmsStatuses,
+  readDeliveries,
+  readDraftCms,
+  readKeptFields,
+  refreshWebflowPublished,
+  refreshWordPressPublished,
+  sendPagesToCms,
+} = await import('./cms-send-client');
 
 const page: CmsPage = {
   draftId: 'd1',
@@ -78,7 +85,7 @@ describe('sendPagesToCms', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/content-drafts/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
-      body: JSON.stringify({ brandId: 'brand-1', pages: [page] }),
+      body: JSON.stringify({ brandId: 'brand-1', pages: [page], target: 'webhook' }),
     });
     expect(result).toEqual({
       ok: true,
@@ -88,6 +95,33 @@ describe('sendPagesToCms', () => {
     // Past the workspace's sends for the day: the pages left over.
     answer(200, { deliveries: [{ id: 'x2', draftId: 'd1', status: 'queued' }], skipped: 3 });
     expect(await sendPagesToCms('brand-1', [page])).toMatchObject({ ok: true, skipped: 3 });
+    // To the brand's Webflow collection (#1331, phase 2).
+    answer(200, { deliveries: [{ id: 'x3', draftId: 'd1', status: 'sent', updated: true }] });
+    expect(await sendPagesToCms('brand-1', [page], 'webflow')).toMatchObject({
+      ok: true,
+      deliveries: [{ updated: true }],
+    });
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toMatchObject({ target: 'webflow' });
+    // To the brand's WordPress site (00294): its post live, its JSON-LD left out.
+    answer(200, {
+      deliveries: [
+        {
+          id: 'x4',
+          draftId: 'd1',
+          status: 'sent',
+          updated: false,
+          live: true,
+          changed: { jsonLd: 2 },
+        },
+      ],
+    });
+    expect(await sendPagesToCms('brand-1', [page], 'wordpress')).toMatchObject({
+      ok: true,
+      deliveries: [{ updated: false, live: true, changed: { jsonLd: 2 } }],
+    });
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toMatchObject({
+      target: 'wordpress',
+    });
   });
 
   it('gives the server’s reason, and the field a 400 names', async () => {
@@ -103,6 +137,28 @@ describe('sendPagesToCms', () => {
       code: 'invalid',
       field: 'pages.0.slug',
     });
+    for (const code of [
+      'webflow_not_configured',
+      'no_webflow',
+      'webflow_refused',
+      'webflow_not_ready',
+      'in_progress',
+    ]) {
+      answer(409, { code });
+      expect(await sendPagesToCms('brand-1', [page], 'webflow')).toMatchObject({ ok: false, code });
+    }
+    for (const code of [
+      'wordpress_not_configured',
+      'no_wordpress',
+      'wordpress_refused',
+      'in_progress',
+    ]) {
+      answer(409, { code });
+      expect(await sendPagesToCms('brand-1', [page], 'wordpress')).toMatchObject({
+        ok: false,
+        code,
+      });
+    }
   });
 
   it('says when a request was more than the API’s proxy takes', async () => {
@@ -146,6 +202,49 @@ describe('sendPagesToCms', () => {
   });
 });
 
+describe('refreshWebflowPublished', () => {
+  it('asks the API to read the brand’s Webflow pages, and gives the drafts it marked published', async () => {
+    answer(200, { checked: 2, published: [{ draftId: 'd1', url: 'https://a.example/b/c' }] });
+    expect(await refreshWebflowPublished('brand-1')).toEqual(['d1']);
+    expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/content-drafts/webflow-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
+      body: JSON.stringify({ brandId: 'brand-1' }),
+    });
+    answer(502, { code: 'failed' });
+    expect(await refreshWebflowPublished('brand-1')).toEqual([]);
+  });
+});
+
+describe('refreshWordPressPublished', () => {
+  it('asks the API to read the brand’s WordPress posts, and gives the drafts it marked published', async () => {
+    answer(200, {
+      checked: 2,
+      published: [
+        { draftId: 'd1', url: 'https://a.example/cold-brew/' },
+        // A page deleted since: no draft to mark.
+        { draftId: null, url: 'https://a.example/espresso/' },
+      ],
+    });
+    expect(await refreshWordPressPublished('brand-1')).toEqual(['d1']);
+    expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/content-drafts/wordpress-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
+      body: JSON.stringify({ brandId: 'brand-1' }),
+    });
+    // Read a moment ago, or not there (an API before 00294): none.
+    answer(200, { checked: 0, published: [], recent: true });
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    answer(404, {});
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    session = null;
+    expect(await refreshWordPressPublished('brand-1')).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
 describe('readDraftCms', () => {
   it('gives the kept fields, where the page went live and its last send', async () => {
     reads = {
@@ -171,7 +270,7 @@ describe('readDraftCms', () => {
     expect(await readDraftCms('d1')).toEqual({
       fields: { slug: 'coffee', metaTitle: undefined, metaDescription: 'Slowly.' },
       publishedUrl: 'https://example.com/coffee',
-      last: { status: 'sent', at: '2026-10-24T10:00:02Z', error: null },
+      last: { status: 'sent', target: 'webhook', at: '2026-10-24T10:00:02Z', error: null },
     });
     expect(filters).toEqual([
       ['content_drafts', 'id', 'd1'],
@@ -258,6 +357,7 @@ describe('readCmsStatuses', () => {
         'd1',
         {
           status: 'published',
+          target: 'webhook',
           at: '2026-10-24T12:00:00Z',
           httpStatus: 200,
           error: null,
@@ -268,6 +368,7 @@ describe('readCmsStatuses', () => {
         'd520',
         {
           status: 'failed',
+          target: 'webhook',
           at: '2026-10-24T09:00:00Z',
           httpStatus: null,
           error: 'Not reached',
@@ -288,6 +389,34 @@ describe('readCmsStatuses', () => {
     const statuses = await readCmsStatuses(['d1', 'd2']);
     expect(statuses.get('d1')).toMatchObject({ status: 'failed', error: 'Not sent: interrupted' });
     expect(statuses.get('d2')).toMatchObject({ status: 'queued', error: null });
+  });
+
+  it('says which sends went to Webflow', async () => {
+    statusReads = [
+      {
+        data: [delivery('d1', 'sent', '2026-10-24T10:00:00Z', { target: 'webflow' })],
+        error: null,
+      },
+    ];
+    expect((await readCmsStatuses(['d1'])).get('d1')).toMatchObject({
+      status: 'sent',
+      target: 'webflow',
+    });
+  });
+
+  it('says which sends went to WordPress, and reads an unknown target as the webhook', async () => {
+    statusReads = [
+      {
+        data: [
+          delivery('d1', 'sent', '2026-10-24T10:00:00Z', { target: 'wordpress' }),
+          delivery('d2', 'sent', '2026-10-24T10:00:00Z', { target: 'shopify' }),
+        ],
+        error: null,
+      },
+    ];
+    const statuses = await readCmsStatuses(['d1', 'd2']);
+    expect(statuses.get('d1')).toMatchObject({ status: 'sent', target: 'wordpress' });
+    expect(statuses.get('d2')).toMatchObject({ target: 'webhook' });
   });
 
   it('leaves a read that fails with no sends, as before its table is there', async () => {

@@ -237,7 +237,8 @@ function RowMenu({ draft, actions }: { draft: ContentDraftListItem; actions: Lib
           {DRAFT_STATUSES.map((status) => (
             <DropdownMenuItem
               key={status}
-              disabled={status === draft.status}
+              // An archived page is restored before it's marked live (CE-013).
+              disabled={status === draft.status || (status === 'published' && !!draft.archivedAt)}
               onClick={() => actions.onStatus(draft, status)}
             >
               <Check
@@ -293,7 +294,13 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
   const format = useFormatter();
   const when = format.dateTime(new Date(status.at), { dateStyle: 'medium', timeStyle: 'short' });
   const live = status.status === 'published' ? status.publishedUrl : null;
-  const label = t(status.status, { when });
+  // A Webflow or WordPress send (#1331, phase 2) says so: sent, it's a draft item or post there.
+  const label = t(
+    status.target === 'webflow' || status.target === 'wordpress'
+      ? `${status.target}.${status.status}`
+      : status.status,
+    { when },
+  );
   const icon = {
     queued: <Clock className="h-3.5 w-3.5" />,
     sent: <Send className="h-3.5 w-3.5" />,

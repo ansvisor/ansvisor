@@ -28,6 +28,7 @@ import {
 } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import { IMPACT_PERIODS, type ContentImpact, type ContentResults } from '@/lib/content/impact';
+import type { ContentConversions } from '@/lib/content/conversions';
 import {
   MAX_BODY_HTML_LENGTH,
   MAX_TITLE_LENGTH,
@@ -37,6 +38,7 @@ import {
 import { detectPageType, siteTypeOf, type SiteType } from '@/lib/content/page-types';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { matchPagePrompts } from '@/lib/content/page-prompts';
+import { pageKey, type CatalogMatch } from '@/lib/content/feed-match';
 import type { LinkCheck } from '@/lib/content/quality-checks';
 import { CLAIM_KINDS, type ClaimBlock } from '@/lib/content/claims';
 import {
@@ -54,14 +56,17 @@ import {
   savedRuleSetSchema,
   startingRules,
   type DraftRulesInput,
+  type LastRewrite,
   type SavedRuleSet,
 } from '@/lib/content/rules';
 import {
+  MAX_BRIEF_BYTES,
   briefFromOpportunity,
   draftBriefSchema,
   type DraftBrief,
   type RebuildSources,
 } from '@/lib/content/brief';
+import { jsonbBytes } from '@/lib/content/draft-inputs';
 import type { ContentBrief } from '@/types';
 import {
   CITED_DAYS,
@@ -89,7 +94,7 @@ import {
 } from '@/lib/content/history';
 import { RUN_STALE_MS } from '@/lib/content/agent-runs';
 import { HANDOFF_KEYS } from '@/lib/content/hand-off';
-import type { AgentWriteRequest } from '@/lib/content/agent-write';
+import type { AgentRule, AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   actionPages,
   completeDraftTasks,
@@ -97,6 +102,7 @@ import {
   findActionDraft,
   reopenDraftTasks,
   setDraftTasksStatus,
+  unpublishDraftWork,
   type ActionDraft,
 } from '@/lib/content/action-drafts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -236,7 +242,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
   const { data, error } = await supabase
     .from('content_drafts')
     .select(
-      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
+      `id, brand_id, title, page_type, page_type_source, method, status, body_html, author, author_id, reviewer_id, source_url, published_url, rules, kept_sources, author_real_at, author_profile_at, action_id, agent_state, agent_state_at, agent_run, updated_at, archived_at, quality_handoff, ${BRAND_SITE}, actions(action_no)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -250,6 +256,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
     pageTypeSource: data.page_type_source === 'user' ? 'user' : 'detected',
     siteType: brandSiteType(data.brands),
     sourceUrl: data.source_url,
+    publishedUrl: data.published_url ?? null,
     method: data.method as DraftMethod,
     status: draftStatus(data.status),
     bodyHtml: data.body_html,
@@ -1115,6 +1122,26 @@ export async function getContentResults(
   return (data as ContentResults | null) ?? null;
 }
 
+/**
+ * Conversions of AI journeys through the page (CE-017, 00287), for the Live
+ * page tab's period: from the AI Traffic snippet with conversions on.
+ */
+export async function getContentConversions(
+  brandId: string,
+  page: string,
+  days: number,
+): Promise<ContentConversions | null> {
+  if (!impactArgsValid(brandId, page, days)) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('content_page_conversions', {
+    p_brand_id: brandId,
+    p_page: page,
+    p_days: days,
+  });
+  if (error) throw new Error(error.message);
+  return (data as ContentConversions | null) ?? null;
+}
+
 /** A brand id, a period the tab offers and a web page's address. */
 function impactArgsValid(brandId: string, page: string, days: number): boolean {
   return (
@@ -1470,7 +1497,9 @@ const ROW_STATUSES = ['draft', 'in_review', 'published'] as const;
  * editor's own status changes). Ready keeps a History version and completes
  * the draft's task, so it goes through markContentDraftReady instead. A
  * ready or published draft moved back to Draft or In review opens again the
- * task Ready completed, as the editor's Ready does when clicked.
+ * task Ready completed, as the editor's Ready does when clicked; a published
+ * one also opens again the Publish task a page's publish completed, and
+ * leaves what its action is measured on (unpublishDraftWork).
  */
 export async function setContentDraftStatus(
   id: string,
@@ -1497,6 +1526,34 @@ export async function setContentDraftStatus(
   if (!data) throw new Error('not_found');
   const wasDone = before.status === 'ready' || before.status === 'published';
   if (wasDone && status !== 'published') await reopenTasksOf(supabase, id, before);
+  if (before.status === 'published' && status !== 'published') {
+    await unpublishOf(supabase, id, before);
+  }
+}
+
+/**
+ * A published draft taken back, in its action (unpublishDraftWork). The
+ * draft's status has changed either way: a failure is logged, and a task
+ * left done can be changed in the drawer.
+ */
+async function unpublishOf(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  draft: { brand_id: string; action_id: string | null },
+): Promise<void> {
+  if (!draft.action_id) return;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await unpublishDraftWork(
+      supabase,
+      { id, brandId: draft.brand_id, actionId: draft.action_id },
+      user?.id ?? null,
+    );
+  } catch (err) {
+    console.error('Failed to take the page back in its action:', err);
+  }
 }
 
 /**
@@ -1710,6 +1767,23 @@ export async function getDraftVersions(id: string): Promise<DraftVersion[]> {
 }
 
 /**
+ * When the draft's page was last restored from History (00289: set each time
+ * a restore changes the page), or null. The agent's batch from before it was
+ * for the page before: the editor opens its card closed.
+ */
+export async function getLastRestoreAt(id: string): Promise<string | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_drafts')
+    .select('restored_at')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.restored_at ?? null;
+}
+
+/**
  * History's hand-offs (Quality CE-051): the draft's runs of Hand off (00275,
  * its members may read them) in the last 90 days, the latest first, each
  * with who started it, how it ended and how many checks it was given.
@@ -1806,7 +1880,12 @@ export async function restoreDraftVersion(id: string, versionId: string): Promis
       else if (typed) updatedAt = typed.updated_at;
     }
   }
-  return { title: restored.title, bodyHtml: restored.bodyHtml, updatedAt };
+  return {
+    title: restored.title,
+    bodyHtml: restored.bodyHtml,
+    updatedAt,
+    ...(typeof restored.restored === 'boolean' ? { restored: restored.restored } : {}),
+  };
 }
 
 /**
@@ -1818,6 +1897,38 @@ export async function keepAgentBeforeVersion(id: string): Promise<void> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
   const supabase = await createClient();
   await keepVersion(supabase, id, 'agent_before');
+}
+
+/**
+ * The draft's last page rewrite, whatever became of it, as the API kept it
+ * (00285): the characters it came to, the Length it was written to and what
+ * it kept, and the page it wrote, for the editor to count as its toolbar
+ * does (the API's count runs a little over). A Length it missed isn't
+ * offered again (rules.ts RewriteReach). One row, read on opening and
+ * whenever the rewrite shown changes. Null without one, or for one made
+ * before 00285 (after_chars marks those).
+ */
+export async function getLastPageRewrite(
+  id: string,
+): Promise<(LastRewrite & { html: string }) | null> {
+  if (!draftId.safeParse(id).success) throw new Error('invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('content_draft_suggestions')
+    .select('after_text, after_chars, length_target, kept_chars')
+    .eq('draft_id', id)
+    .eq('kind', 'page')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || data.after_chars === null || data.kept_chars === null) return null;
+  return {
+    chars: data.after_chars,
+    target: data.length_target,
+    kept: data.kept_chars,
+    html: data.after_text,
+  };
 }
 
 /**
@@ -2095,6 +2206,12 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
   if (!draft) return null;
   const own = draftBriefSchema.safeParse(draft.brief);
   if (own.success) return { brief: own.data };
+  // A brief of its own this editor can't read: said as a failed read, never
+  // as the opportunity's or none, so Edit brief can't write over it.
+  if (draft.brief != null) {
+    console.error('The draft brief can’t be read:', own.error.issues.slice(0, 3));
+    return null;
+  }
   if (!draft.opportunity_id) return { brief: null };
   const { data: opportunity, error: oppError } = await supabase
     .from('content_opportunities')
@@ -2110,6 +2227,8 @@ export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | n
 export async function saveDraftBrief(id: string, brief: DraftBrief): Promise<DraftBrief> {
   const parsed = draftBriefSchema.safeParse({ ...brief, origin: 'edit' });
   if (!draftId.safeParse(id).success || !parsed.success) throw new Error('invalid');
+  // The column's 64 KB (00212): said, not a failed save.
+  if (jsonbBytes(parsed.data) > MAX_BRIEF_BYTES) throw new Error('too_long');
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('content_drafts')
@@ -2140,6 +2259,8 @@ export async function rebuildDraftBrief(
   id: string,
   brandId: string,
   sources: RebuildSources,
+  /** The rules in effect, as the agent reads them: the brief plans to them (brief rules, 2026). */
+  rules?: AgentRule[],
 ): Promise<{ brief: DraftBrief } | { error: BriefRebuildError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
@@ -2156,7 +2277,7 @@ export async function rebuildDraftBrief(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ brandId, sources }),
+      body: JSON.stringify({ brandId, sources, ...(rules?.length ? { rules } : {}) }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
@@ -2200,7 +2321,15 @@ export interface AgentFixRequest {
   locked: string[];
   /** The sources the Sources tab keeps, which the agent writes from (v1.1 CE-033). */
   sources?: RebuildSources;
+  /** The page over a Length it isn't sent (rules.ts overLengthFor). */
+  overLength?: { count: number; max: number };
 }
+
+/** Why a run left nothing to review (content-agent.js emptyWhy). */
+export type AgentEmptyWhy = 'none' | 'locked' | 'dropped';
+
+const fixEmptyWhy = (why: unknown): { why?: AgentEmptyWhy } =>
+  why === 'none' || why === 'locked' || why === 'dropped' ? { why } : {};
 
 /**
  * Fix open rules with agent (CE-018): the Content Agent reads the draft as
@@ -2212,7 +2341,7 @@ export async function fixDraftRules(
   id: string,
   brandId: string,
   request: AgentFixRequest,
-): Promise<{ count: number } | { error: AgentFixError }> {
+): Promise<{ count: number; why?: AgentEmptyWhy } | { error: AgentFixError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
   }
@@ -2239,6 +2368,7 @@ export async function fixDraftRules(
         locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
         // Already within the server's limits (rebuildSources).
         ...(request.sources ? { sources: request.sources } : {}),
+        ...(request.overLength ? { overLength: request.overLength } : {}),
       }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -2248,7 +2378,7 @@ export async function fixDraftRules(
       const code = body.code as AgentFixError;
       return { error: (AGENT_FIX_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
-    return { count: Number(body.count) || 0 };
+    return { count: Number(body.count) || 0, ...fixEmptyWhy(body.why) };
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
     return { error: 'unconfirmed' };
@@ -2285,7 +2415,7 @@ export async function handOffDraft(
   id: string,
   brandId: string,
   request: HandOffRequest,
-): Promise<{ count: number } | { error: HandOffError }> {
+): Promise<{ count: number; why?: AgentEmptyWhy } | { error: HandOffError }> {
   if (!draftId.safeParse(id).success || !draftId.safeParse(brandId).success) {
     return { error: 'failed' };
   }
@@ -2310,6 +2440,7 @@ export async function handOffDraft(
         textRules: request.textRules.slice(0, 50).map((text) => text.slice(0, 300)),
         locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
         ...(request.sources ? { sources: request.sources } : {}),
+        ...(request.overLength ? { overLength: request.overLength } : {}),
         origin: request.origin,
       }),
     });
@@ -2319,7 +2450,7 @@ export async function handOffDraft(
       const code = body.code as HandOffError;
       return { error: (HANDOFF_ERRORS as readonly string[]).includes(code) ? code : 'failed' };
     }
-    return { count: Number(body.count) || 0 };
+    return { count: Number(body.count) || 0, ...fixEmptyWhy(body.why) };
   } catch (err) {
     console.error('Failed to hand the draft off:', err);
     return { error: 'unconfirmed' };
@@ -2332,6 +2463,8 @@ const AGENT_WRITE_ERRORS = [
   'writing',
   'org_writing',
   'open_suggestions',
+  // A Fix open rules or Quality's hand-off still under way on the draft (content-writer.js).
+  'running',
   'not_draft',
   // Rewrite the page to these rules: a page with no text, or one too long to send whole.
   'empty',
@@ -2715,4 +2848,155 @@ export async function confirmDraftItem(
   if (error?.code === OWN_IMAGES_FULL) return 'full';
   if (error) throw new Error(error.message);
   return 'ok';
+}
+
+/** A product's name as the page's title gives it: one line, up to the catalog's length. */
+const catalogTitle = z.string().trim().min(1).max(1000);
+/** A page's path as an address encodes it and as it reads, in its own case ("/%C3%9Cber", "/Über"). */
+function pathForms(url: string): string[] {
+  try {
+    const path = new URL(url.trim()).pathname.replace(/\/+$/, '');
+    if (path.length <= 1) return [];
+    let decoded = path;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      // Not encoded as UTF-8: looked up as it is.
+    }
+    return [...new Set([decoded, path])];
+  } catch {
+    return [];
+  }
+}
+/** Escape `\`, `%` and `_`: a path or a title matched as written. */
+const likeText = (value: string) => value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+
+/**
+ * The draft's product in the brand's catalog (00278; Quality CE-053): by
+ * the page's URL (an optimize draft's), else by its title, when one product
+ * has it. Says whether a catalog is connected at all, so Quality can say to
+ * connect one. Fails soft: null, when it can't be read.
+ */
+export async function getCatalogMatch(id: string, title: string): Promise<CatalogMatch | null> {
+  if (!draftId.safeParse(id).success) return null;
+  try {
+    const supabase = await createClient();
+    const { data: draft, error: draftError } = await supabase
+      .from('content_drafts')
+      .select('brand_id, source_url')
+      .eq('id', id)
+      .maybeSingle();
+    if (draftError) throw new Error(draftError.message);
+    if (!draft) return null;
+    const brand = draft.brand_id;
+    const { data: one, error: oneError } = await supabase
+      .from('catalog_products')
+      .select('id')
+      .eq('brand_id', brand)
+      .is('removed_at', null)
+      .limit(1);
+    if (oneError) throw new Error(oneError.message);
+    if (!one?.length) return { connected: false, product: null };
+
+    let productId: string | null = null;
+    let via: 'url' | 'name' = 'url';
+    const key = pageKey(draft.source_url);
+    const forms = key ? pathForms(draft.source_url!) : [];
+    // PostgREST reads "*" in a pattern as a wildcard: such a path or title isn't looked up.
+    if (key && forms.length && !forms.some((form) => form.includes('*'))) {
+      // The brand's live products (their index), narrowed by the path as
+      // written and as an address encodes it, in its own case, then compared
+      // whole: a feed's URL may carry a query ("?variant=…") or another
+      // form of the host.
+      const byUrl = async (table: 'catalog_products' | 'catalog_variants') => {
+        const ids = new Set<string>();
+        for (const form of forms) {
+          const read =
+            table === 'catalog_products'
+              ? await supabase
+                  .from('catalog_products')
+                  .select('id, url')
+                  .eq('brand_id', brand)
+                  .is('removed_at', null)
+                  .ilike('url', `%${likeText(form)}%`)
+                  .limit(100)
+              : await supabase
+                  .from('catalog_variants')
+                  .select('product_id, url')
+                  .eq('brand_id', brand)
+                  .is('removed_at', null)
+                  .ilike('url', `%${likeText(form)}%`)
+                  .limit(100);
+          if (read.error) throw new Error(read.error.message);
+          for (const row of read.data ?? []) {
+            if (pageKey(row.url) !== key) continue;
+            ids.add('product_id' in row ? row.product_id : row.id);
+          }
+        }
+        return ids;
+      };
+      // A product's URL is its first item's link: a variant with its own
+      // page ("boot-blue" grouped under "boot-red") is found by its own.
+      let ids = await byUrl('catalog_products');
+      if (ids.size === 0) ids = await byUrl('catalog_variants');
+      if (ids.size === 1) productId = [...ids][0];
+    }
+    const name = catalogTitle.safeParse(title);
+    if (!productId && name.success && !name.data.includes('*')) {
+      const { data, error } = await supabase
+        .from('catalog_products')
+        .select('id')
+        .eq('brand_id', brand)
+        .is('removed_at', null)
+        .ilike('title', likeText(name.data))
+        .limit(2);
+      if (error) throw new Error(error.message);
+      // Two products by one name: whose page this is isn't sure.
+      if (data?.length === 1) {
+        productId = data[0].id;
+        via = 'name';
+      }
+    }
+    if (!productId) return { connected: true, product: null };
+
+    const [product, variants] = await Promise.all([
+      supabase
+        .from('catalog_products')
+        .select('title, url')
+        .eq('id', productId)
+        .is('removed_at', null)
+        .maybeSingle(),
+      // By price, so a range's low end is among them however many there are.
+      supabase
+        .from('catalog_variants')
+        .select('price, sale_price, currency, availability, gtin')
+        .eq('product_id', productId)
+        .is('removed_at', null)
+        .order('price', { ascending: true })
+        .limit(200),
+    ]);
+    if (product.error) throw new Error(product.error.message);
+    if (variants.error) throw new Error(variants.error.message);
+    if (!product.data) return { connected: true, product: null };
+    const amount = (value: number | string | null) =>
+      value === null || !Number.isFinite(Number(value)) ? null : Number(value);
+    return {
+      connected: true,
+      product: {
+        title: product.data.title,
+        url: product.data.url,
+        via,
+        variants: (variants.data ?? []).map((v) => ({
+          price: amount(v.price),
+          salePrice: amount(v.sale_price),
+          currency: v.currency,
+          availability: v.availability,
+          gtin: v.gtin,
+        })),
+      },
+    };
+  } catch (err) {
+    console.error('Failed to read the catalog:', err);
+    return null;
+  }
 }

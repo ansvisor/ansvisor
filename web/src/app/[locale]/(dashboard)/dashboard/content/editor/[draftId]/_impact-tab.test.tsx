@@ -3,14 +3,22 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
+import type { ContentConversions } from '@/lib/content/conversions';
 import type { ContentImpact, ContentResults, ResultSource } from '@/lib/content/impact';
 import { ImpactTab } from './_impact-tab';
 
 const getContentImpact = vi.fn();
 const getContentResults = vi.fn();
+const getContentConversions = vi.fn();
 vi.mock('@/lib/actions/content-drafts', () => ({
   getContentImpact: (...args: unknown[]) => getContentImpact(...args),
   getContentResults: (...args: unknown[]) => getContentResults(...args),
+  getContentConversions: (...args: unknown[]) => getContentConversions(...args),
+}));
+// The brand's kind of site, as the store holds it: guessed (B2B) unless a test says.
+const store = vi.hoisted(() => ({ brands: [] as { id: string; siteType?: string }[] }));
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (select: (state: typeof store) => unknown) => select(store),
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -111,6 +119,8 @@ beforeEach(() => {
   root = createRoot(container);
   getContentImpact.mockReset();
   getContentResults.mockReset().mockResolvedValue(results());
+  getContentConversions.mockReset().mockResolvedValue(null);
+  store.brands = [];
 });
 
 afterEach(() => {
@@ -329,5 +339,121 @@ describe('the Live page tab', () => {
     expect(getContentImpact).not.toHaveBeenCalled();
     expect(getContentResults).not.toHaveBeenCalled();
     expect(container.textContent).toContain('This draft is a new page, not live yet');
+  });
+
+  describe('conversions from AI journeys through the page (CE-017)', () => {
+    const conversions = (over: Partial<ContentConversions> = {}): ContentConversions => ({
+      page: '/pricing',
+      enabled: true,
+      goals: [
+        { goal: 'demo', count: 4, units: 0 },
+        { goal: 'signup', count: 2, units: 0 },
+        { goal: 'newsletter', count: 1, units: 0 },
+      ],
+      revenue: [],
+      sources: [
+        { platform: 'perplexity.ai', conversions: 2 },
+        { platform: 'chatgpt.com', conversions: 5 },
+      ],
+      journeys: [
+        {
+          source: 'chatgpt.com',
+          pages: ['/blog/crm-data-hygiene', '/pricing'],
+          goal: 'demo',
+          count: 4,
+        },
+      ],
+      ...over,
+    });
+    const section = () =>
+      [...container.querySelectorAll('section')].find((el) =>
+        el.textContent?.startsWith('Conversions from AI journeys'),
+      )!;
+
+    it('shows a B2B site’s signups and demo forms, by source, and its journeys with this page', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      getContentConversions.mockResolvedValue(conversions());
+      await render();
+      expect(getContentConversions).toHaveBeenCalledWith('b1', PAGE, 30);
+      const cards = [...section().querySelectorAll('.grid > div')].map((el) => el.textContent);
+      // Its own goals first, then a card for each other goal it had.
+      expect(cards).toEqual(['Signups2', 'Demo forms4', 'Newsletter signups1']);
+      const rows = [...section().querySelectorAll('tbody tr')].map((tr) =>
+        [...tr.children].map((cell) => cell.textContent),
+      );
+      expect(rows).toEqual([
+        ['ChatGPT', '5'],
+        ['Perplexity', '2'],
+      ]);
+      const journey = section().querySelector('ol li')!;
+      expect(journey.textContent).toBe(
+        'ChatGPT/blog/crm-data-hygieneThis pageDemo form4 4 conversions',
+      );
+    });
+
+    it('keeps this page in view when a long journey is shortened', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      getContentConversions.mockResolvedValue(
+        conversions({
+          journeys: [
+            {
+              source: 'chatgpt.com',
+              pages: ['/blog/a', '/blog/b', '/pricing', '/c', '/d', '/e', '/checkout'],
+              goal: 'demo',
+              count: 1,
+            },
+          ],
+        }),
+      );
+      await render();
+      expect(section().querySelector('ol li')!.textContent).toBe(
+        'ChatGPT/blog/a…This page…/checkoutDemo form1 1 conversion',
+      );
+    });
+
+    it('shows a shop’s orders, revenue per currency and units sold', async () => {
+      store.brands = [{ id: 'b1', siteType: 'ecommerce' }];
+      getContentImpact.mockResolvedValue(impact());
+      getContentConversions.mockResolvedValue(
+        conversions({
+          goals: [{ goal: 'order', count: 3, units: 7 }],
+          revenue: [{ currency: 'EUR', value: 1290 }],
+          journeys: [],
+        }),
+      );
+      await render();
+      const cards = [...section().querySelectorAll('.grid > div')].map((el) => el.textContent);
+      expect(cards).toEqual(['Orders3', 'Revenue€1,290', 'Units sold7']);
+    });
+
+    it('says where to turn them on while the brand has them off, and what they counted before', async () => {
+      getContentImpact.mockResolvedValue(impact());
+      getContentConversions.mockResolvedValue(conversions({ enabled: false }));
+      await render();
+      expect(section().textContent).toContain("Conversions aren't on for this brand");
+      expect(section().querySelector('a')!.getAttribute('href')).toBe(
+        '/dashboard/brands/b1/settings?tab=tracking',
+      );
+      expect(section().querySelectorAll('.grid > div')).toHaveLength(3);
+
+      // Nothing counted: the note alone.
+      getContentConversions.mockResolvedValue(
+        conversions({ enabled: false, goals: [], sources: [], journeys: [] }),
+      );
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await render();
+      expect(section().querySelector('.grid')).toBeNull();
+      expect(section().querySelector('table')).toBeNull();
+    });
+
+    it('leaves the rest of the tab when they can’t be read', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getContentImpact.mockResolvedValue(impact());
+      getContentConversions.mockRejectedValue(new Error('boom'));
+      await render();
+      expect(metric('Citations')).toBe('Citations45+50%');
+      expect(container.textContent).not.toContain('Conversions from AI journeys');
+    });
   });
 });

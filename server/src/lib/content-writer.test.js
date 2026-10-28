@@ -43,7 +43,10 @@ vi.mock('../config/supabase.js', () => ({
         neq: (col, v) => (op.filters.push([`${col}<>`, v]), chain),
         gt: (col, v) => (op.filters.push([`${col}>`, v]), chain),
         in: (col, v) => (op.filters.push([col, v]), chain),
+        is: (col, v) => (op.filters.push([`${col} is`, v]), chain),
         or: (v) => (op.filters.push(['or', v]), chain),
+        order: () => chain,
+        range: () => chain,
         limit: () => chain,
         update: (value) => ((op.kind = 'update'), (op.value = value), chain),
         insert: (value) => ((op.kind = 'insert'), (op.value = value), chain),
@@ -74,9 +77,11 @@ vi.mock('./plan-guard.js', async (importOriginal) => ({
 vi.mock('./logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 const readLinkTargets = vi.hoisted(() => vi.fn());
 const stopIfStopped = vi.fn();
+const fixUnderWay = vi.hoisted(() => vi.fn());
 vi.mock('./content-runs.js', async (importOriginal) => ({
   ...(await importOriginal()),
   stopIfStopped: (...args) => stopIfStopped(...args),
+  fixUnderWay: (...args) => fixUnderWay(...args),
 }));
 vi.mock('./content-links.js', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -88,8 +93,20 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
   hasOpenSuggestions: (...args) => hasOpenSuggestions(...args),
 }));
 
-const { buildWritePrompt, briefText, renderPage, runDraftWriting, sourcedPage, startDraftWriting } =
-  await import('./content-writer.js');
+const {
+  WRITE_SYSTEM_PROMPT,
+  buildWritePrompt,
+  briefText,
+  renderPage,
+  rewriteSystemPrompt,
+  runDraftWriting,
+  sourcedPage,
+  startDraftWriting,
+  suggestSystemPrompt,
+  writeSystemPrompt,
+} = await import('./content-writer.js');
+const { WRITING_GUARDRAIL } = await import('./content-brief.js');
+const { REWRITE_SYSTEM_PROMPT } = await import('./content-rewrite.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { textLength } = await import('./content-rewrite.js');
 const { passageKey } = await import('./content-agent.js');
@@ -161,6 +178,7 @@ beforeEach(() => {
   });
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   hasOpenSuggestions.mockReset().mockResolvedValue(false);
+  fixUnderWay.mockReset().mockResolvedValue(false);
   stopIfStopped.mockReset().mockResolvedValue(undefined);
 });
 
@@ -242,6 +260,18 @@ describe('startDraftWriting', () => {
     expect(
       writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value,
     ).toMatchObject({ kind: 'write', claimed_at: draftUpdates()[0].agent_state_at });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+  });
+
+  it('says it reads as many rules as the editor counts, when it says so', async () => {
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input({ counted: 7 }) });
+    const run = writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value;
+    expect(run.steps.find((s) => s.key === 'read_rules')).toMatchObject({ count: 7 });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+  });
+
+  it('writes the new page for review once claimed', async () => {
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
     // It ends only its own claim: a newer run's, after a Stop let go, is left alone.
@@ -354,6 +384,32 @@ describe('startDraftWriting', () => {
     expect(hasOpenSuggestions).not.toHaveBeenCalled();
   });
 
+  it('waits while a Fix open rules runs on the draft, before charging, for a Start or a rewrite', async () => {
+    fixUnderWay.mockResolvedValue(true);
+    for (const [row, rewrite] of [
+      [draftRow(), false],
+      [draftRow({ method: 'optimize', source_url: 'https://acme.example/x' }), false],
+      [draftRow({ method: 'optimize', source_url: 'https://acme.example/x' }), true],
+    ]) {
+      rows.content_drafts = row;
+      await expect(
+        startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input(), rewrite }),
+      ).rejects.toMatchObject({ status: 409, code: 'running' });
+    }
+    expect(fixUnderWay).toHaveBeenCalledWith(DRAFT);
+    // Nothing held on the budget, no claim on the draft, no model call.
+    expect(reserveAiBudget).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+    expect(generateObject).not.toHaveBeenCalled();
+
+    // Once it has finished, the Start goes.
+    fixUnderWay.mockResolvedValue(false);
+    rows.content_drafts = draftRow();
+    await expect(
+      startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
+    ).resolves.toEqual({ started: true });
+  });
+
   it('writes one of the organization’s drafts at a time', async () => {
     rows.writingInOrg = [{ id: 'other-draft' }];
     const held = { charge: vi.fn(), release: vi.fn() };
@@ -463,6 +519,172 @@ describe('runDraftWriting on a new page', () => {
     // What the person didn't give is still a placeholder.
     expect(written).not.toContain('Marco Rossi');
     expect(written).not.toContain('3,400');
+  });
+
+  /** A draft's shopping path as content_drafts.shopping_path keeps it. */
+  const shoppingPath = (over = {}) => ({
+    version: 1,
+    builtAt: '2026-10-27T10:00:00.000Z',
+    pageType: 'guide',
+    categories: [
+      { name: 'Hiking Boots', url: 'https://shop.example/collections/hiking-boots', title: null },
+    ],
+    products: [
+      {
+        id: 'p1',
+        title: 'Summit GTX Boot',
+        url: 'https://shop.example/products/p1',
+        price: 189,
+        salePrice: null,
+        currency: 'USD',
+        availability: 'in_stock',
+        image: null,
+        issues: [],
+        score: 9,
+      },
+      {
+        id: 'p2',
+        title: 'Trail 450 Boot',
+        url: 'https://shop.example/products/p2',
+        price: 129,
+        salePrice: null,
+        currency: 'USD',
+        availability: 'in_stock',
+        image: null,
+        issues: [],
+        score: 8,
+      },
+      {
+        id: 'p3',
+        title: 'Evil Boot',
+        url: 'https://evil.example/products/p3',
+        price: 99,
+        salePrice: null,
+        currency: 'USD',
+        availability: 'in_stock',
+        image: null,
+        issues: [],
+        score: 7,
+      },
+    ],
+    leftOut: [],
+    locked: [],
+    removed: [],
+    added: [],
+    ...over,
+  });
+
+  it("writes with the draft's shopping path, its prices kept and its names linked (shopping path)", async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        intro: [
+          'Good hiking boots keep you dry. The Summit GTX Boot costs $189, or 189.00 USD; the Trail 450 Boot [figure, source].',
+          'At 450 g it is light, and $199 elsewhere.',
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    // Sold out since the path was built: the catalog's stock now.
+    rows.catalog_variants = [
+      { id: 'v1', product_id: 'p1', availability: 'out of stock', price: 189, currency: 'USD' },
+    ];
+    await expect(run(draftRow({ shopping_path: shoppingPath() }))).resolves.toEqual({
+      written: true,
+    });
+    const { prompt } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain('- Summit GTX Boot: 189.00 USD, out of stock');
+    // A page off the brand's site isn't offered.
+    expect(prompt).not.toContain('Evil Boot');
+    const written = draftUpdates().find((u) => u.body_html)?.body_html;
+    expect(written).toContain(
+      '<a href="https://shop.example/collections/hiking-boots">hiking boots</a>',
+    );
+    expect(written).toContain(
+      'The <a href="https://shop.example/products/p1">Summit GTX Boot</a> costs $189, or 189.00 USD;',
+    );
+    // A product's own number where its name is: nowhere else, nor another price.
+    expect(written).toContain('Trail 450 Boot</a> [figure, source].');
+    expect(written).toContain('At [figure, source] g it is light, and [figure, source] elsewhere.');
+  });
+
+  it('writes a draft whose shopping path is broken as one with none', async () => {
+    generateObject.mockResolvedValue({
+      object: { ...page, intro: ['The Summit GTX Boot costs $189.'] },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    for (const broken of [
+      shoppingPath({ categories: { name: 'Hiking Boots' } }),
+      shoppingPath({ products: [null] }),
+    ]) {
+      generateObject.mockClear();
+      writes = [];
+      await expect(run(draftRow({ shopping_path: broken }))).resolves.toEqual({ written: true });
+      expect(generateObject.mock.calls[0][0].prompt).not.toContain('The shopping path');
+      const written = draftUpdates().find((u) => u.body_html)?.body_html;
+      expect(written).toContain('<p>The Summit GTX Boot costs [figure, source].</p>');
+    }
+  });
+
+  it("puts the checked path's products in stock as a grid, not the ones the draft keeps (shopping path, part 5)", async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        sections: [
+          { heading: 'How to choose', paragraphs: ['Fit first.'], bullets: [] },
+          {
+            heading: 'Our picks',
+            paragraphs: ['The Summit GTX Boot, then the Trail 450 Boot.'],
+            bullets: [],
+          },
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    rows.brand_domains = [{ domain: 'shop.example' }];
+    const variant = (id, productId, price) => ({
+      id,
+      product_id: productId,
+      availability: 'in stock',
+      price,
+      sale_price: null,
+      currency: 'USD',
+    });
+    // All in stock now, the first cheaper than when the path was built.
+    rows.catalog_variants = [
+      variant('v1', 'p1', 179),
+      variant('v2', 'p2', 129),
+      variant('v3', 'p3', 99),
+      variant('v4', 'p4', 99),
+    ];
+    const kept = shoppingPath({ pageType: 'buying_guide' });
+    // Kept as a member saved it: one page off the brand's site (Evil Boot), one over http.
+    kept.products.push({
+      ...kept.products[1],
+      id: 'p4',
+      title: 'Plain Boot',
+      url: 'http://shop.example/products/p4',
+    });
+    await expect(
+      run(draftRow({ page_type: 'buying_guide', shopping_path: kept })),
+    ).resolves.toEqual({ written: true });
+    const written = draftUpdates().find((u) => u.body_html)?.body_html;
+    const encoded = /<div data-html-block="([^"]+)"><\/div>/.exec(written);
+    const grid = Buffer.from(encoded[1], 'base64').toString('utf8');
+    expect(grid.match(/class="ansvisor-product"/g)).toHaveLength(2);
+    expect(grid).toContain('href="https://shop.example/products/p1"');
+    expect(grid).toContain('href="https://shop.example/products/p2"');
+    expect(grid).not.toContain('Evil Boot');
+    expect(grid).not.toContain('Plain Boot');
+    // The catalog's price now, not the one the path was built with.
+    expect(grid).toContain('$179.00');
+    expect(grid).not.toContain('$189.00');
+    // At the end of the section that links them.
+    expect(written).toMatch(
+      /Trail 450 Boot<\/a>\.<\/p><div data-html-block="[^"]+"><\/div><h2>FAQ<\/h2>/,
+    );
   });
 
   it('leaves a draft marked ready during the run as it is', async () => {
@@ -711,6 +933,10 @@ describe('Rewrite the page to these rules', () => {
       before_html: existing.body_html,
       reason: 'cut to about 3,000 characters',
       rule_keys: ['length', 'faq'],
+      // What it was asked for and came to (00285): the kept passage and table count.
+      length_target: 3000,
+      kept_chars: textLength(`${QUOTED} Ratio 1:16`),
+      after_chars: textLength(row.after_text),
     });
     expect(row.after_text).toBe(
       `<h1>Pour-over coffee</h1><p>${QUOTED}</p><p>Use good coffee, freshly ground.</p>` +
@@ -737,6 +963,8 @@ describe('Rewrite the page to these rules', () => {
     });
     await expect(run()).resolves.toEqual({ rewritten: true });
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    // Length off: it was asked for none (00285).
+    expect(row.length_target).toBeNull();
     // The fan-out it named; S7 isn't on the list.
     expect(row.sources).toEqual([
       { kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' },
@@ -807,6 +1035,120 @@ describe('Rewrite the page to these rules', () => {
     await expect(run()).resolves.toEqual({ skipped: true });
     expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
   });
+
+  describe('a rewrite well past its Length: one more pass cuts it', () => {
+    const cutBudget = {
+      charge: vi.fn(async () => {}),
+      release: vi.fn(async () => {}),
+      keep: vi.fn(async () => {}),
+    };
+    // A Length of 100 (up to 120): a cut pass past 135.
+    const toLength = (length = 100) => ({
+      rules: [{ key: 'length', name: 'Length', detail: `aim: ${length} characters` }],
+      sources: { ...input().sources, length },
+    });
+    const long = `<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>${'Long words. '.repeat(10)}</p>`;
+    const short = '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>[[KEEP 2]]</p><p>Short.</p>';
+    const answers = (...htmls) => {
+      for (const [i, html] of htmls.entries()) {
+        generateObject.mockResolvedValueOnce({
+          object: { html, reason: i ? 'cut it' : 'answered each heading first', sources: [] },
+          usage: { inputTokens: 900 + i, outputTokens: 700 + i },
+        });
+      }
+    };
+    const row = () => writes.find((w) => w.table === 'content_draft_suggestions').value;
+    beforeEach(() => {
+      cutBudget.charge.mockClear();
+      cutBudget.release.mockClear();
+      cutBudget.keep.mockClear();
+      reserveAiBudget.mockReset().mockResolvedValue(cutBudget);
+    });
+
+    it('cuts its own page to the Length on its own hold, keeping every kept line', async () => {
+      answers(long, short);
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      const { prompt } = generateObject.mock.calls[1][0];
+      expect(prompt).toContain('Its Length is 100 characters, up to 120. Cut it to about 100.');
+      expect(prompt).toContain('every [[KEEP n]] line exactly as it is');
+      expect(prompt).toContain('Long words.');
+      expect(reserveAiBudget).toHaveBeenCalledWith('org-1', {
+        feature: 'content',
+        modelId: expect.any(String),
+        draftId: DRAFT,
+      });
+      expect(cutBudget.charge).toHaveBeenCalledWith({ inputTokens: 901, outputTokens: 701 });
+      // The cut page, what it kept put back, the first pass's reason.
+      expect(row().after_text).toContain('Short.');
+      expect(row().after_text).not.toContain('Long words.');
+      expect(row().after_text).toContain(QUOTED);
+      expect(row().reason).toBe('answered each heading first');
+      expect(row().after_chars).toBe(textLength(row().after_text));
+    });
+
+    it('keeps the first rewrite when the cut is no shorter, drops a kept line, fails or has no budget', async () => {
+      answers(long, long);
+      await run(toLength());
+      expect(row().after_text).toContain('Long words.');
+
+      writes = [];
+      answers(long, '<h1>Pour-over coffee</h1><p>[[KEEP 1]]</p><p>Short.</p>');
+      await run(toLength());
+      expect(row().after_text).toContain('Long words.');
+
+      // Kept lines written into a paragraph: restoreKept couldn't put them back.
+      writes = [];
+      answers(long, '<h1>Pour-over coffee</h1><p>[[KEEP 1]] [[KEEP 2]] Short.</p>');
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(row().after_text).toContain('Long words.');
+
+      writes = [];
+      generateObject.mockResolvedValueOnce({
+        object: { html: long, reason: 'answered each heading first', sources: [] },
+        usage: { inputTokens: 900, outputTokens: 700 },
+      });
+      generateObject.mockRejectedValueOnce(new Error('provider down'));
+      cutBudget.charge.mockClear();
+      cutBudget.release.mockClear();
+      await expect(run(toLength())).resolves.toEqual({ rewritten: true });
+      expect(row().after_text).toContain('Long words.');
+      // Nothing billed for a failed call: its hold goes.
+      expect(cutBudget.charge).not.toHaveBeenCalled();
+      expect(cutBudget.release).toHaveBeenCalled();
+
+      writes = [];
+      generateObject.mockReset();
+      reserveAiBudget.mockRejectedValueOnce(
+        Object.assign(new Error('used up'), { code: 'plan_limit' }),
+      );
+      answers(long);
+      await run(toLength());
+      expect(generateObject).toHaveBeenCalledTimes(1);
+      expect(row().after_text).toContain('Long words.');
+    });
+
+    it('keeps the hold of a cut stopped while it runs, and writes nothing', async () => {
+      const { RunStoppedError } = await import('./content-runs.js');
+      answers(long);
+      generateObject.mockRejectedValueOnce(new RunStoppedError());
+      cutBudget.keep.mockClear();
+      await run(toLength());
+      expect(cutBudget.keep).toHaveBeenCalledTimes(1);
+      expect(
+        writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'insert'),
+      ).toBeUndefined();
+    });
+
+    it('cuts nothing within reach of the Length, or with Length off', async () => {
+      answers(long);
+      await run(toLength(3000));
+      answers(long);
+      await run();
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      expect(reserveAiBudget).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('the write prompt', () => {
@@ -826,5 +1168,204 @@ describe('the write prompt', () => {
       'Industry: Coffee\nSite type: B2B SaaS (software or services sold to businesses)\nDescription:',
     );
     expect(write('')).toContain('Industry: Coffee\nDescription:');
+  });
+});
+
+describe('the brief rules (2026) in the Content Agent', () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const planned = {
+    goal: 'Sell beans',
+    audience: 'Home brewers',
+    outline: [
+      {
+        heading: 'Ratio',
+        keyPoints: ['Grams per cup'],
+        fanout: null,
+        platform: null,
+        answer: 'Name the ratio first.',
+        format: 'table',
+        facts: [{ claim: 'The ratio cafés use', sourceType: 'study', source: null }],
+      },
+    ],
+    keywords: ['pour over'],
+    version: 2,
+    tldr: 'A 1:16 ratio suits most beans.',
+    proof: [{ kind: 'test', what: 'Our cupping notes' }],
+  };
+  // A plan whose facts name their sources, and whose links' addresses hold a
+  // number and a name the agent wasn't given.
+  const linked = {
+    ...planned,
+    outline: [
+      {
+        ...planned.outline[0],
+        facts: [
+          {
+            claim: 'Our grind sizes',
+            sourceType: 'example',
+            source: { kind: 'input', ref: 'in-1', label: 'Grind chart' },
+          },
+          {
+            claim: 'The ratio cafés use',
+            sourceType: 'study',
+            source: {
+              kind: 'cited_page',
+              ref: 'https://news.example/ratio',
+              label: 'https://news.example/ratio',
+            },
+          },
+        ],
+      },
+    ],
+    links: {
+      internal: [
+        { anchor: 'our tools', url: 'https://acme.example/top-37-tools', section: 'Ratio' },
+      ],
+      outbound: [
+        {
+          anchor: 'an interview',
+          url: 'https://news.example/interview-with-john-smith',
+          section: null,
+        },
+      ],
+    },
+  };
+
+  it('asks as before while they are off: the same prompts, the brief as version 1', () => {
+    expect(writeSystemPrompt()).toBe(WRITE_SYSTEM_PROMPT);
+    expect(rewriteSystemPrompt()).toBe(REWRITE_SYSTEM_PROMPT);
+    expect(suggestSystemPrompt()).not.toContain(WRITING_GUARDRAIL);
+    // Word for word what version 1's fields give.
+    expect(briefText(planned, null)).toBe(
+      briefText(
+        {
+          goal: planned.goal,
+          audience: planned.audience,
+          keywords: planned.keywords,
+          outline: planned.outline.map((s) => ({
+            heading: s.heading,
+            keyPoints: s.keyPoints,
+            fanout: s.fanout,
+            platform: s.platform,
+          })),
+        },
+        null,
+      ),
+    );
+    expect(briefText(planned, null)).not.toContain('TL;DR');
+  });
+
+  it('with them on, gives each prompt the guardrail and the writer the plan and short headings', () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    for (const prompt of [writeSystemPrompt(), suggestSystemPrompt(), rewriteSystemPrompt()]) {
+      expect(prompt).toContain(WRITING_GUARDRAIL);
+    }
+    expect(writeSystemPrompt()).toContain("Follow the brief's section plans");
+    expect(writeSystemPrompt()).toContain('each section heading about 8 to 15 words');
+    const brief = briefText(planned, null);
+    expect(brief).toContain('Goal: Sell beans');
+    expect(brief).toContain("TL;DR (what the page's top must say): A 1:16 ratio suits most beans.");
+    expect(brief).toContain(
+      '- Ratio — answer first: Name the ratio first.; show as a comparison, the same points for each option in turn; give a fact on: The ratio cafés use (study, a placeholder until a source is found)',
+    );
+    expect(brief).toContain(
+      'Proof to gather (write it only from Your input; else a placeholder): test: Our cupping notes',
+    );
+  });
+
+  it('writes a new page from the plan, with them on', async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    await runDraftWriting({
+      draft: draftRow({ brief: planned }),
+      brand,
+      model: 'model:m',
+      input: input(),
+      budget,
+    });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toContain(WRITING_GUARDRAIL);
+    expect(call.prompt).toContain('Section plans:');
+  });
+
+  it("names a fact's source by its kind, and leaves the planned links out for a new page", async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    const brief = briefText(linked, null);
+    expect(brief).toContain(
+      'give a fact on: Our grind sizes (example, from Your input "Grind chart")',
+    );
+    expect(brief).toContain(
+      "give a fact on: The ratio cafés use (study, a placeholder: check it against https://news.example/ratio, whose words you don't see)",
+    );
+    expect(brief).toContain(
+      'Links planned (only as the links rule allows): "our tools" → https://acme.example/top-37-tools in "Ratio"',
+    );
+    expect(briefText(linked, null, { links: false })).not.toContain('Links planned');
+    // A new page's writer has no links rule: it isn't told of them.
+    await runDraftWriting({
+      draft: draftRow({ brief: linked }),
+      brand,
+      model: 'model:m',
+      input: input(),
+      budget,
+    });
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('Links planned');
+  });
+
+  it('gives an existing page’s suggestions the guardrail and the links planned', async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await runDraftWriting({
+      draft: draftRow({
+        method: 'optimize',
+        source_url: 'https://acme.example/pour-over',
+        body_html: '<h1>Pour-over</h1><p>Use good coffee.</p>',
+        brief: linked,
+      }),
+      brand,
+      model: 'model:m',
+      input: input(),
+      budget,
+    });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toContain(WRITING_GUARDRAIL);
+    expect(call.prompt).toContain('Links planned');
+  });
+
+  it("never lets a planned link's address vouch for a number or a name", async () => {
+    vi.stubEnv('CONTENT_BRIEF_RULES', 'true');
+    generateObject.mockResolvedValue({
+      object: {
+        html:
+          '<h1>Pour-over</h1><p>Try 37 tools for it.</p>' +
+          '<p>John Smith said the bloom matters.</p>',
+        reason: 'followed the plan',
+      },
+      usage: { inputTokens: 900, outputTokens: 700 },
+    });
+    await expect(
+      runDraftWriting({
+        draft: draftRow({
+          method: 'optimize',
+          status: 'in_review',
+          body_html: '<h1>Pour-over</h1><p>Use good coffee.</p>',
+          brief: linked,
+        }),
+        brand,
+        model: 'model:m',
+        input: input(),
+        budget,
+        rewrite: true,
+      }),
+    ).resolves.toEqual({ rewritten: true });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.system).toContain(WRITING_GUARDRAIL);
+    // The rewrite is told of the links; its guards never read their addresses.
+    expect(call.prompt).toContain('https://acme.example/top-37-tools');
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(row.after_text).toContain('<p>Try [figure, source] tools for it.</p>');
+    expect(row.after_text).toContain(`<p>${NAME_PLACEHOLDER} said the bloom matters.</p>`);
   });
 });

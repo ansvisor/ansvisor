@@ -4,8 +4,13 @@ import { assertBrandAccess } from '../lib/access.js';
 import { fixDraftRules, fixRulesInput } from '../lib/content-agent.js';
 import { handOffDraft, handOffInput } from '../lib/content-handoff.js';
 import { qualityPhase } from '../lib/content-quality.js';
-import { rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
+import { briefRules, rebuildDraftBrief, rebuildSources } from '../lib/content-brief.js';
+import { NoShoppingPath, buildShoppingPath } from '../lib/shopping-path.js';
 import { DeliveryError, sendContentPages, sendInput } from '../lib/content-delivery.js';
+import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
+import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
+import { liveAddress, publishDraft } from '../lib/content-published.js';
+import { cmsLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -18,7 +23,7 @@ import { PlanLimitError } from '../lib/plan-guard.js';
  * (CE-018); Hand off has it fix the page's open Quality checks (CE-051);
  * Start's Agent has the Content Agent do the page (CE-015);
  * Stop ends the agent's run under way, changing nothing (v1.1 CE-027); and
- * Send to CMS sends pages to the brand's webhook (#1331).
+ * Send to CMS sends pages to the brand's webhook, its Webflow collection or its WordPress site (#1331).
  */
 
 const router = Router();
@@ -44,7 +49,7 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
  * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
  */
@@ -55,11 +60,11 @@ router.post('/send', async (req, res) => {
     const field = parsed.error.issues[0]?.path.join('.') ?? null;
     return res.status(400).json({ error: 'Invalid request', code: 'invalid', field });
   }
-  const { brandId, pages } = parsed.data;
+  const { brandId, pages, target } = parsed.data;
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
     await assertSender(req.user.id);
-    const sent = await sendContentPages({ orgId, brandId, userId: req.user.id, pages });
+    const sent = await sendContentPages({ orgId, brandId, userId: req.user.id, pages, target });
     return res.json(sent);
   } catch (err) {
     if (err instanceof DeliveryError) {
@@ -75,15 +80,140 @@ router.post('/send', async (req, res) => {
   }
 });
 
+const publishBody = z.object({ url: z.string().max(8192) });
+
+/**
+ * POST /api/content-drafts/:draftId/publish
+ * Body: { url }. A person marks the page Published at its live address
+ * (CE-013): any member of the brand's workspace, as they change its status.
+ * Its Live page tab then measures that address, and a linked action gets
+ * the page (its Publish task done once all its pages are live). Answers
+ * { publishedUrl, publishedAt, taskCompleted, onBrandDomain }: an address
+ * off the brand's domains is kept, but its numbers won't show.
+ */
+router.post('/:draftId/publish', async (req, res) => {
+  const id = z.guid().safeParse(req.params.draftId);
+  const parsed = publishBody.safeParse(req.body ?? {});
+  if (!id.success || !parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  const url = liveAddress(parsed.data.url);
+  if (!url) {
+    return res.status(400).json({
+      error: 'Give the http(s) address the page is live at, with no sign-in details.',
+      code: 'invalid_url',
+    });
+  }
+  try {
+    const { data: draft, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('id, brand_id, action_id, archived_at')
+      .eq('id', id.data)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    // An archived page is restored first, as its status is changed.
+    if (!draft || draft.archived_at) {
+      return res.status(404).json({ error: 'Not found', code: 'not_found' });
+    }
+    await assertBrandAccess(draft.brand_id, req.user.id);
+    return res.json(await publishDraft(draft, url, req.user.id));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err: { name: err?.name } }, 'content draft publish error');
+    return res
+      .status(500)
+      .json({ error: 'The page could not be marked published', code: 'failed' });
+  }
+});
+
+/** A brand's Webflow pages read at most this often on demand (the daily sweep reads them too). */
+const WEBFLOW_STATUS_EVERY_MS = 2 * 60 * 1000;
+const webflowChecked = new Map();
+const webflowStatusBody = z.object({ brandId: z.guid() });
+
+/**
+ * POST /api/content-drafts/webflow-status
+ * Body: { brandId }. Pages the brand sent to Webflow, published there since,
+ * marked published at their address (cms/webflow-status.js). For any member
+ * of the brand's workspace (the Library asks when it opens), a brand at most
+ * every two minutes: { checked, published: [{ draftId, url }], recent? }.
+ */
+router.post('/webflow-status', cmsLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = webflowChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    webflowChecked.set(brandId, Date.now());
+    return res.json(await checkWebflowPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, code: err?.code } },
+      'content draft webflow status error',
+    );
+    return res.status(502).json({ error: 'Webflow could not be read', code: 'failed' });
+  }
+});
+
+/** A brand's WordPress posts read at most this often on demand (the daily sweep reads them too). */
+const wordpressChecked = new Map();
+
+/**
+ * POST /api/content-drafts/wordpress-status
+ * Body: { brandId }. Pages the brand sent to WordPress, published there
+ * since, marked published at the post's link (cms/wordpress-status.js). As
+ * /webflow-status: any member, a brand at most every two minutes.
+ */
+router.post('/wordpress-status', cmsLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = wordpressChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    wordpressChecked.set(brandId, Date.now());
+    return res.json(await checkWordPressPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, code: err?.code } },
+      'content draft wordpress status error',
+    );
+    return res.status(502).json({ error: 'WordPress could not be read', code: 'failed' });
+  }
+});
+
 const rebuildBody = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
   brandId: z.guid(),
   sources: rebuildSources,
+  /** The rules in effect, as Fix sends them: read with the brief rules (2026) on. */
+  rules: briefRules.optional(),
 });
 
 /**
  * POST /api/content-drafts/:draftId/brief
- * Body: { brandId, sources: { promptIds, fanouts, pages, queries, headings, length } }
+ * Body: { brandId, sources: { promptIds, fanouts, pages, queries, headings, length }, rules? }
  */
 router.post('/:draftId/brief', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -91,10 +221,10 @@ router.post('/:draftId/brief', async (req, res) => {
   if (!draftId.success || !parsed.success) {
     return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   }
-  const { brandId, sources } = parsed.data;
+  const { brandId, sources, rules } = parsed.data;
   try {
     await assertBrandAccess(brandId, req.user.id);
-    const brief = await rebuildDraftBrief({ draftId: draftId.data, brandId, sources });
+    const brief = await rebuildDraftBrief({ draftId: draftId.data, brandId, sources, rules });
     return res.json({ brief });
   } catch (err) {
     if (err instanceof PlanLimitError) {
@@ -112,13 +242,48 @@ router.post('/:draftId/brief', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/content-drafts/:draftId/shopping-path
+ * Body: { brandId }
+ * Builds the draft's shopping path from the brand's catalog and saves it
+ * (shopping path, 00351): { path }, or { path: null, reason } when it
+ * doesn't fit ('not_a_shop', 'page_type', 'no_catalog', 'no_match'). A 409
+ * 'changed' when the path changed while it was built; a 429 past its
+ * bucket (shoppingPathLimiter).
+ */
+router.post('/:draftId/shopping-path', shoppingPathLimiter, async (req, res) => {
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const body = z.object({ brandId: z.guid() }).safeParse(req.body ?? {});
+  if (!draftId.success || !body.success) {
+    return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  }
+  try {
+    await assertBrandAccess(body.data.brandId, req.user.id);
+    const path = await buildShoppingPath({ draftId: draftId.data, brandId: body.data.brandId });
+    return res.json({ path });
+  } catch (err) {
+    if (err instanceof NoShoppingPath) return res.json({ path: null, reason: err.reason });
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, message: err?.message } },
+      'content draft shopping path error',
+    );
+    return res.status(502).json({ error: 'The shopping path could not be built', code: 'failed' });
+  }
+});
+
 const fixBody = fixRulesInput.extend({ brandId: z.guid() });
 
 /**
  * POST /api/content-drafts/:draftId/suggestions
  * Body: { brandId, rules: [{ key, name, detail }], textRules, locked }
- * Answers { count, batchId }: the suggestions left for review (none when the
- * agent found nothing it could change); 409 `open_suggestions` while the
+ * Answers { count, batchId, why? }: the suggestions left for review (none when
+ * the agent found nothing it could change, with `why`: 'none', 'locked' or
+ * 'dropped', content-agent.js emptyWhy); 409 `open_suggestions` while the
  * latest batch is undecided, 409 `published` for a published draft, 409
  * `running` while a fix or a hand-off on it is under way.
  */
@@ -154,7 +319,7 @@ const handOffBody = handOffInput.extend({ brandId: z.guid() });
 /**
  * POST /api/content-drafts/:draftId/handoff
  * Body: { brandId, items: [{ key, detail }], textRules, locked, sources?, origin }
- * Quality's hand-off (CE-051): answers { count, batchId } as /suggestions
+ * Quality's hand-off (CE-051): answers { count, batchId, why? } as /suggestions
  * does, with its errors; 404 `off` before Quality's phase 2, 409 `not_due`
  * for an automatic one the brand doesn't hand off, 409 `already` when the
  * draft had its automatic one.
@@ -195,8 +360,9 @@ const writeBody = writeDraftInput.extend({ brandId: z.guid() });
  * Answers 202 { started: true } at once: the agent runs in the background
  * and the draft shows where it is (agent_state). 409 when the draft is marked
  * ready or published (code not_draft), the agent is on it (code writing) or on
- * another of the organization's drafts (code org_writing), or an existing
- * page's suggestions are still open (code open_suggestions).
+ * another of the organization's drafts (code org_writing), an existing
+ * page's suggestions are still open (code open_suggestions), or a Fix open
+ * rules still runs on it (code running).
  */
 router.post('/:draftId/write', async (req, res) => {
   const draftId = z.guid().safeParse(req.params.draftId);
@@ -231,7 +397,7 @@ router.post('/:draftId/write', async (req, res) => {
  * Rewrite the page to these rules: the agent rewrites the whole page in the
  * background and leaves it as ONE suggestion to compare and accept or
  * reject. Answers 202 { started: true } at once; 409 as /write (not_draft,
- * writing, org_writing, open_suggestions); 422 when the page has no text
+ * writing, org_writing, open_suggestions, running); 422 when the page has no text
  * (empty) or is too long to send whole (too_long).
  */
 router.post('/:draftId/rewrite', async (req, res) => {
@@ -296,8 +462,9 @@ router.post('/:draftId/stop', async (req, res) => {
     const stopped = await stopDraftRun(draftId.data, runId ?? null);
     // A run in the background lets go of the draft once it sees the stop;
     // one no server holds any more never would. The editor opens at once.
-    // Only the claim a stopped run holds: a Stop on a Fix or the brief (which
-    // hold none) leaves a Start or Rewrite on the same draft its claim.
+    // Only the claim a stopped run holds: a Stop on Fix open rules or the
+    // brief (which hold none) leaves a Start or Rewrite on the same draft its
+    // claim. A live page's Start runs as a Fix, and holds its own.
     for (const { claimed_at: claimedAt } of stopped) {
       if (!claimedAt) continue;
       const { error: letGoError } = await supabaseAdmin

@@ -156,9 +156,10 @@
 }
 
 /*
- * The Content Agent card's motion (Content Editor v1.1, CE-026): subtle, and
- * never a rotating ring. Each element that moves also takes
- * motion-reduce:animate-none, so all of it stops with reduced motion.
+ * The Content Agent card's motion (Content Editor v1.1, CE-026), and its
+ * waiting page's: subtle, and never a rotating ring. Each element that moves
+ * also takes motion-reduce:animate-none, so all of it stops with reduced
+ * motion.
  */
 @theme {
   --animate-agent-ring: agent-ring 2.2s ease-out infinite;
@@ -170,6 +171,7 @@
   --animate-agent-look: agent-look 1.2s ease-in-out infinite;
   --animate-agent-dot: agent-dot 1.2s infinite;
   --animate-agent-slide: agent-slide 1.4s ease-in-out infinite;
+  --animate-agent-fill: agent-fill 6s ease-out infinite both;
 
   @keyframes agent-ring {
     0% {
@@ -246,6 +248,25 @@
     }
     100% {
       transform: translateX(340%);
+    }
+  }
+  /* A line of the page drawn in, kept a while, then gone for the next pass. */
+  @keyframes agent-fill {
+    0% {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    30%,
+    85% {
+      transform: scaleX(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scaleX(1);
+      opacity: 0;
     }
   }
 }

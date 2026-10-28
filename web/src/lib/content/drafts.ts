@@ -154,6 +154,11 @@ export interface ContentDraft {
   siteType: SiteType;
   /** The existing page an optimize draft is for, when Start picked one. */
   sourceUrl: string | null;
+  /**
+   * Where the page is live (CE-013): given when it was marked published, or
+   * by its CMS (00262). The Live page tab measures it, else sourceUrl.
+   */
+  publishedUrl: string | null;
   method: DraftMethod;
   status: DraftStatus;
   bodyHtml: string;
@@ -294,6 +299,27 @@ export function draftsCreatedIn(
   if (range === 'all') return drafts;
   const since = now - Number.parseInt(range, 10) * 86_400_000;
   return drafts.filter((d) => new Date(d.createdAt).getTime() >= since);
+}
+
+/**
+ * The Library's Last send filter (#1331): any, never sent, or how the last
+ * send to the CMS stands, as the row's mark shows it.
+ */
+export const SEND_FILTERS = ['all', 'never', 'queued', 'sent', 'failed', 'published'] as const;
+export type SendFilter = (typeof SEND_FILTERS)[number];
+
+/**
+ * The drafts whose last send is as picked, read from each draft's last send
+ * (readCmsStatuses: one left queued past its half hour reads as failed).
+ */
+export function draftsLastSent(
+  drafts: ContentDraftListItem[],
+  sends: ReadonlyMap<string, { status: string }>,
+  filter: SendFilter,
+): ContentDraftListItem[] {
+  if (filter === 'all') return drafts;
+  if (filter === 'never') return drafts.filter((d) => !sends.has(d.id));
+  return drafts.filter((d) => sends.get(d.id)?.status === filter);
 }
 
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {

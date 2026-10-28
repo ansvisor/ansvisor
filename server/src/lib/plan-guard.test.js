@@ -47,7 +47,7 @@ describe('applyPlanOverrides', () => {
   });
 });
 
-describe('applyPlanOverrides — Improve budget from the contract value', () => {
+describe('applyPlanOverrides — the Enterprise AI budget', () => {
   const enterprise = {
     id: 'enterprise',
     name: 'Enterprise',
@@ -57,18 +57,22 @@ describe('applyPlanOverrides — Improve budget from the contract value', () => 
     applyPlanOverrides(enterprise, { plan: 'enterprise', plan_overrides }).limits
       .improveMonthlyBudgetUsd;
 
-  it('is 1% of the monthly contract', () => {
-    expect(budget({ contractMonthlyUsd: 1000 })).toBe(10);
-    expect(budget({ contractMonthlyUsd: 2000 })).toBe(20);
-    expect(budget({ contractMonthlyUsd: 1234 })).toBe(12.34);
-  });
-
-  it('never drops below the plan default', () => {
+  it('stays at the plan default whatever the contract is worth (2026-10-27)', () => {
     expect(budget({ contractMonthlyUsd: 300 })).toBe(4.99);
+    expect(budget({ contractMonthlyUsd: 1000 })).toBe(4.99);
+    expect(budget({ contractMonthlyUsd: 100000 })).toBe(4.99);
   });
 
-  it('an explicit improveMonthlyBudgetUsd wins over the contract value', () => {
+  it('takes the customer’s own budget, set explicitly', () => {
+    expect(budget({ improveMonthlyBudgetUsd: 80 })).toBe(80);
     expect(budget({ contractMonthlyUsd: 2000, improveMonthlyBudgetUsd: 7 })).toBe(7);
+  });
+
+  it('keeps the plan’s budget when the one set by hand isn’t a number', () => {
+    // null would read as unlimited, and "80$" would fail every AI call.
+    for (const own of [null, '80', '80$', Number.NaN, Infinity, {}]) {
+      expect(budget({ improveMonthlyBudgetUsd: own })).toBe(4.99);
+    }
   });
 
   it('keeps the default without a usable contract value', () => {
@@ -99,8 +103,8 @@ describe('applyPlanOverrides — relevance allowance from the contract value', (
     ).toBe(0.5);
   });
 
-  it('leaves the Improve budget at its own 1%', () => {
-    expect(limits({ contractMonthlyUsd: 1000 }).improveMonthlyBudgetUsd).toBe(10);
+  it('leaves the AI budget at the plan default', () => {
+    expect(limits({ contractMonthlyUsd: 1000 }).improveMonthlyBudgetUsd).toBe(4.99);
   });
 });
 

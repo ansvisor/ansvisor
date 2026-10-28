@@ -45,6 +45,9 @@ export interface AuditResult {
   finalUrl: string | null;
   status: 'running' | 'completed' | 'failed';
   totalScore: number | null;
+  /** Nearest earlier completed audit of the same normalized page, for the report delta. */
+  previousScore?: number | null;
+  previousCreatedAt?: string | null;
   categoryScores: Record<string, CategoryScore>;
   signalsEvaluated: number | null;
   signalsTotal: number;
