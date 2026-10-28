@@ -1,0 +1,177 @@
+import { act, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
+import type { Brand } from '@/types';
+
+/**
+ * The demo brand's band: what the brand on screen is, and the way to the same
+ * for the workspace's own brand. Only on the demo brand, and alone there.
+ */
+
+// An in-memory localStorage for the brand store, before it loads: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
+
+const refresh = vi.fn();
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children }: { href: string; children: ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+  usePathname: () => '/dashboard/action-center',
+  useRouter: () => ({ push: vi.fn(), refresh }),
+}));
+const ensureDemoBrand = vi.fn();
+vi.mock('@/lib/demo/demo-client', () => ({ ensureDemoBrand: () => ensureDemoBrand() }));
+
+const { PlanProvider } = await import('@/components/providers/plan-provider');
+const { RoleProvider } = await import('@/components/providers/role-provider');
+const { DemoBrandProvider } = await import('@/components/providers/demo-brand-provider');
+const { UpgradeDialogProvider } = await import('@/components/providers/upgrade-dialog-provider');
+const { useBrandStore } = await import('@/stores/use-brand-store');
+const { ReadOnlyBanner } = await import('./read-only-banner');
+const { DemoBanner, resetDemoFreshness } = await import('./demo-banner');
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+let container: HTMLDivElement;
+let root: Root;
+
+function brand(id: string, isDemo = false): Brand {
+  return {
+    id,
+    organizationId: 'org1',
+    name: isDemo ? 'Brewline Coffee' : 'Acme',
+    slug: id,
+    shoppingModeEnabled: false,
+    isActive: true,
+    isDemo,
+    domains: [],
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+  };
+}
+
+async function render({
+  selected = 'demo',
+  active = false,
+  status = null,
+  everSubscribed = false,
+}: {
+  selected?: 'own' | 'demo';
+  active?: boolean;
+  status?: string | null;
+  everSubscribed?: boolean;
+} = {}) {
+  useBrandStore.setState({ brands: [brand('own'), brand('demo', true)], activeBrandId: selected });
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <PlanProvider planId="starter" subscriptionActive={active} subscriptionStatus={status}>
+          <RoleProvider role="admin">
+            <DemoBrandProvider everSubscribed={everSubscribed}>
+              <UpgradeDialogProvider>
+                <ReadOnlyBanner />
+                <DemoBanner />
+              </UpgradeDialogProvider>
+            </DemoBrandProvider>
+          </RoleProvider>
+        </PlanProvider>
+      </NextIntlClientProvider>,
+    );
+  });
+}
+
+const bands = () => container.querySelectorAll('[role="status"]');
+const band = () => container.querySelector('[data-slot="demo-band"]');
+const bandButton = () => band()?.querySelector('button');
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ valid: false })),
+  );
+  ensureDemoBrand.mockResolvedValue({ ok: true, brandId: 'demo', version: 1, rebuilt: false });
+  resetDemoFreshness();
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+describe('DemoBanner', () => {
+  it('says the brand is a demo, alone, and offers the trial to a new workspace', async () => {
+    await render();
+    expect(bands()).toHaveLength(1);
+    expect(band()?.textContent).toContain(
+      "You're exploring Brewline Coffee, a demo brand with sample data. Look around: anything that would run or use AI shows you the plans.",
+    );
+    expect(band()?.querySelector('strong')?.textContent).toBe('Brewline Coffee');
+    expect(bandButton()?.textContent).toBe('Try it on your brand · 50% off');
+    await act(async () => {
+      bandButton()!.click();
+    });
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Start with your brand: 14 days free, then 50% off',
+    );
+  });
+
+  it('offers 50% off the first month once the plan ended', async () => {
+    await render({ status: 'canceled', everSubscribed: true });
+    expect(bands()).toHaveLength(1);
+    expect(bandButton()?.textContent).toBe('Use it for your brand · 50% off');
+  });
+
+  it('points back to the own brand while the plan is active', async () => {
+    await render({ active: true, status: 'active', everSubscribed: true });
+    expect(band()?.textContent).toContain('Nothing here runs or uses AI.');
+    await act(async () => {
+      bandButton()!.click();
+    });
+    expect(useBrandStore.getState().activeBrandId).toBe('own');
+    expect(band()).toBeNull();
+  });
+
+  it("shows nothing on the workspace's own brand, where the read-only band is", async () => {
+    await render({ selected: 'own', status: 'canceled', everSubscribed: true });
+    expect(band()).toBeNull();
+    expect(bands()).toHaveLength(1);
+    expect(bands()[0].textContent).toContain('Your workspace is read-only');
+  });
+
+  it('brings the demo up to date once, and reads the pages again when it was rebuilt', async () => {
+    ensureDemoBrand.mockResolvedValue({ ok: true, brandId: 'demo', version: 2, rebuilt: true });
+    await render();
+    expect(ensureDemoBrand).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await render();
+    expect(ensureDemoBrand).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps quiet when the demo could not be brought up to date', async () => {
+    ensureDemoBrand.mockResolvedValue({ ok: false, status: 403 });
+    await render();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(band()).not.toBeNull();
+  });
+});

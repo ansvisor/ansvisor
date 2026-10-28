@@ -271,6 +271,17 @@
       }
     }
   },
+  "demo": {
+    "band": {
+      "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. Look around: anything that would run or use AI shows you the plans.",
+      "textPlanActive": "You're exploring <b>{brand}</b>, a demo brand with sample data. Nothing here runs or uses AI.",
+      "offer": {
+        "trial": "Try it on your brand · 50% off",
+        "first_month": "Use it for your brand · 50% off"
+      },
+      "switchToOwnBrand": "Switch to your brand"
+    }
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",

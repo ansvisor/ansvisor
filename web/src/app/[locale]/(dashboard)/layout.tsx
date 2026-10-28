@@ -16,6 +16,7 @@ import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
+import { DemoBanner } from '@/components/billing/demo-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -130,6 +131,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                       <MobileNav />
                     </div>
                     <ReadOnlyBanner />
+                    <DemoBanner />
                     <main className="flex-1 overflow-y-auto bg-background p-6">
                       <BrandGuard>{children}</BrandGuard>
                     </main>

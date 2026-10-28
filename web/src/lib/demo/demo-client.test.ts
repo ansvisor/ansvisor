@@ -1,0 +1,65 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/** The demo brand on the API (POST and PATCH /api/demo), from the browser through the proxy. */
+
+let session: { access_token: string } | null = { access_token: 'tok' };
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({ auth: { getSession: async () => ({ data: { session } }) } }),
+}));
+
+const { ensureDemoBrand, setDemoHidden } = await import('./demo-client');
+
+const fetchMock = vi.fn();
+beforeEach(() => {
+  session = { access_token: 'tok' };
+  fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+const answer = (status: number, body: unknown) =>
+  fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
+
+describe('ensureDemoBrand', () => {
+  it('makes or updates the demo brand, with the session', async () => {
+    answer(200, { brandId: 'demo1', version: 3, rebuilt: true });
+    expect(await ensureDemoBrand()).toEqual({
+      ok: true,
+      brandId: 'demo1',
+      version: 3,
+      rebuilt: true,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/demo');
+    expect(init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok' },
+    });
+  });
+
+  it('says a refusal with its status, and an answer without a brand as a failure', async () => {
+    answer(403, { error: 'Forbidden' });
+    expect(await ensureDemoBrand()).toEqual({ ok: false, status: 403 });
+    answer(200, {});
+    expect(await ensureDemoBrand()).toEqual({ ok: false, status: 200 });
+  });
+
+  it('never throws: no session, or no answer', async () => {
+    session = null;
+    expect(await ensureDemoBrand()).toEqual({ ok: false, status: 401 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    session = { access_token: 'tok' };
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    expect(await ensureDemoBrand()).toEqual({ ok: false, status: 0 });
+  });
+});
+
+describe('setDemoHidden', () => {
+  it('hides the demo brand, or shows it again', async () => {
+    answer(200, { brandId: 'demo1', hidden: true });
+    expect(await setDemoHidden(true)).toEqual({ ok: true, brandId: 'demo1', hidden: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/aeo/api/demo');
+    expect(init).toMatchObject({ method: 'PATCH', body: JSON.stringify({ hidden: true }) });
+  });
+});
