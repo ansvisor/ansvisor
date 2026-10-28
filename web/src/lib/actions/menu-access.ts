@@ -244,6 +244,7 @@ export async function setMenuManager(memberId: string, allowed: boolean) {
   const profile = await currentProfile();
   if (profile.role !== 'admin') throw new Error('Only admins can choose who changes menus');
   const id = userId.parse(memberId);
+  const canChange = z.boolean().parse(allowed);
 
   const { data: member } = await supabaseAdmin
     .from('profiles')
@@ -256,7 +257,7 @@ export async function setMenuManager(memberId: string, allowed: boolean) {
 
   const { error } = await supabaseAdmin
     .from('profiles')
-    .update({ can_manage_menus: allowed })
+    .update({ can_manage_menus: canChange })
     .eq('id', id)
     .eq('organization_id', profile.organization_id);
   if (error) throw new Error(error.message);
