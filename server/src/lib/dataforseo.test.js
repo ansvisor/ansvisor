@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * the test: fetch answers with DataForSEO's documented bodies.
  */
 
-const { MAX_TASKS_PER_POST, getTask, isDataForSeoConfigured, postTasks, readyTaskIds } =
+const { MAX_TASKS_PER_POST, getTask, isDataForSeoConfigured, postTasks, readyTasks } =
   await import('./dataforseo.js');
 
 let requests;
@@ -69,7 +69,10 @@ describe('postTasks', () => {
       ]),
     );
 
-    const ids = await postTasks('/v3/serp/google/organic', tasks);
+    const chunks = [];
+    const { ids, failed, errors } = await postTasks('/v3/serp/google/organic', tasks, {
+      onChunk: (set) => chunks.push(set.size),
+    });
 
     expect(requests.map((r) => [r.url, r.method, r.body.length])).toEqual([
       ['https://api.dataforseo.com/v3/serp/google/organic/task_post', 'POST', 100],
@@ -79,18 +82,70 @@ describe('postTasks', () => {
     expect(ids.has('p1')).toBe(false);
     expect(ids.get(`p${MAX_TASKS_PER_POST}`)).toBe('id-last');
     expect(ids.size).toBe(MAX_TASKS_PER_POST);
+    expect(chunks).toEqual([MAX_TASKS_PER_POST - 1, 1]);
+    expect({ failed, errors }).toEqual({ failed: 0, errors: [] });
   });
 
-  it('fails when the request itself is refused', async () => {
-    answers.push({ status_code: 40100, status_message: 'You are not authorized.', tasks: [] });
-    await expect(postTasks('/v3/serp/youtube/organic', [{ tag: 'p1' }])).rejects.toThrow(
-      'You are not authorized.',
+  it('keeps what one request set when another fails, and hands each over as soon as it is set', async () => {
+    const tasks = Array.from({ length: MAX_TASKS_PER_POST * 2 + 1 }, (_, i) => ({ tag: `p${i}` }));
+    const created = (from, to) =>
+      envelope(
+        tasks.slice(from, to).map((t, i) => ({
+          id: `id-${from + i}`,
+          status_code: 20100,
+          data: { tag: t.tag },
+        })),
+      );
+    answers.push(
+      created(0, MAX_TASKS_PER_POST),
+      // The second request is refused: its 100 tasks aren't set.
+      { status_code: 50000, status_message: 'Internal Error.', tasks: [] },
+      created(MAX_TASKS_PER_POST * 2, MAX_TASKS_PER_POST * 2 + 1),
     );
+    const handed = [];
+
+    const { ids, failed, errors } = await postTasks('/v3/serp/google/organic', tasks, {
+      onChunk: async (set) => handed.push([...set.keys()]),
+    });
+
+    expect(requests).toHaveLength(3);
+    expect(ids.size).toBe(MAX_TASKS_PER_POST + 1);
+    expect(ids.get('p0')).toBe('id-0');
+    expect(ids.has(`p${MAX_TASKS_PER_POST}`)).toBe(false);
+    expect(ids.get(`p${MAX_TASKS_PER_POST * 2}`)).toBe(`id-${MAX_TASKS_PER_POST * 2}`);
+    expect(failed).toBe(MAX_TASKS_PER_POST);
+    expect(errors).toEqual(['DataForSEO error: Internal Error.']);
+    expect(handed.map((tags) => tags.length)).toEqual([MAX_TASKS_PER_POST, 1]);
+  });
+
+  it('answers what failed when every request is refused', async () => {
+    answers.push({ status_code: 40100, status_message: 'You are not authorized.', tasks: [] });
+    const onChunk = vi.fn();
+    expect(await postTasks('/v3/serp/youtube/organic', [{ tag: 'p1' }], { onChunk })).toEqual({
+      ids: new Map(),
+      failed: 1,
+      errors: ['DataForSEO error: You are not authorized.'],
+    });
+    expect(onChunk).not.toHaveBeenCalled();
+  });
+
+  it('stops when the caller cannot keep what was set', async () => {
+    const tasks = Array.from({ length: MAX_TASKS_PER_POST + 1 }, (_, i) => ({ tag: `p${i}` }));
+    answers.push(envelope([{ id: 'id-0', status_code: 20100, data: { tag: 'p0' } }]));
+    await expect(
+      postTasks('/v3/serp/google/organic', tasks, {
+        onChunk: async () => {
+          throw new Error('write failed');
+        },
+      }),
+    ).rejects.toThrow('write failed');
+    // The second request never went.
+    expect(requests).toHaveLength(1);
   });
 });
 
-describe('readyTaskIds', () => {
-  it("lists the done tasks' ids", async () => {
+describe('readyTasks', () => {
+  it("lists the done tasks' ids with their tags", async () => {
     answers.push(
       envelope([
         {
@@ -110,11 +165,11 @@ describe('readyTaskIds', () => {
         },
       ]),
     );
-    const ids = await readyTaskIds('/v3/keywords_data/google_trends/explore');
+    const ready = await readyTasks('/v3/keywords_data/google_trends/explore');
     expect(requests[0].url).toBe(
       'https://api.dataforseo.com/v3/keywords_data/google_trends/explore/tasks_ready',
     );
-    expect([...ids]).toEqual(['10311535-0696-0093-0000-8fe3770f079b']);
+    expect([...ready]).toEqual([['10311535-0696-0093-0000-8fe3770f079b', 'p1']]);
   });
 });
 
