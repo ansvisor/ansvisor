@@ -83,13 +83,13 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 
 Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". Open a task to see its details: **What**, **URL** (the exact page), **Where**, **Why**, **Change** (the text before and after, or the text to add), **How** (one step per line), **Done when**, **How we check** (Automatic: we fetch the page again; Re-run: the prompts run again; Manual: you confirm it), **Type** (Content, On-page, Technical, Outreach, PR or Product), **Effort** and **Role**. Click **Edit** to change any of them. A task from the Action Center's own plan comes with its **Done when**, with **How we check** for most of them (not for a task measured over a GA4 or Search Console window), and with its **URL** when it changes a page and the action is about one page.
 
-A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, and when you click **Check now**), by what it changes:
+A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, at most 20 of one brand's, the least recently tried first, and when you click **Check now**), by what it changes:
 
 - **A broken page:** the page answers again.
 - **Publishing:** the page answers where it wasn't before. A page already live at the first check passes once it changes.
-- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions.
+- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions. When the action was raised by another check (the brand's entity, say), the page's structured data must be valid, after a check found it wasn't: a page that had valid structured data all along says so, and you mark the task done once it's fixed.
 - **Crawler access:** robots.txt lets the AI crawlers in, and the page isn't noindex. Only when the audit raised it; a page found uncrawled in the bot logs isn't checked here.
-- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a few words.
+- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a new short review: about a rewritten paragraph. A sidebar, testimonials, the latest or popular posts and similar blocks that change by themselves aren't counted.
 - **A task written with its new text:** that text is on the page, and the text it replaces is gone.
 
 Only pages on the brand's own site are read. One that passes is completed by itself, and History says so; one that doesn't shows **Last check** with what is still missing. A task you reopen after it passed stays open: its checks still show what they find, the nightly check leaves it, and the call is yours. Site Audit fixes are checked by your next audit.

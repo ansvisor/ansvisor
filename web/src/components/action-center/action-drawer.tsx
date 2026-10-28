@@ -92,6 +92,8 @@ import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
   hasTaskSpec,
+  pageCheckable,
+  withTemplateCheck,
   withTemplateDoneWhen,
   withoutTemplateDoneWhen,
   type TaskDetailsEdit,
@@ -732,11 +734,10 @@ export function ActionDrawer({
                         webhook: webhookReady,
                         onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
                       }}
-                      // An open task checked automatically, with its page (AC-010).
+                      // An open task the API checks on its page (AC-010).
                       check={
                         (task.status === 'todo' || task.status === 'in_progress') &&
-                        task.details?.check === 'auto' &&
-                        task.details.url
+                        pageCheckable(task, action.kind)
                           ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
                           : undefined
                       }
@@ -885,10 +886,14 @@ function TaskRow({
     () => !!task.details && !hasTaskSpec(task.details) && !!task.details.body,
   );
   const [editing, setEditing] = useState(false);
-  // A library task's Done when is its template's until someone writes one (AC-010).
+  // A library task's Done when is its template's until someone writes one,
+  // and its How we check Manual when its template is now (AC-010).
   const tDoneWhen = useTranslations('actionCenter.taskDoneWhen');
-  const details = withTemplateDoneWhen(task.details, task.taskKey, (key) =>
-    tDoneWhen.has(key) ? tDoneWhen(key) : null,
+  const details = withTemplateCheck(
+    withTemplateDoneWhen(task.details, task.taskKey, (key) =>
+      tDoneWhen.has(key) ? tDoneWhen(key) : null,
+    ),
+    task.taskKey,
   );
   // Choosing Skipped opens a reason field rather than committing: a skip
   // without a reason cannot be told apart from an abandoned task later.
