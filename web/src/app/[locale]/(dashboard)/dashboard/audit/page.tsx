@@ -26,6 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { qualityPhase } from '@/lib/content/quality';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { isNoPlan } from '@/lib/billing/no-plan';
 import {
   runAudit,
   runAuditsBulk,
@@ -93,6 +95,11 @@ export default function SiteAuditPage() {
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { canManage } = useUserRole();
+  // A read-only workspace (plan not active): Run audit, the bulk bars' Audit,
+  // Pin, Exclude and Restore, and deleting a run open the upgrade dialog
+  // instead; the settings open to read, and their Save asks too.
+  const { guard, isLocked } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   // Prefill the URL with the active brand's primary domain (read once at init).
   const [url, setUrl] = useState(() => {
@@ -228,7 +235,10 @@ export default function SiteAuditPage() {
     };
   }, [groupByTemplate, activeBrandId, refreshKey, t]);
 
-  const quotaExhausted = quota !== null && quota.limit !== -1 && quota.remaining <= 0;
+  // Without an active plan the quota reads 0 of 0: not used up. Run audit
+  // stays clickable, and opens the plan dialog.
+  const quotaExhausted =
+    quota !== null && !isNoPlan(quota, isLocked) && quota.limit !== -1 && quota.remaining <= 0;
 
   // Trend points within the selected range (oldest → newest).
   const rangePoints = useMemo(() => {
@@ -271,26 +281,29 @@ export default function SiteAuditPage() {
         (pct(dailyPoints[0].totalScore) ?? 0)
       : null;
 
-  const handleRun = async () => {
-    if (!activeBrandId) {
-      toast.error(t('noBrand'));
-      return;
-    }
-    if (!url.trim()) {
-      toast.error(t('urlRequired'));
-      return;
-    }
-    setRunning(true);
-    try {
-      // POST returns immediately with a running row; navigate to its detail
-      // page, which polls until the audit completes.
-      const started = await runAudit(activeBrandId, url.trim());
-      router.push(`/dashboard/audit/${started.id}`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('failed'));
-      setRunning(false);
-    }
-  };
+  const handleRun = guard(
+    async () => {
+      if (!activeBrandId) {
+        toast.error(t('noBrand'));
+        return;
+      }
+      if (!url.trim()) {
+        toast.error(t('urlRequired'));
+        return;
+      }
+      setRunning(true);
+      try {
+        // POST returns immediately with a running row; navigate to its detail
+        // page, which polls until the audit completes.
+        const started = await runAudit(activeBrandId, url.trim());
+        router.push(`/dashboard/audit/${started.id}`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t('failed'));
+        setRunning(false);
+      }
+    },
+    { action: tActions('runAudit') },
+  );
 
   // Append the next page of the Pages list. Dedupe by page: a page audited
   // since the first read moves to the top and shifts offsets by one.
@@ -814,7 +827,9 @@ export default function SiteAuditPage() {
                 staleDays={opps.staleDays}
                 selected={oppSelected}
                 onSelect={handleOppSelect}
-                onRestore={(urls) => void handleRestore(urls)}
+                onRestore={guard((urls: string[]) => void handleRestore(urls), {
+                  action: tActions('restorePages'),
+                })}
                 toolbar={
                   selectedOpps.length > 0 && (
                     <AuditBulkBar
@@ -823,7 +838,7 @@ export default function SiteAuditPage() {
                       quota={quota}
                       starting={startingBulk}
                       auditLabel={t('opportunities.auditSelected')}
-                      onAudit={handleAuditOpps}
+                      onAudit={guard(handleAuditOpps, { action: tActions('auditPages') })}
                       onClear={() => setOppSelected(new Set())}
                     >
                       <Button
@@ -831,7 +846,9 @@ export default function SiteAuditPage() {
                         size="sm"
                         className="h-7 gap-1.5 text-xs"
                         disabled={selectedOppUrls.length === 0}
-                        onClick={() => void handlePin()}
+                        onClick={guard(() => void handlePin(), {
+                          action: tActions(allPinned ? 'unpinPages' : 'pinPages'),
+                        })}
                       >
                         <Pin className="h-3 w-3" />
                         {allPinned ? t('opportunities.unpin') : t('opportunities.pin')}
@@ -840,7 +857,9 @@ export default function SiteAuditPage() {
                         variant="outline"
                         size="sm"
                         className="h-7 gap-1.5 text-xs"
-                        onClick={() => void handleExclude()}
+                        onClick={guard(() => void handleExclude(), {
+                          action: tActions('excludePages'),
+                        })}
                       >
                         <EyeOff className="h-3 w-3" />
                         {t('opportunities.exclude')}
@@ -891,7 +910,7 @@ export default function SiteAuditPage() {
                       count={selectedPages.length}
                       quota={quota}
                       starting={startingBulk}
-                      onAudit={handleBulkReaudit}
+                      onAudit={guard(handleBulkReaudit, { action: tActions('auditPages') })}
                       onExport={(format) => exportPages(selectedPages, format)}
                       onClear={() => setSelected(new Set())}
                     />

@@ -32,6 +32,7 @@ import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
+import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
@@ -56,6 +57,7 @@ import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
+import { refreshCloroCountries } from './lib/cloro-countries.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -145,6 +147,13 @@ async function runDailyTracking() {
   // Sweep orphaned Cloro pending tasks daily (runs in both cloud and
   // self-hosted, since both paths funnel through here).
   await cleanupStalePendingTasks();
+
+  // Read the countries each engine answers from (PROMPT-015e) before
+  // tracking, so today's runs skip what an engine doesn't support and the
+  // location picker offers what it does. A failed read keeps yesterday's.
+  await refreshCloroCountries().catch((err) => {
+    logger.error({ err }, '[cloro-countries] refresh crashed');
+  });
 
   // Recover pulses whose fire-and-forget trigger died with the process
   // (OOM, deploy, crash) after the run had already stamped. Non-blocking —
@@ -316,6 +325,8 @@ async function runDailyTracking() {
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
   // Then the products removed from their source over 90 days ago are
   // deleted: after the sweep, so it isn't deleting while a sync brings one back.
+  // Then the brands' AI shopping cards are matched to their catalogs as they
+  // are now (product visibility, 00360).
   sweepCatalogSources()
     .catch((err) => {
       logger.error({ err }, '[catalog] daily sweep failed');
@@ -323,6 +334,13 @@ async function runDailyTracking() {
     .then(() => purgeRemovedCatalogProducts())
     .catch((err) => {
       logger.error({ err }, '[catalog] daily purge failed');
+    })
+    .then(() => sweepShoppingCardMatches())
+    .catch((err) => {
+      logger.error(
+        { err: { name: err?.name, message: err?.message } },
+        '[card-match] daily sweep failed',
+      );
     });
 
   // Pages sent to Webflow, published there since (#1331): read once a day.
