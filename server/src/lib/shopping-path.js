@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { categoryPages, leafName, wordsOf } from './catalog/category-pages.js';
+import { bestInStock } from './catalog/offer.js';
 import { isInStock, stockKey } from './catalog/stock.js';
 import { selectInChunks } from './chunked-in.js';
 import { siteTypeOf } from './content-page-types.js';
@@ -159,8 +160,9 @@ export function refuses(issue) {
 
 /**
  * A product as the path offers it, or why it can't be: a variant in stock
- * that Merchant Center doesn't refuse, its lowest price, and the issues
- * Merchant Center reports for it that don't refuse it.
+ * that Merchant Center doesn't refuse, the best stock then the lowest price
+ * (catalog/offer.js bestInStock), and the issues Merchant Center reports
+ * for it that don't refuse it.
  */
 export function offerOf(product) {
   const url = product.url ?? product.variants.find((v) => v.url)?.url ?? null;
@@ -174,10 +176,7 @@ export function offerOf(product) {
         ? 'refused'
         : null;
   if (reason) return { reason };
-  const cheapest = usable
-    .filter((v) => v.price != null)
-    .sort((a, b) => (a.sale_price ?? a.price) - (b.sale_price ?? b.price))[0];
-  const variant = cheapest ?? usable[0];
+  const variant = bestInStock(usable);
   const issues = [
     ...new Map(
       variant.issues.map((i) => [
@@ -264,7 +263,7 @@ async function readRows(what, page, limit = Infinity) {
  * (chunked-in.js), each read to its end in `order` (a unique key, so no
  * row is read twice or missed across pages).
  */
-async function readIn(db, table, columns, column, ids, { order, more = (q) => q }) {
+export async function readIn(db, table, columns, column, ids, { order, more = (q) => q }) {
   const { data, error } = await selectInChunks(ids, (chunk) =>
     readAllRpcRows(table, (from, to) =>
       more(db.from(table).select(columns).in(column, chunk)).order(order).range(from, to),

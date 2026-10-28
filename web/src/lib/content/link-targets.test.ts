@@ -13,6 +13,19 @@ describe('linkKey and linkHref', () => {
       'https://www.acme.example/a/?plan=pro',
     );
   });
+
+  it('read long links in time near their size', () => {
+    expect(linkKey('https://acme.example/a//b///')).toBe('acme.example/a//b');
+    const slashes = `https://acme.example/${'/'.repeat(100_000)}a`;
+    const page = Array.from(
+      { length: 500 },
+      (_, i) => `https://acme.example/${'/'.repeat(2_000)}${i}`,
+    );
+    const started = performance.now();
+    expect(linkKey(slashes)).toBe(`acme.example/${'/'.repeat(100_000)}a`);
+    for (const url of page) linkKey(url);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
 });
 
 describe('pickLinkTargets', () => {

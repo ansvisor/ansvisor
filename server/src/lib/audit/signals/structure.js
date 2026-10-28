@@ -113,10 +113,22 @@ export const jsonLdValidity = {
       return { status: 'fail', score: 0, evidence: { reason: 'no JSON-LD blocks' } };
     }
     // Among parsed nodes, how many declare a schema.org @context + a @type?
-    const wellFormed = nodes.filter((n) => {
-      const ctxStr = JSON.stringify(n['@context'] ?? '').toLowerCase();
-      return ctxStr.includes('schema.org') && typesOf(n).length > 0;
-    }).length;
+    // A @graph's nodes share their wrapper's context: read each context once.
+    const schemaOrg = new Map();
+    const declaresSchemaOrg = (context) => {
+      if (!schemaOrg.has(context)) {
+        schemaOrg.set(
+          context,
+          JSON.stringify(context ?? '')
+            .toLowerCase()
+            .includes('schema.org'),
+        );
+      }
+      return schemaOrg.get(context);
+    };
+    const wellFormed = nodes.filter(
+      (n) => declaresSchemaOrg(n['@context']) && typesOf(n).length > 0,
+    ).length;
 
     let status = 'fail';
     let score = 0;

@@ -57,7 +57,12 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { suggestTopics, generatePromptsFromTopics, suggestCompetitors } from '@/lib/ai-brand-setup';
+import {
+  BRAND_SETUP_LIMITS,
+  suggestTopics,
+  generatePromptsFromTopics,
+  suggestCompetitors,
+} from '@/lib/ai-brand-setup';
 import { DASHBOARD_HOME } from '@/config/home';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
@@ -1006,6 +1011,7 @@ export default function NewBrandPage() {
                   <div className="flex items-center gap-2 pt-2">
                     <Input
                       placeholder="Add custom topic..."
+                      maxLength={BRAND_SETUP_LIMITS.topic}
                       value={customTopic}
                       onChange={(e) => setCustomTopic(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && addCustomTopic()}
