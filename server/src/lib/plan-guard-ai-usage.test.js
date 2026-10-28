@@ -68,6 +68,8 @@ afterEach(() => {
   vi.useRealTimers();
   delete process.env.IS_CLOUD;
   vi.doUnmock('../config/supabase.js');
+  // One test reads plans.js mocked: here, so a failing one can't pass it on.
+  vi.doUnmock('../config/plans.js');
 });
 
 describe('getAiUsage', () => {
@@ -168,7 +170,6 @@ describe('getAiUsage', () => {
     const usage = await guard.getAiUsage('o1');
     expect(usage.percentUsed).toBe(100);
     expect(usage.features.every((f) => f.percent === 0)).toBe(true);
-    vi.doUnmock('../config/plans.js');
   });
 
   it('meters an Enterprise budget set below the plan’s on the plan’s $50 (#1598)', async () => {
