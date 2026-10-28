@@ -20,18 +20,26 @@
  * read (or found unreadable) in the last `freshDays` isn't read again.
  */
 
-import * as cheerio from 'cheerio';
 import supabaseAdmin from '../../config/supabase.js';
 import { resolve } from '../../config/action-engine.js';
 import { fetchPage } from '../safe-fetch.js';
 import { extractHostname } from '../response-parser.js';
-import { signalRegistry } from '../audit/signals/index.js';
-import { describeSignal } from '../audit/rubric.js';
 import { opportunityKey } from '../audit/opportunities.js';
 import { robotsGroups } from '../audit/signals/trust.js';
 import { logger } from '../logger.js';
 import { topicPromptIds } from './basket-metrics.js';
 import { promptIdsOf } from './priority.js';
+import { FEATURE_CHECKS, featureGaps, pageFeatures } from './page-features.js';
+
+// The page checks live in page-features.js, which reads no database; kept
+// here for the imports that name this module.
+export {
+  FEATURE_CHECKS,
+  MIN_PAGE_CHARACTERS,
+  featureGaps,
+  pageContext,
+  pageFeatures,
+} from './page-features.js';
 
 const { competitorPages: C } = resolve();
 
@@ -41,38 +49,10 @@ const READ_TIMEOUT_MS = 8_000;
 const ANSWERS_READ = 300;
 /** Prompts whose answers are read, at most. */
 const PROMPTS_READ = 50;
-/**
- * Less text than this, and what was read is a wall (a consent or sign-in
- * page, a page drawn by script), not the page: as content-cited-length.js's
- * CITED_MIN_CHARACTERS.
- */
-export const MIN_PAGE_CHARACTERS = 500;
 /** safe-fetch's User-Agent, as robots.txt names a crawler. */
 const ROBOTS_AGENT = 'ansvisorbot';
 /** The most of a robots.txt read (RFC 9309 asks crawlers to read 500 KiB). */
 const ROBOTS_MAX_BYTES = 512 * 1024;
-
-/**
- * The checks compared: Site Audit's that read the page alone, never its
- * site's robots.txt or llms.txt, and that the page's author can act on.
- */
-export const FEATURE_CHECKS = Object.freeze([
-  'length',
-  'structural-depth',
-  'h2-coverage',
-  'lists',
-  'tables',
-  'faq-schema',
-  'json-ld-presence',
-  'statistic-density',
-  'quotations',
-  'citation-density',
-  'outbound-authority-links',
-  'author-byline',
-  'date-markup',
-  'freshness',
-  'readability',
-]);
 
 /**
  * A run that leaves its task as it was (execution/run.js reads `retryLater`):
@@ -91,50 +71,6 @@ export class ReadLaterError extends Error {
     this.output = output;
     this.retryDays = retryDays;
   }
-}
-
-/** What Site Audit's checks read, built from a page fetched here. */
-export function pageContext(url, html, now = Date.now()) {
-  const $ = cheerio.load(html);
-  // Text from a second parse, so the first keeps its JSON-LD blocks (audit/context.js).
-  const $text = cheerio.load(html);
-  $text('script, style, noscript, template, svg').remove();
-  const text = $text('body').text().replace(/\s+/g, ' ').trim();
-  const u = new URL(url);
-  return {
-    url,
-    origin: `${u.protocol}//${u.host}`,
-    protocol: u.protocol.replace(':', ''),
-    statusCode: 200,
-    html,
-    htmlBytes: Buffer.byteLength(html, 'utf8'),
-    $,
-    text,
-    wordCount: text ? text.split(/\s+/).length : 0,
-    robotsTxt: null,
-    llmsTxt: null,
-    query: null,
-    now,
-  };
-}
-
-/**
- * A page's features: its words and each compared check's status; null when
- * what was read is a wall rather than the page (MIN_PAGE_CHARACTERS).
- */
-export async function pageFeatures(url, html, now = Date.now()) {
-  const ctx = pageContext(url, html, now);
-  if (ctx.text.length < MIN_PAGE_CHARACTERS) return null;
-  const checks = {};
-  for (const signal of signalRegistry) {
-    if (!FEATURE_CHECKS.includes(signal.key)) continue;
-    try {
-      checks[signal.key] = (await signal.evaluate(ctx)).status;
-    } catch {
-      checks[signal.key] = 'na';
-    }
-  }
-  return { words: ctx.wordCount, checks };
 }
 
 const hostOf = (value) => extractHostname(/^https?:\/\//i.test(value) ? value : `https://${value}`);
@@ -177,26 +113,6 @@ export function citedPages(answers, { ownDomains, competitorDomains, perAction =
     [...map.values()].sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
   const competitors = [...ranked(tally.rival), ...ranked(tally.other)].slice(0, perAction);
   return { competitors, yours: ranked(tally.own)[0] ?? null };
-}
-
-/**
- * The checks at least half of the competitor pages pass that the brand's
- * page doesn't, the most passed first; every such check when no page of the
- * brand's was read. None from fewer than `minPages` pages: one page isn't
- * what "their pages" have.
- */
-export function featureGaps(competitorPages, yourPage, { minPages = C.minPages } = {}) {
-  const read = competitorPages.filter((page) => page.checks);
-  if (read.length < Math.max(1, minPages)) return [];
-  const needed = Math.ceil(read.length / 2);
-  return FEATURE_CHECKS.map((key) => ({
-    key,
-    label: describeSignal(key)?.label ?? key,
-    competitors: read.filter((page) => page.checks[key] === 'pass').length,
-    of: read.length,
-  }))
-    .filter((gap) => gap.competitors >= needed && yourPage?.checks?.[gap.key] !== 'pass')
-    .sort((a, b) => b.competitors - a.competitors);
 }
 
 const passing = (checks) => FEATURE_CHECKS.filter((key) => checks?.[key] === 'pass');
