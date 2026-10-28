@@ -7,8 +7,12 @@ import type { PromptLocationCell } from '@/lib/prompt-location-matrix';
 import type { Prompt } from '@/types';
 
 const getPromptLocationMatrix = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/actions/prompt', () => ({ getPromptLocationMatrix }));
+const getLocationQuota = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/prompt', () => ({ getPromptLocationMatrix, getLocationQuota }));
+const getTrackingCountries = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/tracking-countries', () => ({ getTrackingCountries }));
 
+const { clearTrackingCountries } = await import('@/lib/use-tracking-countries');
 const { LocationMatrix, clearLocationMatrixCache, loadLocationMatrix } =
   await import('./_location-matrix');
 
@@ -21,8 +25,23 @@ const BRAND = '11111111-1111-1111-1111-111111111111';
 let container: HTMLDivElement;
 let root: Root;
 
-const prompt = (id: string, text: string, regions: string[], category = 'Coffee'): Prompt =>
-  ({ id, text, regions, category }) as unknown as Prompt;
+const prompt = (
+  id: string,
+  text: string,
+  regions: string[],
+  category = 'Coffee',
+  over: Partial<Prompt> = {},
+): Prompt =>
+  ({
+    id,
+    text,
+    regions,
+    category,
+    isActive: true,
+    platforms: ['chatgpt-web'],
+    models: [],
+    ...over,
+  }) as unknown as Prompt;
 const cell = (score: number, position: number | null = 3.2): PromptLocationCell => ({
   score,
   mentions: Math.round(score / 2),
@@ -63,6 +82,14 @@ const bodyRows = () =>
 
 beforeEach(() => {
   clearLocationMatrixCache();
+  clearTrackingCountries();
+  getLocationQuota.mockReset().mockResolvedValue({
+    maxPrompts: 200,
+    used: 152,
+    planId: 'growth',
+    planName: 'Growth',
+  });
+  getTrackingCountries.mockReset().mockResolvedValue([]);
   getPromptLocationMatrix.mockReset().mockResolvedValue({
     p1: { US: cell(62), TR: cell(35, null) },
     p2: { US: cell(20, 6.4) },
@@ -161,6 +188,90 @@ describe('LocationMatrix', () => {
       );
     });
     expect(container.textContent).toContain("Your prompts aren't tracked in a location yet.");
+  });
+});
+
+describe('a location with no answers yet', () => {
+  async function renderRows(
+    list: Prompt[],
+    window: { from: string; to?: string } = { from: '2026-10-21T00:00:00Z' },
+  ) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <LocationMatrix
+            brandId={BRAND}
+            rows={list}
+            pageRows={list}
+            window={window}
+            onOpenCell={onOpenCell}
+            onTrack={onTrack}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+
+  it('says the next daily run asks it, within 24 hours', async () => {
+    getPromptLocationMatrix.mockResolvedValue({ p1: { US: cell(62) } });
+    await renderRows([prompt('p1', 'best specialty coffee subscription', ['US', 'TR'])]);
+    expect(bodyRows()[1]).toEqual([
+      'best specialty coffee subscription',
+      'Coffee',
+      // Locations sort by name: Turkey (TR) before the US.
+      'Within 24h',
+      '62',
+      '—',
+    ]);
+    expect(
+      container.querySelector('span[title^="Tracked in Turkey from the next daily run"]'),
+    ).not.toBeNull();
+  });
+
+  it('shows a plain dash for a custom range that ended before today', async () => {
+    getPromptLocationMatrix.mockResolvedValue({ p1: { US: cell(62) } });
+    await renderRows([prompt('p1', 'best specialty coffee subscription', ['US', 'TR'])], {
+      from: '2026-09-01T00:00:00Z',
+      to: '2026-09-07T23:59:59Z',
+    });
+    expect(bodyRows()[1][2]).toBe('—');
+    expect(container.querySelector('span[title="No answers here in this period"]')).not.toBeNull();
+  });
+
+  it('says when the prompt is paused, or none of its engines answers from there (PROMPT-015e)', async () => {
+    getTrackingCountries.mockResolvedValue([
+      { code: 'US', models: ['chatgpt', 'copilot'] },
+      { code: 'KE', models: ['chatgpt'] },
+    ]);
+    getPromptLocationMatrix.mockResolvedValue({ p1: { US: cell(62) }, p2: { US: cell(40) } });
+    await renderRows([
+      prompt('p1', 'paused prompt', ['US', 'KE'], 'Coffee', { isActive: false }),
+      prompt('p2', 'copilot only', ['US', 'KE'], 'Coffee', { platforms: ['copilot-web'] }),
+    ]);
+    const rows = bodyRows();
+    // KE comes before US.
+    expect(rows[1][2]).toBe('Paused');
+    expect(rows[2][2]).toBe('No engine here');
+  });
+
+  it('shows Limit reached instead of + Track once the plan’s locations are used up', async () => {
+    getLocationQuota.mockResolvedValue({
+      maxPrompts: 200,
+      used: 200,
+      planId: 'growth',
+      planName: 'Growth',
+    });
+    await render();
+    expect(container.textContent).not.toContain('+ Track');
+    const limit = container.querySelector(
+      'button[aria-label="Track “same day coffee delivery near me” in Turkey"]',
+    ) as HTMLButtonElement;
+    expect(limit.textContent).toBe('Limit reached');
+    expect(limit.title).toBe(
+      "Your plan's prompt locations are used up (200 of 200). Open to see how to track here.",
+    );
+    limit.click();
+    expect(onTrack).toHaveBeenCalledWith(rows[1], 'TR');
   });
 });
 

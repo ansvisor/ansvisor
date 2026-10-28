@@ -32,6 +32,15 @@ export type PromptLocationMatrix = Record<string, Record<string, PromptLocationC
 /** Locations read at most in one go: each is its own read. */
 export const MATRIX_REGIONS = 12;
 
+/**
+ * Whether a window runs up to today, so a location with no answers in it can
+ * still get them from the next daily run. A custom range that ended earlier
+ * can't.
+ */
+export function reachesToday(window: { to?: string }, now = Date.now()): boolean {
+  return !window.to || Date.parse(window.to) > now - 86_400_000;
+}
+
 /** A cell's value for the metric; null without answers there (or, for position, never named). */
 export function metricValue(
   cell: PromptLocationCell | undefined,

@@ -16,6 +16,17 @@ export const ENGINE_LABELS: Record<string, string> = {
   aioverview: 'Google AI Overview',
 };
 
+/** The provider's model for each scraper, as the API's CLORO_COUNTRY_MODELS. */
+export const PLATFORM_MODELS: Record<string, string> = {
+  'chatgpt-web': 'chatgpt',
+  'chatgpt-shopping': 'chatgpt',
+  'perplexity-web': 'perplexity',
+  'copilot-web': 'copilot',
+  'gemini-web': 'gemini',
+  'google-aimode': 'aimode',
+  'google-aio': 'aioverview',
+};
+
 /** Engines that answer from a city, by the provider's model name (PROMPT-015d). */
 export const CITY_MODELS: ReadonlySet<string> = new Set(['aimode', 'aioverview']);
 
@@ -61,4 +72,25 @@ export function missingEngines(
 ): string[] {
   const engines = new Set(all.flatMap((c) => c.models));
   return [...engines].filter((m) => !country.models.includes(m)).sort();
+}
+
+/**
+ * Whether any of a prompt's engines answers from a country (a city of it,
+ * when `city`). The API models answer from anywhere; an engine the provider
+ * doesn't list is given the benefit of the doubt; with no lists read, all do.
+ */
+export function answersFrom(
+  engines: { platforms: readonly string[]; models?: readonly string[] | null },
+  country: string,
+  city: boolean,
+  countries: readonly TrackingCountry[] | null,
+): boolean {
+  if (!countries?.length || (engines.models?.length ?? 0) > 0) return true;
+  const entry = countries.find((c) => c.code === country);
+  return engines.platforms.some((platform) => {
+    const model = PLATFORM_MODELS[platform];
+    if (!model) return true;
+    if (city && !CITY_MODELS.has(model)) return false;
+    return Boolean(entry?.models.includes(model));
+  });
 }

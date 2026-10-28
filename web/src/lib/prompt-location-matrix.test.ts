@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  reachesToday,
   cellShade,
   locationAverages,
   matrixInsights,
@@ -91,5 +92,16 @@ describe('matrixInsights', () => {
       },
       overall: 43,
     });
+  });
+});
+
+describe('reachesToday', () => {
+  const now = Date.parse('2026-10-28T12:00:00Z');
+  it('holds for a preset, and a custom range that ends today', () => {
+    expect(reachesToday({}, now)).toBe(true);
+    expect(reachesToday({ to: '2026-10-28T11:59:00Z' }, now)).toBe(true);
+  });
+  it("doesn't for a range that ended before", () => {
+    expect(reachesToday({ to: '2026-10-20T23:59:59Z' }, now)).toBe(false);
   });
 });

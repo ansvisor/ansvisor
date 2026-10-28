@@ -97,7 +97,9 @@ describe('AddLocationsDialog', () => {
     expect(scope('prompt p2').checked).toBe(true);
     await act(async () => submit().click());
     expect(actions.bulkUpdatePromptLocations).toHaveBeenCalledWith(['p2'], 'add', ['TR']);
-    expect(toast.success).toHaveBeenCalledWith('1 prompt is now tracked in the new locations.');
+    expect(toast.success).toHaveBeenCalledWith(
+      '1 prompt is now tracked in the new locations. The first results come with the next daily run, within 24 hours.',
+    );
     expect(onDone).toHaveBeenCalled();
   });
 
