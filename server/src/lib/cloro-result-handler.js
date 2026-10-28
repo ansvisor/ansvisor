@@ -58,25 +58,7 @@ export async function handleScraperResult({
 
   const { data: inserted, error } = await supabaseAdmin
     .from('prompt_results')
-    .insert({
-      prompt_id: promptId,
-      brand_id: brandId,
-      platform: scraperId,
-      response: aiResponse.text,
-      citations: aiResponse.citations,
-      mention_count: metrics.mentionCount,
-      citation_count: metrics.citationCount,
-      sentiment: sentimentResult.sentiment,
-      visibility_score: metrics.visibilityScore,
-      model_used: aiResponse.model,
-      region: region ?? null,
-      competitor_mentions: metrics.competitorMentions,
-      mention_position: metrics.mentionPosition,
-      mentioned_entity_count: metrics.mentionedEntityCount,
-      shopping_cards: aiResponse.shopping_cards ?? [],
-      inline_products: aiResponse.inline_products ?? [],
-      search_queries: Array.isArray(aiResponse.search_queries) ? aiResponse.search_queries : [],
-    })
+    .insert(resultRow({ aiResponse, scraperId, promptId, brandId, region, metrics }))
     .select('id, created_at')
     .single();
 
@@ -118,11 +100,45 @@ export async function handleScraperResult({
 }
 
 /**
- * Normalize and insert shopping cards into the analytical table.
+ * The prompt_results row for one answer, from the parsed answer and its
+ * metrics (parseResponse). Pure, so the demo brand's sample answers
+ * (lib/demo) are stored in exactly the shape tracking stores.
  *
- * Exported so the backfill script can reuse the exact same code path
- * against historical prompt_results rows without duplicating the parse +
- * brand-match logic.
+ * @param {object} args
+ * @param {{ text: string, citations: Array, model: string, shopping_cards?: Array, inline_products?: Array, search_queries?: Array }} args.aiResponse
+ * @param {string} args.scraperId
+ * @param {string} args.promptId
+ * @param {string} args.brandId
+ * @param {string|null} args.region
+ * @param {ReturnType<typeof parseResponse>} args.metrics
+ */
+export function resultRow({ aiResponse, scraperId, promptId, brandId, region, metrics }) {
+  return {
+    prompt_id: promptId,
+    brand_id: brandId,
+    platform: scraperId,
+    response: aiResponse.text,
+    citations: aiResponse.citations,
+    mention_count: metrics.mentionCount,
+    citation_count: metrics.citationCount,
+    sentiment: metrics.sentiment,
+    visibility_score: metrics.visibilityScore,
+    model_used: aiResponse.model,
+    region: region ?? null,
+    competitor_mentions: metrics.competitorMentions,
+    mention_position: metrics.mentionPosition,
+    mentioned_entity_count: metrics.mentionedEntityCount,
+    shopping_cards: aiResponse.shopping_cards ?? [],
+    inline_products: aiResponse.inline_products ?? [],
+    search_queries: Array.isArray(aiResponse.search_queries) ? aiResponse.search_queries : [],
+  };
+}
+
+/**
+ * The prompt_result_shopping_cards rows for one answer's cards, then
+ * ChatGPT's inline products: normalized, matched to the brand or a
+ * competitor, their merchant classified. Pure, for the same reason as
+ * resultRow.
  *
  * @param {object} args
  * @param {string} args.promptResultId
@@ -130,12 +146,12 @@ export async function handleScraperResult({
  * @param {string} args.platform
  * @param {string|null} args.region
  * @param {unknown[]} args.rawCards
- * @param {unknown[]} [args.rawInlineProducts] ChatGPT's in-answer products, stored after the cards
+ * @param {unknown[]} [args.rawInlineProducts]
  * @param {{ brandId: string, brandName: string, domains: string[] }} args.brandInfo
  * @param {Array<{ id: string, name: string, domain: string|null }>} args.competitors
- * @returns {Promise<number>} number of rows inserted (0 if none / on failure)
+ * @returns {object[]}
  */
-export async function persistShoppingCards({
+export function shoppingCardRows({
   promptResultId,
   brandId,
   platform,
@@ -151,9 +167,8 @@ export async function persistShoppingCards({
     ...cards,
     ...normalizeInlineProducts(platform, rawInlineProducts, lastPosition),
   ];
-  if (normalized.length === 0) return 0;
 
-  const rows = normalized.map((card) => {
+  return normalized.map((card) => {
     const match = matchCardBrand(card, brandInfo, competitors);
     const destination = card.merchant_url
       ? classifyMerchant(card.merchant_url, { brandDomains: brandInfo.domains })
@@ -181,6 +196,47 @@ export async function persistShoppingCards({
       region: region ?? null,
     };
   });
+}
+
+/**
+ * Normalize and insert shopping cards into the analytical table.
+ *
+ * Exported so the backfill script can reuse the exact same code path
+ * against historical prompt_results rows without duplicating the parse +
+ * brand-match logic.
+ *
+ * @param {object} args
+ * @param {string} args.promptResultId
+ * @param {string} args.brandId
+ * @param {string} args.platform
+ * @param {string|null} args.region
+ * @param {unknown[]} args.rawCards
+ * @param {unknown[]} [args.rawInlineProducts] ChatGPT's in-answer products, stored after the cards
+ * @param {{ brandId: string, brandName: string, domains: string[] }} args.brandInfo
+ * @param {Array<{ id: string, name: string, domain: string|null }>} args.competitors
+ * @returns {Promise<number>} number of rows inserted (0 if none / on failure)
+ */
+export async function persistShoppingCards({
+  promptResultId,
+  brandId,
+  platform,
+  region,
+  rawCards,
+  rawInlineProducts = [],
+  brandInfo,
+  competitors,
+}) {
+  const rows = shoppingCardRows({
+    promptResultId,
+    brandId,
+    platform,
+    region,
+    rawCards,
+    rawInlineProducts,
+    brandInfo,
+    competitors,
+  });
+  if (rows.length === 0) return 0;
 
   // `onConflict: 'prompt_result_id,position' ignoreDuplicates: true` keeps
   // the call idempotent — re-running the backfill or a retry on the same

@@ -15,7 +15,7 @@ import { expandDateToEndOfDay } from '@/lib/dates';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
-import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
 import {
   fetchPromptUsageRow,
@@ -1174,7 +1174,8 @@ export async function getPromptUsageFor(
   ]);
   if (orgError) throw new Error(orgError.message);
   if (!row) return null;
-  return toPromptUsageSummary(row, planFromOrgRow(org));
+  const { plan, ended } = usagePlanFromOrgRow(org);
+  return toPromptUsageSummary(row, plan, new Date(), { ended });
 }
 
 /**

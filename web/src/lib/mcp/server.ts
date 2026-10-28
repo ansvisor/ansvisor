@@ -709,12 +709,15 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       description:
         'Check tracked-prompt usage against the plan — the numbers on the Tracked Prompts usage cards. ' +
-        'Returns { plan: { key, name, locationLimit, cta }, brand: { active, paused, total }, ' +
+        'Returns { plan: { key, name, locationLimit, cta, ended? }, brand: { active, paused, total }, ' +
         'account: { activePrompts, brands, locationsUsed }, updatedAt }. The plan limit counts ' +
         'prompt LOCATIONS across every brand of the account: each active prompt uses one slot per ' +
         'location it targets, and paused prompts use none. Slots left = locationLimit − ' +
-        'locationsUsed (never below 0); locationLimit null means unlimited. Use this for "how many ' +
-        'prompts can we still add?" / "how close are we to the limit?". This is a read.',
+        'locationsUsed (never below 0); locationLimit null means unlimited. When plan.ended is ' +
+        'true the organization\'s plan has ended (plan is the one it was on, cta is "choose_plan"): ' +
+        '0 slots are left, whatever the limit says, and a plan must be chosen before any prompt ' +
+        'can be added. Use this for "how many prompts can we still add?" / "how close are we to ' +
+        'the limit?". This is a read.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
       },

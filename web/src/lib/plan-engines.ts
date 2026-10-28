@@ -77,10 +77,12 @@ export async function alignPromptsToPlanForOrg(
     }
   }
 
+  // Never the demo brand's prompts (00380): they are sample data on every engine.
   const { data: brands, error: brandsErr } = await supabaseAdmin
     .from('brands')
     .select('id')
-    .eq('organization_id', orgId);
+    .eq('organization_id', orgId)
+    .eq('is_demo', false);
   if (brandsErr) throw new Error(`brands lookup: ${brandsErr.message}`);
 
   const brandIds = (brands ?? []).map((b) => b.id);

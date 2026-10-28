@@ -14,6 +14,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { BROWSER_API_BASE_URL } from '@/config/api';
+import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 
 const API_BASE = BROWSER_API_BASE_URL;
 
@@ -78,7 +79,7 @@ export const BRAND_SETUP_LIMITS = {
   website: 200,
   description: 2000,
   topics: 20,
-  topic: 100,
+  topic: TOPIC_NAME_CHARS,
 };
 
 /** At most `max` UTF-16 units, as the API's limits count them, never half of an emoji's pair. */

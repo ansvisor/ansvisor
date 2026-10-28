@@ -22,6 +22,7 @@ import {
   type WebhookTestResult,
 } from '@/lib/actions/content';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 import { toast } from 'sonner';
 
 const WEBHOOK_EVENTS = [
@@ -50,6 +51,10 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
   // Save open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Only admins and managers save the webhook (RLS) and test it (the API):
+  // a member sees it, and why it can't be changed, before pressing anything.
+  const { canManage } = useUserRole();
+  const readOnly = !canManage;
 
   const [url, setUrl] = useState('');
   const [secret, setSecret] = useState('');
@@ -159,6 +164,11 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
           </div>
         ) : (
           <div className="space-y-4">
+            {readOnly && (
+              <p className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+                {t('readOnly')}
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="webhook-url">{t('url')}</Label>
               <Input
@@ -167,6 +177,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 placeholder={t('urlPlaceholder')}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
+                disabled={readOnly}
               />
             </div>
 
@@ -178,6 +189,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 placeholder={t('secretPlaceholder')}
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
+                disabled={readOnly}
               />
             </div>
 
@@ -190,6 +202,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                     <Checkbox
                       id={`webhook-event-${eventOption.value}`}
                       checked={events.includes(eventOption.value)}
+                      disabled={readOnly}
                       onCheckedChange={(checked) =>
                         setEvents((current) =>
                           checked === true
@@ -219,8 +232,9 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 type="button"
                 role="switch"
                 aria-checked={isActive}
+                disabled={readOnly}
                 onClick={() => setIsActive(!isActive)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                   isActive ? 'bg-primary' : 'bg-muted'
                 }`}
               >
@@ -255,7 +269,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
                 variant="outline"
                 size="sm"
                 onClick={guard(handleTest, { action: tActions('testWorkflow') })}
-                disabled={testing || !url.trim()}
+                disabled={readOnly || testing || !url.trim()}
                 className="gap-2"
               >
                 {testing && <LoadingDots />}
@@ -264,7 +278,7 @@ export function WebhookSettingsDialog({ open, onOpenChange, brandId }: WebhookSe
               <Button
                 size="sm"
                 onClick={guard(handleSave, { action: tActions('saveWorkflow') })}
-                disabled={saving || !url.trim()}
+                disabled={readOnly || saving || !url.trim()}
                 className="gap-2"
               >
                 {saving && <LoadingDots />}

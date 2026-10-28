@@ -483,6 +483,16 @@ describe('runTaskCheck', () => {
     });
   });
 
+  it('names a renamed task in History by its title alone (#1565)', async () => {
+    const renamed = task({ title: 'Fix the pricing link' });
+    await runTaskCheck(renamed, action, { fetch: fetchOf({ [PAGE]: html('x') }), now });
+    expect(ops.find((op) => op.table === 'action_events').payload.data).toEqual({
+      taskId: 't1',
+      task: null,
+      title: 'Fix the pricing link',
+    });
+  });
+
   it('holds a task someone reopened: open, its checks kept, never closed again on that page', async () => {
     const reopened = task({
       details: {
@@ -787,6 +797,8 @@ describe('sweepTaskChecks', () => {
     ]);
     // A held task (reopened after it passed) is left to the person.
     expect(filters).toContainEqual(['is', 'details->autoCheck->>held', null]);
+    // Never a demo brand's (00380): its tasks are sample data.
+    expect(filters).toContainEqual(['actions.brands.is_demo', false]);
   });
 
   it('checks the open tasks not tried in the last day, one at a time', async () => {

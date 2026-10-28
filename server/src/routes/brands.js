@@ -15,12 +15,25 @@ const WAIT_MS = 20_000;
 /**
  * DELETE /api/brands/:id
  * Deletes a brand and all its data. Admins only, as the brands delete policy
- * allows. 200 when it is gone, 202 when it is still being deleted.
+ * allows. 200 when it is gone, 202 when it is still being deleted. Never the
+ * demo brand (00380): it is hidden, not deleted (PATCH /api/demo).
  */
 router.delete('/:id', async (req, res) => {
   try {
     const brandId = req.params.id;
     await assertBrandAccess(brandId, req.user.id);
+
+    const { data: target, error: targetError } = await supabaseAdmin
+      .from('brands')
+      .select('is_demo')
+      .eq('id', brandId)
+      .single();
+    if (targetError) throw targetError;
+    if (target?.is_demo) {
+      return res
+        .status(409)
+        .json({ error: 'The demo brand can be hidden, not deleted.', code: 'demo_brand' });
+    }
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')

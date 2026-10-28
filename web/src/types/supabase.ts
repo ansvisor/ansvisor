@@ -691,6 +691,7 @@ export type Database = {
           conversions_consent: string
           conversions_enabled: boolean
           created_at: string
+          demo_built_at: string | null
           demo_hidden_at: string | null
           demo_version: number | null
           description: string | null
@@ -723,6 +724,7 @@ export type Database = {
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string
+          demo_built_at?: string | null
           demo_hidden_at?: string | null
           demo_version?: number | null
           description?: string | null
@@ -755,6 +757,7 @@ export type Database = {
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string
+          demo_built_at?: string | null
           demo_hidden_at?: string | null
           demo_version?: number | null
           description?: string | null

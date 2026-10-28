@@ -8,8 +8,7 @@ import { PLANS, type Plan } from '@/config/plans';
  */
 
 let brandCount = 0;
-// The filters the brand count was read with.
-let countFilters: [string, unknown][] = [];
+let countFilters: unknown[][] = [];
 let inserted: unknown[] = [];
 let updates: Record<string, unknown>[] = [];
 let plan: Plan;
@@ -24,16 +23,15 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: (table: string) => ({
       select: () => {
-        countFilters = [];
-        const query = {
-          eq: (column: string, value: unknown) => {
-            countFilters.push([column, value]);
-            return query;
+        const chain = {
+          eq: (...filter: unknown[]) => {
+            countFilters.push(filter);
+            return chain;
           },
-          then: (resolve: (value: { count: number; error: null }) => unknown) =>
+          then: (resolve: (value: { count: number; error: null }) => void) =>
             resolve({ count: brandCount, error: null }),
         };
-        return query;
+        return chain;
       },
       update: (payload: Record<string, unknown>) => {
         updates.push(payload);
@@ -75,6 +73,19 @@ const capped = (maxBrands: number): Plan => ({
 describe('createBrand plan limit', () => {
   beforeEach(() => {
     inserted = [];
+    countFilters = [];
+  });
+
+  it("counts the organization's own brands, never the demo brand (00380)", async () => {
+    brandCount = 0;
+    plan = capped(5);
+
+    await createBrand(input);
+
+    expect(countFilters).toEqual([
+      ['organization_id', 'org-1'],
+      ['is_demo', false],
+    ]);
   });
 
   it('returns a readable plan_limit result and inserts nothing at the limit', async () => {
@@ -98,18 +109,6 @@ describe('createBrand plan limit', () => {
 
     expect('brand' in result && result.brand.id).toBe('b1');
     expect(inserted).toHaveLength(1);
-  });
-
-  it("counts the organization's brands without its demo brand", async () => {
-    brandCount = 0;
-    plan = capped(1);
-
-    await createBrand(input);
-
-    expect(countFilters).toEqual([
-      ['organization_id', 'org-1'],
-      ['is_demo', false],
-    ]);
   });
 });
 

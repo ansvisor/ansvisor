@@ -25,6 +25,7 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
+import { listDailyTrackingBrands } from './lib/tracking-brands.js';
 import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
@@ -222,12 +223,8 @@ async function runDailyTracking() {
     logger.error({ err }, '[brand-facts] weekly sweep crashed');
   });
 
-  // Skip paused brands (is_active = false): the user has explicitly suspended
-  // tracking for them, so they should not spend Cloro / LLM credits daily.
-  const { data: brands, error } = await supabaseAdmin
-    .from('brands')
-    .select('id, organization_id')
-    .eq('is_active', true);
+  // Skip paused brands (the user's own stop) and demo brands (sample data).
+  const { data: brands, error } = await listDailyTrackingBrands();
 
   if (error || !brands || brands.length === 0) {
     return { triggered: 0, total: 0 };

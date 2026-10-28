@@ -35,6 +35,7 @@ const {
   BILLING_ROUTES,
   COST_STOPPING,
   DATA_REMOVAL,
+  DEMO_ROUTES,
   MAX_ENTRIES,
   ONBOARDING_DAILY_CALLS,
   ONBOARDING_LIMIT_REACHED,
@@ -217,6 +218,32 @@ describe('requireActiveSubscription', () => {
       expect(res.status).toHaveBeenCalledWith(402);
     }
     expect(DATA_REMOVAL).toHaveLength(1);
+  });
+
+  it('lets an organization off a plan, or never on one, open and hide the demo brand', async () => {
+    for (const state of [ended, neverSubscribed]) {
+      org = state;
+      for (const [method, path] of [
+        ['POST', '/demo'],
+        ['POST', '/demo/'],
+        ['PATCH', '/demo'],
+      ]) {
+        const { res, next } = await run({ method, path });
+        expect(next, `${method} ${path}`).toHaveBeenCalledOnce();
+        expect(res.status).not.toHaveBeenCalled();
+      }
+    }
+    org = ended;
+    for (const [method, path] of [
+      ['DELETE', '/demo'],
+      ['POST', '/demo/rebuild'],
+      ['PUT', '/demo'],
+    ]) {
+      const { res, next } = await run({ method, path });
+      expect(next, `${method} ${path}`).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(402);
+    }
+    expect(DEMO_ROUTES).toHaveLength(2);
   });
 
   it("opens onboarding's routes, and only them, to an organization that never subscribed", async () => {

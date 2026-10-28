@@ -18,6 +18,7 @@ import billingRoutes from './billing.js';
 import brandFactRoutes from './brand-facts.js';
 import catalogRoutes from './catalog.js';
 import cmsRoutes from './cms.js';
+import demoRoutes from './demo.js';
 
 const router = Router();
 
@@ -40,6 +41,7 @@ router.use('/billing', billingRoutes);
 router.use('/brand-facts', brandFactRoutes);
 router.use('/catalog', catalogRoutes);
 router.use('/cms', cmsRoutes);
+router.use('/demo', demoRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });
