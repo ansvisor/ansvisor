@@ -100,7 +100,7 @@ describe('actionStory', () => {
 
     expect(told.family).toBe('citationLoss');
     expect(told.why).toBe(
-      '7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated) lost their citations to acme.example on Gemini, Google AI Overview, and ChatGPT between Oct 2 and Oct 9.',
+      '7 prompts in AI Rank Tracker (28–42k AI searches a month, estimated) lost their citations to acme.example on Gemini, Google AI Overviews, and ChatGPT between Oct 2 and Oct 9.',
     );
     // 70% of 7, rounded up; 30 days after the action was raised.
     expect(told.goal).toBe('Citations back on ≥5 of 7 prompts by Nov 8.');
@@ -130,7 +130,7 @@ describe('actionStory', () => {
   it('quotes a single prompt and agrees with it', () => {
     const told = tell([lostSeven[6]])!;
     expect(told.why).toBe(
-      '“Prompt 6” in AI Rank Tracker lost its citations to acme.example on Gemini and Google AI Overview on Oct 9.',
+      '“Prompt 6” in AI Rank Tracker lost its citations to acme.example on Gemini and Google AI Overviews on Oct 9.',
     );
     expect(told.goal).toBe('Citations back on “Prompt 6” in AI Rank Tracker by Nov 8.');
   });

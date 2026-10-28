@@ -43,6 +43,11 @@ export function planFromOrgRow(
     return getPlan('starter');
   }
 
+  return ownPlan(data);
+}
+
+/** The plan the organization's row names, Enterprise's overrides merged. */
+function ownPlan(data: { plan?: unknown; plan_overrides?: unknown } | null): Plan {
   const plan = getPlan(data?.plan as string | null | undefined);
 
   // Enterprise orgs can have custom limit overrides
@@ -55,6 +60,21 @@ export function planFromOrgRow(
   }
 
   return plan;
+}
+
+/**
+ * The plan to show an organization's usage against: while its subscription
+ * is active, the one it's entitled to; once it has ended (read-only, the
+ * Choose a plan step), the plan it was on, marked ended, not Starter's,
+ * which it never chose. What choosing a plan again gives it back.
+ */
+export function usagePlanFromOrgRow(
+  data: { plan?: unknown; subscription_status?: unknown; plan_overrides?: unknown } | null,
+): { plan: Plan; ended: boolean } {
+  if (isCloud() && !isSubscriptionActive(data?.subscription_status as string | null | undefined)) {
+    return { plan: ownPlan(data), ended: true };
+  }
+  return { plan: planFromOrgRow(data), ended: false };
 }
 
 export class PlanLimitError extends Error {
