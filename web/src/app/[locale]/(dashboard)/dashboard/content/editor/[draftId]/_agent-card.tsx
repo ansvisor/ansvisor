@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { Check, ChevronRight, User, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -193,8 +193,9 @@ export function RunSteps({
   const t = useTranslations('contentEditor.editor.agentCard.steps');
   const tCard = useTranslations('contentEditor.editor.agentCard');
   const tRules = useTranslations('contentEditor.editor.rules.names');
+  const format = useFormatter();
   const shown = shownSteps(run);
-  // The rules it kept its changes small for (learning B6), by their names.
+  // The rules it keeps its changes small for (learning B6), by their names.
   const careful = (run.steps[0]?.careful ?? [])
     .filter((key) => tRules.has(key))
     .map((key) => tRules(key));
@@ -232,7 +233,7 @@ export function RunSteps({
       </ol>
       {careful.length > 0 && (
         <p className="mt-1 text-[11px] text-muted-foreground">
-          {tCard('careful', { rules: careful.join(', ') })}
+          {tCard('careful', { rules: format.list(careful, { type: 'conjunction' }) })}
         </p>
       )}
     </>
