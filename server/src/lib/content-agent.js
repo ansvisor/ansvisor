@@ -1392,8 +1392,11 @@ async function fixWithRun({
           return null;
         }),
   ]);
-  // Named on the run's sources step, which the editor's agent card shows.
-  if (livePage && run?.steps?.[1]) {
+  // Named on the run's sources step, which the editor's agent card shows:
+  // only a page AI answers cited, as the card speaks of its citations. One
+  // with AI visits alone is still told to the agent.
+  const cited = livePage && (livePage.citations.cur > 0 || livePage.citations.prev > 0);
+  if (cited && run?.steps?.[1]) {
     run.steps[1] = {
       ...run.steps[1],
       live: {

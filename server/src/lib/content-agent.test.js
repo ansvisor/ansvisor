@@ -1826,6 +1826,40 @@ describe('fixDraftRules', () => {
     );
   });
 
+  it('names a live page on the run only when AI answers cited it, and still tells the agent of its visits', async () => {
+    rows.content_drafts = { ...rows.content_drafts, source_url: 'https://acme.example/guide' };
+    rows.content_page_impact = {
+      citations: { cur: 0, prev: 0 },
+      aiVisits: { cur: 35, prev: 40 },
+      promptCounts: { cur: 0, prev: 0, lost: 0 },
+      prompts: [],
+    };
+    const run = {
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 2 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    };
+    runs.startRun = async () => run;
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_page_impact;
+    }
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      'tracked AI answers cited it 0 times (0 before), for 0 prompts, and it had 35 AI visits (40 before).',
+    );
+    expect(run.steps[1]).not.toHaveProperty('live');
+  });
+
   it('tells nothing of a live page for a new page', async () => {
     generateObject.mockResolvedValue({
       object: { suggestions: [] },
