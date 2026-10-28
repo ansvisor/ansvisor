@@ -24,7 +24,21 @@ import {
   LANGUAGE_ITEMS,
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
-import { isCloud, PLANS, SUBSCRIBABLE_PLANS, getPlan, toPlanId, type PlanId } from '@/config/plans';
+import {
+  firstMonthOfferOn,
+  isCloud,
+  PLANS,
+  SUBSCRIBABLE_PLANS,
+  getPlan,
+  toPlanId,
+  type PlanId,
+} from '@/config/plans';
+import {
+  FIRST_MONTH_CODE,
+  firstMonthPrice,
+  offerChoice,
+  type CheckoutMode,
+} from '@/lib/billing/plan-purchase';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
@@ -245,9 +259,10 @@ const PLAN_STEP_COPY: Partial<
   },
 };
 
-// Shown under the plan step's heading while the free trial is on offer; checkout
-// collects a card but charges nothing until the trial ends.
-const TRIAL_ASSURANCES = ['Zero risk', 'No charge today', 'Cancel anytime'];
+/** Dollars as the plan cards show them: whole dollars bare, else to the cent. */
+function usd(value: number): string {
+  return Number.isInteger(value) ? `$${value}` : `$${value.toFixed(2)}`;
+}
 
 // Card width per step, matched to each step's content column; unlisted steps are forms.
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = { 3: 'wide', 4: 'wide', 6: 'medium' };
@@ -274,6 +289,7 @@ const COMPETITOR_LOADING_MESSAGES = [
 export default function OnboardingPage() {
   const router = useRouter();
   const tWizard = useTranslations('brands.wizard');
+  const tOffer = useTranslations('planOffer');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -351,15 +367,15 @@ export default function OnboardingPage() {
   const competitorMsgIdx = useRef(0);
 
   // Step 6 (cloud only)
-  const [checkoutLoading, setCheckoutLoading] = useState<PlanId | null>(null);
+  // The plan whose Checkout is opening, and how it starts.
+  const [checkoutLoading, setCheckoutLoading] = useState<{
+    planId: PlanId;
+    mode: CheckoutMode;
+  } | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   // Trial length when the plan step is reached; null once the organization has
-  // had a subscription, since checkout then starts the plan without a trial.
+  // had a subscription, which then only buys now (Checkout refuses its trial).
   const [trialDays, setTrialDays] = useState<number | null>(14);
-  // Whether the trial check said yes. The trial's promises (no charge today,
-  // the day of the first charge) wait for it, so an organization whose trial
-  // is used is never told it won't be charged.
-  const [trialConfirmed, setTrialConfirmed] = useState(false);
 
   useEffect(() => {
     if (step !== 6) return;
@@ -369,7 +385,6 @@ export default function OnboardingPage() {
       .then((body: { trialAvailable: boolean; trialDays: number } | null) => {
         if (cancelled || !body) return;
         setTrialDays(body.trialAvailable ? body.trialDays : null);
-        setTrialConfirmed(body.trialAvailable);
       })
       // Keeps the default copy; checkout itself decides whether there is a trial.
       .catch(() => {});
@@ -999,15 +1014,16 @@ export default function OnboardingPage() {
 
   // ── Step 6: Stripe checkout ──
 
-  const handleCheckout = async (planId: PlanId) => {
+  // Buy now (the first-month offer while it's on) or the free trial; a card either way.
+  const handleCheckout = async (planId: PlanId, mode: CheckoutMode) => {
     if (!organizationId) return;
-    setCheckoutLoading(planId);
+    setCheckoutLoading({ planId, mode });
     track('onboarding_step_completed', {
       step: 6,
       step_name: 'plan',
       plan_id: planId,
     });
-    track('onboarding_plan_selected', { plan_id: planId });
+    track('onboarding_plan_selected', { plan_id: planId, checkout_mode: mode });
     setPersonProperties({
       intended_plan: planId,
     });
@@ -1015,9 +1031,19 @@ export default function OnboardingPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, organizationId }),
+        body: JSON.stringify({
+          planId,
+          organizationId,
+          mode,
+          ...(mode === 'buy' && firstMonthOfferOn() ? { promotionCode: FIRST_MONTH_CODE } : {}),
+        }),
       });
       const data = await res.json();
+      if (!res.ok && data.code === 'trial_unavailable') {
+        // Its trial is used after all: buying now is the way.
+        setTrialDays(null);
+        throw new Error(tOffer('trialUsed'));
+      }
       if (!res.ok) throw new Error(data.error || 'Failed to create checkout session');
       if (data.url) {
         window.location.href = data.url;
@@ -1763,21 +1789,16 @@ export default function OnboardingPage() {
           <div className="mb-8 text-center">
             <p className="text-2xl tracking-tight">One last step</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
-              {trialDays ? `Start Your ${trialDays}-Day Free Trial` : 'Choose Your Plan'}
+              {trialDays ? tOffer('chooseHowToStart') : 'Choose Your Plan'}
             </h1>
-            {trialDays && trialConfirmed ? (
-              <ul className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                {TRIAL_ASSURANCES.map((label) => (
-                  <li
-                    key={label}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    {label}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            {offerChoice(trialDays != null) !== 'none' && (
+              <p data-slot="offer-line" className="mt-3 text-base text-muted-foreground">
+                {tOffer('choiceLine', {
+                  offer: offerChoice(trialDays != null),
+                  days: trialDays ?? 0,
+                })}
+              </p>
+            )}
           </div>
 
           {/* Plan cards */}
@@ -1787,7 +1808,8 @@ export default function OnboardingPage() {
               const price = plan.pricing;
               if (!price) return null;
 
-              const loading = checkoutLoading === planId;
+              const loading = checkoutLoading?.planId === planId ? checkoutLoading.mode : null;
+              const offerOn = firstMonthOfferOn();
               const copy = PLAN_STEP_COPY[planId];
               const { maxBrands, maxPrompts, maxTeamMembers } = plan.limits;
 
@@ -1817,21 +1839,77 @@ export default function OnboardingPage() {
                     <span className="mb-1 text-sm text-muted-foreground">/month</span>
                   </div>
 
+                  {/* Buy now: the full plan from day one, the first month at half price. */}
                   <Button
+                    data-mode="buy"
                     className="w-full"
-                    variant={plan.highlighted ? 'default' : 'outline'}
-                    onClick={() => handleCheckout(planId)}
+                    onClick={() => handleCheckout(planId, 'buy')}
                     disabled={checkoutLoading !== null}
                   >
-                    {loading ? (
+                    {loading === 'buy' ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Redirecting...
                       </>
+                    ) : offerOn ? (
+                      tOffer('buyNow')
                     ) : (
                       `Choose ${plan.name}`
                     )}
                   </Button>
+                  <p
+                    data-slot="buy-terms"
+                    className="mt-2 text-center text-xs text-muted-foreground"
+                  >
+                    {offerOn && (
+                      <span className="flex flex-wrap items-center justify-center gap-1.5">
+                        <Badge
+                          variant="outline"
+                          className="h-5 border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-400"
+                        >
+                          {tOffer('limitedOffer')}
+                        </Badge>
+                        {tOffer('buyPrice', {
+                          first: usd(firstMonthPrice(price.monthly)),
+                          price: usd(price.monthly),
+                        })}
+                      </span>
+                    )}
+                    <span className="block">{tOffer('fullPlan')}</span>
+                  </p>
+
+                  {/* The free trial: no offer with it, and limited AI usage. */}
+                  {trialDays != null && (
+                    <>
+                      <Button
+                        data-mode="trial"
+                        className="mt-3 w-full"
+                        variant="outline"
+                        onClick={() => handleCheckout(planId, 'trial')}
+                        disabled={checkoutLoading !== null}
+                      >
+                        {loading === 'trial' ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Redirecting...
+                          </>
+                        ) : (
+                          tOffer('startTrial', { days: trialDays })
+                        )}
+                      </Button>
+                      <p
+                        data-slot="trial-terms"
+                        className="mt-2 text-center text-xs text-muted-foreground"
+                      >
+                        {tOffer('trialPrice', {
+                          days: trialDays,
+                          price: usd(price.monthly),
+                          period: 'month',
+                        })}
+                        <span className="block">{tOffer('limitedAi', { days: trialDays })}</span>
+                      </p>
+                    </>
+                  )}
 
                   <Separator className="my-5" />
 
@@ -1866,12 +1944,8 @@ export default function OnboardingPage() {
           </div>
 
           <p className="mt-8 text-center text-lg">Secure payments powered by Stripe.</p>
-          <p className="mt-1 text-center text-sm">
-            {!trialDays
-              ? 'Your free trial has been used, so your plan starts today. Cancel anytime.'
-              : trialConfirmed
-                ? `Your card is charged on day ${trialDays + 1}, unless you cancel in Settings before then.`
-                : 'Cancel anytime.'}
+          <p data-slot="card-note" className="mt-1 text-center text-sm">
+            {tOffer('cardNote', { both: trialDays != null ? 'yes' : 'no' })}
           </p>
 
           {/* No card yet: the demo brand, with sample data. */}

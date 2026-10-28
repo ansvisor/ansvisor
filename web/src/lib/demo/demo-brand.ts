@@ -8,9 +8,8 @@
 
 /**
  * What the plan dialog offers from the demo brand: a workspace that never
- * had a subscription starts with the free trial, then 50% off its first
- * paid month; one whose trial or plan ended gets 50% off its first month
- * at once.
+ * had a subscription chooses between the free trial and buying now (the
+ * first-month offer); one whose trial or plan ended buys now.
  */
 export type DemoOffer = 'trial' | 'first_month';
 

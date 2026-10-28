@@ -161,18 +161,22 @@ describe('ReadOnlyBanner', () => {
     );
     await render({ status: null, neverSubscribed: true });
     expect(container.textContent).toContain(
-      "Your brand isn't tracked yet. Start your 14-day free trial, then get 50% off your first month.",
+      "Your brand isn't tracked yet. Start a 14-day free trial, or get 50% off your first month.",
     );
-    expect(seePlans()).toBeUndefined();
-    const start = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Start free trial',
-    )!;
+    const start = seePlans()!;
     expect(seeTheDemo()).toBeDefined();
     await act(async () => start.click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      'Start your 14-day free trial: then 50% off your first month',
-    );
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Choose how to start');
     vi.unstubAllGlobals();
+  });
+
+  it('says only the trial with the first-month offer off', async () => {
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+    await render({ status: null, neverSubscribed: true });
+    expect(container.textContent).toContain(
+      "Your brand isn't tracked yet. Start a 14-day free trial.",
+    );
+    expect(container.textContent).not.toContain('50%');
   });
 
   it('offers another member of such a workspace See plans', async () => {

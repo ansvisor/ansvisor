@@ -1,15 +1,47 @@
 import { z } from 'zod';
-import { PLANS, SUBSCRIBABLE_PLANS, type PlanId } from '@/config/plans';
+import {
+  FIRST_MONTH_OFFER,
+  PLANS,
+  SUBSCRIBABLE_PLANS,
+  firstMonthOfferOn,
+  type PlanId,
+} from '@/config/plans';
 
 /** How often a subscription bills, as Stripe's `recurring.interval` names it. */
 export type BillingInterval = 'month' | 'year';
 
 /**
- * The first-month offer: a Stripe promotion code for a 50% off, once-only
- * coupon on Starter and Growth. Billing fills it in when a trial is bought
- * monthly; Checkout takes it in its own promotion code box.
+ * The first-month offer's code (FIRST_MONTH_OFFER): a Stripe promotion code
+ * for a 50% off, once-only coupon on Starter and Growth. Billing fills it in
+ * when a trial is bought monthly, and "Buy now" applies it at Checkout.
  */
-export const FIRST_MONTH_CODE = 'SAVE50';
+export const FIRST_MONTH_CODE: string = FIRST_MONTH_OFFER.code;
+
+/**
+ * How a new subscription starts at Checkout, both with a card: `buy` bills
+ * the full plan from day one (the first-month offer on a monthly plan);
+ * `trial` starts the free trial, with no offer, for an organization that
+ * never had a subscription.
+ */
+export const CHECKOUT_MODES = ['buy', 'trial'] as const;
+export type CheckoutMode = (typeof CHECKOUT_MODES)[number];
+
+/**
+ * What a band or a title can offer, in words: the free trial (only a
+ * workspace that never had a subscription), the first-month offer (while
+ * it's on), both, or neither.
+ */
+export type OfferChoice = 'both' | 'trial' | 'discount' | 'none';
+
+/** A monthly price's first month with the first-month offer, to the cent. */
+export function firstMonthPrice(monthly: number): number {
+  return Math.round(monthly * (100 - FIRST_MONTH_OFFER.percentOff)) / 100;
+}
+
+export function offerChoice(trialAvailable: boolean, offerOn = firstMonthOfferOn()): OfferChoice {
+  if (trialAvailable) return offerOn ? 'both' : 'trial';
+  return offerOn ? 'discount' : 'none';
+}
 
 /**
  * Whether a promotion code goes with this billing period: a monthly plan

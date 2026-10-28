@@ -131,7 +131,14 @@ export function PlanSwitcher({ subscription, onUpdate, organizationId = null }: 
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, organizationId, interval: period, returnTo: 'billing' }),
+        // A plan that ended starts again now: the trial was the first subscription's.
+        body: JSON.stringify({
+          planId,
+          organizationId,
+          interval: period,
+          returnTo: 'billing',
+          mode: 'buy',
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) throw new Error(data.error || t('checkoutFailed'));

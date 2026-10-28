@@ -59,7 +59,7 @@
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
       "payment_failed": "Your last payment didn't go through, so your workspace is read-only. You can look around; adding, running and AI need the payment method updated.",
-      "trial": "Your brand isn't tracked yet. Start your {days}-day free trial, then get 50% off your first month.",
+      "trial": "Your brand isn't tracked yet. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} other {Start a {days}-day free trial.}}",
       "seePlans": "See plans"
     },
     "dialog": {
@@ -82,8 +82,8 @@
       "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method.",
       "demo": "Ask your admin to choose a plan.",
       "demoNamed": "Ask {name}, your workspace admin, to choose a plan.",
-      "trial": "Ask your admin to start the free trial.",
-      "trialNamed": "Ask {name}, your workspace admin, to start the free trial."
+      "trial": "Ask your admin to choose a plan.",
+      "trialNamed": "Ask {name}, your workspace admin, to choose a plan."
     },
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
@@ -91,10 +91,7 @@
     "noPlan": "No active plan",
     "demo": {
       "dialog": {
-        "title": {
-          "trial": "Start with your brand: {days} days free, then 50% off",
-          "first_month": "Use Ansvisor for your brand: 50% off your first month"
-        },
+        "title": "Use Ansvisor for your own brand",
         "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
         "action": "{action} works on your own brand",
         "label": "This is a demo brand with sample data"
@@ -106,8 +103,8 @@
       "switchToOwnBrand": "Switch to your brand"
     },
     "trialOffer": {
-      "title": "Start your {days}-day free trial: then 50% off your first month",
-      "body": "Everything you set up is here. Start your free trial and Ansvisor starts tracking, writing and fixing for your brand.",
+      "title": "Choose how to start",
+      "body": "Everything you set up is here. Pick a plan and Ansvisor starts tracking, writing and fixing for your brand.",
       "label": "Your brand isn't tracked yet"
     },
     "actions": {
@@ -253,10 +250,7 @@
     },
     "plans": {
       "perMonthBilledYearly": "{price} a month, billed yearly",
-      "chooseToday": "Choose {plan} · {price} today",
       "openingCheckout": "Opening checkout…",
-      "payByCard": "You'll pay by card on Stripe's checkout.",
-      "startTrial": "Start free trial",
       "askAdmin": "Ask your admin to choose a plan",
       "customName": "Custom",
       "customTagline": "For large companies and agencies managing AI visibility at scale.",
@@ -280,14 +274,23 @@
       }
     }
   },
+  "planOffer": {
+    "buyNow": "Buy now",
+    "startTrial": "Start {days}-day free trial",
+    "fullPlan": "Full plan from day one",
+    "limitedAi": "Limited AI usage for {days} days",
+    "buyPrice": "{first} first month, then {price}/month",
+    "trialPrice": "Free for {days} days, then {price}/{period, select, year {year} other {month}}",
+    "cardNote": "{both, select, yes {Card required for both. Cancel any time.} other {Card required. Cancel any time.}}",
+    "limitedOffer": "Limited offer",
+    "trialUsed": "This workspace's free trial has been used. Buy now to start the plan.",
+    "chooseHowToStart": "Choose how to start",
+    "choiceLine": "{offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {}}"
+  },
   "demo": {
     "band": {
-      "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. Look around: anything that would run or use AI shows you the plans.",
+      "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {Pick a plan to use it for your own brand.}}",
       "textPlanActive": "You're exploring <b>{brand}</b>, a demo brand with sample data. Nothing here runs or uses AI.",
-      "offer": {
-        "trial": "Try it on your brand · 50% off",
-        "first_month": "Use it for your brand · 50% off"
-      },
       "switchToOwnBrand": "Switch to your brand"
     },
     "switcher": {

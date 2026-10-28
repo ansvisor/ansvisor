@@ -22,6 +22,7 @@ import {
   PLANS,
   PRICING_URL,
   SUBSCRIBABLE_PLANS,
+  firstMonthOfferOn,
   type PlanId,
 } from '@/config/plans';
 import { useUserRole } from '@/hooks/use-user-role';
@@ -31,6 +32,7 @@ import {
   periodPrice,
   takesPromoCode,
   type BillingInterval,
+  type CheckoutMode,
 } from '@/lib/billing/plan-purchase';
 import { discountedPrice, type PromoOffer } from '@/lib/billing/promo-code';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
@@ -110,12 +112,13 @@ const PROMO_NOTE_ID = 'upgrade-promo-note';
  * new subscription from a card; another member is asked to turn to an admin
  * and sees the plain prices. ×, Escape or a click outside close it.
  *
- * With a `pitch`, the same plans with its offer: from the demo brand, a
- * workspace that never subscribed starts its free trial, then 50% off, and
- * one whose plan ended gets 50% off its first month; on its own brand, a
- * workspace that never subscribed starts its free trial. An admin finds the
- * first-month code already applied; when it doesn't apply, the field is
- * simply left empty.
+ * Two ways to start, each with a card. Buy now: the full plan from day one,
+ * with the first-month offer on a monthly plan (FIRST_MONTH_OFFER): an admin
+ * finds its code already applied, and without it (the offer off, a year, a
+ * code Stripe refused) the button is the plain Choose {plan}. And, for a
+ * workspace that never had a subscription (`pitch.offer` 'trial'), the free
+ * trial, with no offer and limited AI usage. A `pitch` also says where the
+ * dialog was opened from: the demo brand, or a brand never tracked.
  */
 export function ChoosePlanDialog({
   open,
@@ -140,6 +143,7 @@ export function ChoosePlanDialog({
   const tPlans = useTranslations('readOnly.plans');
   const tSettings = useTranslations('settings');
   const tCards = useTranslations('settings.planCards');
+  const tOffer = useTranslations('planOffer');
   const planFeatures = usePlanFeatures();
   const { canAdmin } = useUserRole();
 
@@ -149,23 +153,24 @@ export function ChoosePlanDialog({
   const [codeError, setCodeError] = useState<CodeError | null>(null);
   // The code Stripe took, with what it takes off. Only an admin enters one.
   const [offer, setOffer] = useState<PromoOffer | null>(null);
-  // The plan whose Checkout is opening.
-  const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
+  // The plan whose Checkout is opening, and how it starts.
+  const [checkout, setCheckout] = useState<{ planId: PlanId; mode: CheckoutMode } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // The pitch's code is tried once, the first time the dialog opens.
-  const pitchCodeTried = useRef(false);
-  const pitched = pitch != null;
+  // The first-month offer's code is tried once, the first time the dialog opens.
+  const offerCodeTried = useRef(false);
   const demo = pitch?.from === 'demo';
-  const trial = pitch?.offer === 'trial';
+  // The free trial: for a workspace that never had a subscription.
+  const trialOffered = pitch?.offer === 'trial';
+  const offerOn = firstMonthOfferOn();
 
   useEffect(() => {
-    if (!open || !pitched || !canAdmin || pitchCodeTried.current) return;
-    pitchCodeTried.current = true;
+    if (!open || !offerOn || !canAdmin || offerCodeTried.current) return;
+    offerCodeTried.current = true;
     void checkPromoCode(FIRST_MONTH_CODE).then((found) => {
       // Quietly: a code that doesn't apply leaves the field as it was.
       if (typeof found === 'object') setOffer((current) => current ?? found);
     });
-  }, [open, pitched, canAdmin]);
+  }, [open, offerOn, canAdmin]);
 
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
   // The code lowers this period's prices: a monthly plan, for an admin.
@@ -194,10 +199,11 @@ export function ChoosePlanDialog({
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
-  async function choose(planId: PlanId) {
-    if (!organizationId || checkoutPlan) return;
-    setCheckoutPlan(planId);
-    const promotionCode = discounted?.code;
+  async function choose(planId: PlanId, mode: CheckoutMode) {
+    if (!organizationId || checkout) return;
+    setCheckout({ planId, mode });
+    // A code goes with buying now only: the trial comes without an offer.
+    const promotionCode = mode === 'buy' ? discounted?.code : undefined;
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -207,6 +213,7 @@ export function ChoosePlanDialog({
           organizationId,
           interval: period,
           returnTo: 'billing',
+          mode,
           ...(promotionCode ? { promotionCode } : {}),
         }),
       });
@@ -217,16 +224,17 @@ export function ChoosePlanDialog({
           setOffer(null);
           setCodeInput(promotionCode);
           setCodeError({ kind: 'invalid', code: promotionCode.toUpperCase() });
-          setCheckoutPlan(null);
+          setCheckout(null);
           return;
         }
+        if (data.code === 'trial_unavailable') throw new Error(tOffer('trialUsed'));
         throw new Error(data.error || tSettings('checkoutFailed'));
       }
       window.location.href = data.url;
       // No reset: the page is leaving for Stripe.
     } catch (err) {
       toast.error(err instanceof Error ? err.message : tSettings('checkoutFailed'));
-      setCheckoutPlan(null);
+      setCheckout(null);
     }
   }
 
@@ -284,9 +292,9 @@ export function ChoosePlanDialog({
           </span>
           <DialogTitle className="text-xl leading-tight font-bold tracking-tight">
             {pitch?.from === 'demo'
-              ? t(`demo.dialog.title.${pitch.offer}`, { days: TRIAL_DAYS })
+              ? t('demo.dialog.title')
               : pitch?.from === 'own_brand'
-                ? t('trialOffer.title', { days: TRIAL_DAYS })
+                ? t('trialOffer.title')
                 : t('dialog.title.ended')}
           </DialogTitle>
           <DialogDescription className="max-w-2xl">
@@ -396,7 +404,14 @@ export function ChoosePlanDialog({
             const price = periodPrice(planId, period);
             const firstPrice =
               discounted && monthly != null ? discountedPrice(monthly, discounted) : null;
-            const opening = checkoutPlan === planId;
+            const opening = checkout?.planId === planId ? checkout.mode : null;
+            const busy = price == null || !organizationId || checkout != null;
+            const openingCheckout = (
+              <>
+                <Loader2 className="animate-spin" aria-hidden />
+                {tPlans('openingCheckout')}
+              </>
+            );
 
             return (
               <section
@@ -440,8 +455,18 @@ export function ChoosePlanDialog({
                     </>
                   ) : discounted && firstPrice != null && monthly != null ? (
                     <>
-                      <span className="inline-flex w-full items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                        <Check className="size-3" aria-hidden />
+                      <span className="inline-flex w-full flex-wrap items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                        {offerOn && discounted.code.toUpperCase() === FIRST_MONTH_CODE ? (
+                          <Badge
+                            data-slot="limited-offer"
+                            variant="outline"
+                            className="h-5 border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-400"
+                          >
+                            {tOffer('limitedOffer')}
+                          </Badge>
+                        ) : (
+                          <Check className="size-3" aria-hidden />
+                        )}
                         {tPlans('promo.deal', offerValues(discounted))}
                       </span>
                       <span className="text-sm text-muted-foreground line-through">
@@ -470,29 +495,57 @@ export function ChoosePlanDialog({
 
                 {canAdmin ? (
                   <div className="space-y-2">
+                    {/* Buy now: the full plan today, the first-month offer on a monthly plan. */}
                     <Button
+                      data-mode="buy"
                       className="h-9 w-full"
                       variant={plan.highlighted ? 'default' : 'outline'}
-                      disabled={price == null || !organizationId || checkoutPlan != null}
-                      onClick={() => void choose(planId)}
+                      disabled={busy}
+                      onClick={() => void choose(planId, 'buy')}
                     >
-                      {opening ? (
-                        <>
-                          <Loader2 className="animate-spin" aria-hidden />
-                          {tPlans('openingCheckout')}
-                        </>
-                      ) : trial ? (
-                        tPlans('startTrial')
-                      ) : firstPrice != null ? (
-                        tPlans('chooseToday', { plan: plan.name, price: money(firstPrice) })
-                      ) : (
-                        tSettings('choosePlanFor', { plan: plan.name })
-                      )}
+                      {opening === 'buy'
+                        ? openingCheckout
+                        : firstPrice != null
+                          ? tOffer('buyNow')
+                          : tSettings('choosePlanFor', { plan: plan.name })}
                     </Button>
-                    <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                      <CreditCard className="size-3.5" aria-hidden />
-                      {tPlans('payByCard')}
-                    </p>
+                    {(firstPrice != null || trialOffered) && (
+                      <p
+                        data-slot="buy-terms"
+                        className="text-center text-xs text-muted-foreground"
+                      >
+                        {firstPrice != null &&
+                          monthly != null &&
+                          tOffer('buyPrice', { first: money(firstPrice), price: money(monthly) })}
+                        {trialOffered && <span className="block">{tOffer('fullPlan')}</span>}
+                      </p>
+                    )}
+                    {trialOffered && (
+                      <>
+                        <Button
+                          data-mode="trial"
+                          className="h-9 w-full"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => void choose(planId, 'trial')}
+                        >
+                          {opening === 'trial'
+                            ? openingCheckout
+                            : tOffer('startTrial', { days: TRIAL_DAYS })}
+                        </Button>
+                        <p
+                          data-slot="trial-terms"
+                          className="text-center text-xs text-muted-foreground"
+                        >
+                          {tOffer('trialPrice', {
+                            days: TRIAL_DAYS,
+                            price: price != null ? money(price) : '—',
+                            period,
+                          })}
+                          <span className="block">{tOffer('limitedAi', { days: TRIAL_DAYS })}</span>
+                        </p>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <p
@@ -567,7 +620,15 @@ export function ChoosePlanDialog({
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>{tPlans('pricesInUsd')}</span>
+          <span className="inline-flex flex-wrap items-center gap-x-1.5">
+            {canAdmin && (
+              <span data-slot="card-note" className="inline-flex items-center gap-1.5">
+                <CreditCard className="size-3.5" aria-hidden />
+                {tOffer('cardNote', { both: trialOffered ? 'yes' : 'no' })}
+              </span>
+            )}
+            {tPlans('pricesInUsd')}
+          </span>
           <a
             href={PRICING_URL}
             target="_blank"
