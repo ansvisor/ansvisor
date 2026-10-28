@@ -45,6 +45,7 @@ import { CatalogCategoryPages } from './catalog-category-pages';
 import { FramerCard } from './framer-card';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
+import { WixCard } from './wix-card';
 import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 
@@ -133,6 +134,8 @@ export function IntegrationsSection() {
           <WordPressCard />
 
           <FramerCard />
+
+          <WixCard />
         </IntegrationGroup>
       </CardContent>
     </Card>

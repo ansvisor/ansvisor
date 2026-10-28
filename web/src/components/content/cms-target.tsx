@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import type { CmsTarget } from '@/lib/content/cms-send-client';
 import { readFramer } from '@/lib/framer-client';
 import { readWebflow } from '@/lib/webflow-client';
+import { readWix } from '@/lib/wix-client';
 import { readWordPress } from '@/lib/wordpress-client';
 
 /**
@@ -16,7 +17,7 @@ import { readWordPress } from '@/lib/wordpress-client';
  * a collection with a body field), its WordPress site once connected
  * (00294; no collection or fields to pick there), or its Framer collection
  * once ready (00295; connected, a collection with its title and body
- * fields). The choice, picked or sent to, is remembered per brand, in this
+ * fields), or its Wix site's Blog once connected (00372). The choice, picked or sent to, is remembered per brand, in this
  * browser; the first ready of Webflow, WordPress and Framer is the first
  * choice where none is remembered, or the remembered one is no longer
  * connected. One remembered and connected but not ready leaves the
@@ -36,7 +37,11 @@ const storageKey = (brandId: string) => `aeo:cms-target:${brandId}`;
 function remembered(brandId: string): CmsTarget | null {
   try {
     const value = localStorage.getItem(storageKey(brandId));
-    return value === 'webhook' || value === 'webflow' || value === 'wordpress' || value === 'framer'
+    return value === 'webhook' ||
+      value === 'webflow' ||
+      value === 'wordpress' ||
+      value === 'framer' ||
+      value === 'wix'
       ? value
       : null;
   } catch {
@@ -79,6 +84,23 @@ export type CmsFramer =
   /** Not connected, not set up on this server, or not read. */
   | null;
 
+/** The brand's Wix, as Send to CMS reads it. */
+export type CmsWix =
+  /** Ready: pages go to this site's Blog as draft posts (its name, else its id). */
+  | { ready: true; site: string }
+  /** Connected, but its API key refused. */
+  | { ready: false }
+  /** Not connected, not set up on this server, or not read. */
+  | null;
+
+function wixOf(result: Awaited<ReturnType<typeof readWix>>): CmsWix {
+  const connection = result.ok && result.configured ? result.connection : null;
+  if (!connection) return null;
+  return connection.status === 'connected'
+    ? { ready: true, site: connection.siteName || connection.siteId }
+    : { ready: false };
+}
+
 function webflowOf(result: Awaited<ReturnType<typeof readWebflow>>): CmsWebflow {
   const connection = result.ok && result.configured ? result.connection : null;
   if (!connection) return null;
@@ -118,6 +140,7 @@ export function useCmsTarget(brandId: string) {
     webflow: CmsWebflow;
     wordpress: CmsWordPress;
     framer: CmsFramer;
+    wix: CmsWix;
     /** The connections that couldn't be read. */
     failed: CmsLocal[];
   } | null>(null);
@@ -127,22 +150,27 @@ export function useCmsTarget(brandId: string) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([readWebflow(brandId), readWordPress(brandId), readFramer(brandId)]).then(
-      ([webflow, wordpress, framer]) => {
-        if (cancelled) return;
-        setRead({
-          key,
-          webflow: webflowOf(webflow),
-          wordpress: wordpressOf(wordpress),
-          framer: framerOf(framer),
-          failed: [
-            ...(webflow.ok ? [] : ['webflow' as const]),
-            ...(wordpress.ok ? [] : ['wordpress' as const]),
-            ...(framer.ok ? [] : ['framer' as const]),
-          ],
-        });
-      },
-    );
+    Promise.all([
+      readWebflow(brandId),
+      readWordPress(brandId),
+      readFramer(brandId),
+      readWix(brandId),
+    ]).then(([webflow, wordpress, framer, wix]) => {
+      if (cancelled) return;
+      setRead({
+        key,
+        webflow: webflowOf(webflow),
+        wordpress: wordpressOf(wordpress),
+        framer: framerOf(framer),
+        wix: wixOf(wix),
+        failed: [
+          ...(webflow.ok ? [] : ['webflow' as const]),
+          ...(wordpress.ok ? [] : ['wordpress' as const]),
+          ...(framer.ok ? [] : ['framer' as const]),
+          ...(wix.ok ? [] : ['wix' as const]),
+        ],
+      });
+    });
     return () => {
       cancelled = true;
     };
@@ -152,11 +180,12 @@ export function useCmsTarget(brandId: string) {
   const webflow = current ? current.webflow : undefined;
   const wordpress = current ? current.wordpress : undefined;
   const framer = current ? current.framer : undefined;
+  const wix = current ? current.wix : undefined;
   const chosen = picked?.brandId === brandId ? picked.target : remembered(brandId);
   // Read again after a failure: the note stays, as trying, until the answer.
   const failed = current ? current.failed : read?.key.startsWith(`${brandId}:`) ? read.failed : [];
   const unchecked = chosen && chosen !== 'webhook' && failed.includes(chosen) ? chosen : null;
-  const connectionOf = (to: CmsLocal) => ({ webflow, wordpress, framer })[to];
+  const connectionOf = (to: CmsLocal) => ({ webflow, wordpress, framer, wix })[to];
   // The choice stands while it's still connected; ready or not, it's never swapped for another CMS.
   const kept = chosen && (chosen === 'webhook' || connectionOf(chosen)) ? chosen : null;
   const target: CmsTarget | undefined = !current
@@ -173,7 +202,9 @@ export function useCmsTarget(brandId: string) {
             ? 'wordpress'
             : framer?.ready
               ? 'framer'
-              : 'webhook';
+              : wix?.ready
+                ? 'wix'
+                : 'webhook';
 
   return {
     /** The brand's Webflow; undefined while read; null without one, or when it couldn't be read. */
@@ -182,6 +213,8 @@ export function useCmsTarget(brandId: string) {
     wordpress,
     /** The brand's Framer, as `webflow`. */
     framer,
+    /** The brand's Wix, as `webflow`. */
+    wix,
     target,
     /**
      * The target the person picked before that couldn't be read: the page
@@ -200,20 +233,21 @@ export function useCmsTarget(brandId: string) {
   };
 }
 
-const TARGETS = ['webflow', 'wordpress', 'framer', 'webhook'] as const;
+const TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'webhook'] as const;
 
 /**
  * The targets the brand has, when it has Webflow, WordPress or Framer: the
  * person picks where pages go. The webhook is always one; a CMS connected
  * but not ready shows, off, with what to do. One tab stop, the picked card;
  * the arrow keys move to the next one and pick it, past one that's off.
- * Four cards go two by two.
+ * Four cards go two by two; five, three in a row.
  */
 export function CmsTargetPicker({
   value,
   webflow,
   wordpress,
   framer,
+  wix,
   onChange,
   disabled,
 }: {
@@ -221,12 +255,13 @@ export function CmsTargetPicker({
   webflow: CmsWebflow | undefined;
   wordpress: CmsWordPress | undefined;
   framer: CmsFramer | undefined;
+  wix?: CmsWix | undefined;
   onChange: (target: CmsTarget) => void;
   disabled?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.send.target');
   const cards = useRef<Partial<Record<CmsTarget, HTMLButtonElement | null>>>({});
-  const connections = { webflow, wordpress, framer };
+  const connections = { webflow, wordpress, framer, wix };
   const shown = TARGETS.filter((target) => target === 'webhook' || connections[target]);
   const off = (target: CmsTarget) =>
     disabled || (target !== 'webhook' && !connections[target]?.ready);
@@ -257,6 +292,9 @@ export function CmsTargetPicker({
         ? t('wordpress.hint', { site: wordpress.site })
         : t('wordpress.notReady');
     }
+    if (target === 'wix') {
+      return wix?.ready ? t('wix.hint', { site: wix.site }) : t('wix.notReady');
+    }
     return framer?.ready
       ? t('framer.hint', { collection: framer.collection || t('framer.collection') })
       : t('framer.notReady');
@@ -267,7 +305,7 @@ export function CmsTargetPicker({
       aria-label={t('label')}
       className={cn(
         'grid gap-2',
-        shown.length === 3
+        shown.length === 3 || shown.length >= 5
           ? 'grid-cols-1 sm:grid-cols-3'
           : shown.length === 4
             ? 'grid-cols-1 sm:grid-cols-2'
@@ -329,7 +367,9 @@ export function CmsTargetUnchecked({
             ? 'uncheckedWordPress'
             : target === 'framer'
               ? 'uncheckedFramer'
-              : 'unchecked',
+              : target === 'wix'
+                ? 'uncheckedWix'
+                : 'unchecked',
         )}
       </span>
       <Button

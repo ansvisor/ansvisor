@@ -11,9 +11,9 @@ import type { CmsFields, CmsPage } from '@/lib/content/cms-send';
 
 /**
  * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
- * WordPress site or its Framer collection (phase 2).
+ * WordPress site, its Framer collection or its Wix site's Blog (phase 2).
  */
-export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer';
+export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix';
 
 /** Why a send didn't go, as the server names it. */
 export type CmsSendError =
@@ -35,6 +35,10 @@ export type CmsSendError =
   | 'no_framer'
   | 'framer_refused'
   | 'framer_not_ready'
+  // Wix (00372): not on this server, not connected, or its API key refused.
+  | 'wix_not_configured'
+  | 'no_wix'
+  | 'wix_refused'
   | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
@@ -91,6 +95,9 @@ const KNOWN: readonly CmsSendError[] = [
   'no_framer',
   'framer_refused',
   'framer_not_ready',
+  'wix_not_configured',
+  'no_wix',
+  'wix_refused',
   'in_progress',
   'daily_limit',
   'forbidden',
@@ -234,7 +241,10 @@ function lastSend(row: {
   return {
     status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
     target:
-      row.target === 'webflow' || row.target === 'wordpress' || row.target === 'framer'
+      row.target === 'webflow' ||
+      row.target === 'wordpress' ||
+      row.target === 'framer' ||
+      row.target === 'wix'
         ? row.target
         : 'webhook',
     at: row.published_at ?? row.sent_at ?? row.created_at,
