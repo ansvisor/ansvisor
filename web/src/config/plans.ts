@@ -87,6 +87,13 @@ export interface PlanLimits {
    * Enterprise 200M; 0 = locked, -1 = no cap.
    */
   maxBotRawRecordsPerMonth: number;
+  /**
+   * Live catalog products a workspace's brands may have across their sources
+   * (ECOM-019). Starter 5,000, Growth 50,000, Enterprise set per customer
+   * via organizations.plan_overrides; -1 = no cap. The API's catalog sync
+   * stops adding products past it.
+   */
+  maxCatalogProducts: number;
   maxDailyOnDemand: number;
   onDemandCooldownMinutes: number;
   features: readonly Feature[];
@@ -135,6 +142,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxSiteAudits: -1,
       maxBotEventsPerMonth: -1,
       maxBotRawRecordsPerMonth: -1,
+      maxCatalogProducts: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       features: [
@@ -180,6 +188,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxSiteAudits: 100,
       maxBotEventsPerMonth: 0,
       maxBotRawRecordsPerMonth: 0,
+      maxCatalogProducts: 5_000,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
       allowedScrapers: ['chatgpt-web', 'copilot-web'],
@@ -228,6 +237,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxSiteAudits: 500,
       maxBotEventsPerMonth: 2_000_000,
       maxBotRawRecordsPerMonth: 20_000_000,
+      maxCatalogProducts: 50_000,
       maxDailyOnDemand: 10,
       onDemandCooldownMinutes: 5,
       // API-model tracking (Claude) is not part of Growth — scraper engines
@@ -276,6 +286,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxSiteAudits: -1,
       maxBotEventsPerMonth: 20_000_000,
       maxBotRawRecordsPerMonth: 200_000_000,
+      maxCatalogProducts: -1,
       maxDailyOnDemand: -1,
       onDemandCooldownMinutes: 0,
       // API-model tracking (Claude) is a per-customer opt-in on Enterprise:

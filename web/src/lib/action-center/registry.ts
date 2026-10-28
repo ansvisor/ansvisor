@@ -32,6 +32,8 @@ export type ActionStatus = 'new' | 'in_progress' | 'on_hold' | 'completed' | 'di
 export type ActionOutcome =
   | 'pending_measurement'
   | 'improved'
+  // One metric up and another down, or a fix's pages only partly passing (learning A4).
+  | 'mixed'
   | 'no_meaningful_change'
   | 'declined'
   | 'not_measurable';
@@ -113,8 +115,13 @@ export type ActionKind =
   | 'mention_review'
   // Sent by a person from AI Traffic's Pages section (AT-006).
   | 'traffic_pages'
+  // Sent by a person from a Site Audit report (learning D2).
+  | 'audit_page'
   // Sent by a person from the Content Editor's Start, as Team (CE-015).
   | 'content_draft'
+  // Sent by a person from Product Visibility: a product, or a catalog category (ECOM-013).
+  | 'shopping_product'
+  | 'shopping_category'
   // Raised by the catalog check for a live page linking products that no
   // longer sell (shopping path, part 7), and closed by it once fixed.
   | 'shopping_links';
@@ -149,10 +156,31 @@ export const OPEN_ACTION_STATUSES: readonly ActionStatus[] = ['new', 'in_progres
 export const ACTION_OUTCOMES: readonly ActionOutcome[] = [
   'pending_measurement',
   'improved',
+  'mixed',
   'no_meaningful_change',
   'declined',
   'not_measurable',
 ];
+
+/**
+ * Why an action was dismissed, as the person says it (00366, learning A5):
+ * it doesn't matter to the brand, the work is already done, the data behind
+ * it is wrong, or not now.
+ */
+export const ACTION_DISMISS_REASONS = [
+  'not_relevant',
+  'already_done',
+  'wrong_data',
+  'not_now',
+] as const;
+export type ActionDismissReason = (typeof ACTION_DISMISS_REASONS)[number];
+
+/** A stored dismiss reason, if it is one of ACTION_DISMISS_REASONS; null otherwise. */
+export function dismissReasonOf(value: unknown): ActionDismissReason | null {
+  return (ACTION_DISMISS_REASONS as readonly unknown[]).includes(value)
+    ? (value as ActionDismissReason)
+    : null;
+}
 
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
@@ -253,9 +281,18 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'topic_opportunity',
   'mention_review',
   'traffic_pages',
+  'audit_page',
   'content_draft',
+  'shopping_product',
+  'shopping_category',
   'shopping_links',
 ];
+
+/**
+ * The kinds sent from Product Visibility (ECOM-013): a product or a
+ * category. The Actions page's "From Products" chip lists them.
+ */
+export const FROM_PRODUCTS_KINDS: readonly string[] = ['shopping_product', 'shopping_category'];
 
 /**
  * Is this one of the kinds we have copy for?

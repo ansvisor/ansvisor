@@ -48,6 +48,12 @@ const OPEN_ACTIONS: Record<string, string> = {
     'checks the plan itself (isSubscriptionActive), to answer "plan" instead of throwing',
   'brand.ts:deleteBrand':
     'deleting a brand only removes what the person gave us (Ansvisor, 2026-10-27)',
+  'prompt-table-views.ts:savePromptTableView':
+    'a column layout: costs nothing, and read-only shows the data the same way',
+  'prompt-table-views.ts:removePromptTableView':
+    'a column layout: costs nothing, and read-only shows the data the same way',
+  'menu-access.ts:setMyWorkAreas':
+    'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
 };
 
 /** Actions that take a brand's own id under another name: file:function → the parameter. */
@@ -69,7 +75,7 @@ const OPEN_ROUTES: Record<string, string> = {
   'settings/ai-providers:DELETE': 'removing a key takes back access',
   'stripe/checkout:POST': 'billing: choosing a plan',
   'stripe/portal:POST': 'billing: the payment method',
-  'stripe/promo-code:POST': 'billing: checking a promotion code, which writes nothing',
+  'stripe/promo-code:POST': 'billing: checking a promo code',
   'stripe/subscription:PATCH': 'billing: changing the plan',
   'stripe/subscription:DELETE': 'billing: canceling the plan',
   'stripe/webhook:POST': "Stripe's own calls",

@@ -78,6 +78,8 @@ export const DEMO_GUARDED = [
   guard('POST /action-center/tasks/:id/send', rowIn('action_tasks', 'path')),
   guard('POST /action-center/tasks/:id/check', rowIn('action_tasks', 'path')),
   guard('POST /action-center/pages', brandIn('body')),
+  guard('POST /action-center/audits', brandIn('body')),
+  guard('POST /action-center/products', brandIn('body')),
   guard('POST /action-center/content-drafts', brandIn('body')),
 
   // Site Audit (audits.js).
@@ -111,11 +113,21 @@ export const DEMO_GUARDED = [
   guard('PUT /cms/brands/:brandId/webflow', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/webflow', brandIn('path')),
 
+  // WordPress and Framer (cms-wordpress.js, cms-framer.js): a connection
+  // would reach a real site.
+  guard('POST /cms/brands/:brandId/wordpress', brandIn('path')),
+  guard('DELETE /cms/brands/:brandId/wordpress', brandIn('path')),
+  guard('POST /cms/brands/:brandId/framer', brandIn('path')),
+  guard('PUT /cms/brands/:brandId/framer', brandIn('path')),
+  guard('DELETE /cms/brands/:brandId/framer', brandIn('path')),
+
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.
   guard('POST /content-drafts/send', brandIn('body')),
   guard('POST /content-drafts/:draftId/publish', rowIn('content_drafts', 'path', 'draftId')),
   guard('POST /content-drafts/webflow-status', brandIn('body')),
+  guard('POST /content-drafts/wordpress-status', brandIn('body')),
+  guard('POST /content-drafts/framer-status', brandIn('body')),
   guard(
     'POST /content-drafts/:draftId/brief',
     brandIn('body'),

@@ -306,6 +306,51 @@ describe('ActionDrawer', () => {
     });
   });
 
+  describe('How we check (AC-010)', () => {
+    const lastCheck = { at: '2026-10-20T00:00:00Z', passed: false, missing: ['not_changed'] };
+    const task = (taskKey: string, title: string) => ({
+      id: 't1',
+      position: 1,
+      status: 'todo',
+      taskKey,
+      title,
+      titleParams: {},
+      dependsOn: [],
+      details: parseTaskDetails({
+        url: 'https://acme.example/pricing',
+        check: 'auto',
+        autoCheck: lastCheck,
+      }),
+    });
+    const open = async (taskKey: string, title: string) => {
+      server.getActionDetail.mockResolvedValue({ ...emptyDetail, tasks: [task(taskKey, title)] });
+      await renderDrawer();
+      const button = (name: string) =>
+        [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+        )!;
+      await act(async () => button('Tasks').click());
+      await act(async () => button(`1. ${title}`).click());
+      return document.body.querySelector('[role="dialog"]')!.textContent ?? '';
+    };
+
+    it('shows a call-to-action task planned as Automatic as Manual, with no automatic check', async () => {
+      const text = await open('improve_cta_path', 'Tighten the call to action');
+      expect(text).toContain('Manual: you confirm it');
+      expect(text).toContain('The call to action is live on the page: you confirm it');
+      expect(text).not.toContain('Automatic: we fetch the page again');
+      expect(text).not.toContain('Last check');
+      expect(text).not.toContain('Check now');
+    });
+
+    it('still shows a page-checked task’s automatic check, its last one and Check now', async () => {
+      const text = await open('refresh_content', 'Refresh the page');
+      expect(text).toContain('Automatic: we fetch the page again');
+      expect(text).toContain('Last check');
+      expect(text).toContain('Check now');
+    });
+  });
+
   describe('writing tasks (CE-022)', () => {
     const PRICING = 'https://acme.example/pricing';
     const FEATURES = 'https://acme.example/features';
@@ -429,7 +474,12 @@ describe('ActionDrawer Check now (AC-010)', () => {
     title: 'Let AI crawlers in',
     titleParams: {},
     dependsOn: [],
-    details: parseTaskDetails({ url: 'https://acme.example/pricing', check: 'auto' }),
+    // A written task is checked on its page when it carries its change (#1683).
+    details: parseTaskDetails({
+      url: 'https://acme.example/pricing',
+      check: 'auto',
+      change: { before: 'Disallow: /', after: 'Allow: /' },
+    }),
   };
   const button = (name: string) =>
     [...document.querySelectorAll<HTMLButtonElement>('button')].find(

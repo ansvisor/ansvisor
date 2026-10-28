@@ -29,6 +29,15 @@ const NOT_A_BRAND_ROW = {
   profiles: "A person's own profile.",
 };
 
+/**
+ * Tables with a brand_id that people may write on a demo brand too, and why:
+ * nothing of the demo's sample data, and nothing that costs.
+ */
+const OPEN_ON_A_DEMO_BRAND = {
+  prompt_table_views:
+    "A person's column layout of the Tracked Prompts table (00363): it changes no sample data and costs nothing; the web keeps it open while read-only too.",
+};
+
 const name = (raw) =>
   raw
     .replace(/"/g, '')
@@ -152,10 +161,19 @@ describe('people cannot write a demo brand’s rows', () => {
 
   it('guards every table with a brand_id that people can write, by its own brand_id', () => {
     const missing = [...writable].filter(
-      (table) => brandTables.has(table) && guarded.get(table)?.length !== 0,
+      (table) =>
+        brandTables.has(table) &&
+        guarded.get(table)?.length !== 0 &&
+        !(table in OPEN_ON_A_DEMO_BRAND),
     );
-    // A table here is new: attach refuse_demo_brand_writes() in its migration.
+    // A table here is new: attach refuse_demo_brand_writes() in its migration,
+    // or name it in OPEN_ON_A_DEMO_BRAND with why.
     expect(missing).toEqual([]);
+    for (const table of Object.keys(OPEN_ON_A_DEMO_BRAND)) {
+      expect(writable.has(table), table).toBe(true);
+      expect(brandTables.has(table), table).toBe(true);
+      expect(guarded.has(table), table).toBe(false);
+    }
   });
 
   it('guards every other table people can write, through its brand, unless it has none', () => {

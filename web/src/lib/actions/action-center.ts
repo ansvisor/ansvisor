@@ -13,7 +13,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 import {
+  ACTION_DISMISS_REASONS,
   type ActionCategory,
+  type ActionDismissReason,
   type ActionImpact,
   taskProgress,
   type ActionStatus,
@@ -318,24 +320,35 @@ async function touchAction(
     .eq('id', actionId);
 }
 
+/**
+ * Sets an action's status. A dismissal keeps why, when the person said
+ * (learning A5); any other status clears it, as a dismissal it no longer is.
+ */
 export async function updateActionStatus(
   brandId: string,
   actionId: string,
   status: ActionStatus,
+  reason: ActionDismissReason | null = null,
 ): Promise<void> {
   await assertWritable({ brandId });
   const supabase = await createClient();
+  const dismissReason =
+    status === 'dismissed' && reason && ACTION_DISMISS_REASONS.includes(reason) ? reason : null;
   const { error } = await supabase
     .from('actions')
     .update({
       status,
       completed_at: status === 'completed' ? new Date().toISOString() : null,
+      dismiss_reason: dismissReason,
       updated_at: new Date().toISOString(),
     })
     .eq('brand_id', brandId)
     .eq('id', actionId);
   if (error) throw new Error(error.message);
-  await logEvent(supabase, actionId, 'status_changed', { to: status });
+  await logEvent(supabase, actionId, 'status_changed', {
+    to: status,
+    ...(dismissReason ? { reason: dismissReason } : {}),
+  });
 }
 
 /**

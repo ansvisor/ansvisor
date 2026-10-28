@@ -48,7 +48,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { ActionItem } from '@/lib/actions/action-center';
-import type { ActionCategory, ActionKind, ActionStatus } from '@/lib/action-center/registry';
+import type {
+  ActionCategory,
+  ActionDismissReason,
+  ActionKind,
+  ActionStatus,
+} from '@/lib/action-center/registry';
+import { DismissReasonDialog } from './dismiss-reason-dialog';
 import {
   actionContextTags,
   actionTexts,
@@ -216,7 +222,11 @@ function ActionMenu({
   title: string;
   canDelete: boolean;
   disabled: boolean;
-  onStatusChange: (action: ActionItem, status: ActionStatus) => void;
+  onStatusChange: (
+    action: ActionItem,
+    status: ActionStatus,
+    reason?: ActionDismissReason | null,
+  ) => void;
   onDelete: (action: ActionItem) => void;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
@@ -225,8 +235,15 @@ function ActionMenu({
   // confirm), open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Dismissing asks why first (learning A5).
+  const [dismissing, setDismissing] = useState(false);
   return (
     <>
+      <DismissReasonDialog
+        open={dismissing}
+        onOpenChange={setDismissing}
+        onChoose={(reason) => onStatusChange(action, 'dismissed', reason)}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger
           className="rounded p-1 text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
@@ -240,9 +257,11 @@ function ActionMenu({
             <DropdownMenuItem
               key={status}
               disabled={action.status === status}
-              onClick={guard(() => onStatusChange(action, status), {
-                action: tActions('changeActionStatus'),
-              })}
+              onClick={guard(
+                () =>
+                  status === 'dismissed' ? setDismissing(true) : onStatusChange(action, status),
+                { action: tActions('changeActionStatus') },
+              )}
             >
               <Icon className="h-4 w-4" />
               {t(`rowMenu.${status}`)}
@@ -289,7 +308,11 @@ export function ActionTable({
   actions: ActionItem[];
   onSelect: (action: ActionItem) => void;
   /** With these, each row gets its menu (status changes and Delete). */
-  onStatusChange?: (action: ActionItem, status: ActionStatus) => void;
+  onStatusChange?: (
+    action: ActionItem,
+    status: ActionStatus,
+    reason?: ActionDismissReason | null,
+  ) => void;
   onDelete?: (action: ActionItem) => void;
   canDelete?: boolean;
   /** Actions with a change in flight: their menu waits. */

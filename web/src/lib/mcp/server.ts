@@ -76,6 +76,8 @@ import {
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
+import { getAiUsageFor, getMeFor } from './account';
+import { getActionScorecardFor } from './learning';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -965,7 +967,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_prompt_volumes',
     {
       description:
-        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, the Google search volume of each keyword, total_google_volume (the Google volume of the prompt: the median of its keyword volumes, not their sum), est_ai_volume (estimated AI search demand: total_google_volume × the AI adoption rate), est_ai_volume_low and est_ai_volume_high (its likely range, from how far the keyword volumes agree), volume_confidence (high / medium / low; one level less once the volumes are over six months old), volume_type (always "estimate": AI engines publish no search volumes, so quote the range rather than a single number), competition_index (0-100), and competition label (LOW / MEDIUM / HIGH). Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
+        'Get per-prompt search demand and competition for a brand. Returns one row per analyzed prompt with its keywords, the Google search volume of each keyword, total_google_volume (the Google volume of the prompt: the median of its keyword volumes, not their sum), est_ai_volume (estimated AI search demand: total_google_volume × the AI adoption rate), est_ai_volume_low and est_ai_volume_high (its likely range, from how far the keyword volumes agree), volume_confidence (high / medium / low; one level less once the volumes are over six months old), volume_type (always "estimate": AI engines publish no search volumes, so quote the range rather than a single number), competition_index (0-100), competition label (LOW / MEDIUM / HIGH), and measured_demand: the real signs people ask it — search_console (the brand Search Console queries that match it over 28 days: impressions, clicks, top_query), google_trends (12 months: rising / steady / falling and change_percent), people_also_ask (how many questions Google lists for its top keyword, and the first 3), youtube (videos and their views) — the level they come to (high / medium / low) and read_at, or null until any was read. Sorted by est_ai_volume descending. Use this for "which prompts have the most demand?" or "which prompts have the least competition?" prioritization questions. Only returns prompts that already have volume analysis — triggering a new analysis is not available here.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z
@@ -1189,7 +1191,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_action',
     {
       description:
-        'Get one Action Center action in full: its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `url` (the exact page), `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `change` (`before`, null when it adds text, and `after`), `how` (the steps), `done_when` (the check that closes it), `check` (how it is checked: auto, the page fetched again; rerun, the prompts run again; manual, a person confirms), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
+        'Get one Action Center action in full: its outcome, its change net of the control (`net_of_control`: per metric, its move minus that of the brand\u2019s prompts it didn\u2019t touch; null when not netted) and why it was dismissed (`dismiss_reason`), its priority (score, level and the facts it rests on), its payload (the prompts, pages, competitors or numbers it is about), the signals that triggered it, its task list and its event trail. Each task carries `mode` (who carries it out: system, agent, human or human_or_agent) and `permission` (read, write or execute). Read both before proposing to act on a task — anything beyond read needs a human to approve it in the dashboard. A task is described by `title` when someone wrote one, otherwise by `task_key` with `title_params`. `details` says what the task carries beyond that, or null: `url` (the exact page), `where` (the page, prompt, platform, domain or competitor), `why` (the evidence), `change` (`before`, null when it adds text, and `after`), `how` (the steps), `done_when` (the check that closes it), `check` (how it is checked: auto, the page fetched again; rerun, the prompts run again; manual, a person confirms), `type` (content, on_page, technical, outreach, pr or product), `effort` and `role`; a task sent from the Improve tab also carries `body`, `platform`, `platform_label` and `sources`; `sent_to_content` (the opportunity it became) and `sent_to_webhook` say where it was sent. With `format` "markdown" or "csv" it returns the action as the dashboard\'s Copy Data and Export CSV write it instead (everything its tabs show, labelled in English, dates in UTC): Markdown to paste into a doc, ticket or another agent, CSV with a row per affected item, task and signal.',
       inputSchema: {
         action_id: relaxedUuid.describe('Action UUID, from list_actions or list_action_history.'),
         format: z
@@ -1269,7 +1271,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_action_history',
     {
       description:
-        'List closed Action Center actions (completed or dismissed) for a brand with their measured result, most recently closed first. `outcome` is the verdict (improved, no_meaningful_change, declined, not_measurable, or pending_measurement while the after-window is still open) and `results` holds the before/after values the validation sweep measured. Use this to answer "did what we did last month work?".',
+        'List closed Action Center actions (completed or dismissed) for a brand with their measured result, most recently closed first. `outcome` is the verdict (improved, mixed when its metrics moved both ways or only some of a fix\u2019s pages pass, no_meaningful_change, declined, not_measurable, or pending_measurement while the first week after it closed is still open; read again 14 and 30 days on, the day-30 reading final) and `results` holds the before/after values the validation sweep measured. `reading_day` is the day after closing the latest reading was taken on (7, 14 or 30; null before the first, or for one measured once before readings began). Until `final` is true, the outcome is a reading so far (day 7 or 14), not the result. `net_of_control` is its change net of the brand\u2019s prompts it didn\u2019t touch (`basis` topics or brand, `control_prompts`, and per metric `net`: a rate\u2019s move in points or a count\u2019s in percent, minus the control\u2019s), so a market-wide swing doesn\u2019t read as its effect; null when it couldn\u2019t be netted. `dismiss_reason` says why a dismissed one was turned down (not_relevant, already_done, wrong_data, not_now), or null. Use this to answer "did what we did last month work?"; for what each kind of action does at the brand overall, use get_action_scorecard.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         limit: z
@@ -1762,6 +1764,64 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         };
       }
       return result ? json(result) : notFound('Draft');
+    },
+  );
+
+  // ─── The account: who the key acts as, and the AI allowance (B2) ───
+
+  server.registerTool(
+    'get_me',
+    {
+      title: 'Who am I',
+      description:
+        "Who this connection acts as: the user's id and email, their organization (id and name), their role (admin, manager, analyst or agency_partner), their work areas (what they work on, from Settings › Account, e.g. Content or Founders & leaders) and whether they can choose who sees which menu sections (can_manage_menus). Use it to tailor answers to the person — lead with what their work areas cover — and before suggesting something only an admin or a manager may do.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => json(await getMeFor(auth)),
+  );
+
+  server.registerTool(
+    'get_ai_usage',
+    {
+      title: 'AI usage this period',
+      description:
+        "How much of the workspace's monthly AI allowance is used this period, as the Billing page's meter shows it: percent_used (0–100, to a tenth; the allowance is one budget that Improve suggestions, the Content Editor's AI and quality checks, and the Action Center's task writing all draw on), each feature's share (features: improve, content, action_center, other — only those that used some), the plan, whether it is the free trial's smaller allowance, and when the period started and renews. unlimited is true where nothing is metered (self-hosted); active_plan is false when the workspace has no active plan, so there is no allowance. Dollars are not shown. Use it before suggesting AI-heavy work (many Improve runs or drafts), or when asked how much AI is left.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+      const usage = await getAiUsageFor(auth);
+      return usage ? json(usage) : notFound('Organization');
+    },
+  );
+
+  // ─── What worked: the brand's scorecard by kind of action (B3) ───
+
+  server.registerTool(
+    'get_action_scorecard',
+    {
+      title: 'What worked, by kind of action',
+      description:
+        "What each kind of Action Center action did at this brand, as the History tab's scorecard shows it: one row per kind (e.g. content_opportunity, citation_gap, prompt_improve) of the brand's own actions raised since `date_from` (all of them without it), busiest first. Each row: completed, and their results (improved, mixed, no_change, declined, not_measurable, pending — not read yet — and final, read for the last time a month on); success_rate (improved ÷ results with a verdict, 0–100; null below three verdicts, too few to say); median_change_percent (the median change in each one's main metric, +15 is +15%); dismissed, dismiss_reasons by reason (not_relevant, already_done, wrong_data, not_now, none) and top_dismiss_reason. Use it for \"which kinds of work pay off here?\" and to lead with the kinds that do; never compare brands with it.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        date_from: z
+          .string()
+          .refine((value) => Number.isFinite(Date.parse(value)), 'Not a date')
+          .optional()
+          .describe(
+            'Only actions raised on or after this ISO timestamp, e.g. 2026-05-01T00:00:00Z. All of them when absent.',
+          ),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const scorecard = await getActionScorecardFor(auth, {
+        brandId: args.brand_id,
+        since: args.date_from,
+      });
+      return scorecard ? json(scorecard) : notFound('Brand');
     },
   );
 

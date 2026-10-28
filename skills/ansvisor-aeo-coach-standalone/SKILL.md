@@ -568,6 +568,11 @@ When the user asks how AI describes the brand, why sentiment moved
 - `404 ... not found` → the id doesn't belong to the authenticated
   user's organization. Re-run `GET /brands` (or the matching list
   endpoint) to get the right id.
+- `402` with `"code": "subscription_inactive"` → the workspace's plan
+  has ended (trial over, plan cancelled or payment failed) and it is
+  read-only: `GET` endpoints still work, writes are refused. Tell the
+  user their plan has ended and that an admin can choose a plan (or
+  update the payment method) in **Settings → Billing**. Don't retry.
 - `500` with a message (e.g. a plan limit, "Generate suggestions for
   this range first") → relay the message as is.
 - Network timeout → retry once. If it still fails, surface it and stop.

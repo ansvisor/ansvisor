@@ -1,5 +1,6 @@
 'use server';
 
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
@@ -15,6 +16,12 @@ import {
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
 import { PROMPT_DELETE_BATCH } from '@/lib/prompt-bulk-actions';
 import { isValidLocation, locationCode } from '@/lib/region';
+import { createLimiter } from '@/lib/limiter';
+import {
+  MATRIX_READS_AT_ONCE,
+  MATRIX_REGIONS,
+  type PromptLocationCell,
+} from '@/lib/prompt-location-matrix';
 import type { Plan, PlanId } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import {
@@ -1148,25 +1155,92 @@ async function getPositionRows(
   window: { from: string; to?: string },
   region?: string,
 ): Promise<PositionRows> {
+  const before = previousWindow(window);
+  const [included, current, previous] = await Promise.all([
+    includedPositionPlatforms(brandId),
+    positionSums(brandId, window, region),
+    positionSums(brandId, before, region),
+  ]);
+  if (!included) return noPositionRows();
+  return { included, current, previous };
+}
+
+/**
+ * The engines the brand's plan includes (the org's, Growth's on the demo
+ * brand), as the Positions panel counts them; null without a brand.
+ */
+async function includedPositionPlatforms(
+  brandId: string,
+): Promise<{ id: string; label: string }[] | null> {
   const supabase = await createClient();
   const { data: brand } = await supabase
     .from('brands')
     .select('organization_id, is_demo')
     .eq('id', brandId)
     .maybeSingle();
-  if (!brand?.organization_id) return noPositionRows();
+  if (!brand?.organization_id) return null;
+  const plan = effectivePlanForBrand(
+    await getOrgPlan(brand.organization_id as string),
+    brand.is_demo === true,
+  );
+  return POSITION_PLATFORMS.filter((p) => platformAccess(plan, p.id).state === 'included').map(
+    (p) => ({ id: p.id as string, label: p.label as string }),
+  );
+}
 
-  const before = previousWindow(window);
-  const [orgPlan, current, previous] = await Promise.all([
-    getOrgPlan(brand.organization_id as string),
-    positionSums(brandId, window, region),
-    positionSums(brandId, before, region),
+/**
+ * Each tracked prompt's figures in each of `regions` (PROMPT-015b): the
+ * same reads the table uses for one location, once per location, side by
+ * side, so a location's column equals the table filtered to it. Keyed by
+ * prompt id, then location code; a prompt with no answers in a location
+ * has no cell there.
+ */
+export async function getPromptLocationMatrix(
+  brandId: string,
+  opts: { days?: number; from?: string; to?: string; regions: string[] },
+): Promise<Record<string, Record<string, PromptLocationCell>>> {
+  const regions = [...new Set(opts.regions.filter(isValidLocation))].slice(0, MATRIX_REGIONS);
+  if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
+  const days = opts.days ?? DEFAULT_PROMPT_RANGE_DAYS;
+  const window = {
+    from: opts.from ?? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+    to: opts.to,
+  };
+  // One round of reads, but at most MATRIX_READS_AT_ONCE of the heavy ones
+  // (two per location) at a time: twelve locations at once squeezed the
+  // database.
+  const limit = createLimiter(MATRIX_READS_AT_ONCE);
+  const [platforms, reads] = await Promise.all([
+    includedPositionPlatforms(brandId),
+    Promise.all(
+      regions.map((region) =>
+        Promise.all([
+          limit(() =>
+            getPromptVisibilitySummaries(brandId, { days, from: opts.from, to: opts.to, region }),
+          ),
+          limit(() => positionSums(brandId, window, region)).catch((err) => {
+            console.error('[prompts] location position sums failed:', err);
+            return new Map<string, PlatformPositionRow[]>();
+          }),
+        ]),
+      ),
+    ),
   ]);
-  const plan = effectivePlanForBrand(orgPlan, brand.is_demo === true);
-  const included = POSITION_PLATFORMS.filter(
-    (p) => platformAccess(plan, p.id).state === 'included',
-  ).map((p) => ({ id: p.id as string, label: p.label as string }));
-  return { included, current, previous };
+  const included = platforms ?? [];
+  const cells: Record<string, Record<string, PromptLocationCell>> = {};
+  regions.forEach((region, i) => {
+    const [visibility, positions] = reads[i];
+    for (const [promptId, vis] of Object.entries(visibility)) {
+      (cells[promptId] ??= {})[region] = {
+        score: vis.score,
+        mentions: vis.totalMentions,
+        citations: vis.totalCitations,
+        position: buildPositionCell(positions.get(promptId) ?? [], [], included).avg,
+        runs: vis.runs,
+      };
+    }
+  });
+  return cells;
 }
 
 /** A prompt and platform's sums, as prompt_position_summaries_json (00153) returns them. */
