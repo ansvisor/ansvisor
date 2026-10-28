@@ -120,19 +120,65 @@ describe('checkSite', () => {
 });
 
 describe('ricosChunks', () => {
-  it('keeps the blocks in order, in pieces Wix converts at once', () => {
-    const block = `<p>${'a'.repeat(4000)}</p>`;
+  it('keeps the blocks in order, in pieces within Wix’s 30,000 characters', () => {
+    expect(RICOS_CHUNK).toBeLessThan(30_000);
+    const block = `<p>${'a'.repeat(12_000)}</p>`;
     const chunks = ricosChunks(`${block}${block}${block}<h2>End</h2>`);
     expect(chunks).toHaveLength(2);
     expect(chunks.every((chunk) => chunk.length <= RICOS_CHUNK)).toBe(true);
     expect(chunks[1].endsWith('<h2>End</h2>')).toBe(true);
   });
 
-  it('sends a block longer than that as its text, escaped, piece by piece', () => {
-    const chunks = ricosChunks(`<table><tr><td>${'x < y & '.repeat(3000)}</td></tr></table>`, 1000);
+  it('splits a block longer than that among its children, in copies of its tag', () => {
+    const items = Array.from({ length: 40 }, (_, i) => `<li>Item ${i}: smooth and sweet</li>`);
+    const chunks = ricosChunks(`<ul class="steps">${items.join('')}</ul>`, 500);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(500);
+      expect(chunk).toMatch(/^<ul class="steps">(<li>Item \d+: smooth and sweet<\/li>)+<\/ul>$/);
+    }
+    // Every item, once, in order.
+    expect(chunks.join('').match(/Item \d+/g)).toEqual(items.map((_, i) => `Item ${i}`));
+
+    const rows = `<tr><td>${'x < y & '.repeat(300)}</td></tr>`;
+    const tables = ricosChunks(`<table><tbody>${rows}</tbody></table>`, 1000);
+    expect(tables.every((chunk) => chunk.length <= 1000)).toBe(true);
+    expect(tables.every((chunk) => chunk.startsWith('<table><tbody><tr><td>'))).toBe(true);
+    expect(tables.join('')).toContain('x &lt; y &amp;');
+  });
+
+  it('cuts a long paragraph between words, keeping its links', () => {
+    const text = 'Cold brew steeps slowly overnight. '.repeat(60);
+    const chunks = ricosChunks(
+      `<p>See <a href="https://acme.example">the guide</a>. ${text}</p>`,
+      600,
+    );
+    expect(chunks.every((chunk) => chunk.length <= 600)).toBe(true);
+    expect(chunks.every((chunk) => chunk.startsWith('<p>') && chunk.endsWith('</p>'))).toBe(true);
+    expect(chunks.join('')).toContain('<a href="https://acme.example">the guide</a>');
+    // The words of the paragraph's text after the link, each whole.
+    const words = new Set(`. ${text}`.trim().split(/\s+/));
+    for (const chunk of chunks.slice(1)) {
+      for (const word of chunk
+        .replace(/<[^>]+>/g, '')
+        .trim()
+        .split(/\s+/)) {
+        expect(words.has(word)).toBe(true);
+      }
+    }
+  });
+
+  it('sends a block with nothing to split it by as its text, escaped, between words', () => {
+    const chunks = ricosChunks(
+      `<p title="${'t'.repeat(600)}">${'fish & chips '.repeat(200)}</p>`,
+      1000,
+    );
+    expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((chunk) => chunk.length <= 1000)).toBe(true);
-    expect(chunks.join('')).not.toContain('<table>');
-    expect(chunks.join('')).toContain('x &lt; y &amp;');
+    expect(chunks.join('')).not.toContain('title=');
+    for (const chunk of chunks) {
+      expect(chunk).toMatch(/^<p>((fish|&amp;|chips) ?)+<\/p>$/);
+    }
   });
 });
 
@@ -148,7 +194,7 @@ describe('toRicos', () => {
         },
       }),
     });
-    const block = `<p>${'a'.repeat(6000)}</p>`;
+    const block = `<p>${'a'.repeat(15_000)}</p>`;
     const doc = await toRicos(SITE, KEY, `${block}${block}`, opts);
     expect(doc.nodes.map((node) => node.id)).toEqual(['n1', 'n2']);
     expect(api.calls[0].body.options.plugins).toContain('HEADING');
