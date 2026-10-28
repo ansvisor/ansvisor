@@ -206,6 +206,20 @@ describe('the From Products chip (ECOM-013)', () => {
     await render();
     expect(chip()).toBeUndefined();
   });
+
+  it('shows the chip on from the URL with no such action left, to turn it off', async () => {
+    window.history.replaceState(null, '', '/?from=products');
+    getActions.mockResolvedValue([action]);
+    getActionsAffected.mockResolvedValue({});
+    await render();
+    expect(chip()!.textContent).toBe('fromProducts0');
+    expect(chip()!.getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => chip()!.click());
+    expect(chip()).toBeUndefined();
+    await act(async () => exportButton().click());
+    expect(getActionsAffected).toHaveBeenLastCalledWith('brand-id', ['a1']);
+  });
 });
 
 describe('the actions list Export CSV', () => {
