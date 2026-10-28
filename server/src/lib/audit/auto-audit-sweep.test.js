@@ -55,7 +55,10 @@ function query(table) {
       op.filters.push(['is', col, val]);
       return builder;
     },
-    order: () => builder,
+    order: (col) => {
+      op.order = [...(op.order ?? []), col];
+      return builder;
+    },
     limit: () => builder,
     range: (from, to) => {
       op.range = [from, to];
@@ -71,7 +74,7 @@ function query(table) {
       }
       if (table === 'site_audit_brand_settings') return resolve({ data: settingRows, error: null });
       if (table === 'site_audits' && op.select === 'brand_id, url, final_url, created_at') {
-        return resolve({ data: recentAudits, error: null });
+        return resolve({ data: recentAudits.slice(op.range[0], op.range[1] + 1), error: null });
       }
       if (table === 'site_audit_auto_runs' && op.upsert) {
         return resolve({ data: claimed ? [{ id: 'run-1' }] : [], error: null });
@@ -492,5 +495,39 @@ describe('fixedPages', () => {
       ['brand-a', '/both'],
       ['brand-b', '/both'],
     ]);
+  });
+
+  it('reads every audit since the oldest fix, past the 1000-row page', async () => {
+    fixedActions = [
+      {
+        brand_id: 'brand-a',
+        completed_at: '2026-10-05T10:00:00Z',
+        payload: {
+          targets: [{ id: 'https://acme.com/a-fixed' }, { id: 'https://acme.com/a-due' }],
+        },
+      },
+    ];
+    // A thousand other audits first; the fixed page's comes 1,001st.
+    recentAudits = Array.from({ length: 1000 }, (_, i) => ({
+      brand_id: 'brand-a',
+      url: `https://acme.com/other-${i}`,
+      final_url: null,
+      created_at: '2026-10-06T00:00:00Z',
+    }));
+    recentAudits.push({
+      brand_id: 'brand-a',
+      url: 'https://acme.com/a-fixed',
+      final_url: null,
+      created_at: '2026-10-07T00:00:00Z',
+    });
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+
+    expect((await fixedPages(brandRows, NOW)).map((p) => p.path)).toEqual(['/a-due']);
+    const reads = ops.filter((op) => op.table === 'site_audits');
+    expect(reads.map((op) => op.range)).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    expect(reads[0].order).toEqual(['created_at', 'id']);
   });
 });

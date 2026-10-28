@@ -280,15 +280,21 @@ export async function fixedPages(brands, now) {
   if (pages.size === 0) return [];
 
   // The audits since the oldest of those fixes, by the address asked for or
-  // ended at: the brand's own, as the action's result reads them (A2).
+  // ended at: the brand's own, as the action's result reads them (A2). Every
+  // one, past PostgREST's 1000-row page: a busy month has more.
   const oldest = [...pages.values()].reduce((min, page) =>
     page.fixedAt < min.fixedAt ? page : min,
   ).fixedAt;
-  const { data: audits, error: auditsErr } = await supabaseAdmin
-    .from('site_audits')
-    .select('brand_id, url, final_url, created_at')
-    .in('brand_id', brandIds)
-    .gte('created_at', new Date(oldest).toISOString());
+  const { data: audits, error: auditsErr } = await readAllRpcRows('site_audits', (from, to) =>
+    supabaseAdmin
+      .from('site_audits')
+      .select('brand_id, url, final_url, created_at')
+      .in('brand_id', brandIds)
+      .gte('created_at', new Date(oldest).toISOString())
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
   if (auditsErr) throw new Error(auditsErr.message);
   const lastAudit = new Map();
   for (const audit of audits ?? []) {
