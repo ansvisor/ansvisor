@@ -42021,5 +42021,10 @@ create trigger profiles_reset_menu_access
   before update of organization_id, role on public.profiles
   for each row execute function public.reset_profile_menu_access();
 
+-- Everyone here before menu access counts as asked: "What do you work on?"
+-- is for new sign-ups and people joining from an invite, once. Existing
+-- people pick their work areas in Settings › Account if they want to.
+update public.profiles set work_areas_asked_at = now() where work_areas_asked_at is null;
+
 notify pgrst, 'reload schema';
 
