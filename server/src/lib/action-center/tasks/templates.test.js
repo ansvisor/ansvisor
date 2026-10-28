@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TASKS } from './registry.js';
 import { TEMPLATED_TASKS, onePage, templateDetails } from './templates.js';
 import { TASK_CHECKS } from '../task-writer/quality.js';
 import { CHECKS } from '../task-checks.js';
+
+// task-checks.js reaches the supabase admin client at import time, whose
+// config hard-exits when SUPABASE_* env is absent (as in CI).
+vi.mock('../../../config/supabase.js', () => ({ default: {} }));
 
 /** How a library task is checked, and the page it is done on (AC-010). */
 
