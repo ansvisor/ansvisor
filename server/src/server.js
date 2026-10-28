@@ -38,6 +38,7 @@ import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
+import { sweepIdleDemoBrands } from './lib/demo/idle-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
@@ -299,6 +300,12 @@ async function runDailyTracking() {
   // Content Editor versions past their 90 days (CE-018).
   pruneContentVersions().catch((err) => {
     logger.error({ err }, '[content-history] daily prune failed');
+  });
+
+  // Demo brands nobody opened for two weeks (00380): their sample rows go,
+  // the brand row stays, and the next visit builds them again.
+  sweepIdleDemoBrands().catch((err) => {
+    logger.error({ err }, '[demo] idle sweep failed');
   });
 
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
