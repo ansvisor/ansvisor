@@ -3978,6 +3978,12 @@
           "sent": "In Webflow as a draft item since {when}",
           "failed": "The last send to Webflow failed, {when}",
           "published": "Published {when}"
+        },
+        "wordpress": {
+          "queued": "Sending to WordPress since {when}",
+          "sent": "In WordPress as a draft post since {when}",
+          "failed": "The last send to WordPress failed, {when}",
+          "published": "Published {when}"
         }
       },
       "bulk": {
@@ -3990,6 +3996,7 @@
         "title": "{count, plural, one {Send # page to your CMS} other {Send # pages to your CMS}}",
         "description": "Each page goes to the brand's webhook as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
+        "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
         "notFound": "A page was archived or deleted since you picked it. Close this, pick the pages again and send.",
@@ -4020,6 +4027,7 @@
         "closedUnsent": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the dialog closed while the pages before {count, plural, one {it} other {them}} were still going. Send {count, plural, one {it} other {them}} again from the Library.",
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
         "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
+        "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
         "send": "{count, plural, one {Send # page} other {Send # pages}}",
@@ -5112,10 +5120,11 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS: Webflow, or your workflow through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
+        "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
         "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
           "label": "Send to",
@@ -5125,11 +5134,17 @@
             "collection": "your collection",
             "notReady": "Not ready: connect it again or pick its collection in Settings › Integrations"
           },
+          "wordpress": {
+            "title": "WordPress",
+            "hint": "A draft post on {site}",
+            "notReady": "Sign-in refused: connect WordPress again in Settings › Integrations"
+          },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
           "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
+          "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
@@ -5165,6 +5180,12 @@
           "failed": "The last send to Webflow failed, {when}.",
           "published": "Published {when}."
         },
+        "lastWordPress": {
+          "queued": "Last sent to WordPress {when}, still on its way.",
+          "sent": "In WordPress as a draft post since {when}.",
+          "failed": "The last send to WordPress failed, {when}.",
+          "published": "Published {when}."
+        },
         "errors": {
           "no_webhook": "This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.",
           "webhook_not_subscribed": "The brand's webhook doesn't receive \"Content page sent\". Turn it on in Webhook Settings on Content Opportunities.",
@@ -5183,7 +5204,13 @@
           "webflow_refused": "Webflow refused the brand's site token. Connect it again in Settings › Integrations.",
           "webflow_not_ready": "Pick the Webflow collection pages go to in Settings › Integrations.",
           "in_progress": "This page is already on its way to Webflow. Wait for it, then send again.",
-          "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations."
+          "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
+          "wordpressFailed": "WordPress didn't take the page: {reason}",
+          "wordpress_not_configured": "WordPress isn't set up on this server. Send to your workflow instead.",
+          "no_wordpress": "Connect WordPress in Settings › Integrations first.",
+          "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
+          "in_progressWordPress": "This page is already on its way to WordPress. Wait for it, then send again.",
+          "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations."
         },
         "cancel": "Cancel",
         "send": "Send",
@@ -5191,7 +5218,11 @@
         "sent": "Sent to your CMS",
         "sentWebflow": "Sent to Webflow as a draft item",
         "sentWebflowUpdated": "Updated in Webflow",
-        "webflowChanged": "{tables, plural, =0 {} one {# table went as a list. } other {# tables went as lists. }}{images, plural, =0 {} one {# image wasn't sent: add it in Webflow.} other {# images weren't sent: add them in Webflow.}}"
+        "webflowChanged": "{tables, plural, =0 {} one {# table went as a list. } other {# tables went as lists. }}{images, plural, =0 {} one {# image wasn't sent: add it in Webflow.} other {# images weren't sent: add them in Webflow.}}",
+        "sentWordPress": "Sent to WordPress as a draft post",
+        "sentWordPressUpdated": "Draft post updated in WordPress",
+        "wordpressLive": "Its post was already published or scheduled, so the page went as a new draft. Move the text over in WordPress; published as it is, its slug gets \"-2\".",
+        "wordpressJsonLd": "JSON-LD left out: add schema with your SEO plugin."
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipReading": "Rules · reading",
