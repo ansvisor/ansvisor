@@ -414,7 +414,8 @@ describe('scorePriority with a measured demand level (PROMPT-014)', () => {
       realDemand: 'high',
       demand: 'high',
     });
-    expect(gap(withLevels('low', 'low')).reason.realDemand).toBe('low');
+    // Low raises nothing, so it's no reason for the score.
+    expect(gap(withLevels('low', 'low')).reason.realDemand).toBeNull();
     expect(gap(withLevels(null, null)).reason.realDemand).toBeNull();
   });
 

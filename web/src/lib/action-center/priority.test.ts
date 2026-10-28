@@ -173,12 +173,24 @@ describe('priorityReasonText', () => {
     );
     expect(
       priorityReasonText(
-        reason({ demand: 'medium', realDemand: 'low', commercial: false, heldBefore: false }),
+        reason({ demand: 'medium', realDemand: 'medium', commercial: false, heldBefore: false }),
         t,
       ),
-    ).toBe('Lost ground on 7 prompts 2 days ago — measured demand Low.');
+    ).toBe('Lost ground on 7 prompts 2 days ago — measured demand Medium.');
     expect(parsePriorityReason({ change: 'gap', realDemand: 'medium' })?.realDemand).toBe('medium');
     expect(parsePriorityReason({ change: 'gap', realDemand: 'huge' })?.realDemand).toBeNull();
+  });
+
+  it('never gives Low as a reason: it raises nothing', () => {
+    const stored = parsePriorityReason({
+      change: 'dropped',
+      subject: { entity: 'prompts', count: 7 },
+      demand: 'medium',
+      realDemand: 'low',
+      days: 2,
+    });
+    expect(stored?.realDemand).toBeNull();
+    expect(priorityReasonText(stored!, t)).not.toContain('measured demand');
   });
 
   it('falls back to a plain subject when the count is unknown', () => {

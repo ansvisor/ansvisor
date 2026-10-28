@@ -23,10 +23,10 @@ export interface PriorityReason {
   demand: 'high' | 'medium' | 'low' | null;
   /**
    * The prompts' measured demand level (PROMPT-014: Search Console, Google
-   * Trends, People Also Ask, YouTube), the highest; null when none was read.
-   * High and Medium raise the score.
+   * Trends, People Also Ask, YouTube), the highest, when it raised the score:
+   * High or Medium. Null otherwise: Low raises nothing, so it's no reason.
    */
-  realDemand: 'high' | 'medium' | 'low' | null;
+  realDemand: 'high' | 'medium' | null;
   commercial: boolean;
   /** Ground the brand held and lost. */
   heldBefore: boolean;
@@ -89,10 +89,7 @@ export function parsePriorityReason(
       count: num(subject.count),
     },
     demand: r.demand === 'high' || r.demand === 'medium' || r.demand === 'low' ? r.demand : null,
-    realDemand:
-      r.realDemand === 'high' || r.realDemand === 'medium' || r.realDemand === 'low'
-        ? r.realDemand
-        : null,
+    realDemand: r.realDemand === 'high' || r.realDemand === 'medium' ? r.realDemand : null,
     commercial: r.commercial === true,
     heldBefore: r.heldBefore === true,
     days: daysSince(num(r.days), scoredAt, now),

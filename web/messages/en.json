@@ -1023,8 +1023,7 @@
           "highDemand": "high search demand",
           "realDemand": {
             "high": "measured demand High",
-            "medium": "measured demand Medium",
-            "low": "measured demand Low"
+            "medium": "measured demand Medium"
           },
           "commercial": "commercial intent",
           "heldBefore": "previously visible",

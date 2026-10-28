@@ -5,6 +5,7 @@
  * signals — the caller has in hand already.
  */
 
+import { isDeepStrictEqual } from 'node:util';
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { priorityColumns, promptIdsOf, scorePriority } from './priority.js';
@@ -163,7 +164,11 @@ export async function rescoreAction(action, now = new Date()) {
  * @param {string} brandId
  * @param {{ now?: Date, statuses?: string[] | null, unscored?: boolean }} [options]
  *   statuses: the actions' statuses, null for all. unscored: only actions with no score yet.
- * @returns {Promise<number>} how many actions were scored
+ * An action whose score, level and reason come out as they're stored is
+ * left as it is: a brand is often scored twice a night (the signal pass,
+ * then the demand sweep), and the second has nothing new to write.
+ *
+ * @returns {Promise<number>} how many actions' scores changed and were saved
  */
 export async function rescoreBrandActions(
   brandId,
@@ -171,7 +176,9 @@ export async function rescoreBrandActions(
 ) {
   let query = supabaseAdmin
     .from('actions')
-    .select('id, kind, category, impact, payload, created_at')
+    .select(
+      'id, kind, category, impact, payload, created_at, priority_score, priority_level, priority_reason',
+    )
     .eq('brand_id', brandId);
   if (statuses) query = query.in('status', statuses);
   if (unscored) query = query.is('priority_score', null);
@@ -212,6 +219,14 @@ export async function rescoreBrandActions(
       { action, signals: evidence.get(action.id) ?? [], prompts },
       now,
     );
+    // The reason as it would be stored (jsonb): no undefined keys, no -0.
+    if (
+      action.priority_score === priority.score &&
+      action.priority_level === priority.level &&
+      isDeepStrictEqual(action.priority_reason, JSON.parse(JSON.stringify(priority.reason)))
+    ) {
+      continue;
+    }
     const { error: saveErr } = await supabaseAdmin
       .from('actions')
       .update(priorityColumns(priority, now))

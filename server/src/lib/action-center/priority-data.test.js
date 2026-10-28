@@ -256,6 +256,42 @@ describe('rescoreBrandActions', () => {
     expect(queries.map((q) => q.table)).toEqual(['actions']);
   });
 
+  it('leaves an action whose score, level and reason are what is stored', async () => {
+    const signal = {
+      id: 's1',
+      action_id: 'a1',
+      kind: 'citation_lost',
+      impact: 'high',
+      payload: {},
+      detected_at: '2026-10-16T02:00:00Z',
+    };
+    actionRows = [recover('a1', { promptIds: ['p1'] }), recover('a2')];
+    signalRows = [signal];
+    expect(await rescoreBrandActions('b1', { now: NOW })).toBe(2);
+
+    // Scored again the same night (the demand sweep after the signal pass):
+    // a1 is as stored (read back as jsonb), a2's stored score is older.
+    const stored = Object.fromEntries(saved.map(({ id, row }) => [id, row]));
+    actionRows = [
+      {
+        ...recover('a1', { promptIds: ['p1'] }),
+        priority_score: stored.a1.priority_score,
+        priority_level: stored.a1.priority_level,
+        priority_reason: JSON.parse(JSON.stringify(stored.a1.priority_reason)),
+      },
+      {
+        ...recover('a2'),
+        priority_score: stored.a2.priority_score - 5,
+        priority_level: stored.a2.priority_level,
+        priority_reason: stored.a2.priority_reason,
+      },
+    ];
+    saved = [];
+
+    expect(await rescoreBrandActions('b1', { now: NOW })).toBe(1);
+    expect(saved.map(({ id }) => id)).toEqual(['a2']);
+  });
+
   it('carries on past a score it cannot save, and without demand', async () => {
     actionRows = [recover('a1', { promptIds: ['p1'] }), recover('a2')];
     unsaved.add('a1');

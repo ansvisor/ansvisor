@@ -708,9 +708,10 @@ export async function collectDemandTasks({ now = Date.now() } = {}) {
 /**
  * The brands whose demand levels changed, their open actions scored again
  * (AC-006): the priority reads the levels, and shows the change the same
- * night. Best effort, one brand at a time.
+ * night. Best effort, one brand at a time. An action whose score comes out
+ * as stored isn't written again (rescoreBrandActions).
  *
- * @returns {Promise<number>} actions scored
+ * @returns {Promise<number>} actions whose scores changed
  */
 export async function rescoreDemandBrands(brandIds, { now = Date.now() } = {}) {
   let scored = 0;

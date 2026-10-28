@@ -503,8 +503,10 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
       subject,
       // Measured demand only: an unmeasured one is not called low.
       demand: demand === null ? null : demand >= 0.67 ? 'high' : demand >= 0.4 ? 'medium' : 'low',
-      // The prompts' measured demand level (PROMPT-014), the highest; null if none was read.
-      realDemand: real.level,
+      // The prompts' measured demand level (PROMPT-014), the highest, when it
+      // raised the demand (High, Medium); null otherwise. Low raises nothing,
+      // so it's no reason for the score.
+      realDemand: real.floor === null ? null : real.level,
       searches: promptDemand,
       commercial: businessValue !== null && businessValue >= COMMERCIAL,
       heldBefore: recoverability >= 1,
