@@ -1699,9 +1699,11 @@ export async function getShoppingProductDetail(
         'prompt_result_id, position, created_at, platform, product_title, price_amount, price_currency, rating, review_count, merchant_domain, image_url, matched_brand_role, catalog_product_id, prompt_results:prompt_result_id ( search_queries, prompt:prompt_id ( id, text ) )',
       ),
     ),
+    // Its own row only (00361), none without AI visits or orders.
     supabase.rpc('catalog_product_ai_stats', {
       p_brand_id: brandId,
       p_from: from ?? daysAgoIso(90),
+      p_product_id: productId,
     }),
     supabase
       .from('brand_domains')
