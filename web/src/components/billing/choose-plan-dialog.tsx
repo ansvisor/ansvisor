@@ -65,6 +65,14 @@ function offerValues(offer: PromoOffer) {
 type CodeError = { kind: 'invalid'; code: string } | { kind: 'failed' };
 
 /**
+ * The offer the dialog makes with its plans: from the demo brand (the free
+ * trial for a workspace that never subscribed, 50% off the first month once
+ * a plan ended), or the free trial for a workspace's own brand, never
+ * tracked yet. Each comes with the first-month code.
+ */
+export type PlanPitch = { from: 'demo'; offer: DemoOffer } | { from: 'own_brand'; offer: 'trial' };
+
+/**
  * A promotion code as Stripe has it now (POST /api/stripe/promo-code): what
  * it takes off, 'invalid' when it can't be redeemed, 'failed' when it
  * couldn't be checked.
@@ -102,9 +110,10 @@ const PROMO_NOTE_ID = 'upgrade-promo-note';
  * new subscription from a card; another member is asked to turn to an admin
  * and sees the plain prices. ×, Escape or a click outside close it.
  *
- * From the demo brand (`demo`), the same plans with the demo's offer: a
- * workspace that never subscribed starts its free trial, then 50% off; one
- * whose plan ended gets 50% off its first month. An admin finds the
+ * With a `pitch`, the same plans with its offer: from the demo brand, a
+ * workspace that never subscribed starts its free trial, then 50% off, and
+ * one whose plan ended gets 50% off its first month; on its own brand, a
+ * workspace that never subscribed starts its free trial. An admin finds the
  * first-month code already applied; when it doesn't apply, the field is
  * simply left empty.
  */
@@ -114,7 +123,7 @@ export function ChoosePlanDialog({
   action,
   askAdmin,
   organizationId,
-  demo = null,
+  pitch = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -124,8 +133,8 @@ export function ChoosePlanDialog({
   askAdmin: string;
   /** The organization the new subscription is for. */
   organizationId: string | null;
-  /** Opened from the demo brand: the offer its title and buttons make. */
-  demo?: DemoOffer | null;
+  /** The offer its title and buttons make, besides the plans. */
+  pitch?: PlanPitch | null;
 }) {
   const t = useTranslations('readOnly');
   const tPlans = useTranslations('readOnly.plans');
@@ -143,17 +152,20 @@ export function ChoosePlanDialog({
   // The plan whose Checkout is opening.
   const [checkoutPlan, setCheckoutPlan] = useState<PlanId | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // The demo's code is tried once, the first time the dialog opens.
-  const demoCodeTried = useRef(false);
+  // The pitch's code is tried once, the first time the dialog opens.
+  const pitchCodeTried = useRef(false);
+  const pitched = pitch != null;
+  const demo = pitch?.from === 'demo';
+  const trial = pitch?.offer === 'trial';
 
   useEffect(() => {
-    if (!open || !demo || !canAdmin || demoCodeTried.current) return;
-    demoCodeTried.current = true;
+    if (!open || !pitched || !canAdmin || pitchCodeTried.current) return;
+    pitchCodeTried.current = true;
     void checkPromoCode(FIRST_MONTH_CODE).then((found) => {
       // Quietly: a code that doesn't apply leaves the field as it was.
       if (typeof found === 'object') setOffer((current) => current ?? found);
     });
-  }, [open, demo, canAdmin]);
+  }, [open, pitched, canAdmin]);
 
   const saving = Math.max(0, ...SUBSCRIBABLE_PLANS.map((id) => annualSaving(id) ?? 0));
   // The code lowers this period's prices: a monthly plan, for an admin.
@@ -271,10 +283,18 @@ export function ChoosePlanDialog({
             {action ?? t('dialog.readOnlyLabel')}
           </span>
           <DialogTitle className="text-xl leading-tight font-bold tracking-tight">
-            {demo ? t(`demo.dialog.title.${demo}`, { days: TRIAL_DAYS }) : t('dialog.title.ended')}
+            {pitch?.from === 'demo'
+              ? t(`demo.dialog.title.${pitch.offer}`, { days: TRIAL_DAYS })
+              : pitch?.from === 'own_brand'
+                ? t('trialOffer.title', { days: TRIAL_DAYS })
+                : t('dialog.title.ended')}
           </DialogTitle>
           <DialogDescription className="max-w-2xl">
-            {demo ? t('demo.dialog.body') : t('dialog.body.ended')}
+            {demo
+              ? t('demo.dialog.body')
+              : pitch?.from === 'own_brand'
+                ? t('trialOffer.body')
+                : t('dialog.body.ended')}
           </DialogDescription>
         </DialogHeader>
 
@@ -461,8 +481,8 @@ export function ChoosePlanDialog({
                           <Loader2 className="animate-spin" aria-hidden />
                           {tPlans('openingCheckout')}
                         </>
-                      ) : demo === 'trial' ? (
-                        t('demo.dialog.startTrial')
+                      ) : trial ? (
+                        tPlans('startTrial')
                       ) : firstPrice != null && !demo ? (
                         tPlans('chooseToday', { plan: plan.name, price: money(firstPrice) })
                       ) : (

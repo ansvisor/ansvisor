@@ -207,10 +207,12 @@ describe('the dashboard layout and the demo brand', () => {
     expect(await open()).toBeNull();
     expect(redirect).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Page content');
-    // Read-only on the own brand, with the way to the demo.
-    expect(band()?.textContent).toContain('Your workspace is read-only.');
+    // Read-only on the own brand, with its free trial and the way to the demo.
+    expect(band()?.textContent).toContain(
+      "Your brand isn't tracked yet. Start your 14-day free trial, then get 50% off your first month.",
+    );
     expect([...band()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
-      'See plans',
+      'Start free trial',
       'See the demo',
     ]);
   });

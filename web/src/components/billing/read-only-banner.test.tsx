@@ -6,6 +6,7 @@ import messages from '../../../messages/en.json';
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { DemoBrandContext } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from './read-only-banner';
 
 let pathname = '/dashboard/insights';
@@ -34,15 +35,26 @@ async function render({
   status = 'canceled',
   role = 'admin',
   adminName = null,
-}: { active?: boolean; status?: string; role?: TeamRole; adminName?: string | null } = {}) {
+  neverSubscribed = false,
+}: {
+  active?: boolean;
+  status?: string | null;
+  role?: TeamRole;
+  adminName?: string | null;
+  neverSubscribed?: boolean;
+} = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <PlanProvider planId="starter" subscriptionActive={active} subscriptionStatus={status}>
           <RoleProvider role={role}>
-            <UpgradeDialogProvider adminName={adminName}>
-              <ReadOnlyBanner />
-            </UpgradeDialogProvider>
+            <DemoBrandContext.Provider
+              value={{ isDemo: false, demoBrand: null, offer: 'trial', neverSubscribed }}
+            >
+              <UpgradeDialogProvider adminName={adminName}>
+                <ReadOnlyBanner />
+              </UpgradeDialogProvider>
+            </DemoBrandContext.Provider>
           </RoleProvider>
         </PlanProvider>
       </NextIntlClientProvider>,
@@ -140,6 +152,33 @@ describe('ReadOnlyBanner', () => {
     root = createRoot(container);
     await render({ role: 'analyst' });
     expect(seeTheDemo()).toBeUndefined();
+  });
+
+  it('offers a workspace that never had a plan its free trial', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ valid: false })),
+    );
+    await render({ status: null, neverSubscribed: true });
+    expect(container.textContent).toContain(
+      "Your brand isn't tracked yet. Start your 14-day free trial, then get 50% off your first month.",
+    );
+    expect(seePlans()).toBeUndefined();
+    const start = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Start free trial',
+    )!;
+    expect(seeTheDemo()).toBeDefined();
+    await act(async () => start.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Start your 14-day free trial: then 50% off your first month',
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('offers another member of such a workspace See plans', async () => {
+    await render({ status: null, neverSubscribed: true, role: 'analyst' });
+    expect(container.textContent).toContain("Your brand isn't tracked yet.");
+    expect(seePlans()).toBeDefined();
   });
 
   it('shows nothing while the plan is active', async () => {

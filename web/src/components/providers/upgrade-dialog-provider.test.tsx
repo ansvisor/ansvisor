@@ -344,3 +344,47 @@ describe('useUpgradeGate on the demo brand', () => {
     expect(dialog()).toBeNull();
   });
 });
+
+describe("useUpgradeGate on a brand that isn't tracked yet", () => {
+  const fetchMock = vi.fn(async () => Response.json({ valid: false }));
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('offers an admin who never subscribed the free trial', async () => {
+    selectBrand('own');
+    await render({ active: false, status: null, everSubscribed: false });
+    expect(probe().dataset.locked).toBe('true');
+    await runAll();
+    expect(action).not.toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain(
+      'Start your 14-day free trial: then 50% off your first month',
+    );
+    expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
+      "Your brand isn't tracked yet",
+    );
+    expect(button('Start free trial')).toBeDefined();
+    expect(button('Choose Starter')).toBeUndefined();
+  });
+
+  it('keeps what was clicked as the label', async () => {
+    selectBrand('own');
+    label = 'Adding prompts needs a plan';
+    await render({ active: false, status: 'incomplete', everSubscribed: false });
+    await runAll();
+    expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
+      'Adding prompts needs a plan',
+    );
+  });
+
+  it('asks another member to have the admin start it', async () => {
+    selectBrand('own');
+    await render({ active: false, status: null, everSubscribed: false, role: 'analyst' });
+    await runAll();
+    expect(dialog()?.textContent).toContain('Ask your admin to start the free trial.');
+    expect(button('Start free trial')).toBeUndefined();
+  });
+});

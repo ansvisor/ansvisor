@@ -59,6 +59,7 @@
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
       "payment_failed": "Your last payment didn't go through, so your workspace is read-only. You can look around; adding, running and AI need the payment method updated.",
+      "trial": "Your brand isn't tracked yet. Start your {days}-day free trial, then get 50% off your first month.",
       "seePlans": "See plans"
     },
     "dialog": {
@@ -80,7 +81,9 @@
       "payment_failed": "Ask your workspace admin to update the payment method.",
       "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method.",
       "demo": "Ask your admin to choose a plan.",
-      "demoNamed": "Ask {name}, your workspace admin, to choose a plan."
+      "demoNamed": "Ask {name}, your workspace admin, to choose a plan.",
+      "trial": "Ask your admin to start the free trial.",
+      "trialNamed": "Ask {name}, your workspace admin, to start the free trial."
     },
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
@@ -94,14 +97,18 @@
         },
         "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
         "action": "{action} works on your own brand",
-        "label": "This is a demo brand with sample data",
-        "startTrial": "Start free trial"
+        "label": "This is a demo brand with sample data"
       },
       "ownBrand": {
         "title": "This is a demo brand",
         "body": "It shows Ansvisor with sample data, so nothing here runs. Switch to your own brand to do this."
       },
       "switchToOwnBrand": "Switch to your brand"
+    },
+    "trialOffer": {
+      "title": "Start your {days}-day free trial: then 50% off your first month",
+      "body": "Everything you set up is here. Start your free trial and Ansvisor starts tracking, writing and fixing for your brand.",
+      "label": "Your brand isn't tracked yet"
     },
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
@@ -249,6 +256,7 @@
       "chooseToday": "Choose {plan} · {price} today",
       "openingCheckout": "Opening checkout…",
       "payByCard": "You'll pay by card on Stripe's checkout.",
+      "startTrial": "Start free trial",
       "askAdmin": "Ask your admin to choose a plan",
       "customName": "Custom",
       "customTagline": "For large companies and agencies managing AI visibility at scale.",

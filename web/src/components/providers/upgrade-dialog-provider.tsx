@@ -60,7 +60,7 @@ export function UpgradeDialogProvider({
   children: ReactNode;
 }) {
   const { subscriptionActive, subscriptionStatus } = usePlanContext();
-  const { isDemo, offer } = useDemoBrand();
+  const { isDemo, offer, neverSubscribed } = useDemoBrand();
   const [open, setOpen] = useState(false);
   // What was clicked, for the dialog's label; none when it wasn't said.
   const [action, setAction] = useState<string | null>(null);
@@ -72,9 +72,14 @@ export function UpgradeDialogProvider({
   const value = useMemo(() => {
     const lapsed = readOnlyReason(subscriptionStatus);
     // A payment being retried is fixed in Billing, demo brand or not: a plan
-    // bought from the demo's offer would be a second subscription.
+    // bought from the demo's offer would be a second subscription. A
+    // workspace that never subscribed is offered its free trial.
     const reason: UpgradeReason =
-      isDemo && (subscriptionActive || lapsed !== 'payment_failed') ? 'demo' : lapsed;
+      isDemo && (subscriptionActive || lapsed !== 'payment_failed')
+        ? 'demo'
+        : lapsed === 'ended' && neverSubscribed
+          ? 'trial'
+          : lapsed;
     return {
       isLocked: !subscriptionActive || isDemo,
       isDemo,
@@ -82,7 +87,7 @@ export function UpgradeDialogProvider({
       adminName,
       openUpgrade,
     };
-  }, [subscriptionActive, subscriptionStatus, isDemo, adminName, openUpgrade]);
+  }, [subscriptionActive, subscriptionStatus, isDemo, neverSubscribed, adminName, openUpgrade]);
 
   return (
     <UpgradeDialogContext.Provider value={value}>
@@ -198,7 +203,20 @@ function UpgradeDialog({
         action={label}
         askAdmin={ask}
         organizationId={organizationId}
-        demo={offer}
+        pitch={{ from: 'demo', offer }}
+      />
+    );
+  }
+
+  if (reason === 'trial') {
+    return (
+      <ChoosePlanDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        action={action ?? t('trialOffer.label')}
+        askAdmin={ask}
+        organizationId={organizationId}
+        pitch={{ from: 'own_brand', offer: 'trial' }}
       />
     );
   }

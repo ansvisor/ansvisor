@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import messages from '../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
-import { ChoosePlanDialog } from './choose-plan-dialog';
+import { ChoosePlanDialog, type PlanPitch } from './choose-plan-dialog';
 
 /**
  * "Choose a plan to keep going" with the plans: Billing's features and
@@ -38,7 +38,13 @@ async function render({
   role = 'admin',
   action = 'Adding prompts needs a plan',
   demo = null,
-}: { role?: TeamRole; action?: string | null; demo?: 'trial' | 'first_month' | null } = {}) {
+  pitch = demo ? { from: 'demo', offer: demo } : null,
+}: {
+  role?: TeamRole;
+  action?: string | null;
+  demo?: 'trial' | 'first_month' | null;
+  pitch?: PlanPitch | null;
+} = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
@@ -49,7 +55,7 @@ async function render({
             action={action}
             askAdmin="Ask your admin to choose a plan."
             organizationId="org1"
-            demo={demo}
+            pitch={pitch}
           />
         </RoleProvider>
       </NextIntlClientProvider>,
@@ -391,5 +397,23 @@ describe('ChoosePlanDialog from the demo brand', () => {
   it('tries no code when opened from read-only, outside the demo', async () => {
     await render();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChoosePlanDialog for a brand that isn't tracked yet", () => {
+  it('offers the free trial, SAVE50 applied, with Start free trial', async () => {
+    await render({ pitch: { from: 'own_brand', offer: 'trial' }, action: null });
+    expect(dialog().textContent).toContain(
+      'Start your 14-day free trial: then 50% off your first month',
+    );
+    expect(dialog().textContent).toContain(
+      'Everything you set up is here. Start your free trial and Ansvisor starts tracking, writing and fixing for your brand.',
+    );
+    expect(dialog().textContent).not.toContain('demo brand');
+    await vi.waitFor(() =>
+      expect(dialog().querySelector('[data-slot="promo-applied"]')).not.toBeNull(),
+    );
+    expect(card('starter').querySelector('button')?.textContent).toBe('Start free trial');
+    expect(card('growth').querySelector('button')?.textContent).toBe('Start free trial');
   });
 });
