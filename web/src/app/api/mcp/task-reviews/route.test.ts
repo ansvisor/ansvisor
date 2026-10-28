@@ -80,6 +80,21 @@ describe('POST /api/mcp/task-reviews/[id]/approve', () => {
     expect(reviews.approveTaskReviewFor).not.toHaveBeenCalled();
   });
 
+  it('approves as written without a body, and refuses JSON it cannot read', async () => {
+    reviews.approveTaskReviewFor.mockResolvedValue({ task_id: 'task-9' });
+    expect((await approve.POST(post('approve'), params)).status).toBe(201);
+    expect(reviews.approveTaskReviewFor).toHaveBeenCalledWith(expect.anything(), 'review-1', {});
+    reviews.approveTaskReviewFor.mockClear();
+    const broken = new Request('http://localhost/api/mcp/task-reviews/review-1/approve', {
+      method: 'POST',
+      body: '{"url": "/pricing"',
+    });
+    const res = await approve.POST(broken, params);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Invalid JSON body' });
+    expect(reviews.approveTaskReviewFor).not.toHaveBeenCalled();
+  });
+
   it('answers each refusal with its status', async () => {
     for (const [error, status] of [
       ['forbidden', 403],

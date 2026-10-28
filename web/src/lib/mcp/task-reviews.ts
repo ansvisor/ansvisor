@@ -20,8 +20,12 @@ import { brandInOrg, mcpTaskDetails } from './data';
  * else reads and changes none, as the table's RLS has it.
  *
  * TODO(demo-brand-mcp): approve_task_review and dismiss_task_review find
- * their brand through action_task_reviews → actions.brand_id; add them to
- * WRITE_TOOL_BRANDS (lib/mcp/demo-gate.ts) when feature/demo-brand-mcp merges.
+ * their brand through action_task_reviews → actions.brand_id. When
+ * feature/demo-brand-mcp merges, add them to WRITE_TOOL_BRANDS
+ * (lib/mcp/demo-gate.ts) and call assertNotDemoBrand in
+ * approveTaskReviewFor and dismissTaskReviewFor, so the REST mirrors refuse
+ * a demo brand too: they write as the service role, which the demo trigger
+ * (00381) lets through.
  */
 
 /** A field a task waiting for review was written without, as the MCP names it. */
@@ -267,7 +271,13 @@ export async function dismissTaskReviewFor(
   if (!(await canReview(auth))) return FORBIDDEN;
   const review = await ownedReview(auth, reviewId);
   if (!review) return MISSING;
-  const { error } = await supabaseAdmin.from('action_task_reviews').delete().eq('id', reviewId);
+  const { data, error } = await supabaseAdmin
+    .from('action_task_reviews')
+    .delete()
+    .eq('id', reviewId)
+    .select('id');
   if (error) throw new Error(error.message);
+  // Approved or dismissed meanwhile: nothing was dropped.
+  if (!data?.length) return MISSING;
   return { id: reviewId, dismissed: true };
 }

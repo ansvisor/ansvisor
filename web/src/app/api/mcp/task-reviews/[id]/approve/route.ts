@@ -16,7 +16,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (auth instanceof NextResponse) return auth;
 
   const { id } = await params;
-  const body = z.object(taskReviewEditShape).safeParse(await req.json().catch(() => ({})));
+  // No body approves the task as written; a body it can't read approves nothing.
+  const text = await req.text();
+  let json: unknown = {};
+  if (text.trim()) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+  }
+  const body = z.object(taskReviewEditShape).safeParse(json);
   if (!body.success) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }

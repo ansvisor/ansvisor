@@ -23,6 +23,8 @@ let rpcResult: { data: unknown; error: { code: string; message: string } | null 
 };
 const rpcCalls: [string, Record<string, unknown>][] = [];
 const deleted: string[] = [];
+/** Whether the review is still there when dismiss deletes it. */
+let stillThere = true;
 const filters: [string, string, unknown][] = [];
 
 function builder(table: string) {
@@ -46,10 +48,12 @@ function builder(table: string) {
       error: null,
     }),
     delete: () => ({
-      eq: async (_column: string, id: string) => {
-        deleted.push(id);
-        return { error: null };
-      },
+      eq: (_column: string, id: string) => ({
+        select: async () => {
+          if (stillThere) deleted.push(id);
+          return { data: stillThere ? [{ id }] : [], error: null };
+        },
+      }),
     }),
   };
   return chain;
@@ -96,6 +100,7 @@ beforeEach(() => {
   rpcResult = { data: 'task-9', error: null };
   rpcCalls.length = 0;
   deleted.length = 0;
+  stillThere = true;
   filters.length = 0;
 });
 
@@ -199,6 +204,15 @@ describe('approveTaskReviewFor', () => {
     expect(rpcCalls).toEqual([]);
   });
 
+  it("reads the review within the key's organization", async () => {
+    await approveTaskReviewFor(auth, 'review-1', complete);
+    expect(filters).toContainEqual([
+      'action_task_reviews',
+      'actions.brands.organization_id',
+      'org-1',
+    ]);
+  });
+
   it("reads another organization's review, or one gone, as missing", async () => {
     owned = null;
     expect(await approveTaskReviewFor(auth, 'review-1', complete)).toMatchObject({
@@ -233,6 +247,16 @@ describe('dismissTaskReviewFor', () => {
       dismissed: true,
     });
     expect(deleted).toEqual(['review-1']);
+    expect(filters).toContainEqual([
+      'action_task_reviews',
+      'actions.brands.organization_id',
+      'org-1',
+    ]);
+  });
+
+  it('says missing when the review went meanwhile', async () => {
+    stillThere = false;
+    expect(await dismissTaskReviewFor(auth, 'review-1')).toMatchObject({ error: 'missing' });
   });
 
   it("refuses an analyst, and leaves another organization's review alone", async () => {
