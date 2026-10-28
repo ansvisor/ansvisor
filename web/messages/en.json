@@ -7619,6 +7619,7 @@
         "plan": "Actions"
       },
       "plan": "Plan actions",
+      "planFor": "Plan actions for {category}",
       "planTitle": "Category actions · {category}",
       "planLead": "Shelf share {share}% · {onShelf} of {products} products on the shelf · {prompts, plural, one {# shopping question} other {# shopping questions}}.",
       "prompts": "{count, plural, one {# shopping question} other {# shopping questions}}",
