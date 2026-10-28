@@ -11,7 +11,7 @@ import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
 import { getBrands } from '@/lib/actions/brand';
-import { getPlan, isCloud, type PlanId } from '@/config/plans';
+import { getPlan, isCloud, toPlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
 import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
@@ -86,7 +86,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
   }
 
-  const planId = (org?.plan ?? 'starter') as PlanId;
+  const planId = toPlanId(org?.plan);
 
   // Effective API-model allowlist for the client (null = all allowed).
   // Enterprise orgs can be switched on per customer via
