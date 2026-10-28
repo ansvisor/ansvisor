@@ -37,7 +37,6 @@ import {
   loadImproveRounds,
   sendImproveToActionCenter,
 } from '../lib/action-center/from-prompt-improve.js';
-import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -1164,7 +1163,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         try {
           history = await loadImproveRounds({ promptId, brandId, region: range.region });
         } catch (err) {
-          logger.warn({ promptId, err: err.message }, '[improve] earlier rounds unavailable');
+          req.log.warn({ err, promptId }, 'prompt improve earlier rounds unavailable');
         }
         const { system, prompt: userPrompt } = buildImprovePrompt({
           promptText: prompt.text,
