@@ -54,7 +54,7 @@ const KEY_LINKS: Record<AiProvider, string> = {
 function ProviderIcon({ provider }: { provider: AiProvider }) {
   if (provider === 'azure') return <Cloud className="h-5 w-5 text-muted-foreground" />;
   if (provider === 'openrouter') return <Route className="h-5 w-5 text-muted-foreground" />;
-  // The same logos as the platforms' (OpenAI's drawn black on a light card).
+  // The same one-colour logos as the platforms', in the text colour.
   return <AIProviderAvatar provider={provider} plain />;
 }
 
