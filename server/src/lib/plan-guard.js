@@ -541,8 +541,18 @@ async function holdCostUsd(orgId, modelId, since) {
   return Math.max(typical, recent ?? 0);
 }
 
-/** What the workspace's AI budget is spent on, as prompt_improve_usage.feature says (00242). */
-export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center', 'quality'];
+/**
+ * The meter's rows, in order, and what the workspace's AI budget spent on
+ * each, as prompt_improve_usage.feature says (00242): the Content Editor's
+ * quality checks ('quality', 00264) are its AI too, so they count in its
+ * row. 'other' is spend whose feature isn't known.
+ */
+export const AI_USAGE_FEATURES = {
+  improve: ['improve'],
+  content: ['content', 'quality'],
+  action_center: ['action_center'],
+  other: ['other'],
+};
 
 const tenths = (n) => Math.round(n * 10) / 10;
 
@@ -554,8 +564,10 @@ const tenths = (n) => Math.round(n * 10) / 10;
  * percent to a tenth; dollars stay on the server, as the Improve tab's quota
  * does. Spend past the budget (calls already running when it ran out) reads
  * as 100%, its features scaled to fit. Rows whose feature isn't known (from
- * before 00242, their item deleted) count as 'other', listed only when there
- * are some. Unlimited plans (self-hosted) show no meter.
+ * before 00242, their item deleted) count as 'other'. Only what used some is
+ * listed (an Action Center whose task writer is off has no row), so a row
+ * can read 0 when its share is under a twentieth of a percent: the page
+ * reads that as "<0.1%". Unlimited plans (self-hosted) show no meter.
  */
 export async function getAiUsage(orgId) {
   const plan = await resolveOrgPlanByOrgId(orgId);
@@ -580,7 +592,10 @@ export async function getAiUsage(orgId) {
   const spent = [...spentOn.values()].reduce((a, b) => a + b, 0);
   const scale = budget > 0 && spent > budget ? budget / spent : 1;
   const percentOf = (usd) => (budget > 0 ? tenths((usd * scale * 100) / budget) : 0);
-  const other = spentOn.get('other') ?? 0;
+  const features = Object.entries(AI_USAGE_FEATURES)
+    .map(([feature, from]) => [feature, from.reduce((usd, f) => usd + (spentOn.get(f) ?? 0), 0)])
+    .filter(([, usd]) => usd > 0)
+    .map(([feature, usd]) => ({ feature, percent: percentOf(usd) }));
   return {
     ...base,
     unlimited: false,
@@ -588,13 +603,7 @@ export async function getAiUsage(orgId) {
     // 0 included); just under reads as 99.9, never rounded up to "used up".
     percentUsed:
       budget <= 0 || spent >= budget ? 100 : Math.min(99.9, tenths((spent * 100) / budget)),
-    features: [
-      ...AI_USAGE_FEATURES.map((feature) => ({
-        feature,
-        percent: percentOf(spentOn.get(feature) ?? 0),
-      })),
-      ...(other > 0 ? [{ feature: 'other', percent: percentOf(other) }] : []),
-    ],
+    features,
   };
 }
 

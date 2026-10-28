@@ -18,12 +18,12 @@ export const PLATFORM_LABELS: Record<string, string> = {
   grok: 'Grok',
   copilot: 'Microsoft Copilot',
   'meta-ai': 'Meta AI',
-  'google-ai-overviews': 'Google AI Overview',
+  'google-ai-overviews': 'Google AI Overviews',
   'google-ai-mode': 'Google AI Mode',
 
   // Tracked scraper platform slugs, as stored in `prompt_results.platform`.
   'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overview',
+  'google-aio': 'Google AI Overviews',
   'google-aimode': 'Google AI Mode',
   'copilot-web': 'Microsoft Copilot',
   'grok-web': 'Grok',
@@ -64,7 +64,7 @@ export const MODEL_PROVIDER_LABELS: Record<string, string> = {
   'grok-4-auto': 'Grok',
   'chatgpt-web': 'ChatGPT',
   'perplexity-web': 'Perplexity',
-  'google-aio': 'Google AI Overview',
+  'google-aio': 'Google AI Overviews',
   'google-aimode': 'Google AI Mode',
   'copilot-web': 'Microsoft Copilot',
   'grok-web': 'Grok',
