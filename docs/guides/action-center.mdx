@@ -67,7 +67,7 @@ The cards at the top count and filter the list. Click one to narrow the table to
 
 Below them, filter by category, **Priority**, **Status** and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters live in the URL, so a filtered view can be shared.
 
-An action's status is **New**, **In Progress**, **On Hold**, **Completed** or **Dismissed**. The row menu sets In Progress, Completed or Dismiss without opening the action. **Delete** (admins and managers only) removes it for everyone, and it won't come back on its own the next day.
+An action's status is **New**, **In Progress**, **On Hold**, **Completed** or **Dismissed**. The row menu sets In Progress, Completed or Dismiss without opening the action. Dismissing, from the row menu or the action's status, asks why: it doesn't matter to us, it's already done, the data behind it is wrong, or not now (or none). History shows the reason. **Delete** (admins and managers only) removes it for everyone, and it won't come back on its own the next day.
 
 ### Inside an action
 
@@ -83,13 +83,13 @@ Click a row to open the action. Under its title you set **Status**, **Assignee**
 
 Each action comes with tasks: concrete steps such as "Refresh content for these prompts" or "Add structured data to these pages". Open a task to see its details: **What**, **URL** (the exact page), **Where**, **Why**, **Change** (the text before and after, or the text to add), **How** (one step per line), **Done when**, **How we check** (Automatic: we fetch the page again; Re-run: the prompts run again; Manual: you confirm it), **Type** (Content, On-page, Technical, Outreach, PR or Product), **Effort** and **Role**. Click **Edit** to change any of them. A task from the Action Center's own plan comes with its **Done when**, with **How we check** for most of them (not for a task measured over a GA4 or Search Console window), and with its **URL** when it changes a page and the action is about one page.
 
-A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, and when you click **Check now**), by what it changes:
+A task checked **Automatic** is checked on its page, fetched again (up to 200 tasks a night, at most 20 of one brand's, the least recently tried first, and when you click **Check now**), by what it changes:
 
 - **A broken page:** the page answers again.
 - **Publishing:** the page answers where it wasn't before. A page already live at the first check passes once it changes.
-- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions.
+- **Structured data:** the audit checks that raised the action now pass on the page, such as a FAQ schema with at least two questions. When the action was raised by another check (the brand's entity, say), the page's structured data must be valid, after a check found it wasn't: a page that had valid structured data all along says so, and you mark the task done once it's fixed.
 - **Crawler access:** robots.txt lets the AI crawlers in, and the page isn't noindex. Only when the audit raised it; a page found uncrawled in the bot logs isn't checked here.
-- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a few words.
+- **Optimizing, refreshing:** the page has changed since it was first checked, by more than a date, a price or a rotating quote moving. On a short page that takes more than a new short review: about a rewritten paragraph. A sidebar, testimonials, the latest or popular posts and similar blocks that change by themselves aren't counted.
 - **A task written with its new text:** that text is on the page, and the text it replaces is gone.
 
 Only pages on the brand's own site are read. One that passes is completed by itself, and History says so; one that doesn't shows **Last check** with what is still missing. A task you reopen after it passed stays open: its checks still show what they find, the nightly check leaves it, and the call is yours. Site Audit fixes are checked by your next audit.
@@ -102,7 +102,7 @@ From a task you can also:
 - **Send to Content** — send a content task to Content as an opportunity, where a brief can be written for it.
 - **Send to webhook** — post the task to the brand's webhook, for a workflow outside Ansvisor. The webhook is set up under **Content → Webhook Settings**, with the **Action Center task sent** event selected.
 
-Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance.
+Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance. The AI also reads this brand's last three closed rounds of the same action: which tasks were done and what the result read, or why a round was dismissed. It builds on what improved results here and doesn't hand out again a task that was done without effect. Only this brand's own actions are read.
 
 A task the AI writes without its **URL**, its **Change**, **Done when** or **How we check** doesn't reach your list. It waits on the **Needs review** tab, which admins and managers see, with what it misses. Click **Edit**, fill the missing fields and click **Approve** to add it after the action's other tasks, or **Dismiss** it.
 
@@ -141,6 +141,8 @@ The score weighs seven things:
 - **Recency** — newer evidence counts more. Its weight halves roughly every ten days.
 
 Demand or business value that nothing measures counts as neutral: it neither raises nor lowers the score.
+
+On top of these, **past success** nudges the score: how this brand's own earlier actions of the same kind turned out over the last six months, as the History scorecard counts them. A kind that improved results here sits up to 10 points higher, one that rarely did up to 10 lower. A few results barely move it, and a kind with no results yet doesn't move at all. Other brands' results are never used. When it moves the score by a point or more, **Why this priority?** says so, for example *3 of 4 earlier actions of this kind improved results here*.
 
 An action sent from another page has no detection signals, so it is scored from what it carries: the prompt's platforms for an Improve action, the prompts of a content opportunity or draft, the pages sent from AI Traffic.
 
@@ -191,9 +193,13 @@ The **History** tab lists actions once they are In Progress, On Hold, Completed 
 
 Click an action to see **What was the goal?**, **What happened?** (the signals it was built from), its affected items and tasks, and the **Result**:
 
-- When a completed action's week after closing is over, Ansvisor compares its metrics over the 7 days before it was raised with the 7 days after it closed. The result reads **Improved**, **No meaningful change** or **Declined**. It is measured after the action, not proven to be caused by it.
-- A dismissed action is **Not measurable**, and so is one with no metric to read.
+- A completed action's metrics are read three times: over the week ending 7, 14 and 30 days after it closed, each against the 7 days before it was raised. Until the reading on day 30, which is final, the result reads *so far*, and the drawer lists each reading. The result reads **Improved**, **Mixed**, **No meaningful change** or **Declined**, judged by the action's main metric (the first one it names): **Mixed** when another metric it names moved the other way, or, without the main one measured, when the ones it names moved both ways. Other metrics show beside but don't count. It is measured after the action, not proven to be caused by it. An action that names its prompts or pages is measured on them, with the brand-wide figures over the same days beside; when they can't show its main metric (citations, for prompts), it is measured brand-wide. Its prompts' change is also shown net of the brand's prompts it didn't touch over the same days (the other prompts in its topics, or the brand's others), so what moved for every prompt, such as an engine's update, is told apart from what moved for its own (a count from fewer than 5 before isn't netted: one more would read as a big swing); the result itself stays as measured. A Site Audit fix is judged by its pages audited again since it closed: the check that raised it passing, or a low score past the line; with none audited again yet, by the metrics. When tracking missed nights in either week, the drawer says so, and mentions and citations are read at a full week's worth from the nights that ran. More than two in one week are too few to read them from: they're left out of the result, and an action whose main metric is one of them reads **Not measurable**. The History drawer also says what became of the signals that raised it by then: how many ended, turned into another, were dismissed, or are still open.
+- Only a completed action is measured: a dismissed one reads **Not measured**, dismissed. One with no metric to read is **Not measurable**.
 - An action sent from a prompt's Improve tab reports on how many platforms its position improved. It is read again daily while the action is open and for 30 days after it is completed.
+
+### Scorecard
+
+Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range (90 days unless you pick another, since an action's final reading comes 30 days after it closes): how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, never another brand's.
 
 When an action is closed, its condition can open a new action after a two-week rest if it is still firing. The old one stays in History as the record of that round of work.
 
@@ -209,6 +215,7 @@ Most actions are generated from signals each night. You can also send work to th
 | **AI Traffic** | On the [AI Traffic Analytics](/guides/ai-traffic-analytics) pages list, select pages under *Cited, not clicked* or *No AI traffic* and click **Send to Action Center**. Traffic drops and strong or weak landing pages also arrive as signals. |
 | **Insights** | **Send action** on a topic in Insights' Opportunities opens a Growth action for it. |
 | **Prompts** | **Send Actions** on a prompt's Improve tab sends the selected suggestions as one action. |
+| **Product catalog** | After each catalog sync, a published page that links products that are sold out, refused by Merchant Center or gone from your catalog gets a Fix action with one task: swap them for products in stock. The next sync, or **Check now** on the task, closes it once the live page links none of them. See [Content Editor](/guides/content-editor). |
 
 Sending the same thing twice doesn't create a second action: the page says it is already in the Action Center, with its action number (for example `AC-42`).
 

@@ -222,6 +222,12 @@ export function ExportDialog({
   const [platformsOpen, setPlatformsOpen] = useState(() => isPlatform(destination));
   const platformsId = useId();
   const radios = useRef<Partial<Record<ExportDestination, HTMLButtonElement | null>>>({});
+  // Fill now: the editor selects the placeholder, so focus stays there.
+  const filling = useRef(false);
+  const fillNow = () => {
+    filling.current = true;
+    onFillNow();
+  };
   const placeholders = useMemo(
     () => exportPlaceholders(html) + titlePlaceholders(title, html),
     [html, title],
@@ -443,6 +449,7 @@ export function ExportDialog({
         // Focus starts on the destination picked, as a radio group's does:
         // Enter or Space then keeps it, not the first file's.
         initialFocus={() => radios.current[destination] ?? true}
+        finalFocus={() => !filling.current}
       >
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
@@ -506,7 +513,7 @@ export function ExportDialog({
                   : t('placeholders.headings', { count: left })}
               </span>
               {!ready && (
-                <Button variant="outline" size="sm" className="h-7" onClick={onFillNow}>
+                <Button variant="outline" size="sm" className="h-7" onClick={fillNow}>
                   {t('placeholders.fill')}
                 </Button>
               )}
@@ -526,7 +533,7 @@ export function ExportDialog({
               <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
               <p className="min-w-0 flex-1">{t('placeholders.open', { count: placeholders })}</p>
               <div className="flex w-full justify-end gap-2">
-                <Button variant="outline" size="sm" className="h-7" onClick={onFillNow}>
+                <Button variant="outline" size="sm" className="h-7" onClick={fillNow}>
                   {t('placeholders.fill')}
                 </Button>
                 <Button

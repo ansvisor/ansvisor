@@ -41788,6 +41788,301 @@ comment on column public.content_drafts.shopping_path is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00352_content_shopping_checks.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00352: whether a page's shopping links still sell (shopping path, part 7)
+-- ============================================================================
+-- A buying guide, a best-of list or a comparison sends its readers, and the
+-- AI answers that quote it, to the category pages and the products of its
+-- shopping path (00351). A product sells out, Google Merchant Center refuses
+-- it, or it leaves the catalog, and the page goes on linking it. After each
+-- catalog sync the API reads every page with a shopping path again: the live
+-- page where it is published (content_drafts.published_url, or an optimized
+-- page's own address), else the draft, and keeps here what its links do with
+-- the path. The Content Library shows it in its Shopping path column.
+--
+--   * One row per draft with a shopping path; it goes with the draft, and
+--     the next check removes a row whose draft lost its path or was archived.
+--   * `bad`: the linked products that no longer sell, [{id, title, state}]
+--     with state sold_out, refused or gone, and `needs_attention` whether
+--     there are any.
+--   * Members read their brands' rows; the server writes them.
+
+create table if not exists public.content_shopping_checks (
+  draft_id uuid primary key references public.content_drafts(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  -- Where the links were read: the live page, or the draft when it isn't
+  -- published or its page couldn't be read.
+  read_from text not null check (read_from in ('page', 'draft')),
+  page_url text check (
+    page_url is null or (char_length(page_url) <= 2048 and page_url ~* '^https?://')
+  ),
+  -- The path's category pages and products, and how many of them the page links.
+  categories smallint not null default 0 check (categories between 0 and 5),
+  categories_linked smallint not null default 0,
+  products smallint not null default 0 check (products between 0 and 40),
+  products_linked smallint not null default 0,
+  bad jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(bad) = 'array' and jsonb_array_length(bad) <= 40
+  ),
+  needs_attention boolean generated always as (
+    jsonb_typeof(bad) = 'array' and jsonb_array_length(bad) > 0
+  ) stored,
+  checked_at timestamptz not null default now(),
+  constraint content_shopping_checks_linked_check check (
+    categories_linked between 0 and categories and products_linked between 0 and products
+  )
+);
+
+create index if not exists content_shopping_checks_brand_idx
+  on public.content_shopping_checks (brand_id, needs_attention);
+
+alter table public.content_shopping_checks enable row level security;
+revoke all on table public.content_shopping_checks from anon, authenticated;
+grant select on table public.content_shopping_checks to authenticated;
+grant all on table public.content_shopping_checks to service_role;
+
+drop policy if exists "content_shopping_checks: member select" on public.content_shopping_checks;
+create policy "content_shopping_checks: member select"
+  on public.content_shopping_checks
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+comment on table public.content_shopping_checks is
+  'Shopping path, part 7 (00352): what a page''s links do with its shopping path (00351) as the last catalog sync left the catalog: how many of its category pages and products it links, and the linked products that no longer sell (sold out, refused by Merchant Center, gone). Read from the live page when published, else the draft. Server writes, members read.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00365_action_outcome_mixed.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00365: an action's result can read "mixed" (learning A4)
+-- ============================================================================
+-- The validation sweep (server/src/lib/action-center/validate.js) compares an
+-- action's metrics before it was raised and after it closed. One metric up
+-- and another down used to read as "improved", which taught that anything
+-- moving up was the work paying off. It now reads "mixed", as does a Site
+-- Audit fix whose pages, audited again, only partly pass. The action's main
+-- metric decides when it was measured; see deriveOutcome.
+
+alter table public.actions
+  drop constraint if exists actions_outcome_check;
+
+alter table public.actions
+  add constraint actions_outcome_check
+  check (outcome in (
+    'pending_measurement',
+    'improved',
+    'mixed',
+    'no_meaningful_change',
+    'declined',
+    'not_measurable'
+  ));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00366_action_dismiss_reason.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00366: why an action was dismissed (learning A5)
+-- ============================================================================
+-- Dismissing an Action Center action asked nothing, so a dismissal taught
+-- nothing: the same definition could open again 14 days later for the same
+-- reason it was turned down. The person now says why, as a content
+-- opportunity's dismissal does (CONTENT-006): the reason is kept while the
+-- action stays dismissed, and cleared when it's set to another status.
+-- Nothing reads it to rank or rest actions yet (phase B).
+
+alter table public.actions
+  add column if not exists dismiss_reason text;
+
+alter table public.actions
+  drop constraint if exists actions_dismiss_reason_check;
+
+alter table public.actions
+  add constraint actions_dismiss_reason_check
+  check (
+    dismiss_reason is null
+    or dismiss_reason in ('not_relevant', 'already_done', 'wrong_data', 'not_now')
+  );
+
+comment on column public.actions.dismiss_reason is
+  'Why the action was dismissed (00366, learning A5): not_relevant, already_done, wrong_data or not_now; null when no reason was given or the action is not dismissed.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00367_content_suggestion_decisions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00367: how a brand decides the Content Agent's suggestions, by rule
+-- (learning B6)
+-- ============================================================================
+-- Each suggestion the agent leaves on a draft (00217) names the rules it
+-- fixes (rule_keys), and keeps whether a person accepted or rejected it. Read
+-- one at a time, nothing learned from them. This sums a brand's decisions
+-- since a day by rule: the agent keeps its changes small for a rule people
+-- there mostly reject (content-suggestion-stats.js). One brand's own
+-- decisions only, read by the API (service role).
+--
+-- Only its small changes count, a passage's words replaced or blocks
+-- inserted: a whole page rewritten to the rules (kind 'page', 00247) names
+-- every rule it was asked for, and one rejected would count against each.
+-- `drafts` is how many drafts a rule's suggestions were rejected on, so one
+-- Reject all on one draft isn't read as a habit, even beside an Accept on
+-- another.
+
+-- A database with an earlier shape of it (a dev database, before review)
+-- takes this one in its place: create or replace can't change its rows.
+drop function if exists public.content_suggestion_decisions(uuid, timestamptz);
+
+create or replace function public.content_suggestion_decisions(
+  p_brand_id uuid,
+  p_since timestamptz
+)
+returns table (rule_key text, accepted integer, rejected integer, drafts integer)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  select k.rule_key,
+         count(*) filter (where s.status = 'accepted')::integer as accepted,
+         count(*) filter (where s.status = 'rejected')::integer as rejected,
+         count(distinct s.draft_id) filter (where s.status = 'rejected')::integer as drafts
+    from public.content_draft_suggestions s
+    join public.content_drafts d on d.id = s.draft_id
+    cross join lateral unnest(s.rule_keys) as k(rule_key)
+   where d.brand_id = p_brand_id
+     and s.kind in ('replace', 'insert')
+     and s.status in ('accepted', 'rejected')
+     and s.decided_at >= p_since
+   group by k.rule_key;
+$$;
+
+revoke all on function public.content_suggestion_decisions(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.content_suggestion_decisions(uuid, timestamptz) to service_role;
+
+comment on function public.content_suggestion_decisions(uuid, timestamptz) is
+  'A brand''s accepted and rejected Content Agent suggestions since a day, by rule key, and the drafts they were rejected on; small changes only, not page rewrites (00367, learning B6). Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00368_action_scorecard.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00368: what worked at a brand, by kind of action (learning B3)
+-- ============================================================================
+-- Each completed action keeps its result (server action-center/validate.js,
+-- read a week, two weeks and a month after it closed) and a dismissed one
+-- why it was turned down (00366). Read one at a time, a brand can't see
+-- which kinds of work pay off for it. This sums the brand's actions raised
+-- since a day by kind: how many were completed, what their results read,
+-- the median change in each one's main metric, and how many were dismissed
+-- and why. One brand's own actions only, never another's: the History tab
+-- reads it with the member's session (RLS keeps it to their organization),
+-- the API with the service role.
+
+create or replace function public.action_scorecard(
+  p_brand_id uuid,
+  p_since timestamptz default null
+)
+returns table (
+  kind text,
+  completed integer,
+  improved integer,
+  mixed integer,
+  no_change integer,
+  declined integer,
+  not_measurable integer,
+  pending integer,
+  final integer,
+  median_change numeric,
+  dismissed integer,
+  dismiss_reasons jsonb
+)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with closed as (
+    select a.kind,
+           a.status,
+           a.outcome,
+           a.dismiss_reason,
+           a.validation->>'final' = 'true' as is_final,
+           -- The relative change in its main metric (learning A4), when the
+           -- metric was read before and after and had a before to scale by.
+           (select (m->>'after')::numeric / nullif((m->>'before')::numeric, 0) - 1
+              from jsonb_array_elements(
+                     case when jsonb_typeof(a.validation->'metrics') = 'array'
+                          then a.validation->'metrics' else '[]'::jsonb end
+                   ) as m
+             where m->>'metric' = a.validation->>'primary'
+               and jsonb_typeof(m->'before') = 'number'
+               and jsonb_typeof(m->'after') = 'number'
+             limit 1) as change
+      from public.actions a
+     where a.brand_id = p_brand_id
+       and a.deleted_at is null
+       and a.status in ('completed', 'dismissed')
+       and (p_since is null or a.created_at >= p_since)
+  )
+  select c.kind,
+         count(*) filter (where c.status = 'completed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'improved')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'mixed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'no_meaningful_change')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'declined')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'not_measurable')::integer,
+         count(*) filter (
+           where c.status = 'completed'
+             and (c.outcome is null or c.outcome = 'pending_measurement')
+         )::integer,
+         count(*) filter (where c.status = 'completed' and c.is_final)::integer,
+         -- The median, so one small page that went from 1 to 20 doesn't
+         -- read as the kind's typical result. Over the results with a
+         -- verdict only.
+         round(
+           (percentile_cont(0.5) within group (order by c.change) filter (
+             where c.status = 'completed'
+               and c.outcome in ('improved', 'mixed', 'no_meaningful_change', 'declined')
+           ))::numeric,
+           4
+         ),
+         count(*) filter (where c.status = 'dismissed')::integer,
+         coalesce(
+           (select jsonb_object_agg(r.reason, r.n)
+              from (select coalesce(d.dismiss_reason, 'none') as reason, count(*) as n
+                      from closed d
+                     where d.kind = c.kind and d.status = 'dismissed'
+                     group by 1) as r),
+           '{}'::jsonb
+         )
+    from closed c
+   group by c.kind;
+$$;
+
+revoke all on function public.action_scorecard(uuid, timestamptz) from public, anon;
+grant execute on function public.action_scorecard(uuid, timestamptz) to authenticated, service_role;
+
+comment on function public.action_scorecard(uuid, timestamptz) is
+  'A brand''s actions raised since a day, by kind: completed, results, median change in the main metric, dismissed and why (00368, learning B3). RLS applies to the caller.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00370_prompt_demand.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================

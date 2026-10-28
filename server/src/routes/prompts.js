@@ -5,6 +5,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents } from '../lib/intent-extraction.js';
+import { promptsFromTopicsSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
   PlanLimitError,
@@ -34,6 +35,7 @@ import {
 } from '../lib/prompt-improve.js';
 import {
   liveImproveSends,
+  loadImproveRounds,
   sendImproveToActionCenter,
 } from '../lib/action-center/from-prompt-improve.js';
 import { demandResponse } from '../lib/prompt-demand.js';
@@ -802,12 +804,12 @@ const topicPromptSchema = z.object({
  */
 router.post('/from-topics', async (req, res) => {
   try {
-    const { brandName, industry, description, topics, language } = req.body;
-    const langName = getLanguageName(language);
-
-    if (!brandName || !topics?.length) {
-      return res.status(400).json({ error: 'brandName and topics are required' });
+    const parsed = promptsFromTopicsSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
     }
+    const { brandName, industry, description, topics, language } = parsed.data;
+    const langName = getLanguageName(language);
 
     const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
     const aiModel = resolveModel(promptModel);
@@ -1185,10 +1187,19 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         promptId,
       });
       try {
+        // The brand's earlier Improve rounds on this prompt (learning B5).
+        // Without them the suggestions are still written, as before.
+        let history = [];
+        try {
+          history = await loadImproveRounds({ promptId, brandId, region: range.region });
+        } catch (err) {
+          req.log.warn({ err, promptId }, 'prompt improve earlier rounds unavailable');
+        }
         const { system, prompt: userPrompt } = buildImprovePrompt({
           promptText: prompt.text,
           brand: { name: brand.name, description: brand.description, domains: brandDomains },
           platforms: withEvidence,
+          history,
         });
         // Every attempt is charged at its real token cost, so the budget holds
         // for any model, including attempts withRetry repeats after a schema miss.

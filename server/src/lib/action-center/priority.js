@@ -18,6 +18,10 @@
  *                   nearer to hand than winning it from nothing;
  *   recency         how new the latest evidence is, halving every few days.
  *
+ * And, on top, past success: a kind of action that has improved results at
+ * this brand before sits a little higher, one that rarely has a little
+ * lower (learning B4).
+ *
  * Pure: the caller reads the signals and the prompts' demand and passes them
  * in. Alongside the score it returns the facts it rests on, from which the
  * app writes "Why this priority?" in the reader's language.
@@ -329,7 +333,8 @@ function confidenceOf(signals) {
 /**
  * What an action sent by a person rests on, without detection signals: an
  * Improve action names its platforms and their state, a content opportunity
- * its prompts. Read from the action's own payload.
+ * its prompts. Read from the action's own payload. The shopping check's
+ * actions (from-shopping-check.js) have no signals either.
  */
 function sentByHand(action) {
   const p = action.payload ?? {};
@@ -364,6 +369,17 @@ function sentByHand(action) {
       subject: { entity: p.targetEntity ?? 'prompts', count: p.targetCount ?? null },
     };
   }
+  // A live page linking products that no longer sell (shopping path, part 7):
+  // the catalog says so, and swapping the links is quick work.
+  if (action.kind === 'shopping_links') {
+    return {
+      change: 'issue',
+      severity: 0.6,
+      confidence: 0.9,
+      recoverability: 0.9,
+      subject: { entity: 'pages', count: 1 },
+    };
+  }
   // Pages sent from AI Traffic (AT-006). Answers citing a page nobody clicks
   // rest on two sources, citations and traffic, and the page already earns
   // the answer; a page AI skips rests on traffic alone.
@@ -378,6 +394,22 @@ function sentByHand(action) {
     };
   }
   return null;
+}
+
+/**
+ * Past success (learning B4): from a kind's results at this brand, the
+ * share that improved, shrunk toward the prior by a few imagined results,
+ * and the points that moves the score. None read: the prior, no points.
+ *
+ * @param {{ improved?: number, results?: number } | undefined} track
+ */
+export function pastSuccessOf(track) {
+  const improved = Math.max(0, Math.floor(Number(track?.improved) || 0));
+  const results = Math.max(improved, Math.floor(Number(track?.results) || 0));
+  const rate =
+    (improved + P.pastSuccessPseudoCount * P.pastSuccessPrior) /
+    (results + P.pastSuccessPseudoCount);
+  return { rate, points: (rate - P.pastSuccessPrior) * P.pastSuccessSwing, improved, results };
 }
 
 /** The level a score falls in. */
@@ -399,10 +431,15 @@ export function priorityLevel(score) {
  *   Its open signals: the evidence it rests on now.
  * @param {Map<string, { volume: number|null, intent: string|null }>} [input.prompts]
  *   Demand and intent of the prompts the evidence names.
+ * @param {Map<string, { improved: number, results: number }>} [input.track]
+ *   Per kind, the brand's results with a verdict and how many improved (loadKindTrack).
  * @param {Date} now
  * @returns {{ score: number, level: string, reason: object }}
  */
-export function scorePriority({ action, signals = [], prompts = new Map() }, now = new Date()) {
+export function scorePriority(
+  { action, signals = [], prompts = new Map(), track = new Map() },
+  now = new Date(),
+) {
   const payloads = [action.payload, ...signals.map((s) => s.payload)].filter(Boolean);
   const byHand = signals.length === 0 ? sentByHand(action) : null;
 
@@ -451,6 +488,7 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
     recoverability,
     recency,
   };
+  const past = pastSuccessOf(track.get(action.kind));
   const score = Math.round(
     factors.impact * P.weightImpact +
       factors.demand * P.weightDemand +
@@ -458,7 +496,8 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
       factors.businessValue * P.weightBusinessValue +
       factors.confidence * P.weightConfidence +
       factors.recoverability * P.weightRecoverability +
-      factors.recency * P.weightRecency,
+      factors.recency * P.weightRecency +
+      past.points,
   );
   const bounded = Math.min(100, Math.max(0, score));
 
@@ -483,7 +522,17 @@ export function scorePriority({ action, signals = [], prompts = new Map() }, now
       days: signals.length ? Math.floor(days) : null,
       kinds: confidence.kinds,
       sources: confidence.sources,
-      factors: Object.fromEntries(Object.entries(factors).map(([k, v]) => [k, round2(v)])),
+      // How its kind did here before (learning B4); null with nothing to go on.
+      pastSuccess: past.results
+        ? { improved: past.improved, results: past.results, points: round2(past.points) }
+        : null,
+      // Its rate only with a result behind it: with none, the prior would
+      // read as a measured 0.5.
+      factors: Object.fromEntries(
+        Object.entries({ ...factors, ...(past.results ? { pastSuccess: past.rate } : {}) }).map(
+          ([k, v]) => [k, round2(v)],
+        ),
+      ),
     },
   };
 }

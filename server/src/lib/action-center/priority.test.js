@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { priorityColumns, priorityLevel, promptIdsOf, scorePriority } from './priority.js';
+import {
+  pastSuccessOf,
+  priorityColumns,
+  priorityLevel,
+  promptIdsOf,
+  scorePriority,
+} from './priority.js';
 
 /**
  * The priority score (AC-006): how soon to work on an action, 0–100, from
@@ -363,6 +369,26 @@ describe('scorePriority', () => {
     expect(sent('no_ai_traffic', { valueSignal: 'revenue' }).reason.commercial).toBe(true);
   });
 
+  it('scores a live page linking products that no longer sell as a sure, quick fix (shopping path, part 7)', () => {
+    const linked = scorePriority(
+      {
+        action: action({
+          kind: 'shopping_links',
+          category: 'fix',
+          impact: 'medium',
+          created_at: daysAgo(0),
+          payload: { source: 'shopping_check', targetEntity: 'pages', targetCount: 1 },
+        }),
+      },
+      NOW,
+    );
+    expect(linked.reason).toMatchObject({
+      change: 'issue',
+      subject: { entity: 'pages', count: 1 },
+    });
+    expect(linked.reason.factors).toMatchObject({ severity: 0.6, confidence: 0.9 });
+  });
+
   it('stays within 0–100 and returns whole numbers', () => {
     for (const impact of ['high', 'medium', 'low', 'unknown']) {
       const { score } = scorePriority({ action: action({ impact }), signals: [] }, NOW);
@@ -370,6 +396,67 @@ describe('scorePriority', () => {
       expect(score).toBeGreaterThanOrEqual(0);
       expect(score).toBeLessThanOrEqual(100);
     }
+  });
+});
+
+/**
+ * Past success (learning B4): a kind that has improved results at this
+ * brand before sits a little higher, one that rarely has a little lower;
+ * a couple of results barely move it, and none move nothing.
+ */
+describe('past success', () => {
+  it('reads no history as the prior, moving nothing', () => {
+    expect(pastSuccessOf(undefined)).toEqual({ rate: 0.5, points: 0, improved: 0, results: 0 });
+  });
+
+  it('pulls a few results toward the prior, and many less so', () => {
+    expect(pastSuccessOf({ improved: 3, results: 3 }).points).toBeCloseTo(3.75);
+    expect(pastSuccessOf({ improved: 0, results: 3 }).points).toBeCloseTo(-3.75);
+    expect(pastSuccessOf({ improved: 10, results: 10 }).points).toBeCloseTo(6.67, 1);
+    expect(pastSuccessOf({ improved: 1, results: 1 }).points).toBeLessThan(2);
+  });
+
+  it("moves the score by its kind's track here, and says so", () => {
+    const signals = [signal()];
+    const none = scorePriority({ action: action(), signals }, NOW);
+    const worked = scorePriority(
+      {
+        action: action(),
+        signals,
+        track: new Map([['recover_lost_citations', { improved: 3, results: 3 }]]),
+      },
+      NOW,
+    );
+    const rarely = scorePriority(
+      {
+        action: action(),
+        signals,
+        track: new Map([['recover_lost_citations', { improved: 0, results: 3 }]]),
+      },
+      NOW,
+    );
+
+    expect(none.reason.pastSuccess).toBeNull();
+    // No result behind it: no rate, rather than the prior read as one.
+    expect(none.reason.factors).not.toHaveProperty('pastSuccess');
+    expect(worked.reason.factors.pastSuccess).toBe(0.69);
+    expect(worked.score).toBeGreaterThan(none.score);
+    expect(rarely.score).toBeLessThan(none.score);
+    expect(worked.reason.pastSuccess).toEqual({ improved: 3, results: 3, points: 3.75 });
+  });
+
+  it("reads only its own kind's track", () => {
+    const signals = [signal()];
+    const other = scorePriority(
+      {
+        action: action(),
+        signals,
+        track: new Map([['fix_low_scores', { improved: 0, results: 9 }]]),
+      },
+      NOW,
+    );
+    expect(other.score).toBe(scorePriority({ action: action(), signals }, NOW).score);
+    expect(other.reason.pastSuccess).toBeNull();
   });
 });
 

@@ -127,7 +127,7 @@ export const SCRAPER_GROUPS = [
     scrapers: [
       { id: 'chatgpt-web', label: 'ChatGPT (Web)', platform: 'chatgpt' },
       { id: 'chatgpt-shopping', label: 'ChatGPT Shopping', platform: 'chatgpt-shopping' },
-      { id: 'google-aio', label: 'Google AI Overview', platform: 'google-ai-overviews' },
+      { id: 'google-aio', label: 'Google AI Overviews', platform: 'google-ai-overviews' },
       { id: 'google-aimode', label: 'Google AI Mode', platform: 'google-ai-mode' },
       { id: 'copilot-web', label: 'Microsoft Copilot', platform: 'copilot' },
       { id: 'grok-web', label: 'Grok', platform: 'grok' },

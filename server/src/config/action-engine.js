@@ -354,6 +354,21 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     /** In the queue of waiting findings, per day waited, up to `waitCapDays`. */
     waitPerDay: 1,
     waitCapDays: 14,
+    /**
+     * Past success (learning B4): how this brand's own earlier actions of
+     * the same kind turned out, from its History scorecard over the last
+     * `pastSuccessDays`. The share that improved, pulled toward
+     * `pastSuccessPrior` by `pastSuccessPseudoCount` imagined results, so a
+     * couple of results barely move it: a kind with none sits at the prior
+     * and its score doesn't move. Never another brand's history. The score
+     * moves by the rate's distance from the prior times `pastSuccessSwing`:
+     * up to 10 points either way, about 6.7 for a kind that improved 10
+     * times out of 10.
+     */
+    pastSuccessSwing: 20,
+    pastSuccessPrior: 0.5,
+    pastSuccessPseudoCount: 5,
+    pastSuccessDays: 180,
   }),
 
   /** How an action's effect is measured once it closes. */
@@ -368,6 +383,27 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      * floor every outcome would be a verdict and none would mean anything.
      */
     meaningfulChangeRatio: 0.05,
+
+    /**
+     * Days of a window with no stamped tracking run beyond which its counts
+     * can't be compared (learning A6): a missed night reads as fewer
+     * mentions and citations, a decline nobody caused. Up to this many, the
+     * counts are read at a full window's worth from the nights that ran, and
+     * flagged; more, and they're left out of the verdict (not measurable when
+     * the main metric is one).
+     */
+    maxGapDays: 2,
+
+    /**
+     * The day after an action closed its last, final reading is taken on
+     * (learning B1). Its effect is read a week and two weeks on too, each
+     * over the window's length ending that day, against the same week
+     * before it was raised: a week is short for AI answers to take in a
+     * change to a page, so the final read is a month on, as an Improve
+     * action's is (improve-outcome.js); the earlier ones show where it was
+     * heading.
+     */
+    finalReadingDay: 30,
   }),
 });
 

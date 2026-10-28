@@ -243,6 +243,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           dedup_key: string
+          dismiss_reason: string | null
           due_date: string | null
           id: string
           impact: string
@@ -271,6 +272,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact: string
@@ -299,6 +301,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           dedup_key?: string
+          dismiss_reason?: string | null
           due_date?: string | null
           id?: string
           impact?: string
@@ -1319,6 +1322,61 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_shopping_checks: {
+        Row: {
+          bad: Json
+          brand_id: string
+          categories: number
+          categories_linked: number
+          checked_at: string
+          draft_id: string
+          needs_attention: boolean
+          page_url: string | null
+          products: number
+          products_linked: number
+          read_from: string
+        }
+        Insert: {
+          bad?: Json
+          brand_id: string
+          categories?: number
+          categories_linked?: number
+          checked_at?: string
+          draft_id: string
+          page_url?: string | null
+          products?: number
+          products_linked?: number
+          read_from: string
+        }
+        Update: {
+          bad?: Json
+          brand_id?: string
+          categories?: number
+          categories_linked?: number
+          checked_at?: string
+          draft_id?: string
+          page_url?: string | null
+          products?: number
+          products_linked?: number
+          read_from?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_shopping_checks_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_shopping_checks_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: true
+            referencedRelation: "content_drafts"
             referencedColumns: ["id"]
           },
         ]
@@ -4470,6 +4528,23 @@ export type Database = {
           removed_keys: string[]
           removed_labels: string[]
           total: number
+        }[]
+      }
+      action_scorecard: {
+        Args: { p_brand_id: string; p_since?: string | null }
+        Returns: {
+          completed: number
+          declined: number
+          dismiss_reasons: Json
+          dismissed: number
+          final: number
+          improved: number
+          kind: string
+          median_change: number | null
+          mixed: number
+          no_change: number
+          not_measurable: number
+          pending: number
         }[]
       }
       ai_traffic_merged: {

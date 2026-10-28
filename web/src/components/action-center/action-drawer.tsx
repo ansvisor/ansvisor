@@ -40,6 +40,7 @@ import {
   type ActionTask,
 } from '@/lib/actions/action-center';
 import type { TeamMember } from '@/lib/actions/team';
+import { DismissReasonDialog } from './dismiss-reason-dialog';
 import {
   ACTION_STATUSES,
   TASK_STATUSES,
@@ -74,6 +75,7 @@ import { TopicOpportunityContext } from './topic-opportunity-context';
 import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
+import { ShoppingLinksContext } from './shopping-links-context';
 import {
   TaskDetailForm,
   TaskDetailView,
@@ -91,6 +93,8 @@ import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
   hasTaskSpec,
+  pageCheckable,
+  withTemplateCheck,
   withTemplateDoneWhen,
   withoutTemplateDoneWhen,
   type TaskDetailsEdit,
@@ -155,6 +159,8 @@ export function ActionDrawer({
   const tTaskCard = useTranslations('actionCenter.actionsPage.drawer.task');
   const missingText = useMissingText();
   const [checking, setChecking] = useState<string | null>(null);
+  // Dismissed from the status select: why, first (learning A5).
+  const [dismissing, setDismissing] = useState(false);
   // The drafts written for the action's writing tasks (CE-022), once read.
   const [drafts, setDrafts] = useState<ActionDraft[]>([]);
 
@@ -397,6 +403,17 @@ export function ActionDrawer({
 
   return (
     <Sheet open={Boolean(action)} onOpenChange={onOpenChange}>
+      {action && (
+        <DismissReasonDialog
+          open={dismissing}
+          onOpenChange={setDismissing}
+          onChoose={(reason) =>
+            void changeField({ status: 'dismissed' }, () =>
+              updateActionStatus(brandId, action.id, 'dismissed', reason),
+            )
+          }
+        />
+      )}
       <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         {/* pt-3: the top row's buttons line up with the sheet's close button. */}
         <SheetHeader className="border-b px-6 pt-3 pb-4 pr-12">
@@ -466,9 +483,12 @@ export function ActionDrawer({
             <Select
               value={action.status}
               onValueChange={(value) =>
-                void changeField({ status: value as ActionStatus }, () =>
-                  updateActionStatus(brandId, action.id, value as ActionStatus),
-                )
+                // Dismissing asks why first (learning A5).
+                value === 'dismissed'
+                  ? setDismissing(true)
+                  : void changeField({ status: value as ActionStatus }, () =>
+                      updateActionStatus(brandId, action.id, value as ActionStatus),
+                    )
               }
               items={ACTION_STATUSES.map((status) => ({
                 value: status,
@@ -673,6 +693,11 @@ export function ActionDrawer({
                   <Separator />
                   <ContentDraftContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'shopping_links' ? (
+                <>
+                  <Separator />
+                  <ShoppingLinksContext payload={action.payload ?? {}} />
+                </>
               ) : opportunityId ? (
                 <>
                   <Separator />
@@ -726,11 +751,10 @@ export function ActionDrawer({
                         webhook: webhookReady,
                         onSend: (to) => void sendTask(task.id, taskText(task, tTasks), to),
                       }}
-                      // An open task checked automatically, with its page (AC-010).
+                      // An open task the API checks on its page (AC-010).
                       check={
                         (task.status === 'todo' || task.status === 'in_progress') &&
-                        task.details?.check === 'auto' &&
-                        task.details.url
+                        pageCheckable(task, action.kind)
                           ? { onCheck: () => void checkTask(task.id), busy: checking === task.id }
                           : undefined
                       }
@@ -777,9 +801,11 @@ export function ActionDrawer({
                           ? t('drawer.noSignalsMentionReview')
                           : action.kind === 'traffic_pages'
                             ? t('drawer.noSignalsTrafficPages')
-                            : opportunityId
-                              ? t('drawer.noSignalsOpportunity')
-                              : t('drawer.noSignals')}
+                            : action.kind === 'shopping_links'
+                              ? t('drawer.noSignalsShoppingLinks')
+                              : opportunityId
+                                ? t('drawer.noSignalsOpportunity')
+                                : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
@@ -877,10 +903,14 @@ function TaskRow({
     () => !!task.details && !hasTaskSpec(task.details) && !!task.details.body,
   );
   const [editing, setEditing] = useState(false);
-  // A library task's Done when is its template's until someone writes one (AC-010).
+  // A library task's Done when is its template's until someone writes one,
+  // and its How we check Manual when its template is now (AC-010).
   const tDoneWhen = useTranslations('actionCenter.taskDoneWhen');
-  const details = withTemplateDoneWhen(task.details, task.taskKey, (key) =>
-    tDoneWhen.has(key) ? tDoneWhen(key) : null,
+  const details = withTemplateCheck(
+    withTemplateDoneWhen(task.details, task.taskKey, (key) =>
+      tDoneWhen.has(key) ? tDoneWhen(key) : null,
+    ),
+    task.taskKey,
   );
   // Choosing Skipped opens a reason field rather than committing: a skip
   // without a reason cannot be told apart from an abandoned task later.

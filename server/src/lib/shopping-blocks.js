@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { priceAmount } from './catalog/offer.js';
 import { isInStock } from './catalog/stock.js';
 import { linkHref } from './content-links.js';
 
@@ -19,17 +20,12 @@ export const GRID_PAGE_TYPES = new Set(['best_of', 'buying_guide', 'comparison',
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const escape = (text) => String(text).replace(/[&<>"']/g, (c) => ENTITIES[c]);
 
-/** An amount above 0, or null: a price of 0 is none given. */
-const positive = (value) => (value != null && Number(value) > 0 ? Number(value) : null);
-
 /**
- * A product's price as the editor's card reads it ("$189.00"): the sale
- * price when it's under the price, else the price; null without one.
+ * A product's price as the editor's card reads it ("$189.00"), by
+ * catalog/offer.js's priceAmount; null without one.
  */
 export function priceText({ price, salePrice, currency }) {
-  const regular = positive(price);
-  const sale = positive(salePrice);
-  const amount = sale != null && regular != null && sale < regular ? sale : regular;
+  const amount = priceAmount({ price, salePrice });
   if (amount == null) return null;
   try {
     return currency
