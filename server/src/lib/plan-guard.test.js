@@ -68,6 +68,13 @@ describe('applyPlanOverrides — the Enterprise AI budget', () => {
     expect(budget({ contractMonthlyUsd: 2000, improveMonthlyBudgetUsd: 7 })).toBe(7);
   });
 
+  it('keeps the plan’s budget when the one set by hand isn’t a number', () => {
+    // null would read as unlimited, and "80$" would fail every AI call.
+    for (const own of [null, '80', '80$', Number.NaN, Infinity, {}]) {
+      expect(budget({ improveMonthlyBudgetUsd: own })).toBe(4.99);
+    }
+  });
+
   it('keeps the default without a usable contract value', () => {
     expect(budget({ maxPrompts: 900 })).toBe(4.99);
     expect(budget({ contractMonthlyUsd: 'n/a' })).toBe(4.99);

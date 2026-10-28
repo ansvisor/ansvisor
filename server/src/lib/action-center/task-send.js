@@ -54,7 +54,7 @@ const changeOf = (value) => {
 export async function loadTask(taskId) {
   const { data: task, error } = await supabaseAdmin
     .from('action_tasks')
-    .select('id, action_id, task_key, title, status, details')
+    .select('id, action_id, task_key, title, status, details, updated_at')
     .eq('id', taskId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -62,7 +62,7 @@ export async function loadTask(taskId) {
   const { data: action, error: actionError } = await supabaseAdmin
     .from('actions')
     .select(
-      'id, action_no, brand_id, kind, category, impact, status, priority_score, priority_level',
+      'id, action_no, brand_id, kind, category, impact, status, priority_score, priority_level, deleted_at',
     )
     .eq('id', task.action_id)
     .single();
@@ -70,14 +70,20 @@ export async function loadTask(taskId) {
   return { task, action };
 }
 
+/** The most of a Where or URL read for a page: the drawer keeps them to this. */
+const WHERE_CHARS = 500;
+
 /**
  * The brand's page a task's Where names, as a URL: "acme.example/pricing ·
  * lost on ChatGPT" gives https://acme.example/pricing, and a bare path is on
  * the brand's first domain. Null when Where names no page of the brand's.
+ * Only its first WHERE_CHARS are read, so a long one is read in bounded time.
  */
 export function ownPageOf(where, brandDomains) {
   const isOwn = ownDomainMatcher(brandDomains);
-  for (const token of text(where).split(/[\s·,;()]+/)) {
+  for (const token of text(where)
+    .slice(0, WHERE_CHARS)
+    .split(/[\s·,;()]+/)) {
     const cleaned = token.replace(/^["'“”]+|["'“”.]+$/g, '');
     if (!cleaned) continue;
     if (cleaned.startsWith('/') && cleaned.length > 1 && brandDomains[0]) {

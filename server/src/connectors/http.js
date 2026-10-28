@@ -35,8 +35,10 @@ const RETRY_ERRNOS = new Set(['ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT'
 
 export class ConnectorHttpError extends Error {
   /**
-   * @param {'invalid_url'|'blocked'|'unreachable'|'timeout'|'too_large'|'http_error'|'auth'|'rate_limited'|'bad_response'} code
-   *   'auth': the API refused the sign-in (401, 403)
+   * @param {'invalid_url'|'blocked'|'unreachable'|'timeout'|'too_large'|'http_error'|'auth'|'rate_limited'|'bad_response'|'not_set_up'} code
+   *   'auth': the API refused the sign-in (401, 403);
+   *   'not_set_up': this server's own setup was refused, not the sign-in
+   *   (lib/catalog/sign-in.js only)
    * @param {string} message
    * @param {{ status?: number }} [extra]
    */

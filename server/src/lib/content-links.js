@@ -138,10 +138,19 @@ export async function readLinkTargets({ brandId, draftId, sourceUrl, ruleKeys })
   return { own, sources };
 }
 
-/** The targets as the model reads them, by the rules asked for; '' when there are none. */
+/**
+ * The targets as the model reads them, by the rules asked for; '' when there
+ * are none. A draft's shopping path (shopping-links.js withShopping) comes
+ * first, whatever the rules: it's the page's plan.
+ */
 export function linkTargetsPrompt(targets, ruleKeys) {
   const lines = (list) => list.map((p) => `- ${p.title} — ${p.url}`).join('\n');
   const parts = [];
+  if (targets.shopping?.length) {
+    parts.push(
+      `The shopping path, the brand's shop pages this page sends readers to: link each where the page names it, once:\n${lines(targets.shopping)}`,
+    );
+  }
   if (targets.own.length && ruleKeys.has('internalLinks')) {
     parts.push(
       `Pages on the brand's site you may link to (internal links):\n${lines(targets.own)}`,
@@ -160,5 +169,10 @@ export function linkTargetsPrompt(targets, ruleKeys) {
  * else is unwrapped.
  */
 export function linkAllowList(targets) {
-  return new Map([...targets.own, ...targets.sources].map((p) => [linkKey(p.url), p.url]));
+  return new Map(
+    [...targets.own, ...targets.sources, ...(targets.shopping ?? [])].map((p) => [
+      linkKey(p.url),
+      p.url,
+    ]),
+  );
 }

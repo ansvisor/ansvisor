@@ -60,6 +60,11 @@ export async function buildAuditContext(rawUrl, { query = null } = {}) {
   const origin = `${u.protocol}//${u.host}`;
 
   const page = await fetchViaScrapeDo(url, { render: true });
+  if (page.error === 'too_deep') {
+    throw Object.assign(new Error('The page nests its elements too deeply to read'), {
+      status: 422,
+    });
+  }
   if (!page.ok || !page.html) {
     throw Object.assign(new Error(`Failed to fetch page (status ${page.status})`), { status: 502 });
   }

@@ -923,6 +923,44 @@ describe('readBrandFacts', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('never reads the site once the plan has ended: as kept, if anything is', async () => {
+    const fetcher = vi.fn();
+    const empty = fakeDb(tables({ brand_fact_pages: [], brand_facts: [], brand_domains: [] }));
+    const none = await readBrandFacts('b1', {
+      orgId: 'o1',
+      now: NOW,
+      db: empty.db,
+      fetcher,
+      keptOnly: true,
+    });
+    expect(none).toMatchObject({ facts: [], pages: [], checkedAt: null, noDomain: false });
+    expect(empty.reads).not.toContain('brand_domains');
+
+    const stale = fakeDb(
+      tables({
+        brand_fact_pages: [
+          {
+            kind: 'pricing',
+            url: null,
+            status: 'failed',
+            checked_at: new Date(NOW - 60 * 60_000).toISOString(),
+          },
+        ],
+      }),
+    );
+    const kept = await readBrandFacts('b1', {
+      orgId: 'o1',
+      now: NOW,
+      db: stale.db,
+      fetcher,
+      refresh: true,
+      keptOnly: true,
+    });
+    expect(kept.facts.map((f) => f.id)).toEqual(['a', 'b']);
+    expect(stale.reads).not.toContain('brand_domains');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('reads the site on the first ask, two asks at once once', async () => {
     const { db, reads } = fakeDb(tables({ brand_fact_pages: [], brand_domains: [] }));
     const [one, two] = await Promise.all([

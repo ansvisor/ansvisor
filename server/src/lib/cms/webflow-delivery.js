@@ -61,7 +61,8 @@ export async function sendToWebflow({ delivery, page, html, jsonLd, connection }
   const { html: body, changed } = toWebflowRichText(html);
   // A slug in another script has nothing left: the draft's own, the same every send.
   const slug = webflowSlug(page.slug) ?? webflowSlug(page.title) ?? `page-${page.draftId}`;
-  const fieldData = fieldDataFor({ page, slug, body, jsonLd }, connection.field_map ?? {});
+  const fieldMap = connection.field_map ?? {};
+  const fieldData = fieldDataFor({ page, slug, body, jsonLd }, fieldMap);
   try {
     const before = await lastItem(page.draftId, collectionId, delivery.id);
     let itemId = null;
@@ -73,7 +74,12 @@ export async function sendToWebflow({ delivery, page, html, jsonLd, connection }
       }
     }
     const updated = Boolean(itemId);
-    itemId ??= await createItem(account, collectionId, fieldData);
+    // Only a new item is given the day it's sent: one sent again keeps its date.
+    itemId ??= await createItem(
+      account,
+      collectionId,
+      fieldDataFor({ page, slug, body, jsonLd, sentAt: new Date() }, fieldMap),
+    );
     return { taken: true, externalId: itemId, collectionId, updated, changed };
   } catch (err) {
     if (err instanceof WebflowError) {

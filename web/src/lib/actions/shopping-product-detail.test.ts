@@ -8,6 +8,9 @@ const PRODUCT = '11111111-0000-0000-0000-000000000001';
 let tables: Record<string, Record<string, unknown>[]>;
 // The id lists each read filtered by, as [table, column, how many].
 let filtered: [string, string, number][];
+let rpcArgs: Record<string, unknown>[];
+// The id lists the catalog reads filtered by, as [table, column, the ids].
+let byIds: [string, string, unknown[]][];
 
 function query(table: string) {
   let range: [number, number] | undefined;
@@ -16,7 +19,11 @@ function query(table: string) {
     select: () => q,
     eq: () => q,
     is: () => q,
-    in: (column: string, values: unknown[]) => (filtered.push([table, column, values.length]), q),
+    in: (column: string, values: unknown[]) => (
+      filtered.push([table, column, values.length]),
+      byIds.push([table, column, values]),
+      q
+    ),
     not: () => q,
     gte: () => q,
     lte: () => q,
@@ -39,10 +46,13 @@ function query(table: string) {
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: query,
-    rpc: async () => ({
-      data: [{ product_id: PRODUCT, ai_visits: 4, orders: 0, revenue: null, currency: null }],
-      error: null,
-    }),
+    rpc: async (_name: string, args: Record<string, unknown>) => {
+      rpcArgs.push(args);
+      return {
+        data: [{ product_id: PRODUCT, ai_visits: 4, orders: 0, revenue: null, currency: null }],
+        error: null,
+      };
+    },
   })),
 }));
 
@@ -51,6 +61,8 @@ const { getShoppingProductDetail } = await import('./shopping');
 beforeEach(() => {
   tables = {};
   filtered = [];
+  rpcArgs = [];
+  byIds = [];
 });
 
 const card = (over: Record<string, unknown>) => ({
@@ -125,6 +137,16 @@ describe('getShoppingProductDetail', () => {
       winner: 'summitgear.example',
     });
     expect(detail?.ai).toEqual({ visits: 4, orders: 0, revenue: null, currency: null });
+    // Only this product: its catalog rows, and its own AI visits and orders.
+    expect(byIds.filter(([table]) => table.startsWith('catalog_'))).toEqual([
+      ['catalog_products', 'id', [PRODUCT]],
+      ['catalog_variants', 'product_id', [PRODUCT]],
+      ['catalog_images', 'product_id', [PRODUCT]],
+      ['catalog_product_categories', 'product_id', [PRODUCT]],
+    ]);
+    expect(rpcArgs).toEqual([
+      { p_brand_id: BRAND, p_from: expect.any(String), p_product_id: PRODUCT },
+    ]);
     expect(detail?.result).toBeNull();
   });
 

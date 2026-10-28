@@ -119,7 +119,7 @@ export async function listWaitingJobs({ idleMs, maxAgeMs }) {
   const now = Date.now();
   const { data, error } = await supabaseAdmin
     .from('jobs')
-    .select('id, type')
+    .select('id, type, brand_id')
     .eq('status', 'waiting')
     .lt('updated_at', new Date(now - idleMs).toISOString())
     .gt('created_at', new Date(now - maxAgeMs).toISOString())
@@ -162,6 +162,44 @@ export async function cancelJob(jobId) {
 
   const controller = activeJobs.get(jobId);
   if (controller) controller.abort();
+}
+
+/** Cancel a job while its status is `status`, keeping why; whether it was. */
+async function cancelJobWhile(jobId, status, reason) {
+  const { data, error } = await supabaseAdmin
+    .from('jobs')
+    .update({
+      status: 'cancelled',
+      failed_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', jobId)
+    .eq('status', status)
+    .select('id');
+
+  if (error) {
+    logger.error({ err: error, jobId, status }, 'failed to cancel job');
+    return false;
+  }
+  return (data ?? []).length > 0;
+}
+
+/**
+ * Cancel a job that is still waiting, saying why (`reason`, kept in
+ * failed_reason): one already started, finished or cancelled is left as it
+ * is. Returns whether it was cancelled.
+ */
+export async function cancelWaitingJob(jobId, reason) {
+  return cancelJobWhile(jobId, 'waiting', reason);
+}
+
+/**
+ * Cancel a job this process has just claimed (claimWaitingJob), before its
+ * work starts, saying why: one cancelled meanwhile is left as it is.
+ * Returns whether it was cancelled.
+ */
+export async function cancelClaimedJob(jobId, reason) {
+  return cancelJobWhile(jobId, 'active', reason);
 }
 
 /** Register an active job's AbortController. */
