@@ -557,6 +557,26 @@ describe('runTaskCheck', () => {
     db.moved = false;
   });
 
+  it('a read that throws still writes triedAt', async () => {
+    // The page comes back, then reading it throws: the claim already marked the task tried.
+    const fetch = vi.fn(async (url) => ({
+      url,
+      status: 200,
+      get html() {
+        throw new Error('unreadable');
+      },
+    }));
+    const written = task({
+      task_key: null,
+      details: { check: 'auto', url: '/pricing', change: { after: 'Plans from $9' } },
+    });
+    await expect(runTaskCheck(written, action, { fetch, now })).rejects.toThrow('unreadable');
+    expect(fetch).toHaveBeenCalled();
+    const writes = ops.filter((op) => op.table === 'action_tasks');
+    expect(writes).toHaveLength(1);
+    expect(writes[0].payload.details.autoCheck).toEqual({ triedAt: at });
+  });
+
   it('reads only the brand’s own pages', async () => {
     const fetch = fetchOf({ 'https://other.example/pricing': html('x') });
     const result = await runTaskCheck(
