@@ -301,6 +301,27 @@ export function draftsCreatedIn(
   return drafts.filter((d) => new Date(d.createdAt).getTime() >= since);
 }
 
+/**
+ * The Library's Last send filter (#1331): any, never sent, or how the last
+ * send to the CMS stands, as the row's mark shows it.
+ */
+export const SEND_FILTERS = ['all', 'never', 'queued', 'sent', 'failed', 'published'] as const;
+export type SendFilter = (typeof SEND_FILTERS)[number];
+
+/**
+ * The drafts whose last send is as picked, read from each draft's last send
+ * (readCmsStatuses: one left queued past its half hour reads as failed).
+ */
+export function draftsLastSent(
+  drafts: ContentDraftListItem[],
+  sends: ReadonlyMap<string, { status: string }>,
+  filter: SendFilter,
+): ContentDraftListItem[] {
+  if (filter === 'all') return drafts;
+  if (filter === 'never') return drafts.filter((d) => !sends.has(d.id));
+  return drafts.filter((d) => sends.get(d.id)?.status === filter);
+}
+
 export function draftsInTab(drafts: ContentDraftListItem[], tab: LibraryTab) {
   if (tab === 'archived') return drafts.filter((d) => d.archivedAt !== null);
   const live = drafts.filter((d) => d.archivedAt === null);

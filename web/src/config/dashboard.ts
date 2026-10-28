@@ -79,21 +79,23 @@ export const dashboardNav: NavGroup[] = [
         icon: Sparkles,
         requiredFeature: 'ai_agent',
       },
-      // Content Editor (CE-001): a group, like Prompts. The Plan says what to
-      // do next (CE-014); the Editor goes back to the draft last opened, else
-      // starts a new page; Opportunities is today's page and keeps
-      // /dashboard/content; the Library lists every page written or changed
-      // in Ansvisor.
+      // Content Editor (CE-001): a group, like Prompts, and new as a whole.
+      // Its pages in the order the work goes: Opportunities (today's page,
+      // keeping /dashboard/content) finds what to write, the Plan says what
+      // to do next (CE-014), the Editor goes back to the draft last opened,
+      // else starts a new page, and the Library lists every page written or
+      // changed in Ansvisor.
       {
         title: 'Content',
         href: '/dashboard/content',
         icon: FileText,
         requiredFeature: 'content_optimization',
+        badge: 'New',
         children: [
-          { title: 'Plan', href: '/dashboard/content/plan', badge: 'New' },
+          { title: 'Opportunities', href: '/dashboard/content' },
+          { title: 'Plan', href: '/dashboard/content/plan' },
           // A draft open in the editor (CE-004) is under it.
           { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
-          { title: 'Opportunities', href: '/dashboard/content' },
           { title: 'Library', href: '/dashboard/content/library' },
         ],
       },

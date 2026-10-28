@@ -17,6 +17,8 @@
 
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import supabaseAdmin from '../../../config/supabase.js';
+import { isCloud } from '../../../config/plans.js';
+import { ACTIVE_SUBSCRIPTION_STATUSES } from '../../active-subscriptions.js';
 import { logger } from '../../logger.js';
 import { resolveModel } from '../../ai-provider.js';
 import { withRetry } from '../../retry.js';
@@ -479,14 +481,23 @@ const SWEEP_LIMIT = 20;
  * Write the tasks of recent actions that have none written yet. Runs after
  * a brand's signal pass and once a day for the ones it missed. An
  * organization whose budget is spent is skipped for the rest of the sweep.
+ * On the cloud, only for organizations still on a plan (2026-10-27):
+ * filtered in the query, so the actions of one whose plan ended can't take
+ * the sweep's places, each one only to be refused its budget.
  *
  * @param {{ brandId?: string, now?: Date, limit?: number }} [options]
  */
 export async function sweepActionTasks({ brandId, now = new Date(), limit = SWEEP_LIMIT } = {}) {
   if (!isTaskWriterEnabled()) return { skipped: 'disabled' };
-  let query = supabaseAdmin
-    .from('actions')
-    .select('id, brand_id, kind, status')
+  let query = supabaseAdmin.from('actions');
+  query = isCloud()
+    ? query
+        .select(
+          'id, brand_id, kind, status, brands!inner(organizations!inner(subscription_status))',
+        )
+        .in('brands.organizations.subscription_status', ACTIVE_SUBSCRIPTION_STATUSES)
+    : query.select('id, brand_id, kind, status');
+  query = query
     .is('tasks_generated_at', null)
     .gte('created_at', new Date(now.getTime() - SWEEP_WINDOW_MS).toISOString())
     .not('status', 'in', '("completed","dismissed")')

@@ -1,8 +1,42 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // gsc-sync imports the supabase admin client, whose config module hard-exits
 // when SUPABASE_* env is absent (as in CI) — stub it before the import chain.
-vi.mock('../config/supabase.js', () => ({ default: {} }));
+// The stub answers from `tables` and records each read's filters.
+const calls = [];
+let tables = {};
+vi.mock('../config/supabase.js', () => ({
+  default: {
+    from: (table) => {
+      const call = { table, filters: [] };
+      calls.push(call);
+      const filter =
+        (op) =>
+        (...args) => {
+          call.filters.push([op, ...args]);
+          return chain;
+        };
+      const chain = {
+        select: filter('select'),
+        eq: filter('eq'),
+        not: filter('not'),
+        in: filter('in'),
+        lt: filter('lt'),
+        delete: filter('delete'),
+        then: (resolve, reject) =>
+          Promise.resolve({ data: tables[table] ?? [], error: null }).then(resolve, reject),
+      };
+      return chain;
+    },
+  },
+}));
+vi.mock('./composio.js', () => ({
+  isComposioConfigured: () => true,
+  queryGscSearchAnalytics: vi.fn(),
+}));
+const activeOrgFilter = vi.hoisted(() => vi.fn());
+vi.mock('./active-subscriptions.js', () => ({ activeOrgFilter }));
+vi.mock('./logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import {
   mapAnalyticsRows,
@@ -11,6 +45,7 @@ import {
   PAGE_WINDOW_DAYS,
   pageWindows,
   pagesSyncPlan,
+  runGscSync,
 } from './gsc-sync.js';
 
 describe('mapAnalyticsRows', () => {
@@ -210,5 +245,39 @@ describe('pagesSyncPlan', () => {
       start: true,
       dropOldPages: true,
     });
+  });
+});
+
+/**
+ * Once an organization's plan has ended (2026-10-27), the nightly sync
+ * leaves it out: nothing is read from Search Console for it.
+ */
+describe('runGscSync', () => {
+  beforeEach(() => {
+    calls.length = 0;
+    tables = {
+      integration_connections: [
+        { organization_id: 'paying' },
+        { organization_id: 'lapsed' },
+        { organization_id: 'paying' },
+      ],
+      brands: [],
+    };
+    activeOrgFilter.mockReset().mockResolvedValue((orgId) => orgId === 'paying');
+  });
+
+  it('syncs only the organizations still on a plan', async () => {
+    await runGscSync();
+
+    expect(activeOrgFilter).toHaveBeenCalledWith(['paying', 'lapsed']);
+    const brands = calls.find((call) => call.table === 'brands');
+    expect(brands.filters).toContainEqual(['in', 'organization_id', ['paying']]);
+  });
+
+  it('reads no brand when no connected organization is on a plan', async () => {
+    activeOrgFilter.mockResolvedValue(() => false);
+
+    expect(await runGscSync()).toEqual({ synced: 0, skipped: 0, results: [] });
+    expect(calls.some((call) => call.table === 'brands')).toBe(false);
   });
 });
