@@ -3,6 +3,7 @@ import type { ProductRow } from './products';
 import {
   buildShelf,
   inPriceBand,
+  shelfCurrency,
   shelfStats,
   SHELF_CARDS,
   whyNotYou,
@@ -161,6 +162,25 @@ describe('inPriceBand', () => {
     expect(inPriceBand(row, 'under50')).toBe(false);
     const [noPrices] = buildShelf([card({ price_amount: null })], NOW);
     expect(inPriceBand(noPrices, 'over200')).toBe(false);
+  });
+});
+
+describe('shelfCurrency', () => {
+  it('is the currency most of the shelves’ priced products show, else none', () => {
+    const rows = buildShelf(
+      [
+        card({ position: 0, price_currency: 'EUR' }),
+        card({ position: 1, price_currency: 'EUR' }),
+        card({ position: 2, price_currency: 'USD' }),
+        // Without a price, its currency says nothing.
+        card({ position: 3, price_amount: null, price_currency: 'GBP' }),
+        card({ position: 4, price_amount: null, price_currency: 'GBP' }),
+      ],
+      NOW,
+    );
+    expect(shelfCurrency(rows)).toBe('EUR');
+    expect(shelfCurrency(buildShelf([card({ price_currency: null })], NOW))).toBeNull();
+    expect(shelfCurrency([])).toBeNull();
   });
 });
 

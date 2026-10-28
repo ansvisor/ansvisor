@@ -86,13 +86,17 @@ describe('ReadinessTab', () => {
     expect(onProducts).toHaveBeenCalled();
   });
 
-  function renderTab(props: { loading?: boolean; unread?: ('sources' | 'products')[] }) {
+  function renderTab(props: {
+    loading?: boolean;
+    unread?: ('sources' | 'products')[];
+    channelsRead?: 'loading' | 'failed';
+  }) {
     act(() => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
           <ReadinessTab
             market="us"
-            tracked={[]}
+            tracked={['copilot-web']}
             ownSlots={new Map()}
             score={80}
             items={[{ key: 'catalog', state: 'pass', values: { count: 320 } }]}
@@ -120,5 +124,13 @@ describe('ReadinessTab', () => {
     expect(text).not.toContain('80 / 100');
     expect(text).toContain('Catalog connected');
     expect(renderTab({})).toContain('AI shopping readiness80 / 100');
+  });
+
+  it("doesn't call a channel without the brand's products while every channel's shelves are read, or unread", () => {
+    expect(renderTab({})).toContain('Microsoft CopilotTracked, yours not shown');
+    const reading = renderTab({ channelsRead: 'loading' });
+    expect(reading).not.toContain('Tracked, yours not shown');
+    expect(reading).not.toContain('Not tracked');
+    expect(renderTab({ channelsRead: 'failed' })).toContain("Microsoft CopilotCouldn't read");
   });
 });

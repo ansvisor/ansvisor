@@ -196,12 +196,32 @@ export function shelfStats(cards: readonly ShelfCardRow[]): ShelfStats {
 export const PRICE_BANDS = ['all', 'under50', '50to100', '100to200', 'over200'] as const;
 export type PriceBand = (typeof PRICE_BANDS)[number];
 
-const BAND_RANGE: Record<Exclude<PriceBand, 'all'>, [number, number]> = {
+/** Each band's prices, from its lower bound up to (not with) its upper one. */
+export const BAND_RANGE: Record<Exclude<PriceBand, 'all'>, [number, number]> = {
   under50: [0, 50],
   '50to100': [50, 100],
   '100to200': [100, 200],
   over200: [200, Infinity],
 };
+
+/**
+ * The currency the shelves' prices are in, for the bands' labels: the one
+ * most of their priced products show, else null.
+ */
+export function shelfCurrency(rows: readonly ShelfRow[]): string | null {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    for (const card of row.cards) {
+      if (card.price === null || !card.currency) continue;
+      counts.set(card.currency, (counts.get(card.currency) ?? 0) + 1);
+    }
+  }
+  let best: string | null = null;
+  for (const [currency, count] of counts) {
+    if (best === null || count > counts.get(best)!) best = currency;
+  }
+  return best;
+}
 
 export function inPriceBand(row: ShelfRow, band: PriceBand): boolean {
   if (band === 'all') return true;

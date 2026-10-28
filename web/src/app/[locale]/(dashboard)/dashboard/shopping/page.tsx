@@ -102,7 +102,7 @@ import { ProductDataStrip, useProductSources } from './_data-strip';
 import { CategoriesTable } from './_categories-table';
 import { ProductsTable } from './_products-table';
 import { ReadinessTab } from './_readiness';
-import { ShelfKpis, ShelfRows } from './_shelf';
+import { ShelfFailed, ShelfKpis, ShelfRows } from './_shelf';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 import { WhyDialog } from './_why-dialog';
 import { MerchantSplitCard } from './merchant_split_card';
@@ -153,7 +153,6 @@ export default function ShoppingPage() {
   const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
   const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
   const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
-  const [orders, setOrders] = useState<ShoppingAiOrders | null>(null);
   // The catalog's categories (ECOM-008), read when their tab opens, for the filters they were read with.
   const [categories, setCategories] = useState<{
     key: string;
@@ -276,14 +275,31 @@ export default function ShoppingPage() {
   // Readiness, is open.
   const readKey = `${activeBrandId}:${JSON.stringify(filters)}`;
   const canRead = !!activeBrandId && hasFullAccess && shoppingMarket.ready;
+  // Each "Try again" on a shelf that couldn't be read is a new read.
+  const [shelfTry, setShelfTry] = useState(0);
   // Null while it reads.
   const shelf: ShoppingShelf | 'failed' | null =
     useKeyedRead(
       canRead,
-      readKey,
+      `${readKey}#${shelfTry}`,
       () => getShoppingShelf(activeBrandId!, filters),
       'the shelves',
     ) ?? null;
+  // Readiness's channel cards look at every channel whatever the one chosen
+  // (the Shelf's chips): with one chosen, the shelf read for it has only its
+  // cards, and would show the others as not showing the brand's products.
+  const channelFilters = useMemo<ShoppingFilters>(
+    () => ({ ...filters, platforms: undefined }),
+    [filters],
+  );
+  const channelShelfRead = useKeyedRead(
+    canRead && activeTab === 'readiness' && platform !== 'all',
+    `${activeBrandId}:${JSON.stringify(channelFilters)}`,
+    () => getShoppingShelf(activeBrandId!, channelFilters),
+    'the shelves of every channel',
+  );
+  // Null while it reads.
+  const channelShelf = platform === 'all' ? shelf : (channelShelfRead ?? null);
   const productsRead = useKeyedRead(
     canRead && (activeTab === 'products' || activeTab === 'readiness'),
     readKey,
@@ -342,21 +358,16 @@ export default function ShoppingPage() {
   ]);
   const categoriesRead = categories?.key === categoriesKey ? categories.rows : undefined;
 
-  // Orders from AI visits, the last 30 days whatever the filters (ECOM-006).
-  useEffect(() => {
-    if (!activeBrandId || !hasFullAccess) return;
-    let cancelled = false;
-    getShoppingAiOrders(activeBrandId)
-      .then((read) => {
-        if (!cancelled) setOrders(read);
-      })
-      .catch(() => {
-        if (!cancelled) setOrders(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBrandId, hasFullAccess]);
+  // Orders from AI visits, the last 30 days whatever the filters (ECOM-006),
+  // kept by brand: another brand's never show while this one's are read.
+  const ordersRead = useKeyedRead(
+    !!activeBrandId && hasFullAccess,
+    activeBrandId ?? '',
+    () => getShoppingAiOrders(activeBrandId!),
+    'the orders from AI visits',
+  );
+  // Undefined while they're read, null when they couldn't be.
+  const orders: ShoppingAiOrders | null | undefined = ordersRead === 'failed' ? null : ordersRead;
 
   // This alert always evaluates five consecutive rolling seven-day windows
   // ending at query time, independently of display/platform/region filters.
@@ -476,19 +487,11 @@ export default function ShoppingPage() {
             <TabsContent value="shelf" className="space-y-6">
               {hasFullAccess ? (
                 <>
-                  {shelf === 'failed' && (
-                    <p
-                      role="alert"
-                      className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
-                    >
-                      {t('shelf.failed')}
-                    </p>
+                  {shelf === 'failed' ? (
+                    <ShelfFailed onRetry={() => setShelfTry((n) => n + 1)} />
+                  ) : (
+                    <ShelfKpis shelf={shelf} orders={orders} salesConnected={salesConnected} />
                   )}
-                  <ShelfKpis
-                    shelf={shelf === 'failed' ? null : shelf}
-                    orders={orders}
-                    salesConnected={salesConnected}
-                  />
                   <div className="grid gap-4 lg:grid-cols-2">
                     <MerchantSplitCard split={destinations.split} loading={destinationsLoading} />
                     <ResellerPriceAlerts
@@ -496,19 +499,21 @@ export default function ShoppingPage() {
                       loading={destinationsLoading}
                     />
                   </div>
-                  <ShelfRows
-                    shelf={shelf === 'failed' ? null : shelf}
-                    platforms={filterOpts.platforms}
-                    platform={platform}
-                    onPlatform={setPlatform}
-                    products={
-                      catalogTable && catalogTable !== 'failed'
-                        ? catalogTable.rows
-                        : shelfProducts && shelfProducts !== 'failed'
-                          ? shelfProducts.rows
-                          : undefined
-                    }
-                  />
+                  {shelf !== 'failed' && (
+                    <ShelfRows
+                      shelf={shelf}
+                      platforms={filterOpts.platforms}
+                      platform={platform}
+                      onPlatform={setPlatform}
+                      products={
+                        catalogTable && catalogTable !== 'failed'
+                          ? catalogTable.rows
+                          : shelfProducts && shelfProducts !== 'failed'
+                            ? shelfProducts.rows
+                            : undefined
+                      }
+                    />
+                  )}
                   <h2 className="pt-2 text-sm font-semibold">{t('shelf.trends')}</h2>
                   <div className="grid gap-4 lg:grid-cols-2">
                     <PlatformCardRateChart
@@ -621,11 +626,18 @@ export default function ShoppingPage() {
                   tracked={filterOpts.platforms}
                   ownSlots={
                     new Map(
-                      (shelf && shelf !== 'failed' ? shelf.stats.channels : []).map((c) => [
-                        c.platform,
-                        c.ownSlots,
-                      ]),
+                      (channelShelf && channelShelf !== 'failed'
+                        ? channelShelf.stats.channels
+                        : []
+                      ).map((c) => [c.platform, c.ownSlots]),
                     )
+                  }
+                  channelsRead={
+                    channelShelf === null
+                      ? 'loading'
+                      : channelShelf === 'failed'
+                        ? 'failed'
+                        : undefined
                   }
                   {...readinessChecklist({
                     market: shoppingMarket.shown ?? 'us',

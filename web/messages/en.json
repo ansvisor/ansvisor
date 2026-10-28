@@ -7511,16 +7511,15 @@
       "price": {
         "label": "Price",
         "all": "All",
-        "under50": "Under $50",
-        "50to100": "$50–100",
-        "100to200": "$100–200",
-        "over200": "$200 and up"
+        "under": "Under {price}",
+        "between": "{from}–{to}",
+        "over": "{price} and up"
       },
       "empty": "No shopping answers in this period. Track shopping questions on a channel that shows products.",
       "emptyBand": "No shelf in this price range.",
       "more": "Show {count} more",
       "trends": "Trends",
-      "failed": "Couldn't read the shelves right now. The other tabs still work; try again in a moment."
+      "failed": "Couldn't read the shelves right now. The other tabs still work."
     },
     "readiness": {
       "title": "AI shopping readiness",
@@ -7533,7 +7532,8 @@
       "channels": {
         "showing": "Showing your products",
         "notShowing": "Tracked, yours not shown",
-        "notTracked": "Not tracked"
+        "notTracked": "Not tracked",
+        "unread": "Couldn't read"
       },
       "sources": {
         "chatgpt_us": "OpenAI product index",
