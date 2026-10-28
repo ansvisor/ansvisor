@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { BotConnections } from '@/lib/actions/ai-bots';
 import type { TrafficBots, TrafficDateWindow } from '@/lib/actions/traffic';
+import { PlanProvider } from '@/components/providers/plan-provider';
+import type { PlanId } from '@/config/plans';
 
 /**
  * AI bots reading your site (AT-011, spec §3.7, §7): Starter locked with
@@ -92,6 +94,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   document.body.innerHTML = '';
+  vi.unstubAllEnvs();
 });
 
 async function render(canConnect = true, revision = 0, onChanged?: () => void) {
@@ -106,6 +109,20 @@ async function render(canConnect = true, revision = 0, onChanged?: () => void) {
           revision={revision}
           onChanged={onChanged}
         />
+      </NextIntlClientProvider>,
+    );
+  });
+}
+
+/** On Ansvisor Cloud, on `planId`, whose subscription has ended. */
+async function renderOnEndedPlan(planId: PlanId) {
+  vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <PlanProvider planId={planId} subscriptionActive={false}>
+          <BotsReportSection brandId="b1" dateWindow={WEEK} rangeLabel="last 7 days" canConnect />
+        </PlanProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -237,6 +254,32 @@ describe('BotsReportSection', () => {
     expect(container.querySelector('a')?.getAttribute('href')).toBe(
       '/dashboard/settings?tab=billing',
     );
+  });
+
+  // A plan that ended reads caps of 0 with noPlan: the plan it was on decides the lock.
+  it('shows a workspace whose Growth plan ended its own data, not the locked sample', async () => {
+    getBotConnections.mockResolvedValue(
+      info({ usage: { ...info().usage, cap: 0, rawCap: 0, noPlan: true } }),
+    );
+    await renderOnEndedPlan('growth');
+    expect(text()).not.toContain('The AI bot report comes with the Growth plan.');
+    expect(text()).not.toContain('8,420');
+    expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
+    expect(rows()).toEqual([
+      ['Training (GPTBot, ClaudeBot)', '1,200', '300', '2h ago'],
+      ['Search index (OAI-SearchBot)', '400', '120', '1h ago'],
+      ['/menu', '90', '2h ago', '—', '1h ago'],
+    ]);
+  });
+
+  it('keeps the locked sample and Upgrade for a workspace whose Starter plan ended', async () => {
+    getBotConnections.mockResolvedValue(
+      info({ usage: { ...info().usage, cap: 0, rawCap: 0, noPlan: true } }),
+    );
+    await renderOnEndedPlan('starter');
+    expect(text()).toContain('The AI bot report comes with the Growth plan.');
+    expect(text()).toContain('8,420');
+    expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).not.toBeNull();
   });
 
   it('offers Connect over sample data, and a preview of it', async () => {

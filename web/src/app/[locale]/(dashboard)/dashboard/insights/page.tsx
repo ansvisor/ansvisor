@@ -66,6 +66,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getAIProviderDisplayName, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
@@ -629,6 +630,10 @@ export default function InsightsPage() {
   const tCommon = useTranslations('common');
   const router = useRouter();
   const { isCloud } = usePlanContext();
+  // A read-only workspace (plan not active): Run All and Test Single Prompt
+  // open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
@@ -979,6 +984,11 @@ export default function InsightsPage() {
     }
   };
 
+  const runAll = guard(handleRunPrompts, { action: tActions('runPrompts') });
+  const openSinglePrompt = guard(() => setShowSinglePrompt(true), {
+    action: tActions('testPrompt'),
+  });
+
   const handleStopTracking = async () => {
     if (!activeJobId) return;
     try {
@@ -1104,10 +1114,10 @@ export default function InsightsPage() {
         </HeaderWithAiUsage>
         <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
         {!localJobActive && <ServerRunBanner run={cronRun} />}
-        <EmptyState onRunPrompts={handleRunPrompts} isRunning={isRunning} isCloud={isCloud} />
+        <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />
         {!isCloud && (
           <div className="flex justify-center">
-            <Button variant="outline" onClick={() => setShowSinglePrompt(true)} className="gap-2">
+            <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
               <FlaskConical className="h-4 w-4" />
               Or test a single prompt
             </Button>
@@ -1182,16 +1192,12 @@ export default function InsightsPage() {
             {/* Self-host only */}
             {!isCloud && (
               <>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowSinglePrompt(true)}
-                  className="gap-2"
-                >
+                <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
                   <FlaskConical className="h-4 w-4" />
                   Test Single Prompt
                 </Button>
 
-                <Button onClick={handleRunPrompts} disabled={isRunning} className="gap-2">
+                <Button onClick={runAll} disabled={isRunning} className="gap-2">
                   {isRunning ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (

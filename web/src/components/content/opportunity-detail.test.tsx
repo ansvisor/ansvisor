@@ -1,0 +1,199 @@
+import { act, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { NextIntlClientProvider } from 'next-intl';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
+import type { ContentOpportunity } from '@/types';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+
+/**
+ * The opportunity panel on a read-only workspace (plan not active): its
+ * actions open the upgrade dialog instead, named; on an active plan they run.
+ */
+
+const content = vi.hoisted(() => ({
+  getOpportunity: vi.fn(),
+  getBriefQuota: vi.fn(),
+  generateBrief: vi.fn(),
+  updateOpportunityStatus: vi.fn(),
+  sendToWebhook: vi.fn(),
+  sendOpportunityToActionCenter: vi.fn(),
+  suggestAlternative: vi.fn(),
+  getGenerationJobStatus: vi.fn(),
+}));
+vi.mock('@/lib/actions/content', () => content);
+vi.mock('@/lib/actions/fanout', () => ({
+  getPromptFanout: vi.fn(async () => ({ subQueries: [] })),
+}));
+vi.mock('@/lib/actions/content-drafts', () => ({
+  getOpportunityDrafts: vi.fn(async () => ({})),
+}));
+const plan = vi.hoisted(() => ({
+  getPlanPriorities: vi.fn(async () => []),
+  setPlanRowPriority: vi.fn(async () => undefined),
+}));
+vi.mock('@/lib/actions/content-plan', () => plan);
+vi.mock('@/hooks/use-opportunity-volume', () => ({
+  useOpportunityVolume: () => ({ basket: null, basketFailed: false, volume: null }),
+}));
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+const brandState = vi.hoisted(() => ({
+  activeBrandId: 'b1',
+  brands: [{ id: 'b1', name: 'Acme', siteType: 'b2b' }],
+}));
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (select: (state: typeof brandState) => unknown) => select(brandState),
+}));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children }: { href: string; children: ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
+  HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('@/components/ai-usage/ai-usage-banner', () => ({ AiUsageBanner: () => null }));
+const newContent = vi.hoisted(() => ({ open: false }));
+vi.mock('@/components/content/new-content-dialog', () => ({
+  NewContentDialog: ({ open }: { open: boolean }) => {
+    newContent.open = open;
+    return null;
+  },
+}));
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+}));
+
+const { OpportunityDetail } = await import('./opportunity-detail');
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+const OPPORTUNITY = {
+  id: 'o1',
+  brandId: 'b1',
+  title: 'Office coffee subscriptions',
+  type: 'owned',
+  impact: 'high',
+  opportunityScore: 74,
+  status: 'new',
+  source: 'system',
+  sourceData: {},
+  createdAt: '2026-10-20T10:00:00Z',
+  updatedAt: '2026-10-20T10:00:00Z',
+} as ContentOpportunity;
+
+let container: HTMLDivElement;
+let root: Root;
+const openUpgrade = vi.fn();
+
+async function render(isLocked: boolean) {
+  await act(async () => {
+    root.render(
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <OpportunityDetail id="o1" inDrawer />
+        </UpgradeDialogContext.Provider>
+      </NextIntlClientProvider>,
+    );
+  });
+  await act(async () => {});
+}
+
+const buttonNamed = (name: string) =>
+  [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => b.textContent?.trim() === name,
+  )!;
+const moreItem = async (item: string) => {
+  await act(async () =>
+    container.querySelector<HTMLElement>('[aria-label="More actions"]')!.click(),
+  );
+  const found = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (el) => el.textContent === item,
+  )!;
+  await act(async () => found.click());
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  newContent.open = false;
+  content.getOpportunity.mockResolvedValue(OPPORTUNITY);
+  content.getBriefQuota.mockResolvedValue({ limit: -1, remaining: -1 });
+  content.generateBrief.mockResolvedValue({
+    brief: {
+      suggestedTitle: 'Office coffee subscriptions',
+      contentType: 'how-to',
+      targetWordCount: 1200,
+      outline: [],
+      targetKeywords: [],
+      competitorInsights: '',
+      callToAction: '',
+    },
+    quota: null,
+  });
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+describe('the opportunity panel on a read-only workspace', () => {
+  it('opens the upgrade dialog from its actions, and runs none', async () => {
+    await render(true);
+    await act(async () => buttonNamed('Send to Actions').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Sending actions needs a plan');
+    await act(async () => buttonNamed('Generate Brief').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Generating a brief needs a plan');
+    await act(async () => buttonNamed('Send to Editor').click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Creating content needs a plan');
+    await moreItem('Mark as reviewed');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Marking an opportunity reviewed needs a plan');
+    await moreItem('Another angle');
+    expect(openUpgrade).toHaveBeenLastCalledWith('Generating opportunities needs a plan');
+    expect(openUpgrade).toHaveBeenCalledTimes(5);
+    expect(content.sendOpportunityToActionCenter).not.toHaveBeenCalled();
+    expect(content.generateBrief).not.toHaveBeenCalled();
+    expect(content.updateOpportunityStatus).not.toHaveBeenCalled();
+    expect(newContent.open).toBe(false);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('generates the brief on an active plan', async () => {
+    await render(false);
+    await act(async () => buttonNamed('Generate Brief').click());
+    expect(content.generateBrief).toHaveBeenCalledWith('o1');
+    expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('the brief quota without an active plan', () => {
+  it('says "No active plan", not the limit, and Generate opens the upgrade dialog', async () => {
+    // The server reads 0 of 0 with `noPlan` once the plan has ended.
+    content.getBriefQuota.mockResolvedValue({ used: 4, limit: 0, remaining: 0, noPlan: true });
+    await render(true);
+    expect(container.textContent).toContain('No active plan');
+    expect(container.textContent).not.toContain('Monthly Brief Limit Reached');
+    expect(container.textContent).not.toContain('0/0');
+    const generate = buttonNamed('Generate Content Brief');
+    expect(generate.disabled).toBe(false);
+    expect(buttonNamed('Generate Brief').disabled).toBe(false);
+    await act(async () => generate.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Generating a brief needs a plan');
+    expect(content.generateBrief).not.toHaveBeenCalled();
+  });
+
+  it('still says the limit is reached once an active plan is used up', async () => {
+    content.getBriefQuota.mockResolvedValue({ used: 10, limit: 10, remaining: 0 });
+    await render(false);
+    expect(container.textContent).toContain('Monthly Brief Limit Reached');
+    expect(container.textContent).not.toContain('No active plan');
+    expect(buttonNamed('Generate Brief').disabled).toBe(true);
+  });
+});
