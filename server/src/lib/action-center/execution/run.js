@@ -272,15 +272,17 @@ export async function sweepTaskExecution({ now = new Date() } = {}) {
   // On the cloud, only for organizations still on a plan: a tool reads
   // outside services on the organization's behalf. Filtered in the query, so
   // the old tasks of an organization whose plan ended can't fill the read.
+  // Never a demo brand's (00380): its tasks are sample data.
   let query = supabaseAdmin.from('action_tasks');
   query = isCloud()
     ? query
         .select(
-          'id, task_key, action_id, actions!inner(status, brands!inner(organizations!inner(subscription_status)))',
+          'id, task_key, action_id, actions!inner(status, brands!inner(is_demo, organizations!inner(subscription_status)))',
         )
         .in('actions.brands.organizations.subscription_status', ACTIVE_SUBSCRIPTION_STATUSES)
-    : query.select('id, task_key, action_id, actions!inner(status)');
+    : query.select('id, task_key, action_id, actions!inner(status, brands!inner(is_demo))');
   const { data: rows, error } = await query
+    .eq('actions.brands.is_demo', false)
     .in('status', RUNNABLE_STATUSES)
     .not('actions.status', 'in', '("completed","dismissed")')
     .order('created_at', { ascending: true })

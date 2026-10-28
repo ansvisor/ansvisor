@@ -340,7 +340,7 @@ export async function analyzeBrandVolumes(
 ) {
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
-    .select('region, language, organization_id')
+    .select('region, language, organization_id, is_demo')
     .eq('id', brandId)
     .maybeSingle();
 
@@ -349,6 +349,11 @@ export async function analyzeBrandVolumes(
   }
   if (!brand) {
     throw new Error(`Brand ${brandId} not found`);
+  }
+  // A demo brand's volumes (00380) are sample data, written with it.
+  if (brand.is_demo) {
+    logger.info({ brandId }, 'volume analysis skipped: demo brand');
+    return [];
   }
   // Once the plan has ended (2026-10-27), no volume is looked up: every
   // prompt is a model call and a DataForSEO request. The internal trigger

@@ -11,8 +11,12 @@
  * sites and services send for it (AI-bot logs, traffic beacons, Cloro's
  * answers, workflow callbacks) is answered as usual and not stored.
  *
- * Self-hosted, everything is let through (billing doesn't apply), and
- * nothing is read.
+ * Self-hosted, every organization is let through (billing doesn't apply),
+ * and nothing is read for them.
+ *
+ * A demo brand (00380) is never let through, on the cloud or self-hosted:
+ * its data is the sample the demo generator writes (lib/demo), and nothing
+ * may track, write or spend for it. So a brand is read even self-hosted.
  */
 
 import supabaseAdmin from '../config/supabase.js';
@@ -58,23 +62,31 @@ export async function activeOrgFilter(orgIds) {
 }
 
 /**
- * A test for the ids among `brandIds`: whether the brand's organization has
- * an active or trialing subscription. Throws when the brands can't be read.
+ * A test for the ids among `brandIds`: whether the brand is a real one (not
+ * a demo brand) whose organization has an active or trialing subscription
+ * (any, self-hosted). Throws when the brands can't be read.
  *
  * @param {string[]} brandIds
  * @returns {Promise<(brandId: string) => boolean>}
  */
 export async function activeBrandFilter(brandIds) {
-  if (!isCloud()) return everyone;
   const ids = uniqueIds(brandIds);
   if (ids.length === 0) return () => false;
+  const cloud = isCloud();
   const { data, error } = await selectInChunks(ids, (chunk) =>
-    supabaseAdmin.from('brands').select('id, organizations(subscription_status)').in('id', chunk),
+    supabaseAdmin
+      .from('brands')
+      .select(cloud ? 'id, is_demo, organizations(subscription_status)' : 'id, is_demo')
+      .in('id', chunk),
   );
   if (error) throw new Error(`brands read: ${error.message}`);
   const active = new Set(
     (data ?? [])
-      .filter((brand) => isSubscriptionActive(brand.organizations?.subscription_status))
+      .filter(
+        (brand) =>
+          !brand.is_demo &&
+          (!cloud || isSubscriptionActive(brand.organizations?.subscription_status)),
+      )
       .map((brand) => brand.id),
   );
   return (brandId) => active.has(brandId);
@@ -94,8 +106,8 @@ export async function isOrgActive(orgId) {
 
 /**
  * Whether one brand's organization has an active or trialing subscription
- * (always, self-hosted): for a job, a pass or a callback that starts work
- * for one brand.
+ * (always, self-hosted), and the brand isn't a demo brand: for a job, a pass
+ * or a callback that starts work for one brand.
  *
  * @param {string} brandId
  * @returns {Promise<boolean>}

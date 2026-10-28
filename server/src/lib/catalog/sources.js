@@ -296,8 +296,10 @@ export async function sweepCatalogSources({
   const { data, error } = await db
     .from('catalog_sources')
     .select(
-      'id, brand_id, kind, format, url, account, last_synced_at, brands!inner(organizations!inner(subscription_status))',
+      'id, brand_id, kind, format, url, account, last_synced_at, brands!inner(is_demo, organizations!inner(subscription_status))',
     )
+    // A demo brand's catalog (00380) is sample data: its sources are never read.
+    .eq('brands.is_demo', false)
     .neq('kind', 'upload')
     .or(`last_synced_at.is.null,last_synced_at.lt.${due}`)
     .order('last_synced_at', { ascending: true, nullsFirst: true })

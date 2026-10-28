@@ -148,6 +148,7 @@ beforeEach(() => {
         category: 'recover',
         status: 'new',
         payload: {},
+        brands: { is_demo: false },
       },
     ],
     brands: [{ id: 'b1', name: 'Acme Coffee', description: null, organization_id: 'o1' }],
@@ -461,7 +462,7 @@ describe('sweepActionTasks', () => {
     beforeEach(() => vi.stubEnv('IS_CLOUD', 'true'));
     afterEach(() => vi.unstubAllEnvs());
 
-    const onPlan = (status) => ({ organizations: { subscription_status: status } });
+    const onPlan = (status) => ({ is_demo: false, organizations: { subscription_status: status } });
 
     it("writes no task for an organization whose plan has ended, and the paying one's still", async () => {
       db.actions = [
@@ -477,7 +478,7 @@ describe('sweepActionTasks', () => {
       expect(selects).toContainEqual({
         table: 'actions',
         columns:
-          'id, brand_id, kind, status, brands!inner(organizations!inner(subscription_status))',
+          'id, brand_id, kind, status, brands!inner(is_demo, organizations!inner(subscription_status))',
       });
       expect(reserveAiBudget).toHaveBeenCalledTimes(1);
       expect(ops.filter((op) => op.table === 'actions' && op.op === 'update')).not.toContainEqual(
@@ -490,12 +491,24 @@ describe('sweepActionTasks', () => {
     beforeEach(() => vi.stubEnv('IS_CLOUD', 'false'));
     afterEach(() => vi.unstubAllEnvs());
 
-    it('reads every action, unfiltered', async () => {
+    it('reads every action, unfiltered by plan', async () => {
       db.action_tasks = [];
       generateObject.mockResolvedValue(answer([task()]));
 
       expect(await sweepActionTasks()).toEqual({ written: 1, skipped: 0, failed: 0 });
-      expect(selects).toContainEqual({ table: 'actions', columns: 'id, brand_id, kind, status' });
+      expect(selects).toContainEqual({
+        table: 'actions',
+        columns: 'id, brand_id, kind, status, brands!inner(is_demo)',
+      });
+    });
+
+    it("never writes a demo brand's tasks (00380)", async () => {
+      db.actions = [{ ...db.actions[0], id: 'demo', brands: { is_demo: true } }];
+      db.action_tasks = [];
+      generateObject.mockResolvedValue(answer([task()]));
+
+      expect(await sweepActionTasks()).toEqual({ written: 0, skipped: 0, failed: 0 });
+      expect(reserveAiBudget).not.toHaveBeenCalled();
     });
   });
 });

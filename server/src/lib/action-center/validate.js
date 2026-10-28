@@ -462,7 +462,11 @@ export async function sweepActionValidation({ now = new Date() } = {}) {
   const cutoff = new Date(now.getTime() - VALIDATION_WAIT_DAYS * DAY_MS).toISOString();
   const { data, error } = await supabaseAdmin
     .from('actions')
-    .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at')
+    .select(
+      'id, brand_id, kind, payload, kpi_keys, created_at, completed_at, brands!inner(is_demo)',
+    )
+    // A demo brand's actions (00380) are sample data: their outcomes are written with them.
+    .eq('brands.is_demo', false)
     .eq('status', 'completed')
     .eq('outcome', 'pending_measurement')
     .not('completed_at', 'is', null)

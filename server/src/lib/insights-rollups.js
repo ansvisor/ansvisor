@@ -173,7 +173,12 @@ async function drainRebuildQueue() {
  * finishing in half a minute instead of five seconds is the right trade.
  */
 export async function sweepInsightsRollups({ days = SWEEP_DAYS } = {}) {
-  const { data: brands, error } = await supabaseAdmin.from('brands').select('id');
+  // Not a demo brand's (00380): the demo generator refreshes its rollups as
+  // it writes its sample answers, and nothing else writes any.
+  const { data: brands, error } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('is_demo', false);
   if (error) {
     logger.error({ err: error }, '[insights-rollups] sweep could not list brands');
     return { refreshed: 0, failed: 0 };

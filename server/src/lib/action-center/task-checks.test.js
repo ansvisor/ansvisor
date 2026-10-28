@@ -797,6 +797,8 @@ describe('sweepTaskChecks', () => {
     ]);
     // A held task (reopened after it passed) is left to the person.
     expect(filters).toContainEqual(['is', 'details->autoCheck->>held', null]);
+    // Never a demo brand's (00380): its tasks are sample data.
+    expect(filters).toContainEqual(['actions.brands.is_demo', false]);
   });
 
   it('checks the open tasks not tried in the last day, one at a time', async () => {

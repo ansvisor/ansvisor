@@ -489,15 +489,17 @@ const SWEEP_LIMIT = 20;
  */
 export async function sweepActionTasks({ brandId, now = new Date(), limit = SWEEP_LIMIT } = {}) {
   if (!isTaskWriterEnabled()) return { skipped: 'disabled' };
+  // Never a demo brand's actions (00380): they are sample data.
   let query = supabaseAdmin.from('actions');
   query = isCloud()
     ? query
         .select(
-          'id, brand_id, kind, status, brands!inner(organizations!inner(subscription_status))',
+          'id, brand_id, kind, status, brands!inner(is_demo, organizations!inner(subscription_status))',
         )
         .in('brands.organizations.subscription_status', ACTIVE_SUBSCRIPTION_STATUSES)
-    : query.select('id, brand_id, kind, status');
+    : query.select('id, brand_id, kind, status, brands!inner(is_demo)');
   query = query
+    .eq('brands.is_demo', false)
     .is('tasks_generated_at', null)
     .gte('created_at', new Date(now.getTime() - SWEEP_WINDOW_MS).toISOString())
     .not('status', 'in', '("completed","dismissed")')
