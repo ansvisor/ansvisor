@@ -68,6 +68,8 @@ describe('basketValues', () => {
     page_citations: 7,
     ga_connected: true,
     page_ai_sessions: 55,
+    mentioning_answers: 16,
+    positive_answers: 7,
   };
 
   it('measures the basket', () => {
@@ -79,12 +81,23 @@ describe('basketValues', () => {
       mentions: 12,
       citations: 7,
       ai_referral_traffic: 55,
+      // 7 of the 16 answers naming the brand were positive (learning D1).
+      positive_sentiment: 43.8,
     });
+  });
+
+  it('reads no sentiment while the window isn’t counted, or no answer named the brand', () => {
+    expect(
+      basketValues({ ...raw, mentioning_answers: null }, { pageCount: 1 }).positive_sentiment,
+    ).toBe(null);
+    expect(
+      basketValues({ ...raw, mentioning_answers: 0 }, { pageCount: 1 }).positive_sentiment,
+    ).toBe(null);
   });
 
   it('leaves unanswerable metrics unmeasured instead of zero', () => {
     const none = basketValues(
-      { ...raw, cells: 0, visible: 0, competitor_visible_total: 0 },
+      { ...raw, cells: 0, visible: 0, competitor_visible_total: 0, mentioning_answers: 0 },
       {
         pageCount: 0,
       },
