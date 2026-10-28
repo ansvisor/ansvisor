@@ -50,6 +50,7 @@ import { editSpans } from './edit-spans.js';
 import { getLanguageName } from './languages.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 import { carefulLine, carefulRules } from './content-suggestion-stats.js';
+import { livePageLine, readLivePage } from './content-live-page.js';
 import { logger } from './logger.js';
 
 /**
@@ -1117,6 +1118,7 @@ export function buildFixPrompt({
   sources = '',
   handoff = false,
   careful = '',
+  livePage = '',
 }) {
   const lines = passages.map((p, i) => {
     const locked = lockedKeys.has(passageKey(p.text)) ? ', LOCKED' : '';
@@ -1136,7 +1138,7 @@ Page type: ${pageTypeFormat(draft.page_type)}
 
 Rules the page doesn't meet yet (key: rule — what it asks and how the page reads now):
 ${rules.join('\n')}
-${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
+${over ? `${over}\n` : ''}${careful ? `${careful}\n` : ''}${livePage ? `${livePage}\n` : ''}${handoff ? `${KEEP_PLACEHOLDERS}\n` : ''}${own.length ? `\nThe writer's own rules, to follow in every change:\n${own.join('\n')}\n` : ''}${sources ? `\n${sources}\n` : ''}${linkTargets ? `\n${linkTargets}\n` : ''}
 The page, passage by passage:
 ${lines.join('\n')}
 
@@ -1371,12 +1373,36 @@ async function fixWithRun({
   // The data it writes from, numbered, Brief › Your input last (CE-048);
   // the numbers it may write unmarked.
   await advanceRun(run, 1);
-  const [prompts, inputRow, shoppingPath] = await Promise.all([
+  const [prompts, inputRow, shoppingPath, livePage] = await Promise.all([
     readPrompts(brandId, input.sources?.promptIds ?? []),
     readDraftInputs(draftId),
     // Its shopping path, checked: none when it isn't one (shopping path, part 4).
     shoppingPathFor(draft),
+    // How the page it optimizes does now (learning B5), as the Live page
+    // tab reads it: Apply rules with Agent only, as the careful rules. A
+    // read that fails leaves the run as it was.
+    handoff
+      ? null
+      : readLivePage(brandId, draft.source_url).catch((err) => {
+          logger.warn(
+            { err: { message: err?.message }, draftId },
+            '[content-agent] live page not read',
+          );
+          return null;
+        }),
   ]);
+  // Named on the run's sources step, which the editor's agent card shows.
+  if (livePage && run?.steps?.[1]) {
+    run.steps[1] = {
+      ...run.steps[1],
+      live: {
+        days: livePage.days,
+        citations: livePage.citations.cur,
+        before: livePage.citations.prev,
+        lost: livePage.prompts.lost,
+      },
+    };
+  }
   const numbered = numberSources({
     prompts,
     fanouts: input.sources?.fanouts,
@@ -1469,6 +1495,7 @@ async function fixWithRun({
           sources: sourcesPrompt(numbered),
           handoff,
           careful: carefulLine(careful),
+          livePage: livePageLine(livePage),
         }),
         abortSignal,
       }),

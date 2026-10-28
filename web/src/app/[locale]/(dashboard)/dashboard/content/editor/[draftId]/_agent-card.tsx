@@ -196,6 +196,7 @@ export function RunSteps({
   const format = useFormatter();
   const shown = shownSteps(run);
   // The rules it keeps its changes small for (learning B6), by their names.
+  const live = run.steps.find((step) => step.key === 'gather_sources')?.live;
   const careful = (run.steps[0]?.careful ?? [])
     .filter((key) => tRules.has(key))
     .map((key) => tRules(key));
@@ -236,6 +237,8 @@ export function RunSteps({
           {tCard('careful', { rules: format.list(careful, { type: 'conjunction' }) })}
         </p>
       )}
+      {/* The live page it kept in mind (learning B5). */}
+      {live && <p className="mt-1 text-[11px] text-muted-foreground">{tCard('live', live)}</p>}
     </>
   );
 }

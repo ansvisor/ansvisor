@@ -1757,6 +1757,52 @@ describe('fixDraftRules', () => {
     expect(run.steps[0]).toMatchObject({ key: 'read_rules', careful: ['faq'] });
   });
 
+  it('tells the agent how the live page does now, and names it on the run (learning B5)', async () => {
+    rows.content_drafts = { ...rows.content_drafts, source_url: 'https://acme.example/guide' };
+    rows.content_page_impact = {
+      citations: { cur: 12, prev: 20 },
+      aiVisits: { cur: 35, prev: 40 },
+      promptCounts: { cur: 4, prev: 6, lost: 1 },
+      prompts: [{ text: 'pour over vs french press', cur: 0, prev: 4 }],
+    };
+    const run = {
+      id: 'r1',
+      steps: [
+        { key: 'read_rules', count: 2 },
+        { key: 'gather_sources', count: 0 },
+        { key: 'write_changes', count: null },
+      ],
+      signal: new AbortController().signal,
+    };
+    runs.startRun = async () => run;
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    try {
+      await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    } finally {
+      runs.startRun = null;
+      delete rows.content_page_impact;
+    }
+    expect(generateObject.mock.calls[0][0].prompt).toContain(
+      'How the live page does now (last 30 days, against the 30 before): tracked AI answers cited it 12 times (20 before)',
+    );
+    expect(run.steps[1]).toMatchObject({
+      key: 'gather_sources',
+      live: { days: 30, citations: 12, before: 20, lost: 1 },
+    });
+  });
+
+  it('tells nothing of a live page for a new page', async () => {
+    generateObject.mockResolvedValue({
+      object: { suggestions: [] },
+      usage: { inputTokens: 900, outputTokens: 20 },
+    });
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
+    expect(generateObject.mock.calls[0][0].prompt).not.toContain('How the live page does now');
+  });
+
   it("knows the shopping path's prices and names, a product's number only beside its name, and links its pages", async () => {
     rows.content_drafts = {
       ...rows.content_drafts,
