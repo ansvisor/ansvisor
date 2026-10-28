@@ -196,7 +196,7 @@ describe('useUpgradeGate', () => {
     await runAll();
     expect(button('Choose Starter')).toBeDefined();
     expect(button('Choose Growth')).toBeDefined();
-    expect(dialog()?.textContent).toContain("You'll pay by card on Stripe's checkout.");
+    expect(dialog()?.textContent).toContain('Card required. Cancel any time.');
     expect(button('Update payment method')).toBeUndefined();
   });
 
@@ -282,20 +282,18 @@ describe('useUpgradeGate on the demo brand', () => {
     expect(probe().dataset.locked).toBe('true');
     await runAll();
     expect(action).not.toHaveBeenCalled();
-    expect(dialog()?.textContent).toContain('Start with your brand: 14 days free, then 50% off');
+    expect(dialog()?.textContent).toContain('Use Ansvisor for your own brand');
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       'Adding prompts works on your own brand',
     );
-    expect(button('Start free trial')).toBeDefined();
+    expect(button('Start 14-day free trial')).toBeDefined();
   });
 
-  it('gives a workspace whose plan ended 50% off its first month', async () => {
+  it('gives a workspace whose plan ended Buy now, with no trial', async () => {
     selectBrand('demo');
     await render({ active: false, status: 'canceled' });
     await runAll();
-    expect(dialog()?.textContent).toContain(
-      'Use Ansvisor for your brand: 50% off your first month',
-    );
+    expect(dialog()?.textContent).toContain('Use Ansvisor for your own brand');
     // Opened without a label: what the demo is.
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       'This is a demo brand with sample data',
@@ -360,14 +358,12 @@ describe("useUpgradeGate on a brand that isn't tracked yet", () => {
     expect(probe().dataset.locked).toBe('true');
     await runAll();
     expect(action).not.toHaveBeenCalled();
-    expect(dialog()?.textContent).toContain(
-      'Start your 14-day free trial: then 50% off your first month',
-    );
+    expect(dialog()?.textContent).toContain('Choose how to start');
     expect(document.querySelector('[data-slot="upgrade-action"]')?.textContent).toBe(
       "Your brand isn't tracked yet",
     );
-    expect(button('Start free trial')).toBeDefined();
-    expect(button('Choose Starter')).toBeUndefined();
+    expect(button('Start 14-day free trial')).toBeDefined();
+    expect(button('Choose Starter')).toBeDefined();
   });
 
   it('keeps what was clicked as the label', async () => {
@@ -384,8 +380,8 @@ describe("useUpgradeGate on a brand that isn't tracked yet", () => {
     selectBrand('own');
     await render({ active: false, status: null, everSubscribed: false, role: 'analyst' });
     await runAll();
-    expect(dialog()?.textContent).toContain('Ask your admin to start the free trial.');
-    expect(button('Start free trial')).toBeUndefined();
+    expect(dialog()?.textContent).toContain('Ask your admin to choose a plan.');
+    expect(button('Start 14-day free trial')).toBeUndefined();
   });
 });
 

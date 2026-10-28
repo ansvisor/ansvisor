@@ -9,6 +9,8 @@ import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUpgradeDialog } from '@/components/providers/upgrade-gate';
 import { ensureDemoBrand } from '@/lib/demo/demo-client';
+import { offerChoice } from '@/lib/billing/plan-purchase';
+import { TRIAL_DAYS } from '@/lib/billing/trial';
 import { useBrandStore } from '@/stores/use-brand-store';
 
 /**
@@ -34,6 +36,7 @@ export function resetDemoFreshness() {
 
 function Band() {
   const t = useTranslations('demo.band');
+  const tReadOnly = useTranslations('readOnly');
   const router = useRouter();
   const { offer } = useDemoBrand();
   const { subscriptionActive } = usePlanContext();
@@ -64,6 +67,8 @@ function Band() {
       <p className="min-w-0 flex-1">
         {t.rich(subscriptionActive ? 'textPlanActive' : 'text', {
           brand: brandName,
+          days: TRIAL_DAYS,
+          offer: offerChoice(offer === 'trial'),
           b: (chunks) => <strong className="font-semibold">{chunks}</strong>,
         })}
       </p>
@@ -75,7 +80,7 @@ function Band() {
         )
       ) : (
         <Button size="sm" onClick={() => upgrade?.openUpgrade()}>
-          {t(`offer.${offer}`)}
+          {tReadOnly('banner.seePlans')}
         </Button>
       )}
     </div>
