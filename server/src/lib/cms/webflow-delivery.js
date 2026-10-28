@@ -37,14 +37,20 @@ async function lastItem(draftId, collectionId, deliveryId) {
  * Whether the item has no value in the date field the map gives: one sent
  * before a date was mapped, or before the brand made its date required in
  * Webflow, has none, and a send again gives it one (#1600). False when
- * there's no date field, or the item can't be read: the update goes on
- * without it.
+ * there's no date field, or the item can't be read, or the read didn't see
+ * its fields (every item has a slug): the update goes on without it, so an
+ * answer in a shape we don't know never writes over the item's date.
  */
 async function undated(account, collectionId, itemId, field) {
   if (!field) return false;
   try {
     const item = await getItem(account, collectionId, itemId);
-    return Boolean(item) && !item.filledFields.includes(field);
+    return (
+      Boolean(item) &&
+      Array.isArray(item.filledFields) &&
+      item.filledFields.includes('slug') &&
+      !item.filledFields.includes(field)
+    );
   } catch {
     return false;
   }

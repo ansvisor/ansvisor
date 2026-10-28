@@ -195,6 +195,17 @@ describe('sendToWebflow', () => {
       webflow.getItem.mockRejectedValueOnce(new WebflowError('failed', 'busy'));
       expect(await sendDated()).toMatchObject({ taken: true, updated: true });
       expect(webflow.updateItem.mock.calls[1][3]).not.toHaveProperty('date');
+
+      // A read that didn't see the item's fields keeps its date.
+      webflow.getItem.mockResolvedValueOnce({
+        id: 'item-old',
+        slug: null,
+        live: true,
+        lastPublished: null,
+        filledFields: [],
+      });
+      expect(await sendDated()).toMatchObject({ taken: true, updated: true });
+      expect(webflow.updateItem.mock.calls[2][3]).not.toHaveProperty('date');
     } finally {
       vi.useRealTimers();
     }
