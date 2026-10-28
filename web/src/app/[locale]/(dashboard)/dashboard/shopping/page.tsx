@@ -38,6 +38,7 @@ import {
   getCompetitorProducts,
   getCompetitorSummary,
   getShoppingAiOrders,
+  getShoppingActionResults,
   getShoppingCategories,
   getShoppingProducts,
   getShoppingShelf,
@@ -90,6 +91,7 @@ import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
 import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
 import type { CategoryRow } from '@/lib/shopping/categories';
+import { RECHECK_TARGETS, type ActionResult } from '@/lib/shopping/recheck';
 import { readinessChecklist } from '@/lib/shopping/readiness';
 import { formatNumber } from '@/lib/format';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
@@ -156,6 +158,8 @@ export default function ShoppingPage() {
   const [categories, setCategories] = useState<{
     key: string;
     rows: CategoryRow[] | null | 'failed';
+    /** Each category's last done action, 7 days on (ECOM-018). */
+    results?: Record<string, ActionResult>;
   } | null>(null);
   const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
@@ -306,7 +310,19 @@ export default function ShoppingPage() {
     let cancelled = false;
     getShoppingCategories(activeBrandId, filters)
       .then((rows) => {
-        if (!cancelled) setCategories({ key: categoriesKey, rows });
+        if (cancelled) return;
+        setCategories({ key: categoriesKey, rows });
+        if (!rows?.length) return;
+        // Then their last done actions, 7 days on: a table without them is still the table.
+        // Kept by key, not `cancelled`: setting the rows re-runs this effect.
+        getShoppingActionResults(
+          activeBrandId,
+          rows.slice(0, RECHECK_TARGETS).map((row) => ({ type: 'category' as const, id: row.id })),
+        )
+          .then((results) =>
+            setCategories((read) => (read?.key === categoriesKey ? { ...read, results } : read)),
+          )
+          .catch((err) => console.error('Failed to re-check the categories’ actions:', err));
       })
       .catch((err) => {
         console.error('Failed to read the categories:', err);
@@ -519,6 +535,7 @@ export default function ShoppingPage() {
                   categories={categoriesRead === 'failed' ? null : (categoriesRead ?? null)}
                   loading={categoriesRead === undefined}
                   failed={categoriesRead === 'failed'}
+                  results={categories?.key === categoriesKey ? categories.results : undefined}
                 />
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />

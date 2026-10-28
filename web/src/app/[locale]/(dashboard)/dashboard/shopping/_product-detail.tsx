@@ -22,6 +22,7 @@ import type { ComparisonState } from '@/lib/shopping/product-detail';
 import { productPlan } from '@/lib/shopping/action-plan';
 import { cn } from '@/lib/utils';
 import { ActionPlan } from './_action-plan';
+import { ActionResultCard } from './_action-result';
 
 const platformName = (platform: string) => PLATFORM_LABELS[platform] ?? platform;
 
@@ -34,8 +35,8 @@ const STATE_ICON: Record<ComparisonState, React.ReactNode> = {
 
 /**
  * A product's page (ECOM-011), drawn: its header with its AI visits and
- * orders, "Why not your product?" beside the winner, where it shows, and
- * its readiness.
+ * orders, "Why not your product?" beside the winner, its last done action
+ * 7 days on (ECOM-018), where it shows, and its readiness.
  */
 export function ProductDetailView({
   detail,
@@ -172,6 +173,8 @@ export function ProductDetailView({
           </CardContent>
         )}
       </Card>
+
+      {detail.result && <ActionResultCard result={detail.result} />}
 
       {brandId && (
         <Card>

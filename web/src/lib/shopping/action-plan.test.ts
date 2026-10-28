@@ -42,6 +42,7 @@ const detail = (over: Partial<ShoppingProductDetail> = {}): ShoppingProductDetai
   },
   comparison: [],
   ai: { visits: 0, orders: 0, revenue: null, currency: null },
+  result: null,
   ...over,
 });
 

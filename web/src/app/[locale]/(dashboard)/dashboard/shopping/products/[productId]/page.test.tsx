@@ -136,6 +136,7 @@ const detail: ShoppingProductDetail = {
     { key: 'gtin', you: null, winner: null, state: 'missing' },
   ],
   ai: { visits: 4, orders: 0, revenue: null, currency: null },
+  result: null,
 };
 
 describe('ShoppingProductPage', () => {
@@ -180,6 +181,35 @@ describe('ShoppingProductPage', () => {
       { datePreset: '30d' },
       { promptId: 'q9', platform: 'gemini-web' },
     );
+  });
+
+  const result = {
+    actionId: 'a7',
+    actionNo: 7,
+    completedAt: '2026-10-12T09:00:00Z',
+    readyAt: '2026-10-19T09:00:00Z',
+    before: { shelves: 3, on: 0 },
+    after: { shelves: 4, on: 2 },
+  };
+
+  it('shows what its last done action did, 7 days on', async () => {
+    getShoppingProductDetail.mockResolvedValue({ ...detail, result });
+    const text = await render();
+    expect(text).toContain('After action #7');
+    expect(text).toContain('On more of its shelves');
+    expect(text).toContain(
+      'In the 7 days after it was done, on 2 of 4 shelves. In the 7 days before, on 0 of 3.',
+    );
+    expect(
+      container.querySelector('a[href="/dashboard/action-center/actions?action=a7"]')?.textContent,
+    ).toBe('Open the action');
+  });
+
+  it('says when a done action’s result shows', async () => {
+    getShoppingProductDetail.mockResolvedValue({ ...detail, result: { ...result, after: null } });
+    const text = await render();
+    expect(text).toContain('Done Oct 12, 2026. Its result shows on Oct 19, 2026, 7 days on.');
+    expect(text).not.toContain('On more of its shelves');
   });
 
   it('says when the product is gone, or locked', async () => {

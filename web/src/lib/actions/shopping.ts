@@ -28,6 +28,16 @@ import {
   type ProductShelfLine,
 } from '@/lib/shopping/product-detail';
 import { priceText } from '@/lib/shopping/price';
+import { FROM_PRODUCTS_KINDS } from '@/lib/action-center/registry';
+import {
+  RECHECK_DAYS,
+  RECHECK_TARGETS,
+  actionResult,
+  resultKey,
+  type ActionResult,
+  type RecheckAction,
+  type RecheckCard,
+} from '@/lib/shopping/recheck';
 import {
   productRows,
   readiness,
@@ -1672,6 +1682,8 @@ export interface ShoppingProductDetail {
   comparison: ComparisonRow[];
   /** AI visits to its page and the orders they led to, over the window (00361). */
   ai: { visits: number; orders: number; revenue: number | null; currency: string | null };
+  /** Its last done action from Products, 7 days on (ECOM-018); null without one. */
+  result: ActionResult | null;
 }
 
 /** A product of the brand's catalog, on the AI shelves of the questions it belongs on. Null when it isn't the brand's. */
@@ -1687,6 +1699,13 @@ export async function getShoppingProductDetail(
   }
   const asked = focusOn && z.guid().safeParse(focusOn.promptId).success ? focusOn : null;
   const supabase = await createClient();
+  // Read beside the rest; a re-check that can't be read leaves the page as it is.
+  const resultsRead = readActionResults(supabase, brandId, [
+    { type: 'product', id: productId },
+  ]).catch((err) => {
+    console.error('Failed to re-check the product’s last action:', err);
+    return {} as Record<string, ActionResult>;
+  });
   const { from } = resolveDateRange(filters);
   const [[product], cards, stats, domain] = await Promise.all([
     readCatalogProducts(supabase, brandId, [productId]),
@@ -1760,6 +1779,7 @@ export async function getShoppingProductDetail(
   const shown = detailCards
     .filter((card) => card.productId === productId)
     .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  const results = await resultsRead;
   const shelves = productShelves(product, detailCards, { include: asked?.promptId ?? null });
   const focus = focusShelf(shelves, asked);
   const ai = (stats.data ?? []).find((row) => row.product_id === productId);
@@ -1781,7 +1801,134 @@ export async function getShoppingProductDetail(
       revenue: ai?.revenue === null || ai?.revenue === undefined ? null : Number(ai.revenue),
       currency: ai?.currency ?? null,
     },
+    result: results[resultKey({ type: 'product', id: productId })] ?? null,
   };
+}
+
+// ── Re-check after a done action (Product Visibility, ECOM-018) ───────────────
+
+/** Done actions this recent are re-checked: older ones say little about the shelf now. */
+const RECHECK_SINCE_DAYS = 60;
+/** The actions read at most, the latest done first. */
+const RECHECK_ACTIONS = 500;
+/** The questions read at most across the actions re-checked. */
+const RECHECK_PROMPTS = 400;
+/** Question ids one card read filters by: each request's address stays short. */
+const RECHECK_PROMPTS_PER_READ = 100;
+
+const recheckTargets = z
+  .array(z.object({ type: z.enum(['product', 'category']), id: z.guid() }))
+  .max(RECHECK_TARGETS);
+
+/**
+ * Each target's last done action from Products, 7 days on: the shelves of
+ * its questions in the week before it was done beside the week after
+ * (recheck.ts), by "product:<id>" / "category:<id>". Through the member's
+ * session (RLS): only the brand's own actions and cards.
+ */
+async function readActionResults(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  targets: { type: 'product' | 'category'; id: string }[],
+  now: number = Date.now(),
+): Promise<Record<string, ActionResult>> {
+  const wanted = new Set(targets.map(resultKey));
+  if (!wanted.size) return {};
+  const { data, error } = await supabase
+    .from('actions')
+    .select('id, action_no, completed_at, payload')
+    .eq('brand_id', brandId)
+    .in('kind', [...FROM_PRODUCTS_KINDS])
+    .eq('status', 'completed')
+    .gte('completed_at', new Date(now - RECHECK_SINCE_DAYS * 86_400_000).toISOString())
+    .order('completed_at', { ascending: false })
+    .limit(RECHECK_ACTIONS);
+  if (error) throw new Error(error.message);
+
+  const actions = new Map<string, RecheckAction>();
+  for (const row of data ?? []) {
+    const payload = (row.payload ?? {}) as {
+      target?: { type?: unknown; id?: unknown };
+      promptIds?: unknown;
+    };
+    const type = payload.target?.type;
+    const id = payload.target?.id;
+    if ((type !== 'product' && type !== 'category') || typeof id !== 'string') continue;
+    const target = { type, id } as RecheckAction['target'];
+    const key = resultKey(target);
+    // The latest done one per target: the rows come newest first.
+    if (!wanted.has(key) || actions.has(key) || !row.completed_at) continue;
+    actions.set(key, {
+      id: row.id,
+      actionNo: Number(row.action_no),
+      target,
+      completedAt: row.completed_at,
+      promptIds: Array.isArray(payload.promptIds)
+        ? payload.promptIds.filter((p): p is string => typeof p === 'string')
+        : [],
+    });
+  }
+  if (!actions.size) return {};
+
+  const promptIds = [...new Set([...actions.values()].flatMap((a) => a.promptIds))].slice(
+    0,
+    RECHECK_PROMPTS,
+  );
+  const dones = [...actions.values()].map((a) => Date.parse(a.completedAt));
+  const week = RECHECK_DAYS * 86_400_000;
+  const from = new Date(Math.min(...dones) - week).toISOString();
+  const to = new Date(Math.min(now, Math.max(...dones) + week)).toISOString();
+  const reads = [];
+  for (let i = 0; i < promptIds.length; i += RECHECK_PROMPTS_PER_READ) {
+    const some = promptIds.slice(i, i + RECHECK_PROMPTS_PER_READ);
+    reads.push(
+      fetchAllCards<{
+        created_at: string;
+        platform: string;
+        matched_brand_role: string;
+        catalog_product_id: string | null;
+        prompt_results: { prompt_id: string } | null;
+      }>(() =>
+        supabase
+          .from('prompt_result_shopping_cards')
+          .select(
+            'created_at, platform, matched_brand_role, catalog_product_id, prompt_results!inner ( prompt_id )',
+          )
+          .eq('brand_id', brandId)
+          .gte('created_at', from)
+          .lt('created_at', to)
+          .in('prompt_results.prompt_id', some),
+      ),
+    );
+  }
+  const rows = (await Promise.all(reads)).flat();
+  const cards: RecheckCard[] = rows.flatMap((row) =>
+    row.prompt_results
+      ? [
+          {
+            promptId: row.prompt_results.prompt_id,
+            platform: row.platform,
+            at: row.created_at,
+            own: row.matched_brand_role === 'own',
+            productId: row.catalog_product_id,
+          },
+        ]
+      : [],
+  );
+  return Object.fromEntries(
+    [...actions].map(([key, action]) => [key, actionResult(action, cards, now)]),
+  );
+}
+
+/** What the brand's done Products actions did, 7 days on, for the Categories table (ECOM-018). */
+export async function getShoppingActionResults(
+  brandId: string,
+  targets: { type: 'product' | 'category'; id: string }[],
+): Promise<Record<string, ActionResult>> {
+  const parsed = recheckTargets.safeParse(targets);
+  if (!z.guid().safeParse(brandId).success || !parsed.success) throw new Error('invalid');
+  const supabase = await createClient();
+  return readActionResults(supabase, brandId, parsed.data);
 }
 
 // ── Actions from Product Visibility (ECOM-013) ────────────────────────────────

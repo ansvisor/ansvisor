@@ -8133,6 +8133,20 @@
       "open": "Open",
       "failed": "Couldn't send to Action Center. Try again."
     },
+    "recheck": {
+      "title": "After action #{number}",
+      "pending": "Done {done}. Its result shows on {ready}, 7 days on.",
+      "result": "In the 7 days after it was done, on {after} of {afterShelves, plural, one {# shelf} other {# shelves}}. In the 7 days before, on {before} of {beforeShelves}.",
+      "noRuns": "Done {done}. No shopping answers were read in the 7 days after it, so there's nothing to compare.",
+      "trend": {
+        "better": "On more of its shelves",
+        "worse": "On fewer of its shelves",
+        "same": "No change"
+      },
+      "open": "Open the action",
+      "short": "#{number}: {before}/{beforeShelves} → {after}/{afterShelves} shelves",
+      "shortPending": "#{number} done · result {ready}"
+    },
     "detail": {
       "back": "Products",
       "onShelves": "On {count} of {total} shelves",
