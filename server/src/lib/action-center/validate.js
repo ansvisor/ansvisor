@@ -217,6 +217,52 @@ export function deriveOutcome(metrics) {
   return 'no_meaningful_change';
 }
 
+/** A target the night engine names that a basket can be measured on (learning A1). */
+const TARGET_BASKETS = new Set(['prompts', 'pages']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The brand's primary domain as a host, for a page target written as a path. */
+async function primaryHost(brandId) {
+  const { data, error } = await supabaseAdmin
+    .from('brand_domains')
+    .select('domain')
+    .eq('brand_id', brandId)
+    .order('is_primary', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`brand_domains: ${error.message}`);
+  const host = String(data?.domain ?? '')
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/[/?#].*$/, '');
+  return host || null;
+}
+
+/**
+ * The basket a night-engine action is measured on (learning A1): the
+ * prompts or pages its payload names, every one it counts (`targetIds`)
+ * when it shows fewer, a page written as a path read on the brand's primary
+ * domain. Null for another kind of target, or none: such an action is
+ * measured brand-wide, as before.
+ */
+export async function targetScope(action) {
+  const payload = action.payload ?? {};
+  if (!TARGET_BASKETS.has(payload.targetEntity)) return null;
+  const listed = Array.isArray(payload.targetIds)
+    ? payload.targetIds
+    : (Array.isArray(payload.targets) ? payload.targets : []).map((t) => t?.id);
+  const keys = [...new Set(listed.filter((k) => typeof k === 'string' && k.trim()))];
+  if (payload.targetEntity === 'prompts') {
+    const promptIds = keys.filter((k) => UUID.test(k));
+    return promptIds.length ? { entity: 'prompts', promptIds, pages: [] } : null;
+  }
+  const host = keys.some((k) => k.startsWith('/')) ? await primaryHost(action.brand_id) : null;
+  const pages = keys
+    .map((k) => (k.startsWith('/') ? (host ? `https://${host}${k}` : null) : k))
+    .filter((url) => url && /^https?:\/\//i.test(url));
+  return pages.length ? { entity: 'pages', promptIds: [], pages } : null;
+}
+
 /**
  * What became of the signals that raised the action, when it is measured
  * (learning A3): how many ended (resolved, the condition gone), turned into
@@ -310,6 +356,59 @@ export async function validateAction(action, { now = new Date() } = {}) {
   }
 
   const kpiKeys = (action.kpi_keys ?? []).filter((key) => key in MEASURABLE_KPIS);
+
+  // A night-engine action that names its prompts or pages is measured on
+  // them (learning A1): "recover 6 prompts" moves those 6, which the whole
+  // brand's numbers can bury. The brand-wide figures stay as a second line.
+  // A basket that measured nothing (no answers, citations of prompts) leaves
+  // the action to the brand-wide measure below.
+  const targets = await targetScope(action);
+  if (targets) {
+    const asked = (action.kpi_keys ?? []).filter((key) => key in BASKET_KPIS);
+    const keys = asked.length ? asked : Object.keys(BASKET_KPIS);
+    const [before, after, brandBefore, brandAfter] = await Promise.all([
+      measureBasket(action.brand_id, targets, beforeWindow.from, beforeWindow.to),
+      measureBasket(action.brand_id, targets, afterWindow.from, afterWindow.to),
+      kpiKeys.length
+        ? measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to)
+        : {},
+      kpiKeys.length ? measureKpis(action.brand_id, kpiKeys, afterWindow.from, afterWindow.to) : {},
+    ]);
+    const metrics = keys.map((metric) => ({
+      metric,
+      unit: BASKET_KPIS[metric],
+      before: before[metric] ?? null,
+      after: after[metric] ?? null,
+    }));
+    if (metrics.some((m) => m.before != null && m.after != null)) {
+      const brandWide = kpiKeys.map((metric) => ({
+        metric,
+        unit: MEASURABLE_KPIS[metric],
+        before: brandBefore[metric] ?? null,
+        after: brandAfter[metric] ?? null,
+      }));
+      const outcome = deriveOutcome(metrics);
+      await write(
+        action.id,
+        withSignals({
+          measuredAt: now.toISOString(),
+          beforeWindow,
+          afterWindow,
+          metrics,
+          scope: {
+            kind: 'targets',
+            entity: targets.entity,
+            prompts: targets.promptIds.length,
+            pages: targets.pages.length,
+          },
+          ...(brandWide.length ? { brandWide } : {}),
+        }),
+        outcome,
+        now,
+      );
+      return outcome;
+    }
+  }
 
   // An action with no success metrics has nothing to measure. That is a gap
   // in the rule that produced it, not a failure here — say so plainly rather

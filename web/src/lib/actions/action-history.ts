@@ -69,6 +69,21 @@ interface ValidationSnapshot {
   }[];
   /** What became of the signals that raised it (learning A3). */
   signals?: SignalOutcome;
+  /** The basket it was measured on; 'targets' for the prompts or pages it named (learning A1). */
+  scope?: { kind?: string; entity?: string; prompts?: number; pages?: number };
+  /** The brand-wide figures, beside a measure on its targets. */
+  brandWide?: ValidationSnapshot['metrics'];
+}
+
+/** The prompts or pages it was measured on, when it was measured on its own targets. */
+function measuredOnFrom(
+  validation: ValidationSnapshot | null,
+): { entity: 'prompts' | 'pages'; count: number } | null {
+  const scope = validation?.scope;
+  if (scope?.kind !== 'targets') return null;
+  const entity = scope.entity === 'pages' ? 'pages' : 'prompts';
+  const count = Number(entity === 'pages' ? scope.pages : scope.prompts) || 0;
+  return count > 0 ? { entity, count } : null;
 }
 
 /** The signals' counts, when the sweep kept them and they add up. */
@@ -282,6 +297,10 @@ export async function getActionHistory(
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
       signalsAfter: signalsFrom(row.validation),
+      measuredOn: measuredOnFrom(row.validation),
+      brandWideResults: resultsFrom(
+        row.validation?.brandWide ? { ...row.validation, metrics: row.validation.brandWide } : null,
+      ),
       tasks: tasksByAction.get(row.id) ?? [],
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
       dueDate: row.due_date ?? null,
