@@ -43,6 +43,9 @@ vi.mock('@/lib/actions/tracking', () => ({ getPromptVisibilitySummaries: vi.fn()
 
 vi.mock('@/lib/guards/plan-guard', () => ({
   getOrgPlan: vi.fn(async () => plan),
+  // The Positions column reads the organization's plan from its brand's row.
+  ORG_PLAN_COLUMNS: 'plan, subscription_status, plan_overrides',
+  planFromOrgRow: vi.fn(() => plan),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({

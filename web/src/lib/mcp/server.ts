@@ -76,6 +76,7 @@ import {
 } from './mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
+import { getPromptLocationsFor } from './prompt-locations';
 import { getAiUsageFor, getMeFor } from './account';
 import { getActionScorecardFor } from './learning';
 
@@ -1822,6 +1823,56 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         since: args.date_from,
       });
       return scorecard ? json(scorecard) : notFound('Brand');
+    },
+  );
+
+  // ─── Prompts across locations (B7): the Tracked Prompts Locations view ───
+
+  server.registerTool(
+    'get_prompt_locations',
+    {
+      title: 'Prompts across locations',
+      description:
+        "Each tracked prompt in each location side by side, as Tracked Prompts' Locations view shows it: per prompt and location (a country, a US state such as US-CA, or a city such as TR~ISTANBUL) its AI Visibility Score (0–100), mentions, citations, average position and runs over the window; `tracked_in` (the compared locations it tracks; one it doesn't track has no cells there) and `visibility_gap` (best minus worst location). Also each metric's average per location and the view's cards (`insights`: the weakest location with the prompts not tracked there, the strongest, the prompt whose visibility differs most, and visibility across all of them). Compares the `locations` given (at most 12), else those the prompts track, the most tracked first. Over `days` (7, 30 default, 90) or `date_from`/`date_to`. Paged by prompt: `limit` (default 50, max 200) and `offset`.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        locations: z
+          .array(z.string().max(60))
+          .max(12)
+          .optional()
+          .describe(
+            'Location codes to compare (DE, US-CA, TR~ISTANBUL…); the most tracked when absent.',
+          ),
+        days: z
+          .union([z.literal(7), z.literal(30), z.literal(90)])
+          .optional()
+          .describe('The window: the last 7, 30 (default) or 90 days.'),
+        date_from: z
+          .string()
+          .refine((value) => Number.isFinite(Date.parse(value)), 'Not a date')
+          .optional()
+          .describe('ISO timestamp (inclusive) lower bound; wins over days.'),
+        date_to: z
+          .string()
+          .refine((value) => Number.isFinite(Date.parse(value)), 'Not a date')
+          .optional()
+          .describe('ISO timestamp (inclusive) upper bound.'),
+        limit: z.number().int().min(1).max(200).optional().describe('Prompts a page (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Where the page starts (default 0).'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const view = await getPromptLocationsFor(auth, {
+        brandId: args.brand_id,
+        locations: args.locations,
+        days: args.days,
+        from: args.date_from,
+        to: args.date_to,
+        limit: args.limit,
+        offset: args.offset,
+      });
+      return view ? json(view) : notFound('Brand');
     },
   );
 
