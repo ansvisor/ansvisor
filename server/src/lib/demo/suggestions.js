@@ -21,6 +21,7 @@ import {
 } from '../prompt-improve.js';
 import { BRAND, TOPICS } from './brewline.js';
 import { demoId } from './random.js';
+import { allSettledOrThrow, demoWriter } from './write.js';
 import * as S from './stats.js';
 
 /**
@@ -302,22 +303,32 @@ export function suggestionRows({ brandId, now }) {
   return { prompts, topics, improve };
 }
 
-async function insertRows(db, table, rows) {
-  const { error } = await db.from(table).insert(rows);
-  if (error) throw new Error(`demo ${table} insert: ${error.message}`);
-}
-
 /** The suggestions module. */
 export const suggestions = {
   name: 'suggestions',
+  // Rebuilt in place (write.js): written over, what isn't written again deleted after.
+  inPlace: true,
   tables: ['prompt_suggestions', 'topic_suggestions', 'prompt_improve_suggestions'],
 
-  /** @param {{ brandId: string, now: Date, db?: object }} ctx */
-  async build({ brandId, now, db = supabaseAdmin }) {
+  /**
+   * Its three tables side by side, through the build's writer (a writer over
+   * `db` for a first build without one).
+   *
+   * @param {{ brandId: string, now: Date, db?: object, rebuild?: boolean, write?: Function }} ctx
+   */
+  async build({
+    brandId,
+    now,
+    db = supabaseAdmin,
+    rebuild = false,
+    write = demoWriter({ db, brandId, rebuild }).write,
+  }) {
     const rows = suggestionRows({ brandId, now });
-    await insertRows(db, 'prompt_suggestions', rows.prompts);
-    await insertRows(db, 'topic_suggestions', rows.topics);
-    await insertRows(db, 'prompt_improve_suggestions', rows.improve);
+    await allSettledOrThrow([
+      write('prompt_suggestions', rows.prompts),
+      write('topic_suggestions', rows.topics),
+      write('prompt_improve_suggestions', rows.improve),
+    ]);
     return {
       promptSuggestions: rows.prompts.length,
       topicSuggestions: rows.topics.length,

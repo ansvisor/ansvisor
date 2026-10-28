@@ -276,6 +276,33 @@ describe('demoWriter', () => {
     expect(db.tables.prompts.map((p) => p.id)).toEqual(['p1', 'p9']);
   });
 
+  it('replaces the rows of a table whose ids the database gives, old ones after the new', async () => {
+    const db = fakeDb({
+      events: [
+        { id: 1, brand_id: 'b1', v: 'old' },
+        { id: 2, brand_id: 'b1', v: 'old' },
+        { id: 3, brand_id: 'b2', v: 'other brand' },
+      ],
+    });
+    const writer = demoWriter({ db, brandId: 'b1', rebuild: true });
+    await writer.write('events', [{ brand_id: 'b1', v: 'new' }], { generated: true });
+    expect(db.statements.map((s) => `${s.op} ${s.table}`)).toEqual([
+      'select events',
+      'insert events',
+      'delete events',
+    ]);
+    expect(db.tables.events.map((e) => e.v)).toEqual(['other brand', 'new']);
+    // Nothing left for the prune.
+    expect(await writer.prune()).toEqual({});
+  });
+
+  it('only inserts such rows on a first build', async () => {
+    const db = fakeDb();
+    const writer = demoWriter({ db, brandId: 'b1' });
+    await writer.write('events', [{ brand_id: 'b1', v: 'new' }], { generated: true });
+    expect(db.statements.map((s) => s.op)).toEqual(['insert']);
+  });
+
   it('reads a large table page by page', async () => {
     const old = rowsOf(2500, (i) => ({ id: `r${String(i).padStart(4, '0')}`, brand_id: 'b1' }));
     const db = fakeDb({ results: old.map((r) => ({ ...r })) });

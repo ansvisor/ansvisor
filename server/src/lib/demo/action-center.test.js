@@ -157,10 +157,12 @@ describe('actionCenterRows', () => {
 describe('actionCenter.build', () => {
   it('writes actions before the signals pointing at them, then what hangs off them', async () => {
     const written = [];
+    const keys = {};
     const db = {
       from: (table) => ({
-        insert: async (list) => {
+        upsert: async (list, { onConflict }) => {
           written.push([table, list.length]);
+          keys[table] = onConflict;
           return { error: null };
         },
         update: (patch) => ({
@@ -181,5 +183,12 @@ describe('actionCenter.build', () => {
     expect(order).toContain('action_task_reviews');
     expect(built).toEqual({ signals: 8, actions: 9, tasks: rows.tasks.length });
     for (const table of actionCenter.tables) expect(order).toContain(table);
+    // Written over by key: what a new brand's trigger made, and an old build's rows.
+    expect(keys).toMatchObject({
+      actions: 'id',
+      getting_started: 'brand_id',
+      getting_started_steps: 'brand_id,step',
+      action_signals: 'action_id,signal_id',
+    });
   });
 });
