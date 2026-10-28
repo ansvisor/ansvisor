@@ -247,9 +247,11 @@ describe('requireActiveSubscription', () => {
     expect(
       (await run({ path: '/topics/suggest', user: { id: 'u2' } })).res.status,
     ).toHaveBeenCalledWith(429);
-    // …another organization doesn't.
+    // …another organization's people don't.
     profile = { organization_id: 'org-2' };
-    expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+    expect(
+      (await run({ path: '/topics/suggest', user: { id: 'u3' } })).next,
+    ).toHaveBeenCalledOnce();
 
     // A new day starts over.
     profile = { organization_id: 'org-1' };
@@ -263,22 +265,27 @@ describe('requireActiveSubscription', () => {
     org = neverSubscribed;
     for (let i = 0; i < MAX_ENTRIES; i++) {
       profile = { organization_id: `org-${i}` };
-      await run({ path: '/topics/suggest' });
+      await run({ path: '/topics/suggest', user: { id: `u-${i}` } });
     }
 
     // The next day the first organization uses its calls again: its count
     // moves to the end, behind every count of the day before.
     vi.setSystemTime(new Date('2026-10-28T09:00:00Z'));
     profile = { organization_id: 'org-0' };
+    const first = { id: 'u-0' };
     for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) {
-      expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+      expect((await run({ path: '/topics/suggest', user: first })).next).toHaveBeenCalledOnce();
     }
     // A new organization makes room by dropping a count of the day before…
     profile = { organization_id: 'org-new' };
-    expect((await run({ path: '/topics/suggest' })).next).toHaveBeenCalledOnce();
+    expect(
+      (await run({ path: '/topics/suggest', user: { id: 'u-new' } })).next,
+    ).toHaveBeenCalledOnce();
     // …not today's, so the first organization's calls are still used up.
     profile = { organization_id: 'org-0' };
-    expect((await run({ path: '/topics/suggest' })).res.status).toHaveBeenCalledWith(429);
+    expect((await run({ path: '/topics/suggest', user: first })).res.status).toHaveBeenCalledWith(
+      429,
+    );
   });
 
   it('counts onboarding per person before the organization exists', async () => {
@@ -288,6 +295,28 @@ describe('requireActiveSubscription', () => {
     expect(
       (await run({ path: '/topics/suggest', user: { id: 'u2' } })).next,
     ).toHaveBeenCalledOnce();
+  });
+
+  it('gives one person one allowance a day, before and after the organization exists', async () => {
+    // Half the day's calls before the organization, half after: one allowance.
+    profile = { organization_id: null };
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS / 2; i++) await run({ path: '/topics/suggest' });
+    profile = { organization_id: 'org-1' };
+    org = neverSubscribed;
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS / 2; i++) {
+      expect((await run({ path: '/prompts/from-topics' })).next).toHaveBeenCalledOnce();
+    }
+    expect((await run({ path: '/competitors/suggest' })).res.status).toHaveBeenCalledWith(429);
+    // A refused call counts for neither: the organization's other person
+    // still has the half the first one didn't use there.
+    for (let i = 0; i < ONBOARDING_DAILY_CALLS / 2; i++) {
+      expect(
+        (await run({ path: '/topics/suggest', user: { id: 'u2' } })).next,
+      ).toHaveBeenCalledOnce();
+    }
+    expect(
+      (await run({ path: '/topics/suggest', user: { id: 'u2' } })).res.status,
+    ).toHaveBeenCalledWith(429);
   });
 
   it("leaves an active organization's onboarding calls uncounted", async () => {

@@ -32,6 +32,21 @@ export interface BrandSetupParams {
   language: string;
 }
 
+/**
+ * The longest the API takes each field (server/src/lib/brand-setup-input.js).
+ * What's sent is cut to them, so a long description kept on the brand never
+ * fails a suggestion. A topic is held to `topic` where it's typed: its name
+ * comes back with its prompts, so it isn't cut here.
+ */
+export const BRAND_SETUP_LIMITS = { name: 200, website: 200, description: 2000, topic: 100 };
+
+/** At most `max` UTF-16 units, as the API's limits count them, never half of an emoji's pair. */
+function cut(value: string | undefined, max: number): string | undefined {
+  if (value === undefined || value.length <= max) return value;
+  const end = /[\uD800-\uDBFF]/.test(value[max - 1]) ? max - 1 : max;
+  return value.slice(0, end);
+}
+
 // ── Topic suggestions ──────────────────────────────────────────────────────────
 
 export interface SuggestTopicsResult {
@@ -54,10 +69,10 @@ export async function suggestTopics(params: BrandSetupParams): Promise<SuggestTo
       Authorization: authorization,
     },
     body: JSON.stringify({
-      brandName: params.brandName,
+      brandName: cut(params.brandName, BRAND_SETUP_LIMITS.name),
       industry: '',
-      description: params.description,
-      website: params.website,
+      description: cut(params.description, BRAND_SETUP_LIMITS.description),
+      website: cut(params.website, BRAND_SETUP_LIMITS.website),
       language: params.language,
     }),
   });
@@ -97,9 +112,9 @@ export async function generatePromptsFromTopics(
       Authorization: authorization,
     },
     body: JSON.stringify({
-      brandName: params.brandName,
+      brandName: cut(params.brandName, BRAND_SETUP_LIMITS.name),
       industry: '',
-      description: params.description,
+      description: cut(params.description, BRAND_SETUP_LIMITS.description),
       topics,
       language: params.language,
     }),
@@ -146,12 +161,12 @@ export async function suggestCompetitors(
       Authorization: authorization,
     },
     body: JSON.stringify({
-      brandName: params.brandName,
+      brandName: cut(params.brandName, BRAND_SETUP_LIMITS.name),
       industry: '',
-      description: params.description,
+      description: cut(params.description, BRAND_SETUP_LIMITS.description),
       // The site tells the model which company the name means, the region
       // which market its competitors should come from.
-      website: params.website,
+      website: cut(params.website, BRAND_SETUP_LIMITS.website),
       region: params.region,
       language: params.language,
     }),
