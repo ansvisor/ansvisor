@@ -20,6 +20,11 @@ import { chunkIds } from '../chunked-in.js';
  *
  * Values are clipped to the columns' limits, and an address that isn't
  * http(s) is left out, so one odd product doesn't fail the sync.
+ *
+ * The plan caps a workspace's live products (ECOM-019): a source keeps
+ * `room` of them at most (keptWithin), the rest aren't written, and one in
+ * the catalog already is marked removed, as if gone from the source, until
+ * there's room again.
  */
 
 const PAGE = 1000;
@@ -120,6 +125,29 @@ export function catalogRecords(items) {
   return { products, variants };
 }
 
+/**
+ * The products a source keeps within `room` (ECOM-019): those live in the
+ * catalog already first, so a product tracked stays tracked, then the new
+ * ones in the source's order. In the source's order, with how many are over.
+ *
+ * @param {{ external_id: string }[]} products
+ * @param {{ external_id: string, removed_at: string|null }[]} kept the source's rows
+ * @param {number} room Infinity for no cap
+ */
+export function keptWithin(products, kept, room) {
+  if (products.length <= room) return { products, overLimit: 0 };
+  const live = new Set(kept.filter((row) => !row.removed_at).map((row) => row.external_id));
+  const first = [
+    ...products.filter((p) => live.has(p.external_id)),
+    ...products.filter((p) => !live.has(p.external_id)),
+  ].slice(0, Math.max(0, room));
+  const keep = new Set(first.map((p) => p.external_id));
+  return {
+    products: products.filter((p) => keep.has(p.external_id)),
+    overLimit: products.length - keep.size,
+  };
+}
+
 async function readAll(db, table, columns, brandId, source) {
   const rows = [];
   for (let start = 0; ; start += PAGE) {
@@ -185,22 +213,23 @@ async function replaceIn(db, table, productIds, rows) {
  * @param {string} brandId
  * @param {string} source e.g. 'feed', 'csv', 'shopify'
  * @param {import('../feeds/item.js').FeedItem[]} items
- * @param {{ db?: object, now?: Date }} [options]
+ * @param {{ db?: object, now?: Date, room?: number }} [options] `room`: the live
+ *   products the source may keep (ECOM-019), Infinity for no cap
  */
 export async function syncCatalog(
   brandId,
   source,
   items,
-  { db = supabaseAdmin, now = new Date() } = {},
+  { db = supabaseAdmin, now = new Date(), room = Infinity } = {},
 ) {
   const at = now.toISOString();
-  const { products, variants } = catalogRecords(items);
+  const records = catalogRecords(items);
   const counts = {
     products: { added: 0, changed: 0, removed: 0, unchanged: 0 },
     variants: { added: 0, changed: 0, removed: 0, unchanged: 0 },
   };
 
-  // Products: write the new, the changed and the returned.
+  // Products: write the new, the changed and the returned, within the plan's cap.
   const keptProducts = await readAll(
     db,
     'catalog_products',
@@ -208,6 +237,10 @@ export async function syncCatalog(
     brandId,
     source,
   );
+  const { products, overLimit } = keptWithin(records.products, keptProducts, room);
+  if (overLimit) counts.overLimit = overLimit;
+  const within = new Set(products.map((p) => p.external_id));
+  const variants = records.variants.filter((v) => within.has(v.product_external_id));
   const productBy = new Map(keptProducts.map((row) => [row.external_id, row]));
   const productIds = new Map(keptProducts.map((row) => [row.external_id, row.id]));
   const productWrites = [];

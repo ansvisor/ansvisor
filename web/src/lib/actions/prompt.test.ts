@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLANS, type Plan } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
-import { getPromptVisibilitySummaries } from '@/lib/actions/tracking';
+import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
 
 /**
  * setPromptActive meters resuming like adding (00128): only active prompts
@@ -26,6 +26,16 @@ let positionsNull = false;
 let jsonRpcMissing = false;
 /** The position RPC calls, and whether any asked for a slice. */
 let positionCalls: { fn: string; ranged: boolean }[] = [];
+/** When set, each heavy read takes a moment, counted while it runs. */
+let slowReads: { running: number; most: number } | null = null;
+const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
+  if (!slowReads) return read();
+  const reads = slowReads;
+  reads.most = Math.max(reads.most, ++reads.running);
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  reads.running--;
+  return read();
+};
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: vi.fn() }));
@@ -68,7 +78,10 @@ vi.mock('@/lib/supabase/server', () => ({
           call.ranged = true;
           return chain;
         },
-        then: (resolve: (value: unknown) => unknown) => resolve(result()),
+        then: (resolve: (value: unknown) => unknown) =>
+          fn === 'prompt_position_summaries_json'
+            ? slowRead(result).then(resolve)
+            : resolve(result()),
       };
       return chain;
     },
@@ -106,7 +119,8 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getPromptsPageData, setPromptActive, updatePromptLocations } = await import('./prompt');
+const { getPromptLocationMatrix, getPromptsPageData, setPromptActive, updatePromptLocations } =
+  await import('./prompt');
 
 const capped = (maxPrompts: number): Plan => ({
   ...PLANS.starter,
@@ -366,5 +380,91 @@ describe('getPromptsPageData', () => {
       expect.stringContaining('visibility summaries'),
       expect.any(Error),
     );
+  });
+});
+
+describe('getPromptLocationMatrix (PROMPT-015b)', () => {
+  const BRAND = '11111111-1111-1111-1111-111111111111';
+  beforeEach(() => {
+    plan = capped(50);
+    positionData = [
+      {
+        prompt_id: 'p1',
+        platform: 'chatgpt-web',
+        runs: 4,
+        mention_answers: 4,
+        position_sum: 10,
+        position_count: 4,
+        entity_sum: 20,
+        entity_count: 4,
+      },
+    ];
+    positionsError = null;
+    previousPositionData = null;
+    positionsNull = false;
+    jsonRpcMissing = false;
+    vi.mocked(getPromptVisibilitySummaries).mockImplementation(
+      async (_brand, opts): Promise<Record<string, PromptVisibilitySummary>> =>
+        opts?.region === 'TR'
+          ? {
+              p1: {
+                score: 35,
+                totalMentions: 9,
+                totalCitations: 2,
+                runs: 6,
+              } as PromptVisibilitySummary,
+            }
+          : {},
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reads each location as the table reads one, and keys the prompt's figures by it", async () => {
+    const matrix = await getPromptLocationMatrix(BRAND, {
+      from: '2026-10-21T00:00:00Z',
+      regions: ['TR', 'US', 'TR', 'not a code'],
+    });
+    expect(vi.mocked(getPromptVisibilitySummaries).mock.calls.map(([, o]) => o?.region)).toEqual([
+      'TR',
+      'US',
+    ]);
+    expect(matrix).toEqual({
+      p1: { TR: { score: 35, mentions: 9, citations: 2, position: 2.5, runs: 6 } },
+    });
+    await expect(getPromptLocationMatrix('nope', { regions: ['TR'] })).rejects.toThrow('invalid');
+  });
+
+  it('runs at most three of its heavy reads at once, however many locations', async () => {
+    slowReads = { running: 0, most: 0 };
+    positionCalls = [];
+    vi.mocked(getPromptVisibilitySummaries).mockClear();
+    const summaries = vi.mocked(getPromptVisibilitySummaries).getMockImplementation()!;
+    vi.mocked(getPromptVisibilitySummaries).mockImplementation((brand, opts) =>
+      slowRead(() => summaries(brand, opts)),
+    );
+    const regions = ['TR', 'US', 'DE', 'FR', 'GB', 'ES', 'IT', 'NL', 'JP', 'BR', 'CA', 'AU'];
+    try {
+      const matrix = await getPromptLocationMatrix(BRAND, {
+        from: '2026-10-21T00:00:00Z',
+        regions,
+      });
+      expect(vi.mocked(getPromptVisibilitySummaries)).toHaveBeenCalledTimes(12);
+      expect(positionCalls.filter((c) => c.fn === 'prompt_position_summaries_json')).toHaveLength(
+        12,
+      );
+      expect(slowReads.most).toBe(3);
+      expect(matrix.p1.TR).toEqual({
+        score: 35,
+        mentions: 9,
+        citations: 2,
+        position: 2.5,
+        runs: 6,
+      });
+    } finally {
+      slowReads = null;
+    }
   });
 });

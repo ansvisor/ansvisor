@@ -41861,6 +41861,345 @@ comment on table public.content_shopping_checks is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00360_shopping_card_catalog_match.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00360: the catalog product behind an AI shopping card (product visibility, part 2)
+-- ============================================================================
+-- Product Visibility's Shelf, Products and Categories (ECOM-005…008) count a
+-- brand's products on the AI "shelf": which catalog product (00278) each
+-- product card in an AI answer (prompt_result_shopping_cards) shows. A card
+-- the brand's own (matched_brand_role 'own') is matched to the brand's
+-- catalog when it's written, and again after the catalog changes:
+--
+--   * by the marketplace listing it links (an ASIN, an eBay item id) to a
+--     variant's marketplace_item_id;
+--   * by a GTIN the card carries, to a variant's;
+--   * by its link, to a product's or a variant's page;
+--   * else by its title, close enough to one product's and to no other.
+--
+--   * catalog_product_id: the product, null for none (a rival's card, or a
+--     product the catalog doesn't have); catalog_match: how it was found,
+--     read only with a product. A product deleted from the catalog leaves
+--     its cards' catalog_match behind until the next sweep clears it.
+--   * set_shopping_card_matches: the API writes a brand's matches in bulk
+--     after a catalog sync. Members read the cards as before (RLS); only
+--     the server writes these.
+
+alter table public.prompt_result_shopping_cards
+  add column if not exists catalog_product_id uuid
+    references public.catalog_products(id) on delete set null,
+  add column if not exists catalog_match text
+    check (catalog_match is null or catalog_match in ('listing', 'gtin', 'url', 'title'));
+
+create index if not exists prompt_result_shopping_cards_catalog_product_idx
+  on public.prompt_result_shopping_cards (brand_id, catalog_product_id)
+  where catalog_product_id is not null;
+
+-- A catalog product's cards by the product alone: what `on delete set null`
+-- looks up when a product is deleted, which the index above can't serve.
+create index if not exists prompt_result_shopping_cards_catalog_product_id_idx
+  on public.prompt_result_shopping_cards (catalog_product_id)
+  where catalog_product_id is not null;
+
+comment on column public.prompt_result_shopping_cards.catalog_product_id is
+  'Product visibility (00360): the brand''s catalog product this card shows, matched by its listing, GTIN, link or title; null for none.';
+comment on column public.prompt_result_shopping_cards.catalog_match is
+  'How catalog_product_id was found: listing, gtin, url or title (00360).';
+
+-- A brand's cards' matches, in bulk: [{"id", "product_id", "match"}], a null
+-- product_id clearing one. Only the brand's own cards change, and only those
+-- whose match changed; returns how many did.
+create or replace function public.set_shopping_card_matches(p_brand_id uuid, p_matches jsonb)
+returns integer
+language sql
+security definer
+set search_path = public
+as $$
+  with m as (
+    select
+      (e->>'id')::uuid as id,
+      nullif(e->>'product_id', '')::uuid as product_id,
+      nullif(e->>'match', '') as match
+    from jsonb_array_elements(coalesce(p_matches, '[]'::jsonb)) as e
+  ),
+  changed as (
+    update public.prompt_result_shopping_cards c
+    set catalog_product_id = m.product_id,
+        catalog_match = case when m.product_id is null then null else m.match end
+    from m
+    where c.id = m.id
+      and c.brand_id = p_brand_id
+      and (
+        c.catalog_product_id is distinct from m.product_id
+        or c.catalog_match is distinct from (case when m.product_id is null then null else m.match end)
+      )
+    returning 1
+  )
+  select count(*)::integer from changed;
+$$;
+
+revoke all on function public.set_shopping_card_matches(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.set_shopping_card_matches(uuid, jsonb) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00361_catalog_product_ai_stats.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00361: AI visits and orders per catalog product (product visibility, part 4)
+-- ============================================================================
+-- Product Visibility's Products table (ECOM-007) shows, for each product in
+-- the brand's catalog (00278), the AI-referred visits its page got and the
+-- orders those visits led to, beside where it stands on the AI shelf. No
+-- source carries an order's line items yet (Shopify order sync, #1267), so an
+-- order is credited to the product whose page the AI visitor landed on first:
+-- ai_traffic_events.first_url (CE-017, 00286).
+--
+--   * ai_visits: AI-referred page views on the product's page (the tracking
+--     snippet, ai_traffic_logs: a visit's first view, from an AI source);
+--   * orders, revenue: order conversions whose AI visit started on it, the
+--     revenue in its main currency;
+--   * a product's page is its link, else its first variant's, matched as
+--     page paths are everywhere (normalize_page_path, lowercased);
+--   * only the products with an AI visit or an order: a big catalog's other
+--     products would only add zero rows, past PostgREST's 1000-row page;
+--   * p_product_id: that one product's row (its page), none for all.
+--
+-- Members of the brand's organization only, as the Shopping reads.
+
+create or replace function public.catalog_product_ai_stats(
+  p_brand_id uuid,
+  p_from timestamptz,
+  p_to timestamptz default null,
+  p_product_id uuid default null
+)
+returns table (
+  product_id uuid,
+  ai_visits bigint,
+  orders bigint,
+  revenue numeric,
+  currency text
+)
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+as $$
+begin
+  if auth.role() is distinct from 'service_role' and not exists (
+    select 1
+    from public.brands b
+    join public.profiles pf on pf.organization_id = b.organization_id
+    where b.id = p_brand_id
+      and pf.id = auth.uid()
+  ) then
+    return;
+  end if;
+
+  return query
+  with pages as (
+    select
+      p.id as product_id,
+      lower(public.normalize_page_path(coalesce(p.url, (
+        select v.url
+        from public.catalog_variants v
+        where v.product_id = p.id and v.removed_at is null and v.url is not null
+        order by v.external_id
+        limit 1
+      )))) as page
+    from public.catalog_products p
+    where p.brand_id = p_brand_id
+      and p.removed_at is null
+      and (p_product_id is null or p.id = p_product_id)
+  ),
+  keyed as (
+    select pages.product_id, pages.page
+    from pages
+    where pages.page is not null and pages.page <> '/'
+  ),
+  visits as (
+    select lower(public.normalize_page_path(l.url)) as page, count(*) as n
+    from public.ai_traffic_logs l
+    where l.brand_id = p_brand_id
+      and l.created_at >= p_from
+      and (p_to is null or l.created_at < p_to)
+      and l.visit_of is null
+      and l.source_platform is not null
+    group by 1
+  ),
+  sales as (
+    select e.first_key as page, e.currency, count(*) as n, coalesce(sum(e.value), 0) as value
+    from public.ai_traffic_events e
+    where e.brand_id = p_brand_id
+      and e.kind = 'conversion'
+      and e.goal = 'order'
+      and e.occurred_at >= p_from
+      and (p_to is null or e.occurred_at < p_to)
+    group by 1, 2
+  ),
+  -- A page's orders in its main currency: the one most of them are in.
+  main_sales as (
+    select distinct on (s.page) s.page, s.currency, s.value
+    from sales s
+    order by s.page, s.n desc, s.currency
+  ),
+  all_sales as (
+    select s.page, sum(s.n) as n
+    from sales s
+    group by 1
+  )
+  select
+    k.product_id,
+    coalesce(v.n, 0)::bigint,
+    coalesce(a.n, 0)::bigint,
+    m.value,
+    m.currency
+  from keyed k
+  left join visits v on v.page = k.page
+  left join all_sales a on a.page = k.page
+  left join main_sales m on m.page = k.page
+  where v.n is not null or a.n is not null;
+end;
+$$;
+
+revoke all on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz, uuid) from public, anon;
+grant execute on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz, uuid)
+  to authenticated, service_role;
+
+comment on function public.catalog_product_ai_stats(uuid, timestamptz, timestamptz, uuid) is
+  'Product visibility, part 4 (00361): per live catalog product of a brand with an AI visit or an order (or the one p_product_id names), the AI-referred visits to its page and the orders whose AI visit started there (first_url), with their revenue in the main currency. A product''s page is its link, else its first variant''s. Security definer with an organization check.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00362_prompt_suggestions_catalog_source.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00362: the catalog as a prompt-suggestion source (product visibility, part 14)
+-- ============================================================================
+-- Shopping questions drawn from the brand's catalog categories and their price
+-- bands (ECOM-003) carry source 'catalog', with the category behind them in
+-- source_data. Without it in the check the suggestion insert fails outright,
+-- so this lands with the generator that writes those rows.
+
+alter table public.prompt_suggestions drop constraint prompt_suggestions_source_check;
+alter table public.prompt_suggestions add constraint prompt_suggestions_source_check
+  check (source = any (array['llm', 'heuristic', 'gsc', 'ga', 'catalog']));
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00363_prompt_table_views.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00363: Tracked Prompts column views (PROMPT-015a)
+-- ============================================================================
+-- The Tracked Prompts table's columns, as a person set them: which are shown
+-- and in what order. One row per person and brand, and one row per brand
+-- (user_id null) for the view an admin or manager shared with everyone on it.
+-- A person without a row of their own sees the brand's; without that,
+-- today's default. `columns` is `{ "order": [ids], "hidden": [ids] }`; ids
+-- the web doesn't know are ignored when read.
+
+create table if not exists public.prompt_table_views (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  -- Null: the brand's shared view.
+  user_id uuid references auth.users(id) on delete cascade,
+  columns jsonb not null check (jsonb_typeof(columns) = 'object' and pg_column_size(columns) <= 8192),
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  unique nulls not distinct (brand_id, user_id)
+);
+
+alter table public.prompt_table_views enable row level security;
+revoke all on table public.prompt_table_views from anon, authenticated;
+grant select, insert, update, delete on table public.prompt_table_views to authenticated;
+grant all on table public.prompt_table_views to service_role;
+
+-- Members of the brand's organization read their own view and the brand's.
+drop policy if exists "prompt_table_views: member select" on public.prompt_table_views;
+create policy "prompt_table_views: member select" on public.prompt_table_views
+  for select using (
+    (user_id is null or user_id = auth.uid())
+    and brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+-- A member writes their own view; an admin or manager writes the brand's.
+drop policy if exists "prompt_table_views: write" on public.prompt_table_views;
+create policy "prompt_table_views: write" on public.prompt_table_views
+  for all using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+        and (
+          prompt_table_views.user_id = auth.uid()
+          or (prompt_table_views.user_id is null and p.role in ('admin', 'manager'))
+        )
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+        and (
+          prompt_table_views.user_id = auth.uid()
+          or (prompt_table_views.user_id is null and p.role in ('admin', 'manager'))
+        )
+    )
+  );
+
+comment on table public.prompt_table_views is
+  'Tracked Prompts columns (PROMPT-015a, 00363): a person''s shown and ordered columns per brand, and the brand''s shared view (user_id null) set by an admin or manager.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00364_cloro_countries.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00364: the countries each tracking engine answers from (PROMPT-015e)
+-- ============================================================================
+-- The AI engines' provider (Cloro) supports a different set of countries per
+-- engine, and asking an engine in a country it doesn't support fails. Its
+-- GET /v1/countries?model= is the only source of truth, so the API reads it
+-- daily, before the tracking runs, and keeps it here:
+--
+--   * the location picker offers only countries some engine answers from;
+--   * the tracking run skips an engine in a country it doesn't support.
+--
+-- A model whose read fails keeps its last list. An empty table (no provider
+-- key, or before the first read) restricts nothing.
+
+create table if not exists public.cloro_countries (
+  model text not null check (char_length(model) between 1 and 40),
+  country text not null check (country ~ '^[A-Z]{2}$'),
+  refreshed_at timestamptz not null default now(),
+  primary key (model, country)
+);
+
+alter table public.cloro_countries enable row level security;
+revoke all on table public.cloro_countries from anon, authenticated;
+grant select on table public.cloro_countries to authenticated;
+grant all on table public.cloro_countries to service_role;
+
+-- Not a customer's data: every signed-in member may read it; the API writes.
+drop policy if exists "cloro_countries: read" on public.cloro_countries;
+create policy "cloro_countries: read" on public.cloro_countries
+  for select to authenticated using (true);
+
+comment on table public.cloro_countries is
+  'Countries each tracking engine answers from (PROMPT-015e, 00364), read daily from the provider''s GET /v1/countries?model=. Empty restricts nothing.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00365_action_outcome_mixed.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -42314,6 +42653,106 @@ grant execute on function public.prompt_demand_brand_updates() to service_role;
 
 comment on function public.prompt_demand_brand_updates() is
   'PROMPT-014 (00370): when each brand''s prompt_demand rows were last written, as { brand_id: updated_at }, for the nightly sweep''s brand order. Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00371_catalog_suggestion_categories.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00371: catalog categories for shopping suggestions, counted in the database
+-- ============================================================================
+-- Shopping prompt suggestions (ECOM-003, 00362) offer the model a brand's
+-- biggest catalog categories, each with its price band. The server read the
+-- whole live catalog for that, a page at a time (every product, category
+-- link and variant), to keep 8 categories, and cut the categories at an
+-- arbitrary 1,000. `catalog_suggestion_categories` counts here instead and
+-- returns only the categories offered:
+--
+--   * a category's live products (removed_at null), p_min_products at least;
+--   * a product's price: its lowest live variant's, on sale or not, above
+--     zero, in that variant's currency;
+--   * when every priced product of the category shares one currency: the
+--     lowest and the highest price, and the price three quarters of them
+--     sell at or under (price_p75; the server rounds it to one a shopper
+--     would name);
+--   * the most products first, then by name, p_limit of them.
+--
+-- Products and variants are read by brand, live only, so their brand
+-- indexes (00278, 00281) serve the read, not every brand's rows.
+--
+-- The service role calls it, as 00350's catalog_category_counts.
+
+create or replace function public.catalog_suggestion_categories(
+  p_brand_id uuid,
+  p_limit integer default 8,
+  p_min_products integer default 2
+)
+returns table (
+  category text,
+  products integer,
+  price_low numeric,
+  price_high numeric,
+  price_p75 numeric,
+  currency text
+)
+language sql
+stable
+set search_path = public
+as $$
+  with live as (
+    select pc.category_id, pc.product_id
+    from public.catalog_product_categories pc
+    join public.catalog_products p
+      on p.id = pc.product_id and p.brand_id = p_brand_id and p.removed_at is null
+    where pc.brand_id = p_brand_id
+  ),
+  priced as (
+    select distinct on (v.product_id)
+           v.product_id,
+           coalesce(v.sale_price, v.price) as amount,
+           v.currency
+    from public.catalog_variants v
+    where v.brand_id = p_brand_id
+      and v.removed_at is null
+      and v.product_id in (select l.product_id from live l)
+      and coalesce(v.sale_price, v.price) > 0
+    order by v.product_id, coalesce(v.sale_price, v.price), v.id
+  ),
+  counted as (
+    select c.name as name,
+           count(*)::integer as product_count,
+           count(distinct coalesce(pr.currency, '')) filter (where pr.product_id is not null)
+             as currencies,
+           max(pr.currency) as one_currency,
+           min(pr.amount) as low,
+           max(pr.amount) as high,
+           percentile_disc(0.75) within group (order by pr.amount) as p75
+    from public.catalog_categories c
+    join live l on l.category_id = c.id
+    left join priced pr on pr.product_id = l.product_id
+    where c.brand_id = p_brand_id
+    group by c.id, c.name
+    having count(*) >= p_min_products
+  )
+  select k.name,
+         k.product_count,
+         case when k.currencies = 1 and k.one_currency is not null then k.low end,
+         case when k.currencies = 1 and k.one_currency is not null then k.high end,
+         case when k.currencies = 1 and k.one_currency is not null then k.p75 end,
+         case when k.currencies = 1 then k.one_currency end
+  from counted k
+  order by k.product_count desc, k.name
+  limit greatest(p_limit, 0)
+$$;
+
+revoke all on function public.catalog_suggestion_categories(uuid, integer, integer)
+  from public, anon, authenticated;
+grant execute on function public.catalog_suggestion_categories(uuid, integer, integer)
+  to service_role;
+
+comment on function public.catalog_suggestion_categories(uuid, integer, integer) is
+  'Shopping prompt suggestions (ECOM-003, 00371): a brand''s catalog categories with the most live products (p_min_products at least, p_limit of them), each with the lowest, highest and 75th-percentile price of its products (a product''s lowest live variant price, sale price first) when they share one currency. Service role only.';
 
 notify pgrst, 'reload schema';
 

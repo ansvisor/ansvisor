@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingDots } from '@/components/ui/loading-dots';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { saveDraftBrief } from '@/lib/actions/content-drafts';
 import type { InputsGiven } from '@/lib/content/draft-inputs';
 import {
@@ -123,6 +124,10 @@ export function BriefTab({
   const [confirming, setConfirming] = useState(false);
   // The agent writes over the page (or suggests changes) only once the person says so.
   const [confirmingRewrite, setConfirmingRewrite] = useState(false);
+  // A read-only workspace (plan not active): Run Agent, Rebuild, the rewrite
+  // and Edit open the upgrade dialog instead.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
 
   if (state.status === 'loading') {
     return (
@@ -160,7 +165,10 @@ export function BriefTab({
   const typeLabel = pageType && (tTypes.has(pageType) ? tTypes(pageType) : pageType);
   // Nothing written yet: Run Agent writes it. Once it is, Rebuild brief.
   const empty = !brief || (!brief.goal && !brief.audience && brief.outline.length === 0);
-  const rebuild = () => (brief?.origin === 'edit' && !empty ? setConfirming(true) : onRebuild());
+  const rebuild = guard(
+    () => (brief?.origin === 'edit' && !empty ? setConfirming(true) : onRebuild()),
+    { action: tActions('buildBrief') },
+  );
 
   return (
     <div className="space-y-4 text-sm">
@@ -400,7 +408,7 @@ export function BriefTab({
               size="sm"
               className="w-full"
               disabled={rewrite.running || rewrite.blocked !== null || rebuilding}
-              onClick={() => setConfirmingRewrite(true)}
+              onClick={guard(() => setConfirmingRewrite(true), { action: tActions('runAgent') })}
             >
               {rewrite.running ? <WorkingDots className="ml-0" /> : <Bot className="h-3.5 w-3.5" />}
               {t(`rewrite.button.${method}`)}
@@ -413,7 +421,12 @@ export function BriefTab({
         ))}
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="ghost" disabled={rebuilding} onClick={() => setEditing(true)}>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={rebuilding}
+          onClick={guard(() => setEditing(true), { action: tActions('editBrief') })}
+        >
           <Pencil className="h-3.5 w-3.5" />
           {t('edit')}
         </Button>
