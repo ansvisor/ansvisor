@@ -1,10 +1,35 @@
 import { randomUUID } from 'node:crypto';
 
+/** A row's value at a column, or at a JSON path in it as PostgREST reads one (`shopping_path->>builtAt`). */
+function valueAt(row, column) {
+  const at = column.indexOf('->>');
+  if (at < 0) return row[column];
+  const value = row[column.slice(0, at)]?.[column.slice(at + 3)];
+  if (value == null) return null;
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/** PostgreSQL's order: ascending puts nulls last, descending first, unless told. */
+function compareBy(orders) {
+  return (a, b) => {
+    for (const { column, ascending = true, nullsFirst = !ascending } of orders) {
+      if (a[column] === b[column]) continue;
+      if (a[column] == null) return nullsFirst ? -1 : 1;
+      if (b[column] == null) return nullsFirst ? 1 : -1;
+      const before = a[column] < b[column] ? -1 : 1;
+      return ascending ? before : -before;
+    }
+    return 0;
+  };
+}
+
 /**
  * An in-memory stand-in for the tables the catalog writes, with PostgREST's
  * calls as the sync and the sources make them, counting every write.
+ * `maxRows` caps a read as PostgREST's max_rows does (1000 in
+ * supabase/config.toml): the rest are dropped without an error.
  */
-export function fakeDb() {
+export function fakeDb({ maxRows = Infinity } = {}) {
   const tables = new Map();
   const rows = (name) => {
     if (!tables.has(name)) tables.set(name, []);
@@ -14,6 +39,7 @@ export function fakeDb() {
   const uniqueKey = (table, row) => {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
     if (table === 'catalog_source_credentials') return row.source_id;
+    if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
     return `${row.brand_id}|${row.source}|${row.external_id}`;
   };
   // The unique keys' rows, by table, as the database's unique indexes find them.
@@ -31,19 +57,22 @@ export function fakeDb() {
       payload: null,
       returning: null,
       one: null,
+      order: [],
     };
     const run = () => {
       const all = rows(table);
       const match = (row) =>
         state.filters.every(([kind, column, value]) => {
-          if (kind === 'eq') return row[column] === value;
-          if (kind === 'neq') return row[column] !== value;
-          return value.includes(row[column]);
+          const at = valueAt(row, column);
+          if (kind === 'eq') return at === value;
+          if (kind === 'neq') return at !== value;
+          if (kind === 'is') return value === null ? at == null : at === value;
+          return value.includes(at);
         });
       if (state.op === 'select') {
-        const found = all.filter(match).sort((a, b) => (a.id < b.id ? -1 : 1));
+        const found = all.filter(match).sort(compareBy([...state.order, { column: 'id' }]));
         const [start, end] = state.range ?? [0, found.length];
-        const data = found.slice(start, end + 1);
+        const data = found.slice(start, end + 1).slice(0, state.one ? undefined : maxRows);
         if (state.one) return { data: data[0] ?? null, error: null };
         return { data, error: null };
       }
@@ -73,8 +102,9 @@ export function fakeDb() {
         return { data: state.one ? added[0] : null, error: null };
       }
       if (state.op === 'update') {
-        for (const row of all.filter(match)) Object.assign(row, state.payload);
-        return { data: null, error: null };
+        const changed = all.filter(match);
+        for (const row of changed) Object.assign(row, state.payload);
+        return { data: state.returning ? changed : null, error: null };
       }
       if (state.op === 'delete') {
         tables.set(
@@ -86,13 +116,21 @@ export function fakeDb() {
       throw new Error(`unexpected ${state.op}`);
     };
     const builder = {
-      select: () => builder,
+      // After a write, the rows it wrote, as PostgREST returns them.
+      select: () => {
+        if (state.op !== 'select') state.returning = true;
+        return builder;
+      },
       eq: (column, value) => {
         state.filters.push(['eq', column, value]);
         return builder;
       },
       neq: (column, value) => {
         state.filters.push(['neq', column, value]);
+        return builder;
+      },
+      is: (column, value) => {
+        state.filters.push(['is', column, value]);
         return builder;
       },
       single: () => {
@@ -107,7 +145,10 @@ export function fakeDb() {
         state.filters.push(['in', column, values]);
         return builder;
       },
-      order: () => builder,
+      order: (column, options) => {
+        state.order.push({ column, ...options });
+        return builder;
+      },
       // The sweep's due filter: the tests' rows are all due.
       or: () => builder,
       limit: (n) => {

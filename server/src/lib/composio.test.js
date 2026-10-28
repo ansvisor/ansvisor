@@ -7,6 +7,7 @@ const sdk = {
   list: vi.fn(),
   delete: vi.fn(),
   execute: vi.fn(),
+  proxyExecute: vi.fn(),
 };
 vi.mock('@composio/core', () => ({
   AuthScheme: { APIKey: (val) => ({ authScheme: 'API_KEY', val }) },
@@ -16,12 +17,21 @@ vi.mock('@composio/core', () => ({
       list: (...args) => sdk.list(...args),
       delete: (...args) => sdk.delete(...args),
     };
-    tools = { execute: (...args) => sdk.execute(...args) };
+    tools = {
+      execute: (...args) => sdk.execute(...args),
+      proxyExecute: (...args) => sdk.proxyExecute(...args),
+    };
   },
 }));
 
-const { connectWebflowToken, executeWebflowTool, forgetWebflowAccounts, isWebflowConfigured } =
-  await import('./composio.js');
+const {
+  connectWebflowToken,
+  entityIdFor,
+  executeWebflowTool,
+  forgetWebflowAccounts,
+  isWebflowConfigured,
+  proxyRequest,
+} = await import('./composio.js');
 
 beforeEach(() => {
   vi.stubEnv('COMPOSIO_API_KEY', 'test-composio-key');
@@ -83,5 +93,56 @@ describe('Webflow on Composio', () => {
     await expect(
       executeWebflowTool('WEBFLOW_LIST_WEBFLOW_SITES', { entityId: 'b', accountId: 'a' }, {}),
     ).rejects.toThrow('401 Unauthorized');
+  });
+});
+
+describe('the workspace entity', () => {
+  it('is one per organization: org_ and its id (#577)', () => {
+    expect(entityIdFor('org-9')).toBe('org_org-9');
+  });
+});
+
+describe('proxyRequest (#1270)', () => {
+  const ENDPOINT = 'https://merchantapi.googleapis.com/accounts/v1/accounts';
+
+  it("calls the provider's API on one connected account, the query as parameters", async () => {
+    sdk.proxyExecute.mockResolvedValueOnce({
+      status: 200,
+      headers: { 'retry-after': '1' },
+      data: { accounts: [] },
+    });
+    const signal = new AbortController().signal;
+    await expect(
+      proxyRequest('ca_1', {
+        endpoint: ENDPOINT,
+        query: { pageSize: 500, pageToken: undefined, filter: '', other: null },
+        signal,
+      }),
+    ).resolves.toEqual({ status: 200, headers: { 'retry-after': '1' }, data: { accounts: [] } });
+    expect(sdk.proxyExecute).toHaveBeenCalledWith(
+      {
+        endpoint: ENDPOINT,
+        method: 'GET',
+        parameters: [{ in: 'query', name: 'pageSize', value: '500' }],
+        connectedAccountId: 'ca_1',
+      },
+      { signal },
+    );
+  });
+
+  it("answers the API's own status, whatever it is, and lets Composio's refusals through", async () => {
+    sdk.proxyExecute.mockResolvedValueOnce({ status: 403 });
+    await expect(proxyRequest('ca_1', { endpoint: ENDPOINT })).resolves.toEqual({
+      status: 403,
+      headers: {},
+      data: null,
+    });
+    expect(sdk.proxyExecute).toHaveBeenLastCalledWith(
+      expect.objectContaining({ parameters: [] }),
+      undefined,
+    );
+    const refused = Object.assign(new Error('403 No permission'), { status: 403 });
+    sdk.proxyExecute.mockRejectedValueOnce(refused);
+    await expect(proxyRequest('ca_1', { endpoint: ENDPOINT })).rejects.toBe(refused);
   });
 });
