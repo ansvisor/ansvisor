@@ -115,6 +115,30 @@ describe('pickRunPages', () => {
     ]);
   });
 
+  it("keeps brands sharing a domain apart: one's fixed page doesn't take or skip the other's", () => {
+    const pages = pickRunPages(
+      [
+        {
+          brandId: 'a',
+          opportunities: [row('/shared', { priority: 50 })],
+        },
+        {
+          brandId: 'b',
+          opportunities: [row('/shared', { priority: 90 }), row('/busy', { running: true })],
+        },
+      ],
+      4,
+      NOW,
+      new Set(),
+      [fixedPage('/shared', 'a'), fixedPage('/busy', 'a')],
+    );
+    expect(pages.map((p) => [p.brandId, p.path, p.fixed ?? false])).toEqual([
+      ['a', '/shared', true],
+      ['a', '/busy', true],
+      ['b', '/shared', false],
+    ]);
+  });
+
   it('gives a one-page run to a fixed page, and none to a run with no slots', () => {
     const inbox = [{ brandId: 'a', opportunities: [row('/a-80', { priority: 80 })] }];
     expect(

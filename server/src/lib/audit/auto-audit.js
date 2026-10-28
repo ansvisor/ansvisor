@@ -87,6 +87,12 @@ export function pendingRuns(schedule, recordedDays, now) {
 }
 
 /**
+ * A page within a run: brands may share a domain, and each audits, pins and
+ * fixes its own pages, so a page is the brand's page (`brandId|key`).
+ */
+export const runPageKey = (brandId, key) => `${brandId}|${key}`;
+
+/**
  * Pages fixed since their last audit (learning B7) take at most this share
  * of a run, rounded up: the rest is the inbox's, so new pages keep coming.
  */
@@ -116,8 +122,8 @@ export const FIXED_SHARE = 0.5;
 export function pickRunPages(inboxes, slots, now, triedKeys = new Set(), fixed = []) {
   const freshSince = new Date(now).getTime() - AUTO_AUDIT.freshDays * DAY_MS;
   const running = new Set(
-    inboxes.flatMap(({ opportunities }) =>
-      opportunities.filter((r) => r.running).map((r) => r.key),
+    inboxes.flatMap(({ brandId, opportunities }) =>
+      opportunities.filter((r) => r.running).map((r) => runPageKey(brandId, r.key)),
     ),
   );
   const first = [];
@@ -125,8 +131,9 @@ export function pickRunPages(inboxes, slots, now, triedKeys = new Set(), fixed =
   const fixedSlots = Math.min(Math.max(0, slots), Math.ceil(Math.max(0, slots) * FIXED_SHARE));
   for (const page of fixed) {
     if (first.length >= fixedSlots) break;
-    if (!page.key || running.has(page.key) || taken.has(page.key)) continue;
-    taken.add(page.key);
+    const id = page.key ? runPageKey(page.brandId, page.key) : null;
+    if (!id || running.has(id) || taken.has(id)) continue;
+    taken.add(id);
     first.push({
       brandId: page.brandId,
       url: page.url,
@@ -140,7 +147,8 @@ export function pickRunPages(inboxes, slots, now, triedKeys = new Set(), fixed =
   for (const { brandId, opportunities } of inboxes) {
     for (const row of opportunities) {
       // A template's row (SA-007) stands for pages the inbox lists one by one.
-      if (row.template || row.running || triedKeys.has(row.key) || taken.has(row.key)) continue;
+      if (row.template || row.running || triedKeys.has(row.key)) continue;
+      if (taken.has(runPageKey(brandId, row.key))) continue;
       if (row.lastAudit && Date.parse(row.lastAudit.at) >= freshSince) continue;
       candidates.push({
         brandId,

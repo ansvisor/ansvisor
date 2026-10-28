@@ -13,7 +13,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { getSiteAuditQuotaStatus, PlanLimitError } from '../plan-guard.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { logger } from '../logger.js';
-import { AUTO_AUDIT, pickRunPages } from './auto-audit.js';
+import { AUTO_AUDIT, pickRunPages, runPageKey } from './auto-audit.js';
 import { sendAutoAuditEmail } from './auto-audit-email.js';
 import { excludePatternMatcher, opportunityKey } from './opportunities.js';
 import { pageKey } from './history.js';
@@ -236,7 +236,7 @@ export async function fixedPages(brands, now) {
     domains.get(row.brand_id).push(row.domain);
   }
   const prefs = new Map(
-    (prefRows.data ?? []).map((row) => [`${row.brand_id}|${row.page_key}`, row.state]),
+    (prefRows.data ?? []).map((row) => [runPageKey(row.brand_id, row.page_key), row.state]),
   );
   const excludedByPattern = new Map(
     (settingRows.data ?? []).map((row) => [
@@ -245,11 +245,12 @@ export async function fixedPages(brands, now) {
     ]),
   );
   const leftOut = (brandId, key, path) => {
-    const state = prefs.get(`${brandId}|${key}`);
+    const state = prefs.get(runPageKey(brandId, key));
     if (state === 'excluded') return true;
     return state !== 'pinned' && Boolean(excludedByPattern.get(brandId)?.(path));
   };
 
+  // By the brand's page (runPageKey): brands sharing a domain fix their own.
   const pages = new Map();
   for (const action of actions) {
     const own = domains.get(action.brand_id) ?? [];
@@ -262,11 +263,12 @@ export async function fixedPages(brands, now) {
     );
     for (const url of [...new Set(urls)].slice(0, FIXED_PER_ACTION)) {
       const key = opportunityKey(url);
+      const id = key ? runPageKey(action.brand_id, key) : null;
       // Newest fix first: the first one read for a page is its last.
-      if (!key || pages.has(key)) continue;
+      if (!id || pages.has(id)) continue;
       const path = pageKey(url)?.path ?? '/';
       if (leftOut(action.brand_id, key, path)) continue;
-      pages.set(key, {
+      pages.set(id, {
         brandId: action.brand_id,
         key,
         url,
@@ -277,13 +279,14 @@ export async function fixedPages(brands, now) {
   }
   if (pages.size === 0) return [];
 
-  // The audits since the oldest of those fixes, by the address asked for or ended at.
+  // The audits since the oldest of those fixes, by the address asked for or
+  // ended at: the brand's own, as the action's result reads them (A2).
   const oldest = [...pages.values()].reduce((min, page) =>
     page.fixedAt < min.fixedAt ? page : min,
   ).fixedAt;
   const { data: audits, error: auditsErr } = await supabaseAdmin
     .from('site_audits')
-    .select('url, final_url, created_at')
+    .select('brand_id, url, final_url, created_at')
     .in('brand_id', brandIds)
     .gte('created_at', new Date(oldest).toISOString());
   if (auditsErr) throw new Error(auditsErr.message);
@@ -291,13 +294,14 @@ export async function fixedPages(brands, now) {
   for (const audit of audits ?? []) {
     for (const url of [audit.url, audit.final_url]) {
       const key = url ? opportunityKey(url) : null;
+      const id = key ? runPageKey(audit.brand_id, key) : null;
       const at = Date.parse(audit.created_at);
-      if (key && !(lastAudit.get(key) >= at)) lastAudit.set(key, at);
+      if (id && !(lastAudit.get(id) >= at)) lastAudit.set(id, at);
     }
   }
-  return [...pages.values()]
-    .filter((page) => !(lastAudit.get(page.key) >= page.fixedAt))
-    .map(({ brandId, key, url, path }) => ({ brandId, key, url, path }));
+  return [...pages]
+    .filter(([id, page]) => !(lastAudit.get(id) >= page.fixedAt))
+    .map(([, { brandId, key, url, path }]) => ({ brandId, key, url, path }));
 }
 
 /** Record the finished run and, when the org asked for it, e-mail what it found. */

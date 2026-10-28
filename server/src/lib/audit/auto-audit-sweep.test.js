@@ -70,7 +70,7 @@ function query(table) {
         return resolve({ data: prefRows.slice(op.range[0], op.range[1] + 1), error: null });
       }
       if (table === 'site_audit_brand_settings') return resolve({ data: settingRows, error: null });
-      if (table === 'site_audits' && op.select === 'url, final_url, created_at') {
+      if (table === 'site_audits' && op.select === 'brand_id, url, final_url, created_at') {
         return resolve({ data: recentAudits, error: null });
       }
       if (table === 'site_audit_auto_runs' && op.upsert) {
@@ -338,8 +338,18 @@ describe('fixedPages', () => {
     ];
     // Audited after its fix: done. Audited before it: still due.
     recentAudits = [
-      { url: 'https://acme.com/a-checked', final_url: null, created_at: '2026-10-06T00:00:00Z' },
-      { url: 'https://acme.com/a-fixed', final_url: null, created_at: '2026-10-04T00:00:00Z' },
+      {
+        brand_id: 'brand-a',
+        url: 'https://acme.com/a-checked',
+        final_url: null,
+        created_at: '2026-10-06T00:00:00Z',
+      },
+      {
+        brand_id: 'brand-a',
+        url: 'https://acme.com/a-fixed',
+        final_url: null,
+        created_at: '2026-10-04T00:00:00Z',
+      },
     ];
     const { fixedPages } = await import('./auto-audit-sweep.js');
 
@@ -451,5 +461,36 @@ describe('fixedPages', () => {
         ['in', 'brand_id', ['brand-a', 'brand-b']],
       ]);
     }
+  });
+
+  it("keeps brands sharing a domain apart: one brand's audit doesn't count for another's fix", async () => {
+    fixedActions = [
+      {
+        brand_id: 'brand-a',
+        completed_at: '2026-10-05T10:00:00Z',
+        payload: { targets: [{ id: 'https://acme.com/shared' }, { id: 'https://acme.com/both' }] },
+      },
+      {
+        brand_id: 'brand-b',
+        completed_at: '2026-10-04T10:00:00Z',
+        payload: { targets: [{ id: 'https://acme.com/shared' }, { id: 'https://acme.com/both' }] },
+      },
+    ];
+    // Brand B audited /shared after both fixes: B's is done, A's still due.
+    recentAudits = [
+      {
+        brand_id: 'brand-b',
+        url: 'https://acme.com/shared',
+        final_url: null,
+        created_at: '2026-10-06T00:00:00Z',
+      },
+    ];
+    const { fixedPages } = await import('./auto-audit-sweep.js');
+
+    expect((await fixedPages(brandRows, NOW)).map((p) => [p.brandId, p.path])).toEqual([
+      ['brand-a', '/shared'],
+      ['brand-a', '/both'],
+      ['brand-b', '/both'],
+    ]);
   });
 });
