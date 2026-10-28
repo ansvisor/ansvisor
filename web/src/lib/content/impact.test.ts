@@ -74,7 +74,7 @@ describe('prompts', () => {
     expect(platformNames(['chatgpt', 'chatgpt-web', 'perplexity', 'google-ai-overviews'])).toEqual([
       'ChatGPT',
       'Perplexity',
-      'Google AI Overview',
+      'Google AI Overviews',
     ]);
     expect(platformNames(['new-engine'])).toEqual(['new-engine']);
   });
