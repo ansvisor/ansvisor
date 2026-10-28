@@ -11,6 +11,7 @@ import {
   COMMON_WORD_MIN,
   COMMON_WORD_SHARE,
   MATCH_SLICE,
+  MAX_CARD_TITLE_WORDS,
   REMATCH_DAYS,
   TITLE_MATCH,
   catalogIndex,
@@ -129,6 +130,15 @@ describe('titleWords and the keys', () => {
     );
     expect(pathKey('mailto:a@b.c')).toBeNull();
   });
+
+  it('reads a link with a long run of slashes in time near its length', () => {
+    const started = Date.now();
+    expect(pathKey(`https://shop.example/${'/'.repeat(100_000)}a//`)).toBe(
+      `shop.example/${'/'.repeat(100_000)}a`,
+    );
+    expect(pathKey(`https://shop.example/a${'/'.repeat(100_000)}`)).toBe('shop.example/a');
+    expect(Date.now() - started).toBeLessThan(500);
+  });
 });
 
 describe('matchCard', () => {
@@ -241,6 +251,23 @@ describe('matchCard', () => {
       // Its own title is far enough from them: 1.0 against 0.4 at most.
       expect(matchCard({ product_title: 'Grey Hiking Strap' }, bigIndex)).toEqual({
         productId: 'strap',
+        match: 'title',
+      });
+    });
+
+    it(`reads a long card title's first ${MAX_CARD_TITLE_WORDS} words, in time near its length`, () => {
+      // 5,000 products, each found by its own number; a card title of 20,000
+      // numbers would otherwise compare each product with each of its words.
+      const numbered = catalogIndex({
+        products: Array.from({ length: 5000 }, (_, i) => pack(`n${i}`, `Daypack ${i}`)),
+        variants: [],
+      });
+      const long = Array.from({ length: 20_000 }, (_, i) => String(i)).join(' ');
+      const started = Date.now();
+      expect(matchCard({ product_title: long }, numbered)).toBeNull();
+      expect(Date.now() - started).toBeLessThan(500);
+      expect(matchCard({ product_title: 'Daypack 7' }, numbered)).toEqual({
+        productId: 'n7',
         match: 'title',
       });
     });

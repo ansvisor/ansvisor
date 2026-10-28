@@ -1791,10 +1791,27 @@ export interface ShoppingWork {
   why?: string;
 }
 
+/** Questions the route takes with an action at most (from-products.js MAX_PROMPTS). */
+const ACTION_MAX_PROMPTS = 50;
+/** A work line's length the route takes at most. */
+const ACTION_WHY_MAX = 500;
+
+/** A work line cut to what the route takes, at a word where one is near. */
+function cutWhy(why: string): string {
+  const text = why.trim();
+  if (text.length <= ACTION_WHY_MAX) return text;
+  let cut = text.slice(0, ACTION_WHY_MAX - 1);
+  // Not half of a character written as two.
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > ACTION_WHY_MAX - 100 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /**
  * Sends a product or a category to the Action Center with the work picked
  * (POST /api/action-center/products); the open one comes back when it was
- * sent before.
+ * sent before. A category's questions past ACTION_MAX_PROMPTS, and a work
+ * line past ACTION_WHY_MAX, are cut here: the route refuses them whole.
  */
 export async function sendShoppingActions(
   brandId: string,
@@ -1813,7 +1830,12 @@ export async function sendShoppingActions(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ brandId, target, work, promptIds }),
+    body: JSON.stringify({
+      brandId,
+      target,
+      work: work.map((item) => (item.why ? { ...item, why: cutWhy(item.why) } : item)),
+      promptIds: [...new Set(promptIds)].slice(0, ACTION_MAX_PROMPTS),
+    }),
   });
   // Returned, not thrown: a thrown error's message is masked in production.
   if (!res.ok) {
