@@ -24,17 +24,20 @@ import { dayChunks, resultDayBound } from './citations-rollups.js';
  * sentiment correction (00160) refreshes only the rollups: the rollups in
  * one, then the terms a day per call, since they read each answer's text
  * and a few busy days of the largest brand would near the service role's
- * statement timeout (MENTION_HISTORY_CHUNK_DAYS). Resolves to true when
- * every call succeeds, false at the first that fails; never throws.
+ * statement timeout (MENTION_HISTORY_CHUNK_DAYS). A small brand may pass a
+ * longer `termDays` (the demo brand refreshes its month in one call).
+ * Resolves to true when every call succeeds, false at the first that fails;
+ * never throws.
  */
-export async function refreshMentionsDaily(brandId, dayFrom, dayTo) {
+export async function refreshMentionsDaily(
+  brandId,
+  dayFrom,
+  dayTo,
+  { termDays = MENTION_HISTORY_CHUNK_DAYS } = {},
+) {
   const calls = [
     ['refresh_mentions_daily', dayFrom, dayTo],
-    ...dayChunks(dayFrom, dayTo, MENTION_HISTORY_CHUNK_DAYS).map(([from, to]) => [
-      'refresh_mention_terms',
-      from,
-      to,
-    ]),
+    ...dayChunks(dayFrom, dayTo, termDays).map(([from, to]) => ['refresh_mention_terms', from, to]),
   ];
   for (const [fn, from, to] of calls) {
     const { error } = await supabaseAdmin.rpc(fn, {

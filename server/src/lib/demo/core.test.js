@@ -21,7 +21,7 @@ vi.mock('../mentions-rollups.js', async (importOriginal) => ({
   refreshPerceptionSnapshots: rollups.refreshPerceptionSnapshots,
 }));
 
-const { RUNS, core, coreRows, latestRunStart } = await import('./core.js');
+const { RUNS, core, coreRows, firstAnswerAt, latestRunStart } = await import('./core.js');
 const { resultRow } = await import('../cloro-result-handler.js');
 
 /**
@@ -166,8 +166,8 @@ describe('coreRows', () => {
   });
 });
 
-/** A recording stand-in for the admin client. */
-function recordingDb() {
+/** A recording stand-in for the admin client; `reads` answers its selects, by table. */
+function recordingDb({ reads = {} } = {}) {
   const calls = [];
   const db = {
     calls,
@@ -176,10 +176,19 @@ function recordingDb() {
       calls.push(call);
       const chain = {
         insert: (payload) => ((call.op = 'insert'), (call.rows = payload), chain),
+        upsert: (payload, { onConflict }) => (
+          (call.op = 'upsert'),
+          (call.rows = payload),
+          (call.onConflict = onConflict),
+          chain
+        ),
         update: (payload) => ((call.op = 'update'), (call.payload = payload), chain),
         delete: () => ((call.op = 'delete'), chain),
+        select: () => ((call.op ??= 'select'), chain),
         eq: (column, value) => ((call.eq = [column, value]), chain),
-        then: (resolve) => resolve({ error: null }),
+        order: () => chain,
+        limit: () => chain,
+        then: (resolve) => resolve({ data: reads[table] ?? [], error: null }),
       };
       return chain;
     },
@@ -194,7 +203,7 @@ function recordingDb() {
 describe('core.build', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('writes the brand, its setup and its answers, then rebuilds the rollups', async () => {
+  it('writes the brand, its setup and its answers', async () => {
     const db = recordingDb();
     const built = await core.build({ brandId: BRAND_ID, now: NOW, db });
 
@@ -205,15 +214,16 @@ describe('core.build', () => {
     expect(brand.payload).not.toHaveProperty('demo_hidden_at');
 
     const inserted = [...new Set(db.calls.filter((c) => c.op === 'insert').map((c) => c.table))];
+    // Each step's tables side by side, after the ones they point at.
     expect(inserted).toEqual([
       'brand_domains',
       'brand_platforms',
       'competitors',
       'topics',
       'prompt_sets',
+      'tracking_runs',
       'prompts',
       'prompt_volumes',
-      'tracking_runs',
       'prompt_results',
       'prompt_result_citations',
       'prompt_result_shopping_cards',
@@ -222,8 +232,11 @@ describe('core.build', () => {
       db.calls.filter((c) => c.table === table).reduce((n, c) => n + (c.rows?.length ?? 0), 0);
     expect(count('prompt_results')).toBe(720);
     expect(count('prompt_result_citations')).toBe(rows.citations.length);
-    // Statements stay small.
-    expect(Math.max(...db.calls.map((c) => c.rows?.length ?? 0))).toBeLessThanOrEqual(250);
+    // Statements stay small: the answers 250 at a time, the small citation rows 1,000.
+    const largest = (table) =>
+      Math.max(...db.calls.filter((c) => c.table === table).map((c) => c.rows.length));
+    expect(largest('prompt_results')).toBe(250);
+    expect(largest('prompt_result_citations')).toBeLessThanOrEqual(1000);
 
     // One call resolves every cited URL, and each citation row carries its id.
     const resolves = db.calls.filter((c) => c.rpc === 'citation_url_ids');
@@ -233,25 +246,106 @@ describe('core.build', () => {
       .flatMap((c) => c.rows);
     expect(citationRows.every((r) => Number.isInteger(r.url_id))).toBe(true);
 
-    // The month's rollups, by the nightly run's own functions.
-    expect(rollups.refreshInsightsDaily).toHaveBeenCalledWith(
-      BRAND_ID,
-      rows.results[0].created_at.slice(0, 10),
-      '2026-10-28',
+    // Writing rows rebuilds no rollup: refresh does, once they are all in.
+    expect(rollups.refreshInsightsDaily).not.toHaveBeenCalled();
+    expect(db.calls.some((c) => c.op === 'delete')).toBe(false);
+  });
+
+  it('on a rebuild writes over the old rows, by each table’s key', async () => {
+    const db = recordingDb();
+    await core.build({ brandId: BRAND_ID, now: NOW, db, rebuild: true });
+    const writes = db.calls.filter((c) => c.rows);
+    expect(writes.every((c) => c.op === 'upsert')).toBe(true);
+    const keyOf = (table) => writes.find((c) => c.table === table).onConflict;
+    expect(keyOf('prompt_results')).toBe('id');
+    expect(keyOf('prompts')).toBe('id');
+    expect(keyOf('prompt_volumes')).toBe('prompt_id');
+    expect(keyOf('prompt_result_citations')).toBe('prompt_result_id,position');
+    expect(keyOf('prompt_result_shopping_cards')).toBe('prompt_result_id,position');
+    expect(db.calls.some((c) => c.op === 'delete')).toBe(false);
+  });
+
+  it('fails with the table when a write does', async () => {
+    const db = recordingDb();
+    const from = db.from;
+    db.from = (table) => {
+      const chain = from(table);
+      if (table !== 'prompt_results') return chain;
+      return {
+        ...chain,
+        insert: () => ({ then: (resolve) => resolve({ error: { message: 'full' } }) }),
+      };
+    };
+    await expect(core.build({ brandId: BRAND_ID, now: NOW, db })).rejects.toThrow(
+      'demo prompt_results insert: full',
     );
+    // Nothing that points at the answers was written after them.
+    expect(db.calls.some((c) => c.table === 'prompt_result_citations')).toBe(false);
+  });
+});
+
+describe('core.refresh', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("rebuilds the month's rollups side by side, by the nightly run's own functions", async () => {
+    const db = recordingDb();
+    await core.refresh({ brandId: BRAND_ID, now: NOW, db });
+
+    const first = firstAnswerAt(NOW).toISOString().slice(0, 10);
+    expect(first).toBe(rows.results[0].created_at.slice(0, 10));
+    expect(rollups.refreshInsightsDaily).toHaveBeenCalledWith(BRAND_ID, first, '2026-10-28');
     expect(rollups.refreshCitationsDaily.mock.calls.length).toBeGreaterThanOrEqual(2);
-    expect(rollups.refreshMentionsDaily).toHaveBeenCalledTimes(1);
+    // The demo's month of answer terms in one call.
+    expect(rollups.refreshMentionsDaily).toHaveBeenCalledWith(BRAND_ID, first, '2026-10-28', {
+      termDays: 31,
+    });
     expect(rollups.refreshPerceptionSnapshots).toHaveBeenCalledWith(BRAND_ID);
+    // A first build reads nothing back.
+    expect(db.calls.some((c) => c.op === 'select')).toBe(false);
 
     // What the triggers queued while it was rewritten is done.
     const cleared = db.calls.filter((c) => c.op === 'delete').map((c) => c.table);
     expect(cleared).toEqual(['insights_rollup_rebuilds', 'citation_rollup_rebuilds']);
   });
 
+  it('starts the rollups together, the Perception views after the Mentions ones', async () => {
+    const order = [];
+    const slow = (name, ms) => async () => {
+      order.push(`${name}:start`);
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      order.push(`${name}:end`);
+      return true;
+    };
+    rollups.refreshInsightsDaily.mockImplementationOnce(slow('insights', 10));
+    rollups.refreshCitationsDaily.mockImplementation(slow('citations', 5));
+    rollups.refreshMentionsDaily.mockImplementationOnce(slow('mentions', 5));
+    rollups.refreshPerceptionSnapshots.mockImplementationOnce(slow('perception', 1));
+    await core.refresh({ brandId: BRAND_ID, now: NOW, db: recordingDb() });
+    rollups.refreshCitationsDaily.mockImplementation(async () => true);
+
+    expect(order.slice(0, 3).sort()).toEqual([
+      'citations:start',
+      'insights:start',
+      'mentions:start',
+    ]);
+    expect(order.indexOf('mentions:end')).toBeLessThan(order.indexOf('perception:start'));
+  });
+
+  it('on a rebuild also empties the days the old month covered and the new one doesn’t', async () => {
+    const db = recordingDb({ reads: { insights_brand_daily: [{ day: '2026-09-20' }] } });
+    await core.refresh({ brandId: BRAND_ID, now: NOW, db, rebuild: true });
+    expect(rollups.refreshInsightsDaily).toHaveBeenCalledWith(BRAND_ID, '2026-09-20', '2026-10-28');
+    expect(rollups.refreshMentionsDaily.mock.calls[0][1]).toBe('2026-09-20');
+  });
+
   it('fails, for the next visit to rebuild, when a rollup does', async () => {
     rollups.refreshInsightsDaily.mockResolvedValueOnce(false);
-    await expect(core.build({ brandId: BRAND_ID, now: NOW, db: recordingDb() })).rejects.toThrow(
+    await expect(core.refresh({ brandId: BRAND_ID, now: NOW, db: recordingDb() })).rejects.toThrow(
       'demo insights rollups failed',
+    );
+    rollups.refreshMentionsDaily.mockResolvedValueOnce(false);
+    await expect(core.refresh({ brandId: BRAND_ID, now: NOW, db: recordingDb() })).rejects.toThrow(
+      'demo mention rollups failed',
     );
   });
 });
