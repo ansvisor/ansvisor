@@ -162,7 +162,7 @@ describe('HistoryDrawer', () => {
       before,
       after,
       delta: after - before,
-      unit: 'count' as const,
+      unit: 'number' as const,
       direction: 'higher_is_better' as const,
     });
     render(
@@ -181,6 +181,31 @@ describe('HistoryDrawer', () => {
     const result = under('Result');
     expect(result).toContain('Measured on the 2 prompts it named.');
     expect(result).toMatch(/Brand-wide over the same days: \S.* 100 → 104/);
+  });
+
+  it('says how a Site Audit fix’s pages read when audited again, or that none was yet (learning A2)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, auditAfter: { pages: 3, audited: 2, passed: 1 } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain('Audited again since it closed: 1 of 2 pages pass.');
+
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, auditAfter: { pages: 3, audited: 0, passed: 0 } }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain(
+      'None of its 3 pages was audited again since it closed: the result is from the metrics.',
+    );
   });
 
   it('keeps the general sentences when the signals cannot be read', async () => {

@@ -33,6 +33,8 @@ function mockWrites(rows = {}) {
       not: () => builder,
       limit: () => builder,
       order: () => builder,
+      gt: () => builder,
+      in: () => builder,
       maybeSingle: async () => ({ data: (rows[table] ?? [])[0] ?? null, error: null }),
       update: (patch) => {
         writes.updated.push({ table, patch });
@@ -462,6 +464,36 @@ describe('validateAction', () => {
       expect(rpc.mock.calls.some(([name]) => name === 'opportunity_basket_metrics')).toBe(false);
       ({ validation } = writes.updated.find((w) => w.table === 'actions').patch);
       expect(validation.scope).toBeUndefined();
+    });
+  });
+
+  it('judges a Site Audit fix by its pages audited again since it closed (learning A2)', async () => {
+    const writes = mockWrites({
+      site_audits: [{ id: 'au1', url: 'https://acme.example/pricing', total_score: 0.7 }],
+      audit_signal_results: [{ audit_id: 'au1', signal_key: 'json-ld-validity', status: 'pass' }],
+    });
+    // The page's citations didn't move over the week.
+    rpc.mockResolvedValue({ data: { page_citations: 3 }, error: null });
+
+    const outcome = await validateAction(
+      action({
+        kind: 'fix_structured_data',
+        kpi_keys: [],
+        payload: {
+          targetEntity: 'pages',
+          targets: [{ id: 'https://acme.example/pricing', checks: ['json-ld-validity'] }],
+        },
+      }),
+      { now: NOW },
+    );
+
+    expect(outcome).toBe('improved');
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.outcome).toBe('improved');
+    expect(patch.validation.audit).toEqual({ pages: 1, audited: 1, passed: 1 });
+    expect(patch.validation.metrics.find((m) => m.metric === 'citations')).toMatchObject({
+      before: 3,
+      after: 3,
     });
   });
 

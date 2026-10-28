@@ -28,6 +28,7 @@ import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { logger } from '../logger.js';
 import { resolve } from '../../config/action-engine.js';
 import { BASKET_KPIS, basketScope, measureBasket } from './basket-metrics.js';
+import { auditOutcome, auditRecheck } from './audit-recheck.js';
 
 const DAY_MS = 86_400_000;
 
@@ -308,9 +309,21 @@ export async function validateAction(action, { now = new Date() } = {}) {
   // action, and would file most recent work as a decline.
   if (afterWindow.to >= utcDay(now)) return null;
 
-  // What became of the signals that raised it, kept beside the metrics.
-  const signals = await signalOutcome(action.id);
-  const withSignals = (validation) => (signals ? { ...validation, signals } : validation);
+  // What became of the signals that raised it (A3), and for a Site Audit
+  // fix whether its pages pass when audited again (A2), kept beside the
+  // metrics. A fix whose pages were audited again is judged by that: the
+  // check passing is its aim.
+  const [signals, audit] = await Promise.all([signalOutcome(action.id), auditRecheck(action)]);
+  const finish = async (validation, outcome) => {
+    const beside = { ...(signals ? { signals } : {}), ...(audit ? { audit } : {}) };
+    const kept =
+      validation || Object.keys(beside).length
+        ? { measuredAt: now.toISOString(), ...(validation ?? {}), ...beside }
+        : null;
+    const verdict = (audit && auditOutcome(audit)) ?? outcome;
+    await write(action.id, kept, verdict, now);
+    return verdict;
+  };
 
   // An action sent from a content opportunity is measured on its own prompts
   // and pages; the brand-wide numbers would bury a single piece of content.
@@ -339,20 +352,16 @@ export async function validateAction(action, { now = new Date() } = {}) {
       before: before[metric],
       after: after[metric],
     }));
-    const outcome = deriveOutcome(metrics);
-    await write(
-      action.id,
-      withSignals({
+    return finish(
+      {
         measuredAt: now.toISOString(),
         beforeWindow,
         afterWindow,
         metrics,
         scope: { kind: 'basket', prompts: scope.promptIds.length, pages: scope.pages.length },
-      }),
-      outcome,
-      now,
+      },
+      deriveOutcome(metrics),
     );
-    return outcome;
   }
 
   const kpiKeys = (action.kpi_keys ?? []).filter((key) => key in MEASURABLE_KPIS);
@@ -387,10 +396,8 @@ export async function validateAction(action, { now = new Date() } = {}) {
         before: brandBefore[metric] ?? null,
         after: brandAfter[metric] ?? null,
       }));
-      const outcome = deriveOutcome(metrics);
-      await write(
-        action.id,
-        withSignals({
+      return finish(
+        {
           measuredAt: now.toISOString(),
           beforeWindow,
           afterWindow,
@@ -402,26 +409,16 @@ export async function validateAction(action, { now = new Date() } = {}) {
             pages: targets.pages.length,
           },
           ...(brandWide.length ? { brandWide } : {}),
-        }),
-        outcome,
-        now,
+        },
+        deriveOutcome(metrics),
       );
-      return outcome;
     }
   }
 
   // An action with no success metrics has nothing to measure. That is a gap
   // in the rule that produced it, not a failure here — say so plainly rather
   // than inventing a metric it never claimed.
-  if (kpiKeys.length === 0) {
-    await write(
-      action.id,
-      signals ? { measuredAt: now.toISOString(), signals } : null,
-      'not_measurable',
-      now,
-    );
-    return 'not_measurable';
-  }
+  if (kpiKeys.length === 0) return finish(null, 'not_measurable');
 
   const [before, after] = await Promise.all([
     measureKpis(action.brand_id, kpiKeys, beforeWindow.from, beforeWindow.to),
@@ -435,14 +432,10 @@ export async function validateAction(action, { now = new Date() } = {}) {
     after: after[metric] ?? null,
   }));
 
-  const outcome = deriveOutcome(metrics);
-  await write(
-    action.id,
-    withSignals({ measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics }),
-    outcome,
-    now,
+  return finish(
+    { measuredAt: now.toISOString(), beforeWindow, afterWindow, metrics },
+    deriveOutcome(metrics),
   );
-  return outcome;
 }
 
 async function write(actionId, validation, outcome, now) {
