@@ -112,6 +112,19 @@ describe('deriveOutcome', () => {
     expect(deriveOutcome([up], 'mentions')).toBe('improved');
   });
 
+  it('counts only the metrics the action aims at, given them', () => {
+    const visibility = { metric: 'ai_visibility', unit: 'percent', before: 20, after: 30 };
+    const lead = { metric: 'competitor_lead', unit: 'points', before: 0.4, after: 0.3 };
+    // A basket reads its lead too; the action never aimed at it.
+    expect(deriveOutcome([visibility, lead], 'ai_visibility', ['ai_visibility'])).toBe('improved');
+    // One it names moving the other way is mixed.
+    expect(
+      deriveOutcome([visibility, lead], 'ai_visibility', ['ai_visibility', 'competitor_lead']),
+    ).toBe('mixed');
+    // None of them read: nothing it aims at could be.
+    expect(deriveOutcome([lead], 'ai_visibility', ['ai_visibility'])).toBe('not_measurable');
+  });
+
   // Nothing to scale a ratio by, so any real arrival counts.
   it('treats a first arrival from zero as movement', () => {
     expect(deriveOutcome([pair('citations', 0, 3)])).toBe('improved');
@@ -291,6 +304,34 @@ describe('validateAction', () => {
     expect(patch.validation.scope).toEqual({ kind: 'basket', prompts: 2, pages: 0 });
   });
 
+  it('judges a basket by the metrics the action names, keeping the rest to see', async () => {
+    // Visibility 20 → 30 on the prompts; the lead over the top competitor 0.4 → 0.3.
+    const basket = (before, after) =>
+      rpc.mockImplementation(async (_name, args) => ({
+        data: args.p_from < daysAgo(20).slice(0, 10) ? before : after,
+        error: null,
+      }));
+    const sent = (kpiKeys) =>
+      action({ kind: 'mention_review', kpi_keys: kpiKeys, payload: { promptIds: ['p1'] } });
+
+    let writes = mockWrites();
+    basket(
+      { cells: 100, visible: 20, top_competitor_visible: 19.6 },
+      { cells: 100, visible: 30, top_competitor_visible: 29.7 },
+    );
+    expect(await validateAction(sent(['ai_visibility']), { now: NOW })).toBe('improved');
+    const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(validation.metrics.find((m) => m.metric === 'competitor_lead')).toMatchObject({
+      before: 0.4,
+      after: 0.3,
+    });
+
+    writes = mockWrites();
+    expect(await validateAction(sent(['ai_visibility', 'competitor_lead']), { now: NOW })).toBe(
+      'mixed',
+    );
+  });
+
   it('measures pages sent from AI Traffic on those pages (AT-006)', async () => {
     const writes = mockWrites();
     rpc.mockResolvedValue({ data: {}, error: null });
@@ -443,6 +484,51 @@ describe('validateAction', () => {
       expect(validation.brandWide.map((m) => m.metric)).toEqual(['ai_visibility', 'citations']);
     });
 
+    it('measures brand-wide when the basket can’t read its main metric', async () => {
+      // Citations first, on prompts: a prompt basket has no pages to count them on.
+      const writes = mockWrites();
+      rpc.mockImplementation(async (name, args) => {
+        if (name === 'opportunity_basket_metrics') {
+          const before = args.p_from < daysAgo(20).slice(0, 10);
+          return { data: { cells: 10, visible: 4, mention_answers: before ? 2 : 6 }, error: null };
+        }
+        const before = args.p_day_from < daysAgo(20).slice(0, 10);
+        return {
+          data: { total_citations: before ? 100 : 80, total_mentions: 50 },
+          error: null,
+        };
+      });
+
+      const outcome = await validateAction(
+        action({
+          kind: 'recover_lost_visibility',
+          kpi_keys: ['citations', 'mentions'],
+          payload: { targetEntity: 'prompts', targetCount: 1, targets: [{ id: P1 }] },
+        }),
+        { now: NOW },
+      );
+
+      // The prompts' mentions tripled; the citations it aims at fell brand-wide.
+      expect(outcome).toBe('declined');
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.primary).toBe('citations');
+      expect(validation.metrics).toEqual([
+        { metric: 'citations', unit: 'count', before: 100, after: 80 },
+        { metric: 'mentions', unit: 'count', before: 50, after: 50 },
+      ]);
+      expect(validation.scope).toEqual({
+        kind: 'brand',
+        reason: 'primary_not_in_basket',
+        entity: 'prompts',
+        prompts: 1,
+        pages: 0,
+      });
+      expect(validation.brandWide).toBeUndefined();
+      // The brand-wide figures were read once, not again.
+      const brandCalls = rpc.mock.calls.filter(([name]) => name === 'insights_aggregates_daily');
+      expect(brandCalls).toHaveLength(2);
+    });
+
     it('reads a page written as a path on the brand’s primary domain', async () => {
       mockWrites({ brand_domains: [{ domain: 'https://www.acme.example/' }] });
       answers({}, {});
@@ -529,7 +615,97 @@ describe('validateAction', () => {
       expect(validation.gaps).toEqual({ before: 0, after: 2 });
     });
 
-    it('reads it not measurable past MAX_GAP_DAYS: a missed night reads as a decline', async () => {
+    /** Each source answers `before` over the week before, `after` over the week after. */
+    const weeks = (byName) =>
+      rpc.mockImplementation(async (name, args) => {
+        const from = args.p_day_from ?? args.p_from;
+        const [before, after] = byName[name] ?? [{}, {}];
+        return { data: from < daysAgo(20).slice(0, 10) ? before : after, error: null };
+      });
+
+    it('reads a count at a full week’s worth from the nights that ran: 7 nights of 100 vs 6', async () => {
+      const writes = mockWrites({ tracking_runs: missing([5]) });
+      weeks({ insights_aggregates_daily: [{ total_citations: 700 }, { total_citations: 600 }] });
+
+      // Read as it came, the missed night is a 14% decline nobody caused.
+      expect(await validateAction(action(), { now: NOW })).toBe('no_meaningful_change');
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.metrics).toEqual([
+        {
+          metric: 'citations',
+          unit: 'count',
+          before: 700,
+          after: 700,
+          raw: { before: 700, after: 600 },
+        },
+      ]);
+      expect(validation.gaps).toEqual({ before: 0, after: 1 });
+    });
+
+    it('reads the counts of the prompts it names, and the brand-wide ones, the same way', async () => {
+      const P1 = '11111111-1111-4111-8111-111111111111';
+      const writes = mockWrites({ tracking_runs: missing([5]) });
+      weeks({
+        opportunity_basket_metrics: [
+          { cells: 70, visible: 14, mention_answers: 70 },
+          { cells: 60, visible: 12, mention_answers: 60 },
+        ],
+        insights_aggregates_daily: [{ total_mentions: 700 }, { total_mentions: 600 }],
+      });
+
+      const outcome = await validateAction(
+        action({
+          kind: 'recover_lost_visibility',
+          kpi_keys: ['mentions'],
+          payload: { targetEntity: 'prompts', targets: [{ id: P1 }] },
+        }),
+        { now: NOW },
+      );
+
+      expect(outcome).toBe('no_meaningful_change');
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.metrics[0]).toMatchObject({ metric: 'mentions', before: 70, after: 70 });
+      expect(validation.brandWide[0]).toMatchObject({
+        metric: 'mentions',
+        before: 700,
+        after: 700,
+        raw: { before: 700, after: 600 },
+      });
+    });
+
+    it('past MAX_GAP_DAYS leaves the counts out, and a rate still judges', async () => {
+      // Share of voice 20% → 30%; citations read over 3 nights of the week after.
+      const sources = {
+        share_of_voice_aggregates_daily: [
+          { total_brand_mentions: 20, total_competitor_mentions: 80 },
+          { total_brand_mentions: 30, total_competitor_mentions: 70 },
+        ],
+        insights_aggregates_daily: [{ total_citations: 700 }, { total_citations: 300 }],
+      };
+      let writes = mockWrites({ tracking_runs: missing([3, 4, 5, 6]) });
+      weeks(sources);
+
+      expect(
+        await validateAction(action({ kpi_keys: ['share_of_voice', 'citations'] }), { now: NOW }),
+      ).toBe('improved');
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.gaps).toEqual({ before: 0, after: 4, tooMany: true });
+      // Too few nights to scale from: the counts stay as read.
+      expect(validation.metrics[1]).toEqual({
+        metric: 'citations',
+        unit: 'count',
+        before: 700,
+        after: 300,
+      });
+
+      // Its main metric a count: the weeks can't be compared.
+      writes = mockWrites({ tracking_runs: missing([3, 4, 5, 6]) });
+      expect(
+        await validateAction(action({ kpi_keys: ['citations', 'share_of_voice'] }), { now: NOW }),
+      ).toBe('not_measurable');
+    });
+
+    it('reads it not measurable past MAX_GAP_DAYS when its main metric is a count', async () => {
       const writes = mockWrites({ tracking_runs: missing([3, 4, 5, 6]) });
       rpc
         .mockResolvedValueOnce({ data: { total_citations: 100 }, error: null })
@@ -549,6 +725,22 @@ describe('validateAction', () => {
       await validateAction(action({ kpi_keys: ['ai_referral_traffic'] }), { now: NOW });
       const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
       expect(validation?.gaps).toBeUndefined();
+    });
+
+    it('doesn’t count nights for a rate alone: it doesn’t drift from a missed one', async () => {
+      const writes = mockWrites({ tracking_runs: [] });
+      weeks({
+        share_of_voice_aggregates_daily: [
+          { total_brand_mentions: 20, total_competitor_mentions: 80 },
+          { total_brand_mentions: 30, total_competitor_mentions: 70 },
+        ],
+      });
+
+      expect(await validateAction(action({ kpi_keys: ['share_of_voice'] }), { now: NOW })).toBe(
+        'improved',
+      );
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.gaps).toBeUndefined();
     });
   });
 

@@ -41814,6 +41814,8 @@ alter table public.actions
     'not_measurable'
   ));
 
+notify pgrst, 'reload schema';
+
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00366_action_dismiss_reason.sql
 -- ─────────────────────────────────────────────────────────────────────────
