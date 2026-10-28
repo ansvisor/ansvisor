@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import {
   connectIntegration,
   getIntegrationStatus,
@@ -22,6 +24,8 @@ const CONNECT_POLL_MS = 3000;
  *
  * `onStatus` hears the outcome: 'connected', or whatever the final check
  * said once the user closed the popup. An unmounted caller stops polling.
+ * On a read-only workspace (plan not active) `connect` opens the upgrade
+ * dialog instead.
  */
 export function useIntegrationConnect(
   provider: IntegrationProvider,
@@ -36,6 +40,8 @@ export function useIntegrationConnect(
   },
 ) {
   const [connecting, setConnecting] = useState(false);
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
   // Bumped to stop a poll: a newer attempt, or the caller unmounting.
   const pollGen = useRef(0);
 
@@ -95,5 +101,5 @@ export function useIntegrationConnect(
     }
   };
 
-  return { connecting, connect };
+  return { connecting, connect: guard(connect, { action: tActions('connectIntegrations') }) };
 }

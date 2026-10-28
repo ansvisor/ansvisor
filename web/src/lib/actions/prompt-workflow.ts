@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { assertWritable } from '@/lib/subscription-guard';
 
 /**
  * Prompt workflow (v1): per-prompt work status, a notes thread, and target
@@ -97,6 +98,7 @@ export async function setPromptWorkStatus(
   promptId: string,
   status: PromptWorkStatus | null,
 ): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
   const { error } = await supabase
     .from('prompts')
@@ -108,6 +110,7 @@ export async function setPromptWorkStatus(
 export type AddPromptNoteResult = { note: PromptNote } | { error: string };
 
 export async function addPromptNote(promptId: string, body: string): Promise<AddPromptNoteResult> {
+  await assertWritable();
   const trimmed = body.trim();
   if (!trimmed) return { error: 'Note cannot be empty' };
   if (trimmed.length > 2000) return { error: 'Note is too long (max 2000 characters)' };
@@ -138,6 +141,7 @@ export async function addPromptNote(promptId: string, body: string): Promise<Add
 }
 
 export async function deletePromptNote(noteId: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
   const { error } = await supabase.from('prompt_notes').delete().eq('id', noteId);
   if (error) throw new Error(error.message);
@@ -243,6 +247,7 @@ export async function addPromptTargetUrl(
   url: string,
   label?: string,
 ): Promise<AddPromptTargetUrlResult> {
+  await assertWritable();
   let normalized: string;
   try {
     normalized = normalizeTargetUrl(url);
@@ -284,6 +289,7 @@ export async function addPromptTargetUrl(
 }
 
 export async function deletePromptTargetUrl(id: string): Promise<void> {
+  await assertWritable();
   const supabase = await createClient();
   const { error } = await supabase.from('prompt_target_urls').delete().eq('id', id);
   if (error) throw new Error(error.message);

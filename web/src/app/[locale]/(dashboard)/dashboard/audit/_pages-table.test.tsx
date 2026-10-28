@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import type { AuditedPage, AuditTemplate } from '@/lib/actions/audits';
 import { AuditPagesTable, groupPagesByTemplate, pageLabel } from './_pages-table';
+import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 
 (
   globalThis as typeof globalThis & {
@@ -65,6 +66,7 @@ let root: Root;
 const onLoadMore = vi.fn();
 const onDeleteRun = vi.fn();
 const onSelect = vi.fn();
+const openUpgrade = vi.fn();
 
 function render(
   pages: AuditedPage[],
@@ -73,24 +75,29 @@ function render(
     selected = new Set<string>(),
     toolbar = null as React.ReactNode,
     templates = null as AuditTemplate[] | null,
+    isLocked = false,
   } = {},
 ) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <AuditPagesTable
-          pages={pages}
-          total={total}
-          primaryHost="acme.com"
-          loadingMore={false}
-          onLoadMore={onLoadMore}
-          onDeleteRun={onDeleteRun}
-          selected={selected}
-          onSelect={onSelect}
-          headerAction={<button type="button">Export all</button>}
-          toolbar={toolbar}
-          templates={templates}
-        />
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <AuditPagesTable
+            pages={pages}
+            total={total}
+            primaryHost="acme.com"
+            loadingMore={false}
+            onLoadMore={onLoadMore}
+            onDeleteRun={onDeleteRun}
+            selected={selected}
+            onSelect={onSelect}
+            headerAction={<button type="button">Export all</button>}
+            toolbar={toolbar}
+            templates={templates}
+          />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -173,6 +180,26 @@ describe('AuditPagesTable', () => {
 
     act(() => arrow.click());
     expect(document.getElementById(arrow.getAttribute('aria-controls')!)).toBeNull();
+  });
+
+  it('deletes no run on a read-only workspace: the upgrade dialog opens, not the confirm', () => {
+    render([page()], 1, { isLocked: true });
+    act(() => (container.querySelector('button[aria-expanded]') as HTMLButtonElement).click());
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Delete audit"]')!;
+    act(() => remove.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Deleting an audit needs a plan');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(onDeleteRun).not.toHaveBeenCalled();
+  });
+
+  it('asks before deleting a run on an active plan', () => {
+    render([page()]);
+    act(() => (container.querySelector('button[aria-expanded]') as HTMLButtonElement).click());
+    act(() =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Delete audit"]')!.click(),
+    );
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(openUpgrade).not.toHaveBeenCalled();
   });
 
   it('says how many older audits the history leaves out', () => {
