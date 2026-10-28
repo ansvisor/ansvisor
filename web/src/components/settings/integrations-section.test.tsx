@@ -135,24 +135,33 @@ describe('IntegrationsSection', () => {
     expect(container.querySelector('[data-card="catalog"]')).not.toBeNull();
   });
 
-  it('says Coming soon while the server is not set up for it, on the cloud and self-hosted, with nothing to connect', async () => {
+  it('says Coming soon on the cloud while it is not set up there, with nothing to connect', async () => {
     statuses['google-merchant-center'] = 'not_configured';
-    for (const on of [true, false]) {
-      cloud.on = on;
-      act(() => root.unmount());
-      root = createRoot(container);
-      await render();
-      const card = merchantCenter()!;
-      expect(card).not.toBeNull();
-      expect(badges(card)).toEqual(['Coming soon']);
-      expect(card.textContent).toContain(
-        "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
-      );
-      expect(card.querySelector('button')).toBeNull();
-      // Not the self-hosted set-up line, nor its badge.
-      expect(card.textContent).not.toContain('Not configured');
-      expect(card.textContent).not.toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
-    }
+    cloud.on = true;
+    await render();
+    const card = merchantCenter()!;
+    expect(card).not.toBeNull();
+    expect(badges(card)).toEqual(['Coming soon']);
+    expect(card.textContent).toContain(
+      "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
+    );
+    expect(card.querySelector('button')).toBeNull();
+    // Not the self-hosted set-up line, nor its badge.
+    expect(card.textContent).not.toContain('Not configured');
+    expect(card.textContent).not.toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
+  });
+
+  it('keeps the set-up line on a self-hosted server that is not set up for it', async () => {
+    statuses['google-merchant-center'] = 'not_configured';
+    cloud.on = false;
+    await render();
+    const card = merchantCenter()!;
+    expect(card).not.toBeNull();
+    expect(badges(card)).toEqual(['Not configured']);
+    expect(card.textContent).toContain('COMPOSIO_GMC_AUTH_CONFIG_ID');
+    expect(card.textContent).not.toContain('Coming soon');
+    expect(card.textContent).not.toContain('Until it');
+
     // A provider without it keeps the set-up line.
     statuses['google-search-console'] = 'not_configured';
     act(() => root.unmount());

@@ -158,10 +158,11 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
  * can't be read (an API older than the web), nor on the cloud while it isn't
  * set up there; a self-hosted server keeps the set-up line.
  *
- * `comingSoon`: while the server isn't set up for it, the card says Coming
- * soon and this line instead, on the cloud too, with nothing to connect
- * (Google Merchant Center, until Google approves the connection). Sources
- * a brand added before stay in Product catalog, where they're removed.
+ * `comingSoon`: while the cloud isn't set up for it, the card says Coming
+ * soon and this line instead, with nothing to connect (Google Merchant
+ * Center, until Google approves the connection); a self-hosted server keeps
+ * the set-up line. Sources a brand added before stay in Product catalog,
+ * where they're removed.
  */
 function IntegrationCard({
   provider,
@@ -224,7 +225,7 @@ function IntegrationCard({
     }
   };
 
-  const soon = comingSoon !== undefined && status === 'not_configured';
+  const soon = comingSoon !== undefined && status === 'not_configured' && isCloud();
   if (hideUnavailable && (unreadable || (status === 'not_configured' && isCloud() && !soon))) {
     return null;
   }

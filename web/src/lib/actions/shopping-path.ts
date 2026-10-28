@@ -382,9 +382,10 @@ async function pageSite(
 }
 
 /**
- * Whether the brand reads a Google Merchant Center account into its catalog:
- * only then does the check say a product is accepted by Merchant Center.
- * None when it can't be read: the check then says less, never more.
+ * Whether the brand reads a Google Merchant Center account into its catalog,
+ * its last sync read: only then does the check say a product is accepted by
+ * Merchant Center. None when it can't be read: the check then says less,
+ * never more.
  */
 async function hasMerchantCenter(supabase: Client, brandId: string): Promise<boolean> {
   const { data, error } = await supabase
@@ -392,6 +393,7 @@ async function hasMerchantCenter(supabase: Client, brandId: string): Promise<boo
     .select('id')
     .eq('brand_id', brandId)
     .eq('kind', MERCHANT_CENTER_KIND)
+    .eq('last_status', 'ok')
     .limit(1);
   if (error) {
     console.error('Failed to read the brand’s catalog sources:', error.message);
