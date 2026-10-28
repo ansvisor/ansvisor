@@ -8,6 +8,7 @@ import {
 } from '../middleware/rate-limiter.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 import { liveAddress, markDeliveryPublished } from '../lib/content-published.js';
+import { isBrandActive } from '../lib/active-subscriptions.js';
 
 /**
  * Send to CMS's callback (#1331): the workspace's automation tells how a sent
@@ -18,7 +19,9 @@ import { liveAddress, markDeliveryPublished } from '../lib/content-published.js'
  * limiters (each secret's budget, failed attempts by IP) cover it too. A
  * delivery id with its webhook's secret proves the package arrived, so the
  * callback counts whatever the delivery reads: an automation may call back
- * before it answers the send, or after the send gave up waiting.
+ * before it answers the send, or after the send gave up waiting. Once the
+ * brand's plan has ended (2026-10-27), it is answered 202 and nothing is
+ * written, as /webhooks/content does.
  */
 
 const router = Router();
@@ -27,6 +30,8 @@ router.use(webhookCallbackLimiter, webhookCallbackAuthFailureLimiter);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DENIED = { error: 'Invalid webhook credentials' };
+/** Once the plan has ended: a 2xx, so the workflow neither fails nor retries. */
+const IGNORED = { success: false, ignored: true, code: 'subscription_inactive' };
 const MAX_URL = 2048;
 
 /** A field a workflow left unmapped (Zapier and Make send "" or null) reads as left out. */
@@ -95,6 +100,8 @@ router.post('/:deliveryId/status', async (req, res) => {
       (c) => c.events?.includes(DELIVERY_EVENT) && webhookSecretsMatch(c.webhook_secret, provided),
     );
     if (!matches) return res.status(401).json(DENIED);
+    // Asked only once the secret matched, so the answer tells a stranger nothing.
+    if (!(await isBrandActive(delivery.brand_id))) return res.status(202).json(IGNORED);
 
     const parsed = statusBody.safeParse(req.body ?? {});
     const url = parsed.success && parsed.data.url ? liveAddress(parsed.data.url) : null;

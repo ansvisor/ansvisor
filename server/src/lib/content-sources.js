@@ -183,6 +183,37 @@ export function knownNumbers(...texts) {
   );
 }
 
+/**
+ * The known numbers with names that hold their own ("Trail 450", a
+ * shopping path's product: shopping-links.js): a name's numbers are known
+ * where the name is written whole, never alone. Kept on the set, as
+ * `named`; returns it.
+ */
+export function withNamedNumbers(known, names) {
+  const named = [
+    ...new Set(
+      (names ?? [])
+        .map((n) =>
+          String(n ?? '')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        )
+        .filter((n) => /\d/.test(n)),
+    ),
+  ].sort((a, b) => b.length - a.length);
+  if (!named.length) return known;
+  // Its spaces and apostrophes written any way: "Men’s  Trail 450".
+  const spelled = named.map((n) =>
+    n
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/ /g, '\\s+')
+      .replace(/['’]/g, "['’]"),
+  );
+  return Object.assign(known, {
+    named: new RegExp(`(?<![\\p{L}\\p{N}])(?:${spelled.join('|')})(?![\\p{L}\\p{N}])`, 'gu'),
+  });
+}
+
 /** Today as the agent may write it: its year alone ("23" on the 23rd would let "23%" through). */
 export function todayText(now = new Date()) {
   return `${now.getUTCFullYear()}`;
@@ -242,7 +273,10 @@ export function textPieces(html) {
  * or a currency sign is a claim and counts.
  */
 export function addedNumbers(text, known) {
-  const s = String(text ?? '').replace(BRACKETS, (m) => ' '.repeat(m.length));
+  const blank = (m) => ' '.repeat(m.length);
+  const bare = String(text ?? '').replace(BRACKETS, blank);
+  // A name's own numbers, where it is written (withNamedNumbers).
+  const s = known.named ? bare.replace(known.named, blank) : bare;
   return numbersIn(s).filter((n) => {
     // A claim is known only with its unit or sign; a plain number as any.
     if (known.has(n.unit ? unitKey(n) : n.value)) return false;

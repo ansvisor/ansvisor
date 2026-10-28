@@ -161,6 +161,15 @@ describe('fetchPage against a local site', () => {
       res.write(zlib.gzipSync(`<p>${'x'.repeat(10_000)}</p>`).subarray(0, 40));
       setTimeout(() => res.socket.destroy(), 10);
     },
+    // Nested deeper than a browser keeps: as a page, and as a text file.
+    '/deep': (res) => {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end('<div>'.repeat(600));
+    },
+    '/deep-text': (res) => {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end('<div>'.repeat(600));
+    },
   };
 
   beforeAll(async () => {
@@ -212,6 +221,13 @@ describe('fetchPage against a local site', () => {
     await expect(get('/missing')).rejects.toMatchObject({ code: 'http_error', status: 404 });
     await expect(get('/big', { maxBytes: 1_000 })).rejects.toMatchObject({ code: 'too_large' });
     await expect(get('/slow', { timeoutMs: 50 })).rejects.toMatchObject({ code: 'timeout' });
+  });
+
+  it('turns away a web page nested deeper than any browser keeps, not another type', async () => {
+    await expect(get('/deep')).rejects.toMatchObject({ code: 'too_deep' });
+    await expect(get('/deep-text', { types: /^text\/plain/ })).resolves.toMatchObject({
+      status: 200,
+    });
   });
 
   it('reads another content type only when asked to', async () => {

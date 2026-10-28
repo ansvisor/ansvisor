@@ -143,6 +143,30 @@ describe('suggestFieldMap', () => {
     ).toEqual({ body: 'intro' });
     expect(suggestFieldMap([{ slug: 'name', name: 'Name', type: 'PlainText' }])).toEqual({});
   });
+
+  it('suggests a date the collection requires: the one named as a date, else its only one', () => {
+    const date = (slug, name, required = true) => ({ slug, name, type: 'DateTime', required });
+    expect(suggestFieldMap([...blog, date('date', 'Date')])).toEqual({
+      body: 'post-body',
+      metaDescription: 'post-summary',
+      date: 'date',
+    });
+    expect(
+      suggestFieldMap([
+        ...blog,
+        date('event-day', 'Event day'),
+        date('publish-date', 'Publish Date'),
+      ]).date,
+    ).toBe('publish-date');
+    expect(suggestFieldMap([...blog, date('event-day', 'Event day')]).date).toBe('event-day');
+    // Two it requires, neither named as a date: the person picks.
+    expect(
+      suggestFieldMap([...blog, date('event-day', 'Event day'), date('ends', 'Ends')]).date,
+    ).toBeUndefined();
+    // A date it doesn't require isn't filled unasked, nor Webflow's own.
+    expect(suggestFieldMap([...blog, date('post-date', 'Post Date', false)]).date).toBeUndefined();
+    expect(suggestFieldMap([...blog, date('published-on', 'Published On')]).date).toBeUndefined();
+  });
 });
 
 describe('checkFieldMap', () => {
@@ -201,6 +225,33 @@ describe('checkFieldMap', () => {
       checkFieldMap({ body: 'post-body', jsonLd: 'post-summary' }, summaryRequired).problems,
     ).toEqual([
       'The collection requires Post Summary, which Send to CMS doesn’t fill: make it optional in Webflow, or pick another collection',
+    ]);
+  });
+
+  it('fills a date the collection requires with the day a page is sent, a DateTime field only', () => {
+    const fields = [
+      ...blog,
+      { slug: 'date', name: 'Date', type: 'DateTime', required: true },
+      { slug: 'category', name: 'Category', type: 'Reference', required: false },
+    ];
+    expect(checkFieldMap({ body: 'post-body', date: 'date' }, fields)).toEqual({
+      ok: true,
+      map: { body: 'post-body', date: 'date' },
+    });
+    // Left unmapped, the date is still a field Send to CMS doesn't fill.
+    expect(checkFieldMap({ body: 'post-body' }, fields).problems).toEqual([
+      'The collection requires Date, which Send to CMS doesn’t fill: make it optional in Webflow, or pick another collection',
+    ]);
+    expect(checkFieldMap({ body: 'post-body', date: 'post-summary' }, fields).problems).toEqual([
+      'date: Post Summary is PlainText, not DateTime',
+      'The collection requires Date, which Send to CMS doesn’t fill: make it optional in Webflow, or pick another collection',
+    ]);
+    expect(checkFieldMap({ body: 'post-body', metaDescription: 'date' }, fields).problems).toEqual(
+      expect.arrayContaining(['metaDescription: Date is DateTime, not PlainText']),
+    );
+    // Webflow keeps its own dates.
+    expect(checkFieldMap({ body: 'post-body', date: 'published-on' }, blog).problems).toEqual([
+      'date: the collection has no field "published-on"',
     ]);
   });
 });

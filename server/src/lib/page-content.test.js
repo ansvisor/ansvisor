@@ -331,3 +331,40 @@ describe('extractPageContent', () => {
     expect(html).not.toContain('ada.jpg');
   });
 });
+
+describe('extractPageContent on a long or deep page', () => {
+  const P = '<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>';
+  const SIZE = 1024 * 1024;
+  const fill = (unit, size = SIZE) => unit.repeat(Math.ceil(size / unit.length));
+  extractPageContent(`<body>${P}</body>`, 'https://acme.example/');
+
+  // Each shape grew with the square of its length; now each reads in time
+  // near it, well under the limit even on a busy machine.
+  it.each([
+    ['paragraphs side by side', `<html><body>${fill(P)}</body></html>`],
+    ['paragraphs under 500 blocks', `<html><body>${'<div>'.repeat(500)}${fill(P)}</body></html>`],
+    ['scripts to take out', `<html><body>${P}${fill('<script></script>')}</body></html>`],
+    ['hidden blocks to take out', `<html><body>${P}${fill('<div hidden>x</div>')}</body></html>`],
+    [
+      'blocks of links',
+      `<html><body>${P}${fill('<div><a href="/a">a</a><a href="/b">b</a></div>')}</body></html>`,
+    ],
+    [
+      'H1s without words',
+      `<html><body><h1>Title</h1>${P}${fill('<h1><b></b></h1>', SIZE / 2)}</body></html>`,
+    ],
+    [
+      'images under 500 named blocks',
+      `<html><body>${P}${'<div class="post body">'.repeat(500)}${fill('<img src="/a.png">')}</body></html>`,
+    ],
+  ])(
+    'reads a page of %s in time near its length',
+    (_, html) => {
+      const started = Date.now();
+      const { html: content } = extractPageContent(html, 'https://acme.example/blog/post');
+      expect(content).toContain('Lorem ipsum');
+      expect(Date.now() - started).toBeLessThan(4_000);
+    },
+    10_000,
+  );
+});
