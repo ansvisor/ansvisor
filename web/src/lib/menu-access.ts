@@ -135,6 +135,25 @@ export function hiddenMenuSections(
   return left;
 }
 
+/**
+ * The sections off a menu with these work areas, given those the person's
+ * role and exceptions take off whatever they work on: as they pick, before
+ * it's saved.
+ */
+export function hiddenWithWorkAreas(
+  hiddenByAdmin: readonly string[],
+  workAreas: readonly string[],
+): string[] {
+  const byAreas = hiddenMenuSections({
+    role: 'admin',
+    roleHidden: [],
+    shown: [],
+    hidden: [],
+    workAreas,
+  });
+  return MENU_SECTIONS.filter((section) => hiddenByAdmin.includes(section) || byAreas.has(section));
+}
+
 /** Known sections only, once each, in the menu's order; never Action Center. */
 export function cleanMenuSections(values: readonly string[]): string[] {
   return MENU_SECTIONS.filter(

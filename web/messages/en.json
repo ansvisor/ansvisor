@@ -7833,6 +7833,19 @@
     "citationEvidence": "Citation Evidence",
     "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
   },
+  "welcome": {
+    "title": "What do you work on?",
+    "invitedTitle": "Welcome to {workspace} Workspace, {name}",
+    "invitedTitleNoName": "Welcome to {workspace} Workspace",
+    "lede": "Pick what you work on or lead, one or more. We'll set up your menu around it; your team can pick their own when they join.",
+    "invitedLede": "You've joined as {role}. What do you work on or lead? We'll set up your menu around it.",
+    "yourMenu": "Your menu",
+    "hiddenByAdmin": "{count} hidden by your admin",
+    "changeLater": "You can change this any time in Settings › Account.",
+    "skip": "Skip: show me everything",
+    "continue": "Continue",
+    "saveFailed": "Couldn't save your work areas. Try again."
+  },
   "settings": {
     "title": "Settings",
     "description": "Manage your project and account settings.",

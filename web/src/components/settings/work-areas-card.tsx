@@ -15,7 +15,7 @@ import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import {
   MENU_SECTIONS,
   WORK_AREA_IDS,
-  hiddenMenuSections,
+  hiddenWithWorkAreas,
   menuSectionOf,
   type WorkAreaId,
 } from '@/lib/menu-access';
@@ -34,18 +34,7 @@ const SECTIONS = dashboardNav
  * areas narrow the rest (as for anyone, admins included).
  */
 export function menuWithWorkAreas(menu: MyMenu, workAreas: WorkAreaId[]): MyMenu {
-  const byAreas = hiddenMenuSections({
-    role: 'admin',
-    roleHidden: [],
-    shown: [],
-    hidden: [],
-    workAreas,
-  });
-  return {
-    ...menu,
-    workAreas,
-    hidden: MENU_SECTIONS.filter((s) => menu.hiddenByAdmin.includes(s) || byAreas.has(s)),
-  };
+  return { ...menu, workAreas, hidden: hiddenWithWorkAreas(menu.hiddenByAdmin, workAreas) };
 }
 
 /**
