@@ -8,6 +8,8 @@ import { PlanProvider } from '@/components/providers/plan-provider';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
+import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
@@ -125,42 +127,44 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionStatus={subscriptionStatus}
       >
         <RoleProvider role={role}>
-          <DemoBrandProvider
-            demoBrand={
-              demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
-            }
-            everSubscribed={Boolean(org?.stripe_subscription_id)}
-          >
-            <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
-              {/* Inside the provider: it records nothing while the workspace is read-only. */}
-              <GettingStartedPageOpened />
-              <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
-                <AiUsageProvider>
-                  <div className="flex h-screen overflow-hidden">
-                    {/* Desktop sidebar */}
-                    <div className="relative hidden md:flex md:flex-shrink-0">
-                      <SidebarErrorBoundary>
-                        <Sidebar />
-                      </SidebarErrorBoundary>
-                    </div>
-
-                    {/* Main area */}
-                    <div className="flex flex-1 flex-col overflow-hidden">
-                      <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                        <MobileNav />
+          <ChatAgenticProvider enabled={chatAgenticEnabled(profile.organization_id)}>
+            <DemoBrandProvider
+              demoBrand={
+                demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
+              }
+              everSubscribed={Boolean(org?.stripe_subscription_id)}
+            >
+              <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
+                {/* Inside the provider: it records nothing while the workspace is read-only. */}
+                <GettingStartedPageOpened />
+                <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
+                  <AiUsageProvider>
+                    <div className="flex h-screen overflow-hidden">
+                      {/* Desktop sidebar */}
+                      <div className="relative hidden md:flex md:flex-shrink-0">
+                        <SidebarErrorBoundary>
+                          <Sidebar />
+                        </SidebarErrorBoundary>
                       </div>
-                      <ReadOnlyBanner />
-                      <DemoBanner />
-                      <main className="flex-1 overflow-y-auto bg-background p-6">
-                        <BrandGuard>{children}</BrandGuard>
-                      </main>
-                      <TrackingJobHandoff />
+
+                      {/* Main area */}
+                      <div className="flex flex-1 flex-col overflow-hidden">
+                        <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                          <MobileNav />
+                        </div>
+                        <ReadOnlyBanner />
+                        <DemoBanner />
+                        <main className="flex-1 overflow-y-auto bg-background p-6">
+                          <BrandGuard>{children}</BrandGuard>
+                        </main>
+                        <TrackingJobHandoff />
+                      </div>
                     </div>
-                  </div>
-                </AiUsageProvider>
-              </MenuAccessProvider>
-            </UpgradeDialogProvider>
-          </DemoBrandProvider>
+                  </AiUsageProvider>
+                </MenuAccessProvider>
+              </UpgradeDialogProvider>
+            </DemoBrandProvider>
+          </ChatAgenticProvider>
         </RoleProvider>
       </PlanProvider>
     </>

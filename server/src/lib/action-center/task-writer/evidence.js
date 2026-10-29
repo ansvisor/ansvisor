@@ -7,9 +7,9 @@
  *
  * Read from the signals' payloads as the evidence steps write them
  * (signals/record.js): a lost citation's lost and cited-now pages, a
- * competitor's positions and winning sources, uncited mentions, AI-traffic
- * referrals, and a library finding's targets. The web's Affected tab reads the
- * same fields (web/src/lib/action-center/affected.ts).
+ * competitor's positions, winning sources and page events, uncited mentions,
+ * AI-traffic referrals, and a library finding's targets. The web's Affected
+ * tab reads the same fields (web/src/lib/action-center/affected.ts).
  *
  * Every entity gets a short ref ("page:1", "prompt:3") the model cites.
  */
@@ -147,7 +147,13 @@ export function buildEvidence(signals, { domains: brandDomains = [] } = {}) {
     if (!key) return null;
     let entry = competitors.get(key.toLowerCase());
     if (!entry) {
-      entry = { name: key, prompts: new Set(), sources: new Set(), evidence: 0 };
+      entry = {
+        name: key,
+        prompts: new Set(),
+        sources: new Set(),
+        pageEvents: new Map(),
+        evidence: 0,
+      };
       competitors.set(key.toLowerCase(), entry);
     }
     entry.evidence += 1;
@@ -221,6 +227,19 @@ export function buildEvidence(signals, { domains: brandDomains = [] } = {}) {
       if (!entry) continue;
       entry.answers += num(source.answers) ?? 0;
       rival?.sources.add(entry);
+    }
+    // What happened to its pages lately (learning C3), once per event.
+    for (const event of list(p.pageEvents)) {
+      const url = str(event?.url);
+      const day = str(event?.at).slice(0, 10);
+      if (!rival || !url || !day) continue;
+      if (event.kind !== 'first_cited' && event.kind !== 'changed') continue;
+      rival.pageEvents.set(`${event.kind}|${url}|${day}`, {
+        kind: event.kind,
+        url,
+        day,
+        detail: event.detail ?? {},
+      });
     }
 
     // Answers that name the brand without citing it.
@@ -316,6 +335,36 @@ export function hasTargets(evidence) {
 
 const refsOf = (set) => [...set].map((entry) => entry.ref).filter(Boolean);
 
+/** Page events shown per competitor, newest first. */
+const PAGE_EVENTS_SHOWN = 5;
+
+/** Check names from a page event's gained or lost list. */
+const checkLabels = (checks) =>
+  list(checks)
+    .map((check) => str(check?.label) || str(check?.key))
+    .filter(Boolean);
+
+/** A competitor's page events as the model reads them: what, when, on which page. */
+function pageEventsForPrompt(events) {
+  return [...events.values()]
+    .sort((a, b) => b.day.localeCompare(a.day))
+    .slice(0, PAGE_EVENTS_SHOWN)
+    .map((event) => {
+      const base = { date: event.day, page: bareUrl(event.url) };
+      if (event.kind === 'first_cited') {
+        return { ...base, event: 'first cited in your tracked answers' };
+      }
+      const gained = checkLabels(event.detail.gained);
+      const lost = checkLabels(event.detail.lost);
+      return {
+        ...base,
+        event: 'page changed',
+        ...(gained.length ? { nowHas: gained } : {}),
+        ...(lost.length ? { noLongerHas: lost } : {}),
+      };
+    });
+}
+
 /**
  * The evidence as the model reads it: plain objects, refs instead of
  * cross-links, platform names instead of slugs.
@@ -364,6 +413,7 @@ export function evidenceForPrompt(evidence) {
       name: entry.name,
       ...(entry.prompts.size ? { aheadOnPrompts: refsOf(entry.prompts) } : {}),
       ...(entry.sources.size ? { winsWith: refsOf(entry.sources) } : {}),
+      ...(entry.pageEvents.size ? { pageEvents: pageEventsForPrompt(entry.pageEvents) } : {}),
     })),
     topics: evidence.topics.map((entry) => ({ ref: entry.ref, name: entry.name })),
   };

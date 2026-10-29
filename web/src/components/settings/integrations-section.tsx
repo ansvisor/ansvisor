@@ -26,20 +26,26 @@ import {
 import { BarChart3, Globe, Loader2, Search, ShoppingBag, Unplug } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
-  getIntegrationStatus,
   disconnectIntegration,
-  getGscProperties,
   getGscBrandMappings,
   setBrandGscProperty,
-  getGaProperties,
   getGaBrandMappings,
   setBrandGaProperty,
   type IntegrationProvider,
   type IntegrationStatus,
 } from '@/lib/actions/integrations';
+import {
+  readGaProperties,
+  readGscProperties,
+  readIntegrationStatus,
+  readIntegrationsConfig,
+  isTimeout,
+  withReadTimeout,
+  type IntegrationFailure,
+  type IntegrationResult,
+} from '@/lib/integrations-client';
 import { matchProperty } from '@/lib/property-match';
 import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
-import { isCloud } from '@/config/plans';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { CatalogCategoryPages } from './catalog-category-pages';
 import { FramerCard } from './framer-card';
@@ -72,6 +78,9 @@ import {
  * product catalog card below it. Content management systems: where Send to
  * CMS puts a brand's pages.
  *
+ * Every card reads on its own, from the browser or with a timeout, so a slow
+ * or failing one never holds up the rest: each says when it couldn't be read.
+ *
  * On the demo brand, the cards show the demo's states (lib/demo/integrations):
  * the live ones connected with sample data, the ones still to come as Coming
  * soon, those without a card of their own as a row in their group.
@@ -79,6 +88,20 @@ import {
 export function IntegrationsSection() {
   const t = useTranslations('settings');
   const { isDemo } = useDemoBrand();
+  // Merchant Center's card shows only where this server offers it (its Composio auth config),
+  // as the API's config says: env only, read at once and never behind a status. Until it
+  // says so the card isn't there, with no skeleton; a config that can't be read (an older
+  // API, or one that is down) offers nothing.
+  const [merchantCenterOffered, setMerchantCenterOffered] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void readIntegrationsConfig().then((config) => {
+      if (!cancelled) setMerchantCenterOffered(config?.googleMerchantCenter === true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // Bumped when a brand adds a Merchant Center account, so the catalog card lists it.
   const [catalogReads, setCatalogReads] = useState(0);
   // The catalog's sources as its card read them, for the picker to mark the accounts added.
@@ -123,20 +146,21 @@ export function IntegrationsSection() {
         </IntegrationCard>
 
         <IntegrationGroup title={t('integrations_stores')}>
-          <IntegrationCard
-            provider="google-merchant-center"
-            label={MERCHANT_CENTER_LABEL}
-            description={t('merchantCenter.description')}
-            icon={<ShoppingBag className="h-5 w-5 text-muted-foreground" />}
-            authConfigEnv="COMPOSIO_GMC_AUTH_CONFIG_ID"
-            hideUnavailable
-            comingSoon={t('merchantCenter.comingSoon')}
-          >
-            <MerchantCenterAccounts
-              sources={catalogSources}
-              onConnected={() => setCatalogReads((n) => n + 1)}
-            />
-          </IntegrationCard>
+          {/* On the demo brand it shows, as Coming soon (lib/demo/integrations). */}
+          {(merchantCenterOffered || isDemo) && (
+            <IntegrationCard
+              provider="google-merchant-center"
+              label={MERCHANT_CENTER_LABEL}
+              description={t('merchantCenter.description')}
+              icon={<ShoppingBag className="h-5 w-5 text-muted-foreground" />}
+              authConfigEnv="COMPOSIO_GMC_AUTH_CONFIG_ID"
+            >
+              <MerchantCenterAccounts
+                sources={catalogSources}
+                onConnected={() => setCatalogReads((n) => n + 1)}
+              />
+            </IntegrationCard>
+          )}
 
           {isDemo &&
             upcomingDemoIntegrations('stores').map((id) => (
@@ -221,15 +245,9 @@ function UpcomingIntegrationCard({ id }: { id: string }) {
  * One integration row: status badge, Connect / Disconnect, and whatever the
  * provider wants to render once connected (`children`).
  *
- * `hideUnavailable`: a newer integration's card isn't shown while its status
- * can't be read (an API older than the web), nor on the cloud while it isn't
- * set up there; a self-hosted server keeps the set-up line.
- *
- * `comingSoon`: while the cloud isn't set up for it, the card says Coming
- * soon and this line instead, with nothing to connect (Google Merchant
- * Center, until Google approves the connection); a self-hosted server keeps
- * the set-up line. Sources a brand added before stay in Product catalog,
- * where they're removed.
+ * Its status is read on its own (lib/integrations-client.ts): one that is
+ * slow or fails leaves the other cards be, and after its timeout the card
+ * says it couldn't check, with Try again in place of the skeleton.
  *
  * On the demo brand, its state comes from the demo's list instead of the
  * API: connected (with "Sample data"; Disconnect opens the plan dialog), or
@@ -241,8 +259,6 @@ function IntegrationCard({
   description,
   icon,
   authConfigEnv,
-  hideUnavailable = false,
-  comingSoon,
   children,
 }: {
   provider: IntegrationProvider;
@@ -250,8 +266,6 @@ function IntegrationCard({
   description: string;
   icon: ReactNode;
   authConfigEnv: string;
-  hideUnavailable?: boolean;
-  comingSoon?: string;
   children?: ReactNode;
 }) {
   const t = useTranslations('settings');
@@ -260,7 +274,8 @@ function IntegrationCard({
   const { openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const [readStatus, setStatus] = useState<IntegrationStatus | null>(null);
-  const [unreadable, setUnreadable] = useState(false);
+  // Why the last read of the status didn't come back, while there's no status.
+  const [failure, setFailure] = useState<IntegrationFailure | null>(null);
   // The demo's state, else the API's.
   const status: IntegrationStatus | null =
     demo === 'connected' ? 'connected' : demo === 'soon' ? 'not_configured' : readStatus;
@@ -272,23 +287,15 @@ function IntegrationCard({
   });
 
   const load = useCallback(async () => {
-    try {
-      const result = await getIntegrationStatus(provider);
-      setStatus(result.status);
-    } catch (err) {
-      console.error(`Failed to load ${provider} status:`, err);
-      if (hideUnavailable) {
-        setUnreadable(true);
-        return;
-      }
-      toast.error('Failed to load integration status');
-      setStatus('not_connected');
-    }
-  }, [provider, hideUnavailable]);
+    setFailure(null);
+    const result = await readIntegrationStatus(provider);
+    if (result.ok) setStatus(result.value);
+    else setFailure(result.reason);
+  }, [provider]);
 
   useEffect(() => {
     if (demo) return;
-    load();
+    void load();
   }, [load, demo]);
 
   const handleDisconnect = async () => {
@@ -304,16 +311,7 @@ function IntegrationCard({
     }
   };
 
-  const soon = demo
-    ? demo === 'soon'
-    : comingSoon !== undefined && status === 'not_configured' && isCloud();
-  if (
-    !demo &&
-    hideUnavailable &&
-    (unreadable || (status === 'not_configured' && isCloud() && !soon))
-  ) {
-    return null;
-  }
+  const soon = demo === 'soon';
 
   return (
     <div className="space-y-4">
@@ -344,7 +342,11 @@ function IntegrationCard({
           </div>
         </div>
 
-        {soon ? null : status === null ? (
+        {soon ? null : status === null && failure ? (
+          <Button variant="outline" size="sm" className="shrink-0" onClick={() => void load()}>
+            {t('integrations_retry')}
+          </Button>
+        ) : status === null ? (
           <Skeleton className="h-8 w-24" />
         ) : status === 'not_configured' ? (
           <Badge variant="outline" className="text-muted-foreground shrink-0">
@@ -407,7 +409,13 @@ function IntegrationCard({
         )}
       </div>
 
-      {soon && comingSoon && <p className="text-xs text-muted-foreground">{comingSoon}</p>}
+      {status === null && failure && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t(failure === 'timeout' ? 'integrations_statusTimedOut' : 'integrations_statusFailed', {
+            label,
+          })}
+        </p>
+      )}
 
       {status === 'not_configured' && !soon && (
         <p className="text-xs text-muted-foreground">
@@ -462,14 +470,15 @@ function PropertyMapping({
   sourceName: string;
   description: string;
   emptyMessage: string;
-  loadOptions: () => Promise<PropertyOption[]>;
+  loadOptions: () => Promise<IntegrationResult<PropertyOption[]>>;
   loadRows: () => Promise<BrandPropertyRow[]>;
   save: (brandId: string, value: string | null) => Promise<void>;
 }) {
   const t = useTranslations('settings');
   const [options, setOptions] = useState<PropertyOption[] | null>(null);
   const [rows, setRows] = useState<BrandPropertyRow[] | null>(null);
-  const [loadFailed, setLoadFailed] = useState<string | null>(null);
+  // Why the properties couldn't be read: they took too long, or the API's words.
+  const [loadFailed, setLoadFailed] = useState<'timeout' | { message: string } | null>(null);
   const [savingBrandId, setSavingBrandId] = useState<string | null>(null);
   const autoMatched = useRef(false);
   // A read-only workspace (plan not active): picking a property opens the
@@ -480,11 +489,23 @@ function PropertyMapping({
   const load = useCallback(async () => {
     setLoadFailed(null);
     try {
-      const [properties, brands] = await Promise.all([loadOptions(), loadRows()]);
-      setOptions(properties);
+      const [properties, brands] = await Promise.all([loadOptions(), withReadTimeout(loadRows())]);
+      if (!properties.ok) {
+        setLoadFailed(
+          properties.reason === 'timeout'
+            ? 'timeout'
+            : { message: properties.error ?? 'Failed to load properties' },
+        );
+        return;
+      }
+      setOptions(properties.value);
       setRows(brands);
     } catch (err) {
-      setLoadFailed(err instanceof Error ? err.message : 'Failed to load properties');
+      setLoadFailed(
+        isTimeout(err)
+          ? 'timeout'
+          : { message: err instanceof Error ? err.message : 'Failed to load properties' },
+      );
     }
   }, [loadOptions, loadRows]);
 
@@ -535,9 +556,11 @@ function PropertyMapping({
     return (
       <div className="rounded-lg border p-4 text-sm">
         <p className="text-muted-foreground">Couldn&apos;t load {sourceName} properties.</p>
-        <p className="mt-1 text-xs text-muted-foreground">{loadFailed}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {loadFailed === 'timeout' ? t('integrations_propertiesTimedOut') : loadFailed.message}
+        </p>
         <Button variant="outline" size="sm" className="mt-3" onClick={load}>
-          Retry
+          {t('integrations_retry')}
         </Button>
       </div>
     );
@@ -605,9 +628,13 @@ function PropertyMapping({
 // Loaders live at module scope so their identity is stable across renders —
 // PropertyMapping's effects depend on them.
 
-async function loadGscOptions(): Promise<PropertyOption[]> {
-  const properties = await getGscProperties();
-  return properties.map((p) => ({ value: p.siteUrl, label: p.siteUrl, siteUrls: [p.siteUrl] }));
+async function loadGscOptions(): Promise<IntegrationResult<PropertyOption[]>> {
+  const result = await readGscProperties();
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: result.value.map((p) => ({ value: p.siteUrl, label: p.siteUrl, siteUrls: [p.siteUrl] })),
+  };
 }
 
 async function loadGscRows(): Promise<BrandPropertyRow[]> {
@@ -642,14 +669,20 @@ function useDemoMapping(property: (brand: Brand) => PropertyOption) {
   if (loaders.key !== key) {
     setLoaders({
       key,
-      loadOptions: async () => (option ? [option] : []),
+      loadOptions: async (): Promise<IntegrationResult<PropertyOption[]>> => ({
+        ok: true,
+        value: option ? [option] : [],
+      }),
       loadRows: async () => (row ? [row] : []),
     });
   }
   return loaders;
 }
 
-const noOptions = async (): Promise<PropertyOption[]> => [];
+const noOptions = async (): Promise<IntegrationResult<PropertyOption[]>> => ({
+  ok: true,
+  value: [],
+});
 const noRows = async (): Promise<BrandPropertyRow[]> => [];
 const saveNothing = async () => {};
 
@@ -686,16 +719,20 @@ function GscPropertyMapping() {
   );
 }
 
-async function loadGaOptions(): Promise<PropertyOption[]> {
-  const properties = await getGaProperties();
-  return properties.map((p) => ({
-    value: p.propertyId,
-    // Display names repeat across accounts ("GA4"), so the id disambiguates.
-    label: p.accountName
-      ? `${p.displayName} · ${p.accountName} (${p.propertyId})`
-      : `${p.displayName} (${p.propertyId})`,
-    siteUrls: p.siteUrls,
-  }));
+async function loadGaOptions(): Promise<IntegrationResult<PropertyOption[]>> {
+  const result = await readGaProperties();
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: result.value.map((p) => ({
+      value: p.propertyId,
+      // Display names repeat across accounts ("GA4"), so the id disambiguates.
+      label: p.accountName
+        ? `${p.displayName} · ${p.accountName} (${p.propertyId})`
+        : `${p.displayName} (${p.propertyId})`,
+      siteUrls: p.siteUrls,
+    })),
+  };
 }
 
 async function loadGaRows(): Promise<BrandPropertyRow[]> {

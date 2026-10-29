@@ -354,6 +354,15 @@
       "frameTitle": "Chat preview"
     }
   },
+  "managersOnly": {
+    "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
+    "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
+    "generateOpportunities": "Ask an admin or a manager to generate opportunities.",
+    "trackOrSuggestContent": "Ask an admin or a manager to track these prompts or suggest content for them.",
+    "generateBrief": "Ask an admin or a manager to generate a brief.",
+    "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
+    "addPrompts": "Ask an admin or a manager to add prompts."
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",
@@ -468,7 +477,9 @@
     "firstRun": {
       "running": "First analysis running",
       "queued": "First analysis queued",
-      "progress": "{current} of {total} answers",
+      "progress": "{current} of {total} checks",
+      "minutesLeft": "about {minutes} min left",
+      "hoursLeft": "{hours, plural, one {about # hour left} other {about # hours left}}",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
       "link": "Follow it on Brand Visibility"
@@ -809,6 +820,10 @@
           "untitled": "Untitled prompt",
           "sourceAnswers": "cited in {count} of the {of, plural, one {# latest answer} other {# latest answers}} they win"
         },
+        "pageEvents": {
+          "none": "No page of theirs was first cited in your answers or changed in the last {days} days.",
+          "timeline": "See their pages over time"
+        },
         "cited": {
           "position": "#{position}",
           "lastCited": "last cited {date}",
@@ -851,6 +866,7 @@
           "evidence": "Failed checks",
           "competitorPositions": "Positions by prompt",
           "winningSources": "Sources behind their wins",
+          "competitorPageEvents": "What happened to their pages",
           "mentionDetails": "Mentions by prompt"
         },
         "scopes": {
@@ -3187,7 +3203,8 @@
     "dismissSuggestion": {
       "name": "Dismiss prompt suggestions",
       "step": "Dismissed prompt suggestion"
-    }
+    },
+    "askAdmin": { "name": "Ask your Admin", "step": "Sent to your Admins" }
   },
   "agentic": {
     "avatar": {
@@ -3313,6 +3330,300 @@
       "noAccess": "Its Admins can add you to it.",
       "choosePlan": "Admins can choose a plan.",
       "demo": "No one: the demo brand keeps its sample data."
+    }
+  },
+  "chatAccess": {
+    "roleNames": {
+      "admin": "Admin",
+      "manager": "Manager",
+      "analyst": "Analyst",
+      "agency_partner": "Agency partner"
+    },
+    "classes": { "read": "READ", "write": "WRITE", "execute": "EXECUTE", "never": "NEVER" },
+    "plan": {
+      "yourPlan": "Your plan",
+      "perMonth": "{price}/mo",
+      "trial": "Trial",
+      "custom": "Custom contract",
+      "chips": {
+        "platforms": "{count, plural, one {# AI platform} other {# AI platforms}}",
+        "fullAuto": "Full auto",
+        "ownKeys": "Own AI keys",
+        "mcp": "{access, select, read {MCP read} read_write {MCP read + write} other {MCP}}",
+        "openPr": "Open PR",
+        "claude": "Claude tracking"
+      },
+      "locked": "Needs {plan} · you're on {current}",
+      "lockedTrial": "Not in the trial · {plan} and up",
+      "aiLimit": "AI limit",
+      "aiUsed": "{percent} used",
+      "comparePlans": "Compare plans",
+      "upgrade": "Upgrade",
+      "choosePlan": "Choose a plan",
+      "next": "With {plan} you'd also get",
+      "afterTrial": "After your trial",
+      "priceDiff": "+{price}/mo",
+      "afterTrialPrice": "{plan} · {price}/mo after the trial",
+      "customPrice": "Custom price",
+      "benefits": {
+        "morePlatforms": "See your brand in {count, plural, one {# more AI platform} other {# more AI platforms}}",
+        "fullAuto": "Let Chat make routine changes for you with Full auto",
+        "mcpWrite": "Open pull requests and make changes from Claude, ChatGPT or Cursor",
+        "claude": "Track how Claude answers about your brand",
+        "contract": "AI limit, storage and prompt limits set in your contract",
+        "aiLimit": "{times}× the monthly AI limit",
+        "keepEverything": "Keep everything you're using now",
+        "mcp": "Use Ansvisor inside Claude, ChatGPT and Cursor (MCP)",
+        "monthlyLimit": "A monthly AI limit that resets, instead of the trial's one-time limit",
+        "packs": "Buy extra AI credits and storage when you need them"
+      }
+    },
+    "roles": {
+      "title": "Roles & access",
+      "lead": "Who can do what in this workspace, in the app and through Chat. Chat acts as the signed-in person and never has more rights than they do.",
+      "readOnly": "You're {role, select, manager {a Manager} analyst {an Analyst} other {an Agency partner}} · read-only here",
+      "readOnlyNote": "Only Admins change roles",
+      "members": "Members",
+      "manageInTeam": "Invite or remove in Team",
+      "columns": {
+        "member": "Member",
+        "role": "Role",
+        "brands": "Brands",
+        "throughChat": "Through Chat",
+        "lastActive": "Last active"
+      },
+      "you": "You",
+      "allBrands": "All brands",
+      "neverSignedIn": "Not yet",
+      "roleChanged": "Role changed",
+      "roleChangeFailed": "Couldn't change the role. Try again.",
+      "loadError": "Couldn't load Roles & access. Try again in a moment.",
+      "throughChat": {
+        "admin": "Everything, incl. policy, keys, connections",
+        "manager": "WRITE with approval · EXECUTE after click",
+        "analyst": "Read-only composer · asks an Admin",
+        "agency_partner": "Read-only composer · asks an Admin"
+      },
+      "matrix": {
+        "title": "What each role can do",
+        "count": "app and Chat",
+        "actsAsUser": "Chat acts as the signed-in person",
+        "capability": "Capability",
+        "adminNote": "Changes roles",
+        "groups": {
+          "everyone": "Everyone · app and Chat",
+          "workspace": "Workspace changes",
+          "admin": "Admin only",
+          "never": "Never through Chat"
+        },
+        "rows": {
+          "readApp": { "name": "See dashboards, prompts, citations and reports", "scope": "App" },
+          "askChat": {
+            "name": "Ask Chat, create files and downloads for yourself",
+            "scope": "Chat"
+          },
+          "personal": {
+            "name": "Personal memory and personal in-app watch rules",
+            "scope": "Chat · only you"
+          },
+          "actions": {
+            "name": "Create or attach actions · prompts, topics, competitors",
+            "scope": "App and Chat"
+          },
+          "drafts": {
+            "name": "Drafts, briefs, schedules, CMS drafts",
+            "scope": "App and Chat · approval card"
+          },
+          "agents": { "name": "Create triggered agents", "scope": "Run with the creator's role" },
+          "shared": {
+            "name": "Workspace memory, shared skills, marketplace skills",
+            "scope": "Chat"
+          },
+          "execute": {
+            "name": "Publish, open a PR, send external email",
+            "scope": "Always after a click"
+          },
+          "billing": {
+            "name": "Billing, plan, AI credit and storage packs",
+            "scope": "Settings › Billing"
+          },
+          "team": { "name": "Team: invite, change roles, remove", "scope": "Settings › Team" },
+          "policy": {
+            "name": "Chat tool policy, Full auto availability",
+            "scope": "Settings › Chat"
+          },
+          "keys": {
+            "name": "Connections, MCP server keys, API and AI provider keys",
+            "scope": "Settings › Integrations · Keys"
+          },
+          "never": {
+            "name": "Mark a task done, change roles or billing, delete a brand, reveal keys",
+            "scope": "Not a Chat tool"
+          }
+        },
+        "cells": {
+          "yes": "Yes",
+          "approves": "approves",
+          "request": "Request",
+          "after_click": "after click",
+          "no": "No",
+          "not_tool": "Not a tool"
+        }
+      },
+      "switches": {
+        "title": "Admin switches",
+        "onlyAdmins": "Only Admins change these",
+        "managerExecute": "Managers can publish, open PRs and send external email after the click",
+        "managerExecuteNote": "EXECUTE always needs a click, whoever runs it",
+        "fullAuto": "Members can use Full auto",
+        "fullAutoNote": "Chat makes routine changes without asking each time",
+        "on": "On",
+        "off": "Off",
+        "offFor": "Off for {groups}",
+        "needsPlan": "Needs {plan}",
+        "setBy": "Set by {name}",
+        "groups": {
+          "publishing": "publishing",
+          "email_outreach": "email and outreach",
+          "code_prs": "pull requests",
+          "feeds": "feed pushes"
+        }
+      }
+    },
+    "askAdmin": {
+      "button": "Ask your Admin",
+      "title": "Ask your Admin",
+      "lead": "Your Admins get this in Settings › Team › Roles & access. They can change your role, or make the change themselves.",
+      "label": "What do you need?",
+      "send": "Send",
+      "cancel": "Cancel",
+      "sent": "Sent to your Admins",
+      "tooMany": "You have {count} requests waiting. Withdraw one, or wait for your Admins.",
+      "dailyLimit": "You've sent {count} requests today. Try again tomorrow.",
+      "alreadyToday": "You already asked for this today.",
+      "failed": "Couldn't send it. Try again.",
+      "defaults": {
+        "role": "Change my role so I can make changes in this workspace",
+        "plan": "Upgrade to {plan}"
+      },
+      "roleDetail": "Your role is {role}.",
+      "planDetail": "Needs {plan} · you're on {current}"
+    },
+    "requests": {
+      "title": "Requests",
+      "yours": "Your requests",
+      "lead": "Ask your Admin requests from Chat and Settings. The first Admin who acts decides it.",
+      "leadYours": "What you asked your Admins for, and what they decided.",
+      "empty": "No requests.",
+      "emptyYours": "You haven't asked for anything.",
+      "from": "From {name}",
+      "approve": "Approve",
+      "dismiss": "Dismiss",
+      "withdraw": "Withdraw",
+      "approved": "Approved. Change their role in Members, or make the change yourself.",
+      "dismissed": "Dismissed",
+      "withdrawn": "Withdrawn",
+      "alreadyDecided": "Another Admin already decided it.",
+      "failed": "Couldn't update it. Try again.",
+      "status": {
+        "pending": "Waiting",
+        "approved": "Approved",
+        "rejected": "Dismissed",
+        "withdrawn": "Withdrawn"
+      }
+    },
+    "yourAccess": {
+      "title": "Your access",
+      "brands": "Brands",
+      "actsAsYou": "Chat acts as you",
+      "yourRole": "Your role: {role}",
+      "rows": {
+        "read": "Read data, ask Chat, files for yourself",
+        "personal": "Personal memory and in-app watch rules",
+        "workspace": "Actions, prompts, drafts, schedules",
+        "agents": "Create triggered agents",
+        "execute": "Publish, open a PR, external email",
+        "settings": "Billing, team, tool policy, connections, keys"
+      },
+      "values": {
+        "yes": "Yes",
+        "yes_card": "Yes · approval card",
+        "after_click": "After your click",
+        "after_click_except": "After your click, except {groups}",
+        "execute_off": "Off: an Admin turned it off for Managers",
+        "ask_admin": "Ask your Admin"
+      },
+      "seeRoles": "See what each role can do",
+      "seeCapabilities": "What Chat can do"
+    },
+    "capabilities": {
+      "title": "What Chat can do",
+      "areas": "{count, plural, one {# area} other {# areas}}",
+      "lead": "Every tool Chat may use, by area: what it reads, what it may change, and who may change it. Anything not listed here, Chat doesn't do.",
+      "search": "Search areas or actions",
+      "filters": {
+        "all": "All",
+        "write": "Has WRITE",
+        "execute": "Has EXECUTE",
+        "read": "Read only"
+      },
+      "columns": {
+        "area": "Area",
+        "read": "Read",
+        "write": "Write",
+        "execute": "Execute",
+        "who": "Who can change"
+      },
+      "legend": {
+        "none": "No approval",
+        "card": "Approval card",
+        "auto": "Can auto-run in Full auto",
+        "click": "Needs your click"
+      },
+      "readAll": "Read: all roles",
+      "locked": "Needs {plan}",
+      "empty": "No area matches your search.",
+      "areaNames": {
+        "account": "Account",
+        "usage": "AI usage",
+        "brands": "Brands",
+        "visibility": "Visibility",
+        "prompts": "Prompts",
+        "topics": "Topics",
+        "mentions": "Mentions",
+        "citations": "Citations",
+        "competitors": "Competitors",
+        "product_visibility": "Product Visibility",
+        "ai_traffic": "AI Referral Traffic",
+        "site_audit": "Site Audit",
+        "action_center": "Action Center",
+        "content": "Content",
+        "reports": "Reports"
+      }
+    }
+  },
+  "chatActivity": {
+    "summary": {
+      "saveDraft": "Saved the draft “{title}”",
+      "saveDraftUndo": "Moved the draft “{title}” to the archive",
+      "opportunityStatus": "{status, select, dismissed {Dismissed} other {Marked reviewed}} the opportunity “{title}”",
+      "opportunityStatusUndo": "Put the opportunity “{title}” back as it was",
+      "dismissSuggestion": "Dismissed the prompt suggestion “{text}”",
+      "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
+      "askAdmin": "Asked your Admins: “{asked}”",
+      "askAdminUndo": "Withdrew the request “{asked}”",
+      "accessDenied": "Not allowed: {tool}"
+    },
+    "undo": {
+      "ok": "Undone.",
+      "changed": "This changed since. Open it to undo by hand.",
+      "gone": "This was deleted since, so there's nothing to undo.",
+      "expired": "Undo is no longer available for this change. Change it by hand instead.",
+      "notUndoable": "This change can't be undone here.",
+      "alreadyUndone": "This was already undone.",
+      "inProgress": "Undo is already on its way.",
+      "notFound": "I couldn't find that change.",
+      "failed": "Something went wrong, so nothing was undone. Try again."
     }
   },
   "audit": {
@@ -3726,6 +4037,25 @@
     "viewAll": "View all"
   },
   "insights": {
+    "tracking": {
+      "queued": "Queued — starting automatically",
+      "analyzing": "Analyzing prompts...",
+      "stop": "Stop",
+      "queuedBody": "Another analysis is running right now. Yours will begin the moment a slot opens up — no need to wait here, it'll keep going in the background.",
+      "activeBody": "This can take anywhere from a few minutes to 1–2 hours at busy times. You can leave this page — it keeps running in the background.",
+      "activeBodyMinutes": "About {minutes} min left at the current pace. You can leave this page — it keeps running in the background.",
+      "activeBodyHours": "{hours, plural, one {About # hour left} other {About # hours left}} at the current pace. You can leave this page — it keeps running in the background.",
+      "dailyRun": "Daily tracking in progress",
+      "run": "Tracking in progress",
+      "runBody": "— showing the latest completed results; the numbers will refresh when this run finishes.",
+      "firstRun": "First tracking in progress",
+      "firstRunBody": "— your results appear here as soon as it finishes. You can leave this page.",
+      "done": "Analysis complete.",
+      "doneCount": "{count, plural, one {Analysis complete — # answer saved.} other {Analysis complete — # answers saved.}}",
+      "doneSoFar": "{count, plural, one {Almost done — # answer saved so far, the rest still arriving.} other {Almost done — # answers saved so far, the rest still arriving.}}",
+      "failed": "Job failed: {reason}",
+      "unknownError": "Unknown error"
+    },
     "title": "Answer Engine Insights",
     "description": "Monitor how your brand is represented in AI-generated answers.",
     "runPrompts": "Run Prompts",
@@ -4002,7 +4332,23 @@
       "lastRun": "Last run"
     },
     "appearedIn": "Appeared in {visible} of {active, plural, one {# prompt} other {# prompts}}",
-    "openDetails": "Open topic details"
+    "openDetails": "Open topic details",
+    "rowMenu": {
+      "label": "Actions for {name}",
+      "delete": "Delete topic"
+    },
+    "delete": {
+      "title": "Delete the topic \"{name}\"?",
+      "counting": "Counting the prompts in this topic…",
+      "prompts": "{count, plural, =0 {No prompts are in this topic.} one {# prompt is in this topic. It isn't deleted: it keeps its tracking and results, and moves to prompts without a topic.} other {# prompts are in this topic. They aren't deleted: they keep their tracking and results, and move to prompts without a topic.}}",
+      "promptsKept": "Its prompts aren't deleted: they keep their tracking and results, and move to prompts without a topic.",
+      "undoHint": "You can undo for 10 seconds.",
+      "keep": "Keep it",
+      "confirm": "Delete topic",
+      "deleted": "Topic deleted",
+      "undo": "Undo",
+      "failed": "Couldn't delete \"{name}\", so it's back in the list."
+    }
   },
   "contentEditor": {
     "publish": {
@@ -7702,6 +8048,9 @@
     "presenceRate": "Presence Rate",
     "gaps": "Content Gaps",
     "suggestions": {
+      "loadFailed": "Couldn't load suggestions",
+      "loadUnavailable": "Ansvisor isn't answering right now. Try again in a moment.",
+      "retry": "Retry",
       "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
       "catalog": {
         "badge": "Your catalog",
@@ -9173,6 +9522,7 @@
     "general": "General",
     "apiKeys": "API Keys",
     "team": "Team",
+    "rolesAccess": "Roles & access",
     "menuAccess": {
       "title": "Menu access",
       "new": "New",
@@ -9583,6 +9933,13 @@
     "integrations_cancel": "Cancel",
     "integrations_connecting": "Connecting…",
     "integrations_connect": "Connect",
+    "integrations_connectFailed": "Couldn't start connecting {label}. Try again in a moment.",
+    "integrations_connectTimedOut": "Connecting {label} took too long to start. Try again in a moment.",
+    "integrations_connectForbidden": "Only admins and managers can connect integrations.",
+    "integrations_statusFailed": "Couldn't check whether {label} is connected. Try again in a moment.",
+    "integrations_statusTimedOut": "Checking {label} took too long. Try again in a moment.",
+    "integrations_propertiesTimedOut": "Reading the properties took too long. Try again in a moment.",
+    "integrations_retry": "Try again",
     "integrations_propertyMapping": "Property mapping",
     "integrations_notMapped": "Not mapped",
     "integrations_selectProperty": "Select a property",
@@ -9706,7 +10063,6 @@
     },
     "merchantCenter": {
       "description": "Your products and the problems Merchant Center reports for them. Google AI Overviews and AI Mode show products from it.",
-      "comingSoon": "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
       "title": "Merchant Center account for {brand}",
       "hint": "Pick the account that sells this brand's products. They're read every day into the brand's product catalog below, with their issues.",
       "noBrand": "Pick a brand to add its Merchant Center account.",

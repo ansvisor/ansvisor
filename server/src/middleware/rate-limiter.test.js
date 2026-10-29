@@ -6,6 +6,7 @@ import {
   catalogCategoryLimiter,
   catalogLimiter,
   cmsLimiter,
+  cmsStatusLimiter,
   isJourneyBeacon,
   journeyEventKey,
   shoppingPathLimiter,
@@ -167,6 +168,34 @@ describe('rate-limiter – catalog buckets', () => {
       expect((await statuses('POST', '/sync', 21)).at(-1)).toBe(429);
       // …and a person changing the table row by row goes on past them.
       expect(new Set(await statuses('PUT', '/categories', 40))).toEqual(new Set([200]));
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
+describe('rate-limiter – CMS buckets', () => {
+  it("keeps the Library's publish checks apart from connecting a CMS", async () => {
+    const app = express();
+    app.post('/webflow-status', cmsStatusLimiter, (_req, res) => res.json({}));
+    app.post('/cms', cmsLimiter, (_req, res) => res.json({}));
+    const server = await new Promise((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const statuses = async (path, n) => {
+      const out = [];
+      for (let i = 0; i < n; i += 1)
+        out.push((await fetch(base + path, { method: 'POST' })).status);
+      return out;
+    };
+    try {
+      // Opening the Library 60 times (3 checks each) uses up its own 180…
+      const checks = await statuses('/webflow-status', 181);
+      expect(new Set(checks.slice(0, 180))).toEqual(new Set([200]));
+      expect(checks.at(-1)).toBe(429);
+      // …and connecting a CMS still goes through (its bucket is the module's: a few here).
+      expect(new Set(await statuses('/cms', 5))).toEqual(new Set([200]));
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

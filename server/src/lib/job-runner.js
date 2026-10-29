@@ -30,6 +30,20 @@ import logger from './logger.js';
 // the cycle, watching memory on small instances.
 let activeTrackingCount = 0;
 const MAX_CONCURRENT_TRACKING = Number(process.env.TRACKING_CONCURRENCY) || 2;
+
+// The first run after a payment is the person's first look at the product, and
+// they are watching it. It goes ahead of the queue: it may take this many
+// slots beyond the limit, so it never waits behind the nightly runs, each of
+// which holds its slot through a Cloro drain that can last an hour; and while
+// one still waits for a slot, the others step aside. 0 turns the extra slot
+// off, leaving only the place in the queue.
+const PRIORITY_EXTRA_SLOTS = /^\d+$/.test(process.env.TRACKING_PRIORITY_SLOTS ?? '')
+  ? Number(process.env.TRACKING_PRIORITY_SLOTS)
+  : 1;
+const PRIORITY_RETRY_MS = 1000;
+const REGULAR_RETRY_MS = 5000;
+// Priority jobs waiting for a slot right now.
+const priorityWaiting = new Set();
 let activeContentCount = 0;
 const MAX_CONCURRENT_CONTENT = 2;
 
@@ -84,19 +98,26 @@ async function skipStopped(jobId, brandId) {
 
 /**
  * Run a tracking job. Call without await (fire-and-forget).
- * Handles concurrency gating, retry, and Socket.IO emit.
+ * Handles concurrency gating, retry, and Socket.IO emit. `priority` is for
+ * the first run after a payment (see PRIORITY_EXTRA_SLOTS).
  */
-export function runTrackingJob(jobId, io) {
+export function runTrackingJob(jobId, io, { priority = false } = {}) {
   if (queuedJobs.has(jobId)) return;
   queuedJobs.add(jobId);
-  void attemptTrackingJob(jobId, io);
+  void attemptTrackingJob(jobId, io, priority);
 }
 
-async function attemptTrackingJob(jobId, io) {
-  if (activeTrackingCount >= MAX_CONCURRENT_TRACKING) {
-    setTimeout(() => attemptTrackingJob(jobId, io), 5000);
+async function attemptTrackingJob(jobId, io, priority = false) {
+  const limit = MAX_CONCURRENT_TRACKING + (priority ? PRIORITY_EXTRA_SLOTS : 0);
+  if (activeTrackingCount >= limit || (!priority && priorityWaiting.size > 0)) {
+    if (priority) priorityWaiting.add(jobId);
+    setTimeout(
+      () => attemptTrackingJob(jobId, io, priority),
+      priority ? PRIORITY_RETRY_MS : REGULAR_RETRY_MS,
+    );
     return;
   }
+  priorityWaiting.delete(jobId);
 
   // Take the slot before the first await. Otherwise every timer that fires
   // while the claim is in flight sees the same free slot, and a night once
@@ -222,7 +243,7 @@ async function attemptTrackingJob(jobId, io) {
         .eq('id', jobId);
 
       retrying = true;
-      setTimeout(() => attemptTrackingJob(jobId, io), delay);
+      setTimeout(() => attemptTrackingJob(jobId, io, priority), delay);
     } else {
       await failJob(jobId, err.message);
     }
@@ -338,8 +359,11 @@ export async function recoverWaitingJobs(io) {
       if (await cancelWaitingJob(job.id, reason)) cancelled++;
       continue;
     }
-    if (job.type === 'tracking') runTrackingJob(job.id, io);
-    else runContentJob(job.id, io);
+    if (job.type === 'tracking') {
+      runTrackingJob(job.id, io, { priority: job.data?.afterPayment === true });
+    } else {
+      runContentJob(job.id, io);
+    }
     recovered++;
   }
 

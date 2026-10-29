@@ -530,4 +530,22 @@ describe('CatalogSourcesCard', () => {
       expect.objectContaining({ brandId: 'b1', sources: [FEED] }),
     );
   });
+
+  it("says the sources can't be read once a read takes too long, instead of a lasting skeleton", async () => {
+    vi.useFakeTimers();
+    try {
+      listCatalogSources.mockReturnValue(new Promise(() => {}));
+      const onSources = vi.fn();
+      await render({ onSources });
+      expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(15_000)));
+      expect(container.querySelector('[data-slot="skeleton"]')).toBeNull();
+      expect(container.textContent).toContain("Couldn't read the catalog's sources right now.");
+      expect(onSources).toHaveBeenLastCalledWith(
+        expect.objectContaining({ brandId: 'b1', sources: null }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
