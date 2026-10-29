@@ -241,7 +241,7 @@ describe('readCatalog through the connector harness', () => {
     expect(products.find((p) => p.external_id === '202')?.title).toBe('Trail Boot');
     expect(variants).toHaveLength(4);
     expect(variants.find((v) => v.external_id === '2011')).toMatchObject({
-      product_external_id: '202',
+      product_id: products.find((p) => p.external_id === '202')?.id,
       sku: 'BOOT-RED-42',
       gtin: '900000000002011',
       price: 129,
@@ -251,12 +251,12 @@ describe('readCatalog through the connector harness', () => {
       attributes: { color: 'Red', size: '42', material: 'Leather' },
     });
     expect(variants.find((v) => v.external_id === '2012')).toMatchObject({
-      availability: 'out of stock',
+      availability: 'out_of_stock',
       attributes: { color: 'Blue', size: '43' },
     });
     expect(variants.find((v) => v.external_id === '101')).toMatchObject({
       sku: 'SOCK-101',
-      gtin: '00000000101',
+      gtin: '00000000000101',
       price: 19,
       currency: 'USD',
     });
