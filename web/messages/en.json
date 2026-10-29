@@ -3397,6 +3397,7 @@
       "cancel": "Cancel",
       "sent": "Sent to your Admins",
       "tooMany": "You have {count} requests waiting. Withdraw one, or wait for your Admins.",
+      "dailyLimit": "You've sent {count} requests today. Try again tomorrow.",
       "alreadyToday": "You already asked for this today.",
       "failed": "Couldn't send it. Try again.",
       "defaults": {
