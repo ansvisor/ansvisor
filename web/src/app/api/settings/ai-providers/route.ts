@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeRefusal } from '@/lib/subscription-guard';
 import { encryptApiKey, last4 } from '@/lib/agent/key-encryption';
 import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agent/providers';
+import { chatAgenticEnabled } from '@/lib/chat/flag';
 
 /**
  * GET / PUT / PATCH / DELETE /api/settings/ai-providers
@@ -93,6 +94,21 @@ async function clearLegacyAnthropicKey(organizationId: string) {
       anthropic_api_key_set_by: null,
     })
     .eq('id', organizationId);
+}
+
+/**
+ * A key saved while Chat is still off for the workspace keeps working for
+ * Chat once it is on, on Starter or in a Growth free trial too (CHAT-16 item
+ * 28; 00405 marked the workspaces that had one then). With Chat on, own
+ * keys are Growth's and Enterprise's (lib/chat/key.ts), so nothing is marked.
+ */
+async function markLegacyKey(organizationId: string) {
+  if (chatAgenticEnabled(organizationId)) return { error: null };
+  return supabaseAdmin
+    .from('organizations')
+    .update({ legacy_key_grandfathered: true })
+    .eq('id', organizationId)
+    .or('plan.eq.starter,and(plan.eq.growth,subscription_status.eq.trialing)');
 }
 
 export async function GET() {
@@ -212,6 +228,10 @@ export async function PUT(req: Request) {
     if (legacyError) {
       return NextResponse.json({ error: legacyError.message }, { status: 500 });
     }
+  }
+  const { error: markError } = await markLegacyKey(organizationId);
+  if (markError) {
+    return NextResponse.json({ error: markError.message }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

@@ -335,29 +335,36 @@ router.post(
       });
 
       // Replace the undecided batch wholesale — same behavior as prompt
-      // suggestions refresh. Dismissed/added rows are never touched.
-      await supabaseAdmin
+      // suggestions refresh. Dismissed/added rows are never touched. The new
+      // rows go in first and the old ones are removed only then, so a failed
+      // insert leaves the list as it was rather than empty.
+      let inserted = [];
+      if (fresh.length) {
+        const { data, error } = await supabaseAdmin
+          .from('topic_suggestions')
+          .insert(
+            fresh.map((t) => ({
+              brand_id: brandId,
+              name: t.name.trim(),
+              source: 'llm',
+              status: 'new',
+            })),
+          )
+          .select();
+        if (error) throw error;
+        inserted = data ?? [];
+      }
+
+      let stale = supabaseAdmin
         .from('topic_suggestions')
         .delete()
         .eq('brand_id', brandId)
         .eq('status', 'new');
-
-      if (fresh.length === 0) {
-        return res.json({ suggestions: [] });
-      }
-
-      const { data: inserted, error } = await supabaseAdmin
-        .from('topic_suggestions')
-        .insert(
-          fresh.map((t) => ({
-            brand_id: brandId,
-            name: t.name.trim(),
-            source: 'llm',
-            status: 'new',
-          })),
-        )
-        .select();
-      if (error) throw error;
+      if (inserted.length)
+        stale = stale.not('id', 'in', `(${inserted.map((t) => t.id).join(',')})`);
+      const { error: staleError } = await stale;
+      if (staleError)
+        req.log.warn({ err: staleError }, 'topic-suggestions refresh: old batch not removed');
 
       return res.json({ suggestions: inserted });
     } catch (error) {

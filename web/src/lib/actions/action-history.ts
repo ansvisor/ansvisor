@@ -19,6 +19,7 @@ import type { ActionCategory } from '@/lib/action-center/registry';
 import {
   ACTION_OUTCOMES,
   dismissReasonOf,
+  missingDismissReason,
   type ActionOutcome,
   type ActionStatus,
   type TaskStatus,
@@ -58,11 +59,14 @@ interface HistoryRow {
   updated_at: string;
   priority_score: number | null;
   priority_level: string | null;
-  dismiss_reason: string | null;
+  /** Absent on a database without 00366. */
+  dismiss_reason?: string | null;
 }
 
-const HISTORY_COLUMNS =
-  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level, dismiss_reason';
+const HISTORY_COLUMNS_BEFORE_00366 =
+  'id, action_no, category, kind, status, outcome, validation, position_outcome, payload, kpi_keys, assignee_id, due_date, created_at, completed_at, updated_at, priority_score, priority_level';
+
+const HISTORY_COLUMNS = `${HISTORY_COLUMNS_BEFORE_00366}, dismiss_reason`;
 
 /** What the validation sweep stores on an action. */
 interface ValidationSnapshot {
@@ -249,23 +253,29 @@ export async function getActionHistory(
 ): Promise<ActionHistoryItem[]> {
   const supabase = await createClient();
 
-  let query = supabase
-    .from('actions')
-    .select(HISTORY_COLUMNS)
-    .eq('brand_id', brandId)
-    .in('status', HISTORY_STATUSES as string[])
-    .order('created_at', { ascending: false })
-    .limit(500);
+  const read = (columns: string) => {
+    let query = supabase
+      .from('actions')
+      .select(columns)
+      .eq('brand_id', brandId)
+      .in('status', HISTORY_STATUSES as string[])
+      .order('created_at', { ascending: false })
+      .limit(500);
 
-  // The window covers when an action closed, falling back to when it was
-  // raised for one still running — which is the date the row shows.
-  if (opts?.from) query = query.gte('created_at', opts.from);
-  if (opts?.to) query = query.lte('created_at', opts.to);
+    // The window covers when an action closed, falling back to when it was
+    // raised for one still running — which is the date the row shows.
+    if (opts?.from) query = query.gte('created_at', opts.from);
+    if (opts?.to) query = query.lte('created_at', opts.to);
+    return query;
+  };
 
-  const { data, error } = await query;
+  let { data, error } = await read(HISTORY_COLUMNS);
+  // A database without 00366 has no dismiss_reason (42703): the tab reads
+  // the rest, and no action says why it was dismissed.
+  if (missingDismissReason(error)) ({ data, error } = await read(HISTORY_COLUMNS_BEFORE_00366));
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as HistoryRow[];
+  const rows = (data ?? []) as unknown as HistoryRow[];
   if (rows.length === 0) return [];
 
   const actionIds = rows.map((row) => row.id);
@@ -353,7 +363,8 @@ export async function getActionHistory(
       triggerSignals,
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
-      dismissReason: dismissReasonOf(row.dismiss_reason),
+      // Only while it is dismissed: another status leaves an earlier reason in place.
+      dismissReason: row.status === 'dismissed' ? dismissReasonOf(row.dismiss_reason) : null,
       signalsAfter: signalsFrom(row.validation),
       measuredOn: measuredOnFrom(row.validation),
       auditAfter: auditFrom(row.validation),

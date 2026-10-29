@@ -59,6 +59,14 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
   'chat-access-requests.ts:decideAccessRequest':
     "marks a request decided; it changes no one's access",
+  // Chat's settings (Admins): asAdmin() checks the plan itself (ctx.plan.writable,
+  // as assertWritable) to answer read_only as a result instead of throwing.
+  'chat-settings.ts:setToolPolicy': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:resetToolPolicies': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:setChatSwitch': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:setManagerExecute': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:removeAutoChoice':
+    "removes the person's own Don't ask again tick: takes an auto-approval back, never gives one",
 };
 
 /** Actions that take a brand's own id under another name: file:function → the parameter. */
@@ -85,6 +93,12 @@ const OPEN_ROUTES: Record<string, string> = {
   'stripe/subscription:DELETE': 'billing: canceling the plan',
   'stripe/webhook:POST': "Stripe's own calls",
   'traffic/read:POST': 'reads only',
+  // Chat's runs: the engine answers 402 with the server's body itself
+  // (startChatRun, prepareResume), but for a request to the Admins.
+  'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
+  'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
+  'chat/runs/[id]/skip:POST': 'saying no to a change starts no cost',
+  'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
 };
 
 /** What checks a route's plan before it writes. */

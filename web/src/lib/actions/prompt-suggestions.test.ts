@@ -97,8 +97,13 @@ vi.mock('@/lib/actions/prompt-workflow', () => ({
 const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
 vi.stubGlobal('fetch', fetchMock);
 
-const { getPromptSuggestions, refreshPromptSuggestions, trackPagePrompts, trackSuggestions } =
-  await import('./prompt-suggestions');
+const {
+  dismissSuggestions,
+  getPromptSuggestions,
+  refreshPromptSuggestions,
+  trackPagePrompts,
+  trackSuggestions,
+} = await import('./prompt-suggestions');
 
 beforeEach(() => {
   slotsLeft = Infinity;
@@ -360,5 +365,35 @@ describe('getPromptSuggestions', () => {
       failure: 'workspace',
       retryable: false,
     });
+  });
+});
+
+describe('dismissSuggestions', () => {
+  it('dismisses each one through the route one by one uses, a few at a time', async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `s${i + 1}`);
+    expect(await dismissSuggestions([...ids, 's1'])).toEqual({
+      ok: true,
+      dismissed: ids,
+      failed: [],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(12);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://server/api/prompts/suggestions/s1/dismiss',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer t' } }),
+    );
+  });
+
+  it('lists the ones that could not be dismissed, and never throws', async () => {
+    fetchMock.mockImplementation((async (url: string) => {
+      if (url.includes('/s2/')) return new Response('{}', { status: 403 });
+      if (url.includes('/s3/')) throw new Error('network down');
+      return new Response('{}', { status: 200 });
+    }) as never);
+    expect(await dismissSuggestions(['s1', 's2', 's3'])).toEqual({
+      ok: true,
+      dismissed: ['s1'],
+      failed: ['s2', 's3'],
+    });
+    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }));
   });
 });

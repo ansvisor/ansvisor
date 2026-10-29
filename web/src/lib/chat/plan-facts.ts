@@ -9,7 +9,7 @@ import {
   type PlanId,
   type PlanLimits,
 } from '@/config/plans';
-import { planFromOrgRow } from '@/lib/guards/plan-guard';
+import { planFromOrgRow } from '@/lib/guards/plan-row';
 import type { PlanGate } from './registry/define-tool';
 
 /**
@@ -54,7 +54,7 @@ export interface PlanFacts {
   nextPlan: NextPlan | null;
 }
 
-/** The organization columns the facts read (plan-guard's ORG_PLAN_COLUMNS). */
+/** The organization columns the facts read (plan-row's ORG_PLAN_COLUMNS). */
 export type OrgPlanRow = {
   plan?: unknown;
   subscription_status?: unknown;
@@ -88,7 +88,7 @@ function nextPlanOf(id: PlanId, isTrial: boolean): NextPlan | null {
   };
 }
 
-/** The facts for an organization row with its plan columns (plan-guard's ORG_PLAN_COLUMNS). */
+/** The facts for an organization row with its plan columns (plan-row's ORG_PLAN_COLUMNS). */
 export function planFactsFromOrgRow(row: OrgPlanRow): PlanFacts {
   if (!isCloud()) {
     const plan = PLANS.self_hosted;

@@ -18,6 +18,7 @@ const actions = vi.hoisted(() => ({
   refreshPromptSuggestions: vi.fn(),
   acceptSuggestion: vi.fn(),
   dismissSuggestion: vi.fn(),
+  dismissSuggestions: vi.fn(),
   trackSuggestions: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => actions);
@@ -247,6 +248,88 @@ describe('SuggestionsCard — Add All', () => {
     expect(rows()).toHaveLength(0);
     expect(onAccepted).not.toHaveBeenCalled();
     expect(toast.info).toHaveBeenCalledWith('These suggestions were already added or dismissed');
+  });
+});
+
+describe('SuggestionsCard — Clear All', () => {
+  // Suggestions from Search Console and Analytics stay hidden for 30 days once dismissed.
+  const measured = (n: number, source: 'gsc' | 'ga'): PromptSuggestion => ({
+    ...suggestion(n),
+    source,
+  });
+
+  async function renderList(list: PromptSuggestion[]) {
+    actions.getPromptSuggestions.mockResolvedValue({ ok: true, suggestions: list, stale: false });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <SuggestionsCard brandId="b1" onAccepted={onAccepted} sourceStates={null} />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  const button = (label: string, root: ParentNode = container) =>
+    [...root.querySelectorAll('button')].find((b) => b.textContent === label);
+  const dialog = () => document.body.querySelector('[role="dialog"]');
+  async function click(target: HTMLButtonElement | undefined) {
+    await act(async () => {
+      target!.click();
+    });
+  }
+
+  it('asks first, with how many it dismisses and how many come from Search Console or Analytics', async () => {
+    await renderList([suggestion(1), measured(2, 'gsc'), suggestion(3), measured(4, 'ga')]);
+    await click(button('Clear All'));
+    expect(dialog()?.textContent).toContain('4 suggestions listed will be dismissed.');
+    expect(dialog()?.textContent).toContain(
+      '2 of them come from Search Console or Analytics: once dismissed, they stay hidden for 30 days.',
+    );
+    expect(actions.dismissSuggestions).not.toHaveBeenCalled();
+  });
+
+  it('changes nothing when cancelled', async () => {
+    await renderList([measured(1, 'gsc'), suggestion(2)]);
+    await click(button('Clear All'));
+    await click(button('Cancel', dialog()!));
+    expect(actions.dismissSuggestions).not.toHaveBeenCalled();
+    expect(rows()).toHaveLength(2);
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('clears a list of only Search Console and Analytics suggestions once confirmed', async () => {
+    actions.dismissSuggestions.mockResolvedValue({ ok: true, dismissed: ['s1', 's2'], failed: [] });
+    await renderList([measured(1, 'gsc'), measured(2, 'ga')]);
+    await click(button('Clear All'));
+    expect(dialog()?.textContent).toContain('2 suggestions listed will be dismissed.');
+    expect(dialog()?.textContent).toContain('2 of them come from Search Console or Analytics');
+    await click(button('Clear all', dialog()!));
+    expect(actions.dismissSuggestions).toHaveBeenCalledWith(['s1', 's2']);
+    expect(rows()).toHaveLength(0);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("says nothing of Search Console when none is listed, and brings back what couldn't be dismissed", async () => {
+    actions.dismissSuggestions.mockResolvedValue({ ok: true, dismissed: ['s1'], failed: ['s2'] });
+    await renderList([suggestion(1), suggestion(2)]);
+    await click(button('Clear All'));
+    expect(dialog()?.textContent).not.toContain('Search Console');
+    await click(button('Clear all', dialog()!));
+    expect([...rows()].map((r) => r.textContent).join()).toContain('Prompt 2');
+    expect(rows()).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith("1 suggestion couldn't be dismissed. Try again.");
+  });
+
+  it('puts every one back when the dismiss could not run', async () => {
+    actions.dismissSuggestions.mockResolvedValue({ ok: false, failure: 'failed' });
+    await renderList([suggestion(1), measured(2, 'gsc')]);
+    await click(button('Clear All'));
+    await click(button('Clear all', dialog()!));
+    expect(rows()).toHaveLength(2);
+    expect(toast.error).toHaveBeenCalledWith("Couldn't clear the suggestions. Try again.");
   });
 });
 

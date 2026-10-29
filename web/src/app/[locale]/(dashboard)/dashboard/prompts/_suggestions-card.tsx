@@ -50,6 +50,7 @@ import {
   refreshPromptSuggestions,
   acceptSuggestion,
   dismissSuggestion,
+  dismissSuggestions,
   trackSuggestions,
   type PromptSuggestion,
 } from '@/lib/actions/prompt-suggestions';
@@ -72,6 +73,14 @@ import { useFailureToast } from '@/hooks/use-failure-toast';
 import type { PromptAddFailureCode } from '@/lib/actions/prompt';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { SuggestionsLoadError } from './_suggestions-load-error';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 /**
  * Analytics evidence, in the customer's own numbers (#705). A blind spot is
@@ -348,6 +357,9 @@ export function SuggestionsCard({
   }, []);
   const [search, setSearch] = useState('');
   const [clearing, setClearing] = useState(false);
+  // Clear All asks first: how many it dismisses, and how many of them come
+  // from Search Console or Analytics (hidden for 30 days once dismissed).
+  const [confirmClear, setConfirmClear] = useState(false);
   const [adding, setAdding] = useState(false);
   // What Add All left behind when the plan's prompt limit stopped it.
   const [limitNote, setLimitNote] = useState<{ added: number; left: number } | null>(null);
@@ -442,30 +454,33 @@ export function SuggestionsCard({
   );
 
   /**
-   * Dismiss only generated rows on screen. Search Console and Analytics rows
-   * carry a 30-day cooldown, so bulk clear keeps them visible unless the user
-   * explicitly dismisses each one.
+   * Dismiss every suggestion listed, after the confirmation: each one as
+   * one by one would, so Search Console and Analytics ones stay hidden for
+   * 30 days. They leave the list at once; the ones that couldn't be
+   * dismissed come back.
    */
-  const handleClearAll = () => {
-    const preserved = visible.filter(isMeasuredSuggestion);
-    const doomed = visible.filter((s) => !isMeasuredSuggestion(s));
-    if (preserved.length > 0) {
-      toast.info(t('measuredSuggestionsKept'));
-    }
+  const handleClearAll = async () => {
+    setConfirmClear(false);
+    const doomed = visible;
     if (doomed.length === 0) return;
     setClearing(true);
     const ids = new Set(doomed.map((d) => d.id));
     setSuggestions((prev) => prev.filter((x) => !ids.has(x.id)));
-    Promise.allSettled(doomed.map((d) => dismissSuggestion(d.id)))
-      .then((results) => {
-        const failed = results.filter((r) => r.status === 'rejected').length;
-        if (failed > 0) {
-          toast.error(`${failed} suggestion${failed === 1 ? '' : 's'} could not be dismissed`);
-          load();
-        }
-      })
-      .finally(() => setClearing(false));
+    try {
+      const result = await dismissSuggestions([...ids]);
+      if (!result.ok) {
+        setSuggestions((prev) => [...prev, ...doomed]);
+        toast.error(t('clearAllFailed'));
+      } else if (result.failed.length > 0) {
+        const failed = new Set(result.failed);
+        setSuggestions((prev) => [...prev, ...doomed.filter((d) => failed.has(d.id))]);
+        toast.error(t('clearAllPartial', { count: failed.size }));
+      }
+    } finally {
+      setClearing(false);
+    }
   };
+  const measuredToClear = visible.filter(isMeasuredSuggestion).length;
 
   /**
    * Track every suggestion on screen, in batches trackSuggestions takes. Each
@@ -635,7 +650,9 @@ export function SuggestionsCard({
 
               {canDismiss && (
                 <Button
-                  onClick={guard(handleClearAll, { action: tActions('dismissSuggestions') })}
+                  onClick={guard(() => setConfirmClear(true), {
+                    action: tActions('dismissSuggestions'),
+                  })}
                   disabled={clearing || adding || visible.length === 0}
                   size="sm"
                   variant="outline"
@@ -654,6 +671,27 @@ export function SuggestionsCard({
           )}
         </div>
       </CardHeader>
+      <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('clearAllConfirm.title')}</DialogTitle>
+            <DialogDescription>
+              {t('clearAllConfirm.body', { count: visible.length })}
+            </DialogDescription>
+          </DialogHeader>
+          {measuredToClear > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t('clearAllConfirm.measured', { count: measuredToClear })}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmClear(false)}>
+              {t('clearAllConfirm.cancel')}
+            </Button>
+            <Button onClick={() => void handleClearAll()}>{t('clearAllConfirm.confirm')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <CardContent>
         {limitNote && (
           <div

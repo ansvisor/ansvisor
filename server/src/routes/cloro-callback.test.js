@@ -14,7 +14,10 @@ const PENDING = {
   prompt_id: 'prompt-1',
   brand_id: 'brand-1',
   region: 'US',
+  legacy: false,
 };
+/** The pending row the delivery finds; a test may swap it. */
+let pending = PENDING;
 
 // What happened, in order: the tables read, the pending rows deleted, the
 // answers handled.
@@ -33,7 +36,18 @@ vi.mock('../config/supabase.js', () => ({
             return { error: null };
           },
         }),
-        maybeSingle: async () => ({ data: table === 'cloro_pending_tasks' ? PENDING : null }),
+        insert: async (row) => {
+          events.push(['insert', table, row]);
+          return { error: null };
+        },
+        maybeSingle: async () => ({
+          data:
+            table === 'cloro_pending_tasks'
+              ? pending
+              : table === 'prompts'
+                ? { text: 'best crm for startups' }
+                : null,
+        }),
         single: async () => ({ data: { id: 'brand-1', name: 'Acme' } }),
         then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject),
       };
@@ -41,8 +55,11 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
-vi.mock('../lib/cloro-scraper.js', () => ({
+const submitPromptTask = vi.fn();
+vi.mock('../lib/cloro-scraper.js', async (importOriginal) => ({
+  isLegacyChatgptTask: (await importOriginal()).isLegacyChatgptTask,
   parseScraperResponse: () => ({ text: 'Acme is good.', citations: [], model: 'gpt' }),
+  submitPromptTask: (...a) => submitPromptTask(...a),
 }));
 const handleScraperResult = vi.fn();
 vi.mock('../lib/cloro-result-handler.js', () => ({
@@ -62,6 +79,7 @@ let url;
 
 beforeAll(async () => {
   vi.stubEnv('CLORO_WEBHOOK_SECRET', '');
+  vi.stubEnv('CLORO_WEBHOOK_URL', 'https://api.example.com/cloro/callback');
   const { default: router } = await import('./cloro-callback.js');
   const app = express();
   app.use('/cloro/callback', express.raw({ type: 'application/json' }));
@@ -83,6 +101,12 @@ afterAll(() => {
 
 beforeEach(() => {
   events.length = 0;
+  pending = PENDING;
+  submitPromptTask.mockReset().mockResolvedValue({
+    taskId: 'task-2',
+    scraperId: 'chatgpt-web',
+    legacy: false,
+  });
   handleScraperResult.mockReset().mockImplementation(async () => {
     events.push(['handled']);
     return { inserted: true };
@@ -93,11 +117,11 @@ beforeEach(() => {
   for (const fn of Object.values(log)) fn.mockClear();
 });
 
-const deliver = () =>
+const deliver = (status = 'COMPLETED') =>
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task: { id: 'task-1', status: 'COMPLETED' }, response: { ok: 1 } }),
+    body: JSON.stringify({ task: { id: 'task-1', status }, response: { ok: 1 } }),
   });
 
 /** The callback answers first and works after: wait for the pending row to go. */
@@ -165,4 +189,79 @@ describe('POST /cloro/callback once the plan has ended', () => {
       );
     },
   );
+});
+
+describe('POST /cloro/callback for a failed task', () => {
+  it('sends a failed legacy ChatGPT task again without legacy, in its place (00378)', async () => {
+    pending = { ...PENDING, region: 'US-CA', legacy: true };
+
+    expect((await deliver('FAILED')).status).toBe(200);
+    await settled();
+
+    expect(submitPromptTask).toHaveBeenCalledWith({
+      promptText: 'best crm for startups',
+      promptId: 'prompt-1',
+      scraperId: 'chatgpt-web',
+      region: 'US-CA',
+      webhookUrl: 'https://api.example.com/cloro/callback',
+    });
+    const writes = events.filter(([kind]) => kind !== 'read');
+    expect(writes).toEqual([
+      [
+        'insert',
+        'cloro_pending_tasks',
+        {
+          task_id: 'task-2',
+          prompt_id: 'prompt-1',
+          brand_id: 'brand-1',
+          scraper_id: 'chatgpt-web',
+          region: 'US-CA',
+          legacy: false,
+        },
+      ],
+      ['delete', 'cloro_pending_tasks', 'task-1'],
+    ]);
+    expect(handleScraperResult).not.toHaveBeenCalled();
+  });
+
+  it('only drops any other failed task', async () => {
+    for (const row of [PENDING, { ...PENDING, scraper_id: 'copilot-web', legacy: true }]) {
+      pending = row;
+      events.length = 0;
+
+      await deliver('FAILED');
+      await settled();
+
+      expect(events.filter(([kind]) => kind !== 'read')).toEqual([
+        ['delete', 'cloro_pending_tasks', 'task-1'],
+      ]);
+    }
+    expect(submitPromptTask).not.toHaveBeenCalled();
+  });
+
+  it('spends nothing more once the plan has ended', async () => {
+    pending = { ...PENDING, legacy: true };
+    isBrandActiveCached.mockResolvedValue(false);
+    isBrandActive.mockResolvedValue(false);
+
+    await deliver('FAILED');
+    await settled();
+
+    expect(submitPromptTask).not.toHaveBeenCalled();
+    expect(deleted()).toEqual([['delete', 'cloro_pending_tasks', 'task-1']]);
+  });
+
+  it('still drops the failed row when the second submission fails', async () => {
+    pending = { ...PENDING, legacy: true };
+    submitPromptTask.mockRejectedValue(Object.assign(new Error('Cloro 503'), { status: 503 }));
+
+    await deliver('FAILED');
+    await settled();
+
+    expect(deleted()).toEqual([['delete', 'cloro_pending_tasks', 'task-1']]);
+    expect(log.error).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: 'task-1' }),
+      'cloro callback: could not submit the failed fan-out task again',
+    );
+  });
 });

@@ -124,6 +124,43 @@ export interface ChatConfirm {
   action: string;
   /** "Pricing · Northwind CRM" */
   target: string;
+  /**
+   * What the approval is bound to: a hash of the exact arguments on the card
+   * (CHAT-20 §6). Approve sends it back; arguments that changed since are
+   * refused (`approval_mismatch`) and the card is shown again.
+   */
+  digest: string;
+  /** offerDontAskAgain: the card may offer "Don't ask again" (CHAT-20 §5 step 6). */
+  canDontAskAgain: boolean;
+}
+
+/** The rule behind a refusal (CHAT-20 §4c): denial.ts's kinds. */
+export type ChatDenialRuleKind = 'brand' | 'workspace' | 'demo' | 'policy' | 'plan' | 'role';
+
+/** What a refusal offers next, as buttons (CHAT-20 §4c part 4): denial.ts's. */
+export type ChatDenialNextAction =
+  | 'ask_admin'
+  | 'see_access'
+  | 'upgrade'
+  | 'choose_plan'
+  | 'compare_plans'
+  | 'open_policy';
+
+/**
+ * The out-of-permission answer (CHAT-20 §4c): its four parts, built on the
+ * server from the precedence's denial (denial.ts), never by the model.
+ */
+export interface ChatDenialCard {
+  /** 1. What was asked: "You asked: Save drafts in Content · Pricing FAQ." */
+  asked: string;
+  /** 2. Why not, and where the rule is set (null: nowhere to change it). */
+  rule: { kind: ChatDenialRuleKind; detail: string; source: string | null };
+  /** 3. Who can, by role: "Admins and Managers can do this." */
+  whoCan: string;
+  /** 4. What to do next. */
+  nextActions: ChatDenialNextAction[];
+  /** For a plan gate: the plan's name it needs ("Growth"). */
+  needsPlan?: string;
 }
 
 /** What Chat made (CHAT-00 `file`, CHAT-06). */
@@ -177,9 +214,19 @@ export interface ChatEventPayloads {
   'usage.updated': ChatUsage;
   /** generatedAt and dataAsOf: the answer's "Generated …" and "Data as of …" (CHAT-06 38–39). */
   'run.finished': ChatRunSummary & { generatedAt: string; dataAsOf: string | null };
-  /** code: a standard result code (CHAT-20 §11a); the browser shows its words. */
-  'run.error': ChatRunSummary & { code: 'failed' | 'timeout' };
+  /**
+   * code: a standard result code (CHAT-20 §11a); the browser shows its words,
+   * or `reason`, the server's own plain words when it has them.
+   */
+  'run.error': ChatRunSummary & { code: 'failed' | 'timeout'; reason?: string };
   'run.paused_cap': ChatRunSummary;
+  /**
+   * The run stopped before its end (CHAT-03 item 19, "Stopped after …"): the
+   * person's Stop, or a card left unanswered for 7 days (`expired`).
+   */
+  'run.stopped': ChatRunSummary & { reason: 'person' | 'expired' };
+  /** A call refused: the out-of-permission answer (CHAT-20 §4c). */
+  'access.denied': ChatDenialCard;
   // Editor in Chat (CHAT-25 §12, Phase 4): payloads grow with it.
   /** A new version card of a page Chat writes. */
   'deliverable.updated': ChatDeliverable & { version: number };
@@ -211,6 +258,8 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'run.finished': true,
   'run.error': true,
   'run.paused_cap': true,
+  'run.stopped': true,
+  'access.denied': true,
   'deliverable.updated': true,
   'suggestion.created': true,
   'suggestion.resolved': true,

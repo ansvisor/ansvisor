@@ -468,6 +468,67 @@ async function findOrCreateTopic(brandId, topicName) {
   return created?.id ?? null;
 }
 
+/**
+ * Puts a refreshed batch in place of the brand's undecided suggestions
+ * (status 'new'), in the batch's order. The new rows go in first and the old
+ * ones are removed only then: a failed insert (a database without 00362
+ * turning down source 'catalog', say) leaves the list as it was rather than
+ * empty. A text the old batch already has is refreshed in its row, since a
+ * brand keeps one undecided suggestion per text
+ * (idx_prompt_suggestions_brand_text_active).
+ */
+async function replaceNewSuggestions(brandId, rows, log) {
+  const { data: current, error: currentError } = await supabaseAdmin
+    .from('prompt_suggestions')
+    .select('*')
+    .eq('brand_id', brandId)
+    .eq('status', 'new');
+  if (currentError) throw currentError;
+  const textKey = (text) => text.toLowerCase();
+  const currentByText = new Map((current ?? []).map((row) => [textKey(row.suggested_text), row]));
+
+  const fresh = rows.filter((row) => !currentByText.has(textKey(row.suggested_text)));
+  let inserted = [];
+  if (fresh.length) {
+    const { data, error } = await supabaseAdmin.from('prompt_suggestions').insert(fresh).select();
+    if (error) throw error;
+    inserted = data ?? [];
+  }
+  const byText = new Map(inserted.map((row) => [textKey(row.suggested_text), row]));
+
+  // A repeated text takes the new reason, volume and expiry; its old row
+  // stays as it was if that update fails, and is left out once decided.
+  const generatedAt = new Date().toISOString();
+  for (const row of rows) {
+    const old = currentByText.get(textKey(row.suggested_text));
+    if (!old || byText.has(textKey(row.suggested_text))) continue;
+    const { data, error } = await supabaseAdmin
+      .from('prompt_suggestions')
+      .update({ ...row, generated_at: generatedAt })
+      .eq('id', old.id)
+      .eq('status', 'new')
+      .select()
+      .maybeSingle();
+    if (error) log.warn({ err: error, id: old.id }, 'prompt-suggestions refresh: kept an old row');
+    const refreshed = error ? old : data;
+    if (refreshed) byText.set(textKey(row.suggested_text), refreshed);
+  }
+
+  // Only then the rest of the old batch goes; one decided meanwhile stays.
+  const kept = new Set([...byText.values()].map((row) => row.id));
+  const stale = (current ?? []).filter((row) => !kept.has(row.id)).map((row) => row.id);
+  if (stale.length) {
+    const { error } = await supabaseAdmin
+      .from('prompt_suggestions')
+      .delete()
+      .in('id', stale)
+      .eq('status', 'new');
+    if (error) log.warn({ err: error }, 'prompt-suggestions refresh: old batch not removed');
+  }
+
+  return [...new Set(rows.map((row) => byText.get(textKey(row.suggested_text))).filter(Boolean))];
+}
+
 /** Generating suggestions and Improve sets costs AI: admins and managers start it (2026-10-29). */
 const SUGGEST_PROMPTS_REFUSAL = 'Only admins and managers can generate prompt suggestions.';
 const IMPROVE_REFUSAL = 'Only admins and managers can use Improve.';
@@ -509,12 +570,6 @@ router.post(
           orgId: brand.organization_id,
           log: req.log,
         });
-
-      await supabaseAdmin
-        .from('prompt_suggestions')
-        .delete()
-        .eq('brand_id', req.params.brandId)
-        .eq('status', 'new');
 
       const expiresAt = new Date(Date.now() + SUGGESTION_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
@@ -597,13 +652,8 @@ router.post(
         });
       }
 
-      const { data: inserted, error } = await supabaseAdmin
-        .from('prompt_suggestions')
-        .insert(rows)
-        .select();
-      if (error) throw error;
-
-      return res.json({ suggestions: inserted });
+      const suggestionsNow = await replaceNewSuggestions(req.params.brandId, rows, req.log);
+      return res.json({ suggestions: suggestionsNow });
     } catch (error) {
       const status = error.status || 500;
       req.log.error({ err: error }, 'prompt-suggestions refresh error');

@@ -195,11 +195,27 @@ export async function decideAccessRequest(
   return (data ?? []).length > 0;
 }
 
+/** Why a read gave nothing: Chat is off for the person, or the database didn't answer. */
+export type RequestsReadFailure = 'chat_off' | 'failed';
+
 /**
  * The requests a person sees: an Admin, the workspace's; anyone else, their
- * own. Pending first, then the decided ones of the last weeks.
+ * own. Pending first, then the decided ones of the last weeks. Never throws
+ * (#1777): a failed read is `failed`.
  */
-export async function listAccessRequests(): Promise<{
+export async function listAccessRequests(): Promise<
+  | { ok: true; isAdmin: boolean; requests: AccessRequest[] }
+  | { ok: false; failure: RequestsReadFailure }
+> {
+  try {
+    const read = await readAccessRequests();
+    return read ? { ok: true, ...read } : { ok: false, failure: 'chat_off' };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+async function readAccessRequests(): Promise<{
   isAdmin: boolean;
   requests: AccessRequest[];
 } | null> {
@@ -249,15 +265,24 @@ export async function listAccessRequests(): Promise<{
   return { isAdmin, requests };
 }
 
-/** How many requests wait for an Admin: the count on Roles & access. 0 for anyone else. */
-export async function countPendingAccessRequests(): Promise<number> {
-  const who = await member();
-  if (!who || who.role !== 'admin') return 0;
-  const { count, error } = await supabaseAdmin
-    .from('chat_access_requests')
-    .select('id', { count: 'exact', head: true })
-    .eq('organization_id', who.organizationId)
-    .eq('status', 'pending');
-  if (error) throw new Error(error.message);
-  return count ?? 0;
+/**
+ * How many requests wait for an Admin: the count on Roles & access, 0 for
+ * anyone else. Never throws, as above.
+ */
+export async function countPendingAccessRequests(): Promise<
+  { ok: true; count: number } | { ok: false; failure: RequestsReadFailure }
+> {
+  try {
+    const who = await member();
+    if (!who) return { ok: false, failure: 'chat_off' };
+    if (who.role !== 'admin') return { ok: true, count: 0 };
+    const { count, error } = await supabaseAdmin
+      .from('chat_access_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', who.organizationId)
+      .eq('status', 'pending');
+    return error ? { ok: false, failure: 'failed' } : { ok: true, count: count ?? 0 };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
 }
