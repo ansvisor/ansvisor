@@ -2070,6 +2070,31 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
   );
 
   server.registerTool(
+    'get_content_draft_package',
+    {
+      title: 'Draft as a CMS-ready page',
+      description:
+        "A Content Editor draft as a page ready for a CMS, exactly as Ansvisor's own Send to CMS would send it: title, slug and meta title/description (as the draft kept them from its last send, else from the page), the HTML ready to paste (as the editor's Copy HTML gives it: HTML blocks are passed as written, as Copy HTML and Send to CMS pass them, with any script, iframe or link they hold; no placeholders left, the brand's byline line when it puts one in the content, and no H1: the CMS's title field carries it), its JSON-LD blocks parsed (json_ld), the author for the CMS's author field (null to keep the CMS's own) and the featured image with its alt text. Ansvisor never sends it: put it on the user's CMS with your own CMS connector, then call mark_content_draft_published with the address it went live at. A draft that can't go yet answers why, as an error with code not_ready, its problem (placeholders, noTitle, longTitle, empty, tooLong, slug, metaTitle or metaDescription) and what to do.",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      // Loaded on the tool's first call, with jsdom: no other tool loads the editor's page code.
+      const { getContentDraftPackageFor } = await import('./content-package');
+      const result = await getContentDraftPackageFor(auth, args.draft_id);
+      if ('error' in result) {
+        if (result.error === 'not_found') return notFound('Draft');
+        // As the REST route's 409 answers it.
+        const why = { error: result.message, code: result.error, problem: result.problem ?? null };
+        return { ...json(why), isError: true };
+      }
+      return json(result);
+    },
+  );
+
+  server.registerTool(
     'mark_content_draft_published',
     {
       title: 'Mark a draft published',
