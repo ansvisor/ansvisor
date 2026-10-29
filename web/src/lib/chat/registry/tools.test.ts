@@ -63,7 +63,13 @@ const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool } = await import('./define-
 const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools } = await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 
-const ctx = { userId: 'user-1', email: null, organizationId: 'org-1', apiKeyId: 'agent-internal' };
+const ctx = {
+  userId: 'user-1',
+  email: null,
+  organizationId: 'org-1',
+  apiKeyId: 'agent-internal',
+  role: 'admin' as const,
+};
 const labels = (messages as Record<string, unknown>).chatTools as Record<string, unknown>;
 
 /** What keeps a row out of the registry: a missing label, a fixture its schema refuses. */

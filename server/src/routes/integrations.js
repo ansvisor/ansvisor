@@ -85,13 +85,17 @@ function notConfigured(res, provider) {
  * should be able to check rather than assume. Booleans only, never the
  * credentials themselves.
  */
-router.get('/config', async (_req, res) => {
-  return res.json({
+export function integrationsConfig() {
+  return {
     googleSearchConsole: isComposioConfigured(GSC),
     googleAnalytics: isComposioConfigured(GA),
     googleMerchantCenter: isComposioConfigured(GMC),
     dataForSeo: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
-  });
+  };
+}
+
+router.get('/config', async (_req, res) => {
+  return res.json(integrationsConfig());
 });
 
 // ─── Shared connect / status / disconnect ────────────────────────────────────
