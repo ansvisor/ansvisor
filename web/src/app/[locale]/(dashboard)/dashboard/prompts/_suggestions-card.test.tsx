@@ -29,6 +29,16 @@ vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
 }));
 
+// The viewer's role: an admin unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ role: 'admin' as string }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({
+    role: viewer.role,
+    canManage: viewer.role === 'admin' || viewer.role === 'manager',
+    canAdmin: viewer.role === 'admin',
+  }),
+}));
+
 const suggestion = (n: number): PromptSuggestion => ({
   id: `s${n}`,
   brandId: 'b1',
@@ -94,6 +104,7 @@ beforeEach(() => {
   root = createRoot(container);
   vi.clearAllMocks();
   isLocked = false;
+  viewer.role = 'admin';
 });
 
 afterEach(() => {
@@ -289,6 +300,61 @@ describe('SuggestionsCard on a read-only workspace (plan not active)', () => {
     await act(async () => button('Add to tracked prompts').click());
     expect(actions.acceptSuggestion).toHaveBeenCalledWith('s1');
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('SuggestionsCard by role', () => {
+  const labels = () =>
+    [...container.querySelectorAll('button')].map(
+      (b) => b.getAttribute('aria-label') ?? b.textContent,
+    );
+
+  it('shows an analyst Dismiss and Clear All, but no way to add a prompt', async () => {
+    viewer.role = 'analyst';
+    await render(2);
+    expect(labels()).not.toContain('New');
+    expect(labels()).not.toContain('Add All');
+    expect(labels()).not.toContain('Add to tracked prompts');
+    expect(labels()).toContain('Clear All');
+    expect(labels().filter((l) => l === 'Dismiss suggestion')).toHaveLength(2);
+  });
+
+  it('leaves an agency partner the list to read, without adding or dismissing', async () => {
+    viewer.role = 'agency_partner';
+    await render(2);
+    expect(rows()).toHaveLength(2);
+    for (const label of ['Add All', 'Clear All', 'Add to tracked prompts', 'Dismiss suggestion']) {
+      expect(labels(), label).not.toContain(label);
+    }
+  });
+
+  it('tells an analyst who generates suggestions, instead of Generate Suggestions', async () => {
+    viewer.role = 'analyst';
+    await render(0);
+    expect(labels()).not.toContain('Generate Suggestions');
+    expect(container.textContent).toContain(
+      'Ask an admin or a manager to generate prompt suggestions.',
+    );
+  });
+
+  it('offers a manager Generate Suggestions on an empty list', async () => {
+    viewer.role = 'manager';
+    await render(0);
+    expect(labels()).toContain('Generate Suggestions');
+  });
+
+  it('shows a manager every action', async () => {
+    viewer.role = 'manager';
+    await render(1);
+    for (const label of [
+      'New',
+      'Add All',
+      'Clear All',
+      'Add to tracked prompts',
+      'Dismiss suggestion',
+    ]) {
+      expect(labels(), label).toContain(label);
+    }
   });
 });
 

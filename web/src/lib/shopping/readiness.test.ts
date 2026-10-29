@@ -41,6 +41,7 @@ describe('readinessChecklist', () => {
     const { score, items } = readinessChecklist({
       market: 'europe',
       catalog: [source('feed_url'), source('merchant_center')],
+      merchantCenterOffered: true,
       products: rows,
       openAi: null,
       cheaperResellers: 0,
@@ -83,6 +84,7 @@ describe('readinessChecklist', () => {
     const { score, items } = readinessChecklist({
       market: 'us',
       catalog: [source('feed_url')],
+      merchantCenterOffered: true,
       products: rows,
       openAi: { directFeed: false, ownCards: 3 },
       cheaperResellers: 2,
@@ -118,6 +120,7 @@ describe('readinessChecklist', () => {
       readinessChecklist({
         market: 'us',
         catalog: [source('shopify')],
+        merchantCenterOffered: true,
         products: productRows(products, [], []),
         openAi: null,
         cheaperResellers: null,
@@ -140,6 +143,7 @@ describe('readinessChecklist', () => {
     const { items } = readinessChecklist({
       market: 'europe',
       catalog: [],
+      merchantCenterOffered: true,
       products: null,
       openAi: null,
       cheaperResellers: null,
@@ -155,6 +159,7 @@ describe('readinessChecklist', () => {
     const { items } = readinessChecklist({
       market: 'europe',
       catalog: null,
+      merchantCenterOffered: true,
       products: null,
       openAi: null,
       cheaperResellers: null,
@@ -164,6 +169,44 @@ describe('readinessChecklist', () => {
       ['catalog', 'unknown', 'settings'],
       ['merchantCenter', 'unknown', undefined],
     ]);
+  });
+
+  describe('where Merchant Center is not offered', () => {
+    const base = {
+      market: 'us' as const,
+      products: null,
+      openAi: null,
+      cheaperResellers: null,
+      amazonDrop: null,
+      merchantCenterOffered: false,
+    };
+
+    it('neither lists nor scores it, in the US and in Europe', () => {
+      for (const market of ['us', 'europe'] as const) {
+        const { score, items } = readinessChecklist({
+          ...base,
+          market,
+          catalog: [source('feed_url')],
+        });
+        expect(items.map((item) => item.key)).not.toContain('merchantCenter');
+        // The catalog connected is the one check made: 100, not pulled down.
+        expect(score).toBe(100);
+      }
+      expect(
+        readinessChecklist({ ...base, catalog: null }).items.map((item) => item.key),
+      ).not.toContain('merchantCenter');
+    });
+
+    it('still says a Merchant Center source connected before is', () => {
+      const { items } = readinessChecklist({
+        ...base,
+        catalog: [source('merchant_center')],
+      });
+      expect(items.find((item) => item.key === 'merchantCenter')).toMatchObject({
+        state: 'pass',
+        action: undefined,
+      });
+    });
   });
 });
 
