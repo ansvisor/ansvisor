@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from '@/i18n/navigation';
+import { useUserRole } from '@/hooks/use-user-role';
 import { getMentionResponse } from '@/lib/actions/mentions';
 import { classifyDomain, extractHostname, SOURCE_CATEGORY_LABELS } from '@/lib/citations/classify';
 import { stripEntityMarkup } from '@/lib/entity-markup';
@@ -103,6 +104,8 @@ export function ResponseDrawer({
 }) {
   const t = useTranslations('mentions.drawer');
   const tActions = useTranslations('mentions.actions');
+  // Suggesting content costs AI: admins and managers start it.
+  const { canManage } = useUserRole();
   const locale = useLocale();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [showResponse, setShowResponse] = useState(true);
@@ -373,15 +376,17 @@ export function ResponseDrawer({
                   <Send className="h-3.5 w-3.5" />
                   {tActions('sendToActionCenter')}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => actions.suggest(row)}
-                  disabled={actions.suggesting === row.promptId}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {tActions('suggestContent')}
-                </Button>
+                {canManage && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => actions.suggest(row)}
+                    disabled={actions.suggesting === row.promptId}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {tActions('suggestContent')}
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"

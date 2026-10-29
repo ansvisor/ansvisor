@@ -38,6 +38,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { PLANS, hasFeature, type PlanId } from '@/config/plans';
 import {
@@ -280,6 +281,9 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
   } = improve;
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const outOfQuota = !!quota?.exhausted;
+  // Generating and sending cost AI: admins and managers do them; anyone reads the set.
+  const { canManage } = useUserRole();
+  const tManagers = useTranslations('managersOnly');
 
   if (status === 'locked') return <LockedImprove />;
   if (status === 'error') {
@@ -310,13 +314,17 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           brand is missing or ranked late.
         </p>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{friendlyError(error)}</p>}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button size="sm" onClick={generate} disabled={outOfQuota}>
-            <Sparkles />
-            Generate suggestions
-          </Button>
-          <QuotaNote quota={quota} planId={planId} />
-        </div>
+        {canManage ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" onClick={generate} disabled={outOfQuota}>
+              <Sparkles />
+              Generate suggestions
+            </Button>
+            <QuotaNote quota={quota} planId={planId} />
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">{tManagers('improvePrompt')}</p>
+        )}
       </div>
     );
   }
@@ -355,15 +363,17 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           <span className="text-sky-900 dark:text-sky-200">
             New runs have arrived since these suggestions were generated.
           </span>
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={outOfQuota}
-            onClick={() => (dirty ? setConfirmRegenerate(true) : generate())}
-          >
-            <RefreshCw />
-            Regenerate
-          </Button>
+          {canManage && (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={outOfQuota}
+              onClick={() => (dirty ? setConfirmRegenerate(true) : generate())}
+            >
+              <RefreshCw />
+              Regenerate
+            </Button>
+          )}
         </div>
       )}
       {error && <p className="text-xs text-red-600 dark:text-red-400">{friendlyError(error)}</p>}
@@ -405,7 +415,11 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
           )}
         </span>
         <span className="flex flex-wrap items-center gap-2">
-          {confirmRegenerate ? (
+          {!canManage ? (
+            !sentLatest && (
+              <span className="text-xs text-muted-foreground">{tManagers('improvePrompt')}</span>
+            )
+          ) : confirmRegenerate ? (
             <span className="flex items-center gap-2 text-xs">
               Discard your edits?
               <Button size="xs" variant="outline" onClick={() => setConfirmRegenerate(false)}>
@@ -441,10 +455,12 @@ export function ImproveTab({ improve }: { improve: ImproveController }) {
               <ArrowUpRight />
             </Link>
           ) : (
-            <Button size="sm" onClick={send} disabled={sending || summary.selected === 0}>
-              {sending ? <Loader2 className="animate-spin" /> : <Send />}
-              Send Actions
-            </Button>
+            canManage && (
+              <Button size="sm" onClick={send} disabled={sending || summary.selected === 0}>
+                {sending ? <Loader2 className="animate-spin" /> : <Send />}
+                Send Actions
+              </Button>
+            )
           )}
         </span>
       </div>

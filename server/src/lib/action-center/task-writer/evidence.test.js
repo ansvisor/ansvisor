@@ -57,6 +57,57 @@ describe('buildEvidence', () => {
     expect(evidence.domains[0].domain).toBe('g2.com');
   });
 
+  it("gives a competitor's page events once each, newest first, with the checks' names", () => {
+    const changed = {
+      kind: 'changed',
+      at: '2026-10-12T03:00:00Z',
+      url: 'https://www.trade.example/pricing',
+      domain: 'trade.example',
+      detail: {
+        gained: [{ key: 'faq', label: 'FAQ section' }],
+        lost: [{ key: 'dated', label: '' }],
+      },
+    };
+    const firstCited = {
+      kind: 'first_cited',
+      at: '2026-10-03T00:00:00Z',
+      url: 'https://trade.example/guide',
+      domain: 'trade.example',
+      detail: { answers: 2 },
+    };
+    const signal = (id, kind, pageEvents) => ({
+      id,
+      kind,
+      payload: { competitorName: 'Trade Coffee', pageEvents },
+    });
+    const shown = evidenceForPrompt(
+      buildEvidence([
+        signal('s1', 'competitor_momentum', [changed, firstCited]),
+        signal('s2', 'competitor_leads', [changed, { kind: 'renamed', at: 'x', url: 'y' }]),
+      ]),
+    );
+    expect(shown.competitors).toEqual([
+      {
+        ref: 'competitor:1',
+        name: 'Trade Coffee',
+        pageEvents: [
+          {
+            date: '2026-10-12',
+            page: 'trade.example/pricing',
+            event: 'page changed',
+            nowHas: ['FAQ section'],
+            noLongerHas: ['dated'],
+          },
+          {
+            date: '2026-10-03',
+            page: 'trade.example/guide',
+            event: 'first cited in your tracked answers',
+          },
+        ],
+      },
+    ]);
+  });
+
   it("reads AI-traffic pages and an audit finding's checks", () => {
     const evidence = buildEvidence([
       {
