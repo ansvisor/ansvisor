@@ -20,10 +20,12 @@ import { selectInChunks } from '../lib/chunked-in.js';
 import { isRedirect, postJson } from '../lib/safe-post.js';
 import { webhookTestLimiter } from '../middleware/rate-limiter.js';
 import {
+  MANAGER_ROLES,
   assertBrandAccess,
   assertOpportunitiesAccess,
   assertOpportunityAccess,
   assertPromptAccess,
+  assertRole,
   NOT_IN_WORKSPACE,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
@@ -756,7 +758,8 @@ router.get('/brand/:brandId/topics', async (req, res) => {
 
 /**
  * POST /api/content/bulk/status
- * Update the status of multiple opportunities at once.
+ * Update the status of multiple opportunities at once: admins and managers,
+ * as the database's update rule on content_opportunities.
  */
 router.post('/bulk/status', async (req, res) => {
   try {
@@ -774,6 +777,11 @@ router.post('/bulk/status', async (req, res) => {
     }
 
     await assertOpportunitiesAccess(ids, req.user.id);
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can change opportunities in bulk.',
+    );
 
     const { data, error } = await supabaseAdmin
       .from('content_opportunities')
@@ -803,7 +811,8 @@ router.post('/bulk/status', async (req, res) => {
  * The generated brief lives on the opportunity row, so deleting takes it with
  * it. `brief_usage.opportunity_id` is ON DELETE SET NULL, so the metered usage
  * record survives and quota already spent stays spent — deleting must not hand
- * back a brief allowance.
+ * back a brief allowance. Admins and managers only, as the database's delete
+ * rule.
  */
 router.post('/bulk/delete', async (req, res) => {
   try {
@@ -814,6 +823,11 @@ router.post('/bulk/delete', async (req, res) => {
     }
 
     await assertOpportunitiesAccess(ids, req.user.id);
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can delete opportunities.',
+    );
 
     const { data, error } = await supabaseAdmin
       .from('content_opportunities')
@@ -988,7 +1002,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
 /**
  * PATCH /api/content/:id/status
- * Update the status of an opportunity.
+ * Update the status of an opportunity. Any member records progress;
+ * dismissing one, or moving a dismissed one back, is for admins and managers.
  */
 router.patch('/:id/status', async (req, res) => {
   try {
@@ -1003,6 +1018,13 @@ router.patch('/:id/status', async (req, res) => {
     }
 
     let current = await assertOpportunityAccess(id, req.user.id);
+    if (status === 'dismissed' || current.status === 'dismissed') {
+      await assertRole(
+        req.user.id,
+        MANAGER_ROLES,
+        'Only admins and managers can dismiss an opportunity or bring one back.',
+      );
+    }
 
     // Why it was dismissed (CONTENT-006) rides in source_data, which other
     // writers touch too (an Action Center send, a duplicate merge). The row
