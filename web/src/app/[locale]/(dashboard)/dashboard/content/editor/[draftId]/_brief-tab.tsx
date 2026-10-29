@@ -257,6 +257,24 @@ export function BriefTab({
               : t('lengthFrom')}
           </span>
         </dd>
+        {/* What the cited pages have (learning C2), read with their length. */}
+        {brief?.citedFeatures && brief.citedFeatures.checks.length > 0 && (
+          <>
+            <dt className="text-muted-foreground">{t('citedHave')}</dt>
+            <dd>
+              {brief.citedFeatures.checks
+                .map((check) =>
+                  t('citedHaveCheck', {
+                    check: check.label,
+                    count: check.pages,
+                    of: brief.citedFeatures!.pages,
+                  }),
+                )
+                .join(' · ')}
+              <span className="block text-muted-foreground">{t('citedHaveFrom')}</span>
+            </dd>
+          </>
+        )}
       </dl>
 
       {brief && brief.outline.length > 0 ? (

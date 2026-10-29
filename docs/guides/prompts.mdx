@@ -36,6 +36,8 @@ Each row in **Tracked Prompts** has a status:
 - **Active** — tracked on its schedule.
 - **Paused** — kept, but not tracked.
 
+A new prompt has no results until it's first asked. **Add prompt** and **Bulk import** start analyzing new prompts right away when they can; a prompt added from Prompt Suggestions, or one whose analysis couldn't start, gets its first results with the next daily run. Until then, for its first two days, the row says **Within 24h** in its first figure column, such as Visibility (**Paused** for a paused prompt when the Status column is hidden). An older prompt with no results in the range, such as days without a run, shows a dash, as does a range that ended before today.
+
 The table opens on Active + New. The **Status** filter, or the cards above the table, show one status or all of them. The **Added** column shows when each prompt was added; click it to sort by it. **Track** on a suggestion in the Brand Visibility page's Opportunities opens Tracked Prompts in a new tab, with the new prompts on top.
 
 Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results.
@@ -57,15 +59,17 @@ A prompt tracked in several locations (countries or US states) has figures for e
 - an **All prompts · average** row, and a **Gap** column: the best location minus the worst, for the metric shown;
 - three cards: the weakest location, the strongest one, and the prompt that differs most between locations.
 
-Click a cell to open the prompt's Positions panel for that location. A location the prompt isn't tracked in shows **+ Track** for admins, managers and analysts. The date range and filters work as in the table, and a location's numbers equal the table filtered to it.
+Click a cell to open the prompt's Positions panel for that location. A location the prompt isn't tracked in shows **+ Track** for admins and managers. The date range and filters work as in the table, and a location's numbers equal the table filtered to it.
 
 ### Adding locations
 
-**+ Add location** in the Locations view, or **+ Track** in a cell, opens **Track in more locations**:
+**+ Add location** in the Locations view, **+ Track** in a cell, or **Locations › Add locations** in the bar that shows when you select prompts opens **Track in more locations**:
 
 1. Pick one or more countries, US states or cities (50 major cities). The countries are the ones the AI engines answer from, read from the tracking provider every day: a country one engine doesn't answer from says so ("not on Copilot"), and that engine is skipped there while the others run.
 2. Choose which prompts to ask there: the one you clicked, the selected ones, a topic, or every prompt shown.
 3. Check **Plan usage**. Every prompt in every location counts once on your plan's prompt locations; for example, 50 prompts in two more places use 100 more. Paused prompts don't count.
+
+**US states** are asked by every engine from the state itself: ChatGPT, Perplexity, Copilot and Gemini through the provider's state setting, Google AI Mode and Google AI Overview by the state's name as Google knows it ("California, United States"), and the API models (OpenAI, Claude) by its region. Google's engines asked a state country-wide until October 2026: their answers from before then stay in the country's column.
 
 **Cities** are asked by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country, so they skip a city, and their answers stay in the country's column; track the country too to see them. A city column in the Locations view says *AI Mode · AIO · APIs*. A city counts as one location on your plan, like a country, on every plan. If none of the chosen prompts runs one of those engines, the dialog says so and adds nothing.
 
@@ -79,11 +83,26 @@ A location you just added has no answers yet. Until the next daily run asks it, 
 
 - **Within 24h**: it's tracked there, and the first results come with the next daily run;
 - **Paused**: the prompt is paused, so it isn't asked anywhere until you resume it;
-- **No engine here**: none of the prompt's engines answers from that place; add an engine that does, or remove the location.
+- **No engine here**: none of the prompt's engines answers from that place; add an engine that does, or [remove the location](#removing-locations).
 
 **Within 24h** shows while the prompt is new (added in the last two days) or has answers in another location in the range. An older prompt with no answers anywhere in the range, such as days without a run, shows a dash.
 
 When your plan's prompt locations are used up, **+ Track** reads **Limit reached**. It still opens the dialog, which shows your plan's way to track more.
+
+### Removing locations
+
+To stop asking prompts from a place, open the same dialog in **Remove** mode:
+
+- in the Locations view, the **…** menu on a location's column › **Stop tracking in** *location*, for the prompts shown (or the selected ones);
+- the **×** that shows when you point at a tracked cell (**Stop tracking here**), for that one prompt, when it's tracked somewhere else too;
+- **Locations › Remove locations** in the bar that shows when you select prompts;
+- or **Remove** at the top of **Track in more locations**.
+
+Pick the locations to stop (the ones the prompts you choose track, with how many of them track each) and the prompts, as when adding. The dialog shows how many tracked locations it removes and how many it frees on your plan; a paused prompt's locations go too, but free nothing, because paused prompts don't count.
+
+A prompt needs at least one location, so one tracked only in the locations you stop keeps them, and the dialog says how many do. The rest change.
+
+Past results stay: the prompt is no longer asked there from the next daily run, and the answers already collected there aren't deleted. When no prompt shown is tracked in a location any more, its column leaves the Locations view.
 
 ## Performance
 
@@ -271,6 +290,8 @@ If a draft that isn't published yet already covers the prompt — one started fr
 **Optimize content** opens Start on the page of yours AI engines cite most for the prompt. When none is cited, Start lists your pages that answer the prompt so you can pick one. When a draft already covers the prompt, the step offers **Open draft**.
 
 The tab's suggestions per platform are written from the answers' evidence and from this brand's last two Improve actions on the prompt for the same region: which of their suggestions were done or skipped, and how each platform moved since. They build on what moved, and don't suggest again what was done on a platform that didn't, or what your team skipped. An action sent less than a week ago is too early to tell either way. Only this brand's own actions are read.
+
+When the Action Center's **Analyze competitor content** has read the pages cited for the prompt in the last month, the tab's suggestions also see what Site Audit's checks found on them: which checks each competitor page passes, and which they have that your cited page doesn't. They build on what was seen there, not a guess.
 
 ## Best practices
 

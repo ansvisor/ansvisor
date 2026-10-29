@@ -21,8 +21,12 @@ const actions = vi.hoisted(() => ({
   deletePrompts: vi.fn(),
   importPrompts: vi.fn(),
   updatePrompt: vi.fn(),
+  getLocationQuota: vi.fn(),
+  getPromptLocationMatrix: vi.fn(),
+  bulkUpdatePromptLocations: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt', () => actions);
+vi.mock('@/lib/actions/tracking-countries', () => ({ getTrackingCountries: async () => [] }));
 const volumes = vi.hoisted(() => ({
   startPromptVolumeAnalysis: vi.fn(),
   getVolumeAnalysisStatus: vi.fn(async () => null),
@@ -198,6 +202,103 @@ describe('Tracked Prompts on a read-only workspace', () => {
     await act(async () => button('Pause')!.click());
     expect(actions.setPromptsActive).toHaveBeenCalledWith(['p1'], false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('locations on a read-only workspace (PROMPT-015)', () => {
+  // Tracked in the US and Germany; the second prompt only in the US, so its
+  // Germany cell offers + Track.
+  const twoPlaces: Prompt = { ...prompt, regions: ['US', 'DE'] };
+  const usOnly: Prompt = { ...prompt, id: 'p2', text: 'Coffee beans every week?', regions: ['US'] };
+
+  beforeEach(() => {
+    actions.getPromptsPageData.mockResolvedValue({
+      volumes: [],
+      quota: null,
+      promptSets: [{ prompts: [twoPlaces, usOnly] }],
+      visibility: {},
+      positions: {},
+    });
+    actions.getLocationQuota.mockResolvedValue({
+      maxPrompts: 200,
+      used: 3,
+      planId: 'growth',
+      planName: 'Growth',
+    });
+    actions.getPromptLocationMatrix.mockResolvedValue({});
+  });
+  // The view is kept in the URL (?layout=locations): the next tests start on the table.
+  afterEach(() => window.history.replaceState(null, '', window.location.pathname));
+
+  const openMenu = async (trigger: HTMLElement) => {
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  };
+  const showLocations = async () => {
+    await act(async () => button('Locations')!.click());
+    await act(async () => {});
+  };
+
+  it('opens the upgrade dialog, not the locations one, from every way in', async () => {
+    await render(true);
+
+    // The bulk bar's Locations menu, on the selection.
+    const box = container.querySelector<HTMLElement>(`[aria-label="Select ${prompt.text}"]`)!;
+    await act(async () => box.click());
+    const bulk = [...container.querySelectorAll<HTMLButtonElement>('[role="toolbar"] button')].find(
+      (b) => b.textContent === 'Locations',
+    )!;
+    let items = await openMenu(bulk);
+    await act(async () => items.find((i) => i.textContent === 'Remove locations')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Removing locations needs a plan');
+    items = await openMenu(bulk);
+    await act(async () => items.find((i) => i.textContent === 'Add locations')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Changing locations needs a plan');
+    await act(async () => box.click());
+
+    await showLocations();
+    // A column's menu.
+    items = await openMenu(
+      container.querySelector<HTMLElement>('[aria-label="Actions for Germany"]')!,
+    );
+    await act(async () => items.find((i) => i.textContent === 'Stop tracking in Germany')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Removing locations needs a plan');
+    // A cell's ×.
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          `[aria-label="Stop tracking “${prompt.text}” in Germany"]`,
+        )!
+        .click(),
+    );
+    expect(openUpgrade).toHaveBeenLastCalledWith('Removing locations needs a plan');
+    // A cell's + Track, and + Add location.
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(`[aria-label="Track “${usOnly.text}” in Germany"]`)!
+        .click(),
+    );
+    expect(openUpgrade).toHaveBeenLastCalledWith('Changing locations needs a plan');
+    await act(async () => button('+ Add location')!.click());
+    expect(openUpgrade).toHaveBeenLastCalledWith('Changing locations needs a plan');
+
+    expect(openUpgrade).toHaveBeenCalledTimes(6);
+    expect(dialog()).toBeNull();
+    expect(actions.bulkUpdatePromptLocations).not.toHaveBeenCalled();
+  });
+
+  it("opens stop tracking on a column's prompts on an active plan", async () => {
+    await render(false);
+    await showLocations();
+    const items = await openMenu(
+      container.querySelector<HTMLElement>('[aria-label="Actions for Germany"]')!,
+    );
+    await act(async () => items.find((i) => i.textContent === 'Stop tracking in Germany')!.click());
+    expect(openUpgrade).not.toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain('Stop tracking in locations');
   });
 });
 
