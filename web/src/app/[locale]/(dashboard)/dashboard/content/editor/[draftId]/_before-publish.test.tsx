@@ -682,6 +682,9 @@ describe('BeforePublish', () => {
 
   it('opens and folds the code with one button, its focus on the code it opens', async () => {
     await render(quality(), { mode: 'send' });
+    // The dialog moves focus in a frame after it opens: clicked before that, on a
+    // slow run, it takes the focus back from the code.
+    await vi.waitFor(() => expect(document.activeElement).toBe(button('Continue to send')));
     const show = button("Show the JSON-LD, for a CMS that doesn't add it")!;
     expect(show.getAttribute('aria-expanded')).toBe('false');
     await act(async () => show.click());

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
-import { PV_PERIODS, getShoppingShelfFor, isPlanLocked } from '@/lib/mcp/product-visibility';
+import { NOT_IN_PLAN, SHOPPING_NOT_IN_PLAN } from '@/lib/mcp/data';
+import { PV_PERIODS, getShoppingShelfFor } from '@/lib/mcp/product-visibility';
 import { isShoppingMarket } from '@/lib/shopping/markets';
 
 /** GET /api/mcp/product-visibility/shelf — REST mirror of the `get_shopping_shelf` MCP tool. */
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
     if (read === null) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
-    if (isPlanLocked(read)) return NextResponse.json({ error: read.message }, { status: 403 });
+    if (read === NOT_IN_PLAN) return NextResponse.json(SHOPPING_NOT_IN_PLAN, { status: 403 });
     return NextResponse.json(read);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed';

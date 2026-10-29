@@ -16,6 +16,7 @@ import { detectPageType, type SiteType } from './page-types';
 import type { DraftMethod, PageType } from './drafts';
 import { pageKey } from './sources';
 import type { PriorityLevel } from '@/lib/action-center/priority';
+import { levelOf, logScale, round } from '@/lib/priority-core';
 
 /** The Plan's periods: a week, a month, a quarter. */
 export const PLAN_PERIODS = [7, 30, 90] as const;
@@ -152,10 +153,7 @@ export const SCORE_WEIGHTS = { severity: 40, opportunity: 30, pageValue: 20, cit
 export const PLAN_LEVEL_CUTOFFS = { critical: 75, high: 55, medium: 40 } as const;
 
 export function planPriorityLevel(score: number): PriorityLevel {
-  if (score >= PLAN_LEVEL_CUTOFFS.critical) return 'critical';
-  if (score >= PLAN_LEVEL_CUTOFFS.high) return 'high';
-  if (score >= PLAN_LEVEL_CUTOFFS.medium) return 'medium';
-  return 'low';
+  return levelOf(score, PLAN_LEVEL_CUTOFFS);
 }
 
 /** How bad the signal is, by what the row is (a drop is reckoned, 0.6–1). */
@@ -185,11 +183,11 @@ export function dropSeverity(pct: number, lost: number): number {
 }
 /** A page's AI visits as value: log10(1 + visits) against FULL_VISITS'. */
 export function visitsValue(visits: number): number {
-  return Math.min(1, Math.log10(1 + Math.max(0, visits)) / Math.log10(1 + FULL_VISITS));
+  return logScale(visits, FULL_VISITS);
 }
 /** A page's conversions as value: log10(1 + conversions) against FULL_CONVERSIONS'. */
 export function conversionsValue(conversions: number): number {
-  return Math.min(1, Math.log10(1 + Math.max(0, conversions)) / Math.log10(1 + FULL_CONVERSIONS));
+  return logScale(conversions, FULL_CONVERSIONS);
 }
 /**
  * A page's value: its AI visits, and with conversions weighed (a count, not
@@ -232,7 +230,7 @@ type PartFields = PlanScorePart extends infer P
     : never
   : never;
 /** To one decimal: whole points would tie pages a citation apart. */
-const round1 = (n: number) => Math.round(n * 10) / 10;
+const round1 = (n: number) => round(n, 1);
 function part(fields: PartFields): PlanScorePart {
   const max = SCORE_WEIGHTS[fields.kind];
   return { ...fields, max, points: round1(fields.value * max) } as PlanScorePart;

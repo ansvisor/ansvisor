@@ -458,15 +458,6 @@ export default function PromptsPage() {
     [allPrompts, bulkPromptIds, bulkAction, bulkLocations],
   );
 
-  // Every engine the selection spans: the state-targeting caveat applies if
-  // any selected prompt runs a country-only engine.
-  const bulkSelectedPlatforms = useMemo(
-    () => [
-      ...new Set(allPrompts.filter((p) => bulkPromptIds.has(p.id)).flatMap((p) => p.platforms)),
-    ],
-    [allPrompts, bulkPromptIds],
-  );
-
   const openBulkDialog = useCallback(() => {
     setBulkAction('add');
     setBulkLocations([]);
@@ -1196,7 +1187,6 @@ export default function PromptsPage() {
               allowEmpty
               label={bulkAction === 'add' ? 'Locations to add' : 'Locations to remove'}
               countNoun="selected"
-              platforms={bulkSelectedPlatforms}
             />
 
             <div>
