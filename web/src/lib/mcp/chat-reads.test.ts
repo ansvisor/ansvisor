@@ -14,6 +14,7 @@ const BRAND = 'brand-1';
 
 const reads = vi.hoisted(() => ({
   selects: [] as { table: string; columns: string }[],
+  filters: [] as { table: string; column: string; value: unknown }[],
   answers: {} as Record<string, unknown>,
   org: { plan: 'starter', subscription_status: 'active', plan_overrides: null } as unknown,
 }));
@@ -24,7 +25,10 @@ function from(table: string) {
       reads.selects.push({ table, columns });
       return chain;
     },
-    eq: () => chain,
+    eq: (column: string, value: unknown) => {
+      reads.filters.push({ table, column, value });
+      return chain;
+    },
     in: () => chain,
     is: () => chain,
     order: () => chain,
@@ -93,6 +97,7 @@ const auth = (role: McpAuthContext['role'] = 'manager'): McpAuthContext => ({
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   reads.selects = [];
+  reads.filters = [];
   reads.answers = {};
   reads.org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
   for (const fn of Object.values(mocks)) fn.mockReset();
@@ -124,7 +129,7 @@ describe('a brand outside the organization', () => {
 });
 
 describe('Prompts reads', () => {
-  it("keeps fan-outs to the plan's platforms, with when the brand's data last came in", async () => {
+  it("reads fan-outs from the plan's platforms only, with when their data last came in", async () => {
     reads.answers.prompt_results = { created_at: '2026-10-29T06:00:00Z' };
     mocks.getQueryFanout.mockResolvedValue({
       totalObserved: 3,
@@ -137,42 +142,29 @@ describe('Prompts reads', () => {
           subQueries: 2,
           lastFanoutAt: null,
         },
-        {
-          platform: 'perplexity-web',
-          answers: 4,
-          answersWithFanout: 4,
-          subQueries: 1,
-          lastFanoutAt: null,
-        },
       ],
       subQueries: [
         {
           query: 'best crm',
-          engines: ['copilot-web', 'perplexity-web'],
+          engines: ['copilot-web'],
           timesSearched: 3,
           sourcedPrompts: [{}],
           tracked: true,
           trackedPromptId: 'p1',
         },
-        {
-          query: 'crm pricing',
-          engines: ['perplexity-web'],
-          timesSearched: 1,
-          sourcedPrompts: [],
-          tracked: false,
-          trackedPromptId: null,
-        },
       ],
       promptCoverage: [],
     });
     const fanouts = await getFanoutsFor(auth(), { brandId: BRAND });
-    expect(mocks.getQueryFanout).toHaveBeenCalledWith(BRAND, { days: 30 });
-    // Starter reads ChatGPT and Copilot: Perplexity's searches aren't the plan's.
+    // Starter reads ChatGPT and Copilot: the rows are theirs from the start, so every count is.
+    expect(mocks.getQueryFanout).toHaveBeenCalledWith(BRAND, {
+      days: 30,
+      platforms: ['chatgpt-web', 'copilot-web'],
+    });
     expect(fanouts).toMatchObject({
+      total_observed: 3,
       engines: [{ platform: 'copilot-web', answers_with_fanout: 3 }],
-      sub_queries: [
-        { query: 'best crm', engines: ['copilot-web'], times_searched: 3, tracked: true },
-      ],
+      sub_queries: [{ query: 'best crm', times_searched: 3, tracked: true }],
       sub_queries_total: 1,
       data_as_of: '2026-10-29T06:00:00Z',
     });
@@ -209,12 +201,13 @@ describe('Prompts reads', () => {
       promptId: 'p1',
       platform: 'chatgpt-web',
     });
+    // More than asked: the plan's platforms still fill the page once the rest are left out.
     expect(mocks.getPromptResults).toHaveBeenCalledWith(BRAND, {
       promptId: 'p1',
       platform: 'chatgpt-web',
       dateFrom: undefined,
       dateTo: undefined,
-      limit: 5,
+      limit: 50,
     });
     expect(read?.answers).toHaveLength(1);
     expect(read?.answers[0].answer).toHaveLength(1501);
@@ -248,6 +241,7 @@ describe('Prompts reads', () => {
     const insights = await getPromptInsightsFor(auth(), { brandId: BRAND, limit: 2 });
     expect(insights).toMatchObject({
       prompts_with_volume: 3,
+      truncated: false,
       total_est_ai_volume: 450,
       by_intent: { commercial: 2, informational: 1 },
       data_as_of: '2026-10-28T00:00:00Z',
@@ -327,22 +321,57 @@ describe('Overview, KPIs and Getting started', () => {
 });
 
 describe('Google reads', () => {
-  it('say a source is not connected, and how late Google reports', async () => {
-    reads.answers.brands = { gsc_property: null, ga_property_id: null };
+  const connected = [
+    { provider: 'google-search-console', status: 'connected' },
+    { provider: 'google-analytics', status: 'connected' },
+  ];
+
+  it('say a source is not connected: no connection, or no property picked', async () => {
+    reads.answers.brands = { gsc_property: null, ga_property_id: '123' };
+    reads.answers.integration_connections = [
+      { provider: 'google-search-console', status: 'connected' },
+      { provider: 'google-analytics', status: 'expired' },
+    ];
     expect(await getGscSummaryFor(auth(), { brandId: BRAND })).toEqual({
       connected: false,
       days: 28,
       data_as_of: null,
       source_lag: '2–3 days',
     });
+    expect(await getGaSummaryFor(auth(), { brandId: BRAND })).toMatchObject({ connected: false });
     expect(mocks.getTrafficGoogleTotals).not.toHaveBeenCalled();
   });
 
-  it("read Search Console's clicks to its last reported day, and Analytics' sessions", async () => {
+  it("reads Search Console's latest reported days for a short range, as the page does", async () => {
     reads.answers.brands = { gsc_property: 'sc-domain:x', ga_property_id: '123' };
+    reads.answers.integration_connections = connected;
+    reads.answers.gsc_query_stats = { date: '2026-10-27' };
+    mocks.getTrafficGoogleTotals.mockResolvedValue({
+      ga: null,
+      gsc: { since: '2026-10-21', until: '2026-10-27', clicks: 120, prevClicks: 100 },
+    });
+    expect(await getGscSummaryFor(auth(), { brandId: BRAND, days: 7 })).toMatchObject({
+      connected: true,
+      clicks: 120,
+      previous_clicks: 100,
+      until: '2026-10-27',
+      data_as_of: '2026-10-27',
+    });
+    expect(mocks.getTrafficGoogleTotals.mock.calls[0][2]).toEqual({
+      ga: false,
+      gsc: true,
+      gscLatestDays: 7,
+    });
+    await getGscSummaryFor(auth(), { brandId: BRAND, days: 28 });
+    expect(mocks.getTrafficGoogleTotals.mock.calls[1][2]).toMatchObject({ gscLatestDays: null });
+  });
+
+  it("reads Analytics' sessions to the last day it reported", async () => {
+    reads.answers.brands = { gsc_property: null, ga_property_id: '123' };
+    reads.answers.integration_connections = connected;
     reads.answers.ga_ai_traffic_stats = { date: '2026-10-28' };
     mocks.getTrafficGoogleTotals.mockResolvedValue({
-      gsc: { since: '2026-10-01', until: '2026-10-27', clicks: 120, prevClicks: 100 },
+      gsc: null,
       ga: {
         sessions: 900,
         aiSessions: 40,
@@ -352,12 +381,6 @@ describe('Google reads', () => {
         aiRevenue: 0,
         organic: { sessions: 500, engagedSessions: 0, keyEvents: 0, keyEventSessions: 0 },
       },
-    });
-    expect(await getGscSummaryFor(auth(), { brandId: BRAND, days: 7 })).toMatchObject({
-      connected: true,
-      clicks: 120,
-      previous_clicks: 100,
-      data_as_of: '2026-10-27',
     });
     expect(await getGaSummaryFor(auth(), { brandId: BRAND })).toMatchObject({
       connected: true,
@@ -391,7 +414,6 @@ describe('Workspace reads', () => {
 
   it("list what is connected, and never read a key's value or a credential", async () => {
     reads.answers.brands = [{ id: BRAND, name: 'Acme', gsc_property: 'sc', ga_property_id: null }];
-    reads.answers.profiles = [{ id: 'u1' }];
     reads.answers.brand_cms_connections = [
       { brand_id: BRAND, provider: 'webflow', status: 'connected', site_name: 'Acme site' },
     ];
@@ -401,9 +423,12 @@ describe('Workspace reads', () => {
     expect(read).toMatchObject({
       google: [{ brand: 'Acme', search_console: true, analytics: false }],
       cms: [{ brand: 'Acme', provider: 'webflow', site: 'Acme site' }],
-      api_keys: [{ name: 'MCP laptop' }],
+      your_api_keys: [{ name: 'MCP laptop' }],
       ai_providers: [{ provider: 'anthropic', active: true }],
     });
+    // Only the person's own keys: the read is by their id, never the workspace's members.
+    expect(reads.filters).toContainEqual({ table: 'api_keys', column: 'user_id', value: 'u1' });
+    expect(reads.selects.some((s) => s.table === 'profiles')).toBe(false);
     const columns = reads.selects.map((s) => s.columns).join(',');
     expect(columns).not.toMatch(/key_hash|key_encrypted|key_last4|prefix|composio|credential/);
   });

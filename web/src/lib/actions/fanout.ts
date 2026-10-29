@@ -142,6 +142,8 @@ async function fetchFanoutRows(
   since: string,
   promptId?: string,
   until?: string,
+  /** Only these platforms' answers (Chat's read keeps the plan's); all when absent. */
+  platforms?: readonly string[],
 ): Promise<{ rows: FanoutResultRow[]; truncated: boolean }> {
   const rows: FanoutResultRow[] = [];
   for (let from = 0; from < FANOUT_MAX_ROWS; from += FANOUT_PAGE_SIZE) {
@@ -156,6 +158,7 @@ async function fetchFanoutRows(
       .range(from, from + FANOUT_PAGE_SIZE - 1);
     if (until) query = query.lte('created_at', until);
     if (promptId) query = query.eq('prompt_id', promptId);
+    if (platforms) query = query.in('platform', [...platforms]);
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
@@ -235,7 +238,7 @@ function normalizeQuery(raw: string): string {
  */
 export async function getQueryFanout(
   brandId: string,
-  opts?: { days?: number; from?: string; to?: string },
+  opts?: { days?: number; from?: string; to?: string; platforms?: readonly string[] },
 ): Promise<QueryFanoutData> {
   const supabase = await dbClient();
   // Clamp the window to a sane range so a crafted call can't force an
@@ -253,7 +256,14 @@ export async function getQueryFanout(
   // PostgREST is unreliable, and rows with an empty fan-out contribute nothing
   // to the sub-query aggregation below (the item loop skips them) — but they do
   // count toward coverage, which is the whole point of the denominator.
-  const { rows, truncated } = await fetchFanoutRows(supabase, brandId, since, undefined, opts?.to);
+  const { rows, truncated } = await fetchFanoutRows(
+    supabase,
+    brandId,
+    since,
+    undefined,
+    opts?.to,
+    opts?.platforms,
+  );
 
   interface Acc {
     display: string;

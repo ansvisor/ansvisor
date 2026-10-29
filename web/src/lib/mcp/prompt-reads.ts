@@ -14,6 +14,8 @@ import { asService, latestAnswerAt, newestOf, planPlatforms } from './chat-facts
 
 /** Sub-queries listed, the most searched first. */
 const SUB_QUERIES_SHOWN = 50;
+/** Answers read to find the newest few on the plan's platforms. */
+const ANSWERS_READ = 50;
 /** Characters of an answer's text: enough to quote it, not a whole page. */
 const ANSWER_CHARS = 1500;
 
@@ -23,35 +25,30 @@ export async function getFanoutsFor(
 ) {
   if (!(await brandInOrg(auth, params.brandId))) return null;
   const days = params.days ?? 30;
-  const [fanout, platforms, asOf] = await Promise.all([
-    asService(() => getQueryFanout(params.brandId, { days })),
-    planPlatforms(auth.organizationId!),
-    latestAnswerAt(params.brandId),
+  // The plan's platforms only, from the rows up: every count is theirs.
+  const platforms = await planPlatforms(auth.organizationId!);
+  const [fanout, asOf] = await Promise.all([
+    asService(() => getQueryFanout(params.brandId, { days, ...(platforms ? { platforms } : {}) })),
+    latestAnswerAt(params.brandId, platforms),
   ]);
-  const allowed = (platform: string) => !platforms || platforms.includes(platform);
-  const subQueries = fanout.subQueries
-    .map((q) => ({ ...q, engines: q.engines.filter(allowed) }))
-    .filter((q) => q.engines.length > 0);
   return {
     days,
     total_observed: fanout.totalObserved,
     truncated: fanout.truncated,
-    engines: fanout.engines
-      .filter((e) => allowed(e.platform))
-      .map((e) => ({
-        platform: e.platform,
-        answers: e.answers,
-        answers_with_fanout: e.answersWithFanout,
-        sub_queries: e.subQueries,
-      })),
-    sub_queries: subQueries.slice(0, SUB_QUERIES_SHOWN).map((q) => ({
+    engines: fanout.engines.map((e) => ({
+      platform: e.platform,
+      answers: e.answers,
+      answers_with_fanout: e.answersWithFanout,
+      sub_queries: e.subQueries,
+    })),
+    sub_queries: fanout.subQueries.slice(0, SUB_QUERIES_SHOWN).map((q) => ({
       query: q.query,
       engines: q.engines,
       times_searched: q.timesSearched,
       prompts: q.sourcedPrompts.length,
       tracked: q.tracked,
     })),
-    sub_queries_total: subQueries.length,
+    sub_queries_total: fanout.subQueries.length,
     data_as_of: asOf,
   };
 }
@@ -68,20 +65,24 @@ export async function listAiAnswersFor(
   },
 ) {
   if (!(await brandInOrg(auth, params.brandId))) return null;
+  const limit = params.limit ?? 5;
   const [read, platforms] = await Promise.all([
     // The brand's own answers only: the read filters by brand, so another brand's prompt has none.
+    // More than asked, so the plan's platforms still fill the page once the rest are left out.
     asService(() =>
       getPromptResults(params.brandId, {
         promptId: params.promptId,
         platform: params.platform,
         dateFrom: params.dateFrom,
         dateTo: params.dateTo,
-        limit: params.limit ?? 5,
+        limit: ANSWERS_READ,
       }),
     ),
     planPlatforms(auth.organizationId!),
   ]);
-  const answers = read.results.filter((r) => !platforms || platforms.includes(r.platform));
+  const answers = read.results
+    .filter((r) => !platforms || platforms.includes(r.platform))
+    .slice(0, limit);
   return {
     answers: answers.map((r) => ({
       id: r.id,
@@ -99,6 +100,8 @@ export async function listAiAnswersFor(
   };
 }
 
+/** Prompts the volume read takes at most (getPromptVolumesFor's ceiling). */
+const VOLUMES_READ = 500;
 /** Prompts listed by estimated AI volume. */
 const TOP_PROMPTS = 10;
 
@@ -106,12 +109,14 @@ export async function getPromptInsightsFor(
   auth: McpAuthContext,
   params: { brandId: string; limit?: number },
 ) {
-  const rows = await getPromptVolumesFor(auth, { brandId: params.brandId, limit: 500 });
+  const rows = await getPromptVolumesFor(auth, { brandId: params.brandId, limit: VOLUMES_READ });
   if (!rows) return null;
   const byIntent: Record<string, number> = {};
   for (const row of rows) byIntent[row.intent] = (byIntent[row.intent] ?? 0) + 1;
   return {
     prompts_with_volume: rows.length,
+    // The volume read stops at VOLUMES_READ prompts: the sums cover those.
+    truncated: rows.length === VOLUMES_READ,
     total_est_ai_volume: rows.reduce((sum, row) => sum + (row.est_ai_volume || 0), 0),
     by_intent: byIntent,
     top: [...rows]

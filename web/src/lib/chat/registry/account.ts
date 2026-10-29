@@ -39,7 +39,7 @@ export const ACCOUNT_READS = [
     class: 'read',
     area: 'account',
     description:
-      'What the workspace has connected: Google Search Console and Analytics per brand, CMS sites, AI provider keys (whether set, never the key) and Ansvisor API keys (names and last use, never the key).',
+      "What the workspace has connected: Google Search Console and Analytics per brand, CMS sites, AI provider keys (whether set, never the key) and the person's own Ansvisor API keys (names and last use, never the key).",
     minRole: 'analyst',
     planGate: null,
     brandOf: null,
@@ -63,7 +63,7 @@ export const ACCOUNT_READS = [
     brandOf: null,
     costClass: 'C0',
     labelKey: 'chatPolicy',
-    route: '/dashboard/settings',
+    route: '/dashboard/settings/roles-access',
     mcpTool: null,
     specRow: '10',
     inputSchema: none,

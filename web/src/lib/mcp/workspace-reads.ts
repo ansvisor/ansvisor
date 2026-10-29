@@ -8,7 +8,8 @@ import { planFactsOf } from './chat-facts';
 /**
  * Chat's workspace reads (CHAT-20 §9 rows 5, 8, 9 and 10): the team, what
  * is connected, Chat's policy and the plan's facts, for the caller's
- * organization. Nothing secret leaves: e-mails for Admins only (§4a), no
+ * organization. Nothing secret leaves: e-mails for Admins only (§4a), only
+ * the person's own API keys' names (as Settings › API Keys shows them), no
  * key, token or credential, no AI budget in dollars (DECISIONS R). Each
  * answers `data_as_of`; these are live, so it is now. Null without an
  * organization.
@@ -42,7 +43,7 @@ export async function listMembersFor(auth: McpAuthContext) {
 export async function listConnectionsFor(auth: McpAuthContext) {
   if (!auth.organizationId) return null;
   const orgId = auth.organizationId;
-  const [integrations, brands, aiKeys, members] = await Promise.all([
+  const [integrations, brands, aiKeys] = await Promise.all([
     supabaseAdmin
       .from('integration_connections')
       .select('provider, status')
@@ -55,13 +56,11 @@ export async function listConnectionsFor(auth: McpAuthContext) {
       .from('organization_ai_keys')
       .select('provider, active')
       .eq('organization_id', orgId),
-    supabaseAdmin.from('profiles').select('id').eq('organization_id', orgId),
   ]);
-  for (const read of [integrations, brands, aiKeys, members]) {
+  for (const read of [integrations, brands, aiKeys]) {
     if (read.error) throw new Error(read.error.message);
   }
   const brandRows = brands.data ?? [];
-  const memberIds = (members.data ?? []).map((row) => row.id);
   const [cms, keys] = await Promise.all([
     brandRows.length
       ? supabaseAdmin
@@ -72,13 +71,12 @@ export async function listConnectionsFor(auth: McpAuthContext) {
             brandRows.map((b) => b.id),
           )
       : { data: [], error: null },
-    memberIds.length
-      ? supabaseAdmin
-          .from('api_keys')
-          .select('name, last_used_at')
-          .in('user_id', memberIds)
-          .is('revoked_at', null)
-      : { data: [], error: null },
+    // The person's own keys, as Settings › API Keys lists them: never a teammate's.
+    supabaseAdmin
+      .from('api_keys')
+      .select('name, last_used_at')
+      .eq('user_id', auth.userId)
+      .is('revoked_at', null),
   ]);
   if (cms.error) throw new Error(cms.error.message);
   if (keys.error) throw new Error(keys.error.message);
@@ -99,8 +97,11 @@ export async function listConnectionsFor(auth: McpAuthContext) {
       status: row.status,
       site: row.site_name,
     })),
-    // Whether keys exist and when they were used: never their values (§8b).
-    api_keys: (keys.data ?? []).map((row) => ({ name: row.name, last_used_at: row.last_used_at })),
+    // The person's own keys and when they were used: never their values (§8b).
+    your_api_keys: (keys.data ?? []).map((row) => ({
+      name: row.name,
+      last_used_at: row.last_used_at,
+    })),
     ai_providers: (aiKeys.data ?? []).map((row) => ({
       provider: row.provider,
       active: row.active,

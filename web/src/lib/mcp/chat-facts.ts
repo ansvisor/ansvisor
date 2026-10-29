@@ -31,12 +31,17 @@ export async function planPlatforms(organizationId: string): Promise<readonly st
   return facts.limits.allowedScrapers ?? null;
 }
 
-/** When the brand's newest tracked answer came in; null before its first one. */
-export async function latestAnswerAt(brandId: string): Promise<string | null> {
-  const { data, error } = await supabaseAdmin
-    .from('prompt_results')
-    .select('created_at')
-    .eq('brand_id', brandId)
+/**
+ * When the brand's newest tracked answer came in, on these platforms when
+ * given (the plan's); null before its first one.
+ */
+export async function latestAnswerAt(
+  brandId: string,
+  platforms?: readonly string[] | null,
+): Promise<string | null> {
+  let query = supabaseAdmin.from('prompt_results').select('created_at').eq('brand_id', brandId);
+  if (platforms) query = query.in('platform', [...platforms]);
+  const { data, error } = await query
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
