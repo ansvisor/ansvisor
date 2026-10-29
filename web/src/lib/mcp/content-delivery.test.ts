@@ -35,6 +35,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  role: 'admin',
 };
 const LIVE = 'https://acme.example/blog/cold-brew';
 const fetchMock = vi.fn();
