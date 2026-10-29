@@ -370,3 +370,102 @@ describe('sending a task (AC-004)', () => {
     expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Edit']);
   });
 });
+
+/** What Analyze competitor content found (learning C1), shown on the task. */
+describe('TaskDetailView with competitor findings', () => {
+  const findings = {
+    competitorPages: [
+      {
+        url: 'https://rival.com/kettles/',
+        domain: 'rival.com',
+        cited: 4,
+        words: 1200,
+        passes: ['faq-schema'],
+      },
+      {
+        url: 'https://blog.example/best',
+        domain: 'blog.example',
+        cited: 1,
+        words: null,
+        passes: [],
+      },
+    ],
+    yourPage: {
+      url: 'https://acme.com/kettles',
+      domain: 'acme.com',
+      cited: 1,
+      words: 1,
+      passes: [],
+    },
+    yourPageStatus: 'read' as const,
+    gaps: [{ key: 'faq-schema', label: 'FAQ schema', competitors: 2, of: 2 }],
+    compared: true,
+    unreadable: 0,
+    reason: null,
+  };
+
+  it('says which checks their pages pass and yours does not, and the pages read', () => {
+    render(
+      <TaskDetailView details={null} disabled={false} onEdit={() => {}} competitor={findings} />,
+    );
+    const text = container.textContent!;
+    expect(text).toContain('What the pages AI cites instead of yours have');
+    expect(text).toContain('FAQ schema — on 2 of 2 of their pages, not on yours');
+    expect(text).toContain('The 2 pages read');
+    expect(text).toContain('rival.com/kettles1,200 words · cited in 4 answers');
+    expect(text).toContain('acme.com/kettles1 word · cited in 1 answer');
+    expect(text).not.toContain('tomorrow');
+    expect(container.querySelector('a[href="https://rival.com/kettles/"]')).not.toBeNull();
+  });
+
+  it('says why nothing was compared', () => {
+    render(
+      <TaskDetailView
+        details={null}
+        disabled={false}
+        onEdit={() => {}}
+        competitor={{ ...findings, competitorPages: [], gaps: [], reason: 'none_cited' }}
+      />,
+    );
+    expect(container.textContent).toContain(
+      "In the last two weeks, AI answers for these prompts cited no competitor page, and no page in answers that don't name your brand.",
+    );
+  });
+
+  it('says when one page of theirs is too few to compare', () => {
+    render(
+      <TaskDetailView
+        details={null}
+        disabled={false}
+        onEdit={() => {}}
+        competitor={{
+          ...findings,
+          competitorPages: findings.competitorPages.slice(0, 1),
+          gaps: [],
+          compared: false,
+        }}
+      />,
+    );
+    expect(container.textContent).toContain(
+      "Only one of their pages was read: it takes at least two to say what theirs have that yours doesn't.",
+    );
+    expect(container.textContent).not.toContain('Your page passes');
+  });
+
+  it("says the brand's page couldn't be read rather than that it wasn't cited", () => {
+    render(
+      <TaskDetailView
+        details={null}
+        disabled={false}
+        onEdit={() => {}}
+        competitor={{ ...findings, yourPage: null, yourPageStatus: 'unreadable', unreadable: 1 }}
+      />,
+    );
+    const text = container.textContent!;
+    expect(text).toContain(
+      "Your page cited for these prompts couldn't be read: it may block readers.",
+    );
+    expect(text).not.toContain('None of your pages was cited');
+    expect(text).toContain('FAQ schema — on 2 of 2 of their pages');
+  });
+});

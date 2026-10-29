@@ -1628,7 +1628,27 @@
           "openDraft": "Open draft",
           "pagesToOptimize": "Pages to optimize",
           "draftFailed": "Couldn't open the Content Editor. Try again.",
-          "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor."
+          "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor.",
+          "competitor": {
+            "title": "What the pages AI cites instead of yours have",
+            "gap": "— on {count} of {of} of their pages, not on yours",
+            "gapNoPage": "— on {count} of {of} of their pages",
+            "noGap": "Your page passes every check at least half of their pages pass.",
+            "tooFew": "Only one of their pages was read: it takes at least two to say what theirs have that yours doesn't.",
+            "pages": "{count, plural, one {The page read} other {The # pages read}}",
+            "yours": "Your page cited for these prompts",
+            "noPage": "None of your pages was cited for these prompts lately.",
+            "yourUnreadable": "Your page cited for these prompts couldn't be read: it may block readers.",
+            "words": "{count, plural, one {# word} other {{words} words}}",
+            "cited": "cited in {count, plural, one {# answer} other {# answers}}",
+            "note": "Read from their public pages and run through Site Audit's checks; only what the checks found is kept.",
+            "unreadable": "{count, plural, one {# page} other {# pages}} couldn't be read.",
+            "reasons": {
+              "no_prompts": "There are no tracked prompts to read the answers of for this action.",
+              "none_cited": "In the last two weeks, AI answers for these prompts cited no competitor page, and no page in answers that don't name your brand.",
+              "unreadable": "The pages cited couldn't be read: they may block readers."
+            }
+          }
         },
         "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
         "opportunity": {

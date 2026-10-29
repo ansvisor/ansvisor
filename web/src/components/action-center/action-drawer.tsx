@@ -1050,6 +1050,7 @@ function TaskRow({
             send={send}
             check={check}
             draftWork={draftWork}
+            competitor={task.competitorFindings}
           />
         ))}
 

@@ -60,6 +60,7 @@ import {
   type TaskDetailsEdit,
 } from '@/lib/action-center/task-details';
 import type { PriorityLevel, PriorityReason } from '@/lib/action-center/priority';
+import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
 import { assertWritable } from '@/lib/subscription-guard';
 
 export interface ActionAssignee {
@@ -175,6 +176,8 @@ export interface ActionTask {
    * platform and evidence (PROMPT-004). Null when it carries nothing.
    */
   details: ActionTaskDetails | null;
+  /** What Analyze competitor content found, once it ran (learning C1). */
+  competitorFindings?: CompetitorFindings | null;
 }
 
 export interface ActionEvent {
