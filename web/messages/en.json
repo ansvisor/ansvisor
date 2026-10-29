@@ -113,6 +113,7 @@
     "noPlan": "No active plan",
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
+      "removeLocations": "Removing locations needs a plan",
       "editPrompts": "Editing prompts needs a plan",
       "deletePrompts": "Deleting prompts needs a plan",
       "pausePrompts": "Pausing prompts needs a plan",
@@ -3045,6 +3046,99 @@
       "step": "Dismissed prompt suggestion"
     }
   },
+  "agentic": {
+    "avatar": {
+      "idle": "Agent · idle",
+      "working": "Agent · working",
+      "waiting": "Agent · needs you",
+      "done": "Agent · done",
+      "failed": "Agent · failed"
+    },
+    "status": {
+      "working": "Working",
+      "answering": "Answering",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "answered": "Answered",
+      "ready": "Ready",
+      "planReady": "Plan ready",
+      "draft": "Draft",
+      "failed": "Failed"
+    },
+    "approval": {
+      "auto": "Auto",
+      "asks": "Asks you",
+      "logged": "Auto · logged",
+      "loggedTip": "Runs without a card in Full auto. Logged in the Activity log, with Undo.",
+      "click": "Needs your click",
+      "clickTip": "Goes live or leaves the workspace. Always needs your click, in every mode.",
+      "done": "Done"
+    },
+    "step": {
+      "label": "Step {number} · {state}",
+      "pending": "Not started",
+      "current": "Running",
+      "waiting": "Needs you",
+      "failed": "Failed",
+      "done": "Done"
+    },
+    "dot": {
+      "running": "Running",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "failed": "Stopped or failed",
+      "idle": "Idle",
+      "paused": "Paused",
+      "progress": "Progress",
+      "legend": {
+        "title": "What the dots mean",
+        "running": "The agent is working. The thin line shows progress.",
+        "needsYou": "Waiting for your OK or click. Nothing moves until you reply.",
+        "done": "Finished. Bold until you open the result.",
+        "failed": "You stopped it, or a step failed. Open it to retry.",
+        "idle": "A normal chat. Nothing is running."
+      }
+    },
+    "newPill": "New",
+    "attention": {
+      "needsYou": "{count, plural, one {# needs you} other {# need you}}",
+      "items": "{count, plural, one {# item} other {# items}}",
+      "itemsNeedYou": "{count, plural, one {# item} other {# items}} · {needsYou}"
+    },
+    "tick": "Done",
+    "preview": {
+      "title": "Chat pieces",
+      "description": "The agent's shared pieces in every state, for design sign-off. Nothing here runs.",
+      "motion": "With Reduce motion on, nothing moves.",
+      "sections": {
+        "avatar": "Agent avatar",
+        "avatarList": "Agent avatar in the Agents list",
+        "statusPill": "Status pill",
+        "approvalPill": "Approval pills",
+        "steps": "Step states",
+        "dots": "List dots",
+        "newPill": "New pill",
+        "attention": "Attention badge",
+        "tick": "Done tick"
+      },
+      "avatarStates": {
+        "idle": "Idle",
+        "working": "Working",
+        "waiting": "Needs you",
+        "done": "Done",
+        "failed": "Failed"
+      },
+      "avatarListNote": "Still, at 30 px: grey when idle, paused or stopped",
+      "avatarSizes": "30, 26 and 22 px",
+      "size": "{size} px",
+      "progress": "Progress line",
+      "legend": "Legend",
+      "onIcon": "On a menu icon",
+      "countNeedsYou": "Count, 1 needs you",
+      "countNone": "Count, nothing needs you",
+      "tickPop": "Pops in once"
+    }
+  },
   "chatDenial": {
     "asked": "You asked: {action}.",
     "askedTarget": "You asked: {action} · {target}.",
@@ -3533,7 +3627,7 @@
       "trackedPrompts": "Tracked prompts",
       "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "slotsLeft": "{count, plural, one {# prompt/location left to add} other {# prompts/locations left to add}}",
       "limitReached": "Plan limit reached",
       "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
@@ -4989,7 +5083,7 @@
       },
       "shopping": {
         "title": "Shopping path",
-        "description": "Where this page sends readers. Picked by topic and stock, and by Merchant Center status once it's connected. Prices and specs come from the catalog only.",
+        "description": "Where this page sends readers. Picked by topic and stock. Prices and specs come from the catalog only.",
         "empty": "Pick the category page and the products in stock this page links, from your catalog.",
         "build": "Pick from the catalog",
         "rebuild": "Pick again",
@@ -7654,11 +7748,16 @@
       "gapTip": "Best minus worst tracked location, for the metric shown.",
       "track": "+ Track",
       "trackLabel": "Track “{prompt}” in {location}",
+      "stop": "Stop tracking here",
+      "stopLabel": "Stop tracking “{prompt}” in {location}",
+      "columnMenu": "Actions for {location}",
+      "stopColumn": "Stop tracking in {location}",
       "open": "{prompt} in {location}: open its positions",
       "notNamed": "Not named",
       "noAnswers": "No answers here in this period",
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
+      "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
@@ -7692,9 +7791,18 @@
       "button": "+ Add location",
       "title": "Track in more locations",
       "lead": "The same prompts, asked from each place you add. Each place gets its own column in the Locations view.",
+      "modes": "What to do",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "removeTitle": "Stop tracking in locations",
+      "removeLead": "Stop asking these prompts from the places you pick. Each place you stop leaves the Locations view once no prompt shown is tracked there.",
       "locations": "Locations to add",
+      "removeLocations": "Locations to stop",
+      "removeNoLocations": "These prompts aren't tracked in any location.",
+      "removeChip": "{location}, tracked by {count, plural, =0 {none of these prompts} one {# prompt} other {# prompts}}",
       "picked": "picked",
       "scope": "Ask these prompts there",
+      "removeScope": "Stop it for these prompts",
       "selected": "The {count, plural, one {# prompt} other {# prompts}} selected",
       "topic": "Topic",
       "allShown": "All {count, plural, one {# prompt} other {# prompts}} shown",
@@ -7711,7 +7819,17 @@
       "noPrompts": "Choose the prompts to add these locations to.",
       "cancel": "Cancel",
       "submit": "Track in {count, plural, =0 {these locations} one {# location} other {# locations}}",
-      "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations. The first results come with the next daily run, within 24 hours."
+      "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations. The first results come with the next daily run, within 24 hours.",
+      "removePreview": "Removes {removed, plural, one {# tracked location} other {# tracked locations}} from {count, plural, one {# prompt} other {# prompts}} · frees {freed, plural, one {# plan location} other {# plan locations}}",
+      "removeBlocked": "{count, plural, one {# prompt is} other {# prompts are}} tracked only in these locations, so {count, plural, one {it keeps them} other {they keep them}}: a prompt needs at least one location.",
+      "removeNothing": "None of these prompts is tracked in these locations.",
+      "removeNoPrompts": "Choose the prompts to stop tracking in these locations.",
+      "removePast": "Past results stay; tracking stops from the next run.",
+      "removeSubmit": "Stop tracking in {count, plural, =0 {these locations} one {# location} other {# locations}}",
+      "removed": "{count, plural, one {# prompt is} other {# prompts are}} no longer tracked there. Past results stay.",
+      "bulkButton": "Locations",
+      "bulkAdd": "Add locations",
+      "bulkRemove": "Remove locations"
     },
     "performance": {
       "label": "Performance",
@@ -8261,7 +8379,7 @@
         },
         "fix": {
           "title": "Fix it, then push",
-          "body": "The agent rewrites titles, feed fields and schema. You approve, we send it to Shopify."
+          "body": "Each fix goes to the Action Center. The agent rewrites the page and its schema; you approve it and send it to your CMS. Feed fields change in your feed."
         },
         "sell": {
           "title": "See what it sells",
@@ -8321,7 +8439,7 @@
       "channelsLabel": "AI shopping channels",
       "market": {
         "us": "Market: United States. In the US, ChatGPT picks products from OpenAI's own product index, built from feeds.",
-        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so your Merchant Center feed decides ChatGPT too."
+        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so what Google Shopping has of yours (a Merchant Center feed or your pages' product schema) decides ChatGPT too."
       },
       "channels": {
         "showing": "Showing your products",
@@ -8368,7 +8486,7 @@
           "unknown": "Shops without it can be left out of results. How OpenAI grants it isn't public yet; a direct feed is the best bet."
         },
         "firstWords": {
-          "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
+          "title": "First 40 words of descriptions{count, plural, =0 {} one { · # product} other { · # products}}",
           "pass": "Every description says what the product is in its first 40 words.",
           "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
           "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
@@ -8387,12 +8505,12 @@
           "fail": "Without it, ChatGPT Shopping sales can't be told apart from other AI visits. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links."
         },
         "wrongPrice": {
-          "title": "{count, plural, =0 {Prices in AI answers match yours} other {Wrong price in AI answers · # products}}",
+          "title": "{count, plural, =0 {Prices in AI answers match yours} one {Wrong price in AI answers · # product} other {Wrong price in AI answers · # products}}",
           "pass": "Every price AI showed for your products matches your catalog.",
           "fail": "AI shows {seen} for {product}, your price is {yours}."
         },
         "resellerCheaper": {
-          "title": "{count, plural, =0 {No reseller cheaper than you} other {Reseller cheaper than you · # products}}",
+          "title": "{count, plural, =0 {No reseller cheaper than you} one {Reseller cheaper than you · # product} other {Reseller cheaper than you · # products}}",
           "pass": "AI links to no reseller selling your products for less.",
           "fail": "AI links to a reseller selling your product for less. See Shelf › Where AI sends shoppers."
         },
@@ -8602,7 +8720,7 @@
       "catalog": "Product catalog",
       "catalogLine": "{count, plural, one {# product} other {# products}} · synced {when}",
       "catalogNotSynced": "{count, plural, one {# product} other {# products}} · not synced yet",
-      "catalogNone": "Not connected · your products, from a feed, a file or your store",
+      "catalogNone": "Not connected · add your product feed's URL (read every day) or upload a file",
       "catalogFailed": "Couldn't be read right now",
       "ga": "Google Analytics",
       "gsc": "Google Search Console",
@@ -8644,7 +8762,7 @@
     "tabReadiness": "Readiness",
     "tabProducts": "Products",
     "tabMyProducts": "My Products",
-    "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
+    "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL, read every day, or a file you upload once) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",
     "colProductTitle": "Product Title",
     "colPlatforms": "Platforms",
@@ -9308,7 +9426,7 @@
       "description": "Where {brand}'s products come from: a product feed URL, read every day, or a file you upload. Google product feeds (XML), Meta catalog CSVs and store CSV exports work.",
       "noBrand": "Pick a brand to see its catalog.",
       "unavailable": "Couldn't read the catalog's sources right now.",
-      "empty": "No catalog yet. Add your product feed's URL, or upload a CSV.",
+      "empty": "No catalog yet. Add your product feed's URL: it's read every day, so prices and stock stay current. Or upload a file once.",
       "upload": "Uploaded file",
       "status": {
         "ok": "Synced",
@@ -9331,7 +9449,10 @@
       "urlPlaceholder": "https://example.com/products.xml",
       "addFeed": "Add feed",
       "uploadFile": "Upload a file",
-      "uploadHint": "CSV or XML, up to 4 MB. For a larger catalog, add its feed URL.",
+      "uploadHint": "One-off: prices and stock stay as uploaded until you upload again. CSV or XML, up to 4 MB; a larger catalog needs its feed URL.",
+      "recommended": "Recommended",
+      "feedRecommended": "Your product feed's URL: read every day, so prices and stock stay current.",
+      "uploadStale": "Last uploaded {when} · prices and stock don't refresh by themselves. Upload again, or add the feed's URL.",
       "managersOnly": "Admins and managers can add and sync sources.",
       "categories": {
         "title": "Category pages",
@@ -9377,7 +9498,7 @@
         "too_many": "A brand can have 10 sources at most.",
         "forbidden": "Only admins and managers can change the catalog.",
         "recent": "Synced a moment ago. Try again in a few minutes.",
-        "too_large": "The file is larger than 4 MB. Add its feed URL instead.",
+        "too_large": "The file is larger than 4 MB. Add its feed URL instead: a feed up to 50 MB is read every day.",
         "not_found": "This source no longer exists.",
         "session": "Your session expired. Sign in again.",
         "workspace": "This brand isn't in your workspace.",
@@ -9578,6 +9699,7 @@
       "unavailable": "Couldn't read the Framer connection right now.",
       "notConfigured": "Framer isn't set up on this server yet.",
       "connected": "Connected",
+      "setupNotFinished": "Setup not finished",
       "refused": "Key refused",
       "project": "Project: {project}",
       "published": "published at {url}",
@@ -9585,7 +9707,7 @@
       "notConnectedMember": "Not connected. Admins and managers can connect Framer.",
       "refusedMember": "Framer refused the API key. Pages can't go there until an admin or manager connects it again.",
       "pagesGoTo": "Pages go to {collection} as draft items.",
-      "noCollection": "No collection picked yet.",
+      "noCollection": "No collection picked yet. Pages can't go to Framer until an admin or manager finishes the setup.",
       "projectLabel": "Project address",
       "projectPlaceholder": "https://framer.com/projects/…",
       "keyLabel": "API key",
@@ -9595,6 +9717,7 @@
       "connect": "Connect",
       "connecting": "Checking the project…",
       "connectedToast": "Framer connected",
+      "connectedSetupToast": "Framer connected. Now pick a collection and save.",
       "refusedNote": "Framer refused the saved API key. Make a new one in the project and connect again to send pages.",
       "replace": "Replace key",
       "cancel": "Cancel",
@@ -9603,6 +9726,7 @@
       "disconnectDescription": "Pages stop going to Framer. Items already sent stay in Framer. Framer doesn't let us revoke the API key: delete it in the project's Site Settings › General.",
       "disconnected": "Framer disconnected",
       "disconnectedNotRevoked": "Framer disconnected. Delete its API key in Framer too, in the project's Site Settings › General.",
+      "setupStep": "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Framer until then.",
       "collectionLabel": "Collection",
       "collectionPlaceholder": "Pick a collection",
       "collectionBlocked": "{name} (needs fields we can't fill)",
