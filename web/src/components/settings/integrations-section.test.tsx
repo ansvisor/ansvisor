@@ -4,6 +4,21 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import type { Brand } from '@/types';
+
+// An in-memory localStorage for the brand store, before it loads: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
 
 /**
  * Each provider's status as the API answers it: a failure is a read that
@@ -34,6 +49,7 @@ const client = vi.hoisted(() => ({
   readIntegrationsConfig: vi.fn(),
   readGscProperties: vi.fn(),
   readGaProperties: vi.fn(),
+  INTEGRATION_READ_TIMEOUT_MS: 10_000,
   withReadTimeout: <T,>(promise: Promise<T>) => promise,
   isTimeout: (err: unknown) => (err as { name?: string })?.name === 'TimeoutError',
 }));
@@ -62,6 +78,8 @@ vi.mock('./catalog-category-pages', () => ({
 vi.mock('./webflow-card', () => ({ WebflowCard: () => <div data-card="webflow">Webflow</div> }));
 
 const { IntegrationsSection } = await import('./integrations-section');
+const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
+const { useBrandStore } = await import('@/stores/use-brand-store');
 const { toast } = await import('sonner');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -93,16 +111,26 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-/** `isLocked`: a read-only workspace (plan not active). */
-async function render(isLocked = false) {
+/** `isLocked`: a read-only workspace (plan not active). `isDemo`: the demo brand on screen. */
+async function render(isLocked = false, isDemo = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        <DemoBrandContext.Provider
+          value={{ isDemo, demoBrand: null, offer: 'trial', neverSubscribed: false }}
         >
-          <IntegrationsSection />
-        </UpgradeDialogContext.Provider>
+          <UpgradeDialogContext.Provider
+            value={{
+              isLocked: isLocked || isDemo,
+              isDemo,
+              reason: isDemo ? 'demo' : 'ended',
+              adminName: null,
+              openUpgrade,
+            }}
+          >
+            <IntegrationsSection />
+          </UpgradeDialogContext.Provider>
+        </DemoBrandContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -364,5 +392,76 @@ describe('IntegrationsSection property mapping', () => {
     )!;
     await act(async () => retry.click());
     expect(container.querySelectorAll('[role="combobox"]')).toHaveLength(2);
+  });
+});
+
+describe('IntegrationsSection on the demo brand', () => {
+  const demoBrand: Brand = {
+    id: 'demo',
+    organizationId: 'org1',
+    name: 'Brewline Coffee',
+    slug: 'brewline-coffee',
+    shoppingModeEnabled: true,
+    isActive: true,
+    isDemo: true,
+    domains: [{ id: 'd1', brandId: 'demo', domain: 'brewline.example', isPrimary: true }],
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+  };
+  const card = (label: string) => byText(label)?.closest('.space-y-4') ?? null;
+  const row = (id: string) => container.querySelector(`[data-integration="${id}"]`);
+
+  beforeEach(() => {
+    useBrandStore.setState({ brands: [demoBrand], activeBrandId: 'demo' });
+  });
+
+  it('shows Search Console and Analytics connected with sample data, read from nowhere', async () => {
+    await render(false, true);
+    for (const label of ['Google Search Console', 'Google Analytics']) {
+      expect(badges(card(label)!)).toEqual(['Connected', 'Sample data']);
+    }
+    expect(client.readIntegrationStatus).not.toHaveBeenCalled();
+    expect(client.readGscProperties).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain('Composio');
+    // Each is mapped to the demo brand's sample property.
+    await vi.waitFor(() =>
+      expect(card('Google Search Console')!.textContent).toContain('1 of 1 brand mapped'),
+    );
+    expect(card('Google Search Console')!.textContent).toContain('Brewline Coffee');
+    expect(card('Google Search Console')!.textContent).toContain('sc-domain:brewline.example');
+    expect(card('Google Analytics')!.textContent).toContain('Brewline Coffee · GA4 (100000000)');
+  });
+
+  it('opens the plan dialog from Disconnect, which ends nothing', async () => {
+    await render(false, true);
+    const disconnect = [...card('Google Analytics')!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Disconnect',
+    )!;
+    await act(async () => disconnect.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith(
+      'Disconnecting an integration needs a plan',
+    );
+    expect(integrations.disconnectIntegration).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('shows the integrations still to come as Coming soon, in their groups', async () => {
+    await render(false, true);
+    expect(badges(merchantCenter()!)).toEqual(['Coming soon']);
+    expect(groupOf(row('shopify'))).toBe('Stores and marketplaces');
+    expect(groupOf(row('wix'))).toBe('Content management systems');
+    expect(row('shopify')!.textContent).toContain('Shopify');
+    expect(row('wix')!.textContent).toContain('Wix');
+    expect(badges(row('wix')!)).toEqual(['Coming soon']);
+    // Live now, with cards of their own: no Coming soon row.
+    expect(row('wordpress')).toBeNull();
+    expect(row('framer')).toBeNull();
+  });
+
+  it('shows none of those rows on another brand', async () => {
+    await render();
+    expect(row('shopify')).toBeNull();
+    expect(row('wix')).toBeNull();
+    expect(client.readIntegrationStatus).toHaveBeenCalled();
   });
 });

@@ -179,10 +179,10 @@ describe('reserveAiBudget', () => {
     expect(ops).toEqual([]);
   });
 
-  it('holds a call in the free trial on its $1, and says starting the plan gives more', async () => {
+  it('holds a call in the free trial on its $2, and says starting the plan gives more', async () => {
     org = { ...org, plan: 'growth', subscription_status: 'trialing' };
     await guard.reserveAiBudget('o1', { feature: 'improve', modelId: 'm', promptId: 'p1' });
-    expect(rpcCalls[0].args.p_budget).toBe(1);
+    expect(rpcCalls[0].args.p_budget).toBe(2);
 
     reserved = null;
     await expect(

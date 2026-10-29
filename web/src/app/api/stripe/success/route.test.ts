@@ -14,6 +14,12 @@ vi.mock('@/lib/stripe', () => ({
   },
 }));
 
+/** The demo brand's update: what it set, the filters it was made with, and its answer. */
+const brands = vi.hoisted(() => ({
+  update: vi.fn(),
+  filters: [] as [string, string, unknown][],
+  answer: { error: null } as { error: { message: string } | null },
+}));
 const db = vi.hoisted(() => ({
   update: vi.fn(),
   eq: vi.fn(),
@@ -21,10 +27,25 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    from: () => ({
+    from: (table: string) => ({
       update: (values: unknown) => {
-        db.update(values);
-        return { eq: db.eq };
+        if (table !== 'brands') {
+          db.update(values);
+          return { eq: db.eq };
+        }
+        brands.update(values);
+        const chain = {
+          eq: (column: string, value: unknown) => {
+            brands.filters.push(['eq', column, value]);
+            return chain;
+          },
+          is: (column: string, value: unknown) => {
+            brands.filters.push(['is', column, value]);
+            return chain;
+          },
+          then: (resolve: (value: unknown) => unknown) => resolve(brands.answer),
+        };
+        return chain;
       },
       // The organization's first brand, for its first run: none unless a
       // test says so.
@@ -67,6 +88,8 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
   db.eq.mockResolvedValue({ error: null });
+  brands.filters = [];
+  brands.answer = { error: null };
   db.brand = null;
   api.mockReset();
   vi.stubGlobal('fetch', api);
@@ -159,6 +182,8 @@ describe('GET /api/stripe/success, the first run', () => {
     // The API starts the volume analysis with the run.
     expect(apiPaths()).toEqual(['/api/internal/trigger-tracking']);
     expect(new URL(res.headers.get('location')!).searchParams.get('jobId')).toBe('job-s');
+    // The demo brand stepped aside for the bought plan, beside the run.
+    expect(brands.update).toHaveBeenCalledTimes(1);
   });
 
   it('starts nothing for a subscription whose payment was not made', async () => {
@@ -167,6 +192,8 @@ describe('GET /api/stripe/success, the first run', () => {
     const res = await back();
 
     expect(api).not.toHaveBeenCalled();
+    // Nor is the demo brand hidden: no plan was bought.
+    expect(brands.update).not.toHaveBeenCalled();
     expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
   });
 
@@ -189,6 +216,37 @@ describe('GET /api/stripe/success, the first run', () => {
 
     const res = await back();
 
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+  });
+});
+
+describe('GET /api/stripe/success and the demo brand', () => {
+  it('hides a shown demo brand before the dashboard opens, so the own brand is the one open', async () => {
+    stripeApi.retrieveSession.mockResolvedValue({
+      payment_status: 'no_payment_required',
+      status: 'complete',
+      customer: 'cus1',
+      subscription: subscription(1_800_000_000),
+    });
+    const res = await back();
+    expect(brands.update).toHaveBeenCalledTimes(1);
+    expect(brands.filters).toEqual([
+      ['eq', 'organization_id', 'org1'],
+      ['eq', 'is_demo', true],
+      ['is', 'demo_hidden_at', null],
+    ]);
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+  });
+
+  it('opens the dashboard all the same when the demo brand could not be hidden', async () => {
+    brands.answer = { error: { message: 'timeout' } };
+    stripeApi.retrieveSession.mockResolvedValue({
+      payment_status: 'paid',
+      status: 'complete',
+      customer: 'cus1',
+      subscription: subscription(),
+    });
+    const res = await back();
     expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
   });
 });

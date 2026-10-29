@@ -5,6 +5,7 @@ import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { isSubscriptionActive } from '@/config/plans';
+import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
 import type Stripe from 'stripe';
 
 /**
@@ -91,6 +92,9 @@ export async function POST(req: NextRequest) {
               // ahead of the redirect (or that happen out-of-band entirely)
               // still get prompts in sync. Idempotent.
               await alignPromptsSafe(orgId, planId || 'starter', 'checkout');
+              // A plan bought: the demo brand steps aside. Here only, at the
+              // start of a subscription; never on its updates.
+              await hideDemoBrandAfterPurchase(orgId, subscription.status, 'webhook:checkout');
               // The first run too, after the alignment so it tracks the plan's
               // engines: the return page may never load (a closed tab). One
               // run per checkout, whichever of the two comes first.
@@ -173,6 +177,13 @@ export async function POST(req: NextRequest) {
                 'subscription.updated',
               );
             }
+            // The purchase started only now: the demo brand steps aside, as
+            // on a checkout paid at once.
+            await hideDemoBrandAfterPurchase(
+              orgBefore.id,
+              subscription.status,
+              'webhook:subscription.updated',
+            );
             await startFirstTrackingRun({
               orgId: orgBefore.id,
               subscriptionStatus: subscription.status,

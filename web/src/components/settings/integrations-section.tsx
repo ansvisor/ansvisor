@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { BarChart3, Loader2, Search, ShoppingBag, Unplug } from 'lucide-react';
+import { BarChart3, Globe, Loader2, Search, ShoppingBag, Unplug } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   disconnectIntegration,
@@ -51,9 +51,19 @@ import { CatalogCategoryPages } from './catalog-category-pages';
 import { FramerCard } from './framer-card';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
+import { SampleDataBadge } from './sample-data-badge';
 import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { useBrandStore } from '@/stores/use-brand-store';
+import type { Brand } from '@/types';
+import {
+  DEMO_ANALYTICS_PROPERTY_ID,
+  demoIntegration,
+  demoSearchConsoleProperty,
+  upcomingDemoIntegrations,
+} from '@/lib/demo/integrations';
 
 /**
  * Settings → Integrations (#577, Google Analytics added in #658).
@@ -70,9 +80,14 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
  *
  * Every card reads on its own, from the browser or with a timeout, so a slow
  * or failing one never holds up the rest: each says when it couldn't be read.
+ *
+ * On the demo brand, the cards show the demo's states (lib/demo/integrations):
+ * the live ones connected with sample data, the ones still to come as Coming
+ * soon, those without a card of their own as a row in their group.
  */
 export function IntegrationsSection() {
   const t = useTranslations('settings');
+  const { isDemo } = useDemoBrand();
   // Merchant Center's card shows only where this server offers it (its Composio auth config),
   // as the API's config says: env only, read at once and never behind a status. Until it
   // says so the card isn't there, with no skeleton; a config that can't be read (an older
@@ -131,7 +146,8 @@ export function IntegrationsSection() {
         </IntegrationCard>
 
         <IntegrationGroup title={t('integrations_stores')}>
-          {merchantCenterOffered && (
+          {/* On the demo brand it shows, as Coming soon (lib/demo/integrations). */}
+          {(merchantCenterOffered || isDemo) && (
             <IntegrationCard
               provider="google-merchant-center"
               label={MERCHANT_CENTER_LABEL}
@@ -146,6 +162,11 @@ export function IntegrationsSection() {
             </IntegrationCard>
           )}
 
+          {isDemo &&
+            upcomingDemoIntegrations('stores').map((id) => (
+              <UpcomingIntegrationCard key={id} id={id} />
+            ))}
+
           <CatalogSourcesCard refreshKey={catalogReads} onSources={onCatalogSources} />
 
           <CatalogCategoryPages refreshKey={categoryReads} />
@@ -158,6 +179,10 @@ export function IntegrationsSection() {
           <WordPressCard />
 
           <FramerCard />
+          {isDemo &&
+            upcomingDemoIntegrations('cms').map((id) => (
+              <UpcomingIntegrationCard key={id} id={id} />
+            ))}
         </IntegrationGroup>
       </CardContent>
     </Card>
@@ -180,6 +205,42 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
   );
 }
 
+/** The icons of the integrations without a card of their own yet. */
+const UPCOMING_ICONS: Record<string, ReactNode> = {
+  shopify: <ShoppingBag className="h-5 w-5 text-muted-foreground" />,
+};
+
+/**
+ * An integration still to come, on the demo brand: its row as an
+ * integration card has it, saying Coming soon, with nothing to connect.
+ */
+function UpcomingIntegrationCard({ id }: { id: string }) {
+  const t = useTranslations('settings');
+  return (
+    <div
+      data-integration={id}
+      className="flex items-center justify-between gap-4 rounded-lg border p-4"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
+          {UPCOMING_ICONS[id] ?? <Globe className="h-5 w-5 text-muted-foreground" />}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">{t(`demoIntegrations.${id}.label`)}</p>
+            <Badge variant="secondary" className="bg-muted text-muted-foreground">
+              {t('integrations_comingSoon')}
+            </Badge>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {t(`demoIntegrations.${id}.description`)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * One integration row: status badge, Connect / Disconnect, and whatever the
  * provider wants to render once connected (`children`).
@@ -187,6 +248,10 @@ function IntegrationGroup({ title, children }: { title: string; children: ReactN
  * Its status is read on its own (lib/integrations-client.ts): one that is
  * slow or fails leaves the other cards be, and after its timeout the card
  * says it couldn't check, with Try again in place of the skeleton.
+ *
+ * On the demo brand, its state comes from the demo's list instead of the
+ * API: connected (with "Sample data"; Disconnect opens the plan dialog), or
+ * Coming soon. No set-up line there.
  */
 function IntegrationCard({
   provider,
@@ -204,9 +269,16 @@ function IntegrationCard({
   children?: ReactNode;
 }) {
   const t = useTranslations('settings');
-  const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const { isDemo } = useDemoBrand();
+  const demo = isDemo ? demoIntegration(provider) : null;
+  const { openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const [readStatus, setStatus] = useState<IntegrationStatus | null>(null);
   // Why the last read of the status didn't come back, while there's no status.
   const [failure, setFailure] = useState<IntegrationFailure | null>(null);
+  // The demo's state, else the API's.
+  const status: IntegrationStatus | null =
+    demo === 'connected' ? 'connected' : demo === 'soon' ? 'not_configured' : readStatus;
   const [disconnecting, setDisconnecting] = useState(false);
   const { connecting, connect: handleConnect } = useIntegrationConnect(provider, {
     label,
@@ -222,8 +294,9 @@ function IntegrationCard({
   }, [provider]);
 
   useEffect(() => {
+    if (demo) return;
     void load();
-  }, [load]);
+  }, [load, demo]);
 
   const handleDisconnect = async () => {
     setDisconnecting(true);
@@ -237,6 +310,8 @@ function IntegrationCard({
       setDisconnecting(false);
     }
   };
+
+  const soon = demo === 'soon';
 
   return (
     <div className="space-y-4">
@@ -256,12 +331,18 @@ function IntegrationCard({
                   {t('integrations_connected')}
                 </Badge>
               )}
+              {demo === 'connected' && <SampleDataBadge />}
+              {soon && (
+                <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                  {t('integrations_comingSoon')}
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground truncate">{description}</p>
           </div>
         </div>
 
-        {status === null && failure ? (
+        {soon ? null : status === null && failure ? (
           <Button variant="outline" size="sm" className="shrink-0" onClick={() => void load()}>
             {t('integrations_retry')}
           </Button>
@@ -271,6 +352,17 @@ function IntegrationCard({
           <Badge variant="outline" className="text-muted-foreground shrink-0">
             {t('integrations_notConfigured')}
           </Badge>
+        ) : status === 'connected' && demo ? (
+          // Sample data: there is nothing to disconnect.
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 shrink-0"
+            onClick={() => openUpgrade(tActions('disconnectIntegrations'))}
+          >
+            <Unplug className="h-3.5 w-3.5" />
+            {t('integrations_disconnect')}
+          </Button>
         ) : status === 'connected' ? (
           <Dialog>
             <DialogTrigger
@@ -325,7 +417,7 @@ function IntegrationCard({
         </p>
       )}
 
-      {status === 'not_configured' && (
+      {status === 'not_configured' && !soon && (
         <p className="text-xs text-muted-foreground">
           This server has no Composio credentials for {label}. Set{' '}
           <code className="rounded bg-muted px-1">COMPOSIO_API_KEY</code> and{' '}
@@ -555,15 +647,74 @@ async function loadGscRows(): Promise<BrandPropertyRow[]> {
   }));
 }
 
+/**
+ * The demo brand's mapping: its own row, mapped to its sample property. Its
+ * picker opens the plan dialog, as the workspace is locked on the demo brand.
+ */
+function useDemoMapping(property: (brand: Brand) => PropertyOption) {
+  const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
+  const option = brand ? property(brand) : null;
+  const row: BrandPropertyRow | null =
+    brand && option
+      ? {
+          brandId: brand.id,
+          brandName: brand.name,
+          value: option.value,
+          domains: brand.domains.map((d) => d.domain),
+        }
+      : null;
+  // Stable while the sample property is: the mapping reads again when its loaders change.
+  const key = row ? `${row.brandId}|${row.brandName}|${option?.label}` : '';
+  const [loaders, setLoaders] = useState({ key: '', loadOptions: noOptions, loadRows: noRows });
+  if (loaders.key !== key) {
+    setLoaders({
+      key,
+      loadOptions: async (): Promise<IntegrationResult<PropertyOption[]>> => ({
+        ok: true,
+        value: option ? [option] : [],
+      }),
+      loadRows: async () => (row ? [row] : []),
+    });
+  }
+  return loaders;
+}
+
+const noOptions = async (): Promise<IntegrationResult<PropertyOption[]>> => ({
+  ok: true,
+  value: [],
+});
+const noRows = async (): Promise<BrandPropertyRow[]> => [];
+const saveNothing = async () => {};
+
+function primaryDomain(brand: Brand): string {
+  return (brand.domains.find((d) => d.isPrimary) ?? brand.domains[0])?.domain ?? brand.slug;
+}
+
+function demoGscProperty(brand: Brand): PropertyOption {
+  const url = demoSearchConsoleProperty(primaryDomain(brand));
+  return { value: url, label: url, siteUrls: [url] };
+}
+
+function demoGaProperty(brand: Brand): PropertyOption {
+  return {
+    value: DEMO_ANALYTICS_PROPERTY_ID,
+    label: `${brand.name} · GA4 (${DEMO_ANALYTICS_PROPERTY_ID})`,
+    siteUrls: [`https://${primaryDomain(brand)}`],
+  };
+}
+
 function GscPropertyMapping() {
+  const { isDemo } = useDemoBrand();
+  const demo = useDemoMapping(demoGscProperty);
   return (
     <PropertyMapping
+      key={isDemo ? 'demo' : 'live'}
       sourceName="Search Console"
       description="Pick which Search Console property each brand's data comes from. Brands matching a property by domain are mapped automatically."
       emptyMessage="The connected account has no Search Console properties. Add your site in Search Console first, then retry."
-      loadOptions={loadGscOptions}
-      loadRows={loadGscRows}
-      save={setBrandGscProperty}
+      loadOptions={isDemo ? demo.loadOptions : loadGscOptions}
+      loadRows={isDemo ? demo.loadRows : loadGscRows}
+      save={isDemo ? saveNothing : setBrandGscProperty}
     />
   );
 }
@@ -595,14 +746,17 @@ async function loadGaRows(): Promise<BrandPropertyRow[]> {
 }
 
 function GaPropertyMapping() {
+  const { isDemo } = useDemoBrand();
+  const demo = useDemoMapping(demoGaProperty);
   return (
     <PropertyMapping
+      key={isDemo ? 'demo' : 'live'}
       sourceName="Analytics"
       description="Pick which GA4 property each brand's data comes from. Brands whose domain matches a property's web data stream are mapped automatically."
       emptyMessage="The connected account has no GA4 properties. Create one in Google Analytics first, then retry."
-      loadOptions={loadGaOptions}
-      loadRows={loadGaRows}
-      save={setBrandGaProperty}
+      loadOptions={isDemo ? demo.loadOptions : loadGaOptions}
+      loadRows={isDemo ? demo.loadRows : loadGaRows}
+      save={isDemo ? saveNothing : setBrandGaProperty}
     />
   );
 }

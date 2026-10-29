@@ -69,10 +69,11 @@ describe('startFirstTrackingRun', () => {
     expect(calls()).toEqual(['/api/internal/trigger-tracking']);
     expect(bodyOf(0)).toEqual({ brandId: 'brand1', since: '2027-01-15T08:00:00.000Z' });
     expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer secret' });
-    // A paused brand is never the one tracked.
+    // A paused brand is never the one tracked, nor the demo brand (00380).
     expect(brands.filters).toEqual([
       ['organization_id', 'org1'],
       ['is_active', true],
+      ['is_demo', false],
     ]);
   });
 

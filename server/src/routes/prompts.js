@@ -5,7 +5,7 @@ import supabaseAdmin from '../config/supabase.js';
 import { MANAGER_ROLES, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
-import { classifyQueryIntents } from '../lib/intent-extraction.js';
+import { classifyQueryIntents, normalizeIntentQuery } from '../lib/intent-extraction.js';
 import { promptsFromTopicsSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
@@ -939,10 +939,6 @@ const FANOUT_INTENT_MAX_QUERIES = 200;
 // Cache-lookup batch size — keeps each `.in('query', ...)` URL well under
 // PostgREST / proxy length limits even with long sub-queries.
 const FANOUT_INTENT_LOOKUP_CHUNK = 40;
-
-function normalizeIntentQuery(raw) {
-  return typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 512) : '';
-}
 
 router.post('/fanout-intents', async (req, res) => {
   try {
