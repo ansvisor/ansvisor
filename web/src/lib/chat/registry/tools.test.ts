@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import type { ChatTool } from './define-tool';
+import { clientEventProblems, type ChatEvent } from '../events';
 
 /**
  * The registry's rows (CHAT-20 §9, §21): each has its label and a fixture,
@@ -56,7 +57,7 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
 
-const { CHAT_TOOLS, chatTool, registryCatalog } = await import('./tools');
+const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
 const { FIXTURE_IDS, defineTool } = await import('./define-tool');
 
 const ctx = { userId: 'user-1', email: null, organizationId: 'org-1', apiKeyId: 'agent-internal' };
@@ -305,7 +306,7 @@ describe('approval policies', () => {
 describe('registryCatalog', () => {
   it('lists every row as plain data, in registry order, with no code in it', () => {
     const catalog = registryCatalog();
-    expect(catalog.map((entry) => entry.name)).toEqual(CHAT_TOOLS.map((tool) => tool.name));
+    expect(catalog.map((entry) => entry.key)).toEqual(CHAT_TOOLS.map((tool) => tool.labelKey));
     expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog);
     for (const entry of catalog) {
       expect(Object.keys(entry).sort()).toEqual(
@@ -315,24 +316,41 @@ describe('registryCatalog', () => {
           'costClass',
           'defaultPolicy',
           'flags',
-          'labelKey',
+          'key',
           'maxPolicy',
-          'mcpTool',
           'minRole',
-          'name',
           'planGate',
           'route',
-          'specRow',
         ].sort(),
       );
     }
+  });
+
+  it('never carries a tool name to the browser, internal or MCP', () => {
+    // CHAT-03 item 22: no name in any value, and no key A1's event rule refuses.
+    const names = new Set(CHAT_TOOLS.flatMap((tool) => [tool.name, tool.mcpTool ?? '']));
+    const values: unknown[] = [];
+    const walk = (value: unknown) => {
+      if (value && typeof value === 'object') Object.values(value).forEach(walk);
+      else values.push(value);
+    };
+    const catalog = registryCatalog();
+    walk(catalog);
+    expect(values.filter((value) => typeof value === 'string' && names.has(value))).toEqual([]);
+    const asEvent = { type: 'next_moves', seq: 1, data: { catalog } } as unknown as ChatEvent;
+    expect(clientEventProblems(asEvent)).toEqual([]);
+  });
+
+  it('leads a key from the browser back to its row on the server', () => {
+    for (const tool of CHAT_TOOLS) expect(chatToolByKey(tool.labelKey)).toBe(tool);
+    expect(chatToolByKey('list_brands')).toBeUndefined();
   });
 
   it('describes a row as it is defined, without sharing its objects', () => {
     const row = defineTool({ ...readRow, planGate: { feature: 'prompt_volumes' } });
     const [entry] = registryCatalog([row]);
     expect(entry).toMatchObject({
-      name: 'read_test',
+      key: 'brands',
       class: 'read',
       defaultPolicy: 'on',
       planGate: { feature: 'prompt_volumes' },

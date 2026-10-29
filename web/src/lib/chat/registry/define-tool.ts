@@ -92,7 +92,10 @@ interface ToolFields<S extends z.ZodObject> {
   minRole: TeamRole;
   planGate: PlanGate | null;
   costClass: CostClass;
-  /** The key under `chatTools` in messages/en.json: `name` for Settings, `step` for CHAT-03. */
+  /**
+   * The key under `chatTools` in messages/en.json (`name` for Settings, `step`
+   * for CHAT-03), and the row's key in the browser's catalog.
+   */
   labelKey: string;
   /** The page in the app that shows the same thing (CHAT-19), or null. */
   route: string | null;

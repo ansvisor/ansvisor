@@ -26,7 +26,13 @@ import {
   listSiteAuditsFor,
   listTopicsFor,
 } from '@/lib/mcp/data';
-import { getMentionsSummaryFor, listMentionsFor } from '@/lib/mcp/mentions';
+import {
+  getMentionCompetitorsFor,
+  getMentionFor,
+  getMentionsPerceptionFor,
+  getMentionsSummaryFor,
+  listMentionsFor,
+} from '@/lib/mcp/mentions';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 
 /**
@@ -354,6 +360,59 @@ export const READ_TOOLS = [
         page: input.page,
       }),
     fixture: { input: { brand_id: BRAND, sentiment: 'negative' } },
+  }),
+  // Not in CHAT-20 §9 yet: the Mentions area's reads (§8a "snippets, themes")
+  // that today's agent (/dashboard/agent) has, so Chat answers what it does.
+  defineTool({
+    name: 'get_mention',
+    class: 'read',
+    area: 'mentions',
+    description:
+      'One AI answer naming the brand, in full: its text, citations, the competitors it names, its sentiment and any correction to it.',
+    minRole: 'analyst',
+    planGate: null,
+    costClass: 'C1',
+    labelKey: 'mention',
+    route: '/dashboard/mentions',
+    mcpTool: 'get_mention',
+    specRow: '27',
+    inputSchema: z.object({ id: contentUuid.describe('The answer id, from list_mentions.') }),
+    run: (ctx, input) => getMentionFor(ctx, input.id),
+    fixture: { input: { id: ITEM } },
+  }),
+  defineTool({
+    name: 'get_mention_competitors',
+    class: 'read',
+    area: 'mentions',
+    description:
+      "How often AI answers name each competitor in the brand's tracked answers (count, share, change against the period before) and how often alongside the brand.",
+    minRole: 'analyst',
+    planGate: null,
+    costClass: 'C1',
+    labelKey: 'mentionCompetitors',
+    route: '/dashboard/mentions',
+    mcpTool: 'get_mention_competitors',
+    specRow: '27',
+    inputSchema: z.object(mentionFilters),
+    run: (ctx, input) => getMentionCompetitorsFor(ctx, mentionParams(input)),
+    fixture: { input: { brand_id: BRAND } },
+  }),
+  defineTool({
+    name: 'get_mentions_perception',
+    class: 'read',
+    area: 'mentions',
+    description:
+      'What AI associates with the brand: the terms next to it, now and before, the attributes that set it apart from its top competitors, and the biggest gap a competitor leads. Found by rule, no model.',
+    minRole: 'analyst',
+    planGate: null,
+    costClass: 'C1',
+    labelKey: 'mentionsPerception',
+    route: '/dashboard/mentions',
+    mcpTool: 'get_mentions_perception',
+    specRow: '27',
+    inputSchema: z.object(mentionFilters),
+    run: (ctx, input) => getMentionsPerceptionFor(ctx, mentionParams(input)),
+    fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
     name: 'list_citations',

@@ -3002,6 +3002,15 @@
     "topics": { "name": "Read topics", "step": "Read Topics" },
     "mentionsSummary": { "name": "Read the mentions summary", "step": "Read Mentions" },
     "mentions": { "name": "Read mentions", "step": "Read Mentions" },
+    "mention": { "name": "Read an answer naming the brand", "step": "Read mention" },
+    "mentionCompetitors": {
+      "name": "Read competitors named in answers",
+      "step": "Read Mentions · Competitors"
+    },
+    "mentionsPerception": {
+      "name": "Read how AI describes the brand",
+      "step": "Read Mentions · Perception"
+    },
     "citations": { "name": "Read citations", "step": "Read Citations" },
     "competitors": { "name": "Read competitors", "step": "Read Competitors" },
     "competitorComparison": {
