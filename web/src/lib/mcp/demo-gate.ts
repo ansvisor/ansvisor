@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import { isCloud } from '@/config/plans';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { DEMO_BRAND, DemoBrandError } from '@/lib/subscription-guard';
@@ -130,4 +131,26 @@ export function demoBrandToolResult() {
     content: [{ type: 'text' as const, text: JSON.stringify(DEMO_BRAND, null, 2) }],
     isError: true,
   };
+}
+
+/**
+ * A REST mirror's answer to a write on the demo brand: 402 with the body the
+ * tool answers, or null when the call may go on. `tool` and `args` are the
+ * mirrored tool's, so the route finds the brand as the tool does. A brand
+ * that can't be read refuses too (500): the write never runs unchecked.
+ * Every REST route that writes, runs or spends calls this, or a data
+ * function that refuses the demo brand itself (demo-gate.test.ts).
+ */
+export async function demoBrandRefusal(
+  tool: keyof typeof WRITE_TOOL_BRANDS,
+  organizationId: string | null,
+  args: Args,
+): Promise<NextResponse | null> {
+  try {
+    if (!(await callOnDemoBrand(tool, organizationId, args))) return null;
+    return NextResponse.json(DEMO_BRAND, { status: 402 });
+  } catch (err) {
+    console.error('[mcp] demo brand check failed:', err);
+    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+  }
 }
