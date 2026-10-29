@@ -73,9 +73,18 @@ vi.mock('@/components/content/new-content-dialog', () => ({
     return null;
   },
 }));
-vi.mock('@/components/content/opportunity-detail', () => ({ OpportunityDetail: () => null }));
+const detail = vi.hoisted(() => ({ id: null as string | null }));
+vi.mock('@/components/content/opportunity-detail', () => ({
+  OpportunityDetail: ({ id }: { id: string }) => {
+    detail.id = id;
+    return null;
+  },
+}));
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
+);
 vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
+  toast,
 }));
 
 const { default: ContentPage } = await import('./page');
@@ -141,6 +150,7 @@ beforeEach(() => {
   viewer.canManage = true;
   opened.newOpportunities = false;
   opened.newContent = false;
+  detail.id = null;
   window.history.replaceState(null, '', '/dashboard/content');
   content.getOpportunities.mockResolvedValue({
     opportunities: [OPPORTUNITY],
@@ -328,5 +338,50 @@ describe('Content Opportunities for an analyst or an agency partner', () => {
     await act(async () => trigger.click());
     expect(labels()).toContain('Send to Workflow');
     expect(labels()).not.toContain('Dismiss');
+  });
+});
+
+describe('A "+ New" request for one prompt', () => {
+  // An in-memory localStorage holding the running job: the test environment has none.
+  const store = new Map<string, string>();
+  beforeEach(() => {
+    store.clear();
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    Reflect.deleteProperty(window, 'localStorage');
+  });
+
+  it('offers the open opportunity that already answers the prompt', async () => {
+    localStorage.setItem(
+      'aeo:content-generation',
+      JSON.stringify({ brandId: 'b1', jobId: 'j1', startedAt: Date.now(), count: 1 }),
+    );
+    content.getGenerationJobStatus.mockResolvedValue({
+      status: 'completed',
+      progress: null,
+      result: { generated: 0, duplicates: 0, existingId: 'o9' },
+      failedReason: null,
+    });
+    vi.useFakeTimers();
+    await render(false);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(toast).toHaveBeenCalledWith('This prompt already has an opportunity', {
+      action: { label: 'Open existing', onClick: expect.any(Function) },
+    });
+    await act(async () => toast.mock.calls[0][1].action.onClick());
+    expect(detail.id).toBe('o9');
+    expect(new URL(window.location.href).searchParams.get('opportunity')).toBe('o9');
   });
 });
