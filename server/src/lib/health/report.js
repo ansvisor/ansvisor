@@ -175,7 +175,9 @@ async function checkCloro(now) {
  *    When those days can't be read, ChatGPT alone goes unjudged that day.
  *  - `off` (the self-host default): nothing asks, so it isn't judged.
  */
-export const FANOUT_EXPECTED = ['copilot-web', 'perplexity-web'];
+// `chatgpt` is the OpenAI API model's answers (the tracking worker's
+// resolveModelPlatform): its web_search calls carry their queries.
+export const FANOUT_EXPECTED = ['copilot-web', 'perplexity-web', 'chatgpt'];
 export const FANOUT_DROP_RATIO = 0.25;
 /** Fewer answers than this, on either side, are too few to judge. */
 export const FANOUT_MIN_ANSWERS = 20;
@@ -399,12 +401,14 @@ export function findIssues(report) {
       );
       continue;
     }
+    // The API model's answers come from OpenAI, not from Cloro.
+    const source = p.platform === 'chatgpt' ? "OpenAI's web_search returns" : 'Cloro returns';
     issues.push(
       p.withFanout === 0
         ? `${p.platform} returned no query fan-out on any of its ${p.answers} answers ` +
-            `in the last 24h (${percent(p.baselineRate)} the days before) — check what Cloro returns`
+            `in the last 24h (${percent(p.baselineRate)} the days before) — check what ${source}`
         : `${p.platform} query fan-out fell to ${percent(p.rate)} of answers ` +
-            `(${percent(p.baselineRate)} the days before) — check what Cloro returns`,
+            `(${percent(p.baselineRate)} the days before) — check what ${source}`,
     );
   }
 

@@ -923,6 +923,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
             competitor_mentions: metrics.competitorMentions,
             mention_position: metrics.mentionPosition,
             mentioned_entity_count: metrics.mentionedEntityCount,
+            // The searches the model ran, where its API gives them (OpenAI's web_search).
+            search_queries: Array.isArray(aiResponse.search_queries)
+              ? aiResponse.search_queries
+              : [],
           });
         } catch (err) {
           logger.error({ err, model: modelName, region }, 'ai model task failed');
