@@ -718,6 +718,10 @@
           "untitled": "Untitled prompt",
           "sourceAnswers": "cited in {count} of the {of, plural, one {# latest answer} other {# latest answers}} they win"
         },
+        "pageEvents": {
+          "none": "No page of theirs was first cited in your answers or changed in the last {days} days.",
+          "timeline": "See their pages over time"
+        },
         "cited": {
           "position": "#{position}",
           "lastCited": "last cited {date}",
@@ -760,6 +764,7 @@
           "evidence": "Failed checks",
           "competitorPositions": "Positions by prompt",
           "winningSources": "Sources behind their wins",
+          "competitorPageEvents": "What happened to their pages",
           "mentionDetails": "Mentions by prompt"
         },
         "scopes": {
