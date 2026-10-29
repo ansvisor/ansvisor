@@ -9019,6 +9019,13 @@
           "fail": "In Europe it decides ChatGPT too: connect it.",
           "unknown": "Couldn't read your catalog sources right now."
         },
+        "googleShopping": {
+          "title": "Google shows your products in shopping results (Search Console)",
+          "pass": "{count} of your {total, plural, one {# product page} other {# product pages}} showed as a merchant listing or product snippet in the last 28 days.",
+          "warn": "Only {count} of your {total, plural, one {# product page} other {# product pages}} showed as a merchant listing or product snippet in the last 28 days. Product schema on the rest (price, availability, GTIN) helps Google list them.",
+          "fail": "Google hasn't shown any of your {total, plural, one {# product page} other {# product pages}} as a merchant listing or product snippet in the last 28 days. Check the product schema on your product pages (price, availability, GTIN).",
+          "unknown": "{reason, select, not_connected {Connect Search Console to see whether Google shows your products in its shopping results.} not_synced {Search Console's shopping results come with its next daily sync.} no_pages {None of your catalog's products has a page address to look for in Search Console.} other {Couldn't read Search Console right now.}}"
+        },
         "openAiIndex": {
           "title": "Catalog in OpenAI's product index",
           "pass": "You send OpenAI a direct product feed.",
