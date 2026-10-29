@@ -112,6 +112,7 @@ const OPTION_FIELDS = {
   color: new Set(['color', 'colour', 'farbe', 'couleur', 'kleur', 'cor', 'renk']),
   size: new Set(['size', 'sizes', 'maat', 'groesse', 'grosse', 'taille', 'talla', 'beden']),
   material: new Set(['material', 'fabric', 'stoff', 'matiere', 'materiale']),
+  brand: new Set(['brand', 'manufacturer', 'vendor']),
 };
 
 function normalizedOptionName(value) {
@@ -253,8 +254,12 @@ function attributesOf(product, variant, categoriesById) {
   const selected = optionValues(variant);
   const values = optionValues(product);
   const currency = currencyCode(product, variant);
-  const regularPrice = variant?.regular_price ?? product?.regular_price ?? variant?.price ?? product?.price;
-  const salePrice = variant?.sale_price ?? product?.sale_price;
+  const regularPrice = [variant?.regular_price, product?.regular_price, variant?.price, product?.price].find(
+    (value) => value != null && String(value).trim() !== '',
+  );
+  const salePrice = [variant?.sale_price, product?.sale_price].find(
+    (value) => value != null && String(value).trim() !== '',
+  );
   const images = Array.isArray(product?.images) ? product.images : [];
   const primaryImage = cleanText(variant?.image?.src, 2048) ?? cleanText(images[0]?.src, 2048);
   const extraImages = images
@@ -350,7 +355,6 @@ export default {
 
   async readCatalog(source, { request, credentials }) {
     const base = apiRoot(source.url);
-    const headers = authHeaders(credentials);
     const errors = [];
     const items = [];
 
