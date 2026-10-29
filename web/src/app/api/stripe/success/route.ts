@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
           trackingJobId = await startFirstTrackingRun({
             orgId,
             subscriptionStatus: subscription?.status,
-            checkoutCreated: session.created,
+            purchaseStarted: session.created,
             ctx: 'stripe/success',
           });
         }

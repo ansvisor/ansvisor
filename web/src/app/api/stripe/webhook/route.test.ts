@@ -43,8 +43,11 @@ vi.mock('@/lib/plan-engines', () => ({ alignPromptsToPlanForOrg: align }));
 
 const { POST } = await import('./route');
 
-const deliver = (type: string, object: unknown) => {
-  stripeApi.constructEvent.mockReturnValue({ type, data: { object } });
+const deliver = (type: string, object: unknown, previous?: Record<string, unknown>) => {
+  stripeApi.constructEvent.mockReturnValue({
+    type,
+    data: { object, ...(previous ? { previous_attributes: previous } : {}) },
+  });
   return POST(
     new Request('http://localhost/api/stripe/webhook', {
       method: 'POST',
@@ -113,7 +116,7 @@ describe('checkout.session.completed', () => {
 
 /**
  * The first run starts from the webhook too, as the return page may never
- * load; the API keeps it to one run per checkout.
+ * load; the API keeps it to one run per purchase.
  */
 describe('checkout.session.completed, the first run', () => {
   const checkout = { customer: 'cus1', subscription: 'sub1', created: 1_800_000_000 };
@@ -123,7 +126,7 @@ describe('checkout.session.completed, the first run', () => {
     const res = await deliver('checkout.session.completed', checkout);
 
     expect(res.status).toBe(200);
-    expect(apiPaths()).toEqual(['/api/internal/trigger-tracking', '/api/internal/analyze-volumes']);
+    expect(apiPaths()).toEqual(['/api/internal/trigger-tracking']);
     expect(JSON.parse(api.mock.calls[0][1].body)).toEqual({
       brandId: 'brand1',
       since: '2027-01-15T08:00:00.000Z',
@@ -158,6 +161,46 @@ describe('checkout.session.completed, the first run', () => {
   it('starts nothing on a later update or a failed payment', async () => {
     await deliver('customer.subscription.updated', subscription('active'));
     await deliver('invoice.payment_failed', { customer: 'cus1' });
+    expect(api).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A delayed payment (SEPA) leaves the checkout's subscription incomplete; the
+ * first run starts when Stripe says it went through.
+ */
+describe('customer.subscription.updated, the first run', () => {
+  const paidLater = (status: string) => ({ ...subscription(status), created: 1_800_000_000 });
+
+  it('starts the first run when an incomplete subscription becomes active', async () => {
+    const res = await deliver('customer.subscription.updated', paidLater('active'), {
+      status: 'incomplete',
+    });
+
+    expect(res.status).toBe(200);
+    expect(apiPaths()).toEqual(['/api/internal/trigger-tracking']);
+    // Since the subscription began: a run started since then covers it.
+    expect(JSON.parse(api.mock.calls[0][1].body)).toEqual({
+      brandId: 'brand1',
+      since: '2027-01-15T08:00:00.000Z',
+    });
+    // After the organization reads active, which the run checks.
+    expect(db.update.mock.invocationCallOrder[0]).toBeLessThan(api.mock.invocationCallOrder[0]);
+  });
+
+  it('starts nothing on a renewal, or other changes of an active subscription', async () => {
+    await deliver('customer.subscription.updated', paidLater('active'), {
+      current_period_end: 1_700_000_000,
+    });
+    await deliver('customer.subscription.updated', paidLater('active'), { status: 'trialing' });
+    await deliver('customer.subscription.updated', paidLater('active'), { status: 'past_due' });
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it('starts nothing when the delayed payment fails', async () => {
+    await deliver('customer.subscription.updated', paidLater('incomplete_expired'), {
+      status: 'incomplete',
+    });
     expect(api).not.toHaveBeenCalled();
   });
 });

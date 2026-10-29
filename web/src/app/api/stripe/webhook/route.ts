@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
               await startFirstTrackingRun({
                 orgId,
                 subscriptionStatus: subscription.status,
-                checkoutCreated: session.created,
+                purchaseStarted: session.created,
                 ctx: 'webhook:checkout',
               });
             }
@@ -152,6 +152,21 @@ export async function POST(req: NextRequest) {
             // (Starter → Growth: 2 → 8 engines) and contraction
             // (Growth → Starter: 8 → 2 engines). Issue #79.
             await alignPromptsSafe(orgBefore.id, newPlanId, 'subscription.updated');
+          }
+
+          // A delayed payment (SEPA, for one) that went through: the
+          // checkout left the subscription incomplete, so nothing started
+          // the first run then. Only on that change, never on a renewal.
+          const previous = event.data.previous_attributes as
+            | Partial<Stripe.Subscription>
+            | undefined;
+          if (orgBefore && previous?.status === 'incomplete') {
+            await startFirstTrackingRun({
+              orgId: orgBefore.id,
+              subscriptionStatus: subscription.status,
+              purchaseStarted: subscription.created,
+              ctx: 'webhook:subscription.updated',
+            });
           }
         }
         break;

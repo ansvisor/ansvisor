@@ -150,15 +150,14 @@ describe('GET /api/stripe/success, the first run', () => {
     expect(new URL(res.headers.get('location')!).searchParams.get('jobId')).toBe('job-w');
   });
 
-  it('starts the run itself when it comes first, with the volumes', async () => {
+  it('starts the run itself when it comes first', async () => {
     stripeApi.retrieveSession.mockResolvedValue(paidCheckout('trialing'));
-    api
-      .mockResolvedValueOnce(Response.json({ success: true, jobId: 'job-s', created: true }))
-      .mockResolvedValueOnce(Response.json({ success: true }, { status: 202 }));
+    api.mockResolvedValueOnce(Response.json({ success: true, jobId: 'job-s', created: true }));
 
     const res = await back();
 
-    expect(apiPaths()).toEqual(['/api/internal/trigger-tracking', '/api/internal/analyze-volumes']);
+    // The API starts the volume analysis with the run.
+    expect(apiPaths()).toEqual(['/api/internal/trigger-tracking']);
     expect(new URL(res.headers.get('location')!).searchParams.get('jobId')).toBe('job-s');
   });
 

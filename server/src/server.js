@@ -17,6 +17,7 @@ import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
+import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -26,7 +27,6 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
-import { startFirstRun } from './lib/first-run.js';
 import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
@@ -48,7 +48,6 @@ import { PlanLimitError, getAiUsage, getSiteAuditQuotaStatus } from './lib/plan-
 import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
-import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
 import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js';
 import { runGaSync } from './lib/ga-sync.js';
@@ -630,65 +629,9 @@ app.post('/api/internal/recount-citations', async (req, res) => {
   }
 });
 
-// --- Internal trigger-tracking endpoint (CRON_SECRET auth) ---
-// The first run after a payment, asked for by both the Stripe return page and
-// the checkout webhook: one run per checkout (lib/first-run.js). `since` is
-// when the checkout began; a call that finds the run already started gets its
-// id back with `created: false`.
-const triggerTrackingBody = z.object({
-  brandId: z.string().min(1),
-  since: z.iso.datetime({ offset: true }).optional(),
-});
-
-app.post('/api/internal/trigger-tracking', async (req, res) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  try {
-    const body = triggerTrackingBody.safeParse(req.body ?? {});
-    if (!body.success) {
-      return res
-        .status(400)
-        .json({ success: false, message: 'brandId is required; since must be an ISO time' });
-    }
-
-    const { job, created } = await startFirstRun(body.data);
-    if (created) runTrackingJob(job.id, io);
-
-    return res.json({ success: true, jobId: job.id, created });
-  } catch (err) {
-    req.log.error({ err }, 'internal trigger-tracking error');
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// --- Internal analyze volumes endpoint (CRON_SECRET auth, called by Stripe success route) ---
-app.post('/api/internal/analyze-volumes', async (req, res) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  try {
-    const { brandId } = req.body;
-    if (!brandId) {
-      return res.status(400).json({ success: false, message: 'brandId is required' });
-    }
-
-    analyzeBrandVolumes(brandId, {
-      onlyMissing: true,
-    }).catch((err) => {
-      req.log.error({ err, brandId }, 'internal analyze-volumes error');
-    });
-
-    return res.status(202).json({ success: true, message: 'Volume analysis started' });
-  } catch (err) {
-    req.log.error({ err }, 'internal analyze volume error');
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
+// --- Internal trigger-tracking endpoint (routes/internal-trigger-tracking.js) ---
+// The first run after a payment, and the brand's volume analysis with it.
+app.use('/api/internal/trigger-tracking', internalTriggerTrackingRoutes);
 
 // --- Cloro webhook callback (routes/cloro-callback.js) ---
 // After the raw body parser mounted for this path at the top.

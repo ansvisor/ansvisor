@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The first run after a payment: the Stripe return page and the checkout
- * webhook both ask for it, and only one run starts.
+ * The first run after a payment: the Stripe return page and the webhook both
+ * ask for it, and only one run starts.
  */
 
 // The brand's tracking jobs, as the jobs table holds them (newest first).
@@ -86,7 +86,7 @@ describe('startFirstRun', () => {
     expect(createJob).toHaveBeenCalledWith({
       type: 'tracking',
       brandId: 'b1',
-      data: { brandId: 'b1', immediate: true, firstRun: true },
+      data: { brandId: 'b1', immediate: true, afterPayment: true },
       maxAttempts: 3,
     });
     expect(page).toEqual({ job: expect.objectContaining({ id: 'job-1' }), created: true });
@@ -121,6 +121,27 @@ describe('startFirstRun', () => {
       ['eq', 'brand_id', 'b2'],
     ]);
     expect(createJob).toHaveBeenCalledTimes(2);
+  });
+
+  it('finds the finished run when the return page is opened again a day later', async () => {
+    const purchase = new Date(Date.now() - 30 * 60 * 60_000).toISOString();
+    const done = job('completed', new Date(Date.now() - 29 * 60 * 60_000).toISOString());
+    table.jobs = [done];
+
+    const { job: found, created } = await startFirstRun({ brandId: 'b1', since: purchase });
+
+    expect(created).toBe(false);
+    expect(found).toBe(done);
+    // Read back to the purchase, not only the last 20 hours.
+    expect(table.reads[0].filters).toContainEqual(['gte', 'created_at', purchase]);
+  });
+
+  it('reads back 20 hours for a run still waiting from before a recent purchase', async () => {
+    await startFirstRun({ brandId: 'b1', since: new Date().toISOString() });
+    const [, , floor] = table.reads[0].filters.find(([op]) => op === 'gte');
+    const hoursBack = (Date.now() - Date.parse(floor)) / 3_600_000;
+    expect(hoursBack).toBeGreaterThan(19.9);
+    expect(hoursBack).toBeLessThan(20.1);
   });
 
   it('starts nothing when the jobs cannot be read, and lets the next call try', async () => {

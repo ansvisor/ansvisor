@@ -5,12 +5,17 @@ import { isSubscriptionActive } from '@/config/plans';
 /** Each call to the API gets this long, so a slow server never holds up a webhook. */
 const API_TIMEOUT_MS = 5_000;
 
-/** The organization's first brand: the one onboarding created. */
+/**
+ * The organization's first brand that is not paused: the one onboarding
+ * created. Once the demo brand lands (00380, not on main yet), it is skipped
+ * too: `.eq('is_demo', false)`.
+ */
 async function firstBrandId(orgId: string): Promise<string | null> {
   const { data: brand } = await supabaseAdmin
     .from('brands')
     .select('id')
     .eq('organization_id', orgId)
+    .eq('is_active', true)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -31,13 +36,14 @@ async function callApi(path: string, body: Record<string, unknown>, cronSecret: 
 }
 
 /**
- * Start an organization's first tracking run after a checkout, from the
- * Stripe return page or the checkout webhook, whichever comes first: the
- * person may close the tab before the return page loads, and the prompts
- * saved in onboarding would then wait for the nightly run. The API starts one
- * run per checkout (server/src/lib/first-run.js), so the second caller gets
- * the first one's job back, and only the caller that started it also starts
- * the volume analysis.
+ * Start an organization's first tracking run after a purchase, from the
+ * Stripe return page or the webhook, whichever comes first: the person may
+ * close the tab before the return page loads, and the prompts saved in
+ * onboarding would then wait for the nightly run. The webhook also starts it
+ * when a delayed payment (SEPA, for one) goes through later. The API starts
+ * one run per purchase (server/src/lib/first-run.js), so the second caller
+ * gets the first one's job back; the API also starts the volume analysis
+ * with the run it starts.
  *
  * Only for a subscription that is active or trialing: an incomplete one (a
  * payment not made) gets nothing. Resolves to the run's job id, for the
@@ -47,13 +53,16 @@ async function callApi(path: string, body: Record<string, unknown>, cronSecret: 
 export async function startFirstTrackingRun({
   orgId,
   subscriptionStatus,
-  checkoutCreated,
+  purchaseStarted,
   ctx,
 }: {
   orgId: string;
   subscriptionStatus: string | null | undefined;
-  /** When the Checkout Session was created, in Stripe's Unix seconds. */
-  checkoutCreated?: number | null;
+  /**
+   * When the purchase began, in Stripe's Unix seconds: the Checkout
+   * Session's `created`, or the subscription's.
+   */
+  purchaseStarted?: number | null;
   /** Who is asking, for the logs. */
   ctx: string;
 }): Promise<string | null> {
@@ -68,7 +77,7 @@ export async function startFirstTrackingRun({
     const brandId = await firstBrandId(orgId);
     if (!brandId) return null;
 
-    const since = checkoutCreated ? new Date(checkoutCreated * 1000).toISOString() : undefined;
+    const since = purchaseStarted ? new Date(purchaseStarted * 1000).toISOString() : undefined;
     const res = await callApi('/api/internal/trigger-tracking', { brandId, since }, cronSecret);
     if (!res.ok) {
       console.error(`[${ctx}] First run trigger failed:`, res.status);
@@ -81,18 +90,6 @@ export async function startFirstTrackingRun({
       'jobId:',
       jobId,
     );
-
-    // An API from before one-run-per-checkout says nothing of `created`, and
-    // always started a run.
-    if (created !== false) {
-      try {
-        const volumes = await callApi('/api/internal/analyze-volumes', { brandId }, cronSecret);
-        if (!volumes.ok) console.error(`[${ctx}] Volume analysis trigger failed:`, volumes.status);
-      } catch (err) {
-        console.error(`[${ctx}] Failed to call volume analysis:`, err);
-      }
-    }
-
     return jobId ?? null;
   } catch (err) {
     console.error(`[${ctx}] Failed to start the first run:`, err);
