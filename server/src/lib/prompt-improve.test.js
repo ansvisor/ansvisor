@@ -7,6 +7,7 @@ import {
   improveRangeKey,
   isKnownSource,
   sanitizeSuggestions,
+  withPageChecks,
 } from './prompt-improve.js';
 
 const BRAND_DOMAINS = ['acme.com'];
@@ -481,15 +482,83 @@ describe('improveRangeKey', () => {
 });
 
 describe('Improve plan limits', () => {
-  it('is on every plan, in one AI budget: Starter $5, Growth $25 (5x), Enterprise $50, the trial $1', async () => {
+  it('is on every plan, in one AI budget: Starter $5, Growth $25 (5x), Enterprise $50, the trial $2', async () => {
     const { PLANS, TRIAL_AI_BUDGET_USD } = await import('../config/plans.js');
     expect(PLANS.starter.limits.improveMonthlyBudgetUsd).toBe(5);
-    expect(TRIAL_AI_BUDGET_USD).toBe(1);
+    expect(TRIAL_AI_BUDGET_USD).toBe(2);
     for (const id of ['starter', 'growth', 'enterprise', 'self_hosted']) {
       expect(PLANS[id].limits.features).toContain('prompt_improve');
     }
     expect(PLANS.growth.limits.improveMonthlyBudgetUsd).toBe(25);
     expect(PLANS.enterprise.limits.improveMonthlyBudgetUsd).toBe(50);
     expect(PLANS.self_hosted.limits.improveMonthlyBudgetUsd).toBe(-1);
+  });
+});
+
+/** What Site Audit's checks found on the cited pages, read lately (learning C2). */
+describe('withPageChecks', () => {
+  const evidence = {
+    fanouts: [],
+    citedDomains: [],
+    competitors: [],
+    competitorUrls: [
+      { url: 'https://rival.com/kettles', count: 3 },
+      { url: 'https://other-rival.com/best-kettles', count: 2 },
+    ],
+    brandPages: [{ url: 'https://acme.com/kettles', count: 1 }],
+    excerpt: '',
+  };
+  const stored = new Map([
+    ['rival.com/kettles', { own: false, checks: { 'faq-schema': 'pass', tables: 'pass' } }],
+    ['other-rival.com/best-kettles', { own: false, checks: { 'faq-schema': 'pass' } }],
+    ['acme.com/kettles', { own: true, checks: { tables: 'pass' } }],
+  ]);
+
+  it('names what each page passes and what theirs have that the brand page lacks', () => {
+    const shown = withPageChecks(evidence, stored);
+    expect(shown.pageChecks.map((p) => [p.url, p.own, p.passes.length])).toEqual([
+      ['https://rival.com/kettles', false, 2],
+      ['https://other-rival.com/best-kettles', false, 1],
+      ['https://acme.com/kettles', true, 1],
+    ]);
+    // Compared over two competitor pages at least (C1): FAQ schema on both,
+    // not on the brand's.
+    expect(shown.checkGaps).toHaveLength(1);
+
+    const { prompt } = buildImprovePrompt({
+      promptText: 'best kettle',
+      brand: { name: 'Acme', domains: [] },
+      platforms: [{ id: 'gemini-web', state: 'not_mentioned', evidence: shown }],
+    });
+    expect(prompt).toContain(
+      'Checks on these pages (Site Audit, read lately): https://rival.com/kettles: ',
+    );
+    expect(prompt).toContain("The competitor pages have and the brand's don't: ");
+  });
+
+  it('counts one page cited under two addresses once, at the first', () => {
+    const shown = withPageChecks(
+      {
+        ...evidence,
+        competitorUrls: [
+          { url: 'https://rival.com/kettles', count: 3 },
+          { url: 'https://www.rival.com/kettles?utm_source=chatgpt.com', count: 2 },
+        ],
+      },
+      stored,
+    );
+    expect(shown.pageChecks.map((p) => p.url)).toEqual([
+      'https://rival.com/kettles',
+      'https://acme.com/kettles',
+    ]);
+    // One competitor page is too few to compare (C1): no gap.
+    expect(shown.checkGaps).toEqual([]);
+  });
+
+  it('leaves the evidence as it was when none of its pages was read', () => {
+    expect(withPageChecks(evidence, new Map())).toBe(evidence);
+    expect(withPageChecks(evidence, new Map([['other.com/x', { own: false, checks: {} }]]))).toBe(
+      evidence,
+    );
   });
 });

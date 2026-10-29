@@ -163,6 +163,7 @@ export function OpportunityDetail({
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const tReadOnly = useTranslations('readOnly');
+  const tManagers = useTranslations('managersOnly');
 
   const [opportunity, setOpportunity] = useState<ContentOpportunity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -579,9 +580,10 @@ export function OpportunityDetail({
             generated: !!brief,
             generating: generatingBrief,
             blockedReason: quotaExhausted ? t('briefLimitReached') : null,
-            onGenerate: guard(() => void handleGenerateBrief(), {
-              action: tActions('generateBrief'),
-            }),
+            // Generating costs AI: admins and managers start it.
+            onGenerate: canManage
+              ? guard(() => void handleGenerateBrief(), { action: tActions('generateBrief') })
+              : null,
           }}
           content={{
             draftId:
@@ -608,7 +610,7 @@ export function OpportunityDetail({
           // Another angle is written from a cluster or a prompt; a task sent
           // from the Action Center (AC-004) has neither.
           alternative={
-            opportunity.source !== 'action'
+            canManage && opportunity.source !== 'action'
               ? {
                   running: alternativeRunning,
                   onOpen: guard(() => setAlternativeOpen(true), {
@@ -638,8 +640,9 @@ export function OpportunityDetail({
               ? guard(() => void handleRestore(), { action: tActions('restoreOpportunities') })
               : undefined
           }
+          // Dismissing is for admins and managers, as the server allows it.
           onDismiss={
-            opportunity.status === 'new'
+            canManage && opportunity.status === 'new'
               ? guard(() => setDismissOpen(true), { action: tActions('dismissOpportunities') })
               : undefined
           }
@@ -903,14 +906,18 @@ export function OpportunityDetail({
                     Generate an AI-powered content brief with a suggested title, outline, target
                     keywords, and competitor insights.
                   </p>
-                  <Button
-                    onClick={guard(handleGenerateBrief, { action: tActions('generateBrief') })}
-                    disabled={generatingBrief}
-                    className="gap-2"
-                  >
-                    {generatingBrief ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
-                    {generatingBrief ? 'Generating...' : 'Generate Content Brief'}
-                  </Button>
+                  {canManage ? (
+                    <Button
+                      onClick={guard(handleGenerateBrief, { action: tActions('generateBrief') })}
+                      disabled={generatingBrief}
+                      className="gap-2"
+                    >
+                      {generatingBrief ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
+                      {generatingBrief ? 'Generating...' : 'Generate Content Brief'}
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{tManagers('generateBrief')}</p>
+                  )}
                   {quotaLimited && (
                     <p className="text-xs text-muted-foreground mt-3 tabular-nums">
                       {noPlan

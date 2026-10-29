@@ -13,10 +13,17 @@ import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import { requireActiveSubscription } from './middleware/subscription.js';
+import {
+  DEMO_BRAND,
+  isDemoBrand,
+  isDemoBrandRow,
+  refuseDemoBrandWrites,
+} from './middleware/demo-brand.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
+import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -26,28 +33,31 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
+import { listDailyTrackingBrands } from './lib/tracking-brands.js';
 import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
+import { sweepIdleDemoBrands } from './lib/demo/idle-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepFramerPublished } from './lib/cms/framer-status.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
+import { sweepWixPublished } from './lib/cms/wix-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
+import { liveAddress, publishDraftForKeyUser } from './lib/content-published.js';
 import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
 import { PlanLimitError, getAiUsage, getSiteAuditQuotaStatus } from './lib/plan-guard.js';
 import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
-import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
 import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js';
 import { runGaSync } from './lib/ga-sync.js';
@@ -55,12 +65,16 @@ import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
+import { integrationsConfig } from './routes/integrations.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
+import { sweepCompetitorTimeline } from './lib/action-center/competitor-timeline.js';
 import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
+import { chatAgenticDeployed } from './lib/chat-flag.js';
+import { startModelPriceSync } from './lib/model-prices.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -186,9 +200,17 @@ async function runDailyTracking() {
   // in action_task_runs and, where the user needs to know, in the action's own
   // trail. Fire-and-forget like the rest — an unexecuted task is a step
   // somebody does by hand, not a reason to hold up tracking.
-  sweepTaskExecution().catch((err) => {
-    logger.error({ err }, '[task-run] sweep crashed');
-  });
+  sweepTaskExecution()
+    .catch((err) => {
+      logger.error({ err }, '[task-run] sweep crashed');
+    })
+    // Then a competitor's pages over time (learning C3): their first
+    // citations, and the weekly re-read of those cited most, within what is
+    // left of each brand's page reads after the tasks'.
+    .then(() => sweepCompetitorTimeline())
+    .catch((err) => {
+      logger.error({ err }, '[competitor-timeline] sweep crashed');
+    });
 
   // Write the tasks of recent actions whose writing a pass missed (AC-004):
   // the budget was spent, the model failed, or the process restarted.
@@ -238,12 +260,8 @@ async function runDailyTracking() {
     logger.error({ err }, '[brand-facts] weekly sweep crashed');
   });
 
-  // Skip paused brands (is_active = false): the user has explicitly suspended
-  // tracking for them, so they should not spend Cloro / LLM credits daily.
-  const { data: brands, error } = await supabaseAdmin
-    .from('brands')
-    .select('id, organization_id')
-    .eq('is_active', true);
+  // Skip paused brands (the user's own stop) and demo brands (sample data).
+  const { data: brands, error } = await listDailyTrackingBrands();
 
   if (error || !brands || brands.length === 0) {
     return { triggered: 0, total: 0 };
@@ -325,6 +343,12 @@ async function runDailyTracking() {
     logger.error({ err }, '[content-history] daily prune failed');
   });
 
+  // Demo brands nobody opened for two weeks (00380): their sample rows go,
+  // the brand row stays, and the next visit builds them again.
+  sweepIdleDemoBrands().catch((err) => {
+    logger.error({ err }, '[demo] idle sweep failed');
+  });
+
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
   // Then the products removed from their source over 90 days ago are
   // deleted: after the sweep, so it isn't deleting while a sync brings one back.
@@ -357,6 +381,10 @@ async function runDailyTracking() {
   // And to Framer (00295), once a day too.
   sweepFramerPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[framer-status] daily sweep failed');
+  });
+  // And to Wix (00372), once a day too.
+  sweepWixPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wix-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
@@ -431,7 +459,8 @@ app.post('/api/internal/daily-tracking', async (req, res) => {
 // key belongs to the same org as the opportunity. So this endpoint just
 // trusts the secret and runs the LLM. Always passes force=true to bypass
 // the cached-brief early-return (MCP callers want a fresh brief; for
-// cached reads they should use get_content_opportunity instead).
+// cached reads they should use get_content_opportunity instead). Never on
+// a demo brand (00380): 402 demo_brand, as the API answers.
 app.post('/api/internal/content/:id/brief', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -440,6 +469,9 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
 
   try {
     const { id } = req.params;
+    if (await isDemoBrandRow('content_opportunities', id)) {
+      return res.status(402).json(DEMO_BRAND);
+    }
     const { force, model } = req.body || {};
     const result = await generateBriefForOpportunity(id, {
       force: Boolean(force),
@@ -472,7 +504,7 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
 // before reaching here, so this endpoint just trusts the secret, resolves the
 // brand's org, enforces the monthly Site Audit quota, and starts the detached
 // audit job — returning the new `running` audit (the MCP caller then polls
-// get_site_audit for the result).
+// get_site_audit for the result). Never on a demo brand (00380).
 app.post('/api/internal/site-audits', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -484,6 +516,7 @@ app.post('/api/internal/site-audits', async (req, res) => {
     if (!brandId || !url) {
       return res.status(400).json({ success: false, message: 'brandId and url are required' });
     }
+    if (await isDemoBrand(brandId)) return res.status(402).json(DEMO_BRAND);
     const audit = await startSiteAuditForBrand(brandId, url);
     return res.status(202).json({ success: true, audit });
   } catch (err) {
@@ -564,11 +597,25 @@ app.get('/api/internal/ai-usage', async (req, res) => {
   }
 });
 
+// --- Internal integrations config (CRON_SECRET auth, called by web MCP layer) ---
+// Which integrations this deployment has credentials for, as GET
+// /api/integrations/config answers a member: the MCP tools have no member
+// session to ask with (Product Visibility's readiness checks Merchant Center
+// only where it is offered). Booleans only.
+app.get('/api/internal/integrations-config', (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  return res.json({ success: true, config: integrationsConfig() });
+});
+
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt
 // before reaching here and passes the key's user, so this endpoint trusts the
 // secret, checks the user's plan includes prompt_improve and creates the
 // Action Center action exactly as the Improve tab's "Send Actions" does.
+// Never on a demo brand's prompt (00380).
 app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -579,6 +626,9 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
     const { userId, ...body } = req.body || {};
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+    if (await isDemoBrandRow('prompts', req.params.promptId)) {
+      return res.status(402).json(DEMO_BRAND);
     }
     const result = await sendImproveActionForKeyUser({
       promptId: req.params.promptId,
@@ -601,6 +651,61 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
     }
     req.log.error({ err }, 'internal improve send error');
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal publish endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// A page marked Published at its live address for an MCP API key
+// (`mark_content_draft_published`), as the editor's Mark published does
+// (POST /api/content-drafts/:draftId/publish). The web MCP layer passes the
+// key's organization and user; the draft must be that organization's. Never
+// on a demo brand's draft (00380).
+const internalPublishBody = z.object({
+  url: z.string().max(8192),
+  userId: z.guid(),
+  orgId: z.guid(),
+});
+
+app.post('/api/internal/content-drafts/:draftId/publish', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const body = internalPublishBody.safeParse(req.body ?? {});
+  if (!draftId.success || !body.success) {
+    return res.status(400).json({ success: false, code: 'invalid', message: 'Invalid request' });
+  }
+  const url = liveAddress(body.data.url);
+  if (!url) {
+    return res.status(400).json({
+      success: false,
+      code: 'invalid_url',
+      message: 'Give the http(s) address the page is live at, with no sign-in details.',
+    });
+  }
+  try {
+    if (await isDemoBrandRow('content_drafts', draftId.data)) {
+      return res.status(402).json(DEMO_BRAND);
+    }
+    const result = await publishDraftForKeyUser({
+      draftId: draftId.data,
+      url,
+      userId: body.data.userId,
+      orgId: body.data.orgId,
+    });
+    if (!result) {
+      return res
+        .status(404)
+        .json({ success: false, code: 'not_found', message: 'Draft not found' });
+    }
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    req.log.error({ err: { name: err?.name } }, 'internal content draft publish error');
+    return res
+      .status(500)
+      .json({ success: false, message: 'The page could not be marked published' });
   }
 });
 
@@ -629,59 +734,9 @@ app.post('/api/internal/recount-citations', async (req, res) => {
   }
 });
 
-// --- Internal trigger-tracking endpoint (CRON_SECRET auth, called by Stripe success route) ---
-app.post('/api/internal/trigger-tracking', async (req, res) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  try {
-    const { brandId } = req.body;
-    if (!brandId) {
-      return res.status(400).json({ success: false, message: 'brandId is required' });
-    }
-
-    const job = await createJob({
-      type: 'tracking',
-      brandId,
-      data: { brandId, immediate: true },
-      maxAttempts: 3,
-    });
-    runTrackingJob(job.id, io);
-
-    return res.json({ success: true, jobId: job.id });
-  } catch (err) {
-    req.log.error({ err }, 'internal trigger-tracking error');
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// --- Internal analyze volumes endpoint (CRON_SECRET auth, called by Stripe success route) ---
-app.post('/api/internal/analyze-volumes', async (req, res) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  try {
-    const { brandId } = req.body;
-    if (!brandId) {
-      return res.status(400).json({ success: false, message: 'brandId is required' });
-    }
-
-    analyzeBrandVolumes(brandId, {
-      onlyMissing: true,
-    }).catch((err) => {
-      req.log.error({ err, brandId }, 'internal analyze-volumes error');
-    });
-
-    return res.status(202).json({ success: true, message: 'Volume analysis started' });
-  } catch (err) {
-    req.log.error({ err }, 'internal analyze volume error');
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
+// --- Internal trigger-tracking endpoint (routes/internal-trigger-tracking.js) ---
+// The first run after a payment, and the brand's volume analysis with it.
+app.use('/api/internal/trigger-tracking', internalTriggerTrackingRoutes);
 
 // --- Cloro webhook callback (routes/cloro-callback.js) ---
 // After the raw body parser mounted for this path at the top.
@@ -693,10 +748,18 @@ app.use('/webhooks/content', webhookContentCallbackRoutes);
 app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 
 // --- Authenticated API routes ---
-// Read-only once the plan has ended (middleware/subscription.js): checked
-// once the person is known, before any route. The webhooks, callbacks and
-// internal endpoints above never reach it.
-app.use('/api', Middleware.decodeToken.bind(Middleware), requireActiveSubscription, routes);
+// The demo brand is read-only (middleware/demo-brand.js), and so is a
+// workspace whose plan has ended (middleware/subscription.js): both checked
+// once the person is known, before any route, the demo brand first so its
+// answer is the same with a plan or without one. The webhooks, callbacks and
+// internal endpoints above never reach them.
+app.use(
+  '/api',
+  Middleware.decodeToken.bind(Middleware),
+  refuseDemoBrandWrites,
+  requireActiveSubscription,
+  routes,
+);
 
 // Health check
 app.get('/', (req, res) => {
@@ -759,6 +822,13 @@ server.listen(PORT, async () => {
       logger.error({ err }, '[insights-rollups] scheduled rebuild crashed'),
     );
   });
+
+  // Chat's model prices, from OpenRouter's public catalog, daily (CHAT-16 §A):
+  // only with the new Chat on. Off, nothing is fetched and every cost is
+  // read from improve-cost.js's own table, as before.
+  if (chatAgenticDeployed()) {
+    startModelPriceSync().catch((err) => logger.error({ err }, '[model-prices] start failed'));
+  }
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';

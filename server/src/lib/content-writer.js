@@ -24,10 +24,11 @@ import {
   WRITING_STALE_MS,
 } from './content-agent.js';
 import {
+  CONTENT_WRITE_MAX_TOKENS,
   WRITING_GUARDRAIL,
   briefForWriter,
   briefRulesOn,
-  contentBriefModelId,
+  contentWriteModelId,
   rebuildSources,
 } from './content-brief.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
@@ -82,6 +83,7 @@ import {
 import { getLanguageName } from './languages.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
+import { objectOptions } from './structured-output.js';
 
 /**
  * "Agent" in the Content Editor's Start (CE-015, spec §5): the Content Agent
@@ -296,6 +298,40 @@ export function sourcedPage(page, known, people = knownPeople()) {
   };
 }
 
+/**
+ * The cited pages' checks the writer can give a page in its body HTML. Not
+ * its schema (FAQ schema, JSON-LD), date markup or freshness, which the
+ * site's template or CMS sets, nor its byline, which would name a person the
+ * writer doesn't know. The Brief tab still shows them all.
+ */
+export const WRITER_CHECKS = Object.freeze([
+  'length',
+  'structural-depth',
+  'h2-coverage',
+  'lists',
+  'tables',
+  'statistic-density',
+  'quotations',
+  'citation-density',
+  'outbound-authority-links',
+  'readability',
+]);
+
+/**
+ * What the pages AI cites for the draft's prompts have (learning C2), as the
+ * brief's rebuild read them through Site Audit's checks: seen, not guessed.
+ * Only what the writer can give the page (WRITER_CHECKS).
+ */
+export function citedHave(features) {
+  const checks = (features?.checks ?? []).filter(
+    (c) => c?.label && c.pages > 0 && WRITER_CHECKS.includes(c.key),
+  );
+  if (!checks.length) return '';
+  return `\nWhat the pages AI cites for these prompts have (Site Audit's checks, ${features.pages} pages read): ${checks
+    .map((c) => `${c.label} on ${c.pages}`)
+    .join('; ')}. Give the page these where they serve its readers.`;
+}
+
 /** The brief as the model reads it: the draft's own, else its opportunity's. */
 export function briefText(draftBrief, opportunityBrief, { links = true } = {}) {
   if (draftBrief?.outline?.length || draftBrief?.goal) {
@@ -309,7 +345,7 @@ export function briefText(draftBrief, opportunityBrief, { links = true } = {}) {
 Audience: ${draftBrief.audience || '—'}
 Outline:
 ${list(sections)}
-Keywords: ${(draftBrief.keywords ?? []).join(', ') || '—'}${plan ? `\n${plan}` : ''}`;
+Keywords: ${(draftBrief.keywords ?? []).join(', ') || '—'}${citedHave(draftBrief.citedFeatures)}${plan ? `\n${plan}` : ''}`;
   }
   if (opportunityBrief?.outline?.length) {
     const sections = opportunityBrief.outline.map(
@@ -538,7 +574,7 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
     .eq('id', brandId)
     .single();
   if (brandError) throw brandError;
-  const modelId = contentBriefModelId();
+  const modelId = contentWriteModelId();
   // Held on the budget now, for the run below: starts at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
     feature: 'content',
@@ -583,8 +619,8 @@ export async function startDraftWriting({ draftId, brandId, input, rewrite = fal
     // it, at once; with its claim, the one a Stop on it lets go of.
     const held = { ...draft, agent_state: 'writing', agent_state_at: claimedAt };
     const run = await startWritingRun(held, input, rewrite);
-    runDraftWriting({ draft: held, brand, model, input, budget, rewrite, run }).catch((err) =>
-      logger.error({ err, draftId }, '[content-writer] run failed'),
+    runDraftWriting({ draft: held, brand, model, modelId, input, budget, rewrite, run }).catch(
+      (err) => logger.error({ err, draftId }, '[content-writer] run failed'),
     );
   } catch (err) {
     // Not started: the hold goes.
@@ -634,6 +670,7 @@ async function rewritePage({
   shoppingPath,
   brand,
   model,
+  modelId,
   input,
   budget,
   numbered,
@@ -661,7 +698,7 @@ async function rewritePage({
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({
       model,
-      schema: rewriteSchema,
+      ...objectOptions(modelId, rewriteSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
       system: rewriteSystemPrompt(),
       prompt: buildWritePrompt({
         brand,
@@ -679,7 +716,7 @@ async function rewritePage({
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   // Well past its Length: one more pass that only cuts.
   const answer = ruleKeys.has('length')
-    ? await cutToLength({ answer: object, page, length, brand, draft, model, run })
+    ? await cutToLength({ answer: object, page, length, brand, draft, model, modelId, run })
     : object;
   await advanceRun(run, 3);
 
@@ -762,13 +799,13 @@ async function rewritePage({
  * cut is taken only when it is shorter and keeps every kept line; else, or
  * when it fails, the first rewrite stands (logged). A stop goes through.
  */
-async function cutToLength({ answer, page, length, brand, draft, model, run }) {
+async function cutToLength({ answer, page, length, brand, draft, model, modelId, run }) {
   const total = ownText({ ...page, html: answer.html }) + page.keptChars;
   const max = Math.round(length * (1 + LENGTH_TOLERANCE));
   if (total <= max + length * CUT_PASS_OVER) return answer;
   const budget = await reserveAiBudget(brand.organization_id, {
     feature: 'content',
-    modelId: contentBriefModelId(),
+    modelId,
     draftId: draft.id,
   }).catch((err) => {
     logger.info(
@@ -782,7 +819,7 @@ async function cutToLength({ answer, page, length, brand, draft, model, run }) {
     const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
       generateObject({
         model,
-        schema: rewriteSchema,
+        ...objectOptions(modelId, rewriteSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
         system: rewriteSystemPrompt(),
         prompt: cutPrompt({ html: answer.html, page, total, length, max }),
         abortSignal,
@@ -837,12 +874,15 @@ Write in the page's own language.`;
  * The run itself: the page written, or the suggestions left, and the draft
  * In review; 'failed' when the model fails or leaves nothing to review. The
  * model's answer is charged to the hold Start took on the budget
- * (reserveAiBudget); a run that ends before one lets the hold go.
+ * (reserveAiBudget); a run that ends before one lets the hold go. `modelId`
+ * is the `model`'s, for its call settings (structured-output.js) and the
+ * cut pass's hold.
  */
 export async function runDraftWriting({
   draft,
   brand,
   model,
+  modelId = contentWriteModelId(),
   input,
   budget,
   rewrite = false,
@@ -852,7 +892,16 @@ export async function runDraftWriting({
   // before it answers, so Stop finds it at once; Stop aborts the call.
   const run = started ?? (await startWritingRun(draft, input, rewrite));
   try {
-    const result = await writeWithRun({ draft, brand, model, input, budget, rewrite, run });
+    const result = await writeWithRun({
+      draft,
+      brand,
+      model,
+      modelId,
+      input,
+      budget,
+      rewrite,
+      run,
+    });
     await finishRun(
       run,
       'done',
@@ -904,7 +953,7 @@ function startWritingRun(draft, input, rewrite) {
 }
 
 /** The run itself, step by step: nothing is kept once it is stopped. */
-async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }) {
+async function writeWithRun({ draft, brand, model, modelId, input, budget, rewrite, run }) {
   await advanceRun(run, 1);
   const [prompts, inputRow, opportunityRes, shoppingPath] = await Promise.all([
     readPrompts(draft.brand_id, input.sources.promptIds),
@@ -990,6 +1039,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
       shoppingPath,
       brand,
       model,
+      modelId,
       input,
       budget,
       numbered,
@@ -1005,7 +1055,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
     const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
       generateObject({
         model,
-        schema: pageSchema,
+        ...objectOptions(modelId, pageSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
         system: writeSystemPrompt(),
         prompt: buildWritePrompt({
           brand,
@@ -1074,7 +1124,7 @@ async function writeWithRun({ draft, brand, model, input, budget, rewrite, run }
   const { object, usage } = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
     generateObject({
       model,
-      schema: suggestionsSchema,
+      ...objectOptions(modelId, suggestionsSchema, { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS }),
       system: suggestSystemPrompt(),
       prompt: buildWritePrompt({
         brand,

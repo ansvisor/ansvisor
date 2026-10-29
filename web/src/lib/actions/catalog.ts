@@ -2,14 +2,8 @@
 
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import {
-  catalogSourceKey,
-  type CatalogCounts,
-  type CatalogFormat,
-  type CatalogSource,
-  type CatalogSourceKind,
-  type CatalogSyncStatus,
-} from '@/lib/catalog';
+import type { CatalogFormat, CatalogSource } from '@/lib/catalog';
+import { readCatalogSources } from '@/lib/shopping/catalog-read';
 import { assertWritable } from '@/lib/subscription-guard';
 
 /**
@@ -24,38 +18,7 @@ const FORMATS = ['auto', 'google_xml', 'csv', 'meta_csv'] as const;
 /** The brand's sources, oldest first, each with its live products in the catalog. */
 export async function listCatalogSources(brandId: string): Promise<CatalogSource[]> {
   if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('catalog_sources')
-    .select(
-      'id, kind, format, url, account, label, last_synced_at, last_status, last_error, last_counts',
-    )
-    .eq('brand_id', brandId)
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(error.message);
-  return Promise.all(
-    (data ?? []).map(async (row) => {
-      const { count } = await supabase
-        .from('catalog_products')
-        .select('id', { count: 'exact', head: true })
-        .eq('brand_id', brandId)
-        .eq('source', catalogSourceKey(row.id))
-        .is('removed_at', null);
-      return {
-        id: row.id,
-        kind: row.kind as CatalogSourceKind,
-        format: row.format as CatalogFormat,
-        url: row.url,
-        account: row.account,
-        label: row.label,
-        lastSyncedAt: row.last_synced_at,
-        lastStatus: row.last_status as CatalogSyncStatus | null,
-        lastError: row.last_error,
-        lastCounts: row.last_counts as unknown as CatalogCounts | null,
-        products: count ?? 0,
-      };
-    }),
-  );
+  return readCatalogSources(await createClient(), brandId);
 }
 
 export type AddFeedResult =
@@ -68,7 +31,7 @@ export async function addFeedSource(
   url: string,
   format: CatalogFormat = 'auto',
 ): Promise<AddFeedResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const address = typeof url === 'string' ? url.trim() : '';
   if (
     !z.guid().safeParse(brandId).success ||

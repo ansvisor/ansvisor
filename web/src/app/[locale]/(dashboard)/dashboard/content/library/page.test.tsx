@@ -51,6 +51,7 @@ const sendPagesToCms = vi.hoisted(() => vi.fn());
 const refreshWebflowPublished = vi.hoisted(() => vi.fn());
 const refreshWordPressPublished = vi.hoisted(() => vi.fn());
 const refreshFramerPublished = vi.hoisted(() => vi.fn());
+const refreshWixPublished = vi.hoisted(() => vi.fn());
 // Mark published (CE-013).
 const publishPage = vi.hoisted(() => vi.fn());
 const readPublishAddress = vi.hoisted(() => vi.fn());
@@ -60,6 +61,7 @@ vi.mock('@/lib/content/cms-send-client', () => ({
   refreshWebflowPublished,
   refreshWordPressPublished,
   refreshFramerPublished,
+  refreshWixPublished,
   readDraftCms,
   sendPagesToCms,
   readKeptFields: vi.fn(async () => new Map()),
@@ -177,6 +179,7 @@ beforeEach(() => {
   refreshWebflowPublished.mockReset().mockResolvedValue([]);
   refreshWordPressPublished.mockReset().mockResolvedValue([]);
   refreshFramerPublished.mockReset().mockResolvedValue([]);
+  refreshWixPublished.mockReset().mockResolvedValue([]);
   readPublishAddress.mockReset().mockResolvedValue('https://acme.example/pipeline-forecasting');
   publishPage.mockReset().mockResolvedValue({
     ok: true,
@@ -620,6 +623,34 @@ describe('Send to CMS from a Library row (#1331)', () => {
     expect(refreshWebflowPublished).not.toHaveBeenCalled();
     expect(refreshWordPressPublished).not.toHaveBeenCalled();
     expect(refreshFramerPublished).not.toHaveBeenCalled();
+    expect(refreshWixPublished).not.toHaveBeenCalled();
+  });
+
+  /** Wix (00372): its Blog's draft posts, asked once whether they went live. */
+  it('says a page sent to Wix is a draft post there, and asks Wix once', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'sent',
+            target: 'wix',
+            at: '2026-10-28T10:00:00Z',
+            httpStatus: null,
+            error: null,
+            publishedUrl: null,
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    await act(async () => {});
+    expect(
+      container.querySelectorAll('[aria-label^="In Wix as a draft post since Oct 28, 2026"]'),
+    ).toHaveLength(1);
+    expect(refreshWixPublished).toHaveBeenCalledTimes(1);
+    expect(refreshWixPublished).toHaveBeenCalledWith('brand-1');
   });
 
   it('says a page sent to WordPress is a draft post there, and asks WordPress once', async () => {

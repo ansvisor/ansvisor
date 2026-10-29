@@ -143,7 +143,10 @@ function mockDb(results, { actions = [] } = {}) {
   from.mockImplementation((table) => {
     const b = {
       select: () => b,
-      eq: () => b,
+      eq: (column, value) => {
+        writes.filters.push({ table, eq: [column, value] });
+        return b;
+      },
       in: (column, values) => {
         writes.filters.push({ table, in: [column, values] });
         return b;
@@ -274,5 +277,11 @@ describe('sweepImproveOutcomes', () => {
     });
     expect(result).toEqual({ refreshed: 2 });
     expect(writes.updated).toHaveLength(2);
+  });
+
+  it("never reads a demo brand's actions (00380)", async () => {
+    const writes = mockDb([], { actions: [] });
+    await sweepImproveOutcomes({ now: new Date('2026-10-20T06:00:00.000Z') });
+    expect(writes.filters).toContainEqual({ table: 'actions', eq: ['brands.is_demo', false] });
   });
 });

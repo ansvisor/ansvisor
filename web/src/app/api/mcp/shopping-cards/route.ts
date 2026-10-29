@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
-import { listShoppingCards } from '@/lib/mcp/data';
+import { NOT_IN_PLAN, SHOPPING_NOT_IN_PLAN, listShoppingCards } from '@/lib/mcp/data';
 
+/**
+ * GET /api/mcp/shopping-cards (and /api/v1/shopping-cards)
+ *
+ * Parallel REST surface for the `list_shopping_cards` MCP tool. 403
+ * plan_limit on a plan without shopping analytics (Starter).
+ */
 export async function GET(req: Request) {
   const auth = await authenticateMcpRequest(req);
   if (auth instanceof NextResponse) return auth;
@@ -33,6 +39,9 @@ export async function GET(req: Request) {
       limit: Number.isFinite(limit) ? limit : undefined,
       cursor,
     });
+    if (result === NOT_IN_PLAN) {
+      return NextResponse.json(SHOPPING_NOT_IN_PLAN, { status: 403 });
+    }
     if (result === null) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }

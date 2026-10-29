@@ -3,6 +3,7 @@ import { locationName, platformName } from './names';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { isLibrarySignalKind, type SignalCategory, type SignalKind } from './registry';
 import { libraryTargetCount } from './display';
+import { parseTimelineEvents, type CompetitorPageEvent } from '@/lib/competitor-timeline';
 
 /**
  * What a signal's detail says, as data (AC-001): where it happened, what
@@ -440,6 +441,8 @@ export type WhereFieldKey =
   | 'evidence'
   | 'competitorPositions'
   | 'winningSources'
+  /** What happened to a competitor's pages lately (learning C3). */
+  | 'competitorPageEvents'
   /** Per prompt: platforms, position, sentiment and a quote, for mentions. */
   | 'mentionDetails';
 
@@ -458,6 +461,16 @@ export type WhereValue =
   | { type: 'positions'; competitor: string; items: PromptPosition[] }
   /** Domains cited in the answers a competitor wins. */
   | { type: 'sources'; items: WinningSource[] }
+  /**
+   * A competitor's pages first cited in the brand's answers or changed in
+   * the last `days` (learning C3), newest first; none is a finding too.
+   */
+  | {
+      type: 'pageEvents';
+      competitorId: string | null;
+      items: CompetitorPageEvent[];
+      days: number;
+    }
   /** The brand's mentions on each prompt: where, how high, in what tone. */
   | { type: 'mentions'; items: PromptMention[] }
   /** What each failed audit check found, page by page. */
@@ -754,6 +767,7 @@ const LAYOUT: Record<SignalCategory, WhereFieldKey[]> = {
     'platforms',
     'competitorPositions',
     'winningSources',
+    'competitorPageEvents',
   ],
 };
 
@@ -983,6 +997,16 @@ function fieldValue(signal: Signal, key: WhereFieldKey): WhereValue | null {
     case 'winningSources': {
       const sources = winningSourcesOf(p.winningSources);
       return sources.length ? { type: 'sources', items: sources } : null;
+    }
+    case 'competitorPageEvents': {
+      // Read with the positions: none recorded means not looked at, not none.
+      if (!Array.isArray(p.pageEvents)) return null;
+      return {
+        type: 'pageEvents',
+        competitorId: str(p, 'competitorId') || null,
+        items: parseTimelineEvents(p.pageEvents as Record<string, unknown>[]),
+        days: typeof p.pageEventDays === 'number' ? p.pageEventDays : 28,
+      };
     }
     case 'aiReferrals': {
       const items = pageReferrals(p.referrals);
@@ -1246,6 +1270,18 @@ function apiValue(value: WhereValue): unknown {
         answers: source.answers,
         answers_read: source.answersRead,
       }));
+    case 'pageEvents':
+      return {
+        days: value.days,
+        items: value.items.map((event) => ({
+          kind: event.kind,
+          at: event.at,
+          url: event.url,
+          ...(event.kind === 'first_cited'
+            ? { answers: event.answers }
+            : { gained: event.gained, lost: event.lost }),
+        })),
+      };
     case 'citations':
       return value.items.map((page) => ({
         url: page.url,

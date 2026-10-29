@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
-import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS, getOrgPlan, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { dbClient } from '@/lib/supabase/scoped';
+import { effectivePlanForBrand } from '@/lib/demo/demo-brand';
 import {
   activationDelta,
   getOrgLocationUsage,
@@ -206,7 +208,7 @@ export async function getPromptCapacity(
  * message (#427).
  */
 export async function savePromptSet(input: SavePromptSetInput): Promise<SavePromptSetResult> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId: input.brandId });
   const supabase = await createClient();
 
   const { organizationId: orgId, region: brandRegion } = await getBrandContext(
@@ -512,7 +514,9 @@ export async function bulkUpdatePromptLocations(
 
   const locations = [...new Set(locationsInput.map((r) => r.trim().toUpperCase()))].filter(Boolean);
   if (locations.length === 0) return { error: 'Select at least one location.' };
-  const unknown = locations.filter((r) => !isValidLocation(r));
+  // Only a location being added must be one the product can track: stopping
+  // takes off whatever the prompts hold, a code no list names any more too.
+  const unknown = action === 'add' ? locations.filter((r) => !isValidLocation(r)) : [];
   if (unknown.length > 0) {
     return {
       error: `Unknown location code${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`,
@@ -702,7 +706,7 @@ export async function addPromptToBrand(
   brandId: string,
   input: { text: string; category?: string; platforms: string[]; models?: string[] },
 ): Promise<AddPromptToBrandResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const trimmed = input.text.trim();
   if (!trimmed) return { error: 'Prompt text is required.' };
@@ -855,7 +859,7 @@ export async function importPrompts(
   brandId: string,
   rows: ImportPromptRow[],
 ): Promise<ImportPromptsResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (rows.length === 0) return { importedIdx: [], promptIds: [], analysisStarted: false };
   if (rows.length > 1000) return { error: 'Import at most 1,000 prompts at a time.' };
   const supabase = await createClient();
@@ -1146,7 +1150,8 @@ function noPositionRows(): PositionRows {
 /**
  * Per-prompt, per-engine position sums for the Positions column: the window
  * on screen and the period of the same length just before it, for the trend.
- * Only engines the org's plan includes count, as in the Positions panel.
+ * Only engines the brand's plan includes count (the org's, Growth's on the
+ * demo brand), as in the Positions panel.
  */
 async function getPositionRows(
   brandId: string,
@@ -1163,18 +1168,29 @@ async function getPositionRows(
   return { included, current, previous };
 }
 
-/** The engines the org's plan includes, as the Positions panel counts them; null without a brand. */
+/**
+ * The engines the brand's plan includes (the org's, Growth's on the demo
+ * brand), as the Positions panel counts them; null without a brand.
+ */
 async function includedPositionPlatforms(
   brandId: string,
 ): Promise<{ id: string; label: string }[] | null> {
-  const supabase = await createClient();
-  const { data: brand } = await supabase
+  // dbClient: the member's session, or the service role the MCP's
+  // get_prompt_locations scopes it with (withDbClient), the brand checked.
+  const supabase = await dbClient();
+  const { data: brand, error } = await supabase
     .from('brands')
-    .select('organization_id')
+    .select(
+      `organization_id, is_demo, organizations!brands_organization_id_fkey(${ORG_PLAN_COLUMNS})`,
+    )
     .eq('id', brandId)
     .maybeSingle();
+  // The column then reads —: said here, so a broken read doesn't pass for no data.
+  if (error)
+    console.error('[prompts] brand plan read failed, positions without engines:', error.message);
   if (!brand?.organization_id) return null;
-  const plan = await getOrgPlan(brand.organization_id as string);
+  const org = Array.isArray(brand.organizations) ? brand.organizations[0] : brand.organizations;
+  const plan = effectivePlanForBrand(planFromOrgRow(org ?? null), brand.is_demo === true);
   return POSITION_PLATFORMS.filter((p) => platformAccess(plan, p.id).state === 'included').map(
     (p) => ({ id: p.id as string, label: p.label as string }),
   );
@@ -1252,7 +1268,7 @@ async function positionSums(
   window: { from: string; to?: string },
   region?: string,
 ): Promise<Map<string, PlatformPositionRow[]>> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   // One jsonb array (00153). A busy brand's 30 or 90 days come to thousands
   // of prompt × platform rows, past PostgREST's 1000-row cap, which dropped
   // the rest and left most prompts reading —; a single value isn't cut, so

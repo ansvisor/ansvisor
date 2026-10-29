@@ -51,6 +51,7 @@ import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class
 import { draftShopping } from '@/lib/content/shopping-check';
 import {
   NO_DRAFT_RULES,
+  draftLanguage,
   draftRulesFit,
   draftRulesSchema,
   ruleSetFits,
@@ -339,13 +340,6 @@ export interface DraftPage {
   authorConfirmed: boolean;
   /** The language the draft's own Language rule names, or null: the brand's. */
   language: string | null;
-}
-
-/** The language a draft's own Language rule names, when it is on and set. */
-function draftLanguage(rules: unknown): string | null {
-  const language = draftRulesSchema.safeParse(rules).data?.overrides.language;
-  const value = language?.on === false ? '' : (language?.value?.trim() ?? '');
-  return value || null;
 }
 
 /**
@@ -971,7 +965,7 @@ export async function startDraftFromAction(
   | { draftId: string; created: boolean; importFailed: boolean }
   | { error: 'invalid' | 'not_found' | 'failed' }
 > {
-  await assertWritable();
+  await assertWritable({ brandId });
   const parsed = actionStartInput.safeParse({ brandId, actionId, taskId, ...options });
   if (!parsed.success) return { error: 'invalid' };
   const { page } = parsed.data;
@@ -1241,7 +1235,7 @@ export async function getContentOverlap(
  * stored as detected, so it follows the page (CE-023).
  */
 export async function createContentDraft(brandId: string, start: DraftStart): Promise<string> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const parsed = startInput.safeParse(start);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
   const { method, pageType, typePicked, source, bodyHtml, sourceUrl } = parsed.data;
@@ -2667,7 +2661,7 @@ export async function saveMyRuleSet(
   pageType: PageType,
   set: SavedRuleSet,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const parsed = savedRuleSetSchema.safeParse(set);
   if (
     !draftId.safeParse(brandId).success ||

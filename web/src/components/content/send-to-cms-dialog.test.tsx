@@ -20,6 +20,9 @@ vi.mock('@/lib/wordpress-client', () => ({ readWordPress }));
 // And its Framer collection (00295): none unless a test gives one.
 const readFramer = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/framer-client', () => ({ readFramer }));
+// And its Wix site (00372): none unless a test gives one.
+const readWix = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/wix-client', () => ({ readWix }));
 
 const { SendDialog } = await import('./send-to-cms-dialog');
 
@@ -83,6 +86,7 @@ beforeEach(() => {
   readWebflow.mockReset().mockResolvedValue({ ok: true, configured: false, connection: null });
   readWordPress.mockReset().mockResolvedValue({ ok: true, configured: true, connection: null });
   readFramer.mockReset().mockResolvedValue({ ok: true, configured: true, connection: null });
+  readWix.mockReset().mockResolvedValue({ ok: true, configured: true, connection: null });
   // The send target remembered per brand, in this browser.
   const kept = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -909,6 +913,36 @@ describe('SendDialog', () => {
         description: undefined,
       });
       expect(onClose).toHaveBeenCalled();
+    });
+
+    /** Wix (00372): its Blog, a draft post; images counted, as they don't go. */
+    it('sends to Wix as a draft post, and says how many images stayed out', async () => {
+      readWix.mockResolvedValue({
+        ok: true,
+        configured: true,
+        connection: {
+          status: 'connected',
+          siteId: '2f8a1c3e-1111-4222-8333-944455556666',
+          siteName: 'Acme Coffee',
+          connectedAt: '2026-10-28T10:00:00Z',
+          updatedAt: '2026-10-28T10:00:00Z',
+        },
+      });
+      await render();
+      expect(radios().map((r) => r.textContent)).toEqual([
+        "WixA draft post on Acme Coffee's Blog",
+        "Your workflowThe brand's webhook (Zapier, Make, n8n)",
+      ]);
+      expect(radio('Wix')!.getAttribute('aria-checked')).toBe('true');
+      expect(dialog().textContent).toContain(
+        "The page goes to Acme Coffee's Wix Blog as a draft post",
+      );
+      sentWith({ updated: false, live: false, changed: { images: 2 } });
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', expect.any(Array), 'wix');
+      expect(toast.success).toHaveBeenCalledWith('Sent to Wix as a draft post', {
+        description: "2 images weren't sent: add them in Wix.",
+      });
     });
 
     it('says “your collection” when the collection has no name', async () => {
