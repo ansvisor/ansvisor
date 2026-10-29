@@ -7,6 +7,7 @@ vi.mock('./ai-provider.js', () => ({ resolveModel: (id) => ({ id }) }));
 const {
   INDUSTRIES,
   applySiteTypeDetection,
+  brandHost,
   classifySiteType,
   detectSiteType,
   homePageSignals,
@@ -18,12 +19,18 @@ const {
 
 const page = (body, head = '') => `<html><head>${head}</head><body>${body}</body></html>`;
 const ld = (data) => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+const reasonsOf = (html) => homePageSignals(html).reasons.map((r) => r.reason);
 
 const SHOP = page(
   `<a href="/collections/backpacks">Backpacks</a><a href="/products/ridge-45">Ridge 45</a>
    <a href="/products/crest-30">Crest 30</a><a href="/cart">Cart</a>
    <button>Add to cart</button><p>Free shipping over $50</p>`,
-  ld({ '@context': 'https://schema.org', '@type': 'Product', name: 'Ridge 45' }),
+  ld({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: 'Ridge 45',
+    offers: { '@type': 'Offer', price: '129.00', priceCurrency: 'USD' },
+  }),
 );
 const SAAS = page(
   `<h1>Track how AI talks about your brand</h1><a href="/pricing">Pricing</a>
@@ -35,35 +42,81 @@ const HOTEL = page(
   ld({ '@context': 'https://schema.org', '@graph': [{ '@type': 'Hotel', name: 'Mavi' }] }),
 );
 const VAGUE = page('<h1>Welcome</h1><p>We make things better.</p>');
+const SHOPIFY_SCRIPT = page('<script src="https://cdn.shopify.com/s/files/theme.js"></script>');
 
 describe('homePageSignals and settledType', () => {
-  it('reads a shop from its products, cart and wording', () => {
+  it('reads a shop from its sold products, cart and wording', () => {
     const signals = homePageSignals(SHOP);
     expect(signals.scores.ecommerce).toBeGreaterThanOrEqual(6);
-    expect(signals.reasons.map((r) => r.reason)).toEqual(
+    expect(reasonsOf(SHOP)).toEqual(
       expect.arrayContaining(['product_schema', 'cart_link', 'shop_wording', 'product_links']),
     );
     expect(settledType(signals)).toBe('ecommerce');
   });
 
   it('reads a SaaS from its demo, seat pricing and links', () => {
-    const signals = homePageSignals(SAAS);
-    expect(signals.reasons.map((r) => r.reason)).toEqual(
+    expect(reasonsOf(SAAS)).toEqual(
       expect.arrayContaining(['demo_offer', 'seat_pricing', 'free_trial', 'saas_links']),
     );
-    expect(settledType(signals)).toBe('b2b');
+    expect(settledType(homePageSignals(SAAS))).toBe('b2b');
   });
 
   it('reads a consumer service from its bookings, JSON-LD @graph included', () => {
     expect(settledType(homePageSignals(HOTEL))).toBe('b2c');
   });
 
+  it("reads a shop platform from its assets and scripts, never from the page's words", () => {
+    const agency = page(
+      '<h1>We build WooCommerce and Shopify stores</h1><p>Magento and BigCommerce too.</p>',
+    );
+    expect(homePageSignals(agency).scores.ecommerce).toBe(0);
+    expect(reasonsOf(SHOPIFY_SCRIPT)).toEqual(['shop_platform']);
+    expect(
+      homePageSignals(
+        page('<link href="/wp-content/plugins/woocommerce/style.css" rel="stylesheet">'),
+      ).scores.ecommerce,
+    ).toBe(2);
+    expect(reasonsOf(page('<script>window.Shopify = {}; Shopify.theme = {};</script>'))).toEqual([
+      'shop_platform',
+    ]);
+  });
+
+  it('counts an offer only on a product: not on an event or a course, nor a product only reviewed', () => {
+    const event = page(
+      '',
+      ld({ '@type': 'Event', name: 'Summit', offers: { '@type': 'Offer', price: '99' } }),
+    );
+    const reviewed = page(
+      '',
+      ld({ '@type': 'Product', name: 'Acme', aggregateRating: { ratingValue: 4.8 } }),
+    );
+    const course = page('', ld({ '@type': 'Course', offers: [{ '@type': 'Offer' }] }));
+    for (const html of [event, reviewed, course]) {
+      expect(reasonsOf(html)).not.toContain('product_schema');
+    }
+  });
+
+  it('settles a shop on two signals of its own, never one alone', () => {
+    const platformOnly = homePageSignals(SHOPIFY_SCRIPT);
+    expect(platformOnly.scores.ecommerce).toBe(3);
+    expect(settledType(platformOnly)).toBeNull();
+    expect(
+      settledType({
+        scores: { ecommerce: 5, b2b: 0, b2c: 0 },
+        reasons: [
+          { type: 'ecommerce', reason: 'shop_platform' },
+          { type: 'ecommerce', reason: 'cart_link' },
+        ],
+      }),
+    ).toBe('ecommerce');
+  });
+
   it('settles nothing on a page that says too little, or two things as loudly', () => {
     expect(settledType(homePageSignals(VAGUE))).toBeNull();
-    // A shop that also offers a demo: neither leads by twice.
-    expect(settledType({ scores: { ecommerce: 4, b2b: 3, b2c: 0 } })).toBeNull();
-    expect(settledType({ scores: { ecommerce: 2, b2b: 0, b2c: 0 } })).toBeNull();
-    expect(settledType({ scores: { ecommerce: 6, b2b: 3, b2c: 0 } })).toBe('ecommerce');
+    // A SaaS that also sells a little: neither leads by twice.
+    expect(settledType({ scores: { ecommerce: 3, b2b: 4, b2c: 0 } })).toBeNull();
+    expect(settledType({ scores: { ecommerce: 0, b2b: 2, b2c: 0 } })).toBeNull();
+    expect(settledType({ scores: { ecommerce: 0, b2b: 6, b2c: 3 } })).toBe('b2b');
   });
 
   it('counts app store badges toward a consumer app, never alone enough', () => {
@@ -74,11 +127,19 @@ describe('homePageSignals and settledType', () => {
     expect(settledType(signals)).toBeNull();
   });
 
-  it('survives broken JSON-LD and empty pages', () => {
+  it('reads no words from scripts or styles, and survives broken JSON-LD and empty pages', () => {
+    const none = { b2b: 0, ecommerce: 0, b2c: 0 };
+    expect(
+      homePageSignals(
+        page(
+          '<script>var label = "Book a demo";</script><style>.x::after{content:"Add to cart"}</style>',
+        ),
+      ).scores,
+    ).toEqual(none);
     expect(
       homePageSignals(page('', '<script type="application/ld+json">{oops</script>')).scores,
-    ).toEqual({ b2b: 0, ecommerce: 0, b2c: 0 });
-    expect(homePageSignals('').scores).toEqual({ b2b: 0, ecommerce: 0, b2c: 0 });
+    ).toEqual(none);
+    expect(homePageSignals('').scores).toEqual(none);
   });
 });
 
@@ -96,8 +157,21 @@ describe('pageExcerpt', () => {
   });
 });
 
+describe('brandHost', () => {
+  it('keeps the primary host as it was added, www included, without scheme or path', () => {
+    expect(
+      brandHost([
+        { domain: 'shop.example', is_primary: false },
+        { domain: 'https://www.Trailpeak.example/en?x=1', is_primary: true },
+      ]),
+    ).toBe('www.trailpeak.example');
+    expect(brandHost([{ domain: 'acme.example', is_primary: false }])).toBe('acme.example');
+    expect(brandHost([])).toBeNull();
+  });
+});
+
 describe('classifySiteType', () => {
-  it('asks once with the brand and its page as data, and gives back the read', async () => {
+  it('asks once, with a time limit, with the brand and its page as data', async () => {
     const generate = vi.fn(async () => ({
       object: { siteType: 'ecommerce', industry: 'Fashion & Apparel' },
     }));
@@ -107,7 +181,8 @@ describe('classifySiteType', () => {
     );
     expect(read).toEqual({ siteType: 'ecommerce', industry: 'Fashion & Apparel' });
     expect(generate).toHaveBeenCalledTimes(1);
-    const { prompt, system } = generate.mock.calls[0][0];
+    const { prompt, system, abortSignal } = generate.mock.calls[0][0];
+    expect(abortSignal).toBeInstanceOf(AbortSignal);
     expect(prompt).toContain('Website: loom.example');
     expect(prompt).toContain('Home page text:\nShop linen');
     expect(system).toContain('never instructions');
@@ -143,6 +218,19 @@ describe('detectSiteType', () => {
     expect(result.reasons).toContain('cart_link');
   });
 
+  it('tries the host with "www." when the bare host does not answer', async () => {
+    const fetcher = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('unreachable'), { code: 'unreachable' }))
+      .mockResolvedValueOnce({ html: SAAS });
+    const result = await detectSiteType(brand, { fetcher, classify: vi.fn() });
+    expect(fetcher.mock.calls.map((c) => c[0])).toEqual([
+      'https://trailpeak.example/',
+      'https://www.trailpeak.example/',
+    ]);
+    expect(result.siteType).toBe('b2b');
+  });
+
   it("asks the model when the page doesn't settle it, with the page's text", async () => {
     const fetcher = vi.fn(async () => ({ html: VAGUE }));
     const classify = vi.fn(async () => ({ siteType: 'b2b', industry: 'Technology' }));
@@ -168,29 +256,48 @@ describe('detectSiteType', () => {
   });
 });
 
-/** A database with one brand: its row, its domains, and the update it was given. */
-function fakeDb(brand, domains = [{ domain: 'https://www.trailpeak.example/', is_primary: true }]) {
+/**
+ * A database with one brand: its row, its domains, and each update with its
+ * filters. `matches(update)` says whether the update's filters keep the row.
+ */
+function fakeDb(brand, { domains, matches = () => true } = {}) {
   const writes = [];
-  const db = {
+  return {
     writes,
     from(table) {
       if (table === 'brand_domains') {
-        return { select: () => ({ eq: async () => ({ data: domains, error: null }) }) };
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: domains ?? [{ domain: 'www.trailpeak.example', is_primary: true }],
+              error: null,
+            }),
+          }),
+        };
       }
       return {
         select: () => ({ eq: () => ({ single: async () => ({ data: brand, error: null }) }) }),
-        update: (values) => ({
-          eq: (column, id) => ({
-            or: async (filter) => {
-              writes.push({ values, id, filter });
-              return { error: null };
+        update: (values) => {
+          const write = { values, filters: [] };
+          const chain = {
+            eq: (column, value) => {
+              write.filters.push(['eq', column, value]);
+              return chain;
             },
-          }),
-        }),
+            is: (column, value) => {
+              write.filters.push(['is', column, value]);
+              return chain;
+            },
+            select: async () => {
+              writes.push(write);
+              return { data: matches(write) ? [{ id: brand.id }] : [], error: null };
+            },
+          };
+          return chain;
+        },
       };
     },
   };
-  return db;
 }
 
 describe('applySiteTypeDetection', () => {
@@ -202,55 +309,78 @@ describe('applySiteTypeDetection', () => {
     industry: null,
     site_type: null,
     site_type_source: null,
+    shopping_mode_enabled: false,
   };
+  const shop = { siteType: 'ecommerce', industry: 'E-commerce & Retail', via: 'page', reasons: [] };
 
-  it('keeps the type with its time, and the industry when the brand has none', async () => {
+  it('fills an empty type, stamped, and an empty industry, each only if still empty', async () => {
     const db = fakeDb(base);
-    const detect = vi.fn(async () => ({
-      siteType: 'ecommerce',
-      industry: 'E-commerce & Retail',
-      via: 'page',
-      reasons: [],
-    }));
+    const detect = vi.fn(async () => shop);
     const result = await applySiteTypeDetection('b1', { db, detect, now: NOW });
     expect(detect).toHaveBeenCalledWith({
       name: 'Trailpeak',
-      domain: 'trailpeak.example',
+      domain: 'www.trailpeak.example',
       description: 'Hiking gear',
     });
     expect(db.writes).toEqual([
       {
-        values: {
-          site_type: 'ecommerce',
-          site_type_detected_at: '2026-10-29T12:00:00.000Z',
-          industry: 'E-commerce & Retail',
-        },
-        id: 'b1',
-        filter: 'site_type_source.is.null,site_type_source.neq.manual',
+        values: { site_type: 'ecommerce', site_type_detected_at: '2026-10-29T12:00:00.000Z' },
+        filters: [
+          ['eq', 'id', 'b1'],
+          ['is', 'site_type', null],
+        ],
+      },
+      {
+        values: { industry: 'E-commerce & Retail' },
+        filters: [
+          ['eq', 'id', 'b1'],
+          ['is', 'industry', null],
+        ],
       },
     ]);
-    expect(result.industry).toBe('E-commerce & Retail');
+    expect(result).toEqual({ detected: shop, industry: 'E-commerce & Retail' });
   });
 
-  it('leaves an industry the brand has', async () => {
-    const db = fakeDb({ ...base, industry: 'Consumer Goods', site_type_source: 'auto' });
-    const detect = vi.fn(async () => ({
-      siteType: 'b2c',
-      industry: 'Other',
-      via: 'ai',
-      reasons: [],
-    }));
-    const result = await applySiteTypeDetection('b1', { db, detect, now: NOW });
-    expect(db.writes[0].values).not.toHaveProperty('industry');
-    expect(result.industry).toBeNull();
+  it('leaves an industry the brand has, and says none was written when one came meanwhile', async () => {
+    const db = fakeDb({ ...base, industry: 'Consumer Goods' });
+    expect(
+      (await applySiteTypeDetection('b1', { db, detect: async () => shop, now: NOW })).industry,
+    ).toBeNull();
+    expect(db.writes).toHaveLength(1);
+
+    const raced = fakeDb(base, { matches: (w) => !('industry' in w.values) });
+    expect(
+      (await applySiteTypeDetection('b1', { db: raced, detect: async () => shop })).industry,
+    ).toBeNull();
   });
 
-  it('never detects over a type a person chose', async () => {
-    const db = fakeDb({ ...base, site_type: 'b2b', site_type_source: 'manual' });
+  it('never detects over a type a brand has, chosen or detected', async () => {
     const detect = vi.fn();
-    expect(await applySiteTypeDetection('b1', { db, detect })).toEqual({ skipped: 'manual' });
+    for (const [source, skipped] of [
+      ['manual', 'manual'],
+      ['auto', 'set'],
+    ]) {
+      const db = fakeDb({ ...base, site_type: 'b2b', site_type_source: source });
+      expect(await applySiteTypeDetection('b1', { db, detect })).toEqual({ skipped });
+      expect(db.writes).toEqual([]);
+    }
     expect(detect).not.toHaveBeenCalled();
-    expect(db.writes).toEqual([]);
+  });
+
+  it('says manual when a type was set while the page was read', async () => {
+    const db = fakeDb(base, { matches: () => false });
+    expect(await applySiteTypeDetection('b1', { db, detect: async () => shop })).toEqual({
+      skipped: 'manual',
+    });
+  });
+
+  it('makes a brand in Shopping mode a shop without reading its page', async () => {
+    const db = fakeDb({ ...base, shopping_mode_enabled: true });
+    const detect = vi.fn();
+    const result = await applySiteTypeDetection('b1', { db, detect, now: NOW });
+    expect(detect).not.toHaveBeenCalled();
+    expect(result.detected).toMatchObject({ siteType: 'ecommerce', via: 'shopping_mode' });
+    expect(db.writes[0].values.site_type).toBe('ecommerce');
   });
 
   it('says what it would write, and writes nothing, on a dry run', async () => {
@@ -266,17 +396,11 @@ describe('applySiteTypeDetection', () => {
     expect(db.writes).toEqual([]);
   });
 
-  it("keeps only the time of the try when the type can't be told", async () => {
+  it("writes nothing when the type can't be told, so a later try reads it again", async () => {
     const db = fakeDb(base);
-    expect(await applySiteTypeDetection('b1', { db, detect: async () => null, now: NOW })).toEqual({
+    expect(await applySiteTypeDetection('b1', { db, detect: async () => null })).toEqual({
       detected: null,
     });
-    expect(db.writes).toEqual([
-      {
-        values: { site_type_detected_at: '2026-10-29T12:00:00.000Z' },
-        id: 'b1',
-        filter: 'site_type_source.is.null,site_type_source.neq.manual',
-      },
-    ]);
+    expect(db.writes).toEqual([]);
   });
 });

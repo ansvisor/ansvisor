@@ -54,12 +54,13 @@ router.delete('/:id', async (req, res) => {
 
 /**
  * POST /api/brands/:id/detect-site-type
- * Detects the brand's kind of site from its home page and keeps it, unless a
- * person chose one (action plan by business type, Step 0; 00379). Setup
- * asks for it right after the brand is made. Admins and managers, who may
- * change a brand. Returns { siteType, industry, via }: industry when one was
- * written, via 'page' or 'ai'; siteType null when the type was chosen by
- * hand (skipped: 'manual') or couldn't be told.
+ * Detects the brand's kind of site from its home page and keeps it, when it
+ * has none (action plan by business type, Step 0; 00379). Setup asks for it
+ * right after the brand is made. Admins and managers, who may change a
+ * brand. Returns { siteType, industry, via }: industry when one was written,
+ * via 'page', 'ai' or 'shopping_mode'; siteType null when the brand has a
+ * type already (skipped: 'manual' when a person chose it, 'set' when it was
+ * detected) or it couldn't be told.
  */
 router.post('/:id/detect-site-type', async (req, res) => {
   try {
