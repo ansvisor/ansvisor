@@ -28,6 +28,12 @@ let root: Root;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The card remembers being open; each test starts it collapsed.
+  try {
+    localStorage.clear();
+  } catch {
+    // No storage: the card starts collapsed anyway.
+  }
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);

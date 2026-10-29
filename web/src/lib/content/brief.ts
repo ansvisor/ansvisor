@@ -92,6 +92,14 @@ export interface DraftBrief {
    * none could be.
    */
   citedLength?: { characters: number; pages: number } | null;
+  /**
+   * What Site Audit's checks find on the same cited pages (learning C2): the
+   * checks at least half of them pass, by name, and on how many pages.
+   */
+  citedFeatures?: {
+    pages: number;
+    checks: { key: string; label: string; pages: number }[];
+  } | null;
   /** 2 once it plans with the brief rules (2026); absent before. */
   version?: 2;
   /** The page's essentials, for its top. */
@@ -221,6 +229,22 @@ export const draftBriefSchema = z.object({
     })
     .nullable()
     .optional(),
+  citedFeatures: z
+    .object({
+      pages: z.number().int().min(1).max(30),
+      checks: z
+        .array(
+          z.object({
+            key: z.string().min(1).max(60),
+            label: z.string().min(1).max(120),
+            pages: z.number().int().min(1).max(30),
+          }),
+        )
+        .max(20),
+    })
+    .nullable()
+    .optional()
+    .catch(undefined),
   // A later version reads as the rules it shares with this one.
   version: z.literal(2).optional().catch(undefined),
   tldr: v2text(L.tldr),

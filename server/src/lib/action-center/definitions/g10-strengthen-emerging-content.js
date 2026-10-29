@@ -9,7 +9,7 @@ import { targetPayload } from './_helpers.js';
 export default {
   id: 'strengthen_emerging_content',
   code: 'G10',
-  version: 1,
+  version: 2,
   category: 'growth',
   name: 'Strengthen Emerging Content',
   signalKinds: ['prompt_gain'],
@@ -20,6 +20,8 @@ export default {
     'identify_target_pages',
     'analyze_visibility_change',
     'analyze_citations',
+    // Learning C4: what its winning pages have that the brand's others don't.
+    'analyze_winning_pages',
     'identify_content_gaps',
     'optimize_content',
     'add_internal_links',

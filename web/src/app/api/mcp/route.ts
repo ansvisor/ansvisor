@@ -5,6 +5,8 @@ import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { createMcpServer } from '@/lib/mcp/server';
 
 export const dynamic = 'force-dynamic';
+// Node, not the edge: get_content_draft_package reads pages with jsdom.
+export const runtime = 'nodejs';
 
 /**
  * Streamable HTTP entry point for the Ansvisor MCP server. Claude Desktop,

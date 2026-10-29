@@ -113,6 +113,7 @@
     "noPlan": "No active plan",
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
+      "removeLocations": "Removing locations needs a plan",
       "editPrompts": "Editing prompts needs a plan",
       "deletePrompts": "Deleting prompts needs a plan",
       "pausePrompts": "Pausing prompts needs a plan",
@@ -1636,7 +1637,46 @@
           "openDraft": "Open draft",
           "pagesToOptimize": "Pages to optimize",
           "draftFailed": "Couldn't open the Content Editor. Try again.",
-          "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor."
+          "pageNotRead": "Couldn't read the live page, so the draft starts with its title. Paste the page into the editor.",
+          "competitor": {
+            "title": "What the pages AI cites instead of yours have",
+            "gap": "— on {count} of {of} of their pages, not on yours",
+            "gapNoPage": "— on {count} of {of} of their pages",
+            "noGap": "Your page passes every check at least half of their pages pass.",
+            "tooFew": "Only one of their pages was read: it takes at least two to say what theirs have that yours doesn't.",
+            "pages": "{count, plural, one {The page read} other {The # pages read}}",
+            "yours": "Your page cited for these prompts",
+            "noPage": "None of your pages was cited for these prompts lately.",
+            "yourUnreadable": "Your page cited for these prompts couldn't be read: it may block readers.",
+            "words": "{count, plural, one {# word} other {{words} words}}",
+            "cited": "cited in {count, plural, one {# answer} other {# answers}}",
+            "note": "Read from their public pages and run through Site Audit's checks; only what the checks found is kept.",
+            "unreadable": "{count, plural, one {# page} other {# pages}} couldn't be read.",
+            "reasons": {
+              "no_prompts": "There are no tracked prompts to read the answers of for this action.",
+              "none_cited": "In the last two weeks, AI answers for these prompts cited no competitor page, and no page in answers that don't name your brand.",
+              "unreadable": "The pages cited couldn't be read: they may block readers."
+            }
+          },
+          "winning": {
+            "title": "What sets your winning pages apart",
+            "pattern": "— winning pages {winners} of {ofWinners}, your other pages {others} of {ofOthers}",
+            "noPattern": "Your other audited pages pass the same Site Audit checks your winning pages pass: none sets the winners apart.",
+            "winners": "{count, plural, one {Your winning page} other {Your # winning pages}}",
+            "fromAudit": "from its Site Audit",
+            "fromRead": "read for this task",
+            "words": "{count, plural, one {# word} other {{words} words}}",
+            "compared": "Compared with {count, plural, one {# other page} other {# other pages}} of yours that Site Audit checked in the last 90 days.",
+            "missing": "Pages of yours missing the most of it",
+            "missingLine": "missing {checks}",
+            "note": "From Site Audit's checks; a winning page without a recent audit is read from its public address, and only what the checks found is kept.",
+            "unreadable": "{count, plural, one {# winning page} other {# winning pages}} couldn't be read.",
+            "reasons": {
+              "no_winner": "There's no winning page to compare: none of your pages is named for this action, or cited in its prompts' answers in the last two weeks.",
+              "too_few_audited": "Fewer than three of your other pages have a Site Audit from the last 90 days. Audit more of your pages to compare them with your winning ones.",
+              "winner_unreadable": "Your winning pages couldn't be read: they may block readers. A Site Audit of them works too."
+            }
+          }
         },
         "noSignalsOpportunity": "This action was sent from Content Optimization. Its evidence is the opportunity on the Overview tab, not detection signals.",
         "opportunity": {
@@ -2598,6 +2638,8 @@
       "analyze_ga4_outcomes_target": "Inspect engagement and key events on {targets}",
       "analyze_site_audit": "Review Site Audit findings",
       "analyze_site_audit_target": "Review Site Audit findings on {targets}",
+      "analyze_winning_pages": "Find what sets your winning pages apart",
+      "analyze_winning_pages_target": "Find what sets your winning pages apart, across {targets}",
       "analyze_entity_signals": "Audit entity consistency and coverage",
       "analyze_entity_signals_target": "Audit entity signals on {targets}",
       "analyze_internal_links": "Inspect internal linking",
@@ -2991,6 +3033,194 @@
     "goToSettings": "Go to Settings",
     "planGateTitle": "Agent is a {plan} feature",
     "planGateBody": "Upgrade your plan to chat with your dashboard about visibility, competitors, citations, and content gaps."
+  },
+  "chatTools": {
+    "profile": { "name": "Read your profile", "step": "Read your profile" },
+    "aiUsage": { "name": "Read AI usage", "step": "Read AI usage" },
+    "brands": { "name": "Read brands", "step": "Read Brands" },
+    "visibility": { "name": "Read visibility", "step": "Read Visibility" },
+    "visibilityTrend": { "name": "Read the visibility trend", "step": "Read Visibility trend" },
+    "trackedPrompts": { "name": "Read tracked prompts", "step": "Read Prompts" },
+    "promptPerformance": {
+      "name": "Read prompt performance",
+      "step": "Read Prompt performance"
+    },
+    "promptSuggestions": {
+      "name": "Read prompt suggestions",
+      "step": "Read Prompt Suggestions"
+    },
+    "promptVolumes": { "name": "Read prompt volumes", "step": "Read Prompt volumes" },
+    "topics": { "name": "Read topics", "step": "Read Topics" },
+    "mentionsSummary": { "name": "Read the mentions summary", "step": "Read Mentions" },
+    "mentions": { "name": "Read mentions", "step": "Read Mentions" },
+    "mention": { "name": "Read an answer naming the brand", "step": "Read mention" },
+    "mentionCompetitors": {
+      "name": "Read competitors named in answers",
+      "step": "Read Mentions · Competitors"
+    },
+    "mentionsPerception": {
+      "name": "Read how AI describes the brand",
+      "step": "Read Mentions · Perception"
+    },
+    "citations": { "name": "Read citations", "step": "Read Citations" },
+    "competitors": { "name": "Read competitors", "step": "Read Competitors" },
+    "competitorComparison": {
+      "name": "Compare competitors",
+      "step": "Read Competitors"
+    },
+    "productVisibility": { "name": "Read Product Visibility", "step": "Read Product Visibility" },
+    "aiReferralTraffic": {
+      "name": "Read AI Referral Traffic",
+      "step": "Read AI Referral Traffic"
+    },
+    "siteAudits": { "name": "Read Site Audits", "step": "Read Site Audit" },
+    "siteAuditIssues": { "name": "Read Site Audit issues", "step": "Read Site Audit" },
+    "actions": { "name": "Read Action Center actions", "step": "Read Action Center" },
+    "action": { "name": "Read an action", "step": "Read action" },
+    "signals": { "name": "Read signals", "step": "Read Signals" },
+    "actionHistory": { "name": "Read Action History", "step": "Read Action History" },
+    "contentOpportunities": {
+      "name": "Read content opportunities",
+      "step": "Read Content opportunities"
+    },
+    "drafts": { "name": "Read the Content Library", "step": "Read Library" },
+    "draft": { "name": "Read a draft", "step": "Read draft" },
+    "reports": { "name": "Read reports", "step": "Read Reports" },
+    "saveDraft": { "name": "Save drafts in Content", "step": "Saved draft in Content" },
+    "opportunityStatus": {
+      "name": "Review or dismiss opportunities",
+      "step": "Updated opportunity"
+    },
+    "dismissSuggestion": {
+      "name": "Dismiss prompt suggestions",
+      "step": "Dismissed prompt suggestion"
+    }
+  },
+  "agentic": {
+    "avatar": {
+      "idle": "Agent · idle",
+      "working": "Agent · working",
+      "waiting": "Agent · needs you",
+      "done": "Agent · done",
+      "failed": "Agent · failed"
+    },
+    "status": {
+      "working": "Working",
+      "answering": "Answering",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "answered": "Answered",
+      "ready": "Ready",
+      "planReady": "Plan ready",
+      "draft": "Draft",
+      "failed": "Failed"
+    },
+    "approval": {
+      "auto": "Auto",
+      "asks": "Asks you",
+      "logged": "Auto · logged",
+      "loggedTip": "Runs without a card in Full auto. Logged in the Activity log, with Undo.",
+      "click": "Needs your click",
+      "clickTip": "Goes live or leaves the workspace. Always needs your click, in every mode.",
+      "done": "Done"
+    },
+    "step": {
+      "label": "Step {number} · {state}",
+      "pending": "Not started",
+      "current": "Running",
+      "waiting": "Needs you",
+      "failed": "Failed",
+      "done": "Done"
+    },
+    "dot": {
+      "running": "Running",
+      "needsYou": "Needs you",
+      "done": "Done",
+      "failed": "Stopped or failed",
+      "idle": "Idle",
+      "paused": "Paused",
+      "progress": "Progress",
+      "legend": {
+        "title": "What the dots mean",
+        "running": "The agent is working. The thin line shows progress.",
+        "needsYou": "Waiting for your OK or click. Nothing moves until you reply.",
+        "done": "Finished. Bold until you open the result.",
+        "failed": "You stopped it, or a step failed. Open it to retry.",
+        "idle": "A normal chat. Nothing is running."
+      }
+    },
+    "newPill": "New",
+    "attention": {
+      "needsYou": "{count, plural, one {# needs you} other {# need you}}",
+      "items": "{count, plural, one {# item} other {# items}}",
+      "itemsNeedYou": "{count, plural, one {# item} other {# items}} · {needsYou}"
+    },
+    "tick": "Done",
+    "preview": {
+      "title": "Chat pieces",
+      "description": "The agent's shared pieces in every state, for design sign-off. Nothing here runs.",
+      "motion": "With Reduce motion on, nothing moves.",
+      "sections": {
+        "avatar": "Agent avatar",
+        "avatarList": "Agent avatar in the Agents list",
+        "statusPill": "Status pill",
+        "approvalPill": "Approval pills",
+        "steps": "Step states",
+        "dots": "List dots",
+        "newPill": "New pill",
+        "attention": "Attention badge",
+        "tick": "Done tick"
+      },
+      "avatarStates": {
+        "idle": "Idle",
+        "working": "Working",
+        "waiting": "Needs you",
+        "done": "Done",
+        "failed": "Failed"
+      },
+      "avatarListNote": "Still, at 30 px: grey when idle, paused or stopped",
+      "avatarSizes": "30, 26 and 22 px",
+      "size": "{size} px",
+      "progress": "Progress line",
+      "legend": "Legend",
+      "onIcon": "On a menu icon",
+      "countNeedsYou": "Count, 1 needs you",
+      "countNone": "Count, nothing needs you",
+      "tickPop": "Pops in once"
+    }
+  },
+  "chatDenial": {
+    "asked": "You asked: {action}.",
+    "askedTarget": "You asked: {action} · {target}.",
+    "rule": {
+      "no_access": "You're not a member of this workspace now, so I can't act in it.",
+      "brand_scope": "I can only see the brands shared with you.",
+      "subscription_inactive": "This workspace's plan isn't active, so it's read-only: reading still works, but nothing can be changed, run or generated.",
+      "demo_brand": "This is the demo brand: its data is sample data, so it can't be changed or run. Make the change on your own brand.",
+      "policy_never": "An Admin turned “{action}” off for Chat.",
+      "execute_off": "An Admin turned {group, select, publishing {publishing} email_outreach {email and outreach} code_prs {pull requests} other {feed pushes}} off for Managers.",
+      "plan_locked": "This needs the {needs} plan. You're on {current}.",
+      "plan_locked_trial": "This isn't in the trial. It needs the {needs} plan.",
+      "forbidden_role": "Your role is {roleName}, and {rolePlural} can't do this."
+    },
+    "rolesPlural": {
+      "admin": "Admins",
+      "manager": "Managers",
+      "analyst": "Analysts",
+      "agency_partner": "Agency Partners"
+    },
+    "source": {
+      "roles": "Settings › Team › Roles & access",
+      "chat": "Settings › Chat",
+      "billing": "Settings › Billing"
+    },
+    "whoCan": {
+      "roles": "{roles} can do this.",
+      "brands": "Admins can share more brands with you.",
+      "noAccess": "Its Admins can add you to it.",
+      "choosePlan": "Admins can choose a plan.",
+      "demo": "No one: the demo brand keeps its sample data."
+    }
   },
   "audit": {
     "title": "Site Audit",
@@ -3447,7 +3677,7 @@
       "trackedPrompts": "Tracked prompts",
       "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "slotsLeft": "{count, plural, one {# prompt/location left to add} other {# prompts/locations left to add}}",
       "limitReached": "Plan limit reached",
       "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
@@ -4903,7 +5133,7 @@
       },
       "shopping": {
         "title": "Shopping path",
-        "description": "Where this page sends readers. Picked by topic and stock, and by Merchant Center status once it's connected. Prices and specs come from the catalog only.",
+        "description": "Where this page sends readers. Picked by topic and stock. Prices and specs come from the catalog only.",
         "empty": "Pick the category page and the products in stock this page links, from your catalog.",
         "build": "Pick from the catalog",
         "rebuild": "Pick again",
@@ -4992,6 +5222,9 @@
         "lengthValue": "{count} characters · ~{words} words",
         "lengthFrom": "From the rules",
         "lengthFromCited": "From the rules · a typical cited page has {count} characters (median of {pages})",
+        "citedHave": "Cited pages have",
+        "citedHaveCheck": "{check} ({count} of {of})",
+        "citedHaveFrom": "Site Audit's checks on the same cited pages",
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
@@ -7568,11 +7801,16 @@
       "gapTip": "Best minus worst tracked location, for the metric shown.",
       "track": "+ Track",
       "trackLabel": "Track “{prompt}” in {location}",
+      "stop": "Stop tracking here",
+      "stopLabel": "Stop tracking “{prompt}” in {location}",
+      "columnMenu": "Actions for {location}",
+      "stopColumn": "Stop tracking in {location}",
       "open": "{prompt} in {location}: open its positions",
       "notNamed": "Not named",
       "noAnswers": "No answers here in this period",
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
+      "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
@@ -7606,9 +7844,18 @@
       "button": "+ Add location",
       "title": "Track in more locations",
       "lead": "The same prompts, asked from each place you add. Each place gets its own column in the Locations view.",
+      "modes": "What to do",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "removeTitle": "Stop tracking in locations",
+      "removeLead": "Stop asking these prompts from the places you pick. Each place you stop leaves the Locations view once no prompt shown is tracked there.",
       "locations": "Locations to add",
+      "removeLocations": "Locations to stop",
+      "removeNoLocations": "These prompts aren't tracked in any location.",
+      "removeChip": "{location}, tracked by {count, plural, =0 {none of these prompts} one {# prompt} other {# prompts}}",
       "picked": "picked",
       "scope": "Ask these prompts there",
+      "removeScope": "Stop it for these prompts",
       "selected": "The {count, plural, one {# prompt} other {# prompts}} selected",
       "topic": "Topic",
       "allShown": "All {count, plural, one {# prompt} other {# prompts}} shown",
@@ -7625,7 +7872,17 @@
       "noPrompts": "Choose the prompts to add these locations to.",
       "cancel": "Cancel",
       "submit": "Track in {count, plural, =0 {these locations} one {# location} other {# locations}}",
-      "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations. The first results come with the next daily run, within 24 hours."
+      "done": "{count, plural, one {# prompt is} other {# prompts are}} now tracked in the new locations. The first results come with the next daily run, within 24 hours.",
+      "removePreview": "Removes {removed, plural, one {# tracked location} other {# tracked locations}} from {count, plural, one {# prompt} other {# prompts}} · frees {freed, plural, one {# plan location} other {# plan locations}}",
+      "removeBlocked": "{count, plural, one {# prompt is} other {# prompts are}} tracked only in these locations, so {count, plural, one {it keeps them} other {they keep them}}: a prompt needs at least one location.",
+      "removeNothing": "None of these prompts is tracked in these locations.",
+      "removeNoPrompts": "Choose the prompts to stop tracking in these locations.",
+      "removePast": "Past results stay; tracking stops from the next run.",
+      "removeSubmit": "Stop tracking in {count, plural, =0 {these locations} one {# location} other {# locations}}",
+      "removed": "{count, plural, one {# prompt is} other {# prompts are}} no longer tracked there. Past results stay.",
+      "bulkButton": "Locations",
+      "bulkAdd": "Add locations",
+      "bulkRemove": "Remove locations"
     },
     "performance": {
       "label": "Performance",
@@ -8123,6 +8380,25 @@
       "noDataDescription": "Run a tracking check from the Insights page to generate comparison data for this competitor.",
       "loadError": "Failed to load comparison data."
     },
+    "timeline": {
+      "title": "{competitor}'s pages over time",
+      "lead": "Answers mentioning {competitor} and {brand} each week, beside what happened to {competitor}'s pages: when AI first cited one in your tracked answers, and when one changed.",
+      "weekOf": "Week of {date}",
+      "mentions": "{count, plural, one {# answer} other {# answers}} mentioning",
+      "firstCitedBadge": "{count, plural, one {# page first cited} other {# pages first cited}}",
+      "changedBadge": "{count, plural, one {# page changed} other {# pages changed}}",
+      "events": "What happened to their pages",
+      "firstCited": "First cited in your tracked answers",
+      "firstCitedAnswers": "{count, plural, one {# answer had cited it} other {# answers had cited it}} when Ansvisor found it",
+      "changed": "Changed",
+      "gained": "now has {checks}",
+      "lost": "no longer has {checks}",
+      "changedWords": "its words changed",
+      "noEvents": "Nothing yet: Ansvisor reads {competitor}'s pages cited in your answers each night, and the ones cited most again each week. Their first citations and changes show here.",
+      "note": "Pages are read for free from their public address, within a few reads a day, never from a site whose robots.txt keeps crawlers out; only what Site Audit's checks found and a summary of the words are kept, never the text.",
+      "showAll": "Show all {count}",
+      "loadError": "Couldn't load the timeline. Try again in a moment."
+    },
     "suggestCompetitors": "Suggest competitors",
     "suggestCompetitorsDescription": "Discover competitors for {brand} with AI research. Select the ones you want to track.",
     "suggestCompetitorsLoading": "Researching competitors… This can take a little while.",
@@ -8175,7 +8451,7 @@
         },
         "fix": {
           "title": "Fix it, then push",
-          "body": "The agent rewrites titles, feed fields and schema. You approve, we send it to Shopify."
+          "body": "Each fix goes to the Action Center. The agent rewrites the page and its schema; you approve it and send it to your CMS. Feed fields change in your feed."
         },
         "sell": {
           "title": "See what it sells",
@@ -8235,7 +8511,7 @@
       "channelsLabel": "AI shopping channels",
       "market": {
         "us": "Market: United States. In the US, ChatGPT picks products from OpenAI's own product index, built from feeds.",
-        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so your Merchant Center feed decides ChatGPT too."
+        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so what Google Shopping has of yours (a Merchant Center feed or your pages' product schema) decides ChatGPT too."
       },
       "channels": {
         "showing": "Showing your products",
@@ -8282,7 +8558,7 @@
           "unknown": "Shops without it can be left out of results. How OpenAI grants it isn't public yet; a direct feed is the best bet."
         },
         "firstWords": {
-          "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
+          "title": "First 40 words of descriptions{count, plural, =0 {} one { · # product} other { · # products}}",
           "pass": "Every description says what the product is in its first 40 words.",
           "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
           "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
@@ -8301,12 +8577,12 @@
           "fail": "Without it, ChatGPT Shopping sales can't be told apart from other AI visits. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links."
         },
         "wrongPrice": {
-          "title": "{count, plural, =0 {Prices in AI answers match yours} other {Wrong price in AI answers · # products}}",
+          "title": "{count, plural, =0 {Prices in AI answers match yours} one {Wrong price in AI answers · # product} other {Wrong price in AI answers · # products}}",
           "pass": "Every price AI showed for your products matches your catalog.",
           "fail": "AI shows {seen} for {product}, your price is {yours}."
         },
         "resellerCheaper": {
-          "title": "{count, plural, =0 {No reseller cheaper than you} other {Reseller cheaper than you · # products}}",
+          "title": "{count, plural, =0 {No reseller cheaper than you} one {Reseller cheaper than you · # product} other {Reseller cheaper than you · # products}}",
           "pass": "AI links to no reseller selling your products for less.",
           "fail": "AI links to a reseller selling your product for less. See Shelf › Where AI sends shoppers."
         },
@@ -8516,7 +8792,7 @@
       "catalog": "Product catalog",
       "catalogLine": "{count, plural, one {# product} other {# products}} · synced {when}",
       "catalogNotSynced": "{count, plural, one {# product} other {# products}} · not synced yet",
-      "catalogNone": "Not connected · your products, from a feed, a file or your store",
+      "catalogNone": "Not connected · add your product feed's URL (read every day) or upload a file",
       "catalogFailed": "Couldn't be read right now",
       "ga": "Google Analytics",
       "gsc": "Google Search Console",
@@ -8558,7 +8834,7 @@
     "tabReadiness": "Readiness",
     "tabProducts": "Products",
     "tabMyProducts": "My Products",
-    "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL or a file you upload) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
+    "connectCatalog": "These are your products as AI shopping cards showed them. Add your product catalog (a product feed URL, read every day, or a file you upload once) in <link>Settings › Integrations</link>, and the Content Editor checks your product pages' price, GTIN and stock against it.",
     "tabCompetitors": "Competitors",
     "colProductTitle": "Product Title",
     "colPlatforms": "Platforms",
@@ -9222,7 +9498,7 @@
       "description": "Where {brand}'s products come from: a product feed URL, read every day, or a file you upload. Google product feeds (XML), Meta catalog CSVs and store CSV exports work.",
       "noBrand": "Pick a brand to see its catalog.",
       "unavailable": "Couldn't read the catalog's sources right now.",
-      "empty": "No catalog yet. Add your product feed's URL, or upload a CSV.",
+      "empty": "No catalog yet. Add your product feed's URL: it's read every day, so prices and stock stay current. Or upload a file once.",
       "upload": "Uploaded file",
       "status": {
         "ok": "Synced",
@@ -9245,7 +9521,10 @@
       "urlPlaceholder": "https://example.com/products.xml",
       "addFeed": "Add feed",
       "uploadFile": "Upload a file",
-      "uploadHint": "CSV or XML, up to 4 MB. For a larger catalog, add its feed URL.",
+      "uploadHint": "One-off: prices and stock stay as uploaded until you upload again. CSV or XML, up to 4 MB; a larger catalog needs its feed URL.",
+      "recommended": "Recommended",
+      "feedRecommended": "Your product feed's URL: read every day, so prices and stock stay current.",
+      "uploadStale": "Last uploaded {when} · prices and stock don't refresh by themselves. Upload again, or add the feed's URL.",
       "managersOnly": "Admins and managers can add and sync sources.",
       "categories": {
         "title": "Category pages",
@@ -9291,7 +9570,7 @@
         "too_many": "A brand can have 10 sources at most.",
         "forbidden": "Only admins and managers can change the catalog.",
         "recent": "Synced a moment ago. Try again in a few minutes.",
-        "too_large": "The file is larger than 4 MB. Add its feed URL instead.",
+        "too_large": "The file is larger than 4 MB. Add its feed URL instead: a feed up to 50 MB is read every day.",
         "not_found": "This source no longer exists.",
         "session": "Your session expired. Sign in again.",
         "workspace": "This brand isn't in your workspace.",
@@ -9492,6 +9771,7 @@
       "unavailable": "Couldn't read the Framer connection right now.",
       "notConfigured": "Framer isn't set up on this server yet.",
       "connected": "Connected",
+      "setupNotFinished": "Setup not finished",
       "refused": "Key refused",
       "project": "Project: {project}",
       "published": "published at {url}",
@@ -9499,7 +9779,7 @@
       "notConnectedMember": "Not connected. Admins and managers can connect Framer.",
       "refusedMember": "Framer refused the API key. Pages can't go there until an admin or manager connects it again.",
       "pagesGoTo": "Pages go to {collection} as draft items.",
-      "noCollection": "No collection picked yet.",
+      "noCollection": "No collection picked yet. Pages can't go to Framer until an admin or manager finishes the setup.",
       "projectLabel": "Project address",
       "projectPlaceholder": "https://framer.com/projects/…",
       "keyLabel": "API key",
@@ -9509,6 +9789,7 @@
       "connect": "Connect",
       "connecting": "Checking the project…",
       "connectedToast": "Framer connected",
+      "connectedSetupToast": "Framer connected. Now pick a collection and save.",
       "refusedNote": "Framer refused the saved API key. Make a new one in the project and connect again to send pages.",
       "replace": "Replace key",
       "cancel": "Cancel",
@@ -9517,6 +9798,7 @@
       "disconnectDescription": "Pages stop going to Framer. Items already sent stay in Framer. Framer doesn't let us revoke the API key: delete it in the project's Site Settings › General.",
       "disconnected": "Framer disconnected",
       "disconnectedNotRevoked": "Framer disconnected. Delete its API key in Framer too, in the project's Site Settings › General.",
+      "setupStep": "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Framer until then.",
       "collectionLabel": "Collection",
       "collectionPlaceholder": "Pick a collection",
       "collectionBlocked": "{name} (needs fields we can't fill)",
@@ -9756,6 +10038,7 @@
       "stateHint": "Localizes AI answers to this state from the next tracking run onward.",
       "siteTypeHint": "Sets the page types the Content Editor offers: feature and comparison pages for B2B SaaS, product and category pages for e-commerce, destination and help pages for B2C.",
       "siteTypeGuessed": "Guessed from the industry and Shopping mode until you pick one.",
+      "siteTypeDetected": "Detected automatically from your website. Pick another if it's wrong.",
       "deleteWarning": "This action cannot be undone. All data for this brand (insights, content, competitors) will be permanently deleted.",
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",

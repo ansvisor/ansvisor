@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import type { UserRole } from '@/types';
 
 /**
  * Resolve the current dashboard session into the same shape the MCP data
@@ -20,7 +21,7 @@ export async function resolveAgentAuth(): Promise<McpAuthContext | null> {
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('organization_id')
+    .select('organization_id, role')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -30,6 +31,7 @@ export async function resolveAgentAuth(): Promise<McpAuthContext | null> {
     userId: user.id,
     email: user.email ?? '',
     organizationId: profile.organization_id,
+    role: (profile.role as UserRole | null | undefined) ?? null,
     // The MCP-auth shape expects an apiKeyId — the agent isn't behind an
     // API key, this is just a marker so downstream code that switches on
     // the field knows the call came from the in-product agent rather than
