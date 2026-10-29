@@ -215,6 +215,27 @@ describe('CatalogSourcesCard', () => {
     expect(text).toContain('Item 2: price is missing.');
   });
 
+  it('recommends the feed URL, read every day, and calls an upload one-off', async () => {
+    await render();
+    const text = container.textContent ?? '';
+    expect(text).toContain(
+      "RecommendedYour product feed's URL: read every day, so prices and stock stay current.",
+    );
+    expect(text).toContain('One-off: prices and stock stay as uploaded until you upload again.');
+  });
+
+  it("says when a file was uploaded, and that its prices and stock don't refresh", async () => {
+    listCatalogSources.mockResolvedValue([
+      { ...FEED, id: 's3', kind: 'upload', url: null, lastCounts: null },
+    ]);
+    await render();
+    const row = container.querySelector('li')!.textContent ?? '';
+    expect(row).toContain('Uploaded file');
+    expect(row).toContain('Last uploaded');
+    expect(row).toContain("prices and stock don't refresh by themselves");
+    expect(row).not.toContain('Synced ');
+  });
+
   it('adds a feed URL and reads it at once', async () => {
     await render();
     const input = container.querySelector<HTMLInputElement>('input[type="url"]')!;

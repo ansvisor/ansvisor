@@ -41,6 +41,7 @@ import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
 import { sendImproveActionForKeyUser } from './routes/prompts.js';
+import { liveAddress, publishDraftForKeyUser } from './lib/content-published.js';
 import { readOpportunityInbox, startAutoAudits, startSiteAuditForBrand } from './routes/audits.js';
 import { sweepAutoAudits } from './lib/audit/auto-audit-sweep.js';
 import { PlanLimitError, getAiUsage, getSiteAuditQuotaStatus } from './lib/plan-guard.js';
@@ -55,12 +56,15 @@ import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
+import { integrationsConfig } from './routes/integrations.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
 import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
+import { chatAgenticDeployed } from './lib/chat-flag.js';
+import { startModelPriceSync } from './lib/model-prices.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -564,6 +568,19 @@ app.get('/api/internal/ai-usage', async (req, res) => {
   }
 });
 
+// --- Internal integrations config (CRON_SECRET auth, called by web MCP layer) ---
+// Which integrations this deployment has credentials for, as GET
+// /api/integrations/config answers a member: the MCP tools have no member
+// session to ask with (Product Visibility's readiness checks Merchant Center
+// only where it is offered). Booleans only.
+app.get('/api/internal/integrations-config', (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  return res.json({ success: true, config: integrationsConfig() });
+});
+
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt
 // before reaching here and passes the key's user, so this endpoint trusts the
@@ -601,6 +618,57 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
     }
     req.log.error({ err }, 'internal improve send error');
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// --- Internal publish endpoint (CRON_SECRET auth, called by web MCP layer) ---
+// A page marked Published at its live address for an MCP API key
+// (`mark_content_draft_published`), as the editor's Mark published does
+// (POST /api/content-drafts/:draftId/publish). The web MCP layer passes the
+// key's organization and user; the draft must be that organization's.
+const internalPublishBody = z.object({
+  url: z.string().max(8192),
+  userId: z.guid(),
+  orgId: z.guid(),
+});
+
+app.post('/api/internal/content-drafts/:draftId/publish', async (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  const draftId = z.guid().safeParse(req.params.draftId);
+  const body = internalPublishBody.safeParse(req.body ?? {});
+  if (!draftId.success || !body.success) {
+    return res.status(400).json({ success: false, code: 'invalid', message: 'Invalid request' });
+  }
+  const url = liveAddress(body.data.url);
+  if (!url) {
+    return res.status(400).json({
+      success: false,
+      code: 'invalid_url',
+      message: 'Give the http(s) address the page is live at, with no sign-in details.',
+    });
+  }
+  try {
+    const result = await publishDraftForKeyUser({
+      draftId: draftId.data,
+      url,
+      userId: body.data.userId,
+      orgId: body.data.orgId,
+    });
+    if (!result) {
+      return res
+        .status(404)
+        .json({ success: false, code: 'not_found', message: 'Draft not found' });
+    }
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    req.log.error({ err: { name: err?.name } }, 'internal content draft publish error');
+    return res
+      .status(500)
+      .json({ success: false, message: 'The page could not be marked published' });
   }
 });
 
@@ -759,6 +827,13 @@ server.listen(PORT, async () => {
       logger.error({ err }, '[insights-rollups] scheduled rebuild crashed'),
     );
   });
+
+  // Chat's model prices, from OpenRouter's public catalog, daily (CHAT-16 §A):
+  // only with the new Chat on. Off, nothing is fetched and every cost is
+  // read from improve-cost.js's own table, as before.
+  if (chatAgenticDeployed()) {
+    startModelPriceSync().catch((err) => logger.error({ err }, '[model-prices] start failed'));
+  }
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';

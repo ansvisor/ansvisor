@@ -642,6 +642,7 @@ export default function ShoppingPage() {
                   {...readinessChecklist({
                     market: shoppingMarket.shown ?? 'us',
                     catalog: sources.catalog,
+                    merchantCenterOffered: sources.merchantCenterOffered,
                     products: catalogTable && catalogTable !== 'failed' ? catalogTable.rows : null,
                     openAi: showOpenAiIndex ? openAiIndex.read : null,
                     cheaperResellers: destinationsLoading ? null : destinations.priceAlerts.length,

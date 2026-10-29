@@ -67,7 +67,12 @@ const source = (over: Partial<CatalogSource>): CatalogSource => ({
   ...over,
 });
 
-function render(catalog: CatalogSource[] | null, canConnect = true, loaded = true) {
+function render(
+  catalog: CatalogSource[] | null,
+  canConnect = true,
+  loaded = true,
+  merchantCenterOffered = true,
+) {
   act(() => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -76,6 +81,7 @@ function render(catalog: CatalogSource[] | null, canConnect = true, loaded = tru
             loaded,
             catalog,
             google: { snippetLastVisitAt: null, ga: off, gsc: off },
+            merchantCenterOffered,
             reload: () => {},
           }}
           domain="shop.example"
@@ -107,7 +113,7 @@ describe('ProductDataStrip', () => {
 
   it('asks for the catalog when there is none, with Connect for those who may connect it', () => {
     expect(render([])).toContain(
-      'Not connected · your products, from a feed, a file or your store',
+      "Not connected · add your product feed's URL (read every day) or upload a file",
     );
     expect([...container.querySelectorAll('a')].some((a) => a.textContent === 'Connect')).toBe(
       true,
@@ -127,6 +133,13 @@ describe('ProductDataStrip', () => {
     expect(chip('merchant_center')).toBe('GGoogle Merchant CenterConnected');
     render([source({})], false);
     expect(chip('merchant_center')).toBe('GGoogle Merchant CenterNot connected');
+  });
+
+  it("calls Merchant Center Soon where this server doesn't offer it, unless the brand has it", () => {
+    render([source({})], true, true, false);
+    expect(chip('merchant_center')).toBe('GGoogle Merchant CenterSoon');
+    render([source({ kind: 'merchant_center' })], true, true, false);
+    expect(chip('merchant_center')).toBe('GGoogle Merchant CenterConnected');
   });
 
   it("says when the catalog couldn't be read, and waits while it loads", () => {

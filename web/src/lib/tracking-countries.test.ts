@@ -51,19 +51,14 @@ describe('answersFrom', () => {
     ).toBe(true);
   });
 
-  it("doesn't count Google's engines in a US state: the run asks them country-wide", () => {
+  it("counts Google's engines in a US state: the run asks them from the state", () => {
     const california = { country: 'US', state: 'CA' };
     expect(answersFrom({ platforms: ['google-aio', 'google-aimode'] }, california, countries)).toBe(
-      false,
-    );
-    expect(answersFrom({ platforms: ['google-aio', 'chatgpt-web'] }, california, countries)).toBe(
       true,
     );
-    expect(answersFrom({ platforms: [], models: ['gpt-5'] }, california, countries)).toBe(true);
-    // In the country itself they answer.
+    expect(answersFrom({ platforms: ['google-aimode'] }, california, null)).toBe(true);
+    // As in the country itself.
     expect(answersFrom({ platforms: ['google-aio'] }, country('US'), countries)).toBe(true);
-    // Without the lists, the state still isn't theirs.
-    expect(answersFrom({ platforms: ['google-aimode'] }, california, null)).toBe(false);
   });
 
   it('restricts nothing without the lists, or for an engine the provider does not list', () => {
