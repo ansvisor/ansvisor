@@ -3,8 +3,15 @@
  * model gets the same rules in its prompt; this is the server-side check.
  *
  * - Facts: a number, percentage, price, date or company name must appear in
- *   the page or in the brand data the model was given. Anything else becomes
- *   a [placeholder] the user fills in with real data.
+ *   the page or in the brand data the model was given. A recommendation
+ *   leaves the person no research to do (2026-10-30): the audit reads the
+ *   page, it doesn't search the web, so a figure or a date the page doesn't
+ *   have (a statistic, a count, a year) goes with its sentence. Only what the
+ *   brand alone knows stays as a [placeholder] for the person ("Your input
+ *   needed" in the report): its customers' names, its prices, and in code
+ *   the values its markup needs. A placeholder the model wrote for anything
+ *   else ("[source URL]", "[statistic]") goes with its sentence too, and a
+ *   recommendation keeps MAX_INPUT_PLACEHOLDERS at most.
  * - Length: the explanation and every sentence of the paste-able draft are at
  *   most 150 characters. Code (JSON-LD/HTML) is exempt from the length rule,
  *   not from the facts rule.
@@ -12,12 +19,28 @@
 
 export const MAX_COPY_CHARS = 150;
 
+/** The most placeholders a recommendation's explanation and draft leave the person. */
+export const MAX_INPUT_PLACEHOLDERS = 3;
+
 export const PLACEHOLDER = {
   name: '[customer name]',
-  metric: '[real metric]',
+  metric: '[your figure]',
   price: '[price]',
   date: '[date]',
 };
+
+/**
+ * What stands, in an explanation or a draft, where a figure or a date the
+ * page doesn't have was: a private-use character no text has, so its
+ * sentence is found and taken out (dropUnsettled).
+ */
+const GONE = '\uE000';
+
+/**
+ * A placeholder the brand fills: the guard's own forms, or one the model
+ * wrote for the brand's own fact ("[your plan]", "[your result]").
+ */
+const BRAND_OWN = /^\[(?:your\b[^\]]*|customer name|price|date)\]$/i;
 
 // A placeholder already in the text, e.g. "[customer name]". Letters and
 // spaces only, so a JSON array such as ["a", "b"] never reads as one.
@@ -222,14 +245,15 @@ function jsonPlaceholder(key, fallback) {
 
 /**
  * Replaces numbers, percentages, prices and dates that the page and brand
- * data don't contain.
+ * data don't contain. With `figure`, a number, percentage or date in words
+ * becomes it instead of a placeholder (guardFacts takes its sentence out).
  *
  * @param {string} text
  * @param {KnownFacts} known
- * @param {{ field: 'recommendation' | 'draft' | 'code' }} opts
+ * @param {{ field: 'recommendation' | 'draft' | 'code', figure?: string | null }} opts
  * @returns {{ text: string, hits: number }}
  */
-export function replaceUnknownValues(text, known, { field }) {
+export function replaceUnknownValues(text, known, { field, figure = null }) {
   let hits = 0;
   const result = outsideMasks(text, (chunk, done) =>
     chunk.replace(VALUE_RE, (match, ...args) => {
@@ -269,7 +293,10 @@ export function replaceUnknownValues(text, known, { field }) {
       }
 
       hits += 1;
-      if (field !== 'code') return placeholder;
+      // A figure or a date in words: `figure` (GONE, from guardFacts), so its sentence goes.
+      if (field !== 'code') {
+        return figure && placeholder !== PLACEHOLDER.price ? figure : placeholder;
+      }
       const chosen = jsonPlaceholder(jsonKey(before), placeholder);
       // A bare JSON number needs quotes to stay valid JSON.
       return /:\s*$/.test(before) ? `"${chosen}"` : chosen;
@@ -293,8 +320,15 @@ function namesAfterCue(rest) {
     if (!word) break;
     let start = pos + lead;
     let end = start + word[0].length;
-    // Further capitalised words belong to the same name ("Blue Bottle Coffee").
-    for (let m; (m = rest.slice(end).match(/^\s+([A-Z][\w&'’.-]*)/)); ) end += m[0].length;
+    // Further capitalised words belong to the same name ("Blue Bottle
+    // Coffee"), never past the end of its sentence: "TechFlow. Their team"
+    // is a name, then the next sentence, which may go on its own.
+    for (
+      let m;
+      !rest.slice(start, end).endsWith('.') && (m = rest.slice(end).match(/^\s+([A-Z][\w&'’.-]*)/));
+    ) {
+      end += m[0].length;
+    }
     const raw = rest.slice(start, end);
     const name = raw.replace(/[.,;:]+$/, '');
     names.push({ start, end: start + name.length, name });
@@ -349,7 +383,52 @@ export function replaceUnknownNames(text, known) {
 }
 
 /**
- * The facts rule for one recommendation.
+ * Where a sentence ends inside a line, for taking one out: before a capital,
+ * a digit, a quote, a bracket or what stands for a figure that went.
+ */
+const DROP_BREAK_RE = new RegExp(`(?<=[.!?…])\\s+(?=["“'([A-Z0-9${GONE}])`);
+
+/** The placeholders a text holds, as written. */
+const placeholdersOf = (text) => text.match(new RegExp(PLACEHOLDER_SOURCE, 'g')) ?? [];
+
+/**
+ * A text with the sentences it can't keep taken out, line by line: one with
+ * a figure that went (GONE), one with a placeholder that isn't the brand's
+ * own, and one past what is `left` of a recommendation's placeholders.
+ * Returns the text ('' with nothing left) and how many sentences went.
+ */
+function dropUnsettled(text, budget) {
+  let dropped = 0;
+  const lines = text.split('\n').map((line) => {
+    if (!line.trim()) return line;
+    const kept = line.split(DROP_BREAK_RE).filter((sentence) => {
+      const own = placeholdersOf(sentence);
+      const keep =
+        !sentence.includes(GONE) &&
+        own.every((p) => BRAND_OWN.test(p)) &&
+        own.length <= budget.left;
+      if (keep) budget.left -= own.length;
+      else dropped += 1;
+      return keep;
+    });
+    return kept.length ? kept.join(' ') : null;
+  });
+  // A line that went leaves no run of empty lines (between Q&A pairs) behind.
+  const out = lines
+    .filter((line) => line !== null)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { text: out, dropped };
+}
+
+/**
+ * The facts rule for one recommendation: a figure or a date it adds goes
+ * with its sentence, a name or a price it adds becomes the brand's
+ * placeholder, at most MAX_INPUT_PLACEHOLDERS in its explanation and draft
+ * (dropUnsettled). Its code keeps a placeholder for each value its markup
+ * needs. An explanation left with no sentence is '': the item goes
+ * (generateRecommendations).
  *
  * @template {{ recommendation: string, draft: string|null, code?: string|null }} R
  * @param {R} rec
@@ -358,15 +437,17 @@ export function replaceUnknownNames(text, known) {
  */
 export function guardFacts(rec, known) {
   let hits = 0;
+  const budget = { left: MAX_INPUT_PLACEHOLDERS };
   const prose = (text, field) => {
     if (!text) return text ?? null;
-    const values = replaceUnknownValues(text, known, { field });
+    const values = replaceUnknownValues(text, known, { field, figure: GONE });
     const names = replaceUnknownNames(values.text, known);
-    hits += values.hits + names.hits;
-    return names.text;
+    const settled = dropUnsettled(names.text, budget);
+    hits += values.hits + names.hits + settled.dropped;
+    return settled.text;
   };
-  const recommendation = prose(rec.recommendation, 'recommendation');
-  const draft = prose(rec.draft, 'draft');
+  const recommendation = prose(rec.recommendation, 'recommendation') ?? '';
+  const draft = prose(rec.draft, 'draft') || null;
   let code = rec.code ?? null;
   if (code) {
     const values = replaceUnknownValues(code, known, { field: 'code' });
