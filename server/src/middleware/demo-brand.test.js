@@ -333,6 +333,11 @@ describe("the MCP's internal endpoints", () => {
         "isDemoBrandRow('prompts', req.params.promptId)",
         'sendImproveActionForKeyUser(',
       ],
+      [
+        '/api/internal/content-drafts/:draftId/publish',
+        "isDemoBrandRow('content_drafts', draftId.data)",
+        'publishDraftForKeyUser(',
+      ],
     ]) {
       const body = handler(route);
       expect(body.indexOf(check), route).toBeGreaterThan(0);

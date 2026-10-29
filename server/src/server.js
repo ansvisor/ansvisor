@@ -653,7 +653,8 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
 // A page marked Published at its live address for an MCP API key
 // (`mark_content_draft_published`), as the editor's Mark published does
 // (POST /api/content-drafts/:draftId/publish). The web MCP layer passes the
-// key's organization and user; the draft must be that organization's.
+// key's organization and user; the draft must be that organization's. Never
+// on a demo brand's draft (00380).
 const internalPublishBody = z.object({
   url: z.string().max(8192),
   userId: z.guid(),
@@ -680,6 +681,9 @@ app.post('/api/internal/content-drafts/:draftId/publish', async (req, res) => {
     });
   }
   try {
+    if (await isDemoBrandRow('content_drafts', draftId.data)) {
+      return res.status(402).json(DEMO_BRAND);
+    }
     const result = await publishDraftForKeyUser({
       draftId: draftId.data,
       url,
