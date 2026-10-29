@@ -495,6 +495,19 @@ describe('cloro-scraper – buildRequestBody city targeting (PROMPT-015d)', () =
     expect(buildRequestBody('p', 'google-aio', 'TR')).not.toHaveProperty('location');
   });
 
+  it("sends a US state's Google name the same way, and never as `state` too", () => {
+    const location = 'California,United States';
+    for (const id of ['google-aimode', 'google-aio']) {
+      const body = buildRequestBody('p', id, 'US', 'CA', location);
+      expect(body).toMatchObject({ country: 'US', location });
+      expect(body).not.toHaveProperty('state');
+    }
+    // The AI endpoints take the state as `state`, and no `location`.
+    const chat = buildRequestBody('p', 'chatgpt-web', 'US', 'CA', location);
+    expect(chat).toMatchObject({ country: 'US', state: 'CA' });
+    expect(chat).not.toHaveProperty('location');
+  });
+
   it('never sends it to the other engines', () => {
     expect(
       buildRequestBody('p', 'chatgpt-web', 'TR', undefined, 'Istanbul,Istanbul,Turkiye'),

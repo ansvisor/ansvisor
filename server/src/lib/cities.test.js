@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CITIES, cityFor } from './cities.js';
-import { CITY_SCRAPERS, COUNTRY_ONLY_SCRAPERS } from './locations.js';
+import { CITY_SCRAPERS, locationsForScraper } from './locations.js';
 
 /**
  * The cities and the engines that ask from them (PROMPT-015d) are listed on
@@ -38,11 +38,10 @@ describe('cities on both sides (PROMPT-015d)', () => {
     expect([...CITY_SCRAPERS].sort()).toEqual(quoted(web[1]).sort());
   });
 
-  it('runs country-wide the engines the location picker says have no states', () => {
-    const web = read('web/src/components/dashboard/location-picker.tsx').match(
-      /COUNTRY_ONLY_PLATFORMS\s*=\s*new Set\(\[([^\]]*)\]\)/,
+  it('runs a US state on every engine, as the location picker no longer says otherwise', () => {
+    for (const id of CITY_SCRAPERS) expect(locationsForScraper(['US-CA'], id)).toEqual(['US-CA']);
+    expect(read('web/src/components/dashboard/location-picker.tsx')).not.toMatch(
+      /COUNTRY_ONLY_PLATFORMS/,
     );
-    expect(web).not.toBeNull();
-    expect([...COUNTRY_ONLY_SCRAPERS].sort()).toEqual(quoted(web[1]).sort());
   });
 });
