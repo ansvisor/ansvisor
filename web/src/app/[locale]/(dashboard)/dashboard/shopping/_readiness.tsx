@@ -10,11 +10,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
-import { priceText } from '@/lib/shopping/price';
 import type { ShoppingMarket } from '@/lib/shopping/markets';
 import {
   READINESS_CHANNELS,
   channelState,
+  copyValues,
   type CheckState,
   type ReadinessItem,
 } from '@/lib/shopping/readiness';
@@ -32,17 +32,6 @@ const CHANNEL_TONE = {
   notShowing: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
   notTracked: 'bg-muted text-muted-foreground',
 } as const;
-
-/** The values a check's copy reads, prices written as prices. */
-function copyValues(item: ReadinessItem): Record<string, string | number> {
-  const values = { ...(item.values ?? {}) };
-  if (item.key === 'wrongPrice' && typeof values.seen === 'number') {
-    const currency = String(values.currency ?? 'USD');
-    values.seen = priceText(Number(values.seen), currency);
-    values.yours = priceText(Number(values.yours), currency);
-  }
-  return values;
-}
 
 /** What the checklist reads that may fail: the catalog sources, and the catalog's products. */
 export type ReadinessRead = 'sources' | 'products';

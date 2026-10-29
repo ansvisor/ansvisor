@@ -28,6 +28,8 @@ import {
   getPromptVolumesFor,
   listShoppingCards,
   getProductVisibility,
+  NOT_IN_PLAN,
+  SHOPPING_NOT_IN_PLAN,
   getPromptPerformanceFor,
   runSiteAuditFor,
   getSiteAuditFor,
@@ -78,6 +80,16 @@ import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
 import { getAiUsageFor, getMeFor } from './account';
 import { getActionScorecardFor } from './learning';
+import { getContentPlanFor } from './content-plan';
+import { markContentDraftPublishedFor } from './content-delivery';
+import { PLAN_CARDS, PLAN_PERIODS } from '@/lib/content/plan';
+import { getCatalogSourcesFor, listCatalogProductsFor } from './catalog';
+import {
+  getProductAiSaysFor,
+  getShoppingReadinessFor,
+  getShoppingShelfFor,
+} from './product-visibility';
+import { getPromptLocationsFor } from './prompt-locations';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -334,7 +346,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Accept a topic suggestion',
       description:
-        'Accept a pending topic suggestion: creates exactly one new topic from it and marks the suggestion as added. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query. Accepting the same suggestion twice fails cleanly — it is not accepted or already decided — no duplicate topic is created.',
+        'Accept a pending topic suggestion: creates exactly one new topic from it and marks the suggestion as added. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query. Accepting the same suggestion twice fails cleanly — it is not accepted or already decided — no duplicate topic is created. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         suggestion_id: relaxedUuid.describe('Topic suggestion UUID, from list_topic_suggestions.'),
       },
@@ -366,7 +378,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Dismiss a topic suggestion',
       description:
-        'Dismiss a pending topic suggestion so it never reappears in future suggestion batches. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query.',
+        'Dismiss a pending topic suggestion so it never reappears in future suggestion batches. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         suggestion_id: relaxedUuid.describe('Topic suggestion UUID, from list_topic_suggestions.'),
       },
@@ -423,7 +435,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Accept a prompt suggestion',
       description:
-        "Accept one pending prompt suggestion by creating a tracked prompt with the brand's default platform/model settings and marking the suggestion added. This consumes one active prompt location and respects the organization's plan limit and allowed engines. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Accepting the same suggestion twice does not create a duplicate prompt.",
+        "Accept one pending prompt suggestion by creating a tracked prompt with the brand's default platform/model settings and marking the suggestion added. This consumes one active prompt location and respects the organization's plan limit and allowed engines. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Accepting the same suggestion twice does not create a duplicate prompt. Needs an admin or a manager (get_me returns the role).",
       inputSchema: {
         suggestion_id: relaxedUuid.describe(
           'Prompt suggestion UUID, from list_prompt_suggestions.',
@@ -463,7 +475,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Dismiss a prompt suggestion',
       description:
-        'Dismiss a pending prompt suggestion so it no longer appears in future suggestion lists. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query.',
+        'Dismiss a pending prompt suggestion so it no longer appears in future suggestion lists. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Needs an admin, a manager or an analyst, not an agency partner (get_me returns the role).',
       inputSchema: {
         suggestion_id: relaxedUuid.describe(
           'Prompt suggestion UUID, from list_prompt_suggestions.',
@@ -830,7 +842,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: "Set an opportunity's status",
       description:
-        'Move a content opportunity between workflow states. Valid statuses are: "new" (just generated), "sent" (delivered to a CMS / writer via webhook), "in_progress" (someone is actively writing), "done" (published), "dismissed" (intentionally skipped). Use this to close the loop on the content backlog from inside an MCP conversation — e.g. "mark that opportunity as in_progress" once the user starts writing, or "dismiss this one, we already cover it." This is a write — only fire on explicit user intent for a specific opportunity, never as part of an exploratory query.',
+        'Move a content opportunity between workflow states. Valid statuses are: "new" (just generated), "sent" (delivered to a CMS / writer via webhook), "in_progress" (someone is actively writing), "done" (published), "dismissed" (intentionally skipped). Use this to close the loop on the content backlog from inside an MCP conversation — e.g. "mark that opportunity as in_progress" once the user starts writing, or "dismiss this one, we already cover it." This is a write — only fire on explicit user intent for a specific opportunity, never as part of an exploratory query. Any member may record progress; dismissing one, or moving a dismissed one back, needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         opportunity_id: relaxedUuid.describe(
           'Content opportunity UUID, from list_content_opportunities.',
@@ -1105,7 +1117,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Shopping cards',
       description:
-        'List normalized shopping cards for a brand, showing which products are surfaced by AI engines in commercial-intent contexts. Supports filtering by matched brand role ("own" | "competitor" | "other"), platform, and region. Pagination is cursor-based (default limit 50, max 200). Use this to see which product brands, URLs, and prices are visible in search results.',
+        'List normalized shopping cards for a brand, showing which products are surfaced by AI engines in commercial-intent contexts. Supports filtering by matched brand role ("own" | "competitor" | "other"), platform, and region. Pagination is cursor-based (default limit 50, max 200). Use this to see which product brands, URLs, and prices are visible in search results. Needs a plan with shopping analytics (Growth and above): on Starter it answers plan_limit.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         role: z
@@ -1144,6 +1156,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         limit: args.limit,
         cursor: args.cursor,
       });
+      if (result === NOT_IN_PLAN) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(SHOPPING_NOT_IN_PLAN, null, 2) }],
+          isError: true,
+        };
+      }
       if (result === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1161,7 +1179,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Product visibility',
       description:
-        "Get aggregate visibility metrics for a specific product title across platforms, regions, and dates. Returns total appearances, platform breakdown, region breakdown, chronological trend of dates, average rating, total reviews, and associated merchant domains. Use this to audit a single product's performance and organic footprint in AI-driven shopping results.",
+        "Get aggregate visibility metrics for a specific product title across platforms, regions, and dates. Returns total appearances, platform breakdown, region breakdown, chronological trend of dates, average rating, total reviews, and associated merchant domains. Use this to audit a single product's performance and organic footprint in AI-driven shopping results. Needs a plan with shopping analytics (Growth and above): on Starter it answers plan_limit.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         product_title: z.string().describe('The product title/name to query.'),
@@ -1173,6 +1191,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         brandId: args.brand_id,
         productTitle: args.product_title,
       });
+      if (result === NOT_IN_PLAN) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(SHOPPING_NOT_IN_PLAN, null, 2) }],
+          isError: true,
+        };
+      }
       if (result === null) {
         return {
           content: [{ type: 'text', text: 'Product or Brand not found' }],
@@ -1727,7 +1751,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Content drafts',
       description:
-        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path.",
+        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress or framer, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
       inputSchema: listDraftsShape,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -1742,7 +1766,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Content draft',
       description:
-        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
+        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations). With them, `last_send` and `shopping_links` as list_content_drafts gives them, and `shopping_path`: on a page of an online shop, the category pages and catalog products it should link (with price and stock) and those left out and why, as its Brief tab shows them; null for none.',
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
       },
@@ -2007,6 +2031,276 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         since: args.date_from,
       });
       return scorecard ? json(scorecard) : notFound('Brand');
+    },
+  );
+
+  // ─── The Content plan and pages ready for a CMS (B5) ───
+
+  server.registerTool(
+    'get_content_plan',
+    {
+      title: 'Content plan',
+      description:
+        "The brand's Content plan, as the Content › Plan page ranks it: what to write or fix next, by the Priority Score (0–100: severity 40, opportunity 30, page value 20, citations 10; `score_parts` says what each row's is made of). Each row: `action` (create a new page, optimize a page losing citations or with an opportunity on it, protect a top page), title, the page (null for a new one), page_type, `why` (competitors cited instead, an opportunity's prompts, a citation drop and its platforms, or a top page's citations and AI visits), opportunity_id, the draft already being written for it (with its assignee and editor path) and whether a person marked it a priority (those come first). `counts` per card and `hidden` (rows a person hid). Over `days` 7, 30 or 90 (default 30); `card` narrows to create, optimize, protect or priority. At most 50 rows.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        days: z
+          .union([
+            z.literal(PLAN_PERIODS[0]),
+            z.literal(PLAN_PERIODS[1]),
+            z.literal(PLAN_PERIODS[2]),
+          ])
+          .optional()
+          .describe('The period the plan reads: 7, 30 (default) or 90 days.'),
+        card: z
+          .enum(PLAN_CARDS)
+          .optional()
+          .describe('Only this card: create, optimize, protect or priority.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const plan = await getContentPlanFor(auth, {
+        brandId: args.brand_id,
+        days: args.days ?? 30,
+        card: args.card,
+      });
+      return plan ? json(plan) : notFound('Brand');
+    },
+  );
+
+  server.registerTool(
+    'mark_content_draft_published',
+    {
+      title: 'Mark a draft published',
+      description:
+        "Mark a Content Editor draft Published at the address it went live at, as the editor's Mark published does: for a page you (the user's AI tool) put on their CMS with its own connector — Ansvisor never sends it. Ansvisor then measures that address (get_content_impact, the Live page tab: citations, AI visits, Google clicks) and a linked Action Center action's Publish task completes once every page it names is live. The address must be http(s), with no sign-in details; one off the brand's domains is kept but can't be measured (on_brand_domain false). Marking it again at a new address moves it. It is a write — only once the page is really live, on the user's say.",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
+        url: z.string().max(2048).describe('The http(s) address the page is live at.'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args) => {
+      const result = await markContentDraftPublishedFor(auth, args.draft_id, args.url);
+      return 'error' in result
+        ? { content: [{ type: 'text' as const, text: result.message }], isError: true }
+        : json(result);
+    },
+  );
+
+  // ─── The product catalog (B6a) ───
+
+  server.registerTool(
+    'get_catalog_sources',
+    {
+      title: 'Catalog sources',
+      description:
+        "Where the brand's product catalog is read from, as Settings › Integrations › Catalog shows it: each source's kind (a feed URL, an upload, or a Google Merchant Center account where the server offers it), its address or account, and its last sync — when, its status (ok, failed, format_error, or auth_failed when the store refused the saved sign-in), the error, and what it read (items, skipped and why, products added/changed/removed, Merchant Center issues, products past the plan's cap) — and how many of its products are in the catalog now. Empty for a brand with no catalog.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const sources = await getCatalogSourcesFor(auth, args.brand_id);
+      return sources ? json(sources) : notFound('Brand');
+    },
+  );
+
+  server.registerTool(
+    'list_catalog_products',
+    {
+      title: 'Catalog products',
+      description:
+        "The brand's live catalog products, by title, as Product Visibility reads them: title, page, brand, product type, category, photo, lowest price in stock, in stock, GTIN; `readiness` for AI shopping (`score` 0–100; `missing`, the checks it fails: gtin, image, inStock, price, description, typeFirst — what the product is in its description's first 40 words — category, brand; `unknown`, those that can't be made, such as typeFirst without a product type, left out of the score); its Google Merchant Center issues by severity (disapproved, demoted, not_impacted), each issue once however many of its variants and destinations it is on (null without a Merchant Center account whose last sync went through); and over the last 30 days the AI visits its page got, the orders they led to and their revenue (`revenue_30d` in `revenue_currency`, null without orders). `search` narrows to titles containing it, as written. Paged: `limit` (default 50, max 200) and `offset`; `next_offset` is null on the last page, `total` counts the matches. The readiness, the Merchant Center issues and the AI visits, orders and revenue need a plan with shopping analytics (Growth and above): on Starter they are null and the products are listed without them.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        search: z.string().max(200).optional().describe('Only products whose title contains it.'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Products a page (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Where the page starts (default 0).'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const page = await listCatalogProductsFor(auth, {
+        brandId: args.brand_id,
+        search: args.search,
+        limit: args.limit,
+        offset: args.offset,
+      });
+      return page ? json(page) : notFound('Brand');
+    },
+  );
+
+  // ─── Product Visibility: Shelf, Readiness, What AI says (B6b) ───
+
+  const periodInput = z
+    .enum(['7d', '30d', '90d', 'all'])
+    .optional()
+    .describe("The window, as the page's date filter: 7d, 30d (default), 90d or all.");
+  const marketInput = z
+    .enum(['us', 'europe'])
+    .optional()
+    .describe(
+      "ChatGPT Shopping's market: us or europe. Defaults to the brand's own (its domains' and prompts' countries), as the page opens on.",
+    );
+  /** A brand outside the key's organization, or a plan without Product Visibility. */
+  const pvAnswer = <T>(read: T | typeof NOT_IN_PLAN | null, missing = 'Brand') =>
+    read === null
+      ? notFound(missing)
+      : read === NOT_IN_PLAN
+        ? {
+            content: [
+              { type: 'text' as const, text: JSON.stringify(SHOPPING_NOT_IN_PLAN, null, 2) },
+            ],
+            isError: true,
+          }
+        : json(read);
+
+  server.registerTool(
+    'get_shopping_shelf',
+    {
+      title: 'Product Visibility shelf',
+      description:
+        "Product Visibility's Shelf: for each shopping question the brand tracks, on each AI channel, the first 10 products the latest answer put on its \"shelf\", in order (rank, title, price, rating, reviews, merchant; `own` for the brand's own, `via` the marketplace it was linked through, `product_id` its catalog product when matched) and `products_total`, every product on it; the brand's best place on it (`own_rank`, which can be past the first 10; null when it isn't on it) and its last 7 days there (`week_own_shelves` of `week_shelves`). The shelves it isn't on come first, then where it ranks lowest. A shelf it isn't on has `why_not_you`: its catalog product the question asks for most, with its readiness for AI shopping (score 0–100 and the checks it misses: gtin, image, inStock, price, description, typeFirst, category, brand); null when none fits. `stats` counts the product slots in the period's answers, those holding the brand's products, its distinct products there, and its slots by channel; `catalog_products` the live catalog (null without one). `absent_only` keeps the shelves it isn't on. Paged: `limit` (default 10, max 50) and `offset`; `total` counts the matching shelves. Needs a plan with Product Visibility (Growth and above): on Starter it answers plan_limit.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        period: periodInput,
+        platform: z
+          .string()
+          .max(64)
+          .optional()
+          .describe('One AI channel, e.g. "chatgpt-shopping", "google-aimode", "google-aio".'),
+        market: marketInput,
+        absent_only: z
+          .boolean()
+          .optional()
+          .describe("Only the shelves the brand's products aren't on."),
+        limit: z.number().int().min(1).max(50).optional().describe('Shelves a page (default 10).'),
+        offset: z.number().int().min(0).optional().describe('Where the page starts (default 0).'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) =>
+      pvAnswer(
+        await getShoppingShelfFor(auth, {
+          brandId: args.brand_id,
+          period: args.period,
+          platform: args.platform,
+          market: args.market,
+          absentOnly: args.absent_only,
+          limit: args.limit,
+          offset: args.offset,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'get_shopping_readiness',
+    {
+      title: 'Product Visibility readiness',
+      description:
+        "Product Visibility's Readiness: how ready the brand is for AI shopping, as the Readiness tab checks it, scored 0–100 over the checks that can be made (`score`; null when its catalog's sources or products couldn't be read, listed in `unread`). Each check has its `key` (catalog, merchantCenter, openAiIndex and verifiedSeller in the US, firstWords, feedFields, feedLinks, wrongPrice, resellerCheaper, amazonShare), its `state` (pass, warn, fail, or unknown when it can't be made), its `title` and `detail` as the page writes them, and `fix`: where it starts (products = the Products tab, settings = Settings › Integrations › Catalog). `channels` says for each AI channel (chatgpt-shopping, google-aio, google-aimode, gemini-web, copilot-web) whether the brand's products are on its shelves (showing), its shelves are read without them (notShowing), or it isn't tracked (notTracked). Needs a plan with Product Visibility (Growth and above): on Starter it answers plan_limit.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        period: periodInput,
+        market: marketInput,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) =>
+      pvAnswer(
+        await getShoppingReadinessFor(auth, {
+          brandId: args.brand_id,
+          period: args.period,
+          market: args.market,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    'get_product_ai_says',
+    {
+      title: 'What AI says about a product',
+      description:
+        "What AI says about one of the brand's catalog products, as its Product Visibility page shows it: how many AI answers showed it in the period, up to 5 quotes where they name it (their own words, the latest first, with the channel, when, and the question asked) and up to 5 pages they cited most (url, domain, title, and how many of those answers cited each). Answers are quoted, not summed up. The product_id comes from list_catalog_products or a shelf's product_id. Needs a plan with Product Visibility (Growth and above): on Starter it answers plan_limit.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        product_id: relaxedUuid.describe('Catalog product UUID, from list_catalog_products.'),
+        period: periodInput,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) =>
+      pvAnswer(
+        await getProductAiSaysFor(auth, {
+          brandId: args.brand_id,
+          productId: args.product_id,
+          period: args.period,
+        }),
+        'Brand or product',
+      ),
+  );
+
+  // ─── Prompts across locations (B7): the Tracked Prompts Locations view ───
+
+  server.registerTool(
+    'get_prompt_locations',
+    {
+      title: 'Prompts across locations',
+      description:
+        "Each tracked prompt in each location side by side, as Tracked Prompts' Locations view shows it: per prompt and location (a country, a US state such as US-CA, or a city such as TR~ISTANBUL) its AI Visibility Score (0–100), mentions, citations, average position and runs over the window; `tracked_in` (the compared locations it tracks; one it doesn't track has no cells there) and `visibility_gap` (best minus worst location). Also each metric's average per location and the view's cards (`insights`: the weakest location with how many prompts don't track it, the strongest, the prompt whose visibility differs most, and visibility across all of them). Compares the `locations` given (at most 12, any case), else those the prompts track, the most tracked first; `ignored_locations` lists the codes given that name no location. Over `days` (7, 30 default, 90) or `date_from`/`date_to`. Paged by prompt: `limit` (default 50, max 100) and `offset`.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        locations: z
+          .array(z.string().max(60))
+          .max(12)
+          .optional()
+          .describe(
+            'Location codes to compare (DE, US-CA, TR~ISTANBUL…); the most tracked when absent.',
+          ),
+        days: z
+          .union([z.literal(7), z.literal(30), z.literal(90)])
+          .optional()
+          .describe('The window: the last 7, 30 (default) or 90 days.'),
+        date_from: z
+          .string()
+          .refine((value) => Number.isFinite(Date.parse(value)), 'Not a date')
+          .optional()
+          .describe('ISO timestamp (inclusive) lower bound; wins over days.'),
+        date_to: z
+          .string()
+          .refine((value) => Number.isFinite(Date.parse(value)), 'Not a date')
+          .optional()
+          .describe('ISO timestamp (inclusive) upper bound.'),
+        limit: z.number().int().min(1).max(100).optional().describe('Prompts a page (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Where the page starts (default 0).'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const view = await getPromptLocationsFor(auth, {
+        brandId: args.brand_id,
+        locations: args.locations,
+        days: args.days,
+        from: args.date_from,
+        to: args.date_to,
+        limit: args.limit,
+        offset: args.offset,
+      });
+      return view ? json(view) : notFound('Brand');
     },
   );
 

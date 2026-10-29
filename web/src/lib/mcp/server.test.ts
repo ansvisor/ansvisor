@@ -21,6 +21,7 @@ async function connect() {
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    role: 'admin',
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
