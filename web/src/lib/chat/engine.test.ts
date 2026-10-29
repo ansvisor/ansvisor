@@ -373,8 +373,8 @@ describe('a turn', () => {
       status: 'done',
       rowCount: 3,
       dataAsOf: DATA_AS_OF,
-      detail: 'All time · ChatGPT · 3 rows',
-      scope: { dateRange: 'All time', platforms: ['ChatGPT'] },
+      detail: 'Last 30 days · ChatGPT · 3 rows',
+      scope: { dateRange: 'Last 30 days', platforms: ['ChatGPT'] },
     });
     expect(
       ofType(events, 'text.delta')
@@ -436,6 +436,70 @@ describe('a turn', () => {
         .join(''),
     ).toBe('The brand … is fine.');
     expectClean(events);
+  });
+});
+
+describe("a read's scope (W1-17)", () => {
+  const readInput = () => fakes.readRun.mock.calls.at(-1)?.[1] as Record<string, unknown>;
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+  it('reads the last 30 days when no dates are given, and says so on the step', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    expect(readInput()).toMatchObject({ date_from: day(-30), date_to: day(0) });
+    const step = stepsOf(runId)[0];
+    expect(step.scope_json).toMatchObject({
+      dateRange: 'Last 30 days',
+      used: { dates: 'default', dateFrom: day(-30), dateTo: day(0) },
+    });
+  });
+
+  it('reads all time only when the person asks for it', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    const runId = await turn(ADMIN, 'How have we done since we started?');
+    expect(readInput().date_from).toBeUndefined();
+    expect(readInput().date_to).toBeUndefined();
+    expect(stepsOf(runId)[0].detail).toBe('All time · 3 rows');
+  });
+
+  it("doesn't read a platform the plan doesn't track, and tells the model why", async () => {
+    db.tables.organizations[0].plan = 'starter';
+    const { sonnet } = useModels(
+      [
+        calls(toolCall('r1', 'read_visibility', { brand_id: BRAND, platform: 'perplexity-web' })),
+        READY,
+      ],
+      [text('Your plan tracks ChatGPT and Copilot.')],
+    );
+    const runId = await turn(ADMIN, 'How do we do on Perplexity?');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    expect(stepsOf(runId)).toHaveLength(0);
+    const sent = JSON.stringify(sonnet.seen[0].prompt);
+    expect(sent).toContain('not_on_plan');
+    expect(sent).toContain('Starter');
+  });
+
+  it('cuts a long list to its row limit and says it was cut', async () => {
+    fakes.readRun.mockResolvedValue({
+      rows: Array.from({ length: 60 }, (_, i) => ({ prompt: `prompt ${i}` })),
+    });
+    const { sonnet } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    const runId = await turn(ADMIN, 'Which prompts?');
+    expect(stepsOf(runId)[0].row_count).toBe(50);
+    const sent = JSON.stringify(sonnet.seen[0].prompt);
+    expect(sent).toContain('\\"rows_more\\":10');
+    expect(sent).toContain('\\"truncated\\":true');
+    expect(sent).not.toContain('prompt 55');
   });
 });
 
