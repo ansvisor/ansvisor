@@ -4,14 +4,14 @@ route: /dashboard/insights
 keywords: [first results, after onboarding, first run, visibility zero, brand name prompts]
 synonyms: [no data yet, empty dashboard, why is my score zero, what happens next]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you finish setting up a brand, the first round of questions to the AI engines starts on its own. How long it takes depends on how many prompts you track, and the dashboard updates as the AI platforms report back.
+When you finish setting up a brand, the first round of questions to the AI engines starts on its own. How long it takes depends on how many prompts you track, and the dashboard updates as the AI platforms report back. When it finishes, everyone in your workspace gets one e-mail, **Your first results are ready**, so you can leave the app meanwhile. It's sent once per person, not for every brand you add.
 
 ## Where results appear first
 
