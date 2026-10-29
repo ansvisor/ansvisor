@@ -248,7 +248,8 @@
       "removeAuthors": "Removing authors needs a plan",
       "setDefaultAuthor": "Setting a default author needs a plan",
       "setByline": "Changing the byline setting needs a plan",
-      "changeContentSettings": "Changing content settings needs a plan"
+      "changeContentSettings": "Changing content settings needs a plan",
+      "changeChatSettings": "Changing Chat's settings needs a plan"
     }
   },
   "common": {
@@ -3276,6 +3277,110 @@
         "approved": "Approved",
         "rejected": "Dismissed",
         "withdrawn": "Withdrawn"
+      }
+    },
+    "settings": {
+      "title": "Chat",
+      "lead": "The rules Chat follows in this workspace: which tools it may use, when it asks first, and what Managers may take live.",
+      "readOnly": "Read-only · only Admins change the Chat tool policy",
+      "readOnlyNote": "You see the rules Chat follows for you",
+      "loadError": "Couldn't load Chat's settings. Try again in a moment.",
+      "retry": "Retry",
+      "saved": "Saved",
+      "failures": {
+        "chat_off": "Chat isn't on for this workspace.",
+        "forbidden": "Only Admins change Chat's settings.",
+        "invalid": "That choice isn't available for this tool.",
+        "locked": "That needs the Growth plan.",
+        "read_only": "This workspace is read-only until a plan is active.",
+        "failed": "Couldn't save it. Try again."
+      },
+      "switches": {
+        "title": "Run modes",
+        "fullAuto": "Full auto available to Managers and other members",
+        "fullAutoNote": "Admins can always pick it. Allowed WRITEs run without a card, logged.",
+        "dontAskAgain": "Allow “Don't ask again”",
+        "dontAskAgainNote": "Per person, only inside this policy. Off, everyone's ticks stop at once.",
+        "mcp": "Full auto over MCP",
+        "mcpNote": "MCP writes always ask, in Claude, ChatGPT and Cursor",
+        "mcpValue": "Off in v1",
+        "untrusted": "Untrusted content in a run",
+        "untrustedNote": "Web pages, uploads, AI answer text, mention snippets",
+        "untrustedValue": "Every WRITE shows a card",
+        "on": "On",
+        "off": "Off",
+        "locked": "Needs Growth · you're on {current}"
+      },
+      "precedence": {
+        "title": "Who decides",
+        "note": "Most restrictive wins. A step can't relax the one above it.",
+        "steps": {
+          "hard": {
+            "name": "Hard rules",
+            "detail": "NEVER tools don't exist · EXECUTE needs a click"
+          },
+          "plan": {
+            "name": "Plan gates",
+            "detail": "Full auto and “Don't ask again”: Growth and up"
+          },
+          "role": { "name": "Role", "detail": "Admin · Manager · Analyst · Agency partner" },
+          "policy": {
+            "name": "Tool policy",
+            "detail": "Never · Ask · Ask (auto in Full auto) · Always, per tool"
+          },
+          "mode": {
+            "name": "Run mode",
+            "detail": "Ask me first · Auto, ask before changes · Full auto"
+          },
+          "dontAsk": { "name": "“Don't ask again”", "detail": "One person, inside the steps above" }
+        }
+      },
+      "policy": {
+        "title": "Tool policy",
+        "reset": "Reset to defaults",
+        "resetDone": "Every tool is back to its default",
+        "columns": {
+          "tool": "Tool",
+          "class": "Class",
+          "policy": "Policy",
+          "fullAuto": "In Full auto"
+        },
+        "choices": {
+          "on": "On",
+          "click": "Your click",
+          "never": "Never",
+          "ask": "Ask",
+          "ask_full_auto": "Ask (auto in Full auto)",
+          "always": "Always"
+        },
+        "default": "default",
+        "lockedChoice": "Needs Growth",
+        "behaviour": {
+          "off": "Off",
+          "runs": "Runs freely",
+          "click": "Needs your click",
+          "card": "Card in every mode",
+          "always_card": "Always a card",
+          "auto_full_auto": "Auto in Full auto",
+          "auto_always": "Auto in every mode"
+        }
+      },
+      "execute": {
+        "title": "What Managers may take live",
+        "note": "EXECUTE always needs a click, whoever runs it. Off, a Manager gets Ask your Admin instead.",
+        "groups": {
+          "publishing": "Publishing",
+          "email_outreach": "Email and outreach",
+          "code_prs": "Code and pull requests",
+          "feeds": "Product feeds"
+        }
+      },
+      "autoChoices": {
+        "title": "Your auto changes",
+        "note": "Tools you ticked “Don't ask again” on. They run without a card only where this policy and your plan allow Full auto.",
+        "empty": "You haven't ticked “Don't ask again” on any tool.",
+        "remove": "Remove",
+        "removed": "Removed: it asks again"
       }
     },
     "yourAccess": {
@@ -9161,6 +9266,7 @@
     "apiKeys": "API Keys",
     "team": "Team",
     "rolesAccess": "Roles & access",
+    "chatSettings": "Chat",
     "menuAccess": {
       "title": "Menu access",
       "new": "New",

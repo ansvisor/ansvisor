@@ -26,6 +26,7 @@ import { useCanManageMenus } from '@/components/providers/menu-access-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { RolesAccessSection } from '@/components/chat-access/roles-access-section';
 import { YourAccessSlot } from '@/components/chat-access/your-access-card';
+import { ChatSettingsSection } from '@/components/chat-access/chat-settings-section';
 import { countPendingAccessRequests } from '@/lib/actions/chat-access-requests';
 import { Badge } from '@/components/ui/badge';
 import { updateAccountName } from '@/lib/actions/organization';
@@ -66,9 +67,9 @@ export function SettingsView({ section }: { section: SettingsSection }) {
       live = false;
     };
   }, [chatAgentic, requestsRead]);
-  // Roles & access is Chat's: with Chat off, its address opens Account.
+  // Roles & access and Chat are the new Chat's: with it off, their addresses open Account.
   const [active, setActive] = useState<SettingsSection>(
-    section === 'roles-access' && !chatAgentic ? 'account' : section,
+    (section === 'roles-access' || section === 'chat') && !chatAgentic ? 'account' : section,
   );
 
   const show = (next: SettingsSection) => {
@@ -119,16 +120,17 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     'api-keys': t('apiKeys'),
     'ai-providers': t('aiProviders'),
     billing: t('billing'),
+    chat: t('chatSettings'),
   };
   // AI Providers (bring your own key) and Billing are cloud-only: self-host
   // operators set ANTHROPIC_API_KEY in their own env.
   // Menu access is listed for admins and the managers they let change menus,
-  // Roles & access for everyone while the new Chat is on.
+  // Roles & access and Chat for everyone while the new Chat is on.
   const navItems = SETTINGS_SECTIONS.filter(
     (id) =>
       hasSettingsSection(id, { isCloud }) &&
       (id !== 'menu-access' || canManageMenus) &&
-      (id !== 'roles-access' || chatAgentic),
+      ((id !== 'roles-access' && id !== 'chat') || chatAgentic),
   ).map((id) => ({ id, label: labels[id] }));
 
   return (
@@ -252,6 +254,8 @@ export function SettingsView({ section }: { section: SettingsSection }) {
 
           {/* AI Providers (cloud BYOK) */}
           {active === 'ai-providers' && isCloud && <AiProvidersSection />}
+
+          {active === 'chat' && chatAgentic && <ChatSettingsSection />}
 
           {/* Billing */}
           {active === 'billing' && isCloud && <BillingSection />}

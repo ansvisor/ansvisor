@@ -5,6 +5,7 @@ import {
   ROLE_ORDER,
   approvalMark,
   capabilityAreas,
+  fullAutoBehaviour,
   planCardOf,
   rolesFor,
   yourAccessRows,
@@ -225,5 +226,28 @@ describe('the registry as "What Chat can do" shows it', () => {
     const prompts = areas.find((a) => a.area === 'prompts')!;
     expect(prompts.write.map((e) => e.key)).toContain('dismissSuggestion');
     expect(prompts.writers).not.toContain('agency_partner');
+  });
+});
+
+describe('fullAutoBehaviour', () => {
+  const row = (cls: 'read' | 'write' | 'execute', policy: string, alwaysCard = false) => ({
+    class: cls,
+    policy: policy as never,
+    flags: { alwaysCard },
+  });
+
+  it('says what each tool does in Full auto, by its class and policy', () => {
+    expect(fullAutoBehaviour(row('read', 'on'), true)).toBe('runs');
+    expect(fullAutoBehaviour(row('read', 'never'), true)).toBe('off');
+    expect(fullAutoBehaviour(row('execute', 'click'), true)).toBe('click');
+    expect(fullAutoBehaviour(row('write', 'ask'), true)).toBe('card');
+    expect(fullAutoBehaviour(row('write', 'ask', true), true)).toBe('always_card');
+    expect(fullAutoBehaviour(row('write', 'ask_full_auto'), true)).toBe('auto_full_auto');
+    expect(fullAutoBehaviour(row('write', 'always'), true)).toBe('auto_always');
+  });
+
+  it('asks for every WRITE below Growth, where Full auto is closed', () => {
+    expect(fullAutoBehaviour(row('write', 'always'), false)).toBe('card');
+    expect(fullAutoBehaviour(row('write', 'ask_full_auto'), false)).toBe('card');
   });
 });
