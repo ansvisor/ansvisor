@@ -278,7 +278,8 @@ function attributesOf(product, variant, categoriesById) {
     additional_image_link: extraImages,
     brand: brandOf(product, variant) ?? undefined,
     gtin: gtinOf(product, variant) ?? undefined,
-    mpn: cleanText(variant?.sku, 300) ?? cleanText(product?.sku, 300) ?? undefined,
+    sku: cleanText(variant?.sku, 300) ?? cleanText(product?.sku, 300) ?? undefined,
+    mpn: cleanText(variant?.mpn, 300) ?? cleanText(product?.mpn, 300) ?? undefined,
     price: moneyText(regularPrice, currency),
     sale_price:
       salePrice != null && String(salePrice).trim() !== '' && String(salePrice) !== String(regularPrice)
