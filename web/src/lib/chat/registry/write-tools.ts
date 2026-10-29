@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { updateOpportunityStatus } from '@/lib/actions/content';
 import { createContentDraft } from '@/lib/actions/content-drafts';
 import { dismissSuggestion } from '@/lib/actions/prompt-suggestions';
+import { requestAccess } from '@/lib/actions/chat-access-requests';
+import { ACCESS_REQUEST_RULES } from '@/lib/chat/access-requests';
 import { PAGE_TYPES } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
@@ -139,5 +141,44 @@ export const WRITE_TOOLS = [
     }),
     run: (_ctx, input) => dismissSuggestion(input.suggestion_id),
     fixture: { input: { suggestion_id: ITEM } },
+  }),
+  defineTool({
+    name: 'request_access',
+    class: 'write',
+    area: 'account',
+    description:
+      "Ask the workspace's Admins for a change the person's role, the plan or the tool policy keeps Chat from making: what was asked, and the rule that refused it, as the out-of-permission answer gave them. Only when the person clicks Ask your Admin on that answer.",
+    // Only the person's click sends it, in every mode (CHAT-20 row 80a: "Ask (fixed)").
+    defaultPolicy: 'ask',
+    maxPolicy: 'ask',
+    flags: { alwaysCard: true },
+    // Every role; the server turns an Admin's away, who has no one to ask.
+    minRole: 'analyst',
+    planGate: null,
+    // About the person and the workspace: the chat it came from is the run's own.
+    brandOf: null,
+    costClass: 'C0',
+    labelKey: 'askAdmin',
+    route: '/dashboard/settings/roles-access',
+    mcpTool: null,
+    specRow: '80a',
+    inputSchema: z.object({
+      asked: z.string().trim().min(1).max(500).describe("What was asked, in the answer's words."),
+      rule_kind: z.enum(ACCESS_REQUEST_RULES).describe('The rule that refused it.'),
+      rule_detail: z.string().trim().max(500).optional().describe("The rule's words."),
+      tool_key: z
+        .string()
+        .regex(/^[a-z][A-Za-z0-9]{1,63}$/)
+        .optional()
+        .describe("The refused tool's label key, when one was."),
+    }),
+    run: (_ctx, input) =>
+      requestAccess({
+        asked: input.asked,
+        ruleKind: input.rule_kind,
+        ruleDetail: input.rule_detail,
+        toolKey: input.tool_key,
+      }),
+    fixture: { input: { asked: 'Add competitors · Peec AI', rule_kind: 'role' } },
   }),
 ];

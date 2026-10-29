@@ -45,9 +45,10 @@ afterEach(() => {
 });
 
 async function render(canManage: boolean, ideas: { id: string; name: string }[] = []) {
-  actions.getTopicSuggestions.mockResolvedValue(
-    ideas.map((idea) => ({ ...idea, brand_id: 'b1', status: 'new', reason: null })),
-  );
+  actions.getTopicSuggestions.mockResolvedValue({
+    ok: true,
+    suggestions: ideas.map((idea) => ({ ...idea, brand_id: 'b1', status: 'new', reason: null })),
+  });
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { startFirstTrackingRun } from '@/lib/billing/first-run';
+import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
 import { DASHBOARD_HOME } from '@/config/home';
 
 export async function GET(req: NextRequest) {
@@ -73,6 +74,12 @@ export async function GET(req: NextRequest) {
           } catch (alignErr) {
             console.error('[stripe/success] Plan-engine alignment threw:', alignErr);
           }
+
+          // A plan bought: the demo brand steps aside before the dashboard
+          // opens, whether or not the webhook came first, so the person lands
+          // on their own brand (the layout lists no hidden brand, and the
+          // brand kept from before falls back to the first one listed).
+          await hideDemoBrandAfterPurchase(orgId, subscription?.status, 'stripe/success');
 
           // The first run, or the one the webhook already started for this
           // checkout: its id goes to the dashboard either way.

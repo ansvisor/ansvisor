@@ -1,0 +1,61 @@
+---
+title: Send a page to your CMS
+route: /dashboard/content/library
+keywords: [send to cms, webflow, wordpress, framer, draft post, last send]
+synonyms: [push to cms, publish to blog, send to website, export to cms]
+plan: all
+updated: 2026-10-29
+last_checked: 2026-10-29
+owner: Cihan
+app_version: 0.3.0
+approved: false
+sources: [docs/guides/send-to-cms.mdx, docs/guides/content-editor.mdx]
+---
+**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Ansvisor never publishes on its own: you publish in your CMS. Only admins and managers can send pages.
+
+## Send one page
+
+In the editor, click the paper-plane icon in the header. **Before you publish** opens first when it has something to ask about, such as a missing author, open placeholders, missing alt text or broken links. Check it and click **Continue to send**. From the Library, open a row's **…** menu and pick **Send to CMS**.
+
+The dialog fills the **Slug**, **Meta title** and **Meta description** from the page; change them before sending if you like. What you send is kept on the draft, so the next send starts from it.
+
+## Choose where it goes
+
+The dialog offers each CMS that is connected and ready, Webflow, WordPress, Framer, then Wix, beside **Your workflow**. Your choice is remembered for the brand in your browser.
+
+A CMS that is connected but not ready shows what to fix and can't be picked, for example when its sign-in is refused or no collection is picked. If the dialog can't check a CMS you chose just then, the page goes to your workflow, and the dialog says so with **Try again**.
+
+## What holds a send
+
+The page goes as Export makes it, without its H1: your CMS's title field carries the title. Ansvisor holds the send while:
+
+- a placeholder in square brackets is still open. **Fill now** selects the first one;
+- the page has no title, or nothing under its title;
+- the slug can't be used.
+
+## Send several pages
+
+In the Library, tick the rows to send, up to 25 at once, and click **Send to CMS** in the bar above the table. The dialog lists each page as **Ready**, or says why it can't go; a page that can't go is left out, so fix it in the editor. The pages go one after another in the background. You can close the dialog at any time: the Library keeps following them.
+
+## See how a send went
+
+Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), and a blue link once it's published (click it to open the live page).
+
+The **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**. A send to your workflow isn't retried on its own: send a failed page again from the Library.
+
+## When a page becomes Published
+
+Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one.
+
+## Sending a page again
+
+Sending a page again updates the same Webflow or Framer item, the same WordPress draft post, or the same Wix post (a published one gets a new draft version in Wix). Changes to a published Webflow or Framer item go live with your next publish there. WordPress has no draft of a published post, so a page whose post is published, scheduled or private goes as a new draft post: move the text over in WordPress.
+
+## What each CMS leaves out
+
+- **Webflow**: tables go as lists, and images aren't sent. An empty meta description goes as the page's opening words.
+- **WordPress**: the meta title and the structured data aren't sent, so set them in your SEO plugin. Images keep their addresses, and no featured image or category is set.
+- **Framer**: tables go as tables, and images aren't sent. Another item in the collection with the same slug stops the send.
+- **Wix**: images aren't sent, and no cover image or category is set. Sending again replaces the post's text, so add images in Wix after your last send.
+
+Add images in your CMS. The slug may also change slightly there: lowercase, without accents, with dots turned into dashes.

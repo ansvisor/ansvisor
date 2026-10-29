@@ -22,6 +22,7 @@ vi.mock('@/i18n/navigation', () => ({
 const store = vi.hoisted(() => ({
   brands: [] as unknown[],
   activeBrandId: null,
+  loaded: true,
   setActiveBrand: vi.fn(),
   setBrands: vi.fn(),
 }));

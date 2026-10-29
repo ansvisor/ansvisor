@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import { createContentDraftFor, listContentDraftsFor } from '@/lib/mcp/content';
 import { createDraftShape, listDraftsShape } from '@/lib/mcp/content-schemas';
 
@@ -50,6 +51,11 @@ export async function POST(req: Request) {
   }
   const body = parsed.data;
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('create_content_draft', auth.organizationId, {
+      brand_id: body.brand_id,
+    });
+    if (refused) return refused;
     const created = await createContentDraftFor(auth, {
       brandId: body.brand_id,
       title: body.title,

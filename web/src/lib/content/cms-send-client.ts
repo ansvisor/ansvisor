@@ -12,9 +12,9 @@ import { lastSend } from '@/lib/content/cms-status';
 
 /**
  * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
- * WordPress site or its Framer collection (phase 2).
+ * WordPress site, its Framer collection or its Wix site's Blog (phase 2).
  */
-export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer';
+export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix';
 
 /** Why a send didn't go, as the server names it. */
 export type CmsSendError =
@@ -36,6 +36,10 @@ export type CmsSendError =
   | 'no_framer'
   | 'framer_refused'
   | 'framer_not_ready'
+  // Wix (00372): not on this server, not connected, or its API key refused.
+  | 'wix_not_configured'
+  | 'no_wix'
+  | 'wix_refused'
   | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
@@ -94,6 +98,9 @@ const KNOWN: readonly CmsSendError[] = [
   'no_framer',
   'framer_refused',
   'framer_not_ready',
+  'wix_not_configured',
+  'no_wix',
+  'wix_refused',
   'in_progress',
   'daily_limit',
   'forbidden',
@@ -154,7 +161,7 @@ export async function sendPagesToCms(
  */
 async function refreshPublished(
   brandId: string,
-  route: 'webflow-status' | 'wordpress-status' | 'framer-status',
+  route: 'webflow-status' | 'wordpress-status' | 'framer-status' | 'wix-status',
   label: string,
 ): Promise<string[]> {
   try {
@@ -189,6 +196,11 @@ export function refreshWebflowPublished(brandId: string): Promise<string[]> {
 /** The brand's pages sent to WordPress as draft posts, published there since (00294). */
 export function refreshWordPressPublished(brandId: string): Promise<string[]> {
   return refreshPublished(brandId, 'wordpress-status', 'WordPress');
+}
+
+/** The brand's pages sent to Wix as draft posts, published there since (00372). */
+export function refreshWixPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'wix-status', 'Wix');
 }
 
 /** The brand's pages sent to Framer as draft items, published there since (00295). */
