@@ -365,6 +365,9 @@ export async function detectSiteType(
  *
  * @param {string} brandId
  */
+/** Postgres' code for a column that doesn't exist (here: 00379 not applied). */
+const UNDEFINED_COLUMN = '42703';
+
 export async function applySiteTypeDetection(
   brandId,
   { db = supabaseAdmin, detect = detectSiteType, now = new Date(), write = true } = {},
@@ -377,6 +380,9 @@ export async function applySiteTypeDetection(
       .single(),
     db.from('brand_domains').select('domain, is_primary').eq('brand_id', brandId),
   ]);
+  // 00379 not applied yet (a deploy ahead of its migration): no detection,
+  // rather than an error where a brand is created or set up.
+  if (brandRes.error?.code === UNDEFINED_COLUMN) return { skipped: 'unavailable' };
   if (brandRes.error) throw new Error(brandRes.error.message);
   if (domainsRes.error) throw new Error(domainsRes.error.message);
   const brand = brandRes.data;
@@ -406,6 +412,7 @@ export async function applySiteTypeDetection(
     .eq('id', brandId)
     .is('site_type', null)
     .select('id');
+  if (error?.code === UNDEFINED_COLUMN) return { skipped: 'unavailable' };
   if (error) throw new Error(error.message);
   if (!typed?.length) return { skipped: 'manual' };
 

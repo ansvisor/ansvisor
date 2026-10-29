@@ -8,7 +8,8 @@ import { failedCallResponse } from '@/lib/mcp/subscription-gate';
  *
  * Parallel REST surface for the `generate_content_brief` MCP tool — same
  * data-layer function, same ownership guarantee. Always re-generates;
- * cached reads belong on GET /api/mcp/content-opportunities/[id].
+ * cached reads belong on GET /api/mcp/content-opportunities/[id]. 403
+ * unless the key's user is an admin or a manager.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authenticateMcpRequest(req);

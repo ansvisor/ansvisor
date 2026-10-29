@@ -428,4 +428,38 @@ describe('applySiteTypeDetection', () => {
     });
     expect(db.writes).toEqual([]);
   });
+  it('skips, without an error, while 00379 is not applied yet', async () => {
+    const missing = { code: '42703', message: 'column brands.site_type_source does not exist' };
+    const detect = vi.fn(async () => shop);
+    const unread = {
+      from: (table) =>
+        table === 'brand_domains'
+          ? { select: () => ({ eq: async () => ({ data: [], error: null }) }) }
+          : {
+              select: () => ({
+                eq: () => ({ single: async () => ({ data: null, error: missing }) }),
+              }),
+            },
+    };
+    expect(await applySiteTypeDetection('b1', { db: unread, detect, now: NOW })).toEqual({
+      skipped: 'unavailable',
+    });
+    expect(detect).not.toHaveBeenCalled();
+
+    // Read before the migration, written after a deploy that dropped it: the same.
+    const db = fakeDb(base);
+    db.from = ((from) => (table) => {
+      const t = from(table);
+      if (table !== 'brands') return t;
+      return {
+        ...t,
+        update: () => ({
+          eq: () => ({ is: () => ({ select: async () => ({ data: null, error: missing }) }) }),
+        }),
+      };
+    })(db.from.bind(db));
+    expect(await applySiteTypeDetection('b1', { db, detect, now: NOW })).toEqual({
+      skipped: 'unavailable',
+    });
+  });
 });

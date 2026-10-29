@@ -1,6 +1,7 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
+import { INTEGRATION_READ_TIMEOUT_MS } from '@/lib/integrations-client';
 
 /**
  * A brand's Webflow connection for Send to CMS (#1331, phase 2), from the
@@ -134,7 +135,9 @@ async function call<T>(
 
 /** The brand's connection, and whether this server has Webflow set up. */
 export function readWebflow(brandId: string) {
-  return call<{ configured: boolean; connection: WebflowConnection | null }>(brandId, '');
+  return call<{ configured: boolean; connection: WebflowConnection | null }>(brandId, '', {
+    signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS),
+  });
 }
 
 /** Connects the brand's site with its token, or replaces the token. */
