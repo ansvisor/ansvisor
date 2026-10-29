@@ -3229,6 +3229,28 @@
       "demo": "No one: the demo brand keeps its sample data."
     }
   },
+  "chatActivity": {
+    "summary": {
+      "saveDraft": "Saved the draft “{title}”",
+      "saveDraftUndo": "Moved the draft “{title}” to the archive",
+      "opportunityStatus": "{status, select, dismissed {Dismissed} other {Marked reviewed}} the opportunity “{title}”",
+      "opportunityStatusUndo": "Put the opportunity “{title}” back as it was",
+      "dismissSuggestion": "Dismissed the prompt suggestion “{text}”",
+      "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
+      "accessDenied": "Not allowed: {tool}"
+    },
+    "undo": {
+      "ok": "Undone.",
+      "changed": "This changed since. Open it to undo by hand.",
+      "gone": "This was deleted since, so there's nothing to undo.",
+      "expired": "Undo is no longer available for this change. Change it by hand instead.",
+      "notUndoable": "This change can't be undone here.",
+      "alreadyUndone": "This was already undone.",
+      "inProgress": "Undo is already on its way.",
+      "notFound": "I couldn't find that change.",
+      "failed": "Something went wrong, so nothing was undone. Try again."
+    }
+  },
   "audit": {
     "title": "Site Audit",
     "description": "Score any page against the 48-signal AEO/GEO",
