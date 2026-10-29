@@ -109,7 +109,14 @@ export async function syncCatalogOrders(
       counts.skipped++;
       continue;
     }
-    normalized.push({ ...safe, content_hash: hashOf(safe) });
+    normalized.push({
+      ...safe,
+      content_hash: hashOf(safe),
+      // Mark the order as incomplete until its replacement line items have
+      // been written. If a later write fails, the next sync sees this distinct
+      // hash and retries instead of mistaking a partial order for a complete one.
+      pending_hash: hashOf({ pending: true, order: safe }),
+    });
   }
 
   const kept = await readAll(
@@ -133,11 +140,12 @@ export async function syncCatalogOrders(
 
     counts[previous ? 'changed' : 'added']++;
     changed.push(order);
-    const { items: _items, ...columns } = order;
+    const { items: _items, content_hash: _contentHash, pending_hash, ...columns } = order;
     writes.push({
       brand_id: brandId,
       source,
       ...columns,
+      content_hash: pending_hash,
       updated_at: at,
     });
   }
@@ -170,6 +178,24 @@ export async function syncCatalogOrders(
     const { error } = await db.from('catalog_order_items').insert(batch);
     if (error) throw new Error(`catalog_order_items write: ${error.message}`);
   }
+
+  // Commit the complete content hash only after the line items have been
+  // replaced successfully. Leaving the pending hash on failure makes retries
+  // idempotent while still repairing a partially written order.
+  const completedWrites = changed.map((order) => ({
+    brand_id: brandId,
+    source,
+    external_id: order.external_id,
+    content_hash: order.content_hash,
+    updated_at: at,
+  }));
+  for (const batch of chunks(completedWrites, WRITE_CHUNK)) {
+    const { error } = await db
+      .from('catalog_orders')
+      .upsert(batch, { onConflict: 'brand_id,source,external_id' });
+    if (error) throw new Error(`catalog_orders completion write: ${error.message}`);
+  }
+
   counts.items = lineRows.length;
   return counts;
 }
