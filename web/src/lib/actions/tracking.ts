@@ -2222,7 +2222,11 @@ export interface TrackingJobStatus {
     region?: string;
     platform?: string;
   } | null;
-  result: { resultCount: number } | null;
+  /**
+   * A finished job's answers stored, webhook deliveries included; `stillArriving`
+   * when the run waits on late answers before it closes.
+   */
+  result: { resultCount: number; stamped?: boolean; stillArriving?: boolean } | null;
   failedReason: string | null;
 }
 

@@ -252,6 +252,15 @@
       "changeContentSettings": "Changing content settings needs a plan"
     }
   },
+  "managersOnly": {
+    "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
+    "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
+    "generateOpportunities": "Ask an admin or a manager to generate opportunities.",
+    "trackOrSuggestContent": "Ask an admin or a manager to track these prompts or suggest content for them.",
+    "generateBrief": "Ask an admin or a manager to generate a brief.",
+    "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
+    "addPrompts": "Ask an admin or a manager to add prompts."
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",
@@ -366,7 +375,9 @@
     "firstRun": {
       "running": "First analysis running",
       "queued": "First analysis queued",
-      "progress": "{current} of {total} answers",
+      "progress": "{current} of {total} checks",
+      "minutesLeft": "about {minutes} min left",
+      "hoursLeft": "{hours, plural, one {about # hour left} other {about # hours left}}",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
       "link": "Follow it on Brand Visibility"
@@ -707,6 +718,10 @@
           "untitled": "Untitled prompt",
           "sourceAnswers": "cited in {count} of the {of, plural, one {# latest answer} other {# latest answers}} they win"
         },
+        "pageEvents": {
+          "none": "No page of theirs was first cited in your answers or changed in the last {days} days.",
+          "timeline": "See their pages over time"
+        },
         "cited": {
           "position": "#{position}",
           "lastCited": "last cited {date}",
@@ -749,6 +764,7 @@
           "evidence": "Failed checks",
           "competitorPositions": "Positions by prompt",
           "winningSources": "Sources behind their wins",
+          "competitorPageEvents": "What happened to their pages",
           "mentionDetails": "Mentions by prompt"
         },
         "scopes": {
@@ -3624,6 +3640,25 @@
     "viewAll": "View all"
   },
   "insights": {
+    "tracking": {
+      "queued": "Queued — starting automatically",
+      "analyzing": "Analyzing prompts...",
+      "stop": "Stop",
+      "queuedBody": "Another analysis is running right now. Yours will begin the moment a slot opens up — no need to wait here, it'll keep going in the background.",
+      "activeBody": "This can take anywhere from a few minutes to 1–2 hours at busy times. You can leave this page — it keeps running in the background.",
+      "activeBodyMinutes": "About {minutes} min left at the current pace. You can leave this page — it keeps running in the background.",
+      "activeBodyHours": "{hours, plural, one {About # hour left} other {About # hours left}} at the current pace. You can leave this page — it keeps running in the background.",
+      "dailyRun": "Daily tracking in progress",
+      "run": "Tracking in progress",
+      "runBody": "— showing the latest completed results; the numbers will refresh when this run finishes.",
+      "firstRun": "First tracking in progress",
+      "firstRunBody": "— your results appear here as soon as it finishes. You can leave this page.",
+      "done": "Analysis complete.",
+      "doneCount": "{count, plural, one {Analysis complete — # answer saved.} other {Analysis complete — # answers saved.}}",
+      "doneSoFar": "{count, plural, one {Almost done — # answer saved so far, the rest still arriving.} other {Almost done — # answers saved so far, the rest still arriving.}}",
+      "failed": "Job failed: {reason}",
+      "unknownError": "Unknown error"
+    },
     "title": "Answer Engine Insights",
     "description": "Monitor how your brand is represented in AI-generated answers.",
     "runPrompts": "Run Prompts",

@@ -322,6 +322,8 @@ export function SuggestionsCard({
   // open to analysts too, as the server and the table's update rule allow.
   const { role, canManage } = useUserRole();
   const canDismiss = canManage || role === 'analyst';
+  // Generating suggestions costs AI: admins and managers start it.
+  const tManagers = useTranslations('managersOnly');
   // One method note for the list's volume ranges (PROMPT-013).
   const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
@@ -576,20 +578,22 @@ export function SuggestionsCard({
                 />
               </div>
 
-              <Button
-                onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
-                disabled={refreshing}
-                size="sm"
-                variant="outline"
-                className="gap-2"
-              >
-                {refreshing ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-                {refreshing ? 'Generating…' : 'New'}
-              </Button>
+              {canManage && (
+                <Button
+                  onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
+                  disabled={refreshing}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                >
+                  {refreshing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  {refreshing ? 'Generating…' : 'New'}
+                </Button>
+              )}
 
               {canManage && (
                 <Button
@@ -691,7 +695,7 @@ export function SuggestionsCard({
                   : `${joinNames(notice.names)} is connected and its first sync is in progress. Suggestions from it will be available once it finishes, usually within a few minutes.`}
               </p>
             </div>
-            {notice.kind === 'ready' && (
+            {notice.kind === 'ready' && canManage && (
               <Button
                 onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
                 disabled={refreshing}
@@ -726,23 +730,31 @@ export function SuggestionsCard({
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <Sparkles className="h-8 w-8 text-muted-foreground/40 mb-2" />
             <p className="text-sm font-medium mb-1">No suggestions right now</p>
-            <p className="text-xs text-muted-foreground mb-3 max-w-sm">
-              Click refresh to generate new prompt ideas tailored to your brand and competitor
-              activity.
-            </p>
-            <Button
-              onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
-              disabled={refreshing}
-              size="sm"
-              className="gap-2"
-            >
-              {refreshing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              Generate Suggestions
-            </Button>
+            {canManage ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-3 max-w-sm">
+                  Click refresh to generate new prompt ideas tailored to your brand and competitor
+                  activity.
+                </p>
+                <Button
+                  onClick={guard(handleRefresh, { action: tActions('suggestPrompts') })}
+                  disabled={refreshing}
+                  size="sm"
+                  className="gap-2"
+                >
+                  {refreshing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  Generate Suggestions
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground max-w-sm">
+                {tManagers('suggestPrompts')}
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">

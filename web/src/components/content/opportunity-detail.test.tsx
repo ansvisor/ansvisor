@@ -203,6 +203,33 @@ describe('the brief quota without an active plan', () => {
   });
 });
 
+describe("the opportunity panel's costly AI work", () => {
+  const labels = () =>
+    [...document.body.querySelectorAll('button, [role="menuitem"]')].map((el) =>
+      el.textContent?.trim(),
+    );
+  const openMore = () =>
+    act(async () => container.querySelector<HTMLElement>('[aria-label="More actions"]')!.click());
+
+  it('offers an admin or a manager Generate Brief and Another angle', async () => {
+    await render(false);
+    expect(labels()).toContain('Generate Brief');
+    expect(labels()).toContain('Generate Content Brief');
+    await openMore();
+    expect(labels()).toContain('Another angle');
+  });
+
+  it('leaves them out for an analyst or an agency partner, saying who generates a brief', async () => {
+    viewer.canManage = false;
+    await render(false);
+    expect(labels()).not.toContain('Generate Brief');
+    expect(labels()).not.toContain('Generate Content Brief');
+    expect(container.textContent).toContain('Ask an admin or a manager to generate a brief.');
+    await openMore();
+    expect(labels()).not.toContain('Another angle');
+  });
+});
+
 describe("the opportunity panel's Dismiss", () => {
   const menuItems = async () => {
     await act(async () =>
