@@ -255,7 +255,7 @@
     "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
     "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
     "generateOpportunities": "Ask an admin or a manager to generate opportunities.",
-    "suggestContent": "Ask an admin or a manager to suggest content for a prompt.",
+    "trackOrSuggestContent": "Ask an admin or a manager to track these prompts or suggest content for them.",
     "generateBrief": "Ask an admin or a manager to generate a brief.",
     "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
     "addPrompts": "Ask an admin or a manager to add prompts."

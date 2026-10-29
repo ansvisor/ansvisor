@@ -74,7 +74,8 @@ export function Opportunities({
   // content open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
-  // Suggesting content costs AI: admins and managers start it.
+  // Tracking adds prompts and suggesting content costs AI: admins and
+  // managers do both; anyone else reads the list and sends a topic's action.
   const { canManage } = useUserRole();
   const tManagers = useTranslations('managersOnly');
   const failureToast = useFailureToast();
@@ -352,28 +353,30 @@ export function Opportunities({
                     </span>
                     <span className="flex shrink-0 items-center gap-1.5">
                       {/* The hints sit on wrappers: a disabled button shows no tooltip. */}
-                      <span
-                        title={
-                          planFull
-                            ? t('planFull')
-                            : isTopic
-                              ? t('trackCountHint', { count, topic: item.title })
-                              : t('trackHint')
-                        }
-                      >
-                        <Button
-                          size="sm"
-                          className="h-7 gap-1.5 px-2.5 text-xs"
-                          disabled={planFull || busy !== null}
-                          onClick={guard(() => track(item), { action: tActions('trackPrompts') })}
+                      {canManage && (
+                        <span
+                          title={
+                            planFull
+                              ? t('planFull')
+                              : isTopic
+                                ? t('trackCountHint', { count, topic: item.title })
+                                : t('trackHint')
+                          }
                         >
-                          {/* Track N adds one prompt at a time, so a big topic takes a moment. */}
-                          {busy === item.key && (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                          )}
-                          {isTopic ? t('trackCount', { count }) : t('track')}
-                        </Button>
-                      </span>
+                          <Button
+                            size="sm"
+                            className="h-7 gap-1.5 px-2.5 text-xs"
+                            disabled={planFull || busy !== null}
+                            onClick={guard(() => track(item), { action: tActions('trackPrompts') })}
+                          >
+                            {/* Track N adds one prompt at a time, so a big topic takes a moment. */}
+                            {busy === item.key && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            )}
+                            {isTopic ? t('trackCount', { count }) : t('track')}
+                          </Button>
+                        </span>
+                      )}
                       {(isTopic || canManage) && (
                         <span
                           title={
@@ -405,12 +408,13 @@ export function Opportunities({
                 );
               })}
             </ul>
-            {!canManage &&
-              result.items.slice(0, VISIBLE_ITEMS).some((item) => item.kind !== 'topic') && (
-                <p className="pt-2.5 text-xs text-muted-foreground">
-                  {tManagers('suggestContent')}
-                </p>
-              )}
+            {!canManage && (
+              <p className="pt-2.5 text-xs text-muted-foreground">
+                {result.items.slice(0, VISIBLE_ITEMS).some((item) => item.kind !== 'topic')
+                  ? tManagers('trackOrSuggestContent')
+                  : tManagers('addPrompts')}
+              </p>
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">

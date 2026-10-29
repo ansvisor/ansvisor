@@ -84,14 +84,14 @@ describe('Opportunities — estimated volume (PROMPT-013)', () => {
   });
 });
 
-describe("Opportunities' Suggest content by role", () => {
-  const render = () =>
+describe("Opportunities' Track and Suggest content by role", () => {
+  const render = (suggestions: ReturnType<typeof suggestion>[]) =>
     act(() =>
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
           <Opportunities
             brandId="b1"
-            suggestions={[suggestion('s3', null, 350)]}
+            suggestions={suggestions}
             trackedTopicIds={[]}
             topics={null}
             entities={null}
@@ -103,20 +103,32 @@ describe("Opportunities' Suggest content by role", () => {
       ),
     );
   const labels = () => [...container.querySelectorAll('button')].map((b) => b.textContent);
+  const prompt = [suggestion('s3', null, 350)];
+  const topic = [suggestion('s1', 'Espresso', 800), suggestion('s2', 'Espresso', 400)];
 
-  it('is offered to an admin or a manager', () => {
-    render();
+  it('offers an admin or a manager Track and Suggest content', () => {
+    render(prompt);
+    expect(labels()).toContain('Track');
     expect(labels()).toContain('Suggest content');
     expect(container.textContent).not.toContain('Ask an admin or a manager');
   });
 
-  it('is left out for an analyst or an agency partner, who read who can', () => {
+  it('leaves both out for an analyst or an agency partner, who read who can', () => {
     viewer.canManage = false;
-    render();
+    render(prompt);
+    expect(labels()).not.toContain('Track');
     expect(labels()).not.toContain('Suggest content');
     expect(container.textContent).toContain(
-      'Ask an admin or a manager to suggest content for a prompt.',
+      'Ask an admin or a manager to track these prompts or suggest content for them.',
     );
+  });
+
+  it("keeps a topic's Send action for an analyst, without Track", () => {
+    viewer.canManage = false;
+    render(topic);
+    expect(labels()).toContain('Send action');
+    expect(labels()).not.toContain('Track 2');
+    expect(container.textContent).toContain('Ask an admin or a manager to add prompts.');
   });
 });
 
