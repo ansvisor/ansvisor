@@ -1,6 +1,7 @@
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
 import { factValueText, pagePrices, priceRanges } from './brand-facts';
+import { TEXT_NODE, parseHtml } from './dom';
 import type { PageType } from './drafts';
 import { PLACEHOLDER } from './placeholders';
 import { cleanHref, decodeHtmlBlock } from './html-allowlist';
@@ -47,7 +48,7 @@ export const pageName = (title: string) =>
 
 /** The page's first image with a full https address, as JSON-LD's image. */
 export function firstImage(html: string): string | null {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   for (const img of doc.querySelectorAll('img[src]')) {
     const src = img.getAttribute('src') ?? '';
     if (/^https:\/\/[^\s"'<>]+$/i.test(src)) return src;
@@ -311,7 +312,7 @@ export function offerText(offer: PageOffer): string {
 
 /** The page's opening paragraph (past a byline or a date), as Product's description: up to 500 characters. */
 export function openingParagraph(html: string): string | null {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   for (const p of doc.body.querySelectorAll('p')) {
     const text = (p.textContent ?? '').replace(/\s+/g, ' ').trim();
     if (!text || isByline(text)) continue;
@@ -398,7 +399,7 @@ export const MAX_LISTED = 100;
 function linkName(a: Element): string | null {
   const words: string[] = [];
   const walk = (node: Node) => {
-    if (node.nodeType === Node.TEXT_NODE) words.push(node.textContent ?? '');
+    if (node.nodeType === TEXT_NODE) words.push(node.textContent ?? '');
     else node.childNodes.forEach(walk);
   };
   walk(a);
@@ -430,7 +431,7 @@ export function listedProducts(
 ): ListedProduct[] {
   const own = brandDomains.map(normalizeDomain).filter(Boolean);
   const root = base ?? (own[0] ? `https://${own[0]}` : null);
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   const links: Element[] = [];
   for (const el of doc.body.querySelectorAll('a[href], [data-html-block]')) {
     if (el.tagName === 'A') {
@@ -439,9 +440,7 @@ export function listedProducts(
     }
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (inner) {
-      links.push(
-        ...new DOMParser().parseFromString(inner, 'text/html').body.querySelectorAll('a[href]'),
-      );
+      links.push(...parseHtml(inner).body.querySelectorAll('a[href]'));
     }
   }
   const byKey = new Map<string, ListedProduct>();

@@ -1,5 +1,6 @@
 import type { ActionItem } from '@/lib/actions/action-center';
 import { OPEN_ACTION_STATUSES } from '@/lib/action-center/registry';
+import { levelOf } from '@/lib/priority-core';
 
 /**
  * An action's priority as the app shows it (AC-006): the 0–100 score and its
@@ -49,12 +50,12 @@ export function isPriorityLevel(value: unknown): value is PriorityLevel {
   return (PRIORITY_LEVELS as readonly unknown[]).includes(value);
 }
 
-/** A score's level, as the server assigns it: critical 90+, high 75+, medium 50+. */
+/** The server's level cut-offs (config/action-engine.js `priority`): critical 90+, high 75+, medium 50+. */
+const LEVEL_CUTOFFS = { critical: 90, high: 75, medium: 50 };
+
+/** A score's level, as the server assigns it. */
 export function priorityLevelOf(score: number): PriorityLevel {
-  if (score >= 90) return 'critical';
-  if (score >= 75) return 'high';
-  if (score >= 50) return 'medium';
-  return 'low';
+  return levelOf(score, LEVEL_CUTOFFS);
 }
 
 /** The stored level, or the score's when the stored one is missing or unknown. */
