@@ -34,7 +34,9 @@ import {
   improveRangeKey,
   improveSchema,
   sanitizeSuggestions,
+  withPageChecks,
 } from '../lib/prompt-improve.js';
+import { storedFeatures } from '../lib/action-center/competitor-pages.js';
 import {
   liveImproveSends,
   loadImproveRounds,
@@ -1233,7 +1235,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
       : { data: [] };
     const responseById = new Map((responses ?? []).map((r) => [r.id, r.response]));
 
-    const withEvidence = actionable.map((p) => ({
+    const collected = actionable.map((p) => ({
       ...p,
       evidence: collectEvidence(evidenceByPlatform.get(p.id) ?? [], {
         brandName: brand.name,
@@ -1241,6 +1243,23 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         competitors: competitors ?? [],
         latestResponse: responseById.get(byPlatform.get(p.id)[0].id),
       }),
+    }));
+    // What Site Audit's checks found on the cited pages, where Analyze
+    // competitor content read them lately (learning C2). None read: as before.
+    // A read that fails goes without them, said in the log.
+    const stored = await storedFeatures(
+      brandId,
+      collected.flatMap((p) => [
+        ...p.evidence.competitorUrls.map((u) => u.url),
+        ...p.evidence.brandPages.map((u) => u.url),
+      ]),
+    ).catch((err) => {
+      req.log.warn({ err, promptId }, 'prompt improve page checks read failed');
+      return new Map();
+    });
+    const withEvidence = collected.map((p) => ({
+      ...p,
+      evidence: withPageChecks(p.evidence, stored),
     }));
 
     const modelId = improveModelId();
