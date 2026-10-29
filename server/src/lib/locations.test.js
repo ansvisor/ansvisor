@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  googleLocationFor,
   isUnknownCity,
   locationsForModels,
   locationsForScraper,
@@ -42,12 +43,14 @@ describe('locationsForScraper', () => {
     ]);
   });
 
-  it('collapses states to one country-wide run for Google engines', () => {
-    // Two states of the same country would otherwise submit two identical
-    // country-wide tasks — double spend, and two rows that differ only by a
-    // state label neither run honoured.
-    expect(locationsForScraper(['US-CA', 'US-TX', 'DE'], 'google-aio')).toEqual(['US', 'DE']);
-    expect(locationsForScraper(['US-CA', 'US-TX'], 'google-aimode')).toEqual(['US']);
+  it('keeps every US state for Google engines too, each asked from the state', () => {
+    // Until 2026-10 they ran a state country-wide, once per country.
+    expect(locationsForScraper(['US-CA', 'US-TX', 'DE'], 'google-aio')).toEqual([
+      'US-CA',
+      'US-TX',
+      'DE',
+    ]);
+    expect(locationsForScraper(['US', 'US-CA'], 'google-aimode')).toEqual(['US', 'US-CA']);
   });
 
   it('leaves country-only targeting untouched for Google engines', () => {
@@ -57,6 +60,22 @@ describe('locationsForScraper', () => {
   it('runs once with no targeting when the prompt has no locations', () => {
     expect(locationsForScraper([], 'chatgpt')).toEqual([null]);
     expect(locationsForScraper(undefined, 'google-aio')).toEqual([null]);
+  });
+});
+
+describe('googleLocationFor', () => {
+  it('names a US state as Google does, beside its country', () => {
+    expect(googleLocationFor('US-CA')).toBe('California,United States');
+    expect(googleLocationFor('us-ny')).toBe('New York,United States');
+    expect(googleLocationFor('US-DC')).toBe('District of Columbia,United States');
+  });
+
+  it('names a city by its Google name, and a country not at all', () => {
+    expect(googleLocationFor('TR~ISTANBUL')).toBe('Istanbul,Istanbul,Turkiye');
+    expect(googleLocationFor('US')).toBeUndefined();
+    expect(googleLocationFor('DE')).toBeUndefined();
+    expect(googleLocationFor(null)).toBeUndefined();
+    expect(googleLocationFor('TR~NOWHERE')).toBeUndefined();
   });
 });
 
@@ -95,7 +114,7 @@ describe('cities (PROMPT-015d)', () => {
     expect(locationsForScraper(codes, 'chatgpt-web')).toEqual(['TR']);
     expect(locationsForScraper(codes, 'google-aimode')).toEqual(['TR', 'TR~ISTANBUL', 'TR~ANKARA']);
     expect(locationsForScraper(['US-CA', 'US~NEW_YORK'], 'google-aio')).toEqual([
-      'US',
+      'US-CA',
       'US~NEW_YORK',
     ]);
     // A prompt tracked only in cities: nothing for the engines that can't ask from one.

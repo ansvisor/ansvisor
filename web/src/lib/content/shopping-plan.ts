@@ -3,6 +3,7 @@ import type { DraftStatus } from './drafts';
 import { SCORE_WEIGHTS } from './plan';
 import type { DraftShopping } from './shopping-check';
 import { wordsOf } from './sources';
+import { round } from '@/lib/priority-core';
 
 /**
  * Plan › Shopping opportunities (shopping path, part 7; the mockup's
@@ -97,7 +98,7 @@ function names(textWords: Set<string>, leafWords: string[]): boolean {
   return leafWords.length > 0 && leafWords.every((w) => textWords.has(w));
 }
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
+const round1 = (n: number) => round(n, 1);
 
 /** A new guide's score: a new page's, its opportunity the prompts asking and the products in stock. */
 export function guideScore(prompts: number, inStock: number): number {

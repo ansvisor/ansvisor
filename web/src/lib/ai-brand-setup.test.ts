@@ -9,6 +9,7 @@ vi.mock('@/lib/supabase/client', () => ({
 const {
   BRAND_SETUP_LIMITS,
   SetupDailyLimitError,
+  detectSiteType,
   generatePromptsFromTopics,
   suggestCompetitors,
   suggestFailure,
@@ -182,5 +183,41 @@ describe('setup suggestions past the daily limit', () => {
   it('returns the suggestions on success', async () => {
     vi.stubGlobal('fetch', answer(200, { topics: [{ name: 'Coffee' }] }));
     await expect(suggestTopics(params)).resolves.toEqual({ topics: ['Coffee'] });
+  });
+});
+
+describe('detectSiteType', () => {
+  it("asks the API to detect the brand's site type, signed in, and gives back what it kept", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ siteType: 'ecommerce', industry: 'E-commerce & Retail', via: 'page' }),
+    });
+    await expect(detectSiteType('b 1')).resolves.toEqual({
+      siteType: 'ecommerce',
+      industry: 'E-commerce & Retail',
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/\/api\/brands\/b%201\/detect-site-type$/);
+    expect(init).toMatchObject({ method: 'POST', headers: { Authorization: 'Bearer token' } });
+  });
+
+  it("gives nulls when the type was chosen by hand or couldn't be told, or is one it doesn't know", async () => {
+    for (const body of [
+      { siteType: null, skipped: 'manual' },
+      { siteType: null },
+      { siteType: 'app', industry: 7 },
+    ]) {
+      fetchMock.mockResolvedValue({ ok: true, json: async () => body });
+      await expect(detectSiteType('b1')).resolves.toEqual({ siteType: null, industry: null });
+    }
+  });
+
+  it("throws SetupDailyLimitError past the day's setup calls", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ code: 'onboarding_daily_limit' }),
+    });
+    await expect(detectSiteType('b1')).rejects.toBeInstanceOf(SetupDailyLimitError);
   });
 });
