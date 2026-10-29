@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // The module pulls in the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../config/supabase.js', () => ({ default: {} }));
-const cloro = vi.hoisted(() => ({ submitScraperTask: vi.fn() }));
+const cloro = vi.hoisted(() => ({ submitPromptTask: vi.fn(), pollScraperResult: vi.fn() }));
 const log = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }));
 vi.mock('../lib/logger.js', () => ({ default: log, logger: log }));
-vi.mock('../lib/cloro-scraper.js', () => ({
-  submitScraperTask: cloro.submitScraperTask,
-  pollScraperResult: vi.fn(),
+vi.mock('../lib/cloro-scraper.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  submitPromptTask: cloro.submitPromptTask,
+  pollScraperResult: cloro.pollScraperResult,
 }));
 
 import {
@@ -17,12 +18,15 @@ import {
   fetchAllPendingRows,
   interactiveTailExhausted,
   runnablePlatforms,
+  pollTrackingTask,
+  runAsksChatgptFanout,
+  scraperTasksFor,
   shoppingTracked,
-  submitTrackingTask,
   tailRemainder,
   UNAVAILABLE_PLATFORMS,
 } from './tracking-worker.js';
 import { getPlan, PLANS } from '../config/plans.js';
+import { chatgptFanoutWeekday } from '../lib/chatgpt-fanout.js';
 
 /**
  * Ghost detection for the Cloro drain loop (#687).
@@ -347,59 +351,99 @@ describe('interactiveTailExhausted', () => {
   });
 });
 
-describe('submitTrackingTask', () => {
-  const prompt = { id: 'prompt-1', text: 'best crm for startups' };
-  const hook = { webhookUrl: 'https://api.example.com/cloro/callback' };
+describe('runAsksChatgptFanout', () => {
+  it("asks on the nightly run's first attempt only", () => {
+    expect(runAsksChatgptFanout({ source: 'cron', attempt: 1 })).toBe(true);
+    // A retry, or a recovered run, may follow an attempt that already paid.
+    expect(runAsksChatgptFanout({ source: 'cron', attempt: 2 })).toBe(false);
+    // /check, analyze-new and the internal trigger are all manual runs.
+    expect(runAsksChatgptFanout({ source: 'manual', attempt: 1 })).toBe(false);
+    expect(runAsksChatgptFanout({ source: 'cron' })).toBe(false);
+  });
+});
+
+describe('scraperTasksFor', () => {
+  const prompt = { id: '00000000-0000-4000-8000-000000000001', text: 'best crm' };
+  const day = chatgptFanoutWeekday(prompt.id);
+  // 2026-10-25 was a Sunday (0); the prompt's day and the day after it.
+  const itsDay = new Date(Date.UTC(2026, 9, 25 + day, 2));
+  const nextDay = new Date(Date.UTC(2026, 9, 26 + day, 2));
+  const build = (chatgptFanout) =>
+    scraperTasksFor([prompt], {
+      platformsFor: () => ['chatgpt-web', 'chatgpt-shopping', 'copilot-web'],
+      locationsFor: () => ['US', 'US-CA'],
+      chatgptFanout,
+    }).map((t) => [t.scraperId, t.region, t.legacy]);
+
+  it("asks ChatGPT's every location on the prompt's day, and nothing else", () => {
+    expect(itsDay.getUTCDay()).toBe(day);
+    expect(build({ mode: 'sample', date: itsDay })).toEqual([
+      ['chatgpt-web', 'US', true],
+      ['chatgpt-web', 'US-CA', true],
+      ['chatgpt-shopping', 'US', false],
+      ['chatgpt-shopping', 'US-CA', false],
+      ['copilot-web', 'US', false],
+      ['copilot-web', 'US-CA', false],
+    ]);
+  });
+
+  it("follows the run's date and mode", () => {
+    const asked = (fanout) => build(fanout).filter(([, , legacy]) => legacy).length;
+    expect(asked({ mode: 'sample', date: nextDay })).toBe(0);
+    expect(asked({ mode: 'all', date: nextDay })).toBe(2);
+    expect(asked({ mode: 'off', date: itsDay })).toBe(0);
+  });
+
+  it('asks nothing in a run that may not ask', () => {
+    expect(build(null).filter(([, , legacy]) => legacy)).toEqual([]);
+  });
+});
+
+describe('pollTrackingTask', () => {
+  const meta = { prompt: { id: 'prompt-1', text: 'best crm' }, region: 'US-CA' };
+  const answer = { text: 'answer', citations: [], model: 'gpt-6' };
+  const failed = () =>
+    Object.assign(new Error('Cloro task t1 failed: legacy unavailable'), { taskFailed: true });
 
   beforeEach(() => {
-    cloro.submitScraperTask.mockReset();
+    cloro.submitPromptTask.mockReset();
+    cloro.pollScraperResult.mockReset();
+    log.warn.mockClear();
   });
 
-  it("asks a legacy ChatGPT task for its fan-out, with the prompt's own targeting", async () => {
-    cloro.submitScraperTask.mockResolvedValue({ taskId: 't1', scraperId: 'chatgpt-web' });
-    const task = { prompt, scraperId: 'chatgpt-web', region: 'US-CA', legacy: true };
-
-    await expect(submitTrackingTask(task, hook)).resolves.toEqual({
-      taskId: 't1',
+  it('sends a legacy ChatGPT task Cloro failed again without legacy, and polls that', async () => {
+    cloro.pollScraperResult.mockRejectedValueOnce(failed()).mockResolvedValueOnce(answer);
+    cloro.submitPromptTask.mockResolvedValue({
+      taskId: 't2',
       scraperId: 'chatgpt-web',
+      legacy: false,
     });
-    expect(cloro.submitScraperTask).toHaveBeenCalledTimes(1);
-    expect(cloro.submitScraperTask).toHaveBeenCalledWith(
-      'best crm for startups',
-      'chatgpt-web',
-      'US',
-      {
-        ...hook,
-        state: 'CA',
-        location: undefined,
-        legacy: true,
-      },
-    );
+
+    await expect(
+      pollTrackingTask({ taskId: 't1', scraperId: 'chatgpt-web', legacy: true, meta }),
+    ).resolves.toBe(answer);
+    expect(cloro.submitPromptTask).toHaveBeenCalledWith({
+      promptText: 'best crm',
+      promptId: 'prompt-1',
+      scraperId: 'chatgpt-web',
+      region: 'US-CA',
+    });
+    expect(cloro.pollScraperResult.mock.calls.map(([taskId]) => taskId)).toEqual(['t1', 't2']);
+    expect(log.warn).toHaveBeenCalledTimes(1);
   });
 
-  it('submits a refused legacy task again without it, so the day still has its answer', async () => {
-    cloro.submitScraperTask
-      .mockRejectedValueOnce(new Error('Cloro async submit error 400: unknown field legacy'))
-      .mockResolvedValueOnce({ taskId: 't2', scraperId: 'chatgpt-web' });
-    const task = { prompt, scraperId: 'chatgpt-web', region: 'US', legacy: true };
-
-    await expect(submitTrackingTask(task, hook)).resolves.toMatchObject({ taskId: 't2' });
-    expect(cloro.submitScraperTask.mock.calls.map(([, , , opts]) => opts.legacy)).toEqual([
-      true,
-      false,
-    ]);
-    expect(log.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ scraperId: 'chatgpt-web', promptId: 'prompt-1' }),
-      'chatgpt fan-out task refused; submitting it without fan-out',
-    );
-  });
-
-  it('never retries a task that did not ask for it', async () => {
-    cloro.submitScraperTask.mockRejectedValue(new Error('Cloro async submit error 402'));
-    const task = { prompt, scraperId: 'copilot-web', region: 'US', legacy: false };
-
-    await expect(submitTrackingTask(task, hook)).rejects.toThrow('402');
-    expect(cloro.submitScraperTask).toHaveBeenCalledTimes(1);
-    expect(cloro.submitScraperTask.mock.calls[0][3].legacy).toBe(false);
+  it('leaves any other failure as it was', async () => {
+    for (const [task, err] of [
+      [{ scraperId: 'chatgpt-web', legacy: false }, failed()],
+      [{ scraperId: 'copilot-web', legacy: true }, failed()],
+      [
+        { scraperId: 'chatgpt-web', legacy: true },
+        new Error('Cloro task t1 timed out after 1800s'),
+      ],
+    ]) {
+      cloro.pollScraperResult.mockReset().mockRejectedValueOnce(err);
+      await expect(pollTrackingTask({ taskId: 't1', ...task, meta })).rejects.toBe(err);
+    }
+    expect(cloro.submitPromptTask).not.toHaveBeenCalled();
   });
 });

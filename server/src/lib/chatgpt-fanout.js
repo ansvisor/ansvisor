@@ -5,26 +5,46 @@
  * text, so we stopped asking Cloro for it (#1119). Its legacy desktop
  * interface (`legacy: true`) still does, but the fan-out add-on costs +2
  * credits a task, and Cloro calls the legacy interface best-effort and
- * temporary. So by default each prompt's ChatGPT answer asks for it one day a
- * week: that day's answer is the one tracking stores, with no extra request.
+ * temporary. So each prompt's ChatGPT answer asks for it one day a week:
+ * that day's answer is the one tracking stores, with no extra request. Only
+ * the nightly run's first attempt asks (see runAsksChatgptFanout in the
+ * tracking worker); a manual run, a retry or a recovered run would pay again.
  *
  * Modes:
  *   off     never ask
- *   sample  one day a week per prompt (the default)
- *   all     every run
+ *   sample  one day a week per prompt
+ *   all     every nightly run
+ * Unset, it is `sample` on the managed cloud and `off` on self-host, so an
+ * update never starts spending a self-hoster's credits on its own.
  */
 
 import { createHash } from 'node:crypto';
+import { isCloud } from '../config/plans.js';
+import { logger } from './logger.js';
 
 export const CHATGPT_FANOUT_MODES = ['off', 'sample', 'all'];
-export const DEFAULT_CHATGPT_FANOUT_MODE = 'sample';
 
-/** The configured mode. Unset, or a value it doesn't know, is the default. */
-export function chatgptFanoutMode(value = process.env.CLORO_CHATGPT_FANOUT) {
+let warnedUnknown = false;
+
+/**
+ * The configured mode. Unset (or blank): `sample` on the cloud, `off` on
+ * self-host. A value it doesn't know is `off`, said once in the log: a typo
+ * must not cost credits.
+ */
+export function chatgptFanoutMode(value = process.env.CLORO_CHATGPT_FANOUT, cloud = isCloud()) {
   const mode = String(value ?? '')
     .trim()
     .toLowerCase();
-  return CHATGPT_FANOUT_MODES.includes(mode) ? mode : DEFAULT_CHATGPT_FANOUT_MODE;
+  if (mode === '') return cloud ? 'sample' : 'off';
+  if (CHATGPT_FANOUT_MODES.includes(mode)) return mode;
+  if (!warnedUnknown) {
+    warnedUnknown = true;
+    logger.warn(
+      { value, expected: CHATGPT_FANOUT_MODES },
+      'CLORO_CHATGPT_FANOUT has a value it does not know; ChatGPT fan-out is off',
+    );
+  }
+  return 'off';
 }
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
-import { submitScraperTask, pollScraperResult } from '../lib/cloro-scraper.js';
+import { isLegacyChatgptTask, pollScraperResult, submitPromptTask } from '../lib/cloro-scraper.js';
 import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -15,12 +15,7 @@ import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
-import {
-  isUnknownCity,
-  locationsForModels,
-  locationsForScraper,
-  parseLocation,
-} from '../lib/locations.js';
+import { isUnknownCity, locationsForModels, locationsForScraper } from '../lib/locations.js';
 import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
 import logger from '../lib/logger.js';
@@ -175,41 +170,73 @@ export function interactiveTailExhausted({ pending, expected, quietPolls, quietP
 }
 
 /**
- * Submit one scraper task of a run. Targeting comes from the prompt's own
- * location, not from the brand's single state column (#691): different
- * prompts can target different places, and a brand-wide override would
- * silently win over them.
- *
- * A task with `legacy` asks ChatGPT for its fan-out (chatgpt-fanout.js).
- * Cloro calls that interface temporary, so if it refuses the task, the task
- * goes again without it: the day's answer is still tracked.
+ * Whether a run's ChatGPT tasks may ask for their fan-out at all: only the
+ * nightly run's first attempt. A manual run, a new prompt's first run, a
+ * retry or a recovered run would ask again on a day the prompt may already
+ * have paid +2 credits for it.
  */
-export async function submitTrackingTask({ prompt, scraperId, region, legacy }, { webhookUrl }) {
-  const { country, state, city } = parseLocation(region);
-  const submit = (withLegacy) =>
-    submitScraperTask(prompt.text, scraperId, country, {
-      webhookUrl,
-      state,
-      location: city?.google,
-      legacy: withLegacy,
-    });
-  if (!legacy) return submit(false);
+export function runAsksChatgptFanout({ source, attempt }) {
+  return source === 'cron' && attempt === 1;
+}
+
+/**
+ * A run's scraper tasks: one per prompt × engine × location that engine can
+ * run. `region` carries the full location code — it is what gets stamped on
+ * the result row, so a Google run collapsed to its country is recorded as the
+ * country it actually ran in, not the state that was asked for.
+ *
+ * `chatgptFanout` is `{ mode, date }` when the run may ask (see
+ * runAsksChatgptFanout), else null. A prompt's ChatGPT tasks then ask on its
+ * day of the week (chatgpt-fanout.js), every location's alike.
+ */
+export function scraperTasksFor(prompts, { platformsFor, locationsFor, chatgptFanout }) {
+  const tasks = [];
+  for (const prompt of prompts) {
+    for (const scraperId of platformsFor(prompt)) {
+      const legacy =
+        chatgptFanout != null &&
+        scraperId === 'chatgpt-web' &&
+        chatgptFanoutDue(prompt.id, chatgptFanout.date, chatgptFanout.mode);
+      for (const region of locationsFor(prompt, scraperId)) {
+        tasks.push({ prompt, scraperId, region, legacy });
+      }
+    }
+  }
+  return tasks;
+}
+
+/**
+ * Poll one of a run's tasks (polling mode). A legacy ChatGPT task that Cloro
+ * took and then failed goes once more without legacy and is polled in its
+ * place, so the day keeps its answer; the webhook path does the same in
+ * routes/cloro-callback.js. `legacy` is the submission's own record, as
+ * polling has no pending row.
+ */
+export async function pollTrackingTask({ taskId, scraperId, legacy, meta }) {
   try {
-    return await submit(true);
+    return await pollScraperResult(taskId, scraperId);
   } catch (err) {
+    if (!(err?.taskFailed && isLegacyChatgptTask({ scraperId, legacy }))) throw err;
     logger.warn(
-      { err, scraperId, promptId: prompt.id },
-      'chatgpt fan-out task refused; submitting it without fan-out',
+      { err, taskId, scraperId, promptId: meta.prompt.id },
+      'chatgpt fan-out task failed at cloro; submitting it again without fan-out',
     );
-    return submit(false);
+    const again = await submitPromptTask({
+      promptText: meta.prompt.text,
+      promptId: meta.prompt.id,
+      scraperId,
+      region: meta.region,
+    });
+    return pollScraperResult(again.taskId, scraperId);
   }
 }
 
 /**
  * Core logic: fetch prompts, run them through specified models, store results.
- * @param {{ brandId: string, promptId?: string, promptIds?: string[], source?: string, job?: { progress: function, signal?: AbortSignal } }} opts
+ * `attempt` is the job's attempt number (1 on its first run).
+ * @param {{ brandId: string, promptId?: string, promptIds?: string[], source?: string, attempt?: number, job?: { progress: function, signal?: AbortSignal } }} opts
  */
-export async function processTrackingJob({ brandId, promptId, promptIds, source, job }) {
+export async function processTrackingJob({ brandId, promptId, promptIds, source, attempt, job }) {
   // 1. Fetch brand info with domains
   const { data: brand, error: brandErr } = await supabaseAdmin
     .from('brands')
@@ -420,26 +447,17 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     });
   }
 
-  // 6. Phase 1: Collect & run all scraper (platform) tasks first
-  // A prompt's ChatGPT answer asks for its fan-out on its day of the week
-  // (CLORO_CHATGPT_FANOUT, chatgpt-fanout.js), read once for the whole run.
-  const chatgptFanout = chatgptFanoutMode();
-  const runDate = new Date();
-  const scraperTasks = [];
-  for (const prompt of prompts) {
-    const scrapersToRun = allowedPlatformsFor(prompt);
-
-    for (const scraperId of scrapersToRun) {
-      const legacy =
-        scraperId === 'chatgpt-web' && chatgptFanoutDue(prompt.id, runDate, chatgptFanout);
-      // `region` carries the full location code — it is what gets stamped on
-      // the result row, so a Google run collapsed to its country is recorded
-      // as the country it actually ran in, not the state that was asked for.
-      for (const region of scraperLocations(prompt, scraperId)) {
-        scraperTasks.push({ prompt, scraperId, region, legacy });
-      }
-    }
-  }
+  // 6. Phase 1: Collect & run all scraper (platform) tasks first. A prompt's
+  // ChatGPT answer asks for its fan-out on its day of the week
+  // (CLORO_CHATGPT_FANOUT), on the nightly run's first attempt only; the
+  // mode and the day are read once for the whole run.
+  const scraperTasks = scraperTasksFor(prompts, {
+    platformsFor: allowedPlatformsFor,
+    locationsFor: scraperLocations,
+    chatgptFanout: runAsksChatgptFanout({ source, attempt })
+      ? { mode: chatgptFanoutMode(), date: new Date() }
+      : null,
+  });
 
   const webhookUrl = process.env.CLORO_WEBHOOK_URL;
 
@@ -467,7 +485,14 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
       scraperTasks.map((t) =>
-        submitTrackingTask(t, { webhookUrl }).then((res) => ({
+        submitPromptTask({
+          promptText: t.prompt.text,
+          promptId: t.prompt.id,
+          scraperId: t.scraperId,
+          region: t.region,
+          legacy: t.legacy,
+          webhookUrl,
+        }).then((res) => ({
           ...res,
           meta: t,
         })),
@@ -496,12 +521,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       // Webhook mode: persist (taskId → prompt) mapping; the /cloro/callback
       // endpoint will pick up results asynchronously when Cloro pushes them.
       if (submitted.length > 0) {
-        const pendingRows = submitted.map(({ taskId, scraperId, meta }) => ({
+        // `legacy` (00378): the task went to ChatGPT's legacy interface, so
+        // the callback sends it again without it if Cloro fails it.
+        const pendingRows = submitted.map(({ taskId, scraperId, meta, legacy }) => ({
           task_id: taskId,
           prompt_id: meta.prompt.id,
           brand_id: brandId,
           scraper_id: scraperId,
           region: meta.region,
+          legacy: legacy === true,
         }));
 
         const { error: pendingErr } = await supabaseAdmin
@@ -778,10 +806,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
       // Polling fallback: wait for each task inline (legacy behavior)
       await Promise.allSettled(
-        submitted.map(async ({ taskId, scraperId, meta }) => {
+        submitted.map(async ({ taskId, scraperId, meta, legacy }) => {
           try {
             logger.debug({ taskId, scraperId }, 'polling scraper task');
-            const aiResponse = await pollScraperResult(taskId, scraperId);
+            const aiResponse = await pollTrackingTask({ taskId, scraperId, legacy, meta });
             logger.debug({ taskId, scraperId }, 'scraper task completed, inserting result');
 
             const mentionCount = countBrandMentions(aiResponse.text, brandInfo);

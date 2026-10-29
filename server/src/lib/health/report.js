@@ -164,13 +164,16 @@ async function checkCloro(now) {
  * ChatGPT follows CLORO_CHATGPT_FANOUT (chatgpt-fanout.js): its default
  * interface carries no query text since that day (#1119), so only its legacy
  * tasks ask for it.
- *  - `all`: every task asks, so it's expected like the engines below.
- *  - `sample` (the default): a prompt's task asks one day a week, so a day's
- *    share follows how many prompts fall on that day, and on a small install a
- *    day can hold none. It's judged over the last CHATGPT_SAMPLE_DAYS instead,
- *    which hold every daily prompt's day, and flagged when none of those
- *    answers carried any.
- *  - `off`: nothing asks, so it isn't judged.
+ *  - `all`: every nightly task asks, so it's expected like the engines below.
+ *  - `sample` (the cloud's default): a prompt's task asks one day a week, so a
+ *    day's share follows how many prompts fall on that day, and on a small
+ *    install a day can hold none. It's flagged when none of its answers
+ *    carried any over the last CHATGPT_SAMPLE_DAYS, which hold every daily
+ *    prompt's day, or over the last day alone; either only with
+ *    CHATGPT_SAMPLE_MIN_ANSWERS answers, as a seventh of them asked. The
+ *    drop against the days before isn't used: a sampled day's share swings.
+ *    When those days can't be read, ChatGPT alone goes unjudged that day.
+ *  - `off` (the self-host default): nothing asks, so it isn't judged.
  */
 export const FANOUT_EXPECTED = ['copilot-web', 'perplexity-web'];
 export const FANOUT_DROP_RATIO = 0.25;
@@ -182,12 +185,15 @@ export const FANOUT_MIN_BASELINE = 0.05;
 export const BASELINE_DAYS = 3;
 /** The window sampled ChatGPT fan-out is judged over: one day a week per prompt. */
 export const CHATGPT_SAMPLE_DAYS = 7;
+/** Sampled ChatGPT answers needed to judge: a seventh of them asked for fan-out. */
+export const CHATGPT_SAMPLE_MIN_ANSWERS = CHATGPT_SAMPLE_DAYS * FANOUT_MIN_ANSWERS;
 const CHATGPT = 'chatgpt-web';
 
 /**
  * Each platform's fan-out share over the last day and over the days before.
  * On `sample`, ChatGPT's also gets its last CHATGPT_SAMPLE_DAYS: the two
- * windows above plus the days before them, read only then.
+ * windows above plus the days before them, read only then. That read failing
+ * leaves ChatGPT unjudged (`weekError`) and the other platforms as they are.
  */
 async function checkFanout(now, mode = chatgptFanoutMode()) {
   const day = new Date(now - DAY_MS).toISOString();
@@ -206,10 +212,16 @@ async function checkFanout(now, mode = chatgptFanoutMode()) {
     );
   };
   const sampled = mode === 'sample';
+  let weekError = null;
   const [recent, before, older] = await Promise.all([
     read(day, new Date(now).toISOString()),
     read(week, day),
-    sampled ? read(new Date(now - CHATGPT_SAMPLE_DAYS * DAY_MS).toISOString(), week) : new Map(),
+    sampled
+      ? read(new Date(now - CHATGPT_SAMPLE_DAYS * DAY_MS).toISOString(), week).catch((err) => {
+          weekError = err.message;
+          return new Map();
+        })
+      : new Map(),
   ]);
 
   const keys = new Set([...recent.keys(), ...before.keys()]);
@@ -231,7 +243,8 @@ async function checkFanout(now, mode = chatgptFanoutMode()) {
     return {
       ...entry,
       chatgptFanout: mode,
-      ...(sampled
+      ...(sampled && weekError ? { weekError } : {}),
+      ...(sampled && !weekError
         ? {
             weekAnswers: r.answers + b.answers + o.answers,
             weekWithFanout: r.withFanout + b.withFanout + o.withFanout,
@@ -255,12 +268,23 @@ function fanoutExpectation(p) {
   return FANOUT_EXPECTED.includes(p.platform) ? 'day' : null;
 }
 
+/**
+ * Which window of ChatGPT's sample came back without any fan-out: 'week',
+ * 'day', or null when neither did (or either is too small to judge, or the
+ * week couldn't be read).
+ */
+function sampleSilent(p) {
+  if (p.weekError) return null;
+  if (p.weekAnswers >= CHATGPT_SAMPLE_MIN_ANSWERS && p.weekWithFanout === 0) return 'week';
+  if (p.answers >= CHATGPT_SAMPLE_MIN_ANSWERS && p.withFanout === 0) return 'day';
+  return null;
+}
+
 /** A platform whose fan-out stopped or collapsed (see FANOUT_EXPECTED). */
 export function fanoutDropped(p) {
   const expected = fanoutExpectation(p);
   if (expected === 'never') return false;
-  // A sampled day's share swings by design, so only its week is judged.
-  if (expected === 'week') return p.weekAnswers >= FANOUT_MIN_ANSWERS && p.weekWithFanout === 0;
+  if (expected === 'week') return sampleSilent(p) !== null;
   if (p.answers < FANOUT_MIN_ANSWERS) return false;
   if (expected === 'day' && p.withFanout === 0) return true;
   return (
@@ -358,12 +382,20 @@ export function findIssues(report) {
   // Reports from before the fan-out section have none.
   const fanout = report.fanout ?? {};
   if (fanout.error) issues.push(`Query fan-out could not be checked: ${fanout.error}`);
+  for (const p of fanout.platforms ?? []) {
+    if (p.weekError) {
+      issues.push(`${p.platform} query fan-out could not be checked: ${p.weekError}`);
+    }
+  }
   for (const p of (fanout.platforms ?? []).filter(fanoutDropped)) {
     if (fanoutExpectation(p) === 'week') {
+      const answers =
+        sampleSilent(p) === 'week'
+          ? `${p.weekAnswers} answers in the last ${CHATGPT_SAMPLE_DAYS} days`
+          : `${p.answers} answers in the last 24h`;
       issues.push(
-        `${p.platform} returned no query fan-out on any of its ${p.weekAnswers} answers ` +
-          `in the last ${CHATGPT_SAMPLE_DAYS} days, though each prompt asks for it one day a week ` +
-          `— check what Cloro's legacy ChatGPT interface returns`,
+        `${p.platform} returned no query fan-out on any of its ${answers}, though each prompt ` +
+          `asks for it one day a week — check what Cloro's legacy ChatGPT interface returns`,
       );
       continue;
     }
@@ -405,11 +437,13 @@ function fanoutTable(fanout) {
   if (fanout.error) return `<p>Could not check: ${escapeHtml(fanout.error)}</p>`;
   // ChatGPT's sample is judged on its week, so the row says that week too.
   const sampleWeek = (p) =>
-    fanoutExpectation(p) === 'week'
-      ? `; ${CHATGPT_SAMPLE_DAYS} days, sampled: ` +
-        `${percent(p.weekAnswers ? p.weekWithFanout / p.weekAnswers : null)} ` +
-        `(${p.weekWithFanout} / ${p.weekAnswers})`
-      : '';
+    fanoutExpectation(p) !== 'week'
+      ? ''
+      : p.weekError
+        ? `; ${CHATGPT_SAMPLE_DAYS} days, sampled: could not check`
+        : `; ${CHATGPT_SAMPLE_DAYS} days, sampled: ` +
+          `${percent(p.weekAnswers ? p.weekWithFanout / p.weekAnswers : null)} ` +
+          `(${p.weekWithFanout} / ${p.weekAnswers})`;
   const rows = (fanout.platforms ?? [])
     .map(
       (p) =>

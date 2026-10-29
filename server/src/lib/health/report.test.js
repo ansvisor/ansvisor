@@ -267,6 +267,10 @@ describe('query fan-out', () => {
   });
 
   describe("ChatGPT's sample, one day a week per prompt", () => {
+    beforeEach(() => {
+      process.env.CLORO_CHATGPT_FANOUT = 'sample';
+    });
+
     /** Rows per window, keyed by the window's start. */
     const windows = (recent, before, older) => (name, args) => {
       if (name !== 'fanout_coverage_by_platform') {
@@ -320,16 +324,69 @@ describe('query fan-out', () => {
       ]);
     });
 
-    it('needs enough answers in the week to judge', () => {
+    it('needs seven times the usual answers in the week to judge, as a seventh asked', () => {
       const sampled = {
         platform: 'chatgpt-web',
         chatgptFanout: 'sample',
         answers: 0,
         withFanout: 0,
       };
-      expect(fanoutDropped({ ...sampled, weekAnswers: 19, weekWithFanout: 0 })).toBe(false);
-      expect(fanoutDropped({ ...sampled, weekAnswers: 20, weekWithFanout: 0 })).toBe(true);
-      expect(fanoutDropped({ ...sampled, weekAnswers: 20, weekWithFanout: 1 })).toBe(false);
+      expect(fanoutDropped({ ...sampled, weekAnswers: 139, weekWithFanout: 0 })).toBe(false);
+      expect(fanoutDropped({ ...sampled, weekAnswers: 140, weekWithFanout: 0 })).toBe(true);
+      expect(fanoutDropped({ ...sampled, weekAnswers: 140, weekWithFanout: 1 })).toBe(false);
+    });
+
+    it('judges the last day alone too on an install that large, so it hears the next day', async () => {
+      db.rpc.mockImplementation(windows(chatgpt(200, 0), chatgpt(900, 150), chatgpt(900, 140)));
+      const report = await collectHealthReport(NOW);
+      expect(findIssues(report).filter((i) => i.includes('fan-out'))).toEqual([
+        "chatgpt-web returned no query fan-out on any of its 200 answers in the last 24h, though each prompt asks for it one day a week — check what Cloro's legacy ChatGPT interface returns",
+      ]);
+
+      const sampled = { platform: 'chatgpt-web', chatgptFanout: 'sample', weekWithFanout: 9 };
+      expect(fanoutDropped({ ...sampled, answers: 139, withFanout: 0, weekAnswers: 900 })).toBe(
+        false,
+      );
+      expect(fanoutDropped({ ...sampled, answers: 140, withFanout: 0, weekAnswers: 900 })).toBe(
+        true,
+      );
+    });
+
+    it('leaves only ChatGPT unjudged when its extra days cannot be read', async () => {
+      db.rpc.mockImplementation((name, args) => {
+        if (name !== 'fanout_coverage_by_platform') {
+          return Promise.resolve({ data: 0.1, error: null });
+        }
+        if (args.p_since === hoursAgo(24 * 7)) {
+          return Promise.resolve({ data: null, error: { message: 'timeout' } });
+        }
+        const rows = [
+          { platform: 'chatgpt-web', answers: 300, answers_with_fanout: 0 },
+          { platform: 'copilot-web', answers: 200, answers_with_fanout: 0 },
+        ];
+        return Promise.resolve({ data: rows, error: null });
+      });
+      const report = await collectHealthReport(NOW);
+
+      expect(report.fanout.error).toBeUndefined();
+      expect(report.fanout.platforms[0]).toMatchObject({
+        platform: 'chatgpt-web',
+        weekError: 'timeout',
+      });
+      expect(findIssues(report).filter((i) => i.includes('fan-out'))).toEqual([
+        'chatgpt-web query fan-out could not be checked: timeout',
+        'copilot-web returned no query fan-out on any of its 200 answers in the last 24h (0% the days before) — check what Cloro returns',
+      ]);
+      expect(renderHealthEmail(report).html).toContain('7 days, sampled: could not check');
+    });
+
+    it('is off on self-host unless set, and reads no extra days then', async () => {
+      delete process.env.CLORO_CHATGPT_FANOUT;
+      db.rpc.mockImplementation(windows(chatgpt(300, 0), chatgpt(900, 150), []));
+      const report = await collectHealthReport(NOW);
+      const reads = db.rpc.mock.calls.filter(([name]) => name === 'fanout_coverage_by_platform');
+      expect(reads).toHaveLength(2);
+      expect(report.fanout.platforms[0]).toMatchObject({ chatgptFanout: 'off' });
     });
 
     it('reads the extra days only on sample', async () => {

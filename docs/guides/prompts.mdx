@@ -9,7 +9,7 @@ The **Prompts** page (`/dashboard/prompts`) has four tabs. The **Prompts** item 
 
 - **Prompts** — your prompt list. A switch above the filters picks **Tracked Prompts** (`/dashboard/prompts/tracked`) or **Prompt Suggestions** (`/dashboard/prompts/suggestions`)
 - **Topics** (`/dashboard/prompts/topics`) — your tracked prompts grouped by theme
-- **Query Fan-out** (`/dashboard/prompts/fan-outs`) — the searches AI engines ran behind their answers. Copilot and Perplexity share them with every answer, ChatGPT one day a week for each prompt (see [ChatGPT fan-out](#chatgpt-fan-out))
+- **Query Fan-out** (`/dashboard/prompts/fan-outs`) — the searches AI engines ran behind their answers. Copilot and Perplexity share them when they search; ChatGPT's are sampled one day a week for each prompt (see [ChatGPT fan-out](#chatgpt-fan-out))
 - **Insights** (`/dashboard/prompts/insights`) — estimated AI search volume, intent and the highest-demand prompts
 
 The date range (24h, 7d, 30d, 90d or custom) applies to Prompts, Topics and Query Fan-out, and carries over when you switch tabs. Insights has no range: volume estimates aren't tied to a period.
@@ -26,11 +26,11 @@ The Query Fan-out tab lists the searches an AI engine ran before it answered, as
 
 ### ChatGPT fan-out
 
-ChatGPT's default interface stopped sharing its searches on 30 September 2026. Its older desktop interface still shares them, but asking for them costs extra on every ChatGPT answer, and our data provider calls that interface temporary. So each prompt's ChatGPT answer asks for its searches one day a week, on the same weekday every week, with prompts spread across the week. That day's answer is the one tracked as usual: nothing runs twice.
+ChatGPT's default interface stopped sharing its searches on 30 September 2026. Its older desktop interface still shares them, but asking for them costs extra on every ChatGPT answer, and our data provider calls that interface temporary. So each prompt's ChatGPT answer in the nightly run asks for its searches one day a week, on the same weekday every week, with prompts spread across the week. That day's answer is the one tracked as usual: nothing runs twice. A run you start yourself, or a new prompt's first run, doesn't ask.
 
 Over 7 days or more, every prompt tracked daily has had its day. A 24-hour range shows only the prompts whose day it was. Not every ChatGPT answer has searches even then, because ChatGPT doesn't search for every prompt.
 
-Self-hosted instances choose this with `CLORO_CHATGPT_FANOUT` (see [Environment variables](/self-host/env-variables)).
+Self-hosted instances turn this on with `CLORO_CHATGPT_FANOUT` (off unless set; see [Environment variables](/self-host/env-variables)). The extra cost is per ChatGPT task, and a prompt has one task per location: a prompt tracked in 3 locations pays it 3 times on its day. The day is the UTC day the nightly run starts, so with a schedule close to midnight UTC a prompt can be asked 0 or 2 times in a week.
 
 ## Adding prompts
 

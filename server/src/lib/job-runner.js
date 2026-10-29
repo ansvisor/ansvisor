@@ -120,6 +120,7 @@ async function attemptTrackingJob(jobId, io) {
       promptId,
       promptIds,
       source: immediate ? 'manual' : 'cron',
+      attempt: jobRow.attempts,
       job: proxy,
     });
 

@@ -11,6 +11,12 @@
  *
  * Prints a summary and writes the full response to a temp file. Never prints
  * the API key.
+ *
+ * Still to check with a real request (the maintainer's): whether a legacy
+ * ChatGPT answer's `sources` carry the `footnote` flag the way the default
+ * interface's do, so the #1119 filter (toCitations in cloro-scraper.js) keeps
+ * leaving the uncited pages out on a prompt's fan-out day. The raw response
+ * this writes holds the sources as Cloro sent them.
  */
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';

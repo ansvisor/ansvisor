@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { chatgptFanoutDue, chatgptFanoutMode, chatgptFanoutWeekday } from './chatgpt-fanout.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const log = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }));
+vi.mock('./logger.js', () => ({ default: log, logger: log }));
+
+const { chatgptFanoutDue, chatgptFanoutMode, chatgptFanoutWeekday } =
+  await import('./chatgpt-fanout.js');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Prompt ids shaped like the real ones, fixed so the test never changes. */
@@ -11,26 +16,42 @@ const ids = Array.from(
 const week = (start) => Array.from({ length: 7 }, (_, i) => new Date(start + i * DAY_MS));
 
 describe('chatgptFanoutMode', () => {
-  afterEach(() => {
+  const clear = () => {
     delete process.env.CLORO_CHATGPT_FANOUT;
-  });
+    delete process.env.IS_CLOUD;
+  };
+  beforeEach(clear);
+  afterEach(clear);
 
   it('reads off, sample and all, in any case', () => {
-    expect(chatgptFanoutMode('off')).toBe('off');
-    expect(chatgptFanoutMode(' ALL ')).toBe('all');
-    expect(chatgptFanoutMode('Sample')).toBe('sample');
+    expect(chatgptFanoutMode('off', true)).toBe('off');
+    expect(chatgptFanoutMode(' ALL ', false)).toBe('all');
+    expect(chatgptFanoutMode('Sample', false)).toBe('sample');
   });
 
-  it('defaults to sample when unset or unknown', () => {
-    expect(chatgptFanoutMode(undefined)).toBe('sample');
-    expect(chatgptFanoutMode('')).toBe('sample');
-    expect(chatgptFanoutMode('weekly')).toBe('sample');
+  it('is sample on the cloud and off on self-host when unset or blank', () => {
+    for (const value of [undefined, '', '  ']) {
+      expect(chatgptFanoutMode(value, true)).toBe('sample');
+      expect(chatgptFanoutMode(value, false)).toBe('off');
+    }
   });
 
   it('reads the environment', () => {
+    expect(chatgptFanoutMode()).toBe('off');
+    process.env.IS_CLOUD = 'true';
     expect(chatgptFanoutMode()).toBe('sample');
     process.env.CLORO_CHATGPT_FANOUT = 'off';
     expect(chatgptFanoutMode()).toBe('off');
+  });
+
+  it('turns a value it does not know off, and says so once', () => {
+    expect(chatgptFanoutMode('weekly', true)).toBe('off');
+    expect(chatgptFanoutMode('of', true)).toBe('off');
+    expect(log.warn).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 'weekly' }),
+      'CLORO_CHATGPT_FANOUT has a value it does not know; ChatGPT fan-out is off',
+    );
   });
 });
 
