@@ -634,7 +634,7 @@ export async function saveWebhookConfig(
     isActive?: boolean;
   },
 ): Promise<WebhookConfig> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const allowedEvents = [
     'opportunity.sent',

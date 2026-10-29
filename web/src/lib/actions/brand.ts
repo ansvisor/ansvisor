@@ -44,6 +44,8 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     conversionsEnabled: brand.conversions_enabled === true,
     conversionsConsent: brand.conversions_consent === 'always' ? 'always' : 'wait',
     isActive: brand.is_active === undefined ? true : !!brand.is_active,
+    isDemo: brand.is_demo === true,
+    demoHiddenAt: (brand.demo_hidden_at as string | null | undefined) ?? null,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
     updatedAt: brand.updated_at as string,
@@ -106,10 +108,12 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
   await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
+  // The demo brand (00380) never counts against the plan.
   const { count } = await supabase
     .from('brands')
     .select('id', { count: 'exact', head: true })
-    .eq('organization_id', input.organizationId);
+    .eq('organization_id', input.organizationId)
+    .eq('is_demo', false);
 
   const plan = await getOrgPlan(input.organizationId);
   if (!isWithinLimit(plan, 'maxBrands', count ?? 0)) {
@@ -181,7 +185,7 @@ interface UpdateBrandInput {
 }
 
 export async function updateBrand(id: string, updates: UpdateBrandInput): Promise<Brand> {
-  await assertWritable();
+  await assertWritable({ brandId: id });
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -279,7 +283,7 @@ export async function setBrandShoppingMode(
   brandId: string,
   enabled: boolean,
 ): Promise<{ promptsUpdated: number }> {
-  await assertWritable();
+  await assertWritable({ brandId });
   return applyShoppingMode(await createClient(), brandId, enabled);
 }
 
@@ -371,7 +375,7 @@ const UNDEFINED_COLUMN = '42703';
 export async function markBrandAsEcommerce(
   brandId: string,
 ): Promise<{ industry: string | null; promptsUpdated: number; siteType: SiteType | null }> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
   const read = await supabase
     .from('brands')
@@ -441,7 +445,7 @@ export async function markBrandAsEcommerce(
  * brand via their org membership.
  */
 export async function setBrandActive(brandId: string, isActive: boolean): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   // Return the updated row so a no-op (invalid id, or RLS silently denying the
@@ -472,7 +476,7 @@ export async function setPinnedCompetitors(
   brandId: string,
   competitorIds: string[],
 ): Promise<string[]> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!Array.isArray(competitorIds) || competitorIds.some((id) => typeof id !== 'string')) {
     throw new Error('Pinned competitors must be a list of competitor ids.');
   }

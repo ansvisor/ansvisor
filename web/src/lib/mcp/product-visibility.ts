@@ -8,6 +8,7 @@ import {
   getShoppingFilterOptions,
   getShoppingOwnChannels,
   getShoppingProducts,
+  getShoppingSearchAppearance,
   getShoppingShelf,
   type ShoppingDatePreset,
   type ShoppingFilters,
@@ -320,7 +321,7 @@ export async function getShoppingReadinessFor(
     const own = await marketOf(brandId, params.market);
     const market = own ?? 'us';
     const filters: ShoppingFilters = { datePreset: period, chatgptMarket: own ?? undefined };
-    const [sources, products, openAi, cheaper, amazonDrop, options, ownOn, gmcOffered] =
+    const [sources, products, openAi, cheaper, amazonDrop, options, ownOn, gmcOffered, search] =
       await Promise.all([
         orNull('catalog sources', readCatalogSources(supabaseAdmin, brandId)),
         getShoppingProducts(brandId, filters).then(
@@ -338,11 +339,13 @@ export async function getShoppingReadinessFor(
         // Which channels hold its products: one row a channel, not every card on the shelves.
         orNull('the channels', getShoppingOwnChannels(brandId, filters)),
         merchantCenterOffered(),
+        orNull("Search Console's shopping results", getShoppingSearchAppearance(brandId)),
       ]);
     const { score, items } = readinessChecklist({
       market,
       catalog: sources,
       merchantCenterOffered: gmcOffered,
+      searchAppearance: search,
       products: products === 'failed' ? null : products,
       openAi,
       cheaperResellers: cheaper?.length ?? null,

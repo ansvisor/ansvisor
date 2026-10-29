@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * A page's visual proof spots and proof asks (Quality CE-049): read by the
@@ -120,6 +120,7 @@ beforeEach(() => {
   keep.mockReset();
   generateObject.mockReset().mockResolvedValue(answer());
 });
+afterEach(() => vi.unstubAllEnvs());
 
 const read = (over = {}) =>
   readPage({
@@ -398,6 +399,26 @@ describe('readPage', () => {
       alt: 'A hiker with the Ridge 28 on a wet trail',
     });
     expect(result.proofs.map((p) => p.block)).toEqual([SEAMS, AWARD]);
+  });
+
+  it('reads with Claude Haiku with an Anthropic key, in a schema Claude takes, and keeps its id', async () => {
+    vi.stubEnv('QUALITY_CHECK_MODEL', '');
+    vi.stubEnv('CONTENT_READ_MODEL', '');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    await read();
+    const [call] = generateObject.mock.calls[0];
+    expect(call.model).toEqual({ id: 'anthropic/claude-haiku-5-5' });
+    expect(call.maxOutputTokens).toBe(16_000);
+    expect(call.providerOptions).toEqual({ anthropic: { structuredOutputMode: 'outputFormat' } });
+    for (const key of ['temperature', 'topP', 'topK']) expect(call).not.toHaveProperty(key);
+    const schema = call.schema.jsonSchema;
+    expect(JSON.stringify(schema)).not.toMatch(/"(\$schema|minimum|maximum|maxItems|oneOf)"/);
+    // A check's quote or none: a closed object, or null.
+    expect(schema.properties.balance.anyOf).toEqual([
+      expect.objectContaining({ type: 'object', additionalProperties: false }),
+      { type: 'null' },
+    ]);
+    expect(upserts[0].row.model).toBe('anthropic/claude-haiku-5-5');
   });
 
   it('reads nothing for a short page, an unchanged one, or within the minute', async () => {

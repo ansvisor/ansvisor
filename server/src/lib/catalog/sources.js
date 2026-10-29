@@ -148,7 +148,8 @@ export function redact(message, credentials) {
 
 /**
  * The live products a source may keep (ECOM-019): its workspace's cap less
- * the live products of the workspace's other sources, on any of its brands.
+ * the live products of the workspace's other sources, on any of its brands
+ * but its demo brand (00380), whose sample catalog never counts.
  * `room` is Infinity (and `cap` -1) on a self-hosted server, or for a plan
  * without a cap.
  */
@@ -169,7 +170,8 @@ export async function productRoom(
   const { data: brands, error: brandsError } = await db
     .from('brands')
     .select('id')
-    .eq('organization_id', brand.organization_id);
+    .eq('organization_id', brand.organization_id)
+    .eq('is_demo', false);
   if (brandsError) throw new Error(`brands read: ${brandsError.message}`);
   const { count, error: countError } = await db
     .from('catalog_products')
@@ -434,8 +436,10 @@ export async function sweepCatalogSources({
   const { data, error } = await db
     .from('catalog_sources')
     .select(
-      'id, brand_id, kind, format, url, account, last_synced_at, brands!inner(organizations!inner(subscription_status))',
+      'id, brand_id, kind, format, url, account, last_synced_at, brands!inner(is_demo, organizations!inner(subscription_status))',
     )
+    // A demo brand's catalog (00380) is sample data: its sources are never read.
+    .eq('brands.is_demo', false)
     .neq('kind', 'upload')
     .or(`last_synced_at.is.null,last_synced_at.lt.${due}`)
     .order('last_synced_at', { ascending: true, nullsFirst: true })

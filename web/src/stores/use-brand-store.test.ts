@@ -17,7 +17,7 @@ const { useBrandStore } = await import('./use-brand-store');
 const brand = (id: string) => ({ id, name: id }) as unknown as Brand;
 
 beforeEach(() => {
-  useBrandStore.setState({ brands: [], activeBrandId: null });
+  useBrandStore.setState({ brands: [], activeBrandId: null, loaded: false });
 });
 
 describe('the brand store', () => {
@@ -35,5 +35,18 @@ describe('the brand store', () => {
 
     useBrandStore.getState().setBrands([]);
     expect(useBrandStore.getState().activeBrandId).toBeNull();
+  });
+
+  // Before the server's list, an empty one isn't "no brands", and the brand
+  // on screen isn't known (BrandGuard waits on its skeleton).
+  it('is loaded by the server’s list only, an empty one too, and never keeps that', () => {
+    useBrandStore.setState({ brands: [brand('kept')], activeBrandId: 'kept' });
+    expect(useBrandStore.getState().loaded).toBe(false);
+
+    useBrandStore.getState().setBrands([]);
+    expect(useBrandStore.getState().loaded).toBe(true);
+
+    const kept = JSON.parse(window.localStorage.getItem('brand-store') ?? '{}');
+    expect(Object.keys(kept.state)).toEqual(['activeBrandId', 'brands']);
   });
 });

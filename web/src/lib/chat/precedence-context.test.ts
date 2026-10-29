@@ -194,11 +194,6 @@ describe('readPrecedenceContext', () => {
   });
 });
 
-// The demo chain (#1734, 00380) adds brands.is_demo. This stops compiling then, so the demo
-// flag gets wired to it (readBrandIsDemo) in the same change.
-type BrandRow = Database['public']['Tables']['brands']['Row'];
-const demoColumnNotYetThere: 'is_demo' extends keyof BrandRow ? never : true = true;
-
 // Every table a row looks its brand up in has brand_id; a new one that lacks it doesn't compile.
 type Tables = Database['public']['Tables'];
 const lookupTablesNameTheirBrand: {
@@ -216,13 +211,18 @@ const BRAND_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BRAND_ELSEWHERE = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const OPPORTUNITY = '44444444-4444-4444-8444-444444444444';
 
-/** brands: found only for brand A, in ORG. content_opportunities: the opportunity's brand. */
-function seedBrands(opportunityBrand: string | null = BRAND_A) {
+/**
+ * brands: found only for brand A, in ORG (or by its id alone), the demo brand
+ * when `demo`. content_opportunities: the opportunity's brand.
+ */
+function seedBrands(opportunityBrand: string | null = BRAND_A, demo = false) {
   const filter = (filters: Filters, column: string) => filters.find(([c]) => c === column)?.[1];
-  db.tables.brands = (filters: Filters) =>
-    filter(filters, 'id') === BRAND_A && filter(filters, 'organization_id') === ORG
-      ? { id: BRAND_A }
+  db.tables.brands = (filters: Filters) => {
+    const org = filter(filters, 'organization_id');
+    return filter(filters, 'id') === BRAND_A && (org === undefined || org === ORG)
+      ? { id: BRAND_A, is_demo: demo }
       : null;
+  };
   db.tables.content_opportunities = (filters: Filters) =>
     filter(filters, 'id') === OPPORTUNITY && opportunityBrand
       ? { brand_id: opportunityBrand }
@@ -267,15 +267,29 @@ describe("a call's brand", () => {
     });
   });
 
-  it('reads the demo flag, false until the demo chain merges', async () => {
-    expect(demoColumnNotYetThere).toBe(true);
+  it("reads the brand's demo flag (00380): the demo brand is kept to reading", async () => {
     expect(Object.values(lookupTablesNameTheirBrand).every(Boolean)).toBe(true);
     expect(await readBrandIsDemo(BRAND_A)).toBe(false);
+    expect(await readBrandIsDemo(BRAND_ELSEWHERE)).toBe(false);
     const context = (await readPrecedenceContext(request))!;
     expect(await readToolCall(context, byInput, { brand_id: BRAND_A }, true)).toEqual({
       brandId: BRAND_A,
       brandIsDemo: false,
       tainted: true,
     });
+
+    seedBrands(BRAND_A, true);
+    expect(await readBrandIsDemo(BRAND_A)).toBe(true);
+    const toolCall = await readToolCall(context, byInput, { brand_id: BRAND_A }, false);
+    expect(toolCall).toEqual({ brandId: BRAND_A, brandIsDemo: true, tainted: false });
+    expect(decideToolCall({ ...addPrompts, ...byInput }, context, toolCall)).toEqual({
+      kind: 'deny',
+      denial: { code: 'demo_brand' },
+    });
+  });
+
+  it('decides nothing on a demo flag read that failed', async () => {
+    db.errors.brands = 'timeout';
+    await expect(readBrandIsDemo(BRAND_A)).rejects.toThrow(/timeout/);
   });
 });

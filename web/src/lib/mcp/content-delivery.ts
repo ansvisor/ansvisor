@@ -18,7 +18,7 @@ import { assertSubscriptionActive } from './subscription-gate';
 export interface McpLastSend {
   /** queued, sent, failed (a send left queued reads as failed: interrupted) or published. */
   status: string;
-  /** webhook, webflow, wordpress or framer: the brand's webhook, Webflow collection, WordPress site or Framer collection. */
+  /** webhook, webflow, wordpress, framer or wix: the brand's webhook, Webflow collection, WordPress site, Framer collection or Wix site's Blog. */
   target: string;
   /** When it was published, sent or queued. */
   at: string;
@@ -160,11 +160,8 @@ export type McpPublishError = { error: 'invalid_url' | 'not_found'; message: str
  * citations and AI visits) and a linked action's Publish task completes
  * once all its pages are live. The API's publishDraft runs it for the key's
  * user through the CRON_SECRET internal endpoint; the draft must be the
- * key's organization's.
- *
- * TODO(demo-brand-mcp): add mark_content_draft_published to WRITE_TOOL_BRANDS
- * (lib/mcp/demo-gate.ts), its brand through content_drafts.brand_id, when
- * feature/demo-brand-mcp merges.
+ * key's organization's. Never on a demo brand (00380): the tool and its REST
+ * mirror refuse it (lib/mcp/demo-gate.ts), and so does the endpoint.
  */
 export async function markContentDraftPublishedFor(
   auth: McpAuthContext,

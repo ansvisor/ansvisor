@@ -624,6 +624,8 @@ describe('runGaSync', () => {
     expect(activeOrgFilter).toHaveBeenCalledWith(['paying', 'lapsed']);
     const brands = calls.find((call) => call.table === 'brands');
     expect(brands.filters).toContainEqual(['in', 'organization_id', ['paying']]);
+    // Never a demo brand (00380).
+    expect(brands.filters).toContainEqual(['eq', 'is_demo', false]);
   });
 
   it('reads no brand when no connected organization is on a plan', async () => {
