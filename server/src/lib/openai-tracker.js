@@ -29,19 +29,22 @@ const SOURCE_PLATFORM = 'chatgpt';
 /**
  * The searches a response's web_search calls ran, as the query fan-out is
  * kept (#332, as Cloro's engines give it): `[{ query, source_platform }]`,
- * each once, trimmed. A search action carries `query`, and may carry
- * `queries`; opening or searching within a page is no search.
+ * each once, trimmed. A search action lists them in `queries`; the single
+ * `query` it carried before is deprecated, and still read while responses
+ * may hold it. Opening or searching within a page is no search, and a call
+ * whose `status` is `failed` ran none.
  *
- * @param {Array<{ type?: string, action?: { type?: string, query?: unknown, queries?: unknown } }>} output
+ * @param {Array<{ type?: string, status?: string, action?: { type?: string, queries?: unknown, query?: unknown } }>} output
  */
 export function searchQueriesOf(output) {
   const seen = new Set();
   const queries = [];
   for (const item of output || []) {
     if (item?.type !== 'web_search_call' || item.action?.type !== 'search') continue;
+    if (item.status === 'failed') continue;
     const asked = [
-      item.action.query,
       ...(Array.isArray(item.action.queries) ? item.action.queries : []),
+      item.action.query,
     ];
     for (const value of asked) {
       const query = typeof value === 'string' ? value.trim() : '';

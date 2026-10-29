@@ -17,18 +17,24 @@ vi.mock('./logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: v
 process.env.OPENAI_API_KEY = 'sk-test';
 const { runPrompt, searchQueriesOf } = await import('./openai-tracker.js');
 
-const search = (action) => ({ type: 'web_search_call', id: 'ws_1', status: 'completed', action });
+const search = (action, status = 'completed') => ({
+  type: 'web_search_call',
+  id: 'ws_1',
+  status,
+  action,
+});
 
 beforeEach(() => {
   create.mockReset();
 });
 
 describe('searchQueriesOf', () => {
-  it("keeps each search's query and queries once, trimmed, and nothing else", () => {
+  it("keeps each search's queries (and the deprecated query) once, trimmed, and nothing else", () => {
     expect(
       searchQueriesOf([
-        search({ type: 'search', query: ' best electric kettle 2026 ' }),
-        search({ type: 'search', queries: ['kettle reviews', 'best electric kettle 2026', ' '] }),
+        search({ type: 'search', queries: [' best electric kettle 2026 ', 'kettle reviews', ' '] }),
+        search({ type: 'search', query: 'best electric kettle 2026' }),
+        search({ type: 'search', query: 'kettle descaling' }),
         search({ type: 'open_page', url: 'https://example.com' }),
         search({ type: 'find_in_page', pattern: 'price' }),
         { type: 'message', content: [] },
@@ -37,8 +43,18 @@ describe('searchQueriesOf', () => {
     ).toEqual([
       { query: 'best electric kettle 2026', source_platform: 'chatgpt' },
       { query: 'kettle reviews', source_platform: 'chatgpt' },
+      { query: 'kettle descaling', source_platform: 'chatgpt' },
     ]);
     expect(searchQueriesOf(undefined)).toEqual([]);
+  });
+
+  it('counts no search a failed call ran', () => {
+    expect(
+      searchQueriesOf([
+        search({ type: 'search', queries: ['kettle reviews'] }, 'failed'),
+        search({ type: 'search', queries: ['kettle prices'] }, 'in_progress'),
+      ]),
+    ).toEqual([{ query: 'kettle prices', source_platform: 'chatgpt' }]);
   });
 });
 

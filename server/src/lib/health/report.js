@@ -175,9 +175,11 @@ async function checkCloro(now) {
  *    When those days can't be read, ChatGPT alone goes unjudged that day.
  *  - `off` (the self-host default): nothing asks, so it isn't judged.
  */
-// `chatgpt` is the OpenAI API model's answers (the tracking worker's
-// resolveModelPlatform): its web_search calls carry their queries.
-export const FANOUT_EXPECTED = ['copilot-web', 'perplexity-web', 'chatgpt'];
+// `chatgpt`, the OpenAI API model's answers (the tracking worker's
+// resolveModelPlatform), isn't expected: its web_search calls carry their
+// queries, but gpt-5-chat-latest may search rarely or not at all, so a silent
+// day is no news. It's judged on a drop only, like any other platform.
+export const FANOUT_EXPECTED = ['copilot-web', 'perplexity-web'];
 export const FANOUT_DROP_RATIO = 0.25;
 /** Fewer answers than this, on either side, are too few to judge. */
 export const FANOUT_MIN_ANSWERS = 20;
