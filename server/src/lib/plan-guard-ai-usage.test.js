@@ -227,6 +227,8 @@ describe('getDraftAiUsage', () => {
     expect(pageFilters).toEqual([
       ['eq', 'organization_id', 'o1'],
       ['eq', 'content_draft_id', 'd1'],
+      // Calls on the workspace's own key never count (00405).
+      ['eq', 'own_key', false],
       // The same period as the month's figure: it renews on the 20th.
       ['gte', 'used_at', '2026-10-20T09:00:00.000Z'],
     ]);

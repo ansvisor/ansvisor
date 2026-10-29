@@ -24,9 +24,10 @@ const BAR_CLASS: Record<UsageTone, string> = {
 /**
  * This period's AI usage on the Billing page: how much of the plan's
  * monthly AI allowance the workspace has used, what used it, and when it
- * renews. Agent Chat runs on the workspace's own AI key, so it is a line
- * of text, not a share. Renders nothing for a plan without an allowance,
- * or a workspace without an active plan.
+ * renews. With Chat on for the workspace (`chatMetered`), Chat draws on it
+ * too and has its row; off, Agent Chat runs on the workspace's own AI key,
+ * so it is a line of text, not a share. Renders nothing for a plan without
+ * an allowance, or a workspace without an active plan.
  */
 export function AiUsageCard() {
   const t = useTranslations('settings.aiUsageMeter');
@@ -75,7 +76,9 @@ export function AiUsageCard() {
     <Card id="ai-usage" ref={card} className="scroll-mt-6">
       <CardHeader>
         <CardTitle>{t('title')}</CardTitle>
-        <CardDescription>{t('description')}</CardDescription>
+        <CardDescription>
+          {t(usage?.chatMetered ? 'descriptionChat' : 'description')}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {failed ? (
@@ -137,7 +140,9 @@ export function AiUsageCard() {
             ) : (
               <p className="text-sm text-muted-foreground">{t('none')}</p>
             )}
-            <p className="text-xs text-muted-foreground">{t('chat')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t(usage.chatMetered ? 'chatMetered' : 'chat')}
+            </p>
           </>
         )}
       </CardContent>
