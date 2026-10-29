@@ -3438,7 +3438,7 @@
       "trackedPrompts": "Tracked prompts",
       "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "slotsLeft": "{count, plural, one {# prompt/location left to add} other {# prompts/locations left to add}}",
       "limitReached": "Plan limit reached",
       "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
@@ -8273,7 +8273,7 @@
           "unknown": "Shops without it can be left out of results. How OpenAI grants it isn't public yet; a direct feed is the best bet."
         },
         "firstWords": {
-          "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
+          "title": "First 40 words of descriptions{count, plural, =0 {} one { · # product} other { · # products}}",
           "pass": "Every description says what the product is in its first 40 words.",
           "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
           "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
@@ -8292,12 +8292,12 @@
           "fail": "Without it, ChatGPT Shopping sales can't be told apart from other AI visits. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links."
         },
         "wrongPrice": {
-          "title": "{count, plural, =0 {Prices in AI answers match yours} other {Wrong price in AI answers · # products}}",
+          "title": "{count, plural, =0 {Prices in AI answers match yours} one {Wrong price in AI answers · # product} other {Wrong price in AI answers · # products}}",
           "pass": "Every price AI showed for your products matches your catalog.",
           "fail": "AI shows {seen} for {product}, your price is {yours}."
         },
         "resellerCheaper": {
-          "title": "{count, plural, =0 {No reseller cheaper than you} other {Reseller cheaper than you · # products}}",
+          "title": "{count, plural, =0 {No reseller cheaper than you} one {Reseller cheaper than you · # product} other {Reseller cheaper than you · # products}}",
           "pass": "AI links to no reseller selling your products for less.",
           "fail": "AI links to a reseller selling your product for less. See Shelf › Where AI sends shoppers."
         },
