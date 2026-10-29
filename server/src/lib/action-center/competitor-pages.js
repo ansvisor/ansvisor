@@ -368,3 +368,29 @@ export async function analyzeCompetitorPages({
     unreadable,
   };
 }
+
+/**
+ * What the checks found on pages already read (learning C2), by page key,
+ * for the brand: read in the last two `freshDays`, never read here. Improve
+ * gives them to its model as seen evidence, not a guess.
+ *
+ * @returns {Promise<Map<string, { own: boolean, checks: Record<string, string> }>>}
+ */
+export async function storedFeatures(brandId, urls, now = new Date()) {
+  const keys = [...new Set(urls.map((url) => opportunityKey(url)).filter(Boolean))];
+  if (keys.length === 0) return new Map();
+  const since = new Date(now.getTime() - 2 * C.freshDays * DAY_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('cited_page_features')
+    .select('page_key, own, features')
+    .eq('brand_id', brandId)
+    .in('page_key', keys)
+    .gte('read_at', since);
+  if (error) throw new Error(error.message);
+  return new Map(
+    (data ?? [])
+      // A page that couldn't be read leaves a row with nothing to tell.
+      .filter((row) => !row.features?.unreadable && row.features?.checks)
+      .map((row) => [row.page_key, { own: row.own === true, checks: row.features.checks }]),
+  );
+}

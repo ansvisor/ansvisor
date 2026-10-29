@@ -30,6 +30,25 @@ async function authHeaders(): Promise<Record<string, string>> {
   };
 }
 
+/**
+ * Whether this deployment can connect Google Merchant Center (the API has its
+ * Composio auth config): where it can't, Product Visibility doesn't ask for
+ * it. False when it can't be read: a claim of nothing.
+ */
+export async function getMerchantCenterOffered(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/integrations/config`, {
+      headers: await authHeaders(),
+      cache: 'no-store',
+    });
+    if (!res.ok) return false;
+    const config = (await res.json()) as { googleMerchantCenter?: boolean };
+    return Boolean(config.googleMerchantCenter);
+  } catch {
+    return false;
+  }
+}
+
 export async function getIntegrationStatus(
   provider: IntegrationProvider,
 ): Promise<IntegrationStatusResult> {
