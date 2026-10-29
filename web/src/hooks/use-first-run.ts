@@ -28,6 +28,8 @@ export interface FirstRun {
 
 interface Watch {
   run: FirstRun | null;
+  /** The run was seen going: its end is news ("Your first results are ready"). */
+  seen: boolean;
   /** The run's pace while the page watches it, for the time left. */
   pace: ProgressSample[];
   listeners: Set<() => void>;
@@ -38,6 +40,8 @@ interface Watch {
 
 // One read loop per brand, however many parts of the page show the run.
 const watches = new Map<string, Watch>();
+// Told once when a run a page watched finishes.
+const finishedListeners = new Set<(brandId: string) => void>();
 
 function emit(watch: Watch) {
   for (const listener of watch.listeners) listener();
@@ -58,6 +62,7 @@ async function tick(brandId: string, watch: Watch) {
     watch.live = false;
     watch.run = null;
     emit(watch);
+    if (watch.seen) for (const listener of finishedListeners) listener(brandId);
     return;
   }
   if (win) {
@@ -80,6 +85,7 @@ async function tick(brandId: string, watch: Watch) {
             left: eta === null ? null : etaParts(eta),
           }
         : null;
+    if (watch.run) watch.seen = true;
     emit(watch);
   }
   watch.timer = setTimeout(() => void tick(brandId, watch), FIRST_RUN_POLL_MS);
@@ -88,7 +94,7 @@ async function tick(brandId: string, watch: Watch) {
 function watchFirstRun(brandId: string, listener: () => void) {
   let watch = watches.get(brandId);
   if (!watch) {
-    watch = { run: null, pace: [], listeners: new Set(), live: true };
+    watch = { run: null, seen: false, pace: [], listeners: new Set(), live: true };
     watches.set(brandId, watch);
     void tick(brandId, watch);
   }
@@ -106,19 +112,32 @@ function watchFirstRun(brandId: string, listener: () => void) {
 const noWatch = () => () => {};
 
 /**
+ * Called with the brand's id when a first run a page watched finishes (the
+ * brand's first completed run): not for one already done when first read.
+ * Returns the way to stop listening.
+ */
+export function onFirstRunFinished(listener: (brandId: string) => void) {
+  finishedListeners.add(listener);
+  return () => {
+    finishedListeners.delete(listener);
+  };
+}
+
+/**
  * The active brand's first tracking run while it goes on, or null: before
  * the first read, when no run is under way, and once the brand has a
- * completed run. Another brand's run never shows under this one.
+ * completed run. Another brand's run never shows under this one. With
+ * `enabled` false: nothing, and no reads.
  */
-export function useFirstRun(): FirstRun | null {
+export function useFirstRun({ enabled = true }: { enabled?: boolean } = {}): FirstRun | null {
   const brandId = useBrandStore((s) => s.activeBrandId);
   const subscribe = useCallback(
-    (listener: () => void) => (brandId ? watchFirstRun(brandId, listener) : noWatch()),
-    [brandId],
+    (listener: () => void) => (brandId && enabled ? watchFirstRun(brandId, listener) : noWatch()),
+    [brandId, enabled],
   );
   const run = useSyncExternalStore(
     subscribe,
-    () => (brandId ? (watches.get(brandId)?.run ?? null) : null),
+    () => (brandId && enabled ? (watches.get(brandId)?.run ?? null) : null),
     () => null,
   );
   return run && run.brandId === brandId ? run : null;

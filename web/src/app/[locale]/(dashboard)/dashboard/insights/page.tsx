@@ -8,6 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { useFirstRun } from '@/hooks/use-first-run';
+import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import {
   getInsightsData,
   getTrackingWindow,
@@ -661,6 +663,8 @@ export default function InsightsPage() {
   const tActions = useTranslations('readOnly.actions');
   const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
+  // The brand's first run while it goes on: what an empty page says instead.
+  const firstRun = useFirstRun();
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1148,7 +1152,11 @@ export default function InsightsPage() {
         </HeaderWithAiUsage>
         <TrackingProgressBanner jobStatus={jobStatus} pace={pace} onStop={handleStopTracking} />
         {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
-        <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />
+        {firstRun ? (
+          <FirstRunEmptyState run={firstRun} />
+        ) : (
+          <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />
+        )}
         {!isCloud && (
           <div className="flex justify-center">
             <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
@@ -1273,7 +1281,9 @@ export default function InsightsPage() {
           </div>
         )}
         <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
-          {noResults ? (
+          {noResults && firstRun ? (
+            <FirstRunEmptyState run={firstRun} />
+          ) : noResults ? (
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>

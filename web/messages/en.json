@@ -363,6 +363,15 @@
       "frameTitle": "Chat preview"
     }
   },
+  "firstRun": {
+    "arriving": "Your first answers are arriving",
+    "queued": "Your first tracking starts as soon as a slot opens",
+    "count": "({current} of {total})",
+    "minutesLeft": "~{minutes} min",
+    "hoursLeft": "{hours, plural, one {~# hour} other {~# hours}}",
+    "fillsIn": "This fills in when tracking finishes.",
+    "ready": "Your first results are ready"
+  },
   "managersOnly": {
     "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
     "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
@@ -1960,8 +1969,10 @@
         "skipped": "Skipped"
       },
       "optional": "Optional",
+      "readyNow": "Ready now",
       "everyone": "Everyone in the workspace",
       "readyWhen": {
+        "arriving": "Arriving now",
         "setup": "Now",
         "explore": "First answers · ~3h",
         "dataPrompts": "24h after Search Console or Analytics",
