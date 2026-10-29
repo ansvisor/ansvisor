@@ -54,6 +54,7 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
   // dismissing open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tManagers = useTranslations('managersOnly');
 
   useEffect(() => {
     try {
@@ -233,7 +234,7 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
                   ? 'Generate AI topic ideas tailored to your brand and industry. Topics you already track are excluded automatically.'
                   : 'No topic suggestions have been generated for this brand yet.'}
               </p>
-              {canManage && (
+              {canManage ? (
                 <Button
                   onClick={guard(handleRefresh, { action: tActions('suggestTopics') })}
                   disabled={refreshing}
@@ -247,6 +248,8 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
                   )}
                   Generate Suggestions
                 </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground">{tManagers('suggestTopics')}</p>
               )}
             </div>
           ) : (

@@ -108,6 +108,8 @@ function describeEvidence(
 
 function WhereValueView({ value }: { value: WhereValue }) {
   const t = useTranslations('actionCenter.signalsPage');
+  // A competitor's page events read as the Competitors page's timeline says them.
+  const tTimeline = useTranslations('competitors.timeline');
   const format = useFormatter();
   switch (value.type) {
     case 'text':
@@ -395,6 +397,56 @@ function WhereValueView({ value }: { value: WhereValue }) {
             </li>
           ))}
         </ul>
+      );
+    case 'pageEvents':
+      return (
+        <div className="space-y-1.5">
+          {value.items.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t('drawer.pageEvents.none', { days: value.days })}
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {value.items.map((event) => {
+                const checks = (list: { label: string }[]) => list.map((c) => c.label).join(', ');
+                const what =
+                  event.kind === 'first_cited'
+                    ? [tTimeline('firstCited')]
+                    : [
+                        tTimeline('changed'),
+                        event.gained.length > 0 &&
+                          tTimeline('gained', { checks: checks(event.gained) }),
+                        event.lost.length > 0 && tTimeline('lost', { checks: checks(event.lost) }),
+                        event.gained.length + event.lost.length === 0 && tTimeline('changedWords'),
+                      ];
+                return (
+                  <li key={`${event.kind}-${event.url}-${event.at}`}>
+                    <span className="break-all">
+                      {event.url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {[
+                        format.dateTime(new Date(event.at), { month: 'short', day: 'numeric' }),
+                        ...what,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {value.competitorId && (
+            <Link
+              href={`/dashboard/competitors?competitor=${value.competitorId}`}
+              className="inline-flex items-center gap-0.5 text-xs font-medium underline-offset-2 hover:underline"
+            >
+              {t('drawer.pageEvents.timeline')}
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          )}
+        </div>
       );
     case 'citations':
       return (

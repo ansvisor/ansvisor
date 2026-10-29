@@ -48,6 +48,11 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 vi.mock('sonner', () => ({ toast }));
+// The viewer: a manager unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ canManage: viewer.canManage }),
+}));
 const suggestForPage = vi.fn();
 vi.mock('@/lib/actions/content', () => ({
   generateOpportunitiesOnDemand: vi.fn(),
@@ -118,6 +123,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  viewer.canManage = true;
   getTrafficPages.mockReset();
   sendTrafficPagesToActionCenter.mockReset();
   runAudit.mockReset();
@@ -217,6 +223,25 @@ describe('PagesCard', () => {
     await act(async () => button('Audit page').click());
     expect(runAudit).toHaveBeenCalledWith(BRAND, 'https://acme-coffee.example.com/gifts');
     expect(push).toHaveBeenCalledWith('/dashboard/audit/audit-1');
+  });
+
+  it('leaves an analyst Audit and Send, not Add prompts or Suggest content', async () => {
+    viewer.canManage = false;
+    getTrafficPages.mockResolvedValue(
+      pages([page({ citations: 6 }), page({ page: '/about', valueRank: 2 })]),
+    );
+    await render();
+    const labels = () =>
+      [...document.body.querySelectorAll('button, [role="menuitem"]')].map((el) =>
+        el.textContent?.trim(),
+      );
+    expect(labels()).not.toContain('Add prompts');
+    expect(container.textContent).toContain('Ask an admin or a manager to add prompts.');
+    expect(labels()).toContain('Audit page');
+    const menu = container.querySelector<HTMLElement>('[aria-label^="More actions for"]')!;
+    await act(async () => menu.click());
+    expect(labels()).toContain('Send to Action Center');
+    expect(labels()).not.toContain('Suggest content');
   });
 
   it('audits, suggests and sends nothing on a read-only workspace: the upgrade dialog instead', async () => {

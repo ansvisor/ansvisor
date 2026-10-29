@@ -12,11 +12,15 @@ export type IntegrationProvider =
 
 export type IntegrationStatus = 'not_configured' | 'not_connected' | 'connected';
 
-export interface IntegrationStatusResult {
-  configured: boolean;
-  status: IntegrationStatus;
-  accountId?: string;
-}
+/**
+ * How long a call to the API waits. A provider's status, live connect and
+ * property lists are read from the browser instead (lib/integrations-client.ts):
+ * Next runs server actions one at a time, so they held each other up.
+ */
+const CONFIG_TIMEOUT_MS = 10_000;
+const DISCONNECT_TIMEOUT_MS = 20_000;
+/** The API answers a sync at once and runs it in the background. */
+const SYNC_START_TIMEOUT_MS = 5_000;
 
 async function authHeaders(): Promise<Record<string, string>> {
   const supabase = await createClient();
@@ -40,6 +44,7 @@ export async function getMerchantCenterOffered(): Promise<boolean> {
     const res = await fetch(`${API_BASE_URL}/api/integrations/config`, {
       headers: await authHeaders(),
       cache: 'no-store',
+      signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS),
     });
     if (!res.ok) return false;
     const config = (await res.json()) as { googleMerchantCenter?: boolean };
@@ -49,22 +54,10 @@ export async function getMerchantCenterOffered(): Promise<boolean> {
   }
 }
 
-export async function getIntegrationStatus(
-  provider: IntegrationProvider,
-): Promise<IntegrationStatusResult> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/${provider}/status`, {
-    headers: await authHeaders(),
-    cache: 'no-store',
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
-  return body as IntegrationStatusResult;
-}
-
 /**
  * Everything the suggestion-sources panel needs, in two round trips (#659).
  *
- * Deliberately does NOT call `getIntegrationStatus`. That resolves the live
+ * Deliberately does NOT read the provider's status. That resolves the live
  * state against Composio and re-syncs our row, which costs ~450ms per
  * provider — measured — and made the panel appear well after the suggestions
  * it sits above. This reads the row Composio's own status check maintains,
@@ -132,9 +125,7 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
     fetch(`${API_BASE_URL}/api/integrations/config`, {
       headers: await authHeaders(),
       cache: 'no-store',
-      // The Suggestions tab sends this before the list's own read, and Next
-      // runs server actions one at a time: a hung API must not hold the list.
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS),
     })
       .then((r) => (r.ok ? (r.json() as Promise<ConfigBody>) : ({} as ConfigBody)))
       .catch(() => ({}) as ConfigBody),
@@ -171,24 +162,11 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
   };
 }
 
-export async function connectIntegration(
-  provider: IntegrationProvider,
-  callbackUrl: string,
-): Promise<{ redirectUrl: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/${provider}/connect`, {
-    method: 'POST',
-    headers: await authHeaders(),
-    body: JSON.stringify({ callbackUrl }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
-  return body as { redirectUrl: string };
-}
-
 export async function disconnectIntegration(provider: IntegrationProvider): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/api/integrations/${provider}`, {
     method: 'DELETE',
     headers: await authHeaders(),
+    signal: AbortSignal.timeout(DISCONNECT_TIMEOUT_MS),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
@@ -208,6 +186,7 @@ async function startBrandSync(provider: IntegrationProvider, brandId: string): P
       method: 'POST',
       headers: await authHeaders(),
       body: JSON.stringify({ brandId }),
+      signal: AbortSignal.timeout(SYNC_START_TIMEOUT_MS),
     });
   } catch {
     // The nightly sync picks the brand up.
@@ -217,16 +196,6 @@ async function startBrandSync(provider: IntegrationProvider, brandId: string): P
 export interface GscProperty {
   siteUrl: string;
   permissionLevel: string | null;
-}
-
-export async function getGscProperties(): Promise<GscProperty[]> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/google-search-console/properties`, {
-    headers: await authHeaders(),
-    cache: 'no-store',
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
-  return (body.properties ?? []) as GscProperty[];
 }
 
 export interface GscBrandMapping {
@@ -273,16 +242,6 @@ export interface GaProperty {
   accountName: string | null;
   /** Site URLs from the property's web data streams; empty for app-only ones. */
   siteUrls: string[];
-}
-
-export async function getGaProperties(): Promise<GaProperty[]> {
-  const res = await fetch(`${API_BASE_URL}/api/integrations/google-analytics/properties`, {
-    headers: await authHeaders(),
-    cache: 'no-store',
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
-  return (body.properties ?? []) as GaProperty[];
 }
 
 export interface GaBrandMapping {

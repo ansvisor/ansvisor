@@ -3,6 +3,8 @@ import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
+import { startFirstTrackingRun } from '@/lib/billing/first-run';
+import { isSubscriptionActive } from '@/config/plans';
 import type Stripe from 'stripe';
 
 /**
@@ -89,6 +91,15 @@ export async function POST(req: NextRequest) {
               // ahead of the redirect (or that happen out-of-band entirely)
               // still get prompts in sync. Idempotent.
               await alignPromptsSafe(orgId, planId || 'starter', 'checkout');
+              // The first run too, after the alignment so it tracks the plan's
+              // engines: the return page may never load (a closed tab). One
+              // run per checkout, whichever of the two comes first.
+              await startFirstTrackingRun({
+                orgId,
+                subscriptionStatus: subscription.status,
+                purchaseStarted: session.created,
+                ctx: 'webhook:checkout',
+              });
             }
           }
         } else {
@@ -137,11 +148,37 @@ export async function POST(req: NextRequest) {
             .update(updates)
             .eq('stripe_customer_id', customerId);
 
-          if (orgBefore && newPlanId && newPlanId !== orgBefore.plan) {
+          const planChanged = Boolean(orgBefore && newPlanId && newPlanId !== orgBefore.plan);
+          if (orgBefore && planChanged) {
             // Plan changed — re-align prompts. Handles both expansion
             // (Starter → Growth: 2 → 8 engines) and contraction
             // (Growth → Starter: 8 → 2 engines). Issue #79.
             await alignPromptsSafe(orgBefore.id, newPlanId, 'subscription.updated');
+          }
+
+          // A delayed payment (SEPA, for one) that went through: the
+          // checkout left the subscription incomplete, so nothing started
+          // the first run then. Only on that change, never on a renewal.
+          const previous = event.data.previous_attributes as
+            | Partial<Stripe.Subscription>
+            | undefined;
+          if (orgBefore && previous?.status === 'incomplete') {
+            // Stripe doesn't order its events: this one can come before the
+            // checkout's, whose alignment then hasn't run. Align here too, so
+            // the run tracks only the plan's engines. Idempotent.
+            if (!planChanged && isSubscriptionActive(subscription.status)) {
+              await alignPromptsSafe(
+                orgBefore.id,
+                newPlanId || orgBefore.plan || 'starter',
+                'subscription.updated',
+              );
+            }
+            await startFirstTrackingRun({
+              orgId: orgBefore.id,
+              subscriptionStatus: subscription.status,
+              purchaseStarted: subscription.created,
+              ctx: 'webhook:subscription.updated',
+            });
           }
         }
         break;

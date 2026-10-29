@@ -3,7 +3,7 @@ import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
-import { API_BASE_URL } from '@/config/api';
+import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { DASHBOARD_HOME } from '@/config/home';
 
 export async function GET(req: NextRequest) {
@@ -74,69 +74,14 @@ export async function GET(req: NextRequest) {
             console.error('[stripe/success] Plan-engine alignment threw:', alignErr);
           }
 
-          // Find first brand and trigger tracking via aeo-server
-          const { data: brand } = await supabaseAdmin
-            .from('brands')
-            .select('id')
-            .eq('organization_id', orgId)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .single();
-
-          if (brand) {
-            const serverUrl = API_BASE_URL;
-            const cronSecret = process.env.CRON_SECRET;
-
-            if (cronSecret) {
-              try {
-                const trackingRes = await fetch(`${serverUrl}/api/internal/trigger-tracking`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${cronSecret}`,
-                  },
-                  body: JSON.stringify({ brandId: brand.id }),
-                });
-
-                if (trackingRes.ok) {
-                  const result = await trackingRes.json();
-                  trackingJobId = result.jobId;
-                  console.log(
-                    '[stripe/success] Tracking triggered for brand:',
-                    brand.id,
-                    'jobId:',
-                    trackingJobId,
-                  );
-                } else {
-                  console.error('[stripe/success] Tracking trigger failed:', trackingRes.status);
-                }
-              } catch (fetchErr) {
-                console.error('[stripe/success] Failed to call trigger-tracking:', fetchErr);
-              }
-
-              try {
-                const volumesRes = await fetch(`${serverUrl}/api/internal/analyze-volumes`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${cronSecret}`,
-                  },
-                  body: JSON.stringify({ brandId: brand.id }),
-                });
-
-                if (volumesRes.ok) {
-                  console.log('[stripe/success] Volume analysis triggered for brand:', brand.id);
-                } else {
-                  console.error(
-                    '[stripe/success] Volume analysis trigger failed:',
-                    volumesRes.status,
-                  );
-                }
-              } catch (fetchErr) {
-                console.error('[stripe/success] Failed to call volume analysis:', fetchErr);
-              }
-            }
-          }
+          // The first run, or the one the webhook already started for this
+          // checkout: its id goes to the dashboard either way.
+          trackingJobId = await startFirstTrackingRun({
+            orgId,
+            subscriptionStatus: subscription?.status,
+            purchaseStarted: session.created,
+            ctx: 'stripe/success',
+          });
         }
       }
     }
