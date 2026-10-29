@@ -28,6 +28,19 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// The read-only workspace's upgrade dialog.
+const openUpgrade = vi.hoisted(() => vi.fn());
+const gate = vi.hoisted(() => ({ isLocked: false }));
+vi.mock('@/components/providers/upgrade-gate', () => ({
+  useUpgradeGate: () => ({
+    isLocked: gate.isLocked,
+    openUpgrade,
+    guard:
+      <Args extends unknown[]>(fn: (...args: Args) => unknown, options: { action?: string } = {}) =>
+      (...args: Args) =>
+        gate.isLocked ? openUpgrade(options.action) : fn(...args),
+  }),
+}));
 
 const { WixCard } = await import('./wix-card');
 
@@ -36,8 +49,9 @@ const { WixCard } = await import('./wix-card');
 
 /** Settings › Integrations › Wix (Send to CMS #1331, phase 2; 00372): a brand's site and API key. */
 
-// Every reason the client names has its words: a missing one fails typecheck.
-const ERROR_TEXTS: Record<WixError, string> = messages.settings.wix.errors;
+// Every reason the client names has its words: a missing one fails typecheck. A read-only
+// workspace's refusal opens the upgrade dialog instead.
+const ERROR_TEXTS: Record<Exclude<WixError, 'subscription'>, string> = messages.settings.wix.errors;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -96,6 +110,8 @@ beforeEach(() => {
   root = createRoot(container);
   role.canManage = true;
   store.activeBrandId = 'b1';
+  gate.isLocked = false;
+  openUpgrade.mockReset();
   for (const fn of Object.values(client)) fn.mockReset();
   for (const fn of Object.values(toast)) fn.mockReset();
   client.readWix.mockResolvedValue({ ok: true, configured: true, connection: null });
@@ -177,5 +193,49 @@ describe('WixCard', () => {
     expect(container.textContent).toContain("Pages go to Acme Coffee's Blog as draft posts.");
     expect(container.querySelector('form')).toBeNull();
     expect(button('Disconnect')).toBeUndefined();
+  });
+
+  it('opens the upgrade dialog, not an error, when a read-only workspace’s connect or disconnect is refused', async () => {
+    client.connectWix.mockResolvedValue({ ok: false, code: 'subscription' });
+    await render();
+    await type('Site id', SITE);
+    await type('API key', KEY);
+    await submit();
+    expect(client.connectWix).toHaveBeenCalledTimes(1);
+    expect(openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+
+    client.readWix.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.disconnectWix.mockResolvedValue({ ok: false, code: 'subscription' });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Disconnect'));
+    await click(button('Disconnect', document.body.querySelector('[role="dialog"]')!));
+    expect(client.disconnectWix).toHaveBeenCalledTimes(1);
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('on a read-only workspace, connects and changes no key, and still disconnects', async () => {
+    gate.isLocked = true;
+    await render();
+    await type('Site id', SITE);
+    await type('API key', KEY);
+    await submit();
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    expect(client.connectWix).not.toHaveBeenCalled();
+
+    client.readWix.mockResolvedValue({ ok: true, configured: true, connection: CONNECTED });
+    client.disconnectWix.mockResolvedValue({ ok: true, success: true });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    await click(button('Change API key'));
+    expect(openUpgrade).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    await click(button('Disconnect'));
+    await click(button('Disconnect', document.body.querySelector('[role="dialog"]')!));
+    expect(client.disconnectWix).toHaveBeenCalledWith('b1');
   });
 });
