@@ -7564,6 +7564,7 @@
       "noAnswers": "No answers here in this period",
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
+      "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
