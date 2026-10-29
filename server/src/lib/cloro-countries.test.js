@@ -7,7 +7,7 @@ vi.mock('../config/supabase.js', () => ({ default: {} }));
 
 import { fakeDb } from './catalog/__fixtures__/fake-db.js';
 import { logger } from './logger.js';
-import { CITY_SCRAPERS, COUNTRY_ONLY_SCRAPERS } from './locations.js';
+import { CITY_SCRAPERS } from './locations.js';
 import {
   CLORO_COUNTRY_MODELS,
   countryCodesIn,
@@ -191,10 +191,12 @@ describe('supportsCountry and supportedLocations', () => {
   it('skips a country an engine does not support, cities and states included', () => {
     const codes = ['US', 'KE', 'TR~ISTANBUL', 'US-CA'];
     expect(supportedLocations(codes, 'copilot-web', supported)).toEqual(['US', 'US-CA']);
+    // Google's engines ask from the state too.
     expect(supportedLocations(codes, 'google-aimode', supported)).toEqual([
       'US',
       'KE',
       'TR~ISTANBUL',
+      'US-CA',
     ]);
     expect(supportedLocations([], 'copilot-web', supported)).toEqual([null]);
   });
@@ -229,13 +231,8 @@ describe('the provider models on both sides (PROMPT-015e)', () => {
     expect(pairs).toEqual(CLORO_COUNTRY_MODELS);
   });
 
-  it('leaves a US state to the models of the engines the API runs country-wide', () => {
-    const countryOnly = web.match(/COUNTRY_ONLY_MODELS[^=]*=\s*new Set\(\[([^\]]*)\]\)/);
-    expect(countryOnly).not.toBeNull();
-    const webModels = [...countryOnly[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-    expect(webModels.sort()).toEqual(
-      [...new Set([...COUNTRY_ONLY_SCRAPERS].map((id) => CLORO_COUNTRY_MODELS[id]))].sort(),
-    );
+  it('leaves a US state to every model, as the API runs a state on every engine', () => {
+    expect(web).not.toMatch(/COUNTRY_ONLY_MODELS/);
   });
 
   it("takes a city on the models of the API's city engines", () => {

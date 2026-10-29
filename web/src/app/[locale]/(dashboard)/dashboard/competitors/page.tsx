@@ -6,7 +6,14 @@ import { useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { getCompetitors, addCompetitor, deleteCompetitor } from '@/lib/actions/competitor';
+import {
+  getCompetitors,
+  addCompetitor,
+  deleteCompetitor,
+  getCompetitorTimeline,
+} from '@/lib/actions/competitor';
+import type { CompetitorTimeline } from '@/lib/competitor-timeline';
+import { CompetitorTimelineCard } from './_timeline-card';
 import type { SuggestedCompetitor } from '@/lib/ai-brand-setup';
 import { SuggestCompetitorsDialog } from './_suggest-competitors-dialog';
 import {
@@ -1277,6 +1284,11 @@ export default function CompetitorsPage() {
   }, []);
   const [h2hData, setH2hData] = useState<HeadToHeadData | null>(null);
   const [h2hLoading, setH2hLoading] = useState(false);
+  // The selected competitor's pages over time (learning C3), kept with whose they are.
+  const [timeline, setTimeline] = useState<{
+    competitorId: string;
+    data: CompetitorTimeline | 'failed';
+  } | null>(null);
 
   const loadCompetitors = useCallback(async () => {
     if (!brand) return;
@@ -1361,6 +1373,24 @@ export default function CompetitorsPage() {
       setH2hData(null);
     }
   }, [selectedCompetitorId, loadH2H]);
+
+  useEffect(() => {
+    if (!brand || !selectedCompetitorId) return;
+    let cancelled = false;
+    const competitorId = selectedCompetitorId;
+    getCompetitorTimeline(brand.id, competitorId).then(
+      (data) => {
+        if (!cancelled) setTimeline({ competitorId, data });
+      },
+      (err) => {
+        console.error('Failed to load the competitor timeline:', err);
+        if (!cancelled) setTimeline({ competitorId, data: 'failed' });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [brand, selectedCompetitorId]);
 
   const loadRuns = useCallback(
     (group: HeadToHeadGroup, limit: number) => {
@@ -1680,6 +1710,12 @@ export default function CompetitorsPage() {
                   </CardContent>
                 </Card>
               )}
+
+              <CompetitorTimelineCard
+                timeline={timeline?.competitorId === selectedCompetitorId ? timeline.data : null}
+                brandName={brand.name}
+                competitorName={selectedCompetitor?.name ?? ''}
+              />
             </>
           )}
         </>

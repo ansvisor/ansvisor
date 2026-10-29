@@ -98,6 +98,9 @@ export const DEMO_GUARDED = [
   guard('POST /brand-facts/fetch', brandIn('body')),
   guard('PATCH /brand-facts/:id', rowIn('brand_facts', 'path')),
 
+  // Brands (brands.js): reading the site's home page, and AI, for its kind.
+  guard('POST /brands/:id/detect-site-type', brandIn('path', 'id')),
+
   // Product catalog (catalog.js): the demo's stores are samples, so neither
   // connecting, syncing nor removing one may reach a store.
   guard('POST /catalog/sources', brandIn('body')),
