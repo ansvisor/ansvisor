@@ -1,3 +1,5 @@
+import { ELEMENT_NODE, TEXT_NODE, parseHtml } from './dom';
+
 /**
  * Placeholders in a page (Content Editor Quality spec §4, §9, CE-044): words
  * in square brackets where a real name, quote or number goes — what the
@@ -38,8 +40,9 @@ const INLINE = /^(A|STRONG|EM|B|I|U|S|SPAN|CODE|MARK|SUB|SUP|SMALL|BR)$/;
 function itemOwnText(li: Element): string {
   let text = '';
   for (const node of li.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? '';
-    else if (node instanceof Element && INLINE.test(node.tagName)) text += node.textContent ?? '';
+    if (node.nodeType === TEXT_NODE) text += node.textContent ?? '';
+    else if (node.nodeType === ELEMENT_NODE && INLINE.test((node as Element).tagName))
+      text += node.textContent ?? '';
   }
   return text;
 }
@@ -51,7 +54,7 @@ function itemOwnText(li: Element): string {
  * by its own words.
  */
 export function pagePlaceholders(html: string): PagePlaceholders {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   let count = 0;
   for (const el of doc.body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li')) {
     const text = el.tagName === 'LI' ? itemOwnText(el) : (el.textContent ?? '');

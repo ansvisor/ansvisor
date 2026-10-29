@@ -2474,7 +2474,7 @@ export const SHOPPING_NOT_IN_PLAN = {
  * has ended (read-only), the plan it was on, as the dashboard and the API's
  * readOnly reads keep it. Self-hosted has every feature.
  */
-async function planIncludes(organizationId: string, feature: Feature): Promise<boolean> {
+export async function planIncludes(organizationId: string, feature: Feature): Promise<boolean> {
   if (!isCloud()) return true;
   const { data, error } = await supabaseAdmin
     .from('organizations')
@@ -3079,7 +3079,7 @@ const templateDoneWhen = (taskKey: string) =>
   doneWhenT.has(taskKey as never) ? doneWhenT(taskKey as never) : null;
 
 /** A task's details in the snake_case the rest of the MCP output uses. */
-function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
+export function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
   const d = withTemplateCheck(
     withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen),
     taskKey,

@@ -37,7 +37,11 @@ const plan = vi.hoisted(() => ({
   setPlanRowPriority: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/actions/content-plan', () => plan);
-vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+// An admin or a manager unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ canManage: viewer.canManage }),
+}));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'b1',
   brands: [{ id: 'b1', name: 'Acme', slug: 'acme', siteType: 'b2b' }],
@@ -134,6 +138,7 @@ const rowItem = async (item: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  viewer.canManage = true;
   opened.newOpportunities = false;
   opened.newContent = false;
   window.history.replaceState(null, '', '/dashboard/content');
@@ -288,5 +293,40 @@ describe('Content Opportunities on an active plan', () => {
       'Dismiss opportunities?',
     );
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('Content Opportunities for an analyst or an agency partner', () => {
+  const labels = () =>
+    [...document.body.querySelectorAll('button, [role="menuitem"]')].map((el) =>
+      el.textContent?.trim(),
+    );
+
+  it('keeps Send All in the bulk bar, without Done, Dismiss All or Delete', async () => {
+    viewer.canManage = false;
+    await render(false);
+    await pickRow();
+    expect(labels()).toContain('Send All');
+    for (const label of ['Done', 'Dismiss All', 'Delete']) {
+      expect(labels(), label).not.toContain(label);
+    }
+  });
+
+  it('leaves New out, and says who generates opportunities', async () => {
+    viewer.canManage = false;
+    await render(false);
+    expect(labels()).not.toContain('New');
+    expect(container.textContent).toContain('Ask an admin or a manager to generate opportunities.');
+  });
+
+  it("leaves Dismiss out of the row's menu", async () => {
+    viewer.canManage = false;
+    await render(false);
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label="Actions for Office coffee subscriptions"]',
+    )!;
+    await act(async () => trigger.click());
+    expect(labels()).toContain('Send to Workflow');
+    expect(labels()).not.toContain('Dismiss');
   });
 });

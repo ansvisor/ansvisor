@@ -64,7 +64,8 @@ export function OpportunityActions({
     generating: boolean;
     /** Why it can't be generated now (the month's briefs are used up). */
     blockedReason: string | null;
-    onGenerate: () => void;
+    /** Null for a member who can't generate one (admins and managers do). */
+    onGenerate: (() => void) | null;
   };
   /**
    * The Content Editor: the draft written for this opportunity (undefined
@@ -127,17 +128,19 @@ export function OpportunityActions({
           {t('briefGenerated')}
         </Button>
       ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={brief.onGenerate}
-          disabled={brief.generating || brief.blockedReason !== null}
-          title={brief.blockedReason ?? undefined}
-          className="gap-2"
-        >
-          {brief.generating ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
-          {brief.generating ? t('generatingBrief') : t('generateBrief')}
-        </Button>
+        brief.onGenerate && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={brief.onGenerate}
+            disabled={brief.generating || brief.blockedReason !== null}
+            title={brief.blockedReason ?? undefined}
+            className="gap-2"
+          >
+            {brief.generating ? <LoadingDots /> : <Sparkles className="h-4 w-4" />}
+            {brief.generating ? t('generatingBrief') : t('generateBrief')}
+          </Button>
+        )
       )}
       {showContent &&
         (content.lookupFailed ? (

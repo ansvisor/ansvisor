@@ -1,4 +1,13 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import {
+  SHOPPING_COLUMNS,
+  lastSendsOf,
+  mcpShoppingLinks,
+  mcpShoppingPath,
+  type McpLastSend,
+  type McpShoppingLinks,
+  type McpShoppingPath,
+} from './content-delivery';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { brandInOrg } from '@/lib/mcp/data';
 import {
@@ -140,6 +149,24 @@ export interface McpDraftSummary {
   open_suggestions: number;
   updated_at: string;
   editor_path: string;
+  /** Its last Send to CMS, as the Library shows it; null when never sent. */
+  last_send: McpLastSend | null;
+  /** Whether its shopping links still sell. */
+  shopping_links: McpShoppingLinks;
+}
+
+/** How many agent suggestions wait for review on each draft, by draft id. */
+async function openSuggestionCounts(draftIds: string[]): Promise<Map<string, number>> {
+  const open = new Map<string, number>();
+  if (!draftIds.length) return open;
+  const { data, error } = await supabaseAdmin
+    .from('content_draft_suggestions')
+    .select('draft_id')
+    .in('draft_id', draftIds)
+    .eq('status', 'open');
+  if (error) throw new Error(error.message);
+  for (const s of data ?? []) open.set(s.draft_id, (open.get(s.draft_id) ?? 0) + 1);
+  return open;
 }
 
 /** A brand's drafts, the latest changed first; null for a brand outside the organization. */
@@ -151,7 +178,9 @@ export async function listContentDraftsFor(
   if (!(await brandInOrg(auth, brandId))) return null;
   let query = supabaseAdmin
     .from('content_drafts')
-    .select('id, title, status, method, page_type, author, source_url, updated_at')
+    .select(
+      `id, title, status, method, page_type, author, source_url, updated_at, ${SHOPPING_COLUMNS}`,
+    )
     .eq('brand_id', brandId)
     // Archived drafts (00233) are set aside in the Library, and here.
     .is('archived_at', null)
@@ -162,23 +191,14 @@ export async function listContentDraftsFor(
   if (error) throw new Error(error.message);
   const rows = data ?? [];
 
-  const open = new Map<string, number>();
-  if (rows.length) {
-    const { data: suggestions, error: suggestionsError } = await supabaseAdmin
-      .from('content_draft_suggestions')
-      .select('draft_id')
-      .in(
-        'draft_id',
-        rows.map((r) => r.id),
-      )
-      .eq('status', 'open');
-    if (suggestionsError) throw new Error(suggestionsError.message);
-    for (const s of suggestions ?? []) open.set(s.draft_id, (open.get(s.draft_id) ?? 0) + 1);
-  }
-  return rows.map((row) => ({
+  const ids = rows.map((r) => r.id);
+  const [open, sends] = await Promise.all([openSuggestionCounts(ids), lastSendsOf(ids)]);
+  return rows.map(({ shopping_built, content_shopping_checks, ...row }) => ({
     ...row,
     open_suggestions: open.get(row.id) ?? 0,
     editor_path: contentEditorPath(row.id),
+    last_send: sends.get(row.id) ?? null,
+    shopping_links: mcpShoppingLinks(shopping_built, content_shopping_checks),
   }));
 }
 
@@ -207,6 +227,12 @@ export interface McpDraft {
    * links and inline citations. A link to anything else is unwrapped.
    */
   link_targets: { own_pages: LinkTargets['own']; sources: LinkTargets['sources'] };
+  /** Its last Send to CMS; null when never sent. */
+  last_send: McpLastSend | null;
+  /** What the page should link on an online shop (its Brief tab); null for none. */
+  shopping_path: McpShoppingPath | null;
+  /** Whether its shopping links still sell. */
+  shopping_links: McpShoppingLinks;
 }
 
 /** One draft, its passages numbered and the locked ones marked; null outside the organization. */
@@ -217,14 +243,21 @@ export async function getContentDraftFor(
   const draft = await draftFor(auth, draftId);
   if (!draft) return null;
   const passages = draftPassages(draft.body_html);
-  const [locked, openSuggestions, targets] = await Promise.all([
+  const [locked, openSuggestions, targets, sends, shopping] = await Promise.all([
     lockedKeys(
       draft,
       passages.map((p) => p.text),
     ),
     openSuggestionsOf(draft.id),
     linkTargetsOf(draft),
+    lastSendsOf([draft.id]),
+    supabaseAdmin
+      .from('content_drafts')
+      .select(`shopping_path, ${SHOPPING_COLUMNS}`)
+      .eq('id', draft.id)
+      .maybeSingle(),
   ]);
+  if (shopping.error) throw new Error(shopping.error.message);
 
   return {
     id: draft.id,
@@ -248,6 +281,12 @@ export async function getContentDraftFor(
     })),
     open_suggestions: openSuggestions,
     link_targets: { own_pages: targets.own, sources: targets.sources },
+    last_send: sends.get(draft.id) ?? null,
+    shopping_path: mcpShoppingPath(shopping.data?.shopping_path ?? null),
+    shopping_links: mcpShoppingLinks(
+      shopping.data?.shopping_built ?? null,
+      shopping.data?.content_shopping_checks ?? null,
+    ),
   };
 }
 
