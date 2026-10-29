@@ -7,6 +7,7 @@ import { ConnectorHttpError } from '../http.js';
 /** Maximum pages read from any WooCommerce collection during one catalog sync. */
 export const MAX_PAGES = 200;
 export const PER_PAGE = 100;
+const ORDER_SYNC_OVERLAP_MS = 5 * 60 * 1000;
 
 const API_PATH = '/wp-json/wc/v3';
 const PRODUCT_ERROR = "WooCommerce answered with a product list that couldn't be read.";
@@ -162,6 +163,33 @@ function currencyCode(product, variant) {
   return /^[A-Z]{3}$/.test(code) ? code : null;
 }
 
+/**
+ * The WooCommerce REST v3 product schema does not include the store currency.
+ * Ask the public Store API for one visible product, whose price includes the
+ * ISO currency code. This is a read-only request and does not require broader
+ * settings permissions than the connector's read-only REST key.
+ */
+async function readStoreCurrency(request, storeUrl) {
+  let endpoint;
+  try {
+    const url = new URL(String(storeUrl));
+    endpoint = `${url.origin}${url.pathname.replace(/\/+$/, '')}/wp-json/wc/store/v1/products`;
+  } catch {
+    return null;
+  }
+
+  try {
+    const { data } = await request(endpoint, { query: { per_page: 1, page: 1 } });
+    const value = Array.isArray(data) ? data[0]?.prices?.currency_code : null;
+    const code = typeof value === 'string' ? value.trim().toUpperCase() : '';
+    return /^[A-Z]{3}$/.test(code) ? code : null;
+  } catch {
+    // A custom store may restrict the public Store API. Product/variation-level
+    // currency fields still take precedence; don't fail an otherwise valid sync.
+    return null;
+  }
+}
+
 function moneyText(value, currency) {
   if (value == null || String(value).trim() === '') return undefined;
   const amount = String(value).trim();
@@ -257,10 +285,10 @@ function availabilityOf(product, variant) {
 }
 
 /** One WooCommerce product/variation as the shared catalog's feed attributes. */
-function attributesOf(product, variant, categoriesById) {
+function attributesOf(product, variant, categoriesById, storeCurrency = null) {
   const selected = optionValues(variant);
   const values = optionValues(product);
-  const currency = currencyCode(product, variant);
+  const currency = currencyCode(product, variant) ?? storeCurrency;
   const regularPrice = [
     variant?.regular_price,
     product?.regular_price,
@@ -396,13 +424,13 @@ export function verifyWebhookSignature(rawBody, signature, secret) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function pageLimitError(resource, count) {
-  return {
-    row: 0,
-    field: 'pages',
-    found: '',
-    message: `Only the first ${count.toLocaleString('en-US')} WooCommerce ${resource} were read; the rest were skipped.`,
-  };
+function assertCompletePages(result, resource) {
+  if (result.truncated) {
+    throw new ConnectorHttpError(
+      'bad_response',
+      `WooCommerce has more than ${(MAX_PAGES * PER_PAGE).toLocaleString('en-US')} ${resource}. The sync stopped because reading only part of the catalog could mark unseen items as removed.`,
+    );
+  }
 }
 
 export default {
@@ -458,6 +486,7 @@ export default {
 
   async readCatalog(source, { request, credentials }) {
     const base = apiRoot(source.url);
+    const storeCurrency = await readStoreCurrency(request, source.url);
     const errors = [];
     const items = [];
 
@@ -467,9 +496,7 @@ export default {
       credentials,
       CATEGORY_ERROR,
     );
-    if (categoriesResult.truncated) {
-      errors.push(pageLimitError('categories', MAX_PAGES * PER_PAGE));
-    }
+    assertCompletePages(categoriesResult, 'product categories');
     const categoriesById = new Map(
       categoriesResult.items
         .filter((category) => category?.id != null)
@@ -478,9 +505,7 @@ export default {
 
     // Read the full snapshot: the shared sync marks products missing from it as removed.
     const productsResult = await listPages(request, `${base}/products`, credentials, PRODUCT_ERROR);
-    if (productsResult.truncated) {
-      errors.push(pageLimitError('products', MAX_PAGES * PER_PAGE));
-    }
+    assertCompletePages(productsResult, 'products');
 
     let row = 0;
     for (const product of productsResult.items) {
@@ -503,9 +528,7 @@ export default {
           credentials,
           "WooCommerce answered with a variation list that couldn't be read.",
         );
-        if (variations.truncated) {
-          errors.push(pageLimitError(`variations for product ${productId}`, MAX_PAGES * PER_PAGE));
-        }
+        assertCompletePages(variations, `variations for product ${productId}`);
         if (variations.items.length === 0) {
           row += 1;
           errors.push({
@@ -519,7 +542,11 @@ export default {
 
         for (const variation of variations.items) {
           row += 1;
-          const out = toItem(attributesOf(product, variation, categoriesById), row, 'Item');
+          const out = toItem(
+            attributesOf(product, variation, categoriesById, storeCurrency),
+            row,
+            'Item',
+          );
           if (out.item) items.push(out.item);
           else errors.push(out.error);
         }
@@ -527,7 +554,11 @@ export default {
       }
 
       row += 1;
-      const out = toItem(attributesOf(product, product, categoriesById), row, 'Item');
+      const out = toItem(
+        attributesOf(product, product, categoriesById, storeCurrency),
+        row,
+        'Item',
+      );
       if (out.item) items.push(out.item);
       else errors.push(out.error);
     }
@@ -543,6 +574,12 @@ export default {
   async syncOrders(source, { request, credentials, since = null }) {
     const base = apiRoot(source.url);
     const modifiedAfter = since ? dateText(since) : null;
+    // WooCommerce timestamps are second-precision in many responses. Re-read
+    // a small overlap so an order updated during the previous run isn't missed
+    // because the checkpoint had fractional seconds; persistence is idempotent.
+    const modifiedAfterWithOverlap = modifiedAfter
+      ? new Date(Date.parse(modifiedAfter) - ORDER_SYNC_OVERLAP_MS).toISOString()
+      : null;
     const result = await listPages(
       request,
       `${base}/orders`,
@@ -552,7 +589,7 @@ export default {
         status: 'any',
         orderby: 'modified',
         order: 'asc',
-        ...(modifiedAfter ? { modified_after: modifiedAfter } : {}),
+        ...(modifiedAfterWithOverlap ? { modified_after: modifiedAfterWithOverlap } : {}),
       },
     );
     const orders = [];
