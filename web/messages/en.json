@@ -252,6 +252,15 @@
       "changeContentSettings": "Changing content settings needs a plan"
     }
   },
+  "managersOnly": {
+    "suggestPrompts": "Ask an admin or a manager to generate prompt suggestions.",
+    "suggestTopics": "Ask an admin or a manager to generate topic suggestions.",
+    "generateOpportunities": "Ask an admin or a manager to generate opportunities.",
+    "trackOrSuggestContent": "Ask an admin or a manager to track these prompts or suggest content for them.",
+    "generateBrief": "Ask an admin or a manager to generate a brief.",
+    "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
+    "addPrompts": "Ask an admin or a manager to add prompts."
+  },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong.",
@@ -366,7 +375,9 @@
     "firstRun": {
       "running": "First analysis running",
       "queued": "First analysis queued",
-      "progress": "{current} of {total} answers",
+      "progress": "{current} of {total} checks",
+      "minutesLeft": "about {minutes} min left",
+      "hoursLeft": "{hours, plural, one {about # hour left} other {about # hours left}}",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
       "link": "Follow it on Brand Visibility"
@@ -707,6 +718,10 @@
           "untitled": "Untitled prompt",
           "sourceAnswers": "cited in {count} of the {of, plural, one {# latest answer} other {# latest answers}} they win"
         },
+        "pageEvents": {
+          "none": "No page of theirs was first cited in your answers or changed in the last {days} days.",
+          "timeline": "See their pages over time"
+        },
         "cited": {
           "position": "#{position}",
           "lastCited": "last cited {date}",
@@ -749,6 +764,7 @@
           "evidence": "Failed checks",
           "competitorPositions": "Positions by prompt",
           "winningSources": "Sources behind their wins",
+          "competitorPageEvents": "What happened to their pages",
           "mentionDetails": "Mentions by prompt"
         },
         "scopes": {
@@ -3213,6 +3229,28 @@
       "demo": "No one: the demo brand keeps its sample data."
     }
   },
+  "chatActivity": {
+    "summary": {
+      "saveDraft": "Saved the draft “{title}”",
+      "saveDraftUndo": "Moved the draft “{title}” to the archive",
+      "opportunityStatus": "{status, select, dismissed {Dismissed} other {Marked reviewed}} the opportunity “{title}”",
+      "opportunityStatusUndo": "Put the opportunity “{title}” back as it was",
+      "dismissSuggestion": "Dismissed the prompt suggestion “{text}”",
+      "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
+      "accessDenied": "Not allowed: {tool}"
+    },
+    "undo": {
+      "ok": "Undone.",
+      "changed": "This changed since. Open it to undo by hand.",
+      "gone": "This was deleted since, so there's nothing to undo.",
+      "expired": "Undo is no longer available for this change. Change it by hand instead.",
+      "notUndoable": "This change can't be undone here.",
+      "alreadyUndone": "This was already undone.",
+      "inProgress": "Undo is already on its way.",
+      "notFound": "I couldn't find that change.",
+      "failed": "Something went wrong, so nothing was undone. Try again."
+    }
+  },
   "audit": {
     "title": "Site Audit",
     "description": "Score any page against the 48-signal AEO/GEO",
@@ -3624,6 +3662,25 @@
     "viewAll": "View all"
   },
   "insights": {
+    "tracking": {
+      "queued": "Queued — starting automatically",
+      "analyzing": "Analyzing prompts...",
+      "stop": "Stop",
+      "queuedBody": "Another analysis is running right now. Yours will begin the moment a slot opens up — no need to wait here, it'll keep going in the background.",
+      "activeBody": "This can take anywhere from a few minutes to 1–2 hours at busy times. You can leave this page — it keeps running in the background.",
+      "activeBodyMinutes": "About {minutes} min left at the current pace. You can leave this page — it keeps running in the background.",
+      "activeBodyHours": "{hours, plural, one {About # hour left} other {About # hours left}} at the current pace. You can leave this page — it keeps running in the background.",
+      "dailyRun": "Daily tracking in progress",
+      "run": "Tracking in progress",
+      "runBody": "— showing the latest completed results; the numbers will refresh when this run finishes.",
+      "firstRun": "First tracking in progress",
+      "firstRunBody": "— your results appear here as soon as it finishes. You can leave this page.",
+      "done": "Analysis complete.",
+      "doneCount": "{count, plural, one {Analysis complete — # answer saved.} other {Analysis complete — # answers saved.}}",
+      "doneSoFar": "{count, plural, one {Almost done — # answer saved so far, the rest still arriving.} other {Almost done — # answers saved so far, the rest still arriving.}}",
+      "failed": "Job failed: {reason}",
+      "unknownError": "Unknown error"
+    },
     "title": "Answer Engine Insights",
     "description": "Monitor how your brand is represented in AI-generated answers.",
     "runPrompts": "Run Prompts",
@@ -7616,6 +7673,9 @@
     "presenceRate": "Presence Rate",
     "gaps": "Content Gaps",
     "suggestions": {
+      "loadFailed": "Couldn't load suggestions",
+      "loadUnavailable": "Ansvisor isn't answering right now. Try again in a moment.",
+      "retry": "Retry",
       "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
       "catalog": {
         "badge": "Your catalog",
@@ -9494,6 +9554,13 @@
     "integrations_cancel": "Cancel",
     "integrations_connecting": "Connecting…",
     "integrations_connect": "Connect",
+    "integrations_connectFailed": "Couldn't start connecting {label}. Try again in a moment.",
+    "integrations_connectTimedOut": "Connecting {label} took too long to start. Try again in a moment.",
+    "integrations_connectForbidden": "Only admins and managers can connect integrations.",
+    "integrations_statusFailed": "Couldn't check whether {label} is connected. Try again in a moment.",
+    "integrations_statusTimedOut": "Checking {label} took too long. Try again in a moment.",
+    "integrations_propertiesTimedOut": "Reading the properties took too long. Try again in a moment.",
+    "integrations_retry": "Try again",
     "integrations_propertyMapping": "Property mapping",
     "integrations_notMapped": "Not mapped",
     "integrations_selectProperty": "Select a property",
@@ -9617,7 +9684,6 @@
     },
     "merchantCenter": {
       "description": "Your products and the problems Merchant Center reports for them. Google AI Overviews and AI Mode show products from it.",
-      "comingSoon": "Until it's available, add your products with a feed URL or a file upload in Product catalog below.",
       "title": "Merchant Center account for {brand}",
       "hint": "Pick the account that sells this brand's products. They're read every day into the brand's product catalog below, with their issues.",
       "noBrand": "Pick a brand to add its Merchant Center account.",
@@ -9855,7 +9921,6 @@
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
-    "integrations_comingSoon": "Coming soon",
     "integrations_disconnect": "Disconnect",
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",

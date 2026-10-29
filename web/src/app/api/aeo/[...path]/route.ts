@@ -38,6 +38,15 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 /**
+ * A read (GET, HEAD) gives up once the API hasn't started answering in this
+ * long, with a 504 the page can say something about: a hung upstream used to
+ * leave cards on their skeletons until the platform cut the function off,
+ * minutes later. Changes keep maxDuration: the suggestion runs above are
+ * POSTs. Once the API answers, its body streams through without a limit.
+ */
+const READ_TIMEOUT_MS = 60_000;
+
+/**
  * Headers that describe *this* connection rather than the request, and so
  * must not be replayed upstream — `host` would misroute virtual hosts, and a
  * stale `content-length` contradicts the body we re-send.
@@ -72,6 +81,10 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
 
+  // A read's time limit runs until the API's answer starts, not through its body.
+  const timeout = hasBody ? null : new AbortController();
+  const timer = timeout && setTimeout(() => timeout.abort(), READ_TIMEOUT_MS);
+
   let response: Response;
   try {
     response = await fetch(upstream, {
@@ -79,12 +92,22 @@ async function forward(request: NextRequest, params: Promise<{ path: string[] }>
       headers,
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: 'no-store',
+      signal: timeout?.signal,
     });
   } catch (err) {
+    if (timeout?.signal.aborted) {
+      console.error('[aeo-proxy] upstream timed out', upstream.pathname);
+      return NextResponse.json(
+        { error: 'API server took too long to answer', code: 'upstream_timeout' },
+        { status: 504 },
+      );
+    }
     // The upstream being unreachable used to surface as an opaque browser
     // network error. Name it, so the next outage is one log line away.
     console.error('[aeo-proxy] upstream unreachable', upstream.pathname, err);
     return NextResponse.json({ error: 'API server is unreachable' }, { status: 502 });
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   // Only content-type is copied. `fetch` has already decoded the body, so

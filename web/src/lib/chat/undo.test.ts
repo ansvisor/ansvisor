@@ -1,0 +1,422 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
+import type { FakeSupabase } from './testing/fake-supabase';
+import {
+  BRAND,
+  OPPORTUNITY,
+  ORG,
+  OTHER_ORG,
+  PEOPLE,
+  SUGGESTION,
+  fakeCreateDraft,
+  fakeDismissSuggestion,
+  fakeUpdateOpportunity,
+  seedWorkspace,
+} from './testing/chat-fixtures';
+
+/**
+ * Undo (CHAT-20 §10b, §21 "Undo restores the before state or explains the
+ * conflict"): each WRITE row's inverse within its §9 window, for the person
+ * Chat acted as and Admins, through the same precedence as the tool, with
+ * nothing overwritten when the target changed since.
+ */
+
+vi.mock('@/lib/supabase/admin', async () => ({
+  supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
+}));
+vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
+vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
+vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
+
+const { supabaseAdmin } = await import('@/lib/supabase/admin');
+const db = supabaseAdmin as unknown as FakeSupabase;
+const { createContentDraft } = await import('@/lib/actions/content-drafts');
+const { updateOpportunityStatus } = await import('@/lib/actions/content');
+const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
+const { runLoggedWrite } = await import('./write');
+const { undoChange, undoRule, UNDO_RULES } = await import('./undo');
+const { chatTool, CHAT_TOOLS } = await import('./registry/tools');
+
+const DAY = 24 * 60 * 60 * 1000;
+let step = 0;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  seedWorkspace(db);
+  vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
+  vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
+  vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
+});
+afterEach(() => vi.unstubAllEnvs());
+
+/** A change Chat made for this person in Full auto; returns its log row. */
+async function change(userId: string, name: string, input: unknown) {
+  const outcome = await runLoggedWrite({
+    tool: chatTool(name)!,
+    input,
+    ctx: {} as never,
+    organizationId: ORG,
+    userId,
+    brandId: BRAND,
+    surface: 'chat',
+    mode: 'full_auto',
+    approval: { kind: 'auto', via: 'full_auto' },
+    place: { conversationId: null, runId: null, stepId: null },
+    approvalKey: `step-${++step}`,
+  });
+  if (outcome.code !== 'ok' || !outcome.activityId) throw new Error('no change');
+  return db.tables.chat_activity_log.find((row) => row.id === outcome.activityId)!;
+}
+
+const saveDraft = (userId: string = PEOPLE.manager) =>
+  change(userId, 'create_draft', {
+    brand_id: BRAND,
+    title: 'Pricing FAQ',
+    page_type: 'docs_faq',
+    method: 'create',
+    source: { kind: 'content' },
+  });
+const dismissOpportunity = (userId: string = PEOPLE.manager) =>
+  change(userId, 'update_opportunity', {
+    opportunity_id: OPPORTUNITY,
+    status: 'dismissed',
+    reason: 'wrong_angle',
+  });
+const dismissPromptSuggestion = (userId: string = PEOPLE.manager) =>
+  change(userId, 'dismiss_prompt_suggestion', { suggestion_id: SUGGESTION });
+
+const undo = (activityId: unknown, userId: string = PEOPLE.manager, organizationId: string = ORG) =>
+  undoChange({ activityId: activityId as string, userId, organizationId, surface: 'chat' });
+
+const draft = () => db.tables.content_drafts[0];
+const opportunity = () => db.tables.content_opportunities[0];
+const suggestion = () => db.tables.prompt_suggestions[0];
+const logRow = (id: unknown) => db.tables.chat_activity_log.find((row) => row.id === id)!;
+
+describe('every WRITE row has an Undo', () => {
+  it('with its §9 window, and words for the change and its Undo', () => {
+    const writes = CHAT_TOOLS.filter((tool) => tool.class === 'write');
+    expect(writes.map((tool) => tool.name).sort()).toEqual(Object.keys(UNDO_RULES).sort());
+    expect(UNDO_RULES.create_draft.windowMs).toBe(30 * DAY);
+    expect(UNDO_RULES.update_opportunity.windowMs).toBe(7 * DAY);
+    expect(UNDO_RULES.dismiss_prompt_suggestion.windowMs).toBe(7 * DAY);
+    for (const tool of writes) {
+      expect(undoRule(tool)).not.toBeNull();
+      expect(messages.chatActivity.summary).toHaveProperty(tool.labelKey);
+      expect(messages.chatActivity.summary).toHaveProperty(`${tool.labelKey}Undo`);
+    }
+    expect(undoRule(CHAT_TOOLS.find((tool) => tool.class === 'read')!)).toBeNull();
+  });
+});
+
+describe('create_draft: archive the draft it saved', () => {
+  it('archives it, marks the change undone and logs the Undo as the person’s own action', async () => {
+    const row = await saveDraft();
+    const result = await undo(row.id);
+    expect(result).toMatchObject({ code: 'ok', message: 'Undone.' });
+    expect(draft().archived_at).toEqual(expect.any(String));
+    expect(logRow(row.id)).toMatchObject({ status: 'undone', undone_by: PEOPLE.manager });
+    expect(logRow(row.id).undone_at).toEqual(expect.any(String));
+    const undoRow = logRow(result.code === 'ok' && result.activityId);
+    expect(undoRow).toMatchObject({
+      undoes_id: row.id,
+      tool_key: 'saveDraft',
+      approval_kind: 'run',
+      auto_via: null,
+      mode: null,
+      summary_key: 'saveDraftUndo',
+      summary_params: { title: 'Pricing FAQ' },
+      undo_json: null,
+      undo_until: null,
+      target_type: 'content_draft',
+      target_id: draft().id,
+    });
+    // An Undo isn't undone in turn, and the change only once.
+    expect(await undo(undoRow.id)).toMatchObject({ code: 'not_undoable' });
+    expect(await undo(row.id)).toMatchObject({
+      code: 'already_undone',
+      message: 'This was already undone.',
+    });
+  });
+
+  it('explains the conflict when the person changed the draft since, and overwrites nothing', async () => {
+    const row = await saveDraft();
+    draft().body_html = '<h1>Pricing FAQ</h1><p>My own words.</p>';
+    draft().updated_at = new Date(Date.now() + 1000).toISOString();
+    const result = await undo(row.id);
+    expect(result).toEqual({
+      code: 'conflict',
+      reason: 'changed',
+      href: `/dashboard/content/editor/${draft().id}`,
+      message: 'This changed since. Open it to undo by hand.',
+    });
+    expect(draft().archived_at).toBeNull();
+    expect(logRow(row.id).status).toBe('undo_conflict');
+    expect(db.tables.chat_activity_log).toHaveLength(1);
+
+    // Back as Chat left it: Undo may try again.
+    draft().body_html = '<h1>Pricing FAQ</h1>';
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(logRow(row.id).status).toBe('undone');
+  });
+
+  it.each([
+    ['renamed', (d: Record<string, unknown>) => (d.title = 'Pricing questions')],
+    ['marked ready', (d: Record<string, unknown>) => (d.status = 'ready')],
+    [
+      'archived by someone',
+      (d: Record<string, unknown>) => (d.archived_at = new Date().toISOString()),
+    ],
+  ])('a draft %s since is a conflict', async (_what, edit) => {
+    const row = await saveDraft();
+    edit(draft());
+    expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+  });
+
+  it('a draft deleted since: nothing to undo, no link', async () => {
+    const row = await saveDraft();
+    db.tables.content_drafts = [];
+    expect(await undo(row.id)).toEqual({
+      code: 'conflict',
+      reason: 'gone',
+      href: null,
+      message: "This was deleted since, so there's nothing to undo.",
+    });
+  });
+
+  it('a draft written between the check and the archive is a conflict, not overwritten', async () => {
+    const row = await saveDraft();
+    const realFrom = db.from.bind(db);
+    db.from = (table: string) => {
+      const builder = realFrom(table);
+      if (table !== 'content_drafts') return builder;
+      const update = builder.update.bind(builder);
+      // Someone saves the draft just before the archive's write.
+      builder.update = (patch: Record<string, unknown>) => {
+        draft().updated_at = new Date(Date.now() + 5000).toISOString();
+        return update(patch);
+      };
+      return builder;
+    };
+    try {
+      expect(await undo(row.id)).toMatchObject({ code: 'conflict', reason: 'changed' });
+    } finally {
+      db.from = realFrom;
+    }
+    expect(draft().archived_at).toBeNull();
+  });
+
+  it('an Analyst undoes the draft their own run saved, though the Library leaves archiving to Managers', async () => {
+    const row = await saveDraft(PEOPLE.analyst);
+    expect(await undo(row.id, PEOPLE.analyst)).toMatchObject({ code: 'ok' });
+    expect(draft().archived_at).toEqual(expect.any(String));
+  });
+});
+
+describe('update_opportunity: its status and reason before', () => {
+  it('puts back the status and drops the dismiss reason, keeping the rest of source_data', async () => {
+    const row = await dismissOpportunity();
+    expect(opportunity()).toMatchObject({
+      status: 'dismissed',
+      source_data: { volume: 1200, dismissReason: 'wrong_angle' },
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(opportunity()).toMatchObject({ status: 'new', source_data: { volume: 1200 } });
+    expect(opportunity().source_data).not.toHaveProperty('dismissReason');
+  });
+
+  it('puts back an earlier dismiss reason', async () => {
+    Object.assign(opportunity(), {
+      status: 'dismissed',
+      source_data: { volume: 1200, dismissReason: 'not_relevant' },
+    });
+    const row = await change(PEOPLE.manager, 'update_opportunity', {
+      opportunity_id: OPPORTUNITY,
+      status: 'reviewed',
+    });
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(opportunity()).toMatchObject({
+      status: 'dismissed',
+      source_data: { volume: 1200, dismissReason: 'not_relevant' },
+    });
+  });
+
+  it('is a conflict once someone set it again', async () => {
+    const row = await dismissOpportunity();
+    Object.assign(opportunity(), { status: 'in_progress', source_data: { volume: 1200 } });
+    expect(await undo(row.id)).toMatchObject({
+      code: 'conflict',
+      reason: 'changed',
+      href: `/dashboard/content/${OPPORTUNITY}`,
+    });
+    expect(opportunity().status).toBe('in_progress');
+  });
+
+  it('has no Undo when it changed nothing', async () => {
+    Object.assign(opportunity(), { status: 'reviewed' });
+    const row = await change(PEOPLE.manager, 'update_opportunity', {
+      opportunity_id: OPPORTUNITY,
+      status: 'reviewed',
+    });
+    expect(row).toMatchObject({ undo_json: null, undo_until: null });
+    expect(await undo(row.id)).toMatchObject({
+      code: 'not_undoable',
+      message: "This change can't be undone here.",
+    });
+  });
+});
+
+describe('dismiss_prompt_suggestion: bring it back', () => {
+  it('brings it back as it was', async () => {
+    const row = await dismissPromptSuggestion();
+    expect(suggestion().status).toBe('dismissed');
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(suggestion().status).toBe('new');
+  });
+
+  it('is a conflict once it was added since', async () => {
+    const row = await dismissPromptSuggestion();
+    suggestion().status = 'added';
+    expect(await undo(row.id)).toMatchObject({
+      code: 'conflict',
+      reason: 'changed',
+      href: '/dashboard/prompts/suggestions',
+    });
+    expect(suggestion().status).toBe('added');
+  });
+
+  it('has no Undo for a suggestion that was dismissed already', async () => {
+    suggestion().status = 'dismissed';
+    const row = await dismissPromptSuggestion();
+    expect(row.undo_until).toBeNull();
+    expect(await undo(row.id)).toMatchObject({ code: 'not_undoable' });
+  });
+});
+
+describe('the window', () => {
+  it('is closed once it ended: nothing changes', async () => {
+    const row = await dismissPromptSuggestion();
+    row.undo_until = new Date(Date.now() - 1000).toISOString();
+    expect(await undo(row.id)).toEqual({
+      code: 'expired',
+      message: 'Undo is no longer available for this change. Change it by hand instead.',
+    });
+    expect(suggestion().status).toBe('dismissed');
+    expect(row.status).toBe('done');
+  });
+
+  it('is open until it ends', async () => {
+    const row = await saveDraft();
+    row.undo_until = new Date(Date.now() + 60_000).toISOString();
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+  });
+});
+
+describe('who may undo', () => {
+  it('the person Chat acted as and Admins; anyone else finds nothing', async () => {
+    const row = await dismissPromptSuggestion();
+    expect(await undo(row.id, PEOPLE.otherManager)).toEqual({
+      code: 'not_found',
+      message: "I couldn't find that change.",
+    });
+    expect(await undo(row.id, PEOPLE.analyst)).toMatchObject({ code: 'not_found' });
+    expect(suggestion().status).toBe('dismissed');
+    expect(await undo(row.id, PEOPLE.admin)).toMatchObject({ code: 'ok' });
+    expect(logRow(row.id).undone_by).toBe(PEOPLE.admin);
+  });
+
+  it('not from another workspace, nor once the person left this one', async () => {
+    const row = await dismissPromptSuggestion();
+    expect(await undo(row.id, PEOPLE.manager, OTHER_ORG)).toMatchObject({ code: 'not_found' });
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.organization_id = OTHER_ORG;
+    expect(await undo(row.id)).toMatchObject({ code: 'not_found' });
+    expect(suggestion().status).toBe('dismissed');
+  });
+});
+
+describe('Undo passes the same precedence as the tool (A3)', () => {
+  it('a read-only workspace refuses it', async () => {
+    const row = await dismissPromptSuggestion();
+    db.tables.organizations[0].subscription_status = 'canceled';
+    const result = await undo(row.id);
+    expect(result).toMatchObject({
+      code: 'denied',
+      denial: { code: 'subscription_inactive', status: 402 },
+    });
+    expect(result.message).toMatch(/read-only/);
+    expect(suggestion().status).toBe('dismissed');
+  });
+
+  it('the live role: a Manager made an Analyst can no longer undo an opportunity change', async () => {
+    const row = await dismissOpportunity();
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.role = 'analyst';
+    expect(await undo(row.id)).toMatchObject({
+      code: 'denied',
+      denial: { code: 'forbidden_role' },
+    });
+    expect(opportunity().status).toBe('dismissed');
+  });
+
+  it("an Admin's Never on the tool", async () => {
+    const row = await dismissPromptSuggestion();
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: { dismissSuggestion: 'never' },
+        full_auto_for_members: true,
+        dont_ask_again: true,
+        manager_execute_off: [],
+      },
+    ];
+    expect(await undo(row.id)).toMatchObject({ code: 'denied', denial: { code: 'policy_never' } });
+  });
+
+  it('needs no card, whatever the mode: an Ask policy still undoes', async () => {
+    const row = await dismissPromptSuggestion();
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: { dismissSuggestion: 'ask' },
+        full_auto_for_members: false,
+        dont_ask_again: false,
+        manager_execute_off: [],
+      },
+    ];
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+  });
+});
+
+describe('failures', () => {
+  it("never throws: a read that fails is 'failed', and nothing is undone", async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const row = await dismissPromptSuggestion();
+    db.failures.chat_activity_log = { message: 'connection reset' };
+    expect(await undo(row.id)).toEqual({
+      code: 'failed',
+      message: 'Something went wrong, so nothing was undone. Try again.',
+    });
+    delete db.failures.chat_activity_log;
+    expect(suggestion().status).toBe('dismissed');
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    errors.mockRestore();
+  });
+
+  it('the brand is found again as the tool finds it: a target moved out of the workspace is refused', async () => {
+    const row = await dismissPromptSuggestion();
+    suggestion().brand_id = '77777777-7777-4777-8777-777777777777';
+    expect(await undo(row.id)).toMatchObject({ code: 'denied', denial: { code: 'brand_scope' } });
+    expect(suggestion().status).toBe('dismissed');
+  });
+});
+
+describe('a double-clicked Undo', () => {
+  it('undoes once and answers both clicks the same', async () => {
+    const row = await saveDraft();
+    const [a, b] = await Promise.all([undo(row.id), undo(row.id)]);
+    expect(a).toMatchObject({ code: 'ok' });
+    expect(b).toEqual(a);
+    expect(db.tables.chat_activity_log.filter((r) => r.undoes_id === row.id)).toHaveLength(1);
+  });
+});

@@ -4,16 +4,23 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import type { IntegrationProvider, IntegrationStatus } from '@/lib/actions/integrations';
 import {
-  connectIntegration,
-  getIntegrationStatus,
-  type IntegrationProvider,
-  type IntegrationStatus,
-} from '@/lib/actions/integrations';
+  readIntegrationStatus,
+  startIntegrationConnect,
+  type IntegrationFailure,
+} from '@/lib/integrations-client';
 
 /** How long the popup flow waits for Composio to report the account (#577). */
 const CONNECT_DEADLINE_MS = 120_000;
 const CONNECT_POLL_MS = 3000;
+
+/** What a Connect that couldn't start says (a read-only workspace opens the upgrade dialog). */
+const CONNECT_ERRORS = {
+  timeout: 'integrations_connectTimedOut',
+  forbidden: 'integrations_connectForbidden',
+  failed: 'integrations_connectFailed',
+} as const satisfies Record<Exclude<IntegrationFailure, 'subscription'>, string>;
 
 /**
  * Connect a Google integration in an OAuth popup, polling until Composio
@@ -25,7 +32,9 @@ const CONNECT_POLL_MS = 3000;
  * `onStatus` hears the outcome: 'connected', or whatever the final check
  * said once the user closed the popup. An unmounted caller stops polling.
  * On a read-only workspace (plan not active) `connect` opens the upgrade
- * dialog instead.
+ * dialog instead. The calls go from the browser (lib/integrations-client.ts),
+ * so Connect never waits behind a page's server actions, and one that can't
+ * start says why.
  */
 export function useIntegrationConnect(
   provider: IntegrationProvider,
@@ -40,7 +49,8 @@ export function useIntegrationConnect(
   },
 ) {
   const [connecting, setConnecting] = useState(false);
-  const { guard } = useUpgradeGate();
+  const { guard, openUpgrade } = useUpgradeGate();
+  const t = useTranslations('settings');
   const tActions = useTranslations('readOnly.actions');
   // Bumped to stop a poll: a newer attempt, or the caller unmounting.
   const pollGen = useRef(0);
@@ -56,7 +66,13 @@ export function useIntegrationConnect(
     setConnecting(true);
     const gen = ++pollGen.current;
     try {
-      const { redirectUrl } = await connectIntegration(provider, callbackUrl());
+      const started = await startIntegrationConnect(provider, callbackUrl());
+      if (!started.ok) {
+        if (started.reason === 'subscription') openUpgrade();
+        else toast.error(t(CONNECT_ERRORS[started.reason], { label }));
+        return;
+      }
+      const redirectUrl = started.value;
 
       const popup = window.open(redirectUrl, `${provider}-oauth`, 'width=560,height=720');
       if (!popup) {
@@ -69,23 +85,21 @@ export function useIntegrationConnect(
       while (Date.now() < deadline && pollGen.current === gen) {
         await new Promise((r) => setTimeout(r, CONNECT_POLL_MS));
         if (pollGen.current !== gen) return;
-        try {
-          const result = await getIntegrationStatus(provider);
-          if (result.status === 'connected') {
-            onStatus('connected');
-            toast.success(`${label} connected`);
-            popup.close();
-            return;
-          }
-        } catch {
-          // transient — keep polling until the deadline
+        // A read that fails is transient: keep polling until the deadline.
+        const result = await readIntegrationStatus(provider);
+        if (result.ok && result.value === 'connected') {
+          onStatus('connected');
+          toast.success(`${label} connected`);
+          popup.close();
+          return;
         }
         if (popup.closed) {
           // User closed the window — one final check, then give up quietly.
-          const result = await getIntegrationStatus(provider).catch(() => null);
+          const final = await readIntegrationStatus(provider);
           if (pollGen.current !== gen) return;
-          onStatus(result?.status ?? 'not_connected');
-          if (result?.status === 'connected') {
+          const status = final.ok ? final.value : 'not_connected';
+          onStatus(status);
+          if (status === 'connected') {
             toast.success(`${label} connected`);
           }
           return;
@@ -95,7 +109,8 @@ export function useIntegrationConnect(
         toast.error('Connection timed out — try again.');
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start connection');
+      console.error(`Failed to connect ${provider}:`, err);
+      toast.error(t('integrations_connectFailed', { label }));
     } finally {
       if (pollGen.current === gen) setConnecting(false);
     }
