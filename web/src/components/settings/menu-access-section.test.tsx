@@ -135,7 +135,6 @@ describe('MenuAccessSection', () => {
     expect(actions.setRoleMenu).toHaveBeenCalledWith('manager', [
       'content',
       'audit',
-      'competitors',
       'prompts',
       'shopping',
       'traffic',
@@ -161,15 +160,9 @@ describe('MenuAccessSection', () => {
 
 describe('hiddenForSet', () => {
   it('hides what a ready-made set leaves out, never Action Center', () => {
-    // Competitors too: no work area's set names it yet.
-    expect(hiddenForSet('brand')).toEqual([
-      'content',
-      'audit',
-      'competitors',
-      'prompts',
-      'shopping',
-      'traffic',
-    ]);
+    expect(hiddenForSet('brand')).toEqual(['content', 'audit', 'prompts', 'shopping', 'traffic']);
+    // The sets that don't compare the brand with others leave Competitors off.
+    expect(hiddenForSet('content')).toContain('competitors');
     expect(hiddenForSet('all')).toEqual([]);
   });
 });

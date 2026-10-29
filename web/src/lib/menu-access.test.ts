@@ -47,8 +47,15 @@ describe('MENU_SECTIONS', () => {
     expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('insights') + 1);
     expect(cleanMenuSections(['competitors'])).toEqual(['competitors']);
     expect(hidden({ roleHidden: ['competitors'] })).toEqual(['competitors']);
-    // No work area names it yet: picking one leaves it on the menu.
+  });
+
+  it('keeps Competitors for the areas that compare the brand with others', () => {
+    const withCompetitors = WORK_AREAS.filter((area) =>
+      (area.sections as readonly string[]).includes('competitors'),
+    ).map((area) => area.id);
+    expect(withCompetitors).toEqual(['leaders', 'brand', 'growth', 'bizdev', 'analytics']);
     expect(hidden({ workAreas: ['brand'] })).not.toContain('competitors');
+    expect(hidden({ workAreas: ['content'] })).toContain('competitors');
   });
 
   it('knows every section a work area names', () => {

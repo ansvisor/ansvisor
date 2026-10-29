@@ -59,7 +59,7 @@ describe('WorkAreasStep', () => {
     await render(<WorkAreasStep title="What do you work on?" lede="Pick." onDone={onDone} />);
     expect(container.querySelectorAll('button[aria-pressed]')).toHaveLength(9);
     expect(button('Founders & leaders').textContent).toContain(
-      'Action Center · Chat · Brand Visibility · Mentions · AI Referral Traffic · Reports',
+      'Action Center · Chat · Brand Visibility · Competitors · Mentions · AI Referral Traffic · Reports',
     );
     expect(container.textContent).toContain('12 of 12 sections');
   });
@@ -70,7 +70,7 @@ describe('WorkAreasStep', () => {
     act(() => button('Developers').click());
     expect(button('Brand & PR').getAttribute('aria-pressed')).toBe('true');
     expect(container.textContent).toContain('10 of 12 sections');
-    // No work area names Competitors yet: picking areas leaves it on.
+    // Brand & PR keeps Competitors.
     expect(menu()).toContain('Competitors');
     expect(menu()).not.toContain('Content');
     expect(menu()).not.toContain('Product Visibility');

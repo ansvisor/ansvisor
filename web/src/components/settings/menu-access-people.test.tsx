@@ -171,8 +171,7 @@ describe('MenuPeopleCard', () => {
     expect(row('deniz').textContent).toContain('Brand & PR');
     expect(row('deniz').textContent).toContain("Manager's menu");
     // Manager's 10 sections narrowed to Brand & PR's: Action Center, Chat,
-    // Brand Visibility, Mentions, Citations, Reports, and Competitors, which
-    // no work area names, so none takes it off.
+    // Brand Visibility, Competitors, Mentions, Citations, Reports.
     expect(row('deniz').textContent).toContain('7 of 12 sections');
     expect(row('ece').textContent).toContain('Custom: +Audit');
     expect(row('ece').textContent).toContain('11 of 12 sections');
