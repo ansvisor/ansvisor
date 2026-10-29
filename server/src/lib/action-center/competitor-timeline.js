@@ -26,6 +26,7 @@ import { resolve } from '../../config/action-engine.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { fetchPage } from '../safe-fetch.js';
 import { logger } from '../logger.js';
+import { selectInChunks } from '../chunked-in.js';
 import { opportunityKey } from '../audit/opportunities.js';
 import { describeSignal } from '../audit/rubric.js';
 import { readPages } from './competitor-pages.js';
@@ -43,6 +44,24 @@ const { competitorPages: CP, competitorTimeline: T } = resolve();
 const DAY_MS = 86_400_000;
 /** A night's sweep stops starting brands after this, as the brand facts sweep. */
 const SWEEP_DEADLINE_MS = 10 * 60_000;
+/** PostgREST's most rows a read returns (max_rows): a longer read goes page by page. */
+const PAGE_ROWS = 1000;
+/** Page keys per `in` filter: they are addresses, so fewer than ids fit a request's URL. */
+const KEYS_PER_READ = 30;
+
+/**
+ * Every row of a read, past PostgREST's row cap: `build` makes the ordered
+ * query, read a page of PAGE_ROWS at a time.
+ */
+async function allRows(build) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await build().range(from, from + PAGE_ROWS - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < PAGE_ROWS) return rows;
+  }
+}
 
 /**
  * The cited competitor URLs as pages: one per page key (a URL's query left
@@ -105,12 +124,14 @@ export function pageChange(before, sketch, checks) {
 }
 
 async function citedUrls(brandId, since) {
-  const { data, error } = await supabaseAdmin.rpc('competitor_cited_urls', {
-    p_brand_id: brandId,
-    p_since: since.toISOString(),
-  });
-  if (error) throw new Error(error.message);
-  return citedCompetitorPages(data ?? []);
+  // A brand's 90 days back can cite more competitor addresses than a read returns.
+  const rows = await allRows(() =>
+    supabaseAdmin
+      .rpc('competitor_cited_urls', { p_brand_id: brandId, p_since: since.toISOString() })
+      .order('url')
+      .order('competitor_id'),
+  );
+  return citedCompetitorPages(rows);
 }
 
 /**
@@ -141,15 +162,18 @@ export async function recordFirstCitations(brandId, now = new Date()) {
 
   let recorded = 0;
   if (pages.length > 0) {
-    const { data: known, error } = await supabaseAdmin
-      .from('competitor_page_events')
-      .select('page_key')
-      .eq('brand_id', brandId)
-      .eq('kind', 'first_cited')
-      .in(
-        'page_key',
-        pages.map((page) => page.key),
-      );
+    // Read in parts: hundreds of addresses in one filter pass a request's URL limit.
+    const { data: known, error } = await selectInChunks(
+      pages.map((page) => page.key),
+      (keys) =>
+        supabaseAdmin
+          .from('competitor_page_events')
+          .select('page_key')
+          .eq('brand_id', brandId)
+          .eq('kind', 'first_cited')
+          .in('page_key', keys),
+      KEYS_PER_READ,
+    );
     if (error) throw new Error(error.message);
     const seen = new Set((known ?? []).map((row) => row.page_key));
     const fresh = pages.filter((page) => !seen.has(page.key));
@@ -264,22 +288,27 @@ export async function sweepCompetitorTimeline({
   limit = T.brandsPerNight,
   read = fetchPage,
 } = {}) {
-  const { data: rows, error } = await supabaseAdmin
-    .from('competitors')
-    .select('brand_id, brands!inner(organization_id, is_active)')
-    .eq('brands.is_active', true)
-    .neq('domain', '');
-  if (error) throw new Error(error.message);
+  // Every brand's competitors and reads, past the read's row cap.
+  const rows = await allRows(() =>
+    supabaseAdmin
+      .from('competitors')
+      .select('id, brand_id, brands!inner(organization_id, is_active)')
+      .eq('brands.is_active', true)
+      .neq('domain', '')
+      .order('id'),
+  );
   const brands = new Map();
-  for (const row of rows ?? []) brands.set(row.brand_id, row.brands.organization_id);
+  for (const row of rows) brands.set(row.brand_id, row.brands.organization_id);
   // The brands read longest ago first, never read before them: past the
   // night's limit, the rest are first in line the next night.
-  const { data: scans, error: scanError } = await supabaseAdmin
-    .from('competitor_timeline_scans')
-    .select('brand_id, scanned_at');
-  if (scanError) throw new Error(scanError.message);
+  const scans = await allRows(() =>
+    supabaseAdmin
+      .from('competitor_timeline_scans')
+      .select('competitor_id, brand_id, scanned_at')
+      .order('competitor_id'),
+  );
   const lastRead = new Map();
-  for (const scan of scans ?? []) {
+  for (const scan of scans) {
     const at = Date.parse(scan.scanned_at);
     if (!(at <= (lastRead.get(scan.brand_id) ?? -Infinity))) lastRead.set(scan.brand_id, at);
   }
@@ -289,10 +318,9 @@ export async function sweepCompetitorTimeline({
 
   let active = () => true;
   if (brands.size > 0 && isCloud()) {
-    const { data: orgs, error: orgError } = await supabaseAdmin
-      .from('organizations')
-      .select('id, subscription_status')
-      .in('id', [...new Set(brands.values())]);
+    const { data: orgs, error: orgError } = await selectInChunks([...brands.values()], (ids) =>
+      supabaseAdmin.from('organizations').select('id, subscription_status').in('id', ids),
+    );
     if (orgError) throw new Error(orgError.message);
     const subscribed = new Set(
       (orgs ?? []).filter((o) => isSubscriptionActive(o.subscription_status)).map((o) => o.id),
