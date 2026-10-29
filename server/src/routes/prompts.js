@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
+import { MANAGER_ROLES, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents } from '../lib/intent-extraction.js';
@@ -33,7 +34,9 @@ import {
   improveRangeKey,
   improveSchema,
   sanitizeSuggestions,
+  withPageChecks,
 } from '../lib/prompt-improve.js';
+import { storedFeatures } from '../lib/action-center/competitor-pages.js';
 import {
   liveImproveSends,
   loadImproveRounds,
@@ -678,6 +681,9 @@ router.get('/untracked-queries/:brandId', async (req, res) => {
   }
 });
 
+/** Who may dismiss a prompt suggestion: every role but agency partners, as the table's update rule. */
+const DISMISS_SUGGESTION_ROLES = ['admin', 'manager', 'analyst'];
+
 router.post('/suggestions/:id/dismiss', async (req, res) => {
   try {
     const { data: suggestion } = await supabaseAdmin
@@ -687,6 +693,11 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    await assertRole(
+      req.user.id,
+      DISMISS_SUGGESTION_ROLES,
+      'Only admins, managers and analysts can dismiss prompt suggestions.',
+    );
 
     const { error } = await supabaseAdmin
       .from('prompt_suggestions')
@@ -714,6 +725,8 @@ router.post('/suggestions/:id/accept', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    // The prompt itself is added by admins and managers only (the prompts table's rule).
+    await assertRole(req.user.id, MANAGER_ROLES, 'Only admins and managers can add prompts.');
 
     const { error } = await supabaseAdmin
       .from('prompt_suggestions')
@@ -1222,7 +1235,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
       : { data: [] };
     const responseById = new Map((responses ?? []).map((r) => [r.id, r.response]));
 
-    const withEvidence = actionable.map((p) => ({
+    const collected = actionable.map((p) => ({
       ...p,
       evidence: collectEvidence(evidenceByPlatform.get(p.id) ?? [], {
         brandName: brand.name,
@@ -1230,6 +1243,23 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         competitors: competitors ?? [],
         latestResponse: responseById.get(byPlatform.get(p.id)[0].id),
       }),
+    }));
+    // What Site Audit's checks found on the cited pages, where Analyze
+    // competitor content read them lately (learning C2). None read: as before.
+    // A read that fails goes without them, said in the log.
+    const stored = await storedFeatures(
+      brandId,
+      collected.flatMap((p) => [
+        ...p.evidence.competitorUrls.map((u) => u.url),
+        ...p.evidence.brandPages.map((u) => u.url),
+      ]),
+    ).catch((err) => {
+      req.log.warn({ err, promptId }, 'prompt improve page checks read failed');
+      return new Map();
+    });
+    const withEvidence = collected.map((p) => ({
+      ...p,
+      evidence: withPageChecks(p.evidence, stored),
     }));
 
     const modelId = improveModelId();

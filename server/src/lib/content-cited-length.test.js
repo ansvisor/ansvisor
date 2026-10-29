@@ -39,7 +39,8 @@ vi.mock('./logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 const fetchPage = vi.fn();
 vi.mock('./safe-fetch.js', () => ({ fetchPage: (...args) => fetchPage(...args) }));
 
-const { CITED_LENGTH_PAGES, citedPagesLength } = await import('./content-cited-length.js');
+const { CITED_LENGTH_PAGES, citedFeatures, citedPagesLength } =
+  await import('./content-cited-length.js');
 
 const url = (n) => `https://site${n}.example/a`;
 const page = (n) => ({ url: url(n), kind: 'blog' });
@@ -100,6 +101,19 @@ describe('citedPagesLength', () => {
     expect(read.mock.calls.map(([address]) => address)).toEqual([url(2)]);
   });
 
+  it('reads one page cited under two addresses once, at the first', async () => {
+    const variant = 'https://www.site2.example/a/?utm_source=chatgpt.com';
+    urlRows.push({ id: 9, url: variant });
+    citedIds.push(9);
+    const read = vi.fn(async () => 3000);
+    const result = await citedPagesLength(
+      { brandId: BRAND, pages: [page(2), { url: variant }, page(3)] },
+      { read },
+    );
+    expect(read.mock.calls.map(([address]) => address)).toEqual([url(2), url(3)]);
+    expect(result).toEqual({ characters: 3000, pages: 2 });
+  });
+
   it('reads at most a few, in the Sources order, and stops looking once it has them', async () => {
     const read = vi.fn(async () => 2000);
     await citedPagesLength(
@@ -137,7 +151,10 @@ describe('citedPagesLength', () => {
     const result = await citedPagesLength({ brandId: BRAND, pages: [1, 2, 3].map(page) });
     expect(fetchPage).toHaveBeenCalledWith(url(1), { timeoutMs: 8000, signal: null });
     // Their main text, about 1,000 characters; the page that answered 404 isn't counted.
-    expect(result).toEqual({ characters: 1000, pages: 2 });
+    expect(result).toMatchObject({ characters: 1000, pages: 2 });
+    // What Site Audit's checks find on the same two pages (learning C2): both have an H1.
+    expect(result.features.pages).toBe(2);
+    expect(result.features.checks.every((check) => check.pages >= 1)).toBe(true);
   });
 
   it('makes up no number: null when fewer than two could be read, or only walls were', async () => {
@@ -183,5 +200,35 @@ describe('citedPagesLength', () => {
     const read = vi.fn(async () => 4000);
     expect(await citedPagesLength({ brandId: BRAND, pages: [page(1)] }, { read })).toBeNull();
     expect(read).not.toHaveBeenCalled();
+  });
+});
+
+/** What the cited pages have (learning C2), from the reads the length takes. */
+describe('citedFeatures', () => {
+  const read = (...passing) => ({
+    length: 3000,
+    features: { words: 500, checks: Object.fromEntries(passing.map((key) => [key, 'pass'])) },
+  });
+
+  it('names the checks at least half the pages read pass, the most passed first', () => {
+    expect(
+      citedFeatures([read('faq-schema', 'tables'), read('faq-schema'), read('lists')]),
+    ).toEqual({
+      pages: 3,
+      checks: [{ key: 'faq-schema', label: expect.any(String), pages: 2 }],
+    });
+  });
+
+  it('says nothing from fewer than two pages with features', () => {
+    expect(citedFeatures([read('faq-schema'), { length: 3000, features: null }])).toBeNull();
+  });
+
+  it('keeps the length when a reader gives only numbers', async () => {
+    const lengths = { [url(1)]: 4000, [url(2)]: 4400 };
+    const result = await citedPagesLength(
+      { brandId: BRAND, pages: [page(1), page(2)] },
+      { read: async (address) => lengths[address] },
+    );
+    expect(result).toEqual({ characters: 4200, pages: 2 });
   });
 });

@@ -42714,6 +42714,56 @@ comment on function public.action_scorecard(uuid, timestamptz) is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00369_cited_page_features.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00369: what the pages AI answers cite have (learning C1)
+-- ============================================================================
+-- The Action Center's "Analyze competitor content" task was a step for a
+-- person: nothing read the competitor pages AI engines cite instead of the
+-- brand. The task now reads them (server action-center/competitor-pages.js):
+-- the public pages cited in the brand's own tracked answers for the action's
+-- prompts, and the brand's own page cited there, fetched free (safe-fetch,
+-- never a paid scraper) and run through Site Audit's own rule checks
+-- (structure, FAQ, schema, statistics, dates, length). Only what the checks
+-- found is kept here, never the page's text, and nothing is summarised by AI.
+--
+-- One row per brand and page: read again after two weeks, and a day's reads
+-- counted against the brand's daily cap. The server writes and reads it
+-- (service role); members see what it found on the task.
+
+create table if not exists public.cited_page_features (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  -- The page as Site Audit keys it: host and path, lower case.
+  page_key text not null,
+  url text not null,
+  domain text not null,
+  -- The brand's own page, cited for the same prompts.
+  own boolean not null default false,
+  -- { words, checks: { "<check key>": "pass" | "warn" | "fail" | "na" } }, or
+  -- { unreadable: true[, disallowed: true] } for a page that couldn't be read
+  -- (it blocks readers, a wall, robots.txt): kept so it counts against the
+  -- day's reads and isn't tried again while fresh.
+  features jsonb not null default '{}'::jsonb,
+  read_at timestamptz not null default now(),
+  unique (brand_id, page_key)
+);
+
+create index if not exists cited_page_features_brand_read_idx
+  on public.cited_page_features (brand_id, read_at desc);
+
+-- The server's alone: no member reads it directly.
+alter table public.cited_page_features enable row level security;
+revoke all on table public.cited_page_features from anon, authenticated;
+grant all on table public.cited_page_features to service_role;
+
+comment on table public.cited_page_features is
+  'Learning C1 (00369): Site Audit rule checks of the pages cited in a brand''s tracked answers for an action''s prompts (competitors'' and its own), read free (safe-fetch). Features only, never page text. Server only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00370_prompt_demand.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -42999,6 +43049,112 @@ comment on function public.catalog_suggestion_categories(uuid, integer, integer)
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00373_basket_positive_sentiment.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00373: a basket's positive sentiment (learning D1)
+-- ============================================================================
+-- An action sent from Mentions (MS-08) is measured on its answers' prompts
+-- (opportunity_basket_metrics, 00116), but the basket read mentions,
+-- visibility and citations only: an action sent to turn negative answers
+-- around was judged by how often the brand was named, not by how it was
+-- spoken of. The basket now reads its prompts' answers naming the brand
+-- (the rollup's mention_answers, 00130) and the positive ones among them;
+-- the server turns them into the positive share (basket-metrics.js). That is
+-- the base Insights' Positive Sentiment card divides by since 00191: an
+-- answer that only cites the brand is always neutral, so counting it (the
+-- rollup's mentioning_answers, naming OR citing) would pull the share down.
+-- Null while a day of the window isn't rewritten with them yet. Otherwise
+-- as 00116.
+
+create or replace function public.opportunity_basket_metrics(
+  p_brand_id uuid,
+  p_prompt_ids uuid[],
+  p_page_keys text[],
+  p_page_domains text[],
+  p_page_paths text[],
+  p_from date,
+  p_to date
+)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  with cells as (
+    select count(*) as cells,
+           count(*) filter (where has_mention or has_citation) as visible,
+           coalesce(sum(answer_count) filter (where has_mention), 0) as mention_answers,
+           -- Sentiment (00373): the answers naming the brand (the rollup's
+           -- column, not the alias above; never the ones only citing it), and
+           -- the positive ones among them, as Insights' Positive Sentiment
+           -- card counts them (00191).
+           coalesce(sum(d.mention_answers), 0) as named_answers,
+           coalesce(sum(d.positive_count), 0) as positive_answers,
+           count(*) filter (where d.mention_answers is null or d.positive_count is null) as unfilled
+    from insights_prompt_daily d
+    where brand_id = p_brand_id
+      and day between p_from and p_to
+      and prompt_id = any(p_prompt_ids)
+  ),
+  comp as (
+    select d.competitor_id, count(*) as visible
+    from insights_competitor_prompt_daily d
+    join competitors c on c.id::text = d.competitor_id and c.brand_id = p_brand_id
+    where d.brand_id = p_brand_id
+      and d.day between p_from and p_to
+      and d.prompt_id = any(p_prompt_ids)
+    group by d.competitor_id
+  ),
+  urls as (
+    select id
+    from citation_urls
+    where domain = any(p_page_domains)
+      and rtrim(
+            regexp_replace(split_part(split_part(lower(url), '#', 1), '?', 1), '^https?://(www\.)?', ''),
+            '/'
+          ) = any(p_page_keys)
+  )
+  select jsonb_build_object(
+    'cells', (select cells from cells),
+    'visible', (select visible from cells),
+    'mention_answers', (select mention_answers from cells),
+    -- Null while a day of the window isn't rewritten with them yet (00130):
+    -- a partial count would read as a change.
+    'named_answers', (select case when unfilled = 0 then named_answers end from cells),
+    'positive_answers', (select case when unfilled = 0 then positive_answers end from cells),
+    'competitor_visible_total', (select coalesce(sum(visible), 0) from comp),
+    'top_competitor_visible', (select coalesce(max(visible), 0) from comp),
+    'page_citations', (
+      select count(*)
+      from prompt_result_citations
+      where brand_id = p_brand_id
+        and created_at >= p_from
+        and created_at < p_to + 1
+        and url_id in (select id from urls)
+    ),
+    'ga_connected', exists (
+      select 1 from ga_ai_traffic_stats
+      where brand_id = p_brand_id and date between p_from and p_to
+    ),
+    'page_ai_sessions', (
+      select coalesce(sum(sessions), 0)
+      from ga_ai_traffic_stats
+      where brand_id = p_brand_id
+        and date between p_from and p_to
+        and coalesce(nullif(rtrim(split_part(landing_page, '?', 1), '/'), ''), '/') = any(p_page_paths)
+    )
+  );
+$$;
+
+revoke all on function public.opportunity_basket_metrics(uuid, uuid[], text[], text[], text[], date, date)
+  from public, anon, authenticated;
+grant execute on function public.opportunity_basket_metrics(uuid, uuid[], text[], text[], text[], date, date)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00374_menu_access.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -43165,6 +43321,357 @@ create trigger profiles_reset_menu_access
 update public.profiles set work_areas_asked_at = now() where work_areas_asked_at is null;
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00375_task_review_approve_api.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00375: approving a task waiting for review over the API and MCP (AC-010)
+-- ============================================================================
+-- approve_action_task_review (00293) takes the reviewer from auth.uid(), so
+-- it only works for a signed-in admin or manager. The MCP tools authenticate
+-- with an API key and reach the database as the service role, where
+-- auth.uid() is null.
+--
+-- Restated with p_user_id: the person the service role approves for, the API
+-- key's owner. It counts only for the service role; a signed-in caller is
+-- always auth.uid(), whatever it passes. Either way the person must be an
+-- admin or manager of the review's organization, and the trail says they
+-- added the task, as from the dashboard. Nothing else changes.
+--
+-- The 3-argument function is dropped rather than overloaded: a call with
+-- three arguments would match both, and the dashboard's call keeps working
+-- through p_user_id's default.
+
+drop function if exists public.approve_action_task_review(uuid, text, jsonb);
+
+create or replace function public.approve_action_task_review(
+  p_review_id uuid,
+  p_title text,
+  p_details jsonb,
+  p_user_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_review public.action_task_reviews%rowtype;
+  v_title text := btrim(coalesce(p_title, ''));
+  v_task_id uuid;
+  -- Who approves: the API key's owner for the service role, else the caller.
+  v_person uuid := case when auth.role() = 'service_role' then p_user_id else auth.uid() end;
+begin
+  -- The person's role first, before any row is read or locked.
+  if not exists (
+    select 1 from public.profiles p
+    where p.id = v_person and p.role in ('admin', 'manager')
+  ) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+
+  -- Only a row of the person's own organization: another's reads as not there.
+  select r.* into v_review
+  from public.action_task_reviews r
+  join public.actions a on a.id = r.action_id
+  join public.brands b on b.id = a.brand_id
+  join public.profiles p on p.organization_id = b.organization_id
+  where r.id = p_review_id
+    and p.id = v_person
+  for update of r;
+  if not found then
+    return null;
+  end if;
+
+  if exists (
+    select 1 from public.actions a
+    where a.id = v_review.action_id
+      and (a.deleted_at is not null or a.status in ('completed', 'dismissed'))
+  ) then
+    raise exception 'action closed' using errcode = '55000';
+  end if;
+
+  if char_length(v_title) not between 1 and 200
+    or jsonb_typeof(p_details) is distinct from 'object'
+    or nullif(btrim(coalesce(p_details->>'url', '')), '') is null
+    or nullif(btrim(coalesce(p_details->'change'->>'after', '')), '') is null
+    or nullif(btrim(coalesce(p_details->>'doneWhen', '')), '') is null
+    or coalesce(p_details->>'check', '') not in ('auto', 'rerun', 'manual')
+  then
+    raise exception 'incomplete task' using errcode = '22023';
+  end if;
+
+  insert into public.action_tasks (action_id, position, title, status, mode, permission, details)
+  select
+    v_review.action_id,
+    coalesce(max(t.position), 0) + 1,
+    v_title,
+    'todo',
+    'human',
+    'read',
+    -- The reviewer's task now: Regenerate keeps it (task-writer keepsTask).
+    p_details || jsonb_build_object('source', 'reviewed')
+  from public.action_tasks t
+  where t.action_id = v_review.action_id
+  returning id into v_task_id;
+
+  delete from public.action_task_reviews where id = v_review.id;
+
+  insert into public.action_events (action_id, event, data, actor_id)
+  values (v_review.action_id, 'task_added', jsonb_build_object('title', v_title), v_person);
+
+  update public.actions set updated_at = now() where id = v_review.action_id;
+
+  return v_task_id;
+end;
+$$;
+
+revoke all on function public.approve_action_task_review(uuid, text, jsonb, uuid)
+  from public, anon;
+grant execute on function public.approve_action_task_review(uuid, text, jsonb, uuid)
+  to authenticated, service_role;
+
+comment on function public.approve_action_task_review(uuid, text, jsonb, uuid) is
+  'Action Center (AC-010): a task waiting for review (action_task_reviews) onto its action''s task list, after its last task, with the exact page, the change, Done when and how it is checked filled, as the reviewer''s (source reviewed); the review row goes and the trail says a task was added. Admins and managers of the brand''s organization only, on an action neither deleted nor closed; p_user_id is the person the service role approves for (00375), a signed-in caller is always auth.uid(). Null when the row is gone or another organization''s.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00376_competitor_page_timeline.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00376: a competitor's pages over time (learning C3)
+-- ============================================================================
+-- A competitor rising in AI answers had no "why" beside it. This keeps two
+-- kinds of dated events for each competitor page the brand's own tracked
+-- answers cite (server action-center/competitor-timeline.js):
+--
+--   first_cited  the first day the brand's answers cited the page, read from
+--                prompt_result_citations (no page read; the first night goes
+--                back 90 days, so it is the first since then);
+--   changed      a weekly re-read found the page's words changed by more than
+--                a date or a price moving (the Action Center's page checks'
+--                rule, task-checks.js), with the Site Audit checks it gained
+--                and lost.
+--
+-- The page is read free (safe-fetch), within the brand's daily page reads,
+-- as the pages "Analyze competitor content" reads (00369). What is kept of a
+-- read is what Site Audit's checks found and a sketch of its words (hashes
+-- of its 4-word runs, not the text), so the next read can tell it changed.
+-- Members read the events; the server writes them.
+
+alter table public.cited_page_features
+  add column if not exists sketch jsonb;
+
+comment on column public.cited_page_features.sketch is
+  'Learning C3 (00376): the read page''s word sketch (task-checks.js sketch(): hashes of its 4-word runs, never its text), compared with the next read to tell whether the page changed.';
+
+create table if not exists public.competitor_page_events (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  competitor_id uuid not null references public.competitors(id) on delete cascade,
+  -- The page as Site Audit keys it: host and path, lower case.
+  page_key text not null,
+  url text not null,
+  domain text not null,
+  kind text not null check (kind in ('first_cited', 'changed')),
+  at timestamptz not null,
+  -- first_cited: { answers }; changed: { similarity, gained: [{ key, label }], lost: [{ key, label }] }.
+  detail jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- A page is first cited once.
+create unique index if not exists competitor_page_events_first_cited_uidx
+  on public.competitor_page_events (brand_id, page_key)
+  where kind = 'first_cited';
+
+-- The Competitors page reads one competitor's events, newest first.
+create index if not exists competitor_page_events_competitor_idx
+  on public.competitor_page_events (brand_id, competitor_id, at desc);
+
+alter table public.competitor_page_events enable row level security;
+
+create policy competitor_page_events_member_select on public.competitor_page_events
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+revoke all on table public.competitor_page_events from anon, authenticated;
+grant select on table public.competitor_page_events to authenticated;
+grant all on table public.competitor_page_events to service_role;
+
+comment on table public.competitor_page_events is
+  'Learning C3 (00376): when a competitor page was first cited in the brand''s tracked answers, and when a weekly re-read found it changed (and which Site Audit checks it gained or lost). Server writes; members read.';
+
+-- When each competitor's citations were last read for first_cited events: a
+-- competitor never read is read back 90 days once, the rest from their last
+-- read, so a night doesn't read a brand's whole history again.
+create table if not exists public.competitor_timeline_scans (
+  competitor_id uuid primary key references public.competitors(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  scanned_at timestamptz not null
+);
+
+alter table public.competitor_timeline_scans enable row level security;
+revoke all on table public.competitor_timeline_scans from anon, authenticated;
+grant all on table public.competitor_timeline_scans to service_role;
+
+comment on table public.competitor_timeline_scans is
+  'Learning C3 (00376): when each competitor''s cited pages were last read for first_cited events. Server only.';
+
+-- ----------------------------------------------------------------------------
+-- The competitor pages the brand's answers cited since p_since: each cited
+-- URL on a competitor's domain (its subdomains too), its competitor, the
+-- first time it was cited and in how many answers. Read in the database so a
+-- brand's citations never travel; the server only.
+-- ----------------------------------------------------------------------------
+create or replace function public.competitor_cited_urls(p_brand_id uuid, p_since timestamptz)
+returns table (
+  url text,
+  domain text,
+  competitor_id uuid,
+  first_at timestamptz,
+  answers bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with rivals as (
+    select c.id,
+      -- As citation_urls.domain is kept: host without www., lower case.
+      regexp_replace(
+        regexp_replace(lower(trim(c.domain)), '^[a-z]+://', ''),
+        '^www\.|[/:?#].*$', '', 'g'
+      ) as host
+    from public.competitors c
+    where c.brand_id = p_brand_id and trim(c.domain) <> ''
+  )
+  select u.url, u.domain, r.id, min(prc.created_at), count(distinct prc.prompt_result_id)
+  from public.prompt_result_citations prc
+  join public.citation_urls u on u.id = prc.url_id
+  join rivals r on r.host <> '' and (u.domain = r.host or u.domain like '%.' || r.host)
+  where prc.brand_id = p_brand_id
+    and prc.created_at >= p_since
+  group by u.url, u.domain, r.id
+$$;
+
+revoke all on function public.competitor_cited_urls(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.competitor_cited_urls(uuid, timestamptz) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00379_brand_site_type_source.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00379: where a brand's site type came from (action plan by business type,
+--        Step 0)
+-- ============================================================================
+-- Setup now detects the kind of site from the brand's home page
+-- (server/src/lib/site-type-detect.js) instead of leaving it empty, where
+-- the app guessed B2B for most brands, shops included.
+--
+--   * brands.site_type_source: 'auto' when a detection set the type (the
+--     home page, Shopping mode, a catalog), 'manual' when a person chose it
+--     (Brand settings, the Content Editor). Setup's detection only fills an
+--     empty type; a catalog never writes over a manual one. Null while no
+--     type is set.
+--   * brands.site_type_detected_at: when a detection last set the type. A
+--     change of site_type that doesn't set it too is a person's, and the
+--     trigger below marks it manual: so every place a person picks a type
+--     wins without knowing about detection.
+--   * A catalog source added to a brand (a feed, an upload, a store) makes
+--     it an online shop, unless a person chose its type.
+
+alter table public.brands
+  add column if not exists site_type_source text
+    check (site_type_source in ('auto', 'manual')),
+  add column if not exists site_type_detected_at timestamptz;
+
+comment on column public.brands.site_type_source is
+  'Step 0 (action plan by business type): auto = detected (home page, Shopping mode, a catalog); manual = a person chose it. Detection only fills an empty type; a catalog never overwrites manual. Null while site_type is null.';
+comment on column public.brands.site_type_detected_at is
+  'Step 0: when a detection last set site_type. A site_type change without it is a person''s (marked manual).';
+
+-- A type set before today was a person's choice.
+update public.brands
+   set site_type_source = 'manual'
+ where site_type is not null
+   and site_type_source is null;
+
+-- A brand in Shopping mode, or with a catalog, already sells online.
+update public.brands b
+   set site_type = 'ecommerce',
+       site_type_source = 'auto',
+       site_type_detected_at = now()
+ where b.site_type is null
+   and (
+     b.shopping_mode_enabled
+     or exists (select 1 from public.catalog_sources s where s.brand_id = b.id)
+   );
+
+create or replace function public.mark_brand_site_type_source()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.site_type is null then
+    -- No type: nothing chosen or detected; the app guesses again.
+    new.site_type_source := null;
+  elsif tg_op = 'INSERT' then
+    new.site_type_source :=
+      case when new.site_type_detected_at is null then 'manual' else 'auto' end;
+  elsif new.site_type is distinct from old.site_type then
+    -- A detection stamps site_type_detected_at with the type; a person doesn't.
+    new.site_type_source :=
+      case
+        when new.site_type_detected_at is distinct from old.site_type_detected_at then 'auto'
+        else 'manual'
+      end;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists brands_site_type_source on public.brands;
+create trigger brands_site_type_source
+  before insert or update of site_type, site_type_source, site_type_detected_at
+  on public.brands
+  for each row execute function public.mark_brand_site_type_source();
+
+-- A catalog source makes the brand a shop, unless a person chose its type.
+-- As the person who adds it: admins and managers may add a source (00279)
+-- and update the brand alike; the server adds stores as the service role.
+create or replace function public.catalog_source_marks_ecommerce()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  update public.brands
+     set site_type = 'ecommerce',
+         site_type_detected_at = now()
+   where id = new.brand_id
+     and site_type_source is distinct from 'manual'
+     and site_type is distinct from 'ecommerce';
+  return new;
+end;
+$$;
+
+drop trigger if exists catalog_sources_mark_ecommerce on public.catalog_sources;
+create trigger catalog_sources_mark_ecommerce
+  after insert on public.catalog_sources
+  for each row execute function public.catalog_source_marks_ecommerce();
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00380_demo_brand.sql
@@ -43377,4 +43884,582 @@ grant execute on function public.fanout_coverage_by_platform(timestamptz, timest
 
 comment on function public.fanout_coverage_by_platform(timestamptz, timestamptz) is
   'Answers and answers with observed query fan-out per platform in [p_since, p_until), across all brands but demo ones (00140, 00380). Read by the daily health report.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00400_chat_core.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00400: Chat's core — chats, their messages, runs and steps, and each
+-- person's Chat settings
+-- ============================================================================
+-- The new Chat (the Drive Chat specs, CHAT-00…25), behind CHAT_AGENTIC:
+-- nothing reads these tables while the flag is off, and agent_conversations
+-- and agent_messages (00009) keep serving today's /dashboard/agent as they do.
+--
+--   * chat_conversations: one chat. Private to its author (CHAT-20 §16c):
+--     only they read it, admins included; the server writes it. brand_id is
+--     the brand it is about, null for the workspace as a whole (a Help
+--     question). A deleted brand leaves its chats with their author, then
+--     about the workspace, as agent_conversations does (00009).
+--   * chat_messages: the person's messages and Chat's answers. An answer
+--     holds the answer only, never a tool's output (content_md; CHAT-03 item
+--     23), and when it was made: generated_at, the newest data it read
+--     (data_as_of) and the time zone it was shown in (CHAT-06 items 38–42).
+--   * chat_runs: the work behind one answer (one run, one answer: CHAT-00):
+--     its status, the model and effort it ran with, and its times. Its chat
+--     is kept equal to its answer's by the foreign key.
+--   * chat_run_steps: a run's steps in order (CHAT-03). What the person sees
+--     (kind, label, detail, scope in names, row count, status) and, for the
+--     server and staff only, the tool that ran and its debug record: members
+--     are granted every column but those two (the grants below).
+--   * chat_step_kinds: the kinds a step can be. A table, not a check: a new
+--     kind (CHAT-03 added `execute`; the Content Editor and images add more)
+--     is a row a later migration inserts, with no constraint to rewrite and
+--     no scan of the steps. Kinds aren't taken away: a step keeps its kind
+--     (the key refuses deleting one in use, and finding out reads every step,
+--     with no index on kind). The web's CHAT_STEP_KINDS (lib/chat/events.ts)
+--     lists the same kinds; its test reads them from the migrations.
+--   * chat_user_prefs: a person's Chat settings, on the server so they follow
+--     them to every device (DECISIONS N3): the chat menu open or closed
+--     (CHAT-01 9a–9f), where pages open (CHAT-25 §12), what Chat focuses on
+--     (CHAT-24 §3), and their model and effort (CHAT-16; null = the
+--     workspace's default, Auto and Normal). Theirs to write; the server
+--     checks the model against its catalog before a run uses it.
+--
+-- Messages, runs and steps are readable where their chat is (they follow its
+-- policies), so sharing a chat with the team is one more policy on
+-- chat_conversations later. Approvals, the activity log with Undo, and AI
+-- budget metering bring their own tables and columns in later migrations.
+
+-- ─── Step kinds ─────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_step_kinds (
+  kind text primary key check (kind ~ '^[a-z][a-z_]{1,39}$')
+);
+
+-- CHAT-03 "Labels by kind", and `execute` (CHAT-03 v2) for a step that waits
+-- on the person's click.
+insert into public.chat_step_kinds (kind) values
+  ('thinking'), ('read'), ('open_page'), ('skill'), ('check'),
+  ('write'), ('ask'), ('schedule'), ('image'), ('execute')
+on conflict (kind) do nothing;
+
+-- The server's list: members read a step's kind on the step itself.
+alter table public.chat_step_kinds enable row level security;
+revoke all on table public.chat_step_kinds from anon, authenticated;
+grant all on table public.chat_step_kinds to service_role;
+
+comment on table public.chat_step_kinds is
+  'Chat (00400): the kinds a run step can be (CHAT-03). A new kind is a row a later migration inserts; web lib/chat/events.ts CHAT_STEP_KINDS lists the same.';
+
+-- ─── Chats ──────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_conversations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- Null: about the workspace as a whole, not one brand.
+  brand_id uuid references public.brands(id) on delete set null,
+  -- Null until Chat names it from the first message (CHAT-01 item 8); the
+  -- web shows "New chat" meanwhile.
+  title text check (char_length(title) between 1 and 200),
+  -- The full Chat page or the side panel on another page (CHAT-01).
+  origin text not null default 'page' check (origin in ('page', 'panel')),
+  -- The route it was started on, for "Back to {page}" (CHAT-01).
+  origin_page text check (char_length(origin_page) between 1 and 500),
+  pinned_at timestamptz,
+  archived_at timestamptz,
+  -- Recents' order: the last message, not a rename or a pin. Kept by the
+  -- trigger on chat_messages below.
+  last_message_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists chat_conversations_user_recent_idx
+  on public.chat_conversations (user_id, last_message_at desc);
+create index if not exists chat_conversations_organization_idx
+  on public.chat_conversations (organization_id);
+create index if not exists chat_conversations_brand_idx
+  on public.chat_conversations (brand_id) where brand_id is not null;
+
+drop trigger if exists trg_chat_conversations_updated_at on public.chat_conversations;
+create trigger trg_chat_conversations_updated_at
+  before update on public.chat_conversations
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_conversations is
+  'Chat (00400): one chat, private to its author (CHAT-20 §16c): only they read it, admins included. Written by the server.';
+
+-- ─── Messages ───────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.chat_conversations(id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  -- The message, or the answer only: a tool's output never goes here. Up to
+  -- 200,000 characters: the server cuts or refuses a longer one first.
+  content_md text not null default '' check (char_length(content_md) <= 200000),
+  -- An answer's "Generated …" (UTC), the newest data it read ("Data as of",
+  -- null when it read none) and the IANA time zone both were shown in.
+  generated_at timestamptz,
+  data_as_of timestamptz,
+  timezone text check (char_length(timezone) between 1 and 64),
+  -- clock_timestamp(): a question and its answer written in one statement
+  -- still come in order.
+  created_at timestamptz not null default clock_timestamp(),
+  -- For chat_runs' key: a run's chat is its answer's.
+  unique (id, conversation_id)
+);
+
+create index if not exists chat_messages_conversation_created_idx
+  on public.chat_messages (conversation_id, created_at);
+
+comment on table public.chat_messages is
+  'Chat (00400): a chat''s messages and answers. An answer holds the answer only, with when it was made and the newest data it read (CHAT-06 38–42). Written by the server.';
+
+-- A new message moves its chat up Recents (last_message_at). Security
+-- definer, so the update reaches the chat whoever writes the message: today
+-- only the server does (service role), and members may not update chats.
+-- greatest(): a message written late never moves its chat back. Not covered
+-- by a test (the repository has no database tests); nothing else sets
+-- last_message_at.
+create or replace function public.chat_touch_last_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.chat_conversations
+  set last_message_at = greatest(last_message_at, new.created_at)
+  where id = new.conversation_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_messages_touch_conversation on public.chat_messages;
+create trigger trg_chat_messages_touch_conversation
+  after insert on public.chat_messages
+  for each row execute function public.chat_touch_last_message();
+
+-- ─── Runs ───────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_runs (
+  id uuid primary key default gen_random_uuid(),
+  -- The answer this run writes, and that answer's chat.
+  message_id uuid not null unique,
+  conversation_id uuid not null,
+  -- queued: waiting for a free run (CHAT-20 §14); waiting: on the person (a
+  -- question, an approval, a click, a plan's Start); paused: paused by the
+  -- person; paused_cap: the month's AI limit is used (CHAT-04).
+  status text not null default 'queued' check (
+    status in (
+      'queued', 'running', 'waiting', 'paused', 'paused_cap', 'done', 'error', 'stopped'
+    )
+  ),
+  -- 'auto' or the model the person picked (CHAT-16).
+  model text not null default 'auto' check (char_length(model) between 1 and 200),
+  effort text not null default 'normal' check (effort in ('normal', 'high', 'max')),
+  -- A standard result code (CHAT-20 §11a: 'failed', 'timeout'…) when it ended in error.
+  error text check (error ~ '^[a-z_]{1,40}$'),
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  finished_at timestamptz,
+  foreign key (message_id, conversation_id)
+    references public.chat_messages (id, conversation_id) on delete cascade
+);
+
+create index if not exists chat_runs_conversation_created_idx
+  on public.chat_runs (conversation_id, created_at desc);
+-- The runs under way, oldest first: the queue, the runs tray, the sweeps.
+create index if not exists chat_runs_open_idx
+  on public.chat_runs (created_at)
+  where status in ('queued', 'running', 'waiting', 'paused', 'paused_cap');
+
+comment on table public.chat_runs is
+  'Chat (00400): the work behind one answer (CHAT-00: one run, one answer), with its status, model, effort and times. Written by the server.';
+
+-- ─── Steps ──────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_run_steps (
+  id uuid primary key default gen_random_uuid(),
+  run_id uuid not null references public.chat_runs(id) on delete cascade,
+  -- Its place in the run, from 1: how a question or an approval names it to
+  -- the browser, which gets no ids.
+  position smallint not null check (position >= 1),
+  kind text not null references public.chat_step_kinds(kind) on update cascade,
+  -- pending: in a plan, not started; waiting: on the person.
+  status text not null default 'running' check (
+    status in ('pending', 'running', 'waiting', 'done', 'error', 'skipped')
+  ),
+  -- The label registry's words (CHAT-03): "Read Citations".
+  label text not null check (char_length(label) between 1 and 200),
+  -- "Pricing prompts · Last 30 days · ChatGPT, Perplexity · 42 rows", or an
+  -- error's plain reason.
+  detail text check (char_length(detail) between 1 and 500),
+  -- What a read covered, in names only (subject, date range, platforms,
+  -- brand): never ids. The tool's own arguments are in debug_json.
+  scope_json jsonb check (
+    scope_json is null
+    or (jsonb_typeof(scope_json) = 'object' and octet_length(scope_json::text) <= 8000)
+  ),
+  row_count integer check (row_count >= 0),
+  -- A read's newest data (CHAT-20 §15a); the answer's "Data as of" is the newest of them.
+  data_as_of timestamptz,
+  started_at timestamptz,
+  finished_at timestamptz,
+  -- Server and staff only (members aren't granted them): the registry name
+  -- of the tool that ran, and what the staff Debug view shows (CHAT-03 items
+  -- 25–26: input, output, model, tokens, latency). Up to 1 MB as text: the
+  -- server shortens a large tool output before it keeps it here.
+  tool text check (char_length(tool) between 1 and 100),
+  debug_json jsonb check (
+    debug_json is null
+    or (jsonb_typeof(debug_json) = 'object' and octet_length(debug_json::text) <= 1000000)
+  ),
+  unique (run_id, position)
+);
+
+comment on table public.chat_run_steps is
+  'Chat (00400): a run''s steps in order (CHAT-03). Members read every column but tool and debug_json, which stay with the server and staff. Written by the server.';
+comment on column public.chat_run_steps.scope_json is
+  'What a read covered, in names only (subject, dateRange, platforms, brand): never ids. Members read it.';
+comment on column public.chat_run_steps.debug_json is
+  'The staff Debug view (CHAT-03 25–26): the tool''s input and output, model, tokens, latency. Never granted to members.';
+
+-- ─── A person's Chat settings ───────────────────────────────────────────────
+
+-- Whether a list has no value twice: a check can't hold a subquery.
+create or replace function public.chat_text_array_distinct(p_values text[])
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select count(*) = count(distinct v) from unnest(p_values) as t(v);
+$$;
+
+create table if not exists public.chat_user_prefs (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  -- The chat menu beside the conversation (CHAT-01 9a–9f); open by default.
+  menu_open boolean not null default true,
+  -- Where a page Chat writes opens (CHAT-25 §12): ask each time, keep working
+  -- in chat, the editor inside Chat, or the Content Editor.
+  page_open text not null default 'ask' check (page_open in ('ask', 'chat', 'here', 'editor')),
+  -- What Chat focuses on (CHAT-24 §2), in the order picked: the first one
+  -- leads Home. Null: not asked yet (the picker shows once); empty: skipped,
+  -- or none picked. Each area once.
+  focus text[] check (
+    focus <@ array['lead', 'comp', 'growth', 'seo', 'content', 'brand', 'pd', 'bd']::text[]
+    and cardinality(focus) <= 8
+    and public.chat_text_array_distinct(focus)
+  ),
+  -- Null: the workspace's default (Auto). Only its length is checked here:
+  -- the server checks it against the model catalog and the plan before a
+  -- run uses it (CHAT-16; the price sync and the engine, C1 and C3).
+  model text check (char_length(model) between 1 and 200),
+  -- Null: the workspace's default (Normal). CHAT-16 §E: Normal, High, Max.
+  effort text check (effort in ('normal', 'high', 'max')),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_chat_user_prefs_updated_at on public.chat_user_prefs;
+create trigger trg_chat_user_prefs_updated_at
+  before update on public.chat_user_prefs
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_user_prefs is
+  'Chat (00400): a person''s Chat settings, on the server so they follow them to every device (DECISIONS N3): chat menu, where pages open, focus areas, model and effort. Theirs to read and write.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_conversations enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.chat_runs enable row level security;
+alter table public.chat_run_steps enable row level security;
+alter table public.chat_user_prefs enable row level security;
+
+revoke all on table public.chat_conversations from anon, authenticated;
+revoke all on table public.chat_messages from anon, authenticated;
+revoke all on table public.chat_runs from anon, authenticated;
+revoke all on table public.chat_run_steps from anon, authenticated;
+revoke all on table public.chat_user_prefs from anon, authenticated;
+
+grant select on table public.chat_conversations to authenticated;
+grant select on table public.chat_messages to authenticated;
+grant select on table public.chat_runs to authenticated;
+-- Every column but the tool and the debug record (CHAT-03 item 22).
+grant select (
+  id, run_id, position, kind, status, label, detail, scope_json, row_count,
+  data_as_of, started_at, finished_at
+) on table public.chat_run_steps to authenticated;
+grant select, insert, update on table public.chat_user_prefs to authenticated;
+
+grant all on table public.chat_conversations to service_role;
+grant all on table public.chat_messages to service_role;
+grant all on table public.chat_runs to service_role;
+grant all on table public.chat_run_steps to service_role;
+grant all on table public.chat_user_prefs to service_role;
+
+-- The author reads their chat while they belong to its organization: a
+-- member who left, or moved to another, doesn't.
+drop policy if exists "chat_conversations: author select" on public.chat_conversations;
+create policy "chat_conversations: author select"
+  on public.chat_conversations
+  for select
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- Messages, runs and steps follow their chat's policies.
+drop policy if exists "chat_messages: chat select" on public.chat_messages;
+create policy "chat_messages: chat select"
+  on public.chat_messages
+  for select
+  using (conversation_id in (select c.id from public.chat_conversations c));
+
+drop policy if exists "chat_runs: chat select" on public.chat_runs;
+create policy "chat_runs: chat select"
+  on public.chat_runs
+  for select
+  using (conversation_id in (select c.id from public.chat_conversations c));
+
+drop policy if exists "chat_run_steps: chat select" on public.chat_run_steps;
+create policy "chat_run_steps: chat select"
+  on public.chat_run_steps
+  for select
+  using (run_id in (select r.id from public.chat_runs r));
+
+drop policy if exists "chat_user_prefs: own select" on public.chat_user_prefs;
+create policy "chat_user_prefs: own select"
+  on public.chat_user_prefs
+  for select
+  using (user_id = auth.uid());
+
+drop policy if exists "chat_user_prefs: own insert" on public.chat_user_prefs;
+create policy "chat_user_prefs: own insert"
+  on public.chat_user_prefs
+  for insert
+  with check (user_id = auth.uid());
+
+drop policy if exists "chat_user_prefs: own update" on public.chat_user_prefs;
+create policy "chat_user_prefs: own update"
+  on public.chat_user_prefs
+  for update
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00401_chat_settings.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00401: Chat's settings — each workspace's tool policy and switches, and
+-- each person's "Don't ask again" choices
+-- ============================================================================
+-- The approval precedence (CHAT-20 §5; web lib/chat/precedence.ts) reads both
+-- before every tool call Chat makes, behind CHAT_AGENTIC: nothing reads them
+-- while the flag is off.
+--
+--   * chat_settings: one row per workspace (Settings › Chat). Members read
+--     it, since Settings › Chat and "What Chat can do" show it to every role;
+--     the server writes it (service role), for an Admin. No row = the
+--     defaults below: every tool at its registry default, Full auto open to
+--     every role the plan allows, "Don't ask again" offered, Managers able to
+--     go live after their click.
+--       - tool_policies: an Admin's policy per tool, keyed by the tool's
+--         label key (the key the browser knows a tool by: a tool's name never
+--         reaches a member, CHAT-03 item 22). never · ask · ask_full_auto ·
+--         always; the server keeps each within its tool's maximum, so an
+--         EXECUTE or an always-card tool is never "always".
+--       - full_auto_for_members: people other than Admins may use Full auto
+--         (CHAT-23 policy.toggleFullAutoForManagers). The plan decides first:
+--         Full auto is Growth and up.
+--       - dont_ask_again: "Don't ask again" is offered and the ticks count.
+--         Off, everyone's ticks stop at once; they are kept, not deleted.
+--       - manager_execute_off: the go-live groups an Admin turned off for
+--         Managers (CHAT-20 §4): publishing, email_outreach, code_prs, feeds.
+--   * chat_auto_choices: a person's "Don't ask again" ticks, by tool label
+--     key, in their workspace. Theirs to read, add and remove (Settings ›
+--     Chat › "Your auto changes"). A tick counts only inside what the plan,
+--     the role, the policy and the switches allow (precedence step 6), so a
+--     row by itself never lets anything run without a card.
+
+-- Whether every value of a tool policy map is a policy, keyed by a label key.
+create or replace function public.chat_tool_policies_valid(p_policies jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when jsonb_typeof(p_policies) <> 'object' then false
+    else coalesce(
+      (
+        select bool_and(
+          e.key ~ '^[a-z][A-Za-z0-9]{1,63}$'
+          and e.value in ('never', 'ask', 'ask_full_auto', 'always')
+        )
+        from jsonb_each_text(p_policies) as e(key, value)
+      ),
+      true
+    )
+  end;
+$$;
+
+-- ─── A workspace's Chat settings ────────────────────────────────────────────
+
+create table if not exists public.chat_settings (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  tool_policies jsonb not null default '{}'::jsonb
+    check (public.chat_tool_policies_valid(tool_policies)),
+  full_auto_for_members boolean not null default true,
+  dont_ask_again boolean not null default true,
+  manager_execute_off text[] not null default '{}' check (
+    manager_execute_off <@ array['publishing', 'email_outreach', 'code_prs', 'feeds']::text[]
+    and public.chat_text_array_distinct(manager_execute_off)
+  ),
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_chat_settings_updated_at on public.chat_settings;
+create trigger trg_chat_settings_updated_at
+  before update on public.chat_settings
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_settings is
+  'Chat (00401): a workspace''s Chat settings (Settings › Chat): tool policies by label key, Full auto for non-Admins, "Don''t ask again", go-live groups off for Managers. Members read; the server writes for an Admin. No row = the defaults.';
+comment on column public.chat_settings.tool_policies is
+  'An Admin''s policy per tool, keyed by the tool''s label key (never its name): never, ask, ask_full_auto or always. Held within each tool''s maximum by the server.';
+
+-- ─── A person's "Don't ask again" ticks ─────────────────────────────────────
+
+create table if not exists public.chat_auto_choices (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The tool's label key, as in chat_settings.tool_policies.
+  tool_key text not null check (tool_key ~ '^[a-z][A-Za-z0-9]{1,63}$'),
+  created_at timestamptz not null default now(),
+  primary key (user_id, organization_id, tool_key)
+);
+
+create index if not exists chat_auto_choices_organization_idx
+  on public.chat_auto_choices (organization_id);
+
+comment on table public.chat_auto_choices is
+  'Chat (00401): a person''s "Don''t ask again" ticks, by tool label key, in their workspace. Theirs to read, add and remove; a tick counts only where the plan, role, policy and switches allow Full auto.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_settings enable row level security;
+alter table public.chat_auto_choices enable row level security;
+
+revoke all on table public.chat_settings from anon, authenticated;
+revoke all on table public.chat_auto_choices from anon, authenticated;
+
+grant select on table public.chat_settings to authenticated;
+grant select, insert, delete on table public.chat_auto_choices to authenticated;
+
+grant all on table public.chat_settings to service_role;
+grant all on table public.chat_auto_choices to service_role;
+
+-- Members of the workspace read its settings; the server writes them.
+drop policy if exists "chat_settings: member select" on public.chat_settings;
+create policy "chat_settings: member select"
+  on public.chat_settings
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+-- A person's own ticks, in the workspace they belong to now: one who moved
+-- to another workspace doesn't carry them there.
+drop policy if exists "chat_auto_choices: own select" on public.chat_auto_choices;
+create policy "chat_auto_choices: own select"
+  on public.chat_auto_choices
+  for select
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "chat_auto_choices: own insert" on public.chat_auto_choices;
+create policy "chat_auto_choices: own insert"
+  on public.chat_auto_choices
+  for insert
+  with check (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "chat_auto_choices: own delete" on public.chat_auto_choices;
+create policy "chat_auto_choices: own delete"
+  on public.chat_auto_choices
+  for delete
+  using (user_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00404_chat_model_prices.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00404: the models' prices, synced daily from OpenRouter's public catalog
+-- ============================================================================
+-- Chat (CHAT-16 §A, CHAT-00 `model_price`), behind CHAT_AGENTIC: a daily job
+-- reads https://openrouter.ai/api/v1/models (public, no key) and keeps every
+-- model's price here (server/src/lib/model-prices.js). What a model call costs
+-- is read from it first, and from the server's own table when a model isn't
+-- here (lib/improve-cost.js); multipliers (Auto = 1x) are worked out from it
+-- on the server.
+--
+--   * Prices are USD per million tokens (OpenRouter's per-token prices ×
+--     1,000,000); null where OpenRouter gives none or a variable one ("-1").
+--   * overrides: OpenRouter's pricing.overrides as given. A time window
+--     (utc_days, utc_start/utc_end as HHMM) or a prompt size
+--     (min_prompt_tokens), each with the prices that apply in it.
+--   * is_batch: a ":batch" variant, kept as its own row and never offered.
+--   * synced_at: the last sync that listed the model. A model the catalog
+--     drops keeps its last row: a failed or partial sync never loses prices.
+--
+-- Dollars never reach a browser (CHAT-04, owner decision 2026-10-27): no
+-- policy lets a member read this table; only the server does.
+
+create table if not exists public.chat_model_prices (
+  model_id text primary key check (char_length(model_id) between 1 and 200),
+  name text not null default '',
+  provider text not null default '',
+  input_modalities text[] not null default '{}',
+  output_modalities text[] not null default '{}',
+  input_per_m numeric check (input_per_m is null or input_per_m >= 0),
+  output_per_m numeric check (output_per_m is null or output_per_m >= 0),
+  cache_read_per_m numeric check (cache_read_per_m is null or cache_read_per_m >= 0),
+  image_output_per_m numeric check (image_output_per_m is null or image_output_per_m >= 0),
+  overrides jsonb not null default '[]'::jsonb check (jsonb_typeof(overrides) = 'array'),
+  is_batch boolean not null default false,
+  synced_at timestamptz not null default now()
+);
+
+comment on table public.chat_model_prices is
+  'CHAT-16 §A: OpenRouter''s public model catalog, synced daily (model-prices.js). USD per million tokens; server only, never sent to a browser.';
+comment on column public.chat_model_prices.overrides is
+  'OpenRouter pricing.overrides as given: a UTC time window (utc_days, utc_start/utc_end HHMM) or a prompt size (min_prompt_tokens) with its per-token prices.';
+comment on column public.chat_model_prices.synced_at is
+  'The last sync that listed the model; a model the catalog drops keeps its last row.';
+
+alter table public.chat_model_prices enable row level security;
+revoke all on table public.chat_model_prices from anon, authenticated;
+grant all on table public.chat_model_prices to service_role;
 

@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
-import { getProductVisibility } from '@/lib/mcp/data';
+import { NOT_IN_PLAN, SHOPPING_NOT_IN_PLAN, getProductVisibility } from '@/lib/mcp/data';
 
+/**
+ * GET /api/mcp/product-visibility
+ *
+ * Parallel REST surface for the `get_product_visibility` MCP tool. 403
+ * plan_limit on a plan without shopping analytics (Starter).
+ */
 export async function GET(req: Request) {
   const auth = await authenticateMcpRequest(req);
   if (auth instanceof NextResponse) return auth;
@@ -22,6 +28,9 @@ export async function GET(req: Request) {
       brandId,
       productTitle,
     });
+    if (result === NOT_IN_PLAN) {
+      return NextResponse.json(SHOPPING_NOT_IN_PLAN, { status: 403 });
+    }
     if (result === null) {
       return NextResponse.json({ error: 'Product or Brand not found' }, { status: 404 });
     }

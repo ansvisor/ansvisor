@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
 import { requireFeature } from '../lib/plan-guard.js';
 import { boundedBrandSetup, boundedTopicName, brandSetupSchema } from '../lib/brand-setup-input.js';
 import { resolveModel } from '../lib/ai-provider.js';
@@ -360,9 +360,14 @@ router.post(
   },
 );
 
+/** What a member without the role for a topic suggestion reads. */
+const TOPIC_SUGGESTION_ROLE_MESSAGE =
+  'Only admins and managers can accept or dismiss topic suggestions.';
+
 /**
  * POST /api/topics/suggestions/:id/dismiss
  * Marks a suggestion dismissed; its name is excluded from future refreshes.
+ * Admins and managers only, as the Topics page offers it.
  */
 router.post('/suggestions/:id/dismiss', async (req, res) => {
   try {
@@ -373,6 +378,7 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, TOPIC_SUGGESTION_ROLE_MESSAGE);
 
     const { error } = await supabaseAdmin
       .from('topic_suggestions')
@@ -391,7 +397,8 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
  * POST /api/topics/suggestions/:id/accept
  * Body: { topicId } — the topic the web app just created via the singular
  * createTopic action. This only records the outcome; topic creation itself
- * happens RLS-checked in the web app.
+ * happens RLS-checked in the web app. Admins and managers only, as the
+ * Topics page offers it.
  */
 router.post('/suggestions/:id/accept', async (req, res) => {
   try {
@@ -406,6 +413,7 @@ router.post('/suggestions/:id/accept', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, TOPIC_SUGGESTION_ROLE_MESSAGE);
 
     const { error } = await supabaseAdmin
       .from('topic_suggestions')
