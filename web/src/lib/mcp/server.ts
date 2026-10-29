@@ -311,7 +311,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'accept_topic_suggestion',
     {
       description:
-        'Accept a pending topic suggestion: creates exactly one new topic from it and marks the suggestion as added. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query. Accepting the same suggestion twice fails cleanly — it is not accepted or already decided — no duplicate topic is created.',
+        'Accept a pending topic suggestion: creates exactly one new topic from it and marks the suggestion as added. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query. Accepting the same suggestion twice fails cleanly — it is not accepted or already decided — no duplicate topic is created. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         suggestion_id: relaxedUuid.describe('Topic suggestion UUID, from list_topic_suggestions.'),
       },
@@ -336,7 +336,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'dismiss_topic_suggestion',
     {
       description:
-        'Dismiss a pending topic suggestion so it never reappears in future suggestion batches. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query.',
+        'Dismiss a pending topic suggestion so it never reappears in future suggestion batches. Only fire on explicit user intent for a specific suggestion (from list_topic_suggestions), never as part of an exploratory query. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         suggestion_id: relaxedUuid.describe('Topic suggestion UUID, from list_topic_suggestions.'),
       },
@@ -384,7 +384,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'accept_prompt_suggestion',
     {
       description:
-        "Accept one pending prompt suggestion by creating a tracked prompt with the brand's default platform/model settings and marking the suggestion added. This consumes one active prompt location and respects the organization's plan limit and allowed engines. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Accepting the same suggestion twice does not create a duplicate prompt.",
+        "Accept one pending prompt suggestion by creating a tracked prompt with the brand's default platform/model settings and marking the suggestion added. This consumes one active prompt location and respects the organization's plan limit and allowed engines. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Accepting the same suggestion twice does not create a duplicate prompt. Needs an admin or a manager (get_me returns the role).",
       inputSchema: {
         suggestion_id: relaxedUuid.describe(
           'Prompt suggestion UUID, from list_prompt_suggestions.',
@@ -417,7 +417,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'dismiss_prompt_suggestion',
     {
       description:
-        'Dismiss a pending prompt suggestion so it no longer appears in future suggestion lists. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query.',
+        'Dismiss a pending prompt suggestion so it no longer appears in future suggestion lists. Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Needs an admin, a manager or an analyst, not an agency partner (get_me returns the role).',
       inputSchema: {
         suggestion_id: relaxedUuid.describe(
           'Prompt suggestion UUID, from list_prompt_suggestions.',
@@ -745,7 +745,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'update_opportunity_status',
     {
       description:
-        'Move a content opportunity between workflow states. Valid statuses are: "new" (just generated), "sent" (delivered to a CMS / writer via webhook), "in_progress" (someone is actively writing), "done" (published), "dismissed" (intentionally skipped). Use this to close the loop on the content backlog from inside an MCP conversation — e.g. "mark that opportunity as in_progress" once the user starts writing, or "dismiss this one, we already cover it." This is a write — only fire on explicit user intent for a specific opportunity, never as part of an exploratory query.',
+        'Move a content opportunity between workflow states. Valid statuses are: "new" (just generated), "sent" (delivered to a CMS / writer via webhook), "in_progress" (someone is actively writing), "done" (published), "dismissed" (intentionally skipped). Use this to close the loop on the content backlog from inside an MCP conversation — e.g. "mark that opportunity as in_progress" once the user starts writing, or "dismiss this one, we already cover it." This is a write — only fire on explicit user intent for a specific opportunity, never as part of an exploratory query. Any member may record progress; dismissing one, or moving a dismissed one back, needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         opportunity_id: relaxedUuid.describe(
           'Content opportunity UUID, from list_content_opportunities.',
