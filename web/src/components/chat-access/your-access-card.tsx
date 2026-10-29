@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { getChatAccess, type ChatAccess } from '@/lib/actions/chat-access';
 import type { YourAccessRow } from '@/lib/chat/access';
 import { ClassBadge } from './class-badge';
+import { AskAdminButton } from './ask-admin-button';
 
 export const ROLES_ACCESS_PATH = '/dashboard/settings/roles-access';
 export const CAPABILITIES_PATH = '/dashboard/chat/capabilities';
@@ -59,7 +60,14 @@ export function YourAccessCard({ access }: { access: ChatAccess }) {
             ))}
           </ul>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {access.role !== 'admin' && (
+            <AskAdminButton
+              asked={t('askAdmin.defaults.role')}
+              ruleKind="role"
+              ruleDetail={t('askAdmin.roleDetail', { role: t(`roleNames.${access.role}`) })}
+            />
+          )}
           <Link
             href={ROLES_ACCESS_PATH}
             className="inline-flex items-center gap-0.5 text-xs font-medium underline-offset-2 hover:underline"

@@ -36,6 +36,8 @@ import { ROLE_MATRIX, ROLE_ORDER, type RoleCell } from '@/lib/chat/access';
 import { cn } from '@/lib/utils';
 import { ClassBadge } from './class-badge';
 import { YourPlanCard } from './plan-card';
+import { AskAdminButton } from './ask-admin-button';
+import { RequestsSection } from './requests-section';
 import { CAPABILITIES_PATH } from './your-access-card';
 
 /**
@@ -45,8 +47,14 @@ import { CAPABILITIES_PATH } from './your-access-card';
  * Admins change a role here (the rest of the team's management stays in
  * Team).
  */
-export function RolesAccessSection() {
+export function RolesAccessSection({
+  onRequestsChanged,
+}: {
+  /** A request was decided or sent: Settings' count reads again. */
+  onRequestsChanged?: () => void;
+} = {}) {
   const t = useTranslations('chatAccess');
+  const [requestsVersion, setRequestsVersion] = useState(0);
   const [access, setAccess] = useState<ChatAccess | null | 'failed' | undefined>(undefined);
   const [members, setMembers] = useState<RoleMember[]>([]);
 
@@ -97,12 +105,22 @@ export function RolesAccessSection() {
       </div>
 
       {!isAdmin && (
-        <div className="flex items-center gap-2.5 rounded-xl border bg-muted/40 px-3.5 py-2.5 text-sm">
+        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border bg-muted/40 px-3.5 py-2.5 text-sm">
           <Info className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           <span className="font-medium">{t('roles.readOnly', { role: access.role })}</span>
           <span className="text-muted-foreground">{t('roles.readOnlyNote')}</span>
+          <span className="ml-auto">
+            <AskAdminButton
+              asked={t('askAdmin.defaults.role')}
+              ruleKind="role"
+              ruleDetail={t('askAdmin.roleDetail', { role: t(`roleNames.${access.role}`) })}
+              onSent={() => setRequestsVersion((n) => n + 1)}
+            />
+          </span>
         </div>
       )}
+
+      <RequestsSection version={requestsVersion} onChanged={onRequestsChanged} />
 
       <MembersTable members={members} isAdmin={isAdmin} onChanged={reload} />
       <RoleMatrix role={access.role} />

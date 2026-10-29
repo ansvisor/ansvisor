@@ -16,6 +16,18 @@ vi.mock('@/lib/actions/chat-access', () => ({
   listRoleMembers: () => listRoleMembers(),
 }));
 vi.mock('@/lib/actions/team', () => ({ updateMemberRole: vi.fn() }));
+const requestAccess = vi.fn();
+const listAccessRequests = vi.fn();
+const decideAccessRequest = vi.fn();
+const withdrawAccessRequest = vi.fn();
+vi.mock('@/lib/actions/chat-access-requests', () => ({
+  requestAccess: (...args: unknown[]) => requestAccess(...args),
+  listAccessRequests: () => listAccessRequests(),
+  decideAccessRequest: (...args: unknown[]) => decideAccessRequest(...args),
+  withdrawAccessRequest: (...args: unknown[]) => withdrawAccessRequest(...args),
+}));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
   useUpgradeGate: () => ({ guard: (fn: unknown) => fn }),
 }));
@@ -47,6 +59,16 @@ beforeEach(() => {
   root = createRoot(container);
   getChatAccess.mockReset();
   listRoleMembers.mockReset();
+  for (const fn of [
+    requestAccess,
+    decideAccessRequest,
+    withdrawAccessRequest,
+    ...Object.values(toast),
+  ]) {
+    fn.mockReset();
+  }
+  listAccessRequests.mockReset();
+  listAccessRequests.mockResolvedValue({ isAdmin: false, requests: [] });
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -276,5 +298,114 @@ describe('CapabilitiesView', () => {
     });
     expect(text()).toContain('Read citations');
     expect(text()).not.toContain('Read tracked prompts');
+  });
+});
+
+const button = (label: string, root: ParentNode = container) =>
+  [...root.querySelectorAll('button')].find((b) => b.textContent === label);
+
+describe('Ask your Admin', () => {
+  it('sends what the person needs, with the rule, after their click', async () => {
+    getChatAccess.mockResolvedValue(access());
+    listRoleMembers.mockResolvedValue([]);
+    requestAccess.mockResolvedValue({ ok: true, id: 'r1' });
+    await render(<RolesAccessSection />);
+    expect(requestAccess).not.toHaveBeenCalled();
+    // The plan card has its own (for the next plan); this is the read-only bar's.
+    const bar = [...container.querySelectorAll('div')].find((d) =>
+      d.textContent?.startsWith("You're a Manager"),
+    )!;
+    await act(async () => button('Ask your Admin', bar)!.click());
+    const box = document.body.querySelector('textarea')!;
+    expect(box.value).toBe('Change my role so I can make changes in this workspace');
+    await act(async () => button('Send', document.body)!.click());
+    expect(requestAccess).toHaveBeenCalledWith({
+      asked: 'Change my role so I can make changes in this workspace',
+      ruleKind: 'role',
+      ruleDetail: 'Your role is Manager.',
+      toolKey: null,
+    });
+    expect(toast.success).toHaveBeenCalledWith('Sent to your Admins');
+  });
+
+  it('says when ten requests already wait, or this one was asked today', async () => {
+    await render(<YourAccessCard access={access()} />);
+    requestAccess.mockResolvedValue({ ok: false, reason: 'too_many' });
+    await act(async () => button('Ask your Admin')!.click());
+    await act(async () => button('Send', document.body)!.click());
+    expect(toast.error).toHaveBeenCalledWith(
+      'You have 10 requests waiting. Withdraw one, or wait for your Admins.',
+    );
+    requestAccess.mockResolvedValue({ ok: false, reason: 'already_today' });
+    await act(async () => button('Send', document.body)!.click());
+    expect(toast.info).toHaveBeenCalledWith('You already asked for this today.');
+  });
+
+  it("puts Ask your Admin in Upgrade's place on the plan card, for the next plan", async () => {
+    await render(<YourPlanCard plan={starter} isAdmin={false} />);
+    await act(async () => button('Ask your Admin')!.click());
+    expect(document.body.querySelector('textarea')!.value).toBe('Upgrade to Growth');
+    expect(document.body.textContent).toContain("Needs Growth · you're on Starter");
+  });
+});
+
+describe('Requests', () => {
+  const request = (over = {}) => ({
+    id: 'r1',
+    requester: 'Taylor Brooks',
+    isYours: false,
+    asked: 'Add competitors · Peec AI',
+    toolKey: 'addCompetitors',
+    ruleKind: 'role',
+    ruleDetail: 'Your role is Analyst.',
+    status: 'pending',
+    createdAt: '2026-10-29T11:00:00Z',
+    decidedAt: null,
+    ...over,
+  });
+
+  it("lets an Admin approve or dismiss a workspace's waiting request, with a count", async () => {
+    getChatAccess.mockResolvedValue(access({ role: 'admin' }));
+    listRoleMembers.mockResolvedValue([]);
+    listAccessRequests.mockResolvedValue({
+      isAdmin: true,
+      requests: [request(), request({ id: 'r2', status: 'approved' })],
+    });
+    decideAccessRequest.mockResolvedValue(true);
+    const changed = vi.fn();
+    await render(<RolesAccessSection onRequestsChanged={changed} />);
+    const section = container.querySelector('[aria-labelledby="chat-access-requests"]')!;
+    expect(section.textContent).toContain('Requests1');
+    expect(section.textContent).toContain(
+      'From Taylor Brooks · Your role is Analyst. · 1 hour ago',
+    );
+    expect(section.textContent).toContain('Approved');
+    expect([...section.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Approve',
+      'Dismiss',
+    ]);
+    await act(async () => button('Approve', section)!.click());
+    expect(decideAccessRequest).toHaveBeenCalledWith('r1', 'approved');
+    expect(changed).toHaveBeenCalled();
+    decideAccessRequest.mockResolvedValue(false);
+    await act(async () => button('Dismiss', section)!.click());
+    expect(toast.info).toHaveBeenCalledWith('Another Admin already decided it.');
+  });
+
+  it('lets anyone else withdraw their own waiting request', async () => {
+    getChatAccess.mockResolvedValue(access());
+    listRoleMembers.mockResolvedValue([]);
+    listAccessRequests.mockResolvedValue({
+      isAdmin: false,
+      requests: [request({ isYours: true })],
+    });
+    withdrawAccessRequest.mockResolvedValue(true);
+    await render(<RolesAccessSection />);
+    const section = container.querySelector('[aria-labelledby="chat-access-requests"]')!;
+    expect(section.textContent).toContain('Your requests');
+    expect(section.textContent).not.toContain('From ');
+    await act(async () => button('Withdraw', section)!.click());
+    expect(withdrawAccessRequest).toHaveBeenCalledWith('r1');
+    expect(toast.success).toHaveBeenCalledWith('Withdrawn');
   });
 });
