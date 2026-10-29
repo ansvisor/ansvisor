@@ -39,6 +39,36 @@ describe('generationCostUsd', () => {
   it('treats missing usage as zero tokens', () => {
     expect(generationCostUsd('openai/gpt-5-mini', undefined)).toBe(0);
   });
+
+  it("prices the Content Editor's Claude models: Haiku 5.5 reads, Sonnet 5.5 writes", () => {
+    // Haiku 5.5: $0.10 / $0.50 per 1M; Sonnet 5.5: $2 / $10.
+    expect(
+      generationCostUsd('anthropic/claude-haiku-5-5', { inputTokens: 7000, outputTokens: 2000 }),
+    ).toBeCloseTo(0.0017, 6);
+    expect(
+      generationCostUsd('anthropic/claude-sonnet-5-5', { inputTokens: 7000, outputTokens: 2000 }),
+    ).toBeCloseTo(0.034, 6);
+    expect(priceFor('anthropic/claude-sonnet-5-5')).not.toBe(FALLBACK_PRICE);
+  });
+
+  it("charges Haiku 5.5's long rate, $0.50 / $2.50, on a prompt past 100k tokens only", () => {
+    expect(
+      generationCostUsd('anthropic/claude-haiku-5-5', {
+        inputTokens: 100_000,
+        outputTokens: 1_000,
+      }),
+    ).toBeCloseTo(0.0105, 6);
+    expect(
+      generationCostUsd('anthropic/claude-haiku-5-5', {
+        inputTokens: 100_001,
+        outputTokens: 1_000,
+      }),
+    ).toBeCloseTo(0.0525005, 7);
+    // A model with one rate has none.
+    expect(
+      generationCostUsd('anthropic/claude-sonnet-5-5', { inputTokens: 200_000, outputTokens: 0 }),
+    ).toBe(0.4);
+  });
 });
 
 describe('priceFor with synced prices (CHAT-16 §A)', () => {
@@ -87,6 +117,8 @@ describe('the same 1% budget buys more on a cheaper model', () => {
     expect(left('google/gemini-3-flash-preview')).toBe(262);
     expect(left('openai/gpt-5-mini')).toBe(433);
     expect(left('anthropic/claude-haiku-4-5')).toBe(146);
+    expect(left('anthropic/claude-haiku-5-5')).toBe(1464);
+    expect(left('anthropic/claude-sonnet-5-5')).toBe(73);
   });
 });
 

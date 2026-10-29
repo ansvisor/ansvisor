@@ -30,6 +30,7 @@ import { UntrackedQueriesCard } from './_untracked-queries';
 import { getTrafficGooglePages } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 
 /** CTR as the table shows it: "3.1%". */
 function ctr(clicks: number, impressions: number): string {
@@ -101,6 +102,9 @@ export function GoogleSection({
   // AI as it opens) opens the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Suggesting prompts for a page costs AI and tracking adds prompts: admins and managers.
+  const { canManage } = useUserRole();
+  const tManagers = useTranslations('managersOnly');
 
   const gscReady = source === null || googleSourceStatus(source) === 'connected';
 
@@ -190,6 +194,8 @@ export function GoogleSection({
                 >
                   {t('taking.positions')}
                 </Link>
+              ) : !canManage ? (
+                <span className="text-xs text-muted-foreground">{tManagers('addPrompts')}</span>
               ) : (
                 <Button
                   size="sm"

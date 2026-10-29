@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * Which organizations the nightly work may still run for (2026-10-27): on
  * the cloud, those with an active or trialing subscription; self-hosted,
- * every one, without a read.
+ * every one, without a read. Never a demo brand (00380), on either.
  */
 
 const reads = [];
@@ -47,6 +47,8 @@ const {
   MAX_CACHED_ANSWERS,
   activeBrandFilter,
   activeOrgFilter,
+  brandStopReason,
+  brandStopReasons,
   clearCachedAnswers,
   isBrandActive,
   isBrandActiveCached,
@@ -72,6 +74,7 @@ beforeEach(() => {
       { id: 'b-trialing', organizations: { subscription_status: 'trialing' } },
       { id: 'b-canceled', organizations: { subscription_status: 'canceled' } },
       { id: 'b-orphan', organizations: null },
+      { id: 'b-demo', is_demo: true, organizations: { subscription_status: 'active' } },
     ],
   };
 });
@@ -83,14 +86,24 @@ afterEach(() => {
 describe('self-hosted', () => {
   beforeEach(() => vi.stubEnv('IS_CLOUD', 'false'));
 
-  it('lets every organization and brand through without reading anything', async () => {
+  it('lets every organization through without reading anything', async () => {
     const isOrgActive = await activeOrgFilter(['canceled', 'anything']);
-    const isBrandActive = await activeBrandFilter(['b-canceled']);
 
     expect(isOrgActive('canceled')).toBe(true);
     expect(isOrgActive(undefined)).toBe(true);
-    expect(isBrandActive('b-canceled')).toBe(true);
     expect(reads).toHaveLength(0);
+  });
+
+  it('lets every brand through but a demo one, reading only which is which', async () => {
+    const isBrandActive = await activeBrandFilter(['b-canceled', 'b-orphan', 'b-demo']);
+
+    expect(['b-canceled', 'b-orphan', 'b-demo'].filter(isBrandActive)).toEqual([
+      'b-canceled',
+      'b-orphan',
+    ]);
+    expect(reads).toEqual([
+      { table: 'brands', columns: 'id, is_demo', in: ['id', ['b-canceled', 'b-orphan', 'b-demo']] },
+    ]);
   });
 });
 
@@ -122,16 +135,14 @@ describe('cloud', () => {
     ]);
   });
 
-  it('lets through only the brands whose organization has one', async () => {
-    const isActive = await activeBrandFilter(['b-active', 'b-trialing', 'b-canceled', 'b-orphan']);
+  it('lets through only the brands whose organization has one, never a demo brand', async () => {
+    const all = ['b-active', 'b-trialing', 'b-canceled', 'b-orphan', 'b-demo'];
+    const isActive = await activeBrandFilter(all);
 
-    expect(['b-active', 'b-trialing', 'b-canceled', 'b-orphan'].filter(isActive)).toEqual([
-      'b-active',
-      'b-trialing',
-    ]);
+    expect(all.filter(isActive)).toEqual(['b-active', 'b-trialing']);
     expect(reads[0]).toMatchObject({
       table: 'brands',
-      columns: 'id, organizations(subscription_status)',
+      columns: 'id, is_demo, organizations(subscription_status)',
     });
   });
 
@@ -147,6 +158,32 @@ describe('cloud', () => {
       'organizations read: statement timeout',
     );
     await expect(activeBrandFilter(['b-active'])).rejects.toThrow('brands read: statement timeout');
+  });
+});
+
+describe('brandStopReasons and brandStopReason', () => {
+  it('says why no work may start: demo_brand before an ended plan, null when it may', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    const reasonFor = await brandStopReasons(['b-active', 'b-canceled', 'b-orphan', 'b-demo']);
+    expect(['b-active', 'b-canceled', 'b-orphan', 'b-demo', 'b-missing'].map(reasonFor)).toEqual([
+      null,
+      'subscription_inactive',
+      'subscription_inactive',
+      'demo_brand',
+      'subscription_inactive',
+    ]);
+    expect(reads).toHaveLength(1);
+  });
+
+  it('self-hosted, stops only a demo brand', async () => {
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await brandStopReason('b-canceled')).toBe(null);
+    expect(await brandStopReason('b-demo')).toBe('demo_brand');
+  });
+
+  it('reads nothing for no ids', async () => {
+    expect((await brandStopReasons([]))('b-active')).toBe('subscription_inactive');
+    expect(reads).toHaveLength(0);
   });
 });
 
@@ -169,9 +206,14 @@ describe('isBrandActive', () => {
     expect(await isBrandActive('b-canceled')).toBe(false);
     expect(await isBrandActive('b-orphan')).toBe(false);
     vi.stubEnv('IS_CLOUD', 'false');
-    reads.length = 0;
     expect(await isBrandActive('b-canceled')).toBe(true);
-    expect(reads).toHaveLength(0);
+  });
+
+  it('never tells a demo brand active, on the cloud or self-hosted', async () => {
+    vi.stubEnv('IS_CLOUD', 'true');
+    expect(await isBrandActive('b-demo')).toBe(false);
+    vi.stubEnv('IS_CLOUD', 'false');
+    expect(await isBrandActive('b-demo')).toBe(false);
   });
 });
 

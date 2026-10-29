@@ -48,7 +48,7 @@ export async function addDomain(
   brandId: string,
   data: { domain: string; country?: string; isPrimary: boolean },
 ): Promise<BrandDomain> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   const { data: domain, error } = await supabase
@@ -122,7 +122,7 @@ export async function syncDomains(
   brandId: string,
   domains: { domain: string; country?: string; isPrimary: boolean }[],
 ): Promise<BrandDomain[]> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   await supabase.from('brand_domains').delete().eq('brand_id', brandId);

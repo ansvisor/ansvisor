@@ -355,6 +355,8 @@ export async function runGscSync({ organizationId, brandId } = {}) {
       'id, organization_id, gsc_property, gsc_pages_backfilled_property, gsc_pages_backfill_from, gsc_shopping_property',
     )
     .eq('is_active', true)
+    // A demo brand's figures (00380) are sample data, never synced.
+    .eq('is_demo', false)
     .not('gsc_property', 'is', null)
     .in('organization_id', connectedOrgIds);
   if (brandId) brandQuery = brandQuery.eq('id', brandId);

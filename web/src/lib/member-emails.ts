@@ -10,11 +10,30 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
  */
 export async function readMemberEmails(userIds: string[]): Promise<Map<string, string>> {
   const emails = new Map<string, string>();
+  for (const [id, auth] of await readMemberAuth(userIds)) {
+    if (auth.email) emails.set(id, auth.email);
+  }
+  return emails;
+}
+
+/**
+ * Members' e-mails and when they last signed in, from the same admin call:
+ * what Settings › Team › Roles & access lists (CHAT-20 §4a). Server only, as
+ * above.
+ */
+export async function readMemberAuth(
+  userIds: string[],
+): Promise<Map<string, { email: string | null; lastSignInAt: string | null }>> {
+  const out = new Map<string, { email: string | null; lastSignInAt: string | null }>();
   await Promise.all(
     [...new Set(userIds)].map(async (id) => {
       const { data } = await supabaseAdmin.auth.admin.getUserById(id);
-      if (data?.user?.email) emails.set(id, data.user.email);
+      if (!data?.user) return;
+      out.set(id, {
+        email: data.user.email ?? null,
+        lastSignInAt: data.user.last_sign_in_at ?? null,
+      });
     }),
   );
-  return emails;
+  return out;
 }
