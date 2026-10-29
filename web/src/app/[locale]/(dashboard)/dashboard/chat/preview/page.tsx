@@ -16,6 +16,7 @@ import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
 import { AttentionCount, AttentionDot } from '@/components/agentic/attention-badge';
 import { DoneTick } from '@/components/agentic/done-tick';
+import { CardsPreview } from './_cards-preview';
 
 const AVATAR_SIZES: readonly AgentAvatarSize[] = ['md', 'sm', 'xs'];
 
@@ -155,14 +156,16 @@ function ChatPiecesPreview() {
           <DoneTick pop />
         </Sample>
       </Section>
+
+      <CardsPreview />
     </div>
   );
 }
 
 /**
- * Chat's shared agent pieces for design sign-off (Chat P0, D1). Only with the
- * new Chat on for this workspace (CHAT_AGENTIC); otherwise the page isn't
- * there. Not linked from the menu.
+ * Chat's shared agent pieces and run cards for design sign-off (Chat P0, D1
+ * and D2). Only with the new Chat on for this workspace (CHAT_AGENTIC);
+ * otherwise the page isn't there. Not linked from the menu.
  */
 export default async function ChatPiecesPreviewPage() {
   const supabase = await createClient();

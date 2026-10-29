@@ -41,7 +41,7 @@ vi.mock('@/lib/supabase/admin', () => ({
       queries.push(query);
       const settle = () => Promise.resolve(results.shift() ?? { data: null, error: null });
       const chain: Record<string, unknown> = {};
-      for (const op of ['select', 'eq', 'upsert', 'update', 'delete', 'order', 'limit']) {
+      for (const op of ['select', 'eq', 'or', 'upsert', 'update', 'delete', 'order', 'limit']) {
         chain[op] = (...args: unknown[]) => {
           query.calls.push([op, ...args]);
           return chain;
@@ -82,6 +82,12 @@ beforeEach(() => {
   queries.length = 0;
   results = [];
   rpc.mockReset().mockResolvedValue({ data: true, error: null });
+  // Chat off, as today: a saved key is marked to keep working once it is on.
+  vi.stubEnv('CHAT_AGENTIC', 'false');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('GET', () => {
@@ -193,7 +199,27 @@ describe('PUT', () => {
       p_provider: 'azure',
       p_only_if_none: true,
     });
-    // Only an Anthropic key has an old copy to clear.
+    // Only an Anthropic key has an old copy to clear; the workspace is marked
+    // to keep its key for Chat (below).
+    expect(queries.map((q) => q.table)).toEqual(['organization_ai_keys', 'organizations']);
+  });
+
+  it('marks a Starter or trial workspace to keep its key for Chat while Chat is off', async () => {
+    expect((await PUT(send('PUT', { provider: 'openai', apiKey: KEY }))).status).toBe(200);
+    const mark = queries[queries.length - 1];
+    expect(mark.table).toBe('organizations');
+    expect(mark.calls).toEqual([
+      ['update', { legacy_key_grandfathered: true }],
+      ['eq', 'id', 'org1'],
+      // Only where its plan wouldn't include own keys (CHAT-16 item 28).
+      ['or', 'plan.eq.starter,and(plan.eq.growth,subscription_status.eq.trialing)'],
+    ]);
+  });
+
+  it('marks nothing once Chat is on: own keys are then Growth’s and Enterprise’s', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    expect((await PUT(send('PUT', { provider: 'openai', apiKey: KEY }))).status).toBe(200);
     expect(queries.map((q) => q.table)).toEqual(['organization_ai_keys']);
   });
 

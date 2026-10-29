@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
 
 import logger from './lib/logger.js';
+import { handleProcessErrors } from './lib/process-errors.js';
 import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
@@ -24,6 +25,7 @@ import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
+import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -46,6 +48,7 @@ import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepFramerPublished } from './lib/cms/framer-status.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
+import { sweepWixPublished } from './lib/cms/wix-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -74,6 +77,9 @@ import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
 import { startModelPriceSync } from './lib/model-prices.js';
+
+// Before anything starts: a stray rejection is logged, not a crash.
+handleProcessErrors();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -381,6 +387,10 @@ async function runDailyTracking() {
   sweepFramerPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[framer-status] daily sweep failed');
   });
+  // And to Wix (00372), once a day too.
+  sweepWixPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wix-status] daily sweep failed');
+  });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
   // above: independent, never blocks or fails the tracking run, no-ops when
@@ -604,6 +614,12 @@ app.get('/api/internal/integrations-config', (req, res) => {
   }
   return res.json({ success: true, config: integrationsConfig() });
 });
+
+// --- Internal Chat budget endpoints (CRON_SECRET auth, called by the web's Chat engine) ---
+// Each model step of a Chat run is held on the workspace's AI budget before it
+// starts, then charged at its real cost or let go (routes/internal-chat-budget.js).
+// With the secret, the /api limiter above doesn't count them (rate-limiter.js).
+app.use('/api/internal/chat/budget', internalChatBudgetRoutes);
 
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt

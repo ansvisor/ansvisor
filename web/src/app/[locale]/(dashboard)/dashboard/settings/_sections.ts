@@ -19,6 +19,8 @@ export const SETTINGS_SECTIONS = [
   'api-keys',
   'ai-providers',
   'billing',
+  // Settings › Chat (CHAT-20 §5): listed only while the new Chat is on.
+  'chat',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];

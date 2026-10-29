@@ -15,6 +15,7 @@ import {
   typicalCostUsd,
 } from './improve-cost.js';
 import { logger } from './logger.js';
+import { chatAgenticEnabled } from './chat-flag.js';
 import { RELEVANCE_BUDGET_SHARE } from './suggestion-relevance.js';
 import { AUDIT_RUN_TIMEOUT_MS } from './audit/history.js';
 import {
@@ -360,26 +361,40 @@ export async function getBriefQuotaStatus(orgId, { readOnly = false } = {}) {
 /** How many of the org's latest calls its typical cost is the median of. */
 const RECENT_CALLS = 20;
 
+/**
+ * Chat's model steps on the budget (00405): a Chat run's ('chat'), and the
+ * room its agents, scheduled runs and images take. They count in what's
+ * spent, but not in what an Improve or Content Editor call typically costs:
+ * a step is sized on its own worst case (chat-budget.js).
+ */
+export const CHAT_AI_FEATURES = ['chat', 'agent', 'schedule', 'image'];
+
+/** Features whose calls aren't sized like an Improve or Content Editor call. */
+const NOT_TYPICAL = new Set(['quality', ...CHAT_AI_FEATURES]);
+
 async function improveSpendThisPeriod(orgId) {
   const periodStart = await quotaPeriodStart(orgId);
   const { data } = await supabaseAdmin
     .from('prompt_improve_usage')
     .select('cost_usd, feature')
     .eq('organization_id', orgId)
+    // A step on the workspace's own key is billed to it, not to the budget.
+    .eq('own_key', false)
     .gte('used_at', periodStart.toISOString())
     .order('used_at', { ascending: false })
     .limit(5000);
   const rows = data ?? [];
   const spent = rows.reduce((sum, r) => sum + (Number(r.cost_usd) || 0), 0);
-  // Quality's small checks count in what's spent, not in what a call costs.
-  const calls = rows.filter((r) => r.feature !== 'quality').slice(0, RECENT_CALLS);
+  // Quality's small checks and Chat's steps count in what's spent, not in
+  // what a call costs.
+  const calls = rows.filter((r) => !NOT_TYPICAL.has(r.feature)).slice(0, RECENT_CALLS);
   return { spent, typical: medianCost(calls.map((r) => Number(r.cost_usd) || 0)) };
 }
 
 /**
  * Improve-tab budget (PROMPT-003): a monthly USD budget per organization
  * (plan.limits.improveMonthlyBudgetUsd: Starter $5, Growth $25, Enterprise
- * $50 or a customer's own set by Ansvisor, the free trial $1), charged with each
+ * $50 or a customer's own set by Ansvisor, the free trial $2), charged with each
  * generation's real token cost so the budget holds for any model. Users see
  * an estimate of generations left, not dollars. -1 is unlimited. `readOnly`
  * as resolveOrgPlanByOrgId: without an active plan, a budget of 0 and
@@ -446,14 +461,7 @@ export async function reserveAiBudget(
       p_content_draft_id: draftId,
     });
     if (error) throw new Error(error.message);
-    if (!data) {
-      throw new PlanLimitError(
-        plan.trial
-          ? "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance."
-          : `This month's suggestion budget on the ${plan.name} plan is used up. It resets when your subscription renews.`,
-        429,
-      );
-    }
+    if (!data) throw aiBudgetUsedUp(plan);
     reservedId = data;
   }
 
@@ -515,6 +523,35 @@ export async function reserveAiBudget(
 }
 
 /**
+ * The workspace's AI budget is spent (429): in the free trial (`trial`),
+ * more comes with starting the plan.
+ */
+export function aiBudgetUsedUp(plan) {
+  const err = new PlanLimitError(
+    plan.trial
+      ? "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance."
+      : `This month's suggestion budget on the ${plan.name} plan is used up. It resets when your subscription renews.`,
+    429,
+  );
+  err.trial = plan.trial === true;
+  return err;
+}
+
+/**
+ * The workspace's AI budget as a hold is taken on it: the plan (402 without
+ * an active one, as reserveAiBudget), its budget in USD and the period's
+ * start, from which the spend counts; both null when the budget is
+ * unlimited (self-hosted). In the free trial the period runs over the whole
+ * trial (quotaPeriodStart, from the trial's end): its budget never resets.
+ */
+export async function aiBudgetOf(orgId) {
+  const plan = await resolveOrgPlanByOrgId(orgId);
+  const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
+  if (budget === -1) return { plan, budgetUsd: null, since: null };
+  return { plan, budgetUsd: budget, since: (await quotaPeriodStart(orgId)).toISOString() };
+}
+
+/**
  * What a call holds before it runs: the org's median cost over its last
  * RECENT_CALLS calls this period, never less than the model's typical one.
  * Calls average about twice the typical estimate and reach five times it (a
@@ -525,13 +562,15 @@ export async function reserveAiBudget(
  */
 async function holdCostUsd(orgId, modelId, since) {
   const typical = typicalCostUsd(modelId);
-  // Quality's small checks hold their own (holdUsd): left out, they don't
-  // pull the median under what the larger calls cost.
+  // Quality's small checks hold their own (holdUsd), and Chat's steps their
+  // worst case: left out, they don't pull the median under what the larger
+  // calls cost. Steps on a workspace's own key never count.
   const { data, error } = await supabaseAdmin
     .from('prompt_improve_usage')
     .select('cost_usd')
     .eq('organization_id', orgId)
-    .or('feature.is.null,feature.neq.quality')
+    .eq('own_key', false)
+    .or(`feature.is.null,feature.not.in.(${[...NOT_TYPICAL].join(',')})`)
     .gte('used_at', since)
     .order('used_at', { ascending: false })
     .limit(RECENT_CALLS);
@@ -547,12 +586,18 @@ async function holdCostUsd(orgId, modelId, since) {
  * The meter's rows, in order, and what the workspace's AI budget spent on
  * each, as prompt_improve_usage.feature says (00242): the Content Editor's
  * quality checks ('quality', 00264) are its AI too, so they count in its
- * row. 'other' is spend whose feature isn't known.
+ * row. Chat's model steps have theirs (00405), with Chat on: Chat's runs,
+ * then its agents, scheduled runs and images, as they come. 'other' is spend
+ * whose feature isn't known.
  */
 export const AI_USAGE_FEATURES = {
   improve: ['improve'],
   content: ['content', 'quality'],
   action_center: ['action_center'],
+  chat: ['chat'],
+  agent: ['agent'],
+  schedule: ['schedule'],
+  image: ['image'],
   other: ['other'],
 };
 
@@ -570,6 +615,9 @@ const tenths = (n) => Math.round(n * 10) / 10;
  * listed (an Action Center whose task writer is off has no row), so a row
  * can read 0 when its share is under a twentieth of a percent: the page
  * reads that as "<0.1%". Unlimited plans (self-hosted) show no meter.
+ * `chatMetered`: Chat draws on the budget too (CHAT_AGENTIC on for the
+ * workspace); off, it runs on the workspace's own key only, as the page says.
+ * Steps on a workspace's own key never count (ai_usage_by_feature, 00405).
  */
 export async function getAiUsage(orgId) {
   const plan = await resolveOrgPlanByOrgId(orgId);
@@ -581,6 +629,7 @@ export async function getAiUsage(orgId) {
     trial: plan.trial === true,
     periodStart: periodStart.toISOString(),
     periodEnd: shiftMonthClamped(periodStart, 1).toISOString(),
+    chatMetered: chatAgenticEnabled(orgId),
   };
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
   if (budget === -1) return { ...base, unlimited: true, percentUsed: null, features: [] };
@@ -632,6 +681,7 @@ export async function getDraftAiUsage(orgId, draftId) {
       .select('cost_usd')
       .eq('organization_id', orgId)
       .eq('content_draft_id', draftId)
+      .eq('own_key', false)
       .gte('used_at', since),
     supabaseAdmin.rpc('ai_usage_by_feature', { p_organization_id: orgId, p_since: since }),
   ]);

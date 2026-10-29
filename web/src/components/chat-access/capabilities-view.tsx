@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Lock, MousePointerClick, SquareCheckBig, Unlock, Zap } from 'lucide-react';
+import { useRouter } from '@/i18n/navigation';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -183,6 +185,21 @@ export function CapabilitiesView({
           </TableBody>
         </Table>
       </div>
+    </div>
+  );
+}
+
+/** The page when its facts couldn't be read: plain words and Retry, never the error itself. */
+export function CapabilitiesUnavailable() {
+  const t = useTranslations('chatAccess.capabilities');
+  const router = useRouter();
+  return (
+    <div role="status" className="space-y-2 text-sm text-muted-foreground">
+      <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+      <p>{t('loadError')}</p>
+      <Button size="sm" variant="outline" onClick={() => router.refresh()}>
+        {t('retry')}
+      </Button>
     </div>
   );
 }

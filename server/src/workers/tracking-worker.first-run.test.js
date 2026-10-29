@@ -67,7 +67,12 @@ vi.mock('../config/supabase.js', () => {
 
 let taskIds = 0;
 vi.mock('../lib/cloro-scraper.js', () => ({
-  submitScraperTask: vi.fn(async (_text, scraperId) => ({ taskId: `t${++taskIds}`, scraperId })),
+  submitPromptTask: vi.fn(async ({ scraperId, legacy = false }) => ({
+    taskId: `t${++taskIds}`,
+    scraperId,
+    legacy,
+  })),
+  isLegacyChatgptTask: vi.fn(() => false),
   pollScraperResult: vi.fn(),
 }));
 vi.mock('../lib/cloro-countries.js', () => ({

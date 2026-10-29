@@ -733,7 +733,16 @@ export default function ContentPage() {
               setPendingCount(0);
               const generated = status.result?.generated ?? 0;
               const duplicates = status.result?.duplicates ?? 0;
+              const existingId = status.result?.existingId;
               if (status.result?.limited) toast.error(t('newLimitReached'));
+              // A request for one prompt that an open opportunity answers.
+              else if (generated === 0 && existingId)
+                toast(t('newExisting'), {
+                  action: {
+                    label: t('openExisting'),
+                    onClick: () => selectOpportunity(existingId),
+                  },
+                });
               else if (generated === 0 && duplicates === 0) toast(t('newNothing'));
               else toast.success(t('newDone', { generated, duplicates }));
               loadData();
@@ -770,7 +779,7 @@ export default function ContentPage() {
 
       poll();
     },
-    [loadData, loadPromptOptions, t],
+    [loadData, loadPromptOptions, selectOpportunity, t],
   );
   // Restore generation state from localStorage on mount
   useEffect(() => {

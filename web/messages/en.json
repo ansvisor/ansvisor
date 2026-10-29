@@ -55,6 +55,14 @@
       "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
     }
   },
+  "chatBudget": {
+    "ai_limit": "You've used this month's AI limit, so Chat stopped here. What's done so far is kept.",
+    "ai_limit_trial": "Your trial AI limit is used up, so Chat stopped here. What's done so far is kept.",
+    "plan_limit": "This workspace's plan isn't active, so Chat can't run. Choose a plan to use it again.",
+    "not_found": "This chat's work is gone. Ask your question again.",
+    "chat_off": "Chat isn't on for this workspace.",
+    "unavailable": "Chat couldn't check your AI usage just now, so it didn't start this step. Try again in a moment."
+  },
   "readOnly": {
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
@@ -249,7 +257,8 @@
       "setDefaultAuthor": "Setting a default author needs a plan",
       "setByline": "Changing the byline setting needs a plan",
       "changeContentSettings": "Changing content settings needs a plan",
-      "disconnectIntegrations": "Disconnecting an integration needs a plan"
+      "disconnectIntegrations": "Disconnecting an integration needs a plan",
+      "changeChatSettings": "Changing Chat's settings needs a plan"
     },
     "plans": {
       "perMonthBilledYearly": "{price} a month, billed yearly",
@@ -3267,6 +3276,128 @@
       "itemsNeedYou": "{count, plural, one {# item} other {# items}} · {needsYou}"
     },
     "tick": "Done",
+    "stepList": {
+      "skipped": "Skipped",
+      "waiting": "Waiting for you"
+    },
+    "runSteps": {
+      "working": "Working on it",
+      "workedFor": "Worked for {duration}",
+      "stoppedAfter": "Stopped after {duration}",
+      "failed": "Stopped: something went wrong",
+      "steps": "{count, plural, one {# step} other {# steps}}",
+      "stepsSources": "{steps, plural, one {# step} other {# steps}} · {sources, plural, one {# source} other {# sources}}",
+      "stepsClock": "{steps, plural, one {# step} other {# steps}} · {clock}",
+      "rows": "{count, plural, one {# row} other {# rows}}",
+      "seconds": "{s}s",
+      "minutes": "{m}m {s}s",
+      "now": "Step {n}: {label}"
+    },
+    "planCard": {
+      "head": "Here’s my plan",
+      "uses": "Uses",
+      "about": "About",
+      "aiUsage": "AI usage",
+      "aiUsageValue": "{value} of monthly limit",
+      "outputs": "Outputs",
+      "mode": "Mode:",
+      "modes": {
+        "ask_first": "Ask me first",
+        "auto": "Auto, ask before changes",
+        "full_auto": "Full auto"
+      },
+      "edit": "Edit plan",
+      "doneEditing": "Done editing",
+      "start": "Start",
+      "askAdmin": "Ask your Admin",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove step",
+      "notConnected": "{name} isn’t connected.",
+      "connected": "Connected",
+      "connect": "Connect {name}",
+      "startNeedsPlan": "Starting a run needs a plan",
+      "askNeedsPlan": "Sending a request needs a plan"
+    },
+    "approvalCard": {
+      "stepOf": "Step {n} of {total}",
+      "before": "Before",
+      "after": "After",
+      "approve": "Approve",
+      "skip": "Skip",
+      "edit": "Edit",
+      "cancel": "Cancel",
+      "saveAndApprove": "Save & approve",
+      "newText": "New text",
+      "dontAskAgain": "Don’t ask again for this kind of change",
+      "dontAskAgainTip": "Only for you, and only where your Admin’s tool policy allows it",
+      "approved": "Step {n} approved",
+      "skipped": "Step {n} skipped",
+      "done": "Done",
+      "working": "Working…",
+      "retry": "Retry",
+      "preview": "Preview",
+      "sources": "Sources",
+      "approveNeedsPlan": "Approving changes needs a plan",
+      "clickNeedsPlan": "Going live needs a plan"
+    },
+    "resultCard": {
+      "generated": "Generated {date} · {time}",
+      "generatedTip": "Generated {full}",
+      "dataAsOf": "Data as of {date}, {time}",
+      "dataAsOfTip": "Data as of {full}",
+      "open": "Open",
+      "files": "What I made",
+      "summary": "Result"
+    },
+    "denialCard": {
+      "asked": "You asked",
+      "why": "Why not",
+      "who": "Who can",
+      "next": "Next",
+      "requestGoes": "Your request goes to the workspace Admins, in the app",
+      "actions": {
+        "ask_admin": "Ask your Admin",
+        "see_access": "See your access ↗",
+        "upgrade": "Upgrade",
+        "choose_plan": "Choose a plan",
+        "compare_plans": "Compare plans",
+        "open_policy": "See tool policy ↗"
+      },
+      "sent": "Sent",
+      "sentToast": "Sent to your Admins",
+      "sendFailed": "Couldn’t send it. Try again.",
+      "askNeedsPlan": "Sending a request needs a plan"
+    },
+    "errorCard": {
+      "failed": "Failed",
+      "stoppedAt": "Stopped at step {n} of {total}",
+      "stopped": "Stopped: something went wrong",
+      "retry": "Retry",
+      "retryStep": "Retry step {n}",
+      "retryFrom": "Retry starts again from step {n}",
+      "retryNeedsPlan": "Retrying a run needs a plan"
+    },
+    "runsTray": {
+      "label": "Your runs",
+      "title": "Your runs",
+      "button": "{count, plural, =0 {Runs} other {# running}}",
+      "needsYouTip": "{count, plural, one {# needs you} other {# need you}}",
+      "summary": "{running} running · {needsYou, plural, one {# needs you} other {# need you}}",
+      "summaryRunning": "{running} running",
+      "empty": "No runs yet. Runs keep going when you leave a page.",
+      "failedToLoad": "Couldn’t load your runs.",
+      "newChat": "New chat",
+      "stepOf": "Step {n} of {total}",
+      "stepOfLabel": "Step {n} of {total} · {label}",
+      "needsYou": "Needs your OK · step {n} of {total}",
+      "paused": "Paused · step {n} of {total}",
+      "done": "Done {time}",
+      "failed": "Stopped · step {n} of {total}",
+      "starting": "Starting…",
+      "review": "Review",
+      "open": "Open"
+    },
     "preview": {
       "title": "Chat pieces",
       "description": "The agent's shared pieces in every state, for design sign-off. Nothing here runs.",
@@ -3297,7 +3428,52 @@
       "onIcon": "On a menu icon",
       "countNeedsYou": "Count, 1 needs you",
       "countNone": "Count, nothing needs you",
-      "tickPop": "Pops in once"
+      "tickPop": "Pops in once",
+      "cards": {
+        "title": "Run cards",
+        "description": "Plan, approval, result, out-of-permission and failed-run cards, and the runs tray, in every state. Sample data; nothing here runs.",
+        "sections": {
+          "plan": "Plan card",
+          "runSteps": "Run steps",
+          "approval": "Approval card",
+          "execute": "Click card (EXECUTE)",
+          "result": "Result card",
+          "denial": "Out-of-permission answer",
+          "failed": "Failed run",
+          "tray": "Runs tray"
+        },
+        "states": {
+          "planAuto": "Auto, ask before changes",
+          "planFullAuto": "Full auto, a tool not connected",
+          "planReadOnly": "Analyst: read-only",
+          "stepsRunning": "Running",
+          "stepsWaiting": "Waiting for you",
+          "stepsDone": "Done",
+          "stepsSingle": "Done, one step",
+          "stepsStopped": "Stopped",
+          "stepsError": "Failed",
+          "pendingDontAsk": "Waiting, Don’t ask again allowed",
+          "pendingNoDontAsk": "Waiting, Don’t ask again not allowed",
+          "saving": "Saving",
+          "error": "Failed, with Retry",
+          "approved": "Approved",
+          "skipped": "Skipped",
+          "executePending": "Waiting for the click",
+          "executeDisabled": "Before the draft is approved",
+          "executeSaving": "Publishing",
+          "executeDone": "Published",
+          "resultDone": "Done",
+          "resultNeedsClick": "Done but for a click",
+          "denialRole": "Role",
+          "denialPlan": "Plan",
+          "denialPolicy": "Policy",
+          "failedStep": "A step failed",
+          "failedRun": "The run failed",
+          "trayRuns": "With runs (click to open)",
+          "trayEmpty": "No runs",
+          "trayLive": "Live: your runs and this brand’s"
+        }
+      }
     }
   },
   "chatNavigation": {
@@ -3345,6 +3521,59 @@
       "choosePlan": "Admins can choose a plan.",
       "demo": "No one: the demo brand keeps its sample data."
     }
+  },
+  "chatEngine": {
+    "allTime": "All time",
+    "since": "Since {date}",
+    "until": "Until {date}",
+    "range": "{from} – {to}",
+    "rows": "{count, plural, one {# row} other {# rows}}",
+    "morePlatforms": "+{count}",
+    "step": {
+      "stopped": "Stopped",
+      "expired": "No answer in 7 days",
+      "skipped": "Skipped",
+      "auto": "Done automatically",
+      "failed": "Something went wrong",
+      "readFailed": "Couldn't read this",
+      "timedOut": "Timed out",
+      "limit": "Over this run's limit",
+      "unknown": "Worked on a step"
+    },
+    "error": {
+      "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
+      "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
+      "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
+      "rateHour": "You're sending a lot. Wait a few minutes, then send again.",
+      "rateDay": "You've sent today's messages. Chat takes more tomorrow.",
+      "notWaiting": "This run isn't waiting for an answer any more.",
+      "approvalMismatch": "This changed after you approved it. Approve again?",
+      "notFound": "This chat isn't there any more."
+    }
+  },
+  "chatPage": {
+    "title": "Chat",
+    "subtitle": "A test page for Chat's engine. The full Chat replaces it.",
+    "placeholder": "Ask about your brand…",
+    "send": "Send",
+    "stop": "Stop",
+    "newChat": "New chat",
+    "you": "You",
+    "modeLabel": "Mode",
+    "modes": {
+      "ask_first": "Ask me first",
+      "auto": "Auto, ask before changes",
+      "full_auto": "Full auto"
+    },
+    "generated": "Generated {date}",
+    "dataAsOf": "Data as of {date}",
+    "deniedTitle": "I can't do this for you",
+    "queued": "Waiting for a free slot…",
+    "reconnecting": "Reconnecting…",
+    "sendFailed": "Couldn't send that. Try again.",
+    "answerFailed": "Couldn't save your answer. Try again.",
+    "stopped": "Stopped. What's done so far is kept.",
+    "pausedCap": "You've used this month's AI limit, so Chat stopped here."
   },
   "chatAccess": {
     "roleNames": {
@@ -3412,6 +3641,7 @@
       "roleChanged": "Role changed",
       "roleChangeFailed": "Couldn't change the role. Try again.",
       "loadError": "Couldn't load Roles & access. Try again in a moment.",
+      "retry": "Retry",
       "throughChat": {
         "admin": "Everything, incl. policy, keys, connections",
         "manager": "WRITE with approval · EXECUTE after click",
@@ -3530,6 +3760,8 @@
       "leadYours": "What you asked your Admins for, and what they decided.",
       "empty": "No requests.",
       "emptyYours": "You haven't asked for anything.",
+      "loadError": "Couldn't load the requests.",
+      "retry": "Retry",
       "from": "From {name}",
       "approve": "Approve",
       "dismiss": "Dismiss",
@@ -3545,6 +3777,172 @@
         "rejected": "Dismissed",
         "withdrawn": "Withdrawn"
       }
+    },
+    "settings": {
+      "title": "Chat",
+      "lead": "The rules Chat follows in this workspace: which tools it may use, when it asks first, and what Managers may take live.",
+      "readOnly": "Read-only · only Admins change the Chat tool policy",
+      "readOnlyNote": "You see the rules Chat follows for you",
+      "loadError": "Couldn't load Chat's settings. Try again in a moment.",
+      "retry": "Retry",
+      "saved": "Saved",
+      "failures": {
+        "chat_off": "Chat isn't on for this workspace.",
+        "forbidden": "Only Admins change Chat's settings.",
+        "invalid": "That choice isn't available for this tool.",
+        "locked": "That needs the Growth plan.",
+        "read_only": "This workspace is read-only until a plan is active.",
+        "failed": "Couldn't save it. Try again."
+      },
+      "switches": {
+        "title": "Run modes",
+        "fullAuto": "Full auto available to Managers and other members",
+        "fullAutoNote": "Admins can always pick it. Allowed WRITEs run without a card, logged.",
+        "dontAskAgain": "Allow “Don't ask again”",
+        "dontAskAgainNote": "Per person, only inside this policy. Off, everyone's ticks stop at once.",
+        "mcp": "Full auto over MCP",
+        "mcpNote": "MCP writes always ask, in Claude, ChatGPT and Cursor",
+        "mcpValue": "Off in v1",
+        "untrusted": "Untrusted content in a run",
+        "untrustedNote": "Web pages, uploads, AI answer text, mention snippets",
+        "untrustedValue": "Every WRITE shows a card",
+        "on": "On",
+        "off": "Off",
+        "locked": "Needs Growth · you're on {current}"
+      },
+      "precedence": {
+        "title": "Who decides",
+        "note": "Most restrictive wins. A step can't relax the one above it.",
+        "steps": {
+          "hard": {
+            "name": "Hard rules",
+            "detail": "NEVER tools don't exist · EXECUTE needs a click"
+          },
+          "plan": {
+            "name": "Plan gates",
+            "detail": "Full auto and “Don't ask again”: Growth and up"
+          },
+          "role": { "name": "Role", "detail": "Admin · Manager · Analyst · Agency partner" },
+          "policy": {
+            "name": "Tool policy",
+            "detail": "Never · Ask · Ask (auto in Full auto) · Always, per tool"
+          },
+          "mode": {
+            "name": "Run mode",
+            "detail": "Ask me first · Auto, ask before changes · Full auto"
+          },
+          "dontAsk": { "name": "“Don't ask again”", "detail": "One person, inside the steps above" }
+        }
+      },
+      "policy": {
+        "title": "Tool policy",
+        "reset": "Reset to defaults",
+        "resetDone": "Every tool is back to its default",
+        "columns": {
+          "tool": "Tool",
+          "class": "Class",
+          "policy": "Policy",
+          "fullAuto": "In Full auto"
+        },
+        "choices": {
+          "on": "On",
+          "click": "Your click",
+          "never": "Never",
+          "ask": "Ask",
+          "ask_full_auto": "Ask (auto in Full auto)",
+          "always": "Always"
+        },
+        "default": "default",
+        "lockedChoice": "Needs Growth",
+        "behaviour": {
+          "off": "Off",
+          "runs": "Runs freely",
+          "click": "Needs your click",
+          "card": "Card in every mode",
+          "always_card": "Always a card",
+          "auto_full_auto": "Auto in Full auto",
+          "auto_always": "Auto in every mode"
+        }
+      },
+      "execute": {
+        "title": "What Managers may take live",
+        "note": "EXECUTE always needs a click, whoever runs it. Off, a Manager gets Ask your Admin instead.",
+        "groups": {
+          "publishing": "Publishing",
+          "email_outreach": "Email and outreach",
+          "code_prs": "Code and pull requests",
+          "feeds": "Product feeds"
+        }
+      },
+      "autoChoices": {
+        "title": "Your auto changes",
+        "note": "Tools you ticked “Don't ask again” on. They run without a card only where this policy and your plan allow Full auto.",
+        "empty": "You haven't ticked “Don't ask again” on any tool.",
+        "remove": "Remove",
+        "removed": "Removed: it asks again"
+      }
+    },
+    "activity": {
+      "title": "Activity log",
+      "lead": "Every change Chat made, every Undo and everything it wasn't allowed to do. You see your own; Admins see the workspace's.",
+      "loadError": "Couldn't load the Activity log. Try again in a moment.",
+      "retry": "Retry",
+      "empty": "Nothing here yet: Chat's changes show up here as they happen.",
+      "emptyFiltered": "Nothing matches these filters.",
+      "loadMore": "Load more",
+      "export": "Export CSV",
+      "exported": "Exported the Activity log",
+      "exportFailed": "Couldn't export it. Try again.",
+      "clear": "Clear",
+      "autoOnly": "Auto changes only",
+      "you": "You",
+      "seeLog": "See the Activity log",
+      "filters": {
+        "person": "Person",
+        "everyone": "Everyone",
+        "area": "Area",
+        "allAreas": "All areas",
+        "kind": "Class",
+        "allKinds": "All",
+        "kinds": { "write": "WRITE", "execute": "EXECUTE", "denied": "Not allowed" }
+      },
+      "columns": {
+        "when": "When",
+        "who": "Who",
+        "event": "Event",
+        "class": "Class",
+        "approval": "Approval",
+        "undo": "Undo"
+      },
+      "surfaces": {
+        "chat": "chat",
+        "agent": "agent",
+        "mcp": "MCP",
+        "schedule": "schedule",
+        "watch_rule": "watch rule"
+      },
+      "approval": {
+        "denied": "Not allowed",
+        "card": "Approved on its card",
+        "click": "Your click",
+        "always": "Auto · policy Always",
+        "full_auto": "Auto · Full auto",
+        "dont_ask_again": "Auto · “Don't ask again”",
+        "run": "Ran"
+      },
+      "denials": {
+        "brand_scope": "Brand not shared",
+        "subscription_inactive": "Read-only workspace",
+        "demo_brand": "Demo brand",
+        "policy_never": "Turned off by an Admin",
+        "plan_locked": "Needs another plan",
+        "forbidden_role": "Role doesn't allow it",
+        "execute_off": "Off for Managers",
+        "no_access": "No access"
+      },
+      "status": { "done": "Done", "undone": "Undone", "undo_conflict": "Changed since" },
+      "undo": "Undo",
+      "openToUndo": "Open it"
     },
     "yourAccess": {
       "title": "Your access",
@@ -3597,6 +3995,8 @@
       "readAll": "Read: all roles",
       "locked": "Needs {plan}",
       "empty": "No area matches your search.",
+      "loadError": "Couldn't load what Chat can do. Try again in a moment.",
+      "retry": "Retry",
       "areaNames": {
         "account": "Account",
         "usage": "AI usage",
@@ -4678,6 +5078,12 @@
           "failed": "The last send to WordPress failed, {when}",
           "published": "Published {when}"
         },
+        "wix": {
+          "queued": "Sending to Wix since {when}",
+          "sent": "In Wix as a draft post since {when}",
+          "failed": "The last send to Wix failed, {when}",
+          "published": "Published {when}"
+        },
         "framer": {
           "queued": "Sending to Framer since {when}",
           "sent": "In Framer as a draft item since {when}",
@@ -4696,6 +5102,7 @@
         "description": "Each page goes to the brand's webhook as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
+        "descriptionWix": "Each page goes to {site}'s Wix Blog as a draft post, as it is ready to publish, with its slug, meta title, meta description and JSON-LD as the post's SEO settings. Images aren't sent: add them in Wix. A page whose post is already published updates its draft there; you publish the changes in Wix.",
         "descriptionFramer": "Each page goes to {collection} in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them. A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
@@ -4728,6 +5135,7 @@
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
         "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
         "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
+        "inProgressWix": "A page is already on its way to Wix. Wait for it, then send again.",
         "inProgressFramer": "A page is already on its way to Framer. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
@@ -5824,11 +6232,12 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, or your workflow through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, Wix, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
         "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
+        "descriptionWix": "The page goes to {site}'s Wix Blog as a draft post, with its slug, and its meta title, meta description and JSON-LD as the post's SEO settings. You publish it in Wix.",
         "descriptionFramer": "The page goes to {collection} in Framer as a draft item, with its slug and meta. Images aren't sent yet. You publish it in Framer.",
         "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
@@ -5850,12 +6259,18 @@
             "collection": "your collection",
             "notReady": "Not ready: connect it again or pick its collection and fields in Settings › Integrations"
           },
+          "wix": {
+            "title": "Wix",
+            "hint": "A draft post on {site}'s Blog",
+            "notReady": "API key refused: connect Wix again in Settings › Integrations"
+          },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
           "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
           "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
+          "uncheckedWix": "Couldn't check Wix just now, so this send goes to your workflow.",
           "uncheckedFramer": "Couldn't check Framer just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
@@ -5898,6 +6313,12 @@
           "failed": "The last send to WordPress failed, {when}.",
           "published": "Published {when}."
         },
+        "lastWix": {
+          "queued": "Last sent to Wix {when}, still on its way.",
+          "sent": "In Wix as a draft post since {when}.",
+          "failed": "The last send to Wix failed, {when}.",
+          "published": "Published {when}."
+        },
         "lastFramer": {
           "queued": "Last sent to Framer {when}, still on its way.",
           "sent": "In Framer as a draft item since {when}.",
@@ -5924,11 +6345,17 @@
           "in_progress": "This page is already on its way to Webflow. Wait for it, then send again.",
           "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
           "wordpressFailed": "WordPress didn't take the page: {reason}",
+          "wixFailed": "Wix didn't take the page: {reason}",
           "wordpress_not_configured": "WordPress isn't set up on this server. Send to your workflow instead.",
           "no_wordpress": "Connect WordPress in Settings › Integrations first.",
           "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
+          "wix_not_configured": "Wix isn't set up on this server. Send to your workflow instead.",
+          "no_wix": "Connect Wix in Settings › Integrations first.",
+          "wix_refused": "Wix refused the API key. Connect it again in Settings › Integrations.",
           "in_progressWordPress": "This page is already on its way to WordPress. Wait for it, then send again.",
+          "in_progressWix": "This page is already on its way to Wix. Wait for it, then send again.",
           "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations.",
+          "no_webhookWix": "This brand's Wix refused the API key, and it has no webhook. Connect Wix again in Settings › Integrations.",
           "framerFailed": "Framer didn't take the page: {reason}",
           "framer_not_configured": "Framer isn't set up on this server. Send to your workflow instead.",
           "no_framer": "Connect Framer in Settings › Integrations first.",
@@ -5951,7 +6378,10 @@
         "sentFramer": "Sent to Framer as a draft item",
         "sentFramerUpdated": "Updated in Framer",
         "framerImages": "{images, plural, one {# image wasn't sent: add it in Framer.} other {# images weren't sent: add them in Framer.}}",
-        "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site."
+        "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site.",
+        "sentWix": "Sent to Wix as a draft post",
+        "sentWixUpdated": "Draft post updated in Wix",
+        "wixImages": "{images, plural, one {# image wasn't sent: add it in Wix.} other {# images weren't sent: add them in Wix.}}"
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipReading": "Rules · reading",
@@ -7079,6 +7509,8 @@
     "new": "New",
     "newDone": "{generated, plural, =0 {No new opportunities} one {1 opportunity created} other {# opportunities created}}{duplicates, plural, =0 {} one { · 1 duplicate skipped (not counted)} other { · # duplicates skipped (not counted)}}",
     "newNothing": "No new opportunities: every matching need already has one.",
+    "newExisting": "This prompt already has an opportunity",
+    "openExisting": "Open existing",
     "newLimitReached": "Monthly opportunity limit reached.",
     "newLimitTooltip": "Monthly limit reached. Resets on {date}.",
     "newRefunded": "Nothing was used from your monthly quota.",
@@ -7133,6 +7565,7 @@
       "fewer": "Fewer",
       "more": "More",
       "max": "max {max}",
+      "promptOne": "One per prompt. For a different take, use Another angle on its opportunity.",
       "uses": "Uses {count} of your {remaining} remaining this month → {after} left after this. Duplicates of existing opportunities are skipped and don't count.",
       "usesUnlimited": "Generates up to {count}. Duplicates of existing opportunities are skipped.",
       "noneLeft": "You've used this month's opportunities. They reset when your subscription renews.",
@@ -8066,7 +8499,15 @@
       "loadFailed": "Couldn't load suggestions",
       "loadUnavailable": "Ansvisor isn't answering right now. Try again in a moment.",
       "retry": "Retry",
-      "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
+      "clearAllConfirm": {
+        "title": "Clear all suggestions?",
+        "body": "{count, plural, one {# suggestion} other {# suggestions}} listed will be dismissed.",
+        "measured": "{count, plural, one {# of them comes} other {# of them come}} from Search Console or Analytics: once dismissed, {count, plural, one {it stays} other {they stay}} hidden for 30 days.",
+        "confirm": "Clear all",
+        "cancel": "Cancel"
+      },
+      "clearAllPartial": "{count, plural, one {# suggestion} other {# suggestions}} couldn't be dismissed. Try again.",
+      "clearAllFailed": "Couldn't clear the suggestions. Try again.",
       "catalog": {
         "badge": "Your catalog",
         "tooltip": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}.",
@@ -8176,8 +8617,8 @@
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
       "emptyTitle": "No fan-out captured yet",
-      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT, Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
-      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Only Copilot and Perplexity share them."
+      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Copilot and Perplexity share them, ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
@@ -9004,6 +9445,13 @@
           "fail": "In Europe it decides ChatGPT too: connect it.",
           "unknown": "Couldn't read your catalog sources right now."
         },
+        "googleShopping": {
+          "title": "Google shows your products in shopping results (Search Console)",
+          "pass": "{count} of your {total, plural, one {# product page} other {# product pages}} showed as a merchant listing or product snippet in the last 28 days.",
+          "warn": "Only {count} of your {total, plural, one {# product page} other {# product pages}} showed as a merchant listing or product snippet in the last 28 days. Product schema on the rest (price, availability, GTIN) helps Google list them.",
+          "fail": "Google hasn't shown any of your {total, plural, one {# product page} other {# product pages}} as a merchant listing or product snippet in the last 28 days. Check the product schema on your product pages (price, availability, GTIN).",
+          "unknown": "{reason, select, not_connected {Connect Search Console to see whether Google shows your products in its shopping results.} not_synced {Search Console's shopping results come with its next daily sync.} no_pages {None of your catalog's products has a page address to look for in Search Console.} other {Couldn't read Search Console right now.}}"
+        },
         "openAiIndex": {
           "title": "Catalog in OpenAI's product index",
           "pass": "You send OpenAI a direct product feed.",
@@ -9538,6 +9986,7 @@
     "apiKeys": "API Keys",
     "team": "Team",
     "rolesAccess": "Roles & access",
+    "chatSettings": "Chat",
     "menuAccess": {
       "title": "Menu access",
       "new": "New",
@@ -9720,6 +10169,7 @@
     "aiUsageMeter": {
       "title": "This period's AI usage",
       "description": "Improve suggestions, the Content Editor's AI and the Action Center's task writing share your plan's monthly AI allowance.",
+      "descriptionChat": "Chat, Improve suggestions, the Content Editor's AI and the Action Center's task writing share your plan's monthly AI allowance.",
       "used": "{percent} used",
       "resets": "Resets on {date}",
       "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
@@ -9730,10 +10180,15 @@
         "improve": "Improve suggestions",
         "content": "Content Editor (briefs, Content Agent, quality checks)",
         "action_center": "Action Center task writing",
+        "chat": "Chat",
+        "agent": "Agents",
+        "schedule": "Scheduled runs",
+        "image": "Images",
         "other": "Other"
       },
       "none": "No AI usage yet this period.",
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
+      "chatMetered": "Chat uses this allowance too. Chat on your own AI key isn't counted.",
       "failed": "Couldn't read this period's AI usage. Try again later."
     },
     "cancelsOn": "Subscription ends on {date}",
@@ -10311,6 +10766,49 @@
         "session": "Your session expired. Sign in again.",
         "workspace": "This brand isn't in your workspace.",
         "failed": "Couldn't reach Framer. Try again later."
+      }
+    },
+    "wix": {
+      "title": "Wix",
+      "description": "Send to CMS puts {brand}'s pages on its Wix site's Blog as draft posts. You publish them in Wix.",
+      "noBrand": "Pick a brand to connect its Wix site.",
+      "unavailable": "Couldn't read the Wix connection right now.",
+      "notConfigured": "Wix isn't set up on this server yet.",
+      "connected": "Connected",
+      "refused": "API key refused",
+      "site": "Site: {site}",
+      "notConnectedMember": "Not connected. Admins and managers can connect Wix.",
+      "refusedMember": "Wix refused the API key. Pages can't go there until an admin or manager connects it again.",
+      "pagesGoTo": "Pages go to {site}'s Blog as draft posts.",
+      "siteLabel": "Site id",
+      "sitePlaceholder": "The site's id, or its dashboard address",
+      "keyLabel": "API key",
+      "keyPlaceholder": "Paste the API key",
+      "keyHint": "In Wix, the site's owner makes it: Account Settings › API Keys Manager › Generate API Key, with this site picked and the Manage Blog (Wix Blog) and Manage Ricos Document (Ricos) permissions. The site id is the long code after manage.wix.com/dashboard/ in the dashboard's address. The key is kept encrypted by our API, never shown again. Ansvisor writes drafts only.",
+      "connect": "Connect",
+      "connecting": "Checking the site…",
+      "connectedToast": "Wix connected",
+      "refusedNote": "Wix refused the saved API key. Connect it again to send pages.",
+      "replace": "Change API key",
+      "cancel": "Cancel",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect Wix?",
+      "disconnectDescription": "Pages stop going to Wix and its API key is deleted here. Posts already sent stay in Wix. To end the key itself, delete it in Wix's API Keys Manager.",
+      "disconnected": "Wix disconnected. Delete the API key in Wix's API Keys Manager too.",
+      "errors": {
+        "not_configured": "Wix isn't set up on this server yet.",
+        "invalid": "Check the site id (it's in the dashboard's address) and that you pasted the whole API key.",
+        "forbidden": "Only admins and managers can change the Wix connection.",
+        "auth_failed": "Wix refused the API key. Check it and try again.",
+        "no_access": "The API key isn't allowed to write the site's Blog. Give it the Wix Blog permissions in the API Keys Manager.",
+        "no_ricos_permission": "The key needs the Ricos permission (Manage Ricos Document) too: Wix uses it to turn pages into posts. Add it to the key in the API Keys Manager, then connect again.",
+        "no_blog": "This site has no Wix Blog. Add the Blog to the site first.",
+        "no_member": "Wix needs a site member to own the posts. Write one post on the Blog as the site's owner, then connect again.",
+        "unreachable": "Wix couldn't be reached. Try again later.",
+        "session": "Your session expired. Sign in again.",
+        "workspace": "This brand isn't in your workspace.",
+        "busy": "Too many requests. Wait a few minutes.",
+        "failed": "Couldn't reach Wix. Try again later."
       }
     },
     "integrations_connected": "Connected",

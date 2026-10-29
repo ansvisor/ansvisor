@@ -43049,6 +43049,140 @@ comment on function public.catalog_suggestion_categories(uuid, integer, integer)
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00372_cms_wix.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00372: Wix for Send to CMS (#1331, phase 2)
+-- ============================================================================
+-- After Webflow (00283, 00284), WordPress (00294) and Framer (00295), a brand
+-- connects its Wix site: the site's id and an API key its owner made in Wix's
+-- API Keys Manager, with the Wix Blog permissions. Pages go to the site's
+-- Blog through Wix's REST API as draft posts.
+--
+--   * brand_cms_connections takes provider 'wix'. A Wix connection keeps the
+--     site's id (`site_id`), its name (`site_name`) and the member who owns
+--     the posts it writes (`account`: a Wix member id; Wix's Blog needs an
+--     owner for a post).
+--   * The API key is kept in brand_cms_credentials, sealed as WordPress's
+--     sign-in is (00294); the table itself doesn't change.
+--   * content_draft_deliveries.target takes 'wix'. `target_collection` keeps
+--     the site's id the post was written to, as it keeps WordPress's site.
+--   * reserve_content_deliveries: as 00295, a page already queued for the
+--     same CMS (Webflow, WordPress, Framer or Wix) isn't sent there again
+--     meanwhile.
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_check,
+  add constraint brand_cms_connections_provider_check
+    check (provider in ('webflow', 'wordpress', 'framer', 'wix'));
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_fields,
+  add constraint brand_cms_connections_provider_fields check (
+    case provider
+      when 'webflow' then composio_account_id is not null and composio_entity_id is not null
+      when 'wordpress' then site_url is not null and account is not null
+      when 'framer' then site_id is not null
+      when 'wix' then site_id is not null and account is not null
+      else false
+    end
+  );
+
+comment on column public.brand_cms_connections.site_id is
+  'Webflow: the site pages go to (00283). Framer (00295): the project''s id, as Framer connects to it. Wix (00372): the site''s id.';
+comment on column public.brand_cms_connections.site_name is
+  'The site''s name (Webflow, WordPress, Wix (00372): its display name, when the API key may read it), or the Framer project''s (00295).';
+comment on column public.brand_cms_connections.account is
+  'WordPress (00294): the user the connection signs in as, with an Application Password. Framer (00295): the user the API key acts as. Both kept in brand_cms_credentials. Wix (00372): the member who owns the posts it writes.';
+
+comment on table public.brand_cms_credentials is
+  'Send to CMS (#1331, 00294, 00295, 00372): a CMS connection''s sign-in (WordPress: the user and the Application Password; Framer: the project''s API key; Wix: the site owner''s API key), encrypted by the API (AES-256-GCM, bound to the connection id). Service role only; removed with its connection.';
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_target_check,
+  add constraint content_draft_deliveries_target_check
+    check (target in ('webhook', 'webflow', 'wordpress', 'framer', 'wix'));
+
+comment on column public.content_draft_deliveries.target is
+  'Where the page was sent (00284, 00294, 00295, 00372): the brand''s webhook, its Webflow collection, its WordPress site, its Framer collection or its Wix site''s Blog (00283).';
+comment on column public.content_draft_deliveries.target_collection is
+  'The Webflow or Framer collection (00284, 00295), the WordPress site''s address (00294) or the Wix site''s id (00372) the page''s item or post was written to; its id is external_id.';
+
+-- ----------------------------------------------------------------------------
+-- As 00295, with Wix among the CMSs a page isn't sent to twice at once.
+-- ----------------------------------------------------------------------------
+create or replace function public.reserve_content_deliveries(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_sent_by uuid,
+  p_batch_id uuid,
+  p_items jsonb,
+  p_limit integer,
+  p_target text default 'webhook'
+)
+returns setof public.content_draft_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used integer;
+  room integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
+
+  -- sent_at stays empty: it was never sent, and its time stays its own.
+  update public.content_draft_deliveries
+  set status = 'failed', error = 'Not sent: interrupted'
+  where organization_id = p_organization_id
+    and status = 'queued'
+    and created_at < now() - interval '30 minutes';
+
+  select count(*) into used
+  from public.content_draft_deliveries
+  where organization_id = p_organization_id
+    and created_at > now() - interval '24 hours';
+
+  room := greatest(0, p_limit - used);
+  if room = 0 or jsonb_typeof(p_items) <> 'array' then
+    return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass: both would
+  -- make an item (Webflow refuses the second on its slug) or a post.
+  if p_target in ('webflow', 'wordpress', 'framer', 'wix') and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = p_target
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
+  end if;
+
+  return query
+  insert into public.content_draft_deliveries
+    (organization_id, brand_id, draft_id, sent_by, batch_id, title, slug, target)
+  select p_organization_id, p_brand_id, (item ->> 'draft_id')::uuid, p_sent_by, p_batch_id,
+         left(item ->> 'title', 300), nullif(left(item ->> 'slug', 200), ''),
+         coalesce(p_target, 'webhook')
+  from jsonb_array_elements(p_items) with ordinality as items(item, position)
+  order by position
+  limit room
+  returning *;
+end;
+$$;
+
+revoke all on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00373_basket_positive_sentiment.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -43568,6 +43702,99 @@ revoke all on function public.competitor_cited_urls(uuid, timestamptz) from publ
 grant execute on function public.competitor_cited_urls(uuid, timestamptz) to service_role;
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00377_gsc_shopping_appearance.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00377: does Google show the brand's products in its shopping results?
+-- ============================================================================
+-- Product Visibility's Readiness asked for a Google Merchant Center feed,
+-- which this deployment may not be able to connect. Search Console says it
+-- too, from the brand's own property: the pages Google shows as merchant
+-- listings (the free shopping listings, fed by Merchant Center or by the
+-- page's product schema) and as product snippets (a product's price,
+-- rating and stock under its result).
+--
+-- The Search Analytics API can't give search appearance as a column beside
+-- the page, so the sync (server/src/lib/gsc-sync.js) asks in two steps: the
+-- property's appearance types over the last 28 days, then each shopping one's
+-- pages by day, filtered to it. gsc_shopping_page_stats keeps those rows; the
+-- sync (service role) upserts on (brand_id, page, appearance, date), and
+-- members read them. Rows older than 90 days are pruned, as queries' are.
+--
+-- brands.gsc_shopping_property is the property whose shopping rows the brand
+-- has (another one's are dropped first), and gsc_shopping_synced_at when they
+-- were last read: before the first read, Readiness says it doesn't know yet
+-- rather than that no product shows.
+
+create table if not exists public.gsc_shopping_page_stats (
+    id uuid primary key default gen_random_uuid(),
+    brand_id uuid not null references public.brands(id) on delete cascade,
+    page text not null,
+    -- merchant_listings | product_snippets
+    appearance text not null check (appearance in ('merchant_listings', 'product_snippets')),
+    date date not null,
+    clicks integer not null default 0,
+    impressions integer not null default 0,
+    ctr double precision not null default 0,
+    position double precision not null default 0,
+    created_at timestamptz not null default now(),
+    unique (brand_id, page, appearance, date)
+);
+
+create index if not exists gsc_shopping_page_stats_brand_date_idx
+    on public.gsc_shopping_page_stats (brand_id, date desc);
+
+-- The sync's table-wide retention prune (date < 90 days ago).
+create index if not exists gsc_shopping_page_stats_date_idx
+    on public.gsc_shopping_page_stats (date);
+
+alter table public.gsc_shopping_page_stats enable row level security;
+
+create policy "gsc_shopping_page_stats: member select" on public.gsc_shopping_page_stats
+    for select using (
+        brand_id in (
+            select b.id
+            from public.brands b
+            join public.profiles p on p.organization_id = b.organization_id
+            where p.id = auth.uid()
+        )
+    );
+
+revoke all on table public.gsc_shopping_page_stats from anon, authenticated;
+grant select on public.gsc_shopping_page_stats to authenticated;
+
+comment on table public.gsc_shopping_page_stats is
+  'Product Visibility Readiness (00377): the brand''s Search Console pages Google showed as merchant listings or product snippets, by day. Synced from the brand''s own property (gsc-sync.js); members read.';
+
+alter table public.brands
+    add column if not exists gsc_shopping_property text,
+    add column if not exists gsc_shopping_synced_at timestamptz;
+
+comment on column public.brands.gsc_shopping_property is
+  '00377: the Search Console property gsc_shopping_page_stats''s rows for the brand come from; when it names another, they are dropped first (gsc-sync.js).';
+comment on column public.brands.gsc_shopping_synced_at is
+  '00377: when the brand''s shopping appearance rows were last read; null before the first read, when Readiness doesn''t know yet.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00378_cloro_pending_tasks_legacy.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00378: which pending Cloro tasks went to ChatGPT's legacy interface
+-- ============================================================================
+-- A prompt's ChatGPT task asks for its query fan-out one day a week through
+-- Cloro's legacy desktop interface (CLORO_CHATGPT_FANOUT), which Cloro calls
+-- best-effort and temporary. When Cloro takes such a task and then fails it,
+-- the webhook sends it again without legacy, so the day keeps its answer
+-- (server/src/routes/cloro-callback.js). The callback only has this row to
+-- go on, so the row says whether the task was a legacy one. Every other task,
+-- and every row from before this file, is not.
+
+alter table public.cloro_pending_tasks
+  add column if not exists legacy boolean not null default false;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00379_brand_site_type_source.sql
@@ -45108,4 +45335,507 @@ comment on column public.chat_model_prices.synced_at is
 alter table public.chat_model_prices enable row level security;
 revoke all on table public.chat_model_prices from anon, authenticated;
 grant all on table public.chat_model_prices to service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00405_chat_ai_budget.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00405: Chat's model steps on the workspace's one AI budget
+-- ============================================================================
+-- Chat (CHAT-04 §C items 11–14, CHAT-16 items 22, 26, 28–30; DECISIONS P),
+-- behind CHAT_AGENTIC: with the flag on, a Chat run calls models on
+-- Ansvisor's key and each model step draws on the workspace's monthly AI
+-- budget (plan.limits.improveMonthlyBudgetUsd), the one Improve, the Content
+-- Editor's AI and the Action Center's task writer already share
+-- (prompt_improve_usage, 00120 / 00242 / 00243). A step costs what the model
+-- costs (1x); the margin on purchased AI credits (CHAT-16 30a) is not here.
+--
+--   * feature: 'chat' (a Chat run's model step), and the room the next ones
+--     need: 'agent' (CHAT-21), 'schedule' (CHAT-12) and 'image' (CHAT-15).
+--   * own_key: the step ran on the workspace's own provider key (CHAT-16
+--     item 26). Its row is written, with its cost, so every step has one,
+--     but the provider bills the workspace: it never counts toward the
+--     budget. Every sum of the budget leaves it out (the two functions
+--     below, and the server's reads in plan-guard.js).
+--   * chat_run_id, chat_run_step_id: the run, and the step when it has one,
+--     the row was for (00400). A deleted run or step leaves its rows, named
+--     by neither: what was spent stays spent.
+--   * reserve_chat_ai_usage: a step's hold before it starts. Stricter than
+--     reserve_ai_usage (00243), which lets a call start while anything is
+--     left: a Chat step starts only when the period's spend, holds in flight
+--     included, plus the step's worst case stays within the budget (CHAT-04
+--     item 13), so runs at once can't pass it. The same per-organization
+--     lock as reserve_ai_usage, so Chat and the other features queue on one
+--     budget.
+--   * organizations.legacy_key_grandfathered: a Starter workspace (or one
+--     in its free trial) that saved its own key before Chat drew on the
+--     budget keeps using it (CHAT-16 item 28): own keys are otherwise
+--     Growth's and Enterprise's. Set here for those with a key now; the web
+--     sets it for one that saves a key while Chat is still off for it. Only
+--     the server writes it (the guard below).
+
+-- ─── What a row was for ─────────────────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  drop constraint if exists prompt_improve_usage_feature_check;
+alter table public.prompt_improve_usage
+  add constraint prompt_improve_usage_feature_check
+    check (
+      feature is null
+      or feature in (
+        'improve', 'content', 'action_center', 'quality', 'chat', 'agent', 'schedule', 'image'
+      )
+    );
+
+comment on column public.prompt_improve_usage.feature is
+  'What the AI call was for: improve (the Improve tab), content (the Content Editor''s AI), action_center (the task writer), quality (the Content Editor''s Quality checks, 00264), chat (a Chat run''s model step, 00405), agent, schedule or image (Chat''s agents, scheduled runs and images). Null on rows from before 00242 whose prompt, draft or action was deleted.';
+
+alter table public.prompt_improve_usage
+  add column if not exists own_key boolean not null default false;
+
+comment on column public.prompt_improve_usage.own_key is
+  'The call ran on the workspace''s own provider key (CHAT-16 item 26): the provider bills the workspace, so the row never counts toward the AI budget.';
+
+alter table public.prompt_improve_usage
+  add column if not exists chat_run_id uuid
+    references public.chat_runs(id) on delete set null;
+alter table public.prompt_improve_usage
+  add column if not exists chat_run_step_id uuid
+    references public.chat_run_steps(id) on delete set null;
+
+comment on column public.prompt_improve_usage.chat_run_id is
+  'The Chat run whose model step this row is (00405). Null for other features, and once the run is deleted.';
+comment on column public.prompt_improve_usage.chat_run_step_id is
+  'The run''s step the model call was for, when it had one. Null otherwise, and once the step is deleted.';
+
+-- A run's rows, for its cost; and what a deleted run or step looks up.
+create index if not exists prompt_improve_usage_chat_run_idx
+  on public.prompt_improve_usage (chat_run_id)
+  where chat_run_id is not null;
+create index if not exists prompt_improve_usage_chat_run_step_idx
+  on public.prompt_improve_usage (chat_run_step_id)
+  where chat_run_step_id is not null;
+
+-- ─── The budget's sums leave own-key rows out ───────────────────────────────
+
+-- 00243's, with own-key rows left out of the spend.
+create or replace function public.reserve_ai_usage(
+  p_organization_id  uuid,
+  p_since            timestamptz,
+  p_budget           numeric,
+  p_cost             numeric,
+  p_feature          text,
+  p_model            text,
+  p_prompt_id        uuid default null,
+  p_action_id        uuid default null,
+  p_content_draft_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_spent numeric;
+  v_id    uuid;
+begin
+  -- One reservation at a time per organization: the next waits and sees this one.
+  perform pg_advisory_xact_lock(hashtext('ai_usage:' || p_organization_id::text));
+
+  select coalesce(sum(cost_usd), 0) into v_spent
+  from public.prompt_improve_usage
+  where organization_id = p_organization_id
+    and used_at >= p_since
+    and not own_key;
+
+  if v_spent >= p_budget then
+    return null;
+  end if;
+
+  insert into public.prompt_improve_usage (
+    organization_id, feature, model, prompt_id, action_id, content_draft_id, cost_usd)
+  values (
+    p_organization_id, p_feature, p_model, p_prompt_id, p_action_id, p_content_draft_id,
+    greatest(p_cost, 0))
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- 00242's, with own-key rows left out: they never move the meter.
+create or replace function public.ai_usage_by_feature(
+  p_organization_id uuid,
+  p_since timestamptz
+)
+returns table (feature text, cost_usd numeric)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(u.feature, 'other') as feature, sum(u.cost_usd) as cost_usd
+  from public.prompt_improve_usage u
+  where u.organization_id = p_organization_id
+    and u.used_at >= p_since
+    and not u.own_key
+  group by 1;
+$$;
+
+-- ─── A Chat step's hold ─────────────────────────────────────────────────────
+
+-- Writes the step's row and returns its id; the server turns it into the
+-- step's real cost once the model answers, or deletes it when nothing was
+-- billed. Null when the budget can't cover the step's worst case (p_cost).
+-- On the workspace's own key (p_own_key), or with no budget to hold against
+-- (p_budget null: self-hosted), the row is written without a check. The run
+-- must be the organization's, and the step, when named, the run's.
+create or replace function public.reserve_chat_ai_usage(
+  p_organization_id  uuid,
+  p_chat_run_id      uuid,
+  p_chat_run_step_id uuid,
+  p_feature          text,
+  p_model            text,
+  p_cost             numeric,
+  p_own_key          boolean,
+  p_since            timestamptz,
+  p_budget           numeric
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_spent numeric;
+  v_id    uuid;
+begin
+  if p_feature is null or p_feature not in ('chat', 'agent', 'schedule', 'image') then
+    raise exception 'not a Chat feature: %', p_feature using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1
+    from public.chat_runs r
+    join public.chat_conversations c on c.id = r.conversation_id
+    where r.id = p_chat_run_id
+      and c.organization_id = p_organization_id
+  ) or (
+    p_chat_run_step_id is not null
+    and not exists (
+      select 1 from public.chat_run_steps s
+      where s.id = p_chat_run_step_id and s.run_id = p_chat_run_id
+    )
+  ) then
+    raise exception 'chat run not found' using errcode = 'P0002';
+  end if;
+
+  if not coalesce(p_own_key, false) and p_budget is not null then
+    -- The lock reserve_ai_usage takes: one hold at a time per organization.
+    perform pg_advisory_xact_lock(hashtext('ai_usage:' || p_organization_id::text));
+
+    select coalesce(sum(cost_usd), 0) into v_spent
+    from public.prompt_improve_usage
+    where organization_id = p_organization_id
+      and used_at >= p_since
+      and not own_key;
+
+    if v_spent >= p_budget or v_spent + greatest(p_cost, 0) > p_budget then
+      return null;
+    end if;
+  end if;
+
+  insert into public.prompt_improve_usage (
+    organization_id, feature, model, cost_usd, own_key, chat_run_id, chat_run_step_id)
+  values (
+    p_organization_id, p_feature, p_model, greatest(p_cost, 0), coalesce(p_own_key, false),
+    p_chat_run_id, p_chat_run_step_id)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+comment on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric) is
+  'Holds a Chat step''s worst-case cost (p_cost) on its organization''s AI budget under the per-organization lock, only while the period''s spend since p_since (own-key rows left out, holds in flight in) plus p_cost stays within p_budget; returns the row to settle, or null. Own-key steps and an unlimited budget (null) write the row unchecked.';
+
+revoke all on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric)
+  from public, anon, authenticated;
+grant execute on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric)
+  to service_role;
+
+-- ─── Starter keys saved before Chat drew on the budget ──────────────────────
+
+alter table public.organizations
+  add column if not exists legacy_key_grandfathered boolean not null default false;
+
+comment on column public.organizations.legacy_key_grandfathered is
+  'CHAT-16 item 28: a Starter workspace (or a Growth one in its free trial) that saved its own AI key before Chat drew on the AI budget keeps using that key for Chat. Set by 00405 and, while Chat is off for the workspace, when it saves a key; server only.';
+
+update public.organizations o
+set legacy_key_grandfathered = true
+where (o.plan = 'starter' or (o.plan = 'growth' and o.subscription_status = 'trialing'))
+  and exists (select 1 from public.organization_ai_keys k where k.organization_id = o.id);
+
+-- 00276's guard, with the new column the server's too: a member can't mark
+-- their own workspace.
+create or replace function public.guard_organization_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.plan is distinct from 'free'
+       or new.plan_overrides is not null
+       or new.subscription_status is distinct from 'incomplete'
+       or new.subscription_ends_at is not null
+       or new.stripe_customer_id is not null
+       or new.stripe_subscription_id is not null
+       or new.anthropic_api_key_encrypted is not null
+       or new.anthropic_api_key_last4 is not null
+       or new.anthropic_api_key_set_at is not null
+       or new.anthropic_api_key_set_by is not null
+       or new.legacy_key_grandfathered is distinct from false
+    then
+      raise exception 'organization column is managed server-side and cannot be set from the client'
+        using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if new.plan is distinct from old.plan
+     or new.plan_overrides is distinct from old.plan_overrides
+     or new.subscription_status is distinct from old.subscription_status
+     or new.subscription_ends_at is distinct from old.subscription_ends_at
+     or new.stripe_customer_id is distinct from old.stripe_customer_id
+     or new.stripe_subscription_id is distinct from old.stripe_subscription_id
+     or new.anthropic_api_key_encrypted is distinct from old.anthropic_api_key_encrypted
+     or new.anthropic_api_key_last4 is distinct from old.anthropic_api_key_last4
+     or new.anthropic_api_key_set_at is distinct from old.anthropic_api_key_set_at
+     or new.anthropic_api_key_set_by is distinct from old.anthropic_api_key_set_by
+     or new.legacy_key_grandfathered is distinct from old.legacy_key_grandfathered
+  then
+    raise exception 'organization column is managed server-side and cannot be set from the client'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00406_chat_engine.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00406: Chat's engine — the events each run streamed, the state a run
+-- pauses with, and its concurrency slots
+-- ============================================================================
+-- The engine (web lib/chat/engine.ts) runs a Chat turn as live steps that
+-- pause for the person's OK (CHAT-03, CHAT-20 §5–§6, §14). Behind
+-- CHAT_AGENTIC: nothing writes these tables while the flag is off.
+--
+--   * chat_run_events: every event a run sent to the browser, in order
+--     (CHAT-00 "Streaming events"), so a lost connection resumes after the
+--     last one it got and a reload rebuilds the run as it was (CHAT-03 item
+--     21). Each event was made safe before it was kept (chatEvent: no tool
+--     name, id field or money). Server only: the API serves them to the
+--     run's author.
+--   * chat_run_state: what the engine needs to pick a run up again, in
+--     another request, after an approval: who it runs for, its mode, the
+--     model messages so far (they hold tools' inputs and outputs, so never a
+--     member's), the calls still waiting, its counters (reads, data, writes:
+--     CHAT-04 item 5, CHAT-20 §14), its working time and its last event.
+--     waiting_since dates the card it waits on: one left 7 days stops the
+--     run. heartbeat_at is the driver's last sign of life: a running run
+--     with none for long was lost and ends as timed out. Server only.
+--   * chat_run_limits(): a person's runs and messages under way, for the
+--     limits of CHAT-20 §14, in one read.
+--   * chat_claim_run_slot(): starts a queued run when its workspace and its
+--     person have a free slot (concurrent runs per plan, per person), one
+--     claim at a time per workspace, so two runs can't both take the last.
+
+-- ─── Events ─────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_run_events (
+  run_id uuid not null references public.chat_runs(id) on delete cascade,
+  -- From 1 within the run: a reconnect asks for the ones after the last it got.
+  seq integer not null check (seq >= 1),
+  type text not null check (type ~ '^[a-z][a-z_.]{0,39}$'),
+  data jsonb not null check (
+    jsonb_typeof(data) = 'object' and octet_length(data::text) <= 200000
+  ),
+  created_at timestamptz not null default now(),
+  primary key (run_id, seq)
+);
+
+comment on table public.chat_run_events is
+  'Chat (00406): the events a run streamed (CHAT-00), each already safe for the browser, kept so a reconnect resumes after the last one it got and a reload rebuilds the run. Server only.';
+
+-- ─── A run's state ──────────────────────────────────────────────────────────
+
+create table if not exists public.chat_run_state (
+  run_id uuid primary key references public.chat_runs(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The person the run acts as (CHAT-20 §3b).
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- The composer's mode (CHAT-02): Ask me first, Auto, Full auto.
+  mode text not null default 'auto' check (mode in ('ask_first', 'auto', 'full_auto')),
+  -- The model messages of this run so far: the server's, with tools' inputs
+  -- and outputs (CHAT-03 item 23 keeps them out of the answer). Up to 2 MB.
+  messages jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(messages) = 'array' and octet_length(messages::text) <= 2000000
+  ),
+  -- The tool calls a waiting run left: the one on the card, and those after it.
+  pending jsonb check (pending is null or jsonb_typeof(pending) = 'object'),
+  -- Its phase, counters and what it read (the engine's RunProgress).
+  progress jsonb not null default '{}'::jsonb check (jsonb_typeof(progress) = 'object'),
+  -- Time spent working, without the waits on the person (CHAT-03 item 9).
+  working_ms integer not null default 0 check (working_ms >= 0),
+  last_seq integer not null default 0 check (last_seq >= 0),
+  -- Since when it waits on a card or a click; null while it doesn't.
+  waiting_since timestamptz,
+  heartbeat_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists chat_run_state_organization_idx
+  on public.chat_run_state (organization_id);
+create index if not exists chat_run_state_user_idx
+  on public.chat_run_state (user_id);
+create index if not exists chat_run_state_waiting_idx
+  on public.chat_run_state (waiting_since)
+  where waiting_since is not null;
+
+drop trigger if exists trg_chat_run_state_updated_at on public.chat_run_state;
+create trigger trg_chat_run_state_updated_at
+  before update on public.chat_run_state
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_run_state is
+  'Chat (00406): what the engine needs to pick a run up again after an approval: who, mode, model messages, waiting calls, counters, working time, last event. Server only.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_run_events enable row level security;
+alter table public.chat_run_state enable row level security;
+
+revoke all on table public.chat_run_events from anon, authenticated;
+revoke all on table public.chat_run_state from anon, authenticated;
+
+grant all on table public.chat_run_events to service_role;
+grant all on table public.chat_run_state to service_role;
+
+-- ─── Limits (CHAT-20 §14) ───────────────────────────────────────────────────
+
+-- A person's runs working now, their workspace's, and the messages they sent
+-- in the last hour and day: what the limits are checked against. A running
+-- run with no sign of life for 10 minutes was lost and isn't counted.
+create or replace function public.chat_run_limits(
+  p_organization_id uuid,
+  p_user_id uuid
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'workspaceRunning', (
+      select count(*)
+      from public.chat_runs r
+      join public.chat_run_state s on s.run_id = r.id
+      where s.organization_id = p_organization_id
+        and r.status = 'running'
+        and coalesce(s.heartbeat_at, s.updated_at) > now() - interval '10 minutes'
+    ),
+    'userRunning', (
+      select count(*)
+      from public.chat_runs r
+      join public.chat_run_state s on s.run_id = r.id
+      where s.organization_id = p_organization_id
+        and s.user_id = p_user_id
+        and r.status = 'running'
+        and coalesce(s.heartbeat_at, s.updated_at) > now() - interval '10 minutes'
+    ),
+    'messagesHour', (
+      select count(*)
+      from public.chat_messages m
+      join public.chat_conversations c on c.id = m.conversation_id
+      where c.user_id = p_user_id
+        and c.organization_id = p_organization_id
+        and m.role = 'user'
+        and m.created_at > now() - interval '1 hour'
+    ),
+    'messagesDay', (
+      select count(*)
+      from public.chat_messages m
+      join public.chat_conversations c on c.id = m.conversation_id
+      where c.user_id = p_user_id
+        and c.organization_id = p_organization_id
+        and m.role = 'user'
+        and m.created_at > now() - interval '1 day'
+    )
+  );
+$$;
+
+-- Starts a queued run when its workspace and its person each have a free
+-- slot. One claim at a time per workspace: the next waits and counts this
+-- one. False when the run isn't queued or no slot is free.
+create or replace function public.chat_claim_run_slot(
+  p_run_id uuid,
+  p_workspace_limit integer,
+  p_user_limit integer
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_org uuid;
+  v_user uuid;
+  v_workspace integer;
+  v_person integer;
+begin
+  select organization_id, user_id into v_org, v_user
+  from public.chat_run_state
+  where run_id = p_run_id;
+  if v_org is null then
+    return false;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('chat_run_slot:' || v_org::text));
+
+  select count(*), count(*) filter (where s.user_id = v_user)
+  into v_workspace, v_person
+  from public.chat_runs r
+  join public.chat_run_state s on s.run_id = r.id
+  where s.organization_id = v_org
+    and r.status = 'running'
+    -- A run whose driver was lost (no sign of life for 10 minutes, the
+    -- sweep's measure) frees its slot even before the sweep ends it.
+    and coalesce(s.heartbeat_at, s.updated_at) > now() - interval '10 minutes';
+
+  if v_workspace >= p_workspace_limit or v_person >= p_user_limit then
+    return false;
+  end if;
+
+  update public.chat_runs
+  set status = 'running', started_at = coalesce(started_at, now())
+  where id = p_run_id and status = 'queued';
+  return found;
+end;
+$$;
+
+revoke all on function public.chat_run_limits(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.chat_claim_run_slot(uuid, integer, integer)
+  from public, anon, authenticated;
+grant execute on function public.chat_run_limits(uuid, uuid) to service_role;
+grant execute on function public.chat_claim_run_slot(uuid, integer, integer) to service_role;
+
+notify pgrst, 'reload schema';
 

@@ -15,12 +15,18 @@ let ops;
 let recent;
 // The `or` filters its reads ask for.
 let ors;
+// The `eq` filters its prompt_improve_usage reads ask for.
+let filters;
 
 function query(table) {
   const op = { table, kind: 'select', filters: [] };
   const builder = {
     select: () => builder,
-    eq: (col, val) => (op.filters.push([col, val]), builder),
+    eq: (col, val) => {
+      op.filters.push([col, val]);
+      if (table === 'prompt_improve_usage') filters.push([col, val]);
+      return builder;
+    },
     gte: (col, val) => (op.filters.push([col, val]), builder),
     or: (val) => (ors.push(val), builder),
     order: () => builder,
@@ -51,6 +57,7 @@ beforeEach(async () => {
   rpcCalls = [];
   ops = [];
   ors = [];
+  filters = [];
   vi.doMock('../config/supabase.js', () => ({
     default: {
       from: (t) => query(t),
@@ -111,7 +118,15 @@ describe('reserveAiBudget', () => {
       feature: 'content',
       modelId: 'google/gemini-3-flash-preview',
     });
-    expect(ors).toEqual(['feature.is.null,feature.neq.quality']);
+    expect(ors).toEqual(['feature.is.null,feature.not.in.(quality,chat,agent,schedule,image)']);
+  });
+
+  it('leaves steps on a workspace’s own key out of the median a hold is sized on', async () => {
+    await guard.reserveAiBudget('o1', {
+      feature: 'content',
+      modelId: 'google/gemini-3-flash-preview',
+    });
+    expect(filters).toContainEqual(['own_key', false]);
   });
 
   it('holds the estimate on the period’s budget, then turns it into the real cost', async () => {
@@ -179,10 +194,10 @@ describe('reserveAiBudget', () => {
     expect(ops).toEqual([]);
   });
 
-  it('holds a call in the free trial on its $1, and says starting the plan gives more', async () => {
+  it('holds a call in the free trial on its $2, and says starting the plan gives more', async () => {
     org = { ...org, plan: 'growth', subscription_status: 'trialing' };
     await guard.reserveAiBudget('o1', { feature: 'improve', modelId: 'm', promptId: 'p1' });
-    expect(rpcCalls[0].args.p_budget).toBe(1);
+    expect(rpcCalls[0].args.p_budget).toBe(2);
 
     reserved = null;
     await expect(
@@ -235,6 +250,21 @@ describe('reserveAiBudget', () => {
 });
 
 describe('getImproveQuotaStatus', () => {
+  it('counts Chat’s steps as spent, but sizes a call on the others, and leaves own-key rows out', async () => {
+    recent = {
+      data: [
+        ...Array.from({ length: 10 }, () => ({ cost_usd: 0.001, feature: 'chat' })),
+        ...Array.from({ length: 5 }, () => ({ cost_usd: 0.02, feature: 'improve' })),
+      ],
+      error: null,
+    };
+    const status = await guard.getImproveQuotaStatus('o1', 'google/gemini-3-flash-preview');
+    expect(status.spentUsd).toBeCloseTo(0.11);
+    // $4.89 left at $0.02 a call: Chat's $0.001 steps don't pull the estimate down.
+    expect(status.generationsLeft).toBe(244);
+    expect(filters).toContainEqual(['own_key', false]);
+  });
+
   it('counts Quality’s small checks as spent, but sizes a call on the others', async () => {
     recent = {
       data: [

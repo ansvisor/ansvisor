@@ -46,6 +46,8 @@ export const SKIPPED = {
     "Chat's log of the changes it made (00402): Chat's precedence refuses every change on a demo brand, so none is logged.",
   chat_access_requests:
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
+  gsc_shopping_page_stats:
+    "Search Console's shopping results by page (00377): the sync that reads them never runs for a demo brand, and with the brand's gsc_shopping_synced_at left empty, Readiness shows that item as not read yet and leaves it out of the score.",
 };
 
 const FOLLOW_UP =
