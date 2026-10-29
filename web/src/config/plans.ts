@@ -331,11 +331,39 @@ export const CUSTOM_PLAN_STARTING_PRICE = 499;
 export const PRICING_URL = 'https://www.ansvisor.com/pricing';
 
 /**
+ * The first-month offer with "Buy now": a Stripe promotion code taking
+ * `percentOff` off the first month of a monthly plan (no trial with it; a
+ * year up front has its own discount). One setting, so it can end without a
+ * code change: NEXT_PUBLIC_FIRST_MONTH_OFFER=off turns it off, and every
+ * plan button and line goes back to the plain price. The code itself lives
+ * in Stripe, where its coupon is ended too.
+ */
+export const FIRST_MONTH_OFFER = {
+  code: 'SAVE50',
+  percentOff: 50,
+  period: 'monthly',
+} as const;
+
+/** Whether the first-month offer is on (NEXT_PUBLIC_FIRST_MONTH_OFFER isn't `off`). */
+export function firstMonthOfferOn(): boolean {
+  return process.env.NEXT_PUBLIC_FIRST_MONTH_OFFER !== 'off';
+}
+
+/**
  * Self-hosted instances bypass all limits.
  * Cloud is determined by NEXT_PUBLIC_IS_CLOUD env var.
  */
 export function isCloud(): boolean {
   return process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
+}
+
+/**
+ * A stored plan as a known one. A new sign-up's organization holds `free`
+ * (or nothing) until it picks a plan; the dashboard opens for it once it has
+ * the demo brand, and reads limits as Starter's until then.
+ */
+export function toPlanId(value: string | null | undefined): PlanId {
+  return value && value in PLANS ? (value as PlanId) : 'starter';
 }
 
 export function getPlan(planId: string | null | undefined): Plan {

@@ -5,6 +5,7 @@ import { assertBrandAccess } from '../lib/access.js';
 import { isOrgActive } from '../lib/active-subscriptions.js';
 import { readBrandFacts, setFactStatus } from '../lib/brand-facts.js';
 import { qualityPhase } from '../lib/content-quality.js';
+import { isDemoBrand } from '../middleware/demo-brand.js';
 import { brandFactsLimiter } from '../middleware/rate-limiter.js';
 
 /**
@@ -32,14 +33,15 @@ function failed(req, res, err, what) {
 // GET /api/brand-facts?brandId=… — the facts, read from the site on the
 // first ask (once, however many ask), else as kept: the editor reads it
 // each time its tab comes back, so it has no bucket of its own. Once the
-// plan has ended, only as kept: the site isn't read for it.
+// plan has ended, and on a demo brand (sample facts, 00380), only as kept:
+// the site isn't read for it.
 router.get('/', async (req, res) => {
   if (qualityPhase() < 2) return off(res);
   const parsed = z.guid().safeParse(req.query.brandId);
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
     const { orgId } = await assertBrandAccess(parsed.data, req.user.id);
-    const keptOnly = !(await isOrgActive(orgId));
+    const keptOnly = !(await isOrgActive(orgId)) || (await isDemoBrand(parsed.data));
     return res.json(await readBrandFacts(parsed.data, { orgId, keptOnly }));
   } catch (err) {
     return failed(req, res, err, 'brand facts read error');

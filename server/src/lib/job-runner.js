@@ -16,7 +16,7 @@ import {
   registerActiveJob,
   unregisterActiveJob,
 } from './job-manager.js';
-import { activeBrandFilter, isBrandActive } from './active-subscriptions.js';
+import { brandStopReason, brandStopReasons } from './active-subscriptions.js';
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
@@ -30,6 +30,20 @@ import logger from './logger.js';
 // the cycle, watching memory on small instances.
 let activeTrackingCount = 0;
 const MAX_CONCURRENT_TRACKING = Number(process.env.TRACKING_CONCURRENCY) || 2;
+
+// The first run after a payment is the person's first look at the product, and
+// they are watching it. It goes ahead of the queue: it may take this many
+// slots beyond the limit, so it never waits behind the nightly runs, each of
+// which holds its slot through a Cloro drain that can last an hour; and while
+// one still waits for a slot, the others step aside. 0 turns the extra slot
+// off, leaving only the place in the queue.
+const PRIORITY_EXTRA_SLOTS = /^\d+$/.test(process.env.TRACKING_PRIORITY_SLOTS ?? '')
+  ? Number(process.env.TRACKING_PRIORITY_SLOTS)
+  : 1;
+const PRIORITY_RETRY_MS = 1000;
+const REGULAR_RETRY_MS = 5000;
+// Priority jobs waiting for a slot right now.
+const priorityWaiting = new Set();
 let activeContentCount = 0;
 const MAX_CONCURRENT_CONTENT = 2;
 
@@ -59,41 +73,51 @@ function createJobProxy(jobId, signal) {
 }
 
 /**
- * Whether a claimed job's organization has no active plan, cancelling the
- * job if so (2026-10-27): every way a job starts (the nightly run, the
- * internal trigger, a retry, the recovery) ends in a claim, so this is where
- * an ended plan stops tracking and content generation, with no Cloro, AI or
- * scraping spent. A read that fails throws, and the job retries as after any
- * failure.
+ * Whether a claimed job may not run, cancelling it if so: its organization
+ * has no active plan (2026-10-27), or its brand is a demo brand (00380),
+ * whose data is sample data. Every way a job starts (the nightly run, "Run
+ * now", the internal trigger, a retry, the recovery) ends in a claim, so
+ * this is where tracking and content generation stop, with no Cloro, AI or
+ * scraping spent and nothing counted: the job's own row is all that is left
+ * (failed_reason says why). A read that fails throws, and the job retries as
+ * after any failure.
  */
-async function skipUnpaid(jobId, brandId) {
-  if (await isBrandActive(brandId)) return false;
-  if (await cancelClaimedJob(jobId, 'subscription_inactive')) {
-    logger.info({ jobId, brandId }, 'cancelled a job of an organization without an active plan');
+async function skipStopped(jobId, brandId) {
+  const reason = await brandStopReason(brandId);
+  if (!reason) return false;
+  if (await cancelClaimedJob(jobId, reason)) {
+    logger.info({ jobId, brandId, reason }, 'cancelled a job that may not run');
   } else {
     // Not cancelled (the write failed, or the row moved on): never left
     // 'active', where nothing would end it.
-    logger.warn({ jobId, brandId }, 'could not cancel a job without an active plan; failing it');
-    await failJob(jobId, 'subscription_inactive');
+    logger.warn({ jobId, brandId, reason }, 'could not cancel a job that may not run; failing it');
+    await failJob(jobId, reason);
   }
   return true;
 }
 
 /**
  * Run a tracking job. Call without await (fire-and-forget).
- * Handles concurrency gating, retry, and Socket.IO emit.
+ * Handles concurrency gating, retry, and Socket.IO emit. `priority` is for
+ * the first run after a payment (see PRIORITY_EXTRA_SLOTS).
  */
-export function runTrackingJob(jobId, io) {
+export function runTrackingJob(jobId, io, { priority = false } = {}) {
   if (queuedJobs.has(jobId)) return;
   queuedJobs.add(jobId);
-  void attemptTrackingJob(jobId, io);
+  void attemptTrackingJob(jobId, io, priority);
 }
 
-async function attemptTrackingJob(jobId, io) {
-  if (activeTrackingCount >= MAX_CONCURRENT_TRACKING) {
-    setTimeout(() => attemptTrackingJob(jobId, io), 5000);
+async function attemptTrackingJob(jobId, io, priority = false) {
+  const limit = MAX_CONCURRENT_TRACKING + (priority ? PRIORITY_EXTRA_SLOTS : 0);
+  if (activeTrackingCount >= limit || (!priority && priorityWaiting.size > 0)) {
+    if (priority) priorityWaiting.add(jobId);
+    setTimeout(
+      () => attemptTrackingJob(jobId, io, priority),
+      priority ? PRIORITY_RETRY_MS : REGULAR_RETRY_MS,
+    );
     return;
   }
+  priorityWaiting.delete(jobId);
 
   // Take the slot before the first await. Otherwise every timer that fires
   // while the claim is in flight sees the same free slot, and a night once
@@ -112,7 +136,7 @@ async function attemptTrackingJob(jobId, io) {
 
   try {
     const { brandId, promptId, promptIds, immediate } = jobRow.data;
-    if (await skipUnpaid(jobId, brandId)) return;
+    if (await skipStopped(jobId, brandId)) return;
     const proxy = createJobProxy(jobId, abortController.signal);
 
     const result = await processTrackingJob({
@@ -219,7 +243,7 @@ async function attemptTrackingJob(jobId, io) {
         .eq('id', jobId);
 
       retrying = true;
-      setTimeout(() => attemptTrackingJob(jobId, io), delay);
+      setTimeout(() => attemptTrackingJob(jobId, io, priority), delay);
     } else {
       await failJob(jobId, err.message);
     }
@@ -260,7 +284,7 @@ async function attemptContentJob(jobId, io) {
 
   try {
     const { brandId, model, request } = jobRow.data;
-    if (await skipUnpaid(jobId, brandId)) return;
+    if (await skipStopped(jobId, brandId)) return;
     const proxy = createJobProxy(jobId, abortController.signal);
 
     const result = await processContentJob({ brandId, model, job: proxy, request });
@@ -312,9 +336,10 @@ async function attemptContentJob(jobId, io) {
  * Restart waiting jobs that have no run chain in this process. Runs at
  * startup and every minute (server.js). Returns how many it restarted.
  *
- * A job whose organization's plan has ended is cancelled instead: it would
- * track, scrape or write for an organization that no longer pays for it, and
- * left waiting it would only be found again the next minute.
+ * A job that may not run is cancelled instead, saying why: its
+ * organization's plan has ended (it would track, scrape or write for an
+ * organization that no longer pays for it), or its brand is a demo brand.
+ * Left waiting, it would only be found again the next minute.
  */
 export async function recoverWaitingJobs(io) {
   const jobs = (
@@ -324,23 +349,25 @@ export async function recoverWaitingJobs(io) {
     })
   ).filter((job) => !queuedJobs.has(job.id) && RECOVERABLE_TYPES.has(job.type));
   if (jobs.length === 0) return 0;
-  const isActive = await activeBrandFilter(jobs.map((job) => job.brand_id));
+  const reasonFor = await brandStopReasons(jobs.map((job) => job.brand_id));
 
   let recovered = 0;
   let cancelled = 0;
   for (const job of jobs) {
-    if (!isActive(job.brand_id)) {
-      if (await cancelWaitingJob(job.id, 'subscription_inactive')) cancelled++;
+    const reason = reasonFor(job.brand_id);
+    if (reason) {
+      if (await cancelWaitingJob(job.id, reason)) cancelled++;
       continue;
     }
-    if (job.type === 'tracking') runTrackingJob(job.id, io);
-    else runContentJob(job.id, io);
+    if (job.type === 'tracking') {
+      runTrackingJob(job.id, io, { priority: job.data?.afterPayment === true });
+    } else {
+      runContentJob(job.id, io);
+    }
     recovered++;
   }
 
-  if (cancelled > 0) {
-    logger.info({ cancelled }, 'cancelled waiting jobs of organizations without an active plan');
-  }
+  if (cancelled > 0) logger.info({ cancelled }, 'cancelled waiting jobs that may not run');
   if (recovered > 0) logger.warn({ recovered }, 'restarted waiting jobs that had no run chain');
   return recovered;
 }

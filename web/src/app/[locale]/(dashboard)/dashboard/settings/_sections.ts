@@ -9,6 +9,8 @@ export const SETTINGS_SECTIONS = [
   'account',
   'organization',
   'team',
+  // Roles & access (CHAT-20 §4a): listed only while the new Chat is on.
+  'roles-access',
   'menu-access',
   'authors',
   'content',

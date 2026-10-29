@@ -43674,6 +43674,487 @@ create trigger catalog_sources_mark_ecommerce
   for each row execute function public.catalog_source_marks_ecommerce();
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00380_demo_brand.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00380: a demo brand per organization (demo-core)
+-- ============================================================================
+-- People who sign up without a card, and workspaces whose trial ended or whose
+-- plan was cancelled, can explore a demo brand: Brewline Coffee, a fictional
+-- brand on a `.example` domain, filled with sample data in the real tables.
+-- It is an ordinary brand row in the person's own organization, so every page
+-- reads it through the same queries and policies as any brand. The server
+-- writes its data (server/src/lib/demo/) and rebuilds it when DEMO_VERSION
+-- moves on or the data grows old, keeping the brand's id so links to it hold.
+--
+-- What it must never do is cost anything or count against the plan:
+--   * the nightly sweeps and the jobs skip `is_demo` brands (server code);
+--   * the plan's prompt-location quota and the brand count leave them out
+--     (org_prompt_location_usage, prompt_usage_summary below; the web's
+--     maxBrands check);
+--   * the health report's fan-out share leaves out their answers, which share
+--     their searches every run by construction and would hide a real drop.
+--
+-- Policies: members read the demo brand like any other. Only the server
+-- (service role) writes it: people can't insert a demo brand, mark a brand as
+-- one, change it or delete it. Hiding it (demo_hidden_at) goes through the
+-- server too (PATCH /api/demo), for admins and managers.
+
+alter table public.brands
+  add column if not exists is_demo boolean not null default false,
+  add column if not exists demo_version integer,
+  add column if not exists demo_built_at timestamptz,
+  add column if not exists demo_hidden_at timestamptz;
+
+-- The demo columns mean nothing on a real brand.
+alter table public.brands
+  drop constraint if exists brands_demo_columns_check;
+alter table public.brands
+  add constraint brands_demo_columns_check
+  check (is_demo or (demo_version is null and demo_built_at is null and demo_hidden_at is null));
+
+-- One demo brand per organization. Two first visits at once both try to
+-- create it; the second insert fails here and reads the first one's row.
+create unique index if not exists brands_one_demo_per_org
+  on public.brands (organization_id)
+  where is_demo;
+
+comment on column public.brands.is_demo is
+  'Demo brand (00380): sample data written by the server (lib/demo), one per organization. Never tracked, audited or synced, never counted against the plan; people read it and can''t change it.';
+comment on column public.brands.demo_version is
+  'Demo brand (00380): the DEMO_VERSION its data was built with; null while a build is under way or after one failed. A lower version is rebuilt on the next visit.';
+comment on column public.brands.demo_built_at is
+  'Demo brand (00380): when its data was last built, its dates counted back from then; with a null demo_version, when the build under way started. Data older than a few days is rebuilt on the next visit.';
+comment on column public.brands.demo_hidden_at is
+  'Demo brand (00380): when the organization hid it (after a purchase, or from the brand switcher); null = shown. Hidden, never deleted: it can be shown again.';
+
+-- ─── Policies ──────────────────────────────────────────────────────────────
+-- Same as before, plus `not is_demo`: a person can't insert a demo brand, turn
+-- a brand into one or back, change one or delete one. The server's writes use
+-- the service role and aren't bound by these.
+
+drop policy if exists "brands: admin/manager insert" on public.brands;
+create policy "brands: admin/manager insert" on public.brands
+  for insert
+  with check (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+  );
+
+drop policy if exists "brands: admin/manager update" on public.brands;
+create policy "brands: admin/manager update" on public.brands
+  for update
+  using (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+  )
+  with check (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['admin'::public.user_role, 'manager'::public.user_role])
+    )
+  );
+
+drop policy if exists "brands: admin delete" on public.brands;
+create policy "brands: admin delete" on public.brands
+  for delete
+  using (
+    not is_demo
+    and organization_id in (
+      select profiles.organization_id
+      from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = 'admin'::public.user_role
+    )
+  );
+
+-- ─── The plan's prompt-location quota (00128) without the demo brand ───────
+-- savePromptSet, the prompt dialogs and import_prompts all count through this.
+create or replace function public.org_prompt_location_usage(p_organization_id uuid)
+returns table (brand_id uuid, locations bigint)
+language sql
+stable
+set search_path to 'public'
+as $$
+  select b.id, sum(greatest(coalesce(array_length(p.regions, 1), 0), 1))::bigint
+  from public.prompts p
+  join public.prompt_sets ps on ps.id = p.prompt_set_id
+  join public.brands b on b.id = ps.brand_id
+  where b.organization_id = p_organization_id
+    and not b.is_demo
+    and p.is_active
+  group by b.id;
+$$;
+
+revoke all on function public.org_prompt_location_usage(uuid) from public;
+grant execute on function public.org_prompt_location_usage(uuid) to authenticated, service_role;
+
+comment on function public.org_prompt_location_usage(uuid) is
+  'Active prompt locations per brand for one org (#691, 00128) — the plan-quota unit, one per region entry per active prompt, minimum one; paused prompts and the demo brand (00380) don''t count. Security invoker: RLS scopes it to the caller''s org.';
+
+-- ─── The usage cards' account totals (00139) without the demo brand ────────
+-- The demo brand's own counts stay (its Prompts page shows them); the
+-- account's prompts, brands and locations, which the plan limits, leave it out.
+create or replace function public.prompt_usage_summary(p_brand_id uuid)
+returns table (
+  brand_active integer,
+  brand_paused integer,
+  account_active integer,
+  account_brands integer,
+  account_locations integer
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    coalesce(bc.active_prompts, 0),
+    coalesce(bc.paused_prompts, 0),
+    coalesce(acct.active_prompts, 0)::integer,
+    (
+      select count(*)
+      from public.brands b2
+      where b2.organization_id = b.organization_id
+        and not b2.is_demo
+    )::integer,
+    coalesce(acct.active_locations, 0)::integer
+  from public.brands b
+  left join public.prompt_usage_counters bc on bc.brand_id = b.id
+  left join lateral (
+    select sum(c.active_prompts) as active_prompts, sum(c.active_locations) as active_locations
+    from public.prompt_usage_counters c
+    join public.brands cb on cb.id = c.brand_id
+    where c.organization_id = b.organization_id
+      and not cb.is_demo
+  ) acct on true
+  where b.id = p_brand_id;
+$$;
+
+revoke all on function public.prompt_usage_summary(uuid) from public, anon;
+grant execute on function public.prompt_usage_summary(uuid) to authenticated, service_role;
+
+comment on function public.prompt_usage_summary(uuid) is
+  'One brand''s active/paused prompts and its account''s active prompts, brands and active prompt locations, from prompt_usage_counters only (PROMPT-012); the account totals leave out the demo brand (00380). Security invoker.';
+
+-- ─── The health report's fan-out share (00140) without demo answers ────────
+create or replace function public.fanout_coverage_by_platform(
+  p_since timestamptz,
+  p_until timestamptz
+)
+returns table (platform text, answers bigint, answers_with_fanout bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    r.platform,
+    count(*)::bigint,
+    count(*) filter (
+      where case
+        when jsonb_typeof(r.search_queries) = 'array' then jsonb_array_length(r.search_queries)
+        else 0
+      end > 0
+    )::bigint
+  from public.prompt_results r
+  join public.brands b on b.id = r.brand_id
+  where r.created_at >= p_since
+    and r.created_at < p_until
+    and not b.is_demo
+  group by r.platform;
+$$;
+
+revoke all on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
+  to service_role;
+
+comment on function public.fanout_coverage_by_platform(timestamptz, timestamptz) is
+  'Answers and answers with observed query fan-out per platform in [p_since, p_until), across all brands but demo ones (00140, 00380). Read by the daily health report.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00381_demo_brand_writes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00381: people can't write the demo brand's data (demo-guard)
+-- ============================================================================
+-- The demo brand (00380) is sample data the server writes (server/src/lib/
+-- demo) with the service role. People explore it, but nothing of theirs may
+-- change it: the API refuses its writes (402 demo_brand, server/src/
+-- middleware/demo-brand.js) and so does the web app's lock, but members can
+-- also write a brand's rows straight through Supabase, under RLS. This
+-- refuses those writes in the database.
+--
+-- refuse_demo_brand_writes() is a BEFORE INSERT/UPDATE/DELETE row trigger:
+--   * a role that bypasses RLS (the service role the server and the demo
+--     generator use, migrations, the table owner behind a cascade) passes,
+--     as in the other server-column guards (00204, 00228). Not, though, a
+--     SECURITY DEFINER function a person calls (approve_action_task_review,
+--     content_draft_restore, override_mention_sentiment, seed_kpi_presets):
+--     it runs as its owner, who bypasses RLS, but the write is the person's.
+--     So the session's own role decides (the one PostgREST sets per request:
+--     authenticated or anon is a person), unless the write comes from inside
+--     another trigger (a cascade, or a trigger of the server's);
+--   * otherwise, a row of a demo brand is refused with SQLSTATE 42501 and
+--     the message 'demo_brand' (an update is checked on its old and new row,
+--     so a row can't be moved into or out of the demo brand either).
+-- With no arguments, the row's brand is its own brand_id. A table without a
+-- brand_id names the way to it: (column, table) pairs, each table's row found
+-- by its id, the last one's brand_id being the brand, e.g. prompt_notes:
+-- prompt_id → prompts, prompt_set_id → prompt_sets.
+--
+-- It is attached to every table people can write under RLS (an insert,
+-- update, delete or all policy for a role other than service_role) that
+-- belongs to a brand. server/src/lib/demo/write-guard.test.js reads the
+-- migrations and fails on such a table without it: a new one attaches it in
+-- its own migration.
+--
+-- It reads the brand (and a parent row) as the person, under RLS: a row of a
+-- brand they can't see is refused by RLS itself. The brands themselves are
+-- guarded by their own policies (00380).
+
+create or replace function public.refuse_demo_brand_writes()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_keys text[] := '{}';
+  v_key text;
+  v_column text;
+  i integer;
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations), unless
+  -- it is the owner of a SECURITY DEFINER function a person called directly.
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)
+    and (
+      pg_catalog.pg_trigger_depth() > 1
+      or coalesce(pg_catalog.current_setting('role', true), 'none')
+        not in ('authenticated', 'anon')
+    )
+  then
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
+  end if;
+
+  if tg_nargs = 0 then
+    if tg_op <> 'INSERT' then
+      v_keys := v_keys || old.brand_id::text;
+    end if;
+    if tg_op <> 'DELETE' then
+      v_keys := v_keys || new.brand_id::text;
+    end if;
+  else
+    if tg_op <> 'INSERT' then
+      execute format('select ($1).%I::text', tg_argv[0]) into v_key using old;
+      v_keys := v_keys || v_key;
+    end if;
+    if tg_op <> 'DELETE' then
+      execute format('select ($1).%I::text', tg_argv[0]) into v_key using new;
+      v_keys := v_keys || v_key;
+    end if;
+    -- From each table on the way to the next one's id, the last one's brand_id.
+    i := 1;
+    while i < tg_nargs loop
+      v_column := case when i + 1 < tg_nargs then tg_argv[i + 1] else 'brand_id' end;
+      execute format(
+        'select coalesce(array_agg(distinct t.%I::text), ''{}'') '
+          || 'from public.%I t where t.id = any ($1::uuid[])',
+        v_column,
+        tg_argv[i]
+      ) into v_keys using v_keys;
+      i := i + 2;
+    end loop;
+  end if;
+
+  if exists (
+    select 1 from public.brands b
+    where b.id = any (v_keys::uuid[])
+      and b.is_demo
+  ) then
+    raise exception 'demo_brand'
+      using errcode = '42501',
+            detail = 'The demo brand holds sample data and can''t be changed.',
+            hint = 'Choose a plan to do this for your own brand.';
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.refuse_demo_brand_writes() is
+  'Demo brand (00381): refuses a write to a demo brand''s row (42501, ''demo_brand'') unless the role bypasses RLS (the server, which writes the demo''s sample data) and isn''t a person''s SECURITY DEFINER call. No arguments: the row''s brand_id; else (column, table) pairs leading to the brand.';
+
+-- ─── Tables with a brand_id ────────────────────────────────────────────────
+
+create or replace trigger actions_refuse_demo_brand_writes
+  before insert or update or delete on public.actions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger agent_conversations_refuse_demo_brand_writes
+  before insert or update or delete on public.agent_conversations
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger brand_domains_refuse_demo_brand_writes
+  before insert or update or delete on public.brand_domains
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger brand_facts_refuse_demo_brand_writes
+  before insert or update or delete on public.brand_facts
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger brand_platforms_refuse_demo_brand_writes
+  before insert or update or delete on public.brand_platforms
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger catalog_sources_refuse_demo_brand_writes
+  before insert or update or delete on public.catalog_sources
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger competitors_refuse_demo_brand_writes
+  before insert or update or delete on public.competitors
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_author_defaults_refuse_demo_brand_writes
+  before insert or update or delete on public.content_author_defaults
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_drafts_refuse_demo_brand_writes
+  before insert or update or delete on public.content_drafts
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_opportunities_refuse_demo_brand_writes
+  before insert or update or delete on public.content_opportunities
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger content_plan_marks_refuse_demo_brand_writes
+  before insert or update or delete on public.content_plan_marks
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger getting_started_refuse_demo_brand_writes
+  before insert or update or delete on public.getting_started
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger getting_started_steps_refuse_demo_brand_writes
+  before insert or update or delete on public.getting_started_steps
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger kpi_definitions_refuse_demo_brand_writes
+  before insert or update or delete on public.kpi_definitions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger prompt_sets_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_sets
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger prompt_suggestions_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_suggestions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger pulse_settings_refuse_demo_brand_writes
+  before insert or update or delete on public.pulse_settings
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger reports_refuse_demo_brand_writes
+  before insert or update or delete on public.reports
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger sentiment_overrides_refuse_demo_brand_writes
+  before insert or update or delete on public.sentiment_overrides
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger signals_refuse_demo_brand_writes
+  before insert or update or delete on public.signals
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger site_audits_refuse_demo_brand_writes
+  before insert or update or delete on public.site_audits
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger topic_suggestions_refuse_demo_brand_writes
+  before insert or update or delete on public.topic_suggestions
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger topics_refuse_demo_brand_writes
+  before insert or update or delete on public.topics
+  for each row execute function public.refuse_demo_brand_writes();
+
+create or replace trigger webhook_configs_refuse_demo_brand_writes
+  before insert or update or delete on public.webhook_configs
+  for each row execute function public.refuse_demo_brand_writes();
+
+-- ─── Tables that reach their brand through another row ────────────────────
+
+create or replace trigger action_events_refuse_demo_brand_writes
+  before insert or update or delete on public.action_events
+  for each row execute function public.refuse_demo_brand_writes('action_id', 'actions');
+
+create or replace trigger action_task_reviews_refuse_demo_brand_writes
+  before insert or update or delete on public.action_task_reviews
+  for each row execute function public.refuse_demo_brand_writes('action_id', 'actions');
+
+create or replace trigger action_tasks_refuse_demo_brand_writes
+  before insert or update or delete on public.action_tasks
+  for each row execute function public.refuse_demo_brand_writes('action_id', 'actions');
+
+create or replace trigger agent_messages_refuse_demo_brand_writes
+  before insert or update or delete on public.agent_messages
+  for each row execute function public.refuse_demo_brand_writes('conversation_id', 'agent_conversations');
+
+create or replace trigger audit_signal_results_refuse_demo_brand_writes
+  before insert or update or delete on public.audit_signal_results
+  for each row execute function public.refuse_demo_brand_writes('audit_id', 'site_audits');
+
+create or replace trigger content_draft_confirmations_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_confirmations
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_inputs_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_inputs
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_own_images_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_own_images
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_ready_log_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_ready_log
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger content_draft_sources_refuse_demo_brand_writes
+  before insert or update or delete on public.content_draft_sources
+  for each row execute function public.refuse_demo_brand_writes('draft_id', 'content_drafts');
+
+create or replace trigger prompts_refuse_demo_brand_writes
+  before insert or update or delete on public.prompts
+  for each row execute function public.refuse_demo_brand_writes('prompt_set_id', 'prompt_sets');
+
+create or replace trigger prompt_notes_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_notes
+  for each row execute function public.refuse_demo_brand_writes('prompt_id', 'prompts', 'prompt_set_id', 'prompt_sets');
+
+create or replace trigger prompt_target_urls_refuse_demo_brand_writes
+  before insert or update or delete on public.prompt_target_urls
+  for each row execute function public.refuse_demo_brand_writes('prompt_id', 'prompts', 'prompt_set_id', 'prompt_sets');
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00400_chat_core.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -44197,6 +44678,289 @@ create policy "chat_auto_choices: own delete"
   on public.chat_auto_choices
   for delete
   using (user_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00402_chat_activity.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00402: Chat's activity log with Undo, and its idempotency keys
+-- ============================================================================
+-- Every change Chat makes is visible and, where possible, undoable (CHAT-20
+-- §2 principle 6, §10), and a double click never makes it twice (§11c).
+-- Behind CHAT_AGENTIC: nothing writes these tables while the flag is off.
+--
+--   * chat_activity_log: one row per WRITE or EXECUTE Chat ran (§10a layer 2,
+--     mockup #g-activity): who, from which surface, in which chat, run and
+--     step; the tool by its label key (never its name, CHAT-03 item 22), its
+--     class, the run's mode and how it was approved; the target (type and
+--     id), and the summary in the person's words (a messages/en.json key
+--     under chatActivity.summary, with its values). kind says which row:
+--       - change: a WRITE or EXECUTE that ran;
+--       - undo: an Undo (approval 'run', undoes_id pointing at the change it
+--         undid, which turns 'undone');
+--       - access.denied: a call the precedence refused (§4c, §10a "Denied
+--         requests appear as access.denied rows"), with its reason
+--         (denial_code, denial_json: what the denial.ts answer is built
+--         from) and no approval, target or Undo. A read's denial too.
+--     A person reads their own rows; an Admin reads the workspace's (§10a
+--     "Members see their own rows; Admins see all"). Only the server writes.
+--     Rows stay when the chat, the run or the member goes (§16c: Activity
+--     log rows stay).
+--       - undo_json: what Undo restores and what it checks first (the before
+--         state, and the after state a conflict is measured against). Server
+--         only: members are granted every column but this one.
+--       - undo_until: the end of the tool's Undo window (CHAT-20 §9: 7 or 30
+--         days), null when there is no Undo (an EXECUTE, §10b).
+--       - status: done; undone; undo_conflict when an Undo found the target
+--         changed since ("This changed since. Open it to undo by hand.").
+--         An Undo may be tried again from undo_conflict.
+--   * chat_idempotency_keys: a WRITE's or EXECUTE's key (§9's column) for 24
+--     hours per workspace, with the first call's result: a double-clicked
+--     approval, a reconnect or a retry gets that result back and makes
+--     nothing new. A key is claimed (pending) before the change runs and
+--     holds its result once it ran; a call that failed gives its key back.
+--     request_hash is what the key was claimed for (the tool and its input):
+--     the same key with another request is an approval mismatch. Server
+--     only: no member reads or writes it.
+
+-- ─── The activity log ───────────────────────────────────────────────────────
+
+create table if not exists public.chat_activity_log (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The person Chat acted as (§2 principle 1). Null once their account is
+  -- deleted: the row stays, for the workspace's Admins.
+  user_id uuid references auth.users(id) on delete set null,
+  brand_id uuid references public.brands(id) on delete set null,
+  -- Where it ran. A deleted chat, run or step leaves its rows.
+  conversation_id uuid references public.chat_conversations(id) on delete set null,
+  run_id uuid references public.chat_runs(id) on delete set null,
+  step_id uuid references public.chat_run_steps(id) on delete set null,
+  -- §10a's sources: Chat, an agent (CHAT-21), MCP, a schedule (CHAT-12), a watch rule (CHAT-22).
+  surface text not null check (surface in ('chat', 'agent', 'mcp', 'schedule', 'watch_rule')),
+  -- change, undo or access.denied (above).
+  kind text not null default 'change' check (kind in ('change', 'undo', 'access.denied')),
+  -- The tool's label key (chat_settings.tool_policies' keys), never its name.
+  tool_key text not null check (tool_key ~ '^[a-z][A-Za-z0-9]{1,63}$'),
+  -- A read only in an access.denied row.
+  class text not null check (class in ('read', 'write', 'execute')),
+  -- The run's mode (CHAT-02); null for the person's own action (an Undo) and a denial.
+  mode text check (mode in ('ask_first', 'auto', 'full_auto')),
+  -- ask: approved on its card; click: an EXECUTE the person clicked; auto:
+  -- ran without a card (auto_via says why); run: the person's own action,
+  -- which needs no card (Undo, §10b). Null for a denial: nothing ran.
+  approval_kind text check (approval_kind in ('run', 'ask', 'click', 'auto')),
+  auto_via text check (auto_via in ('always', 'full_auto', 'dont_ask_again')),
+  -- What it changed: 'content_draft', 'content_opportunity', 'prompt_suggestion'…
+  -- Null for a denial.
+  target_type text check (target_type ~ '^[a-z][a-z_]{1,39}$'),
+  target_id text check (char_length(target_id) between 1 and 200),
+  -- A denial's reason, the precedence's code (no_access, brand_scope,
+  -- forbidden_role, plan_locked…), and the rest of it ({role, roles},
+  -- {needs}, {group}): what the out-of-permission answer is built from.
+  denial_code text check (denial_code ~ '^[a-z_]{1,40}$'),
+  denial_json jsonb check (denial_json is null or jsonb_typeof(denial_json) = 'object'),
+  -- chatActivity.summary.{summary_key} in messages/en.json, and its values.
+  summary_key text not null check (summary_key ~ '^[a-z][A-Za-z0-9]{1,63}$'),
+  summary_params jsonb not null default '{}'::jsonb check (jsonb_typeof(summary_params) = 'object'),
+  -- Server only (not granted to members): what Undo restores and checks.
+  undo_json jsonb check (undo_json is null or jsonb_typeof(undo_json) = 'object'),
+  undo_until timestamptz,
+  -- This row is the Undo of that one.
+  undoes_id uuid references public.chat_activity_log(id) on delete set null,
+  status text not null default 'done' check (status in ('done', 'undone', 'undo_conflict')),
+  undone_at timestamptz,
+  undone_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  -- What each kind holds: a change and an Undo were approved and have a
+  -- target; a denial has a reason, and neither.
+  check ((kind = 'access.denied') = (approval_kind is null)),
+  check ((kind = 'access.denied') = (denial_code is not null)),
+  check (kind = 'access.denied' or (target_type is not null and class <> 'read')),
+  -- Only an Undo points at the change it undid.
+  check (kind = 'undo' or undoes_id is null),
+  -- auto_via only, and always, on a change that ran without a card.
+  check ((auto_via is not null) = (approval_kind is not distinct from 'auto')),
+  -- Undo only on a WRITE that ran (§10b: an EXECUTE has none); with what it restores.
+  check (undo_until is null or (kind = 'change' and class = 'write')),
+  check (undo_until is null or undo_json is not null),
+  check ((status = 'undone') = (undone_at is not null)),
+  check (status = 'done' or kind = 'change')
+);
+
+-- Admins: the workspace's log, newest first. Members: their own.
+create index if not exists chat_activity_log_organization_created_idx
+  on public.chat_activity_log (organization_id, created_at desc);
+create index if not exists chat_activity_log_user_created_idx
+  on public.chat_activity_log (user_id, created_at desc);
+create index if not exists chat_activity_log_undoes_idx
+  on public.chat_activity_log (undoes_id) where undoes_id is not null;
+
+comment on table public.chat_activity_log is
+  'Chat (00402): one row per WRITE or EXECUTE Chat ran, per Undo and per access.denied (CHAT-20 §10a): actor, surface, tool label key, class, mode, approval, target, summary (en.json key + values), Undo window and status, or a denial''s reason. A person reads their own rows, an Admin the workspace''s; the server writes.';
+comment on column public.chat_activity_log.undo_json is
+  'What Undo restores and the state it checks first (CHAT-20 §10b). Server only: never granted to members.';
+comment on column public.chat_activity_log.summary_key is
+  'The key under chatActivity.summary in web messages/en.json; summary_params holds its values.';
+
+-- ─── Idempotency keys ───────────────────────────────────────────────────────
+
+create table if not exists public.chat_idempotency_keys (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  key text not null check (key ~ '^[a-z][A-Za-z0-9]{1,63}:[0-9a-f]{64}$'),
+  -- The tool and input the key was claimed for (sha-256, hex).
+  request_hash text not null check (request_hash ~ '^[0-9a-f]{64}$'),
+  -- pending: the change is running; done: result_json is its result.
+  status text not null default 'pending' check (status in ('pending', 'done')),
+  result_json jsonb,
+  -- The log row the change wrote, for a repeat to point at the same one.
+  activity_id uuid references public.chat_activity_log(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '24 hours'),
+  primary key (organization_id, key),
+  check (status = 'pending' or result_json is not null)
+);
+
+-- The sweep of expired keys.
+create index if not exists chat_idempotency_keys_expires_idx
+  on public.chat_idempotency_keys (expires_at);
+
+comment on table public.chat_idempotency_keys is
+  'Chat (00402): a WRITE''s or EXECUTE''s idempotency key for 24 hours per workspace (CHAT-20 §11c), with the first call''s result. Server only.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_activity_log enable row level security;
+alter table public.chat_idempotency_keys enable row level security;
+
+revoke all on table public.chat_activity_log from anon, authenticated;
+revoke all on table public.chat_idempotency_keys from anon, authenticated;
+
+-- Every column but undo_json.
+grant select (
+  id, organization_id, user_id, brand_id, conversation_id, run_id, step_id, surface, kind,
+  tool_key, class, mode, approval_kind, auto_via, target_type, target_id, denial_code,
+  denial_json, summary_key, summary_params, undo_until, undoes_id, status, undone_at,
+  undone_by, created_at
+) on table public.chat_activity_log to authenticated;
+
+grant all on table public.chat_activity_log to service_role;
+grant all on table public.chat_idempotency_keys to service_role;
+
+-- A person's own rows, and every row of the workspace for its Admins, while
+-- they belong to it: one who left, or moved to another, reads none.
+drop policy if exists "chat_activity_log: own or admin select" on public.chat_activity_log;
+create policy "chat_activity_log: own or admin select"
+  on public.chat_activity_log
+  for select
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_activity_log.user_id = auth.uid())
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00403_chat_access_requests.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00403: Chat's access requests — "Ask your Admin"
+-- ============================================================================
+-- When a person's role, the plan or the tool policy keeps Chat from doing
+-- what they asked, Chat's out-of-permission answer offers Ask your Admin
+-- (CHAT-20 §4c, registry row 80a `access.request`): only after their click,
+-- a request goes to the workspace's Admins, who see it in Settings › Team ›
+-- Roles & access › Requests with a count. Behind CHAT_AGENTIC: nothing writes
+-- here while the flag is off.
+--
+--   * asked: what was asked, in the answer's words ("Add competitors ·
+--     Peec AI"); asked_hash its fingerprint, so a person asks for the same
+--     change at most once a day (requested_on, UTC).
+--   * tool_key: the registry row's label key, the name the browser knows a
+--     tool by (a tool's name never reaches a member, CHAT-03 item 22); null
+--     for a request about the plan or the role as a whole.
+--   * rule_kind / rule_detail: the rule that refused it (web
+--     lib/chat/denial.ts: role, plan, policy, workspace, brand, demo) and its
+--     words.
+--   * drafted_change: the change Chat had drafted, for an Admin to approve as
+--     their own card once Chat runs (C3); null when there was none.
+--   * status: pending until an Admin approves or dismisses it (the first one
+--     to act decides it for every Admin), or the person withdraws it.
+--
+-- The server writes every row (service role), after its own checks: a person
+-- has at most 10 pending requests and sends at most 20 a day. The person
+-- reads their own; the workspace's Admins read all of its requests.
+
+create table if not exists public.chat_access_requests (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  requester_id uuid not null references auth.users(id) on delete cascade,
+  brand_id uuid references public.brands(id) on delete set null,
+  conversation_id uuid references public.chat_conversations(id) on delete set null,
+  asked text not null check (char_length(asked) between 1 and 500),
+  asked_hash text not null check (asked_hash ~ '^[0-9a-f]{64}$'),
+  tool_key text check (tool_key is null or tool_key ~ '^[a-z][A-Za-z0-9]{1,63}$'),
+  rule_kind text not null
+    check (rule_kind in ('role', 'plan', 'policy', 'workspace', 'brand', 'demo')),
+  rule_detail text not null default '' check (char_length(rule_detail) <= 500),
+  -- The server takes at most 8,000 characters of JSON; this is its backstop.
+  drafted_change jsonb
+    check (
+      drafted_change is null
+      or (jsonb_typeof(drafted_change) = 'object' and octet_length(drafted_change::text) <= 32768)
+    ),
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected', 'withdrawn')),
+  decided_by uuid references auth.users(id) on delete set null,
+  decided_at timestamptz,
+  requested_on date not null default ((now() at time zone 'utc')::date),
+  created_at timestamptz not null default now(),
+  check ((status = 'pending') = (decided_at is null))
+);
+
+-- One request per person per asked change per day.
+create unique index if not exists chat_access_requests_once_a_day_uidx
+  on public.chat_access_requests (requester_id, asked_hash, requested_on);
+-- Roles & access › Requests: the workspace's pending ones first, newest first.
+create index if not exists chat_access_requests_org_idx
+  on public.chat_access_requests (organization_id, status, created_at desc);
+-- A person's own requests, and how many are pending.
+create index if not exists chat_access_requests_requester_idx
+  on public.chat_access_requests (requester_id, status, created_at desc);
+
+comment on table public.chat_access_requests is
+  'Chat (00403): "Ask your Admin" requests (CHAT-20 §4c). Server writes; the requester reads their own, the workspace''s Admins read all of its.';
+comment on column public.chat_access_requests.tool_key is
+  'The registry row''s label key (never a tool''s name); null for a request about the plan or the role.';
+comment on column public.chat_access_requests.asked_hash is
+  'sha256 of the asked change (tool key and words): one request per person per change per day.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_access_requests enable row level security;
+revoke all on table public.chat_access_requests from anon, authenticated;
+grant select on table public.chat_access_requests to authenticated;
+grant all on table public.chat_access_requests to service_role;
+
+-- The requester reads their own, in the workspace they belong to now; its
+-- Admins read all of the workspace's.
+drop policy if exists "chat_access_requests: own or admin select" on public.chat_access_requests;
+create policy "chat_access_requests: own or admin select"
+  on public.chat_access_requests
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_access_requests.requester_id = auth.uid())
+    )
+  );
 
 notify pgrst, 'reload schema';
 

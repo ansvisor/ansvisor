@@ -66,6 +66,8 @@ import {
 import type { SuggestionSourceStates } from '@/lib/actions/integrations';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
+import { readWithOneRetry, type ReadFailure } from '@/lib/api-failure';
+import { SuggestionsLoadError } from './_suggestions-load-error';
 
 /**
  * Analytics evidence, in the customer's own numbers (#705). A blind spot is
@@ -329,7 +331,7 @@ export function SuggestionsCard({
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReadFailure | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
@@ -347,17 +349,15 @@ export function SuggestionsCard({
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const { suggestions: s } = await getPromptSuggestions(brandId);
-      setSuggestions(s);
+    // Once more by itself when the API didn't answer, as while it restarts.
+    const read = await readWithOneRetry(() => getPromptSuggestions(brandId));
+    if (read.ok) {
+      setSuggestions(read.suggestions);
       setLoaded(true);
-    } catch (err) {
-      console.error('Failed to load suggestions:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load suggestions');
-      toast.error('Failed to load suggestions');
-    } finally {
-      setLoading(false);
+    } else {
+      setError(read);
     }
+    setLoading(false);
   }, [brandId]);
 
   useEffect(() => {
@@ -717,15 +717,7 @@ export function SuggestionsCard({
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <AlertTriangle className="h-8 w-8 text-destructive/60 mb-2" />
-            <p className="text-sm font-medium mb-1">Couldn&apos;t load suggestions</p>
-            <p className="text-xs text-muted-foreground mb-3 max-w-sm">{error}</p>
-            <Button onClick={load} disabled={loading} size="sm" variant="outline" className="gap-2">
-              <RefreshCw className="h-3.5 w-3.5" />
-              Retry
-            </Button>
-          </div>
+          <SuggestionsLoadError failure={error} onRetry={load} />
         ) : suggestions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <Sparkles className="h-8 w-8 text-muted-foreground/40 mb-2" />
