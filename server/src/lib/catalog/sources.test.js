@@ -581,14 +581,17 @@ describe("the plan's product cap (ECOM-019)", () => {
     fake
       .rows('brands')
       .push(
-        { id: 'brand-1', organization_id: 'org-1' },
-        { id: 'brand-2', organization_id: 'org-1' },
-        { id: 'brand-x', organization_id: 'org-2' },
+        { id: 'brand-1', organization_id: 'org-1', is_demo: false },
+        { id: 'brand-2', organization_id: 'org-1', is_demo: false },
+        { id: 'brand-demo', organization_id: 'org-1', is_demo: true },
+        { id: 'brand-x', organization_id: 'org-2', is_demo: false },
       );
     fake.rows('catalog_products').push(
       // The workspace's other brand: one live, one removed.
       { id: 'p1', brand_id: 'brand-2', source: OTHER, external_id: 'X1', removed_at: null },
       { id: 'p2', brand_id: 'brand-2', source: OTHER, external_id: 'X2', removed_at: NOW },
+      // The workspace's demo brand's sample catalog (00380): never counts.
+      { id: 'pd', brand_id: 'brand-demo', source: OTHER, external_id: 'D1', removed_at: null },
       // Another workspace's, and this source's own: neither counts.
       { id: 'p3', brand_id: 'brand-x', source: OTHER, external_id: 'X3', removed_at: null },
       {

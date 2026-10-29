@@ -148,7 +148,8 @@ export function redact(message, credentials) {
 
 /**
  * The live products a source may keep (ECOM-019): its workspace's cap less
- * the live products of the workspace's other sources, on any of its brands.
+ * the live products of the workspace's other sources, on any of its brands
+ * but its demo brand (00380), whose sample catalog never counts.
  * `room` is Infinity (and `cap` -1) on a self-hosted server, or for a plan
  * without a cap.
  */
@@ -169,7 +170,8 @@ export async function productRoom(
   const { data: brands, error: brandsError } = await db
     .from('brands')
     .select('id')
-    .eq('organization_id', brand.organization_id);
+    .eq('organization_id', brand.organization_id)
+    .eq('is_demo', false);
   if (brandsError) throw new Error(`brands read: ${brandsError.message}`);
   const { count, error: countError } = await db
     .from('catalog_products')
