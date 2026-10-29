@@ -9,7 +9,7 @@
 
 import logger from './logger.js';
 import { stripEntityMarkup } from './entity-markup.js';
-import { parseLocation } from './locations.js';
+import { googleLocationFor, parseLocation } from './locations.js';
 
 export const CLORO_API = 'https://api.cloro.dev';
 
@@ -40,15 +40,15 @@ function getApiKey() {
  */
 export function buildRequestBody(promptText, scraperId, region, state, location, opts = {}) {
   const country = region || 'US';
-  // A city (PROMPT-015d): Google's canonical name, which the Google
-  // endpoints take as `location` beside the country. Only they get it.
+  // A city (PROMPT-015d) or a US state: Google's canonical name
+  // (googleLocationFor), which the Google endpoints take as `location` beside
+  // the country. Only they get it.
   const locationField = location ? { location } : {};
 
   // State-level geo-targeting (#554): the AI endpoints accept a USPS state
   // code alongside country US and route through an in-state proxy. Google
-  // AIO / AI Mode use location/uule for sub-country targeting instead and
-  // must never receive it — their branches below skip this spread, and since
-  // #691 the caller never even submits a per-state task for them.
+  // AIO / AI Mode ask from a state through `location` instead and must never
+  // receive `state` too: their branches below skip this spread.
   const stateField = country === 'US' && state ? { state } : {};
 
   if (scraperId === 'chatgpt-shopping') {
@@ -278,9 +278,10 @@ export function parseScraperResponse(result, scraperId) {
  * @param {string} [region]
  * @param {{ webhookUrl?: string, state?: string, location?: string, legacy?: boolean }} [opts] - `state` is the
  *   USPS code of the location this task targets (#554, per-prompt since
- *   #691); only forwarded on US AI-endpoint tasks. `location` is a city's
- *   Google canonical name (PROMPT-015d), forwarded on Google tasks only.
- *   `legacy` asks a `chatgpt-web` task for its fan-out (chatgpt-fanout.js).
+ *   #691); only forwarded on US AI-endpoint tasks. `location` is a city's or
+ *   a US state's Google canonical name (googleLocationFor), forwarded on
+ *   Google tasks only. `legacy` asks a `chatgpt-web` task for its fan-out
+ *   (chatgpt-fanout.js).
  * @returns {Promise<{ taskId: string, scraperId: string, legacy: boolean }>} `legacy`: the
  *   task went to ChatGPT's legacy interface.
  * @throws {Error} with the HTTP `status` when Cloro answered the submission
@@ -382,12 +383,14 @@ export async function submitPromptTask({
   webhookUrl,
   promptId,
 }) {
-  const { country, state, city } = parseLocation(region);
+  // Google's engines take a city or a US state as `location`, the AI
+  // endpoints a state as `state`; buildRequestBody gives each its own.
+  const { country, state } = parseLocation(region);
   const submit = (withLegacy) =>
     submitScraperTask(promptText, scraperId, country, {
       webhookUrl,
       state,
-      location: city?.google,
+      location: googleLocationFor(region),
       legacy: withLegacy,
     });
   if (!legacy) return submit(false);

@@ -5,6 +5,7 @@ import {
   PROMPT_COLUMNS,
   addLocationColumn,
   parseLocationColumn,
+  pendingColumn,
   removeColumn,
   effectiveView,
   moveColumn,
@@ -95,5 +96,52 @@ describe('location columns (PROMPT-015b)', () => {
     });
     expect(view?.order.filter((id) => id.startsWith('loc:'))).toHaveLength(MAX_LOCATION_COLUMNS);
     expect(view?.order).not.toContain('loc:nope:TR');
+  });
+});
+
+describe('pendingColumn', () => {
+  const active = { isActive: true, regions: ['US', 'TR'] };
+  const all = [...PROMPT_COLUMNS];
+
+  it('says it once, in the first answer column shown, for a row with no answers', () => {
+    expect(pendingColumn(active, { hasAnswers: false, region: '', columns: all })).toBe(
+      'visibility',
+    );
+    // Visibility hidden, Runs moved ahead of Mentions.
+    expect(
+      pendingColumn(active, {
+        hasAnswers: false,
+        region: '',
+        columns: ['topic', 'status', 'runs', 'mentions', 'loc:visibility:TR'],
+      }),
+    ).toBe('runs');
+    // No answer column shown: nowhere.
+    expect(
+      pendingColumn(active, { hasAnswers: false, region: '', columns: ['topic', 'volume'] }),
+    ).toBeNull();
+  });
+
+  it('leaves a row with answers to its figures', () => {
+    expect(pendingColumn(active, { hasAnswers: true, region: '', columns: all })).toBeNull();
+    expect(pendingColumn(active, { hasAnswers: true, region: 'TR', columns: all })).toBeNull();
+  });
+
+  it('with a location picked, says it only for a prompt tracked there', () => {
+    expect(pendingColumn(active, { hasAnswers: false, region: 'TR', columns: all })).toBe(
+      'visibility',
+    );
+    expect(pendingColumn(active, { hasAnswers: false, region: 'DE', columns: all })).toBeNull();
+  });
+
+  it("names a paused prompt only when the Status column doesn't already", () => {
+    const paused = { ...active, isActive: false };
+    expect(pendingColumn(paused, { hasAnswers: false, region: '', columns: all })).toBeNull();
+    expect(
+      pendingColumn(paused, {
+        hasAnswers: false,
+        region: '',
+        columns: all.filter((id) => id !== 'status'),
+      }),
+    ).toBe('visibility');
   });
 });

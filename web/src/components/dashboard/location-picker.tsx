@@ -44,8 +44,6 @@ export interface LocationPickerProps {
    * fail afterwards.
    */
   maxSelectable: number | null;
-  /** Engines the prompt runs, to warn where state targeting doesn't apply. */
-  platforms?: string[];
   /** Field label. Defaults to the per-prompt wording. */
   label?: string;
   /** What the count describes, when the plan is unlimited. */
@@ -61,9 +59,6 @@ export interface LocationPickerProps {
 /** The brand regions first, as people look for them, then every other country by name. */
 const POPULAR = TRACKING_COUNTRIES.slice(0, 18).map((c) => c.code);
 
-/** Engines with no sub-country mechanism — mirrors the worker's collapse. */
-const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
-
 /**
  * Per-prompt tracking locations (#691).
  *
@@ -72,17 +67,14 @@ const COUNTRY_ONLY_PLATFORMS = new Set(['google-aio', 'google-aimode']);
  * than a Select because the list is about 50 countries plus 50 states — long
  * enough that scrolling to a known name is worse than typing it.
  *
- * Two things this picker must say out loud, because both cost money or
- * mislead if left implicit: every location is a plan-quota unit (the trigger
- * carries the count, and picks stop at the cap with the reason on screen),
- * and Google's engines have no state targeting, so a state pick runs them
- * country-wide instead of twice.
+ * One thing this picker must say out loud, because it costs money if left
+ * implicit: every location is a plan-quota unit (the trigger carries the
+ * count, and picks stop at the cap with the reason on screen).
  */
 export function LocationPicker({
   value,
   onChange,
   maxSelectable,
-  platforms,
   label = 'Locations',
   countNoun = 'tracked',
   allowEmpty = false,
@@ -143,10 +135,7 @@ export function LocationPicker({
   // remove control hidden rather than failing server-side.
   const canRemove = allowEmpty || value.length > 1;
 
-  const hasStatePick = value.some((code) => parseLocation(code)?.state);
   const hasCityPick = value.some((code) => parseLocation(code)?.city);
-  const countryOnlyEngines = (platforms ?? []).filter((id) => COUNTRY_ONLY_PLATFORMS.has(id));
-  const showCountryOnlyNote = hasStatePick && countryOnlyEngines.length > 0;
 
   const add = (option: LocationOption | null) => {
     if (!option || selected.has(option.value) || atCap) return;
@@ -222,13 +211,6 @@ export function LocationPicker({
         <p className="mt-1.5 text-[11px] text-muted-foreground">
           A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Perplexity,
           Copilot, Gemini and Grok answer per country, so track the country too to see them.
-        </p>
-      )}
-
-      {showCountryOnlyNote && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Google AI Overviews and AI Mode have no state-level targeting — they run once per country,
-          so your state picks cost one location each but are answered country-wide there.
         </p>
       )}
     </div>

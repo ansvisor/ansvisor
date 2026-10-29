@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * markBrandAsEcommerce: setup found the brand sells online, so its industry
- * becomes E-commerce & Retail when it has none and Shopping mode goes on
- * (ChatGPT Shopping on every prompt, the brand_platforms row), which shows
- * Product Visibility in the menu.
+ * markBrandAsEcommerce: setup found the brand sells online, so its site type
+ * becomes e-commerce as a detection unless a person chose one (00379), its
+ * industry becomes E-commerce & Retail when it has none and Shopping mode
+ * goes on (ChatGPT Shopping on every prompt, the brand_platforms row), which
+ * shows Product Visibility in the menu.
  */
 
-let brand: { industry: string | null; shopping_mode_enabled: boolean };
+let brand: {
+  industry: string | null;
+  shopping_mode_enabled: boolean;
+  site_type: string | null;
+  site_type_source: string | null;
+};
 let prompts: { id: string; platforms: string[] }[];
 let writes: { table: string; op: string; value: unknown }[];
 // RLS lets a write through, or matches no row without an error (an analyst).
@@ -52,8 +58,14 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const { markBrandAsEcommerce, setBrandShoppingMode } = await import('./brand');
 
+const TYPE_WRITE = {
+  table: 'brands',
+  op: 'update',
+  value: { site_type: 'ecommerce', site_type_detected_at: expect.any(String) },
+};
+
 beforeEach(() => {
-  brand = { industry: null, shopping_mode_enabled: false };
+  brand = { industry: null, shopping_mode_enabled: false, site_type: null, site_type_source: null };
   prompts = [
     { id: 'p1', platforms: ['chatgpt-web'] },
     { id: 'p2', platforms: ['chatgpt-web', 'chatgpt-shopping'] },
@@ -63,12 +75,14 @@ beforeEach(() => {
 });
 
 describe('markBrandAsEcommerce', () => {
-  it('sets the industry and turns Shopping mode on', async () => {
+  it('sets the site type and industry and turns Shopping mode on', async () => {
     expect(await markBrandAsEcommerce('b1')).toEqual({
       industry: 'E-commerce & Retail',
       promptsUpdated: 1,
+      siteType: 'ecommerce',
     });
     expect(writes).toEqual([
+      TYPE_WRITE,
       { table: 'brands', op: 'update', value: { industry: 'E-commerce & Retail' } },
       { table: 'brands', op: 'update', value: { shopping_mode_enabled: true } },
       { table: 'prompts', op: 'update', value: { platforms: ['chatgpt-web', 'chatgpt-shopping'] } },
@@ -87,9 +101,30 @@ describe('markBrandAsEcommerce', () => {
   });
 
   it('leaves a brand already in Shopping mode as it is, industry included', async () => {
-    brand = { industry: null, shopping_mode_enabled: true };
-    expect(await markBrandAsEcommerce('b1')).toEqual({ industry: null, promptsUpdated: 0 });
+    brand = {
+      ...brand,
+      shopping_mode_enabled: true,
+      site_type: 'ecommerce',
+      site_type_source: 'auto',
+    };
+    expect(await markBrandAsEcommerce('b1')).toEqual({
+      industry: null,
+      promptsUpdated: 0,
+      siteType: null,
+    });
     expect(writes).toEqual([]);
+  });
+
+  it('gives a brand already in Shopping mode its site type, and nothing else', async () => {
+    brand = { ...brand, shopping_mode_enabled: true };
+    expect(await markBrandAsEcommerce('b1')).toMatchObject({ siteType: 'ecommerce' });
+    expect(writes).toEqual([TYPE_WRITE]);
+  });
+
+  it('never writes over a site type a person chose', async () => {
+    brand = { ...brand, site_type: 'b2b', site_type_source: 'manual' };
+    expect(await markBrandAsEcommerce('b1')).toMatchObject({ siteType: null });
+    expect(writes.some((w) => (w.value as { site_type?: string })?.site_type)).toBe(false);
   });
 
   it('fails, writing nothing, when RLS denies the brand update', async () => {

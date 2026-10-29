@@ -182,6 +182,21 @@ describe('planBulkLocationChange', () => {
     expect(plan.changes[0].regions).toEqual(['DE']);
     expect(plan.delta).toBe(0);
   });
+
+  it('removes from many prompts with a long list of codes in time near its length', () => {
+    // A removal's codes aren't checked against the known locations.
+    const codes = Array.from({ length: 60_000 }, (_, i) => `X${i}`).concat('DE');
+    const prompts = Array.from({ length: 2_000 }, (_, i) => ({
+      id: `p${i}`,
+      regions: ['US', 'DE', 'US-CA', 'TR~ISTANBUL'],
+    }));
+    const started = performance.now();
+    const plan = planBulkLocationChange(prompts, 'remove', codes);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(plan.changes).toHaveLength(2_000);
+    expect(plan.changes[0].regions).toEqual(['US', 'US-CA', 'TR~ISTANBUL']);
+    expect(plan.delta).toBe(-2_000);
+  });
 });
 
 describe('planBulkLocationChange on paused prompts', () => {
