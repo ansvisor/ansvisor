@@ -89,6 +89,11 @@ describe('the Tracked prompts card', () => {
     expect(container.textContent).not.toContain('all brands');
   });
 
+  it('says one more in the singular', () => {
+    render(plan(49, 50));
+    expect(container.textContent).toContain('1 prompt/location left to add');
+  });
+
   it('formats a large count', () => {
     render(plan(250, 1500));
     expect(container.textContent).toContain('1,250 prompts/locations left to add');

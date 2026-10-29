@@ -188,8 +188,7 @@ export function supportsCountry(supported, scraperId, country) {
 
 /**
  * The locations a scraper is asked from: locationsForScraper's (cities only
- * for Google's engines, states collapsed where they can't be targeted),
- * less the countries the scraper doesn't answer from.
+ * for Google's engines), less the countries the scraper doesn't answer from.
  */
 export function supportedLocations(locations, scraperId, supported) {
   return locationsForScraper(locations, scraperId).filter((code) =>

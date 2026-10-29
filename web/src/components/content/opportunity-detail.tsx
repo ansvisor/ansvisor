@@ -638,8 +638,9 @@ export function OpportunityDetail({
               ? guard(() => void handleRestore(), { action: tActions('restoreOpportunities') })
               : undefined
           }
+          // Dismissing is for admins and managers, as the server allows it.
           onDismiss={
-            opportunity.status === 'new'
+            canManage && opportunity.status === 'new'
               ? guard(() => setDismissOpen(true), { action: tActions('dismissOpportunities') })
               : undefined
           }
