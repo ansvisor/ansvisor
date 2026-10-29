@@ -59,6 +59,38 @@ function inlineText(el) {
   return out;
 }
 
+/** The elements read as blocks, by name. */
+const BLOCKS = new Set('h1 h2 h3 p li blockquote div section article figcaption dd dt'.split(' '));
+
+/**
+ * The body's block elements in document order, as
+ * `$('body').find('h1, h2, …')` gives them, in one walk: that find's
+ * context step is quadratic in the elements it starts from, and a page of
+ * tens of thousands of short paragraphs held the server for a minute.
+ */
+function blockElements($) {
+  const found = [];
+  const body = $('body')[0];
+  if (!body) return found;
+  const stack = [...(body.children ?? [])].reverse();
+  while (stack.length) {
+    const node = stack.pop();
+    if (node.type !== 'tag' && node.type !== 'script' && node.type !== 'style') continue;
+    if (BLOCKS.has(node.name.toLowerCase())) found.push(node);
+    const children = node.children ?? [];
+    for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]);
+  }
+  return found;
+}
+
+/** Whether an element sits inside one of these, by name (a selector per element costs more than the walk). */
+function insideOf(el, names) {
+  for (let up = el.parent; up && up.type === 'tag'; up = up.parent) {
+    if (names.includes(up.name.toLowerCase())) return true;
+  }
+  return false;
+}
+
 /**
  * The page's headings and prose, in order: a quote once, each list item on
  * its own, a table's cells not at all. Text a page builder leaves loose in
@@ -71,23 +103,21 @@ export function readingBlocks(html) {
   const $ = cheerio.load(html ?? '');
   $('script, style, noscript, template, svg').remove();
   const blocks = [];
-  $('body')
-    .find('h1, h2, h3, p, li, blockquote, div, section, article, figcaption, dd, dt')
-    .each((_, el) => {
-      const tag = el.name.toLowerCase();
-      if (['div', 'section', 'article', 'figcaption', 'dd', 'dt'].includes(tag)) {
-        // Inside a block read whole, or a table, it is read with it, or not at all.
-        if ($(el).parents('p, li, blockquote, td, th').length) return;
-        const loose = inlineText(el).replace(/\s+/g, ' ').trim();
-        if (loose) blocks.push({ tag: 'p', text: loose });
-        return;
-      }
-      // A paragraph in a list item, a quote or a cell is read with it, or not at all.
-      if (tag === 'p' && $(el).closest('li, blockquote, td, th').length) return;
-      if (tag === 'li' && $(el).closest('td, th').length) return;
-      const text = ownText(el).replace(/\s+/g, ' ').trim();
-      if (text) blocks.push({ tag, text });
-    });
+  blockElements($).forEach((el) => {
+    const tag = el.name.toLowerCase();
+    if (['div', 'section', 'article', 'figcaption', 'dd', 'dt'].includes(tag)) {
+      // Inside a block read whole, or a table, it is read with it, or not at all.
+      if (insideOf(el, ['p', 'li', 'blockquote', 'td', 'th'])) return;
+      const loose = inlineText(el).replace(/\s+/g, ' ').trim();
+      if (loose) blocks.push({ tag: 'p', text: loose });
+      return;
+    }
+    // A paragraph in a list item, a quote or a cell is read with it, or not at all.
+    if (tag === 'p' && insideOf(el, ['li', 'blockquote', 'td', 'th'])) return;
+    if (tag === 'li' && insideOf(el, ['td', 'th'])) return;
+    const text = ownText(el).replace(/\s+/g, ' ').trim();
+    if (text) blocks.push({ tag, text });
+  });
   return blocks;
 }
 

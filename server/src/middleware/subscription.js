@@ -94,11 +94,13 @@ export const ONBOARDING_ROUTES = [
   { method: 'POST', path: /^\/prompts\/from-topics\/?$/ },
   // The brand's competitors, and whether it sells online (competitors.js).
   { method: 'POST', path: /^\/competitors\/suggest\/?$/ },
+  // The brand's kind of site, from its home page (brands.js, 00379).
+  { method: 'POST', path: /^\/brands\/[^/]+\/detect-site-type\/?$/ },
 ];
 
 /**
  * Onboarding's calls an organization that never subscribed may make a day
- * (UTC), all three routes together: a setup asks each once, so this leaves
+ * (UTC), all these routes together: a setup asks each once, so this leaves
  * room for several setups and retries, and bounds what a workspace without a
  * plan can spend on AI. Counted for the person and for their organization,
  * so neither one person nor an organization of several gets more. Counted

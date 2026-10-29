@@ -414,6 +414,66 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      */
     finalReadingDay: 30,
   }),
+
+  /**
+   * What the "Analyze competitor content" task reads (learning C1): the
+   * pages cited in the brand's tracked answers for the action's prompts over
+   * the last `answersDays`, at most `perAction` competitor pages a run, at
+   * most `perBrandPerDay` new reads a day for the brand (its own page
+   * included; a run needing more than are left waits for the next night),
+   * and a page read within `freshDays` reused rather than read again. Read
+   * free, never through a paid scraper. Fewer than `minPages` competitor
+   * pages read are compared with nothing; a run that finds nothing to
+   * compare leaves the task to a person and tries again after `retryDays`.
+   */
+  competitorPages: Object.freeze({
+    answersDays: 14,
+    perAction: 3,
+    perBrandPerDay: 12,
+    freshDays: 14,
+    minPages: 2,
+    retryDays: 7,
+  }),
+
+  /**
+   * What the "Analyze your winning pages" task compares (learning C4): at
+   * most `perAction` of the action's winning pages (G14's landing pages, or
+   * G10's own pages its prompts' answers cite) with the brand's other pages
+   * that have a completed Site Audit from the last `auditDays`, at most
+   * `others` of them, the newest audit first. Those are read from their
+   * audits, never fetched. A winning page without one is read like a cited
+   * page (competitorPages' reader): within the same `perBrandPerDay` reads
+   * and reused while `freshDays` old. Fewer than `minOthers` other pages and
+   * nothing is compared: the task stays a person's and tries again after
+   * `retryDays`. The `missingPages` other pages missing the most of what the
+   * winners have are listed.
+   */
+  winningPages: Object.freeze({
+    perAction: 3,
+    auditDays: 90,
+    others: 30,
+    minOthers: 3,
+    missingPages: 5,
+    retryDays: 7,
+  }),
+
+  /**
+   * A competitor's pages over time (learning C3). first_cited: a competitor
+   * never read is read back `backfillDays` once, the others from their last
+   * read. changed: each night, a brand's `pagesPerBrand` competitor pages its
+   * answers cited most over the last `citedDays` are read again once their
+   * last read is `rereadDays` old, within what is left of the brand's
+   * `competitorPages.perBrandPerDay` reads after the tasks' (C1, C4), and
+   * compared with that read's word sketch (task-checks' CHANGED_BELOW and
+   * MIN_CHANGED_RUNS). At most `brandsPerNight` brands a night.
+   */
+  competitorTimeline: Object.freeze({
+    backfillDays: 90,
+    citedDays: 14,
+    pagesPerBrand: 10,
+    rereadDays: 7,
+    brandsPerNight: 200,
+  }),
 });
 
 /**
