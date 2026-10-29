@@ -1978,7 +1978,7 @@ describe('fixDraftRules', () => {
             sources: [],
             marks: [],
           }),
-          // The name's number alone: a number with no source.
+          // The name's number alone: a number with no source, left for the person.
           suggestion({
             passage: 3,
             before: 'A dripper',
@@ -2006,10 +2006,11 @@ describe('fixDraftRules', () => {
     expect(generateObject.mock.calls[0][0].prompt).toContain(
       '- Ruth Miller Kettle 600 — https://shop.example/products/k1',
     );
-    expect(result.count).toBe(2);
+    expect(result.count).toBe(3);
     const batch = writes.find((w) => w.table === 'content_draft_suggestions');
     expect(batch.value.map((r) => r.after_text)).toEqual([
       'good coffee and the Ruth Miller Kettle 600 at $49',
+      'A [figure, source] ml dripper',
       'tastes better, says designer Ruth Miller',
     ]);
     expect(batch.value[0].after_links).toEqual([
@@ -2160,11 +2161,11 @@ describe('fixDraftRules', () => {
             sources: [],
             marks: [],
           }),
-          // A figure it wrote with no source, that no page has: its sentence goes, and the change with it.
+          // A figure it wrote with no source, that no page has: left for the person, never dropped unseen.
           suggestion({
-            passage: 2,
-            before: 'tastes better',
-            after: 'tastes 40% better',
+            passage: 3,
+            before: 'A dripper and a filter',
+            after: 'A dripper and a filter, 40% cheaper',
             sources: [],
             marks: [],
           }),
@@ -2200,10 +2201,11 @@ describe('fixDraftRules', () => {
     expect(call.prompt).toContain('needs: check: 40%');
     expect(reserveAiBudget).toHaveBeenCalledWith(
       'org-1',
-      expect.objectContaining({ feature: 'content', holdUsd: expect.any(Number) }),
+      expect.objectContaining({ feature: 'quality', holdUsd: expect.any(Number) }),
     );
-    expect(result).toEqual({ count: 1, batchId: expect.any(String) });
-    const [row] = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(result).toEqual({ count: 2, batchId: expect.any(String) });
+    const [row, second] = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(second.after_text).toBe('A dripper and a filter, [figure, source] cheaper');
     expect(row).toMatchObject({
       kind: 'replace',
       after_text: 'freshly ground coffee and water at 90.5–96.1 °C',
@@ -2521,8 +2523,11 @@ describe('Quality’s hand-off (CE-051)', () => {
       input: handoff(),
       handoff: { origin: 'person' },
     });
-    // 94 was only in the editor's detail: a number with no source, so not kept.
-    expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
+    // 94 was only in the editor's detail: a number with no source, looked up,
+    // found nowhere, so the person's to fill.
+    expect(writes.find((w) => w.table === 'content_draft_suggestions').value[0].after_text).toBe(
+      'good coffee and water at [figure, source] degrees',
+    );
     // A Fix open rules run takes the details as given.
     writes = [];
     await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: handoff() });

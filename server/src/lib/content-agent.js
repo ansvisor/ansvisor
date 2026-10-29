@@ -14,7 +14,7 @@ import { inputSources, readDraftInputs } from './content-inputs.js';
 import {
   RESEARCH_RULE,
   lookUpSuggestionFacts,
-  placeholdersIn,
+  pageOwn,
   withFactLinks,
 } from './content-research.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
@@ -1540,7 +1540,8 @@ async function fixWithRun({
       new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]),
       shopping.names,
     ),
-    allowed: new Set(placeholdersIn(htmlText(draft.body_html))),
+    own: pageOwn(draft.body_html),
+    products: shopping.names,
     orgId: brand.organization_id,
     draftId,
     modelId: contentReadModelId(),
