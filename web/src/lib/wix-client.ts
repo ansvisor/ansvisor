@@ -1,6 +1,7 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
+import { INTEGRATION_READ_TIMEOUT_MS } from '@/lib/integrations-client';
 
 /**
  * A brand's Wix connection for Send to CMS (#1331, phase 2; 00372), from the
@@ -90,7 +91,9 @@ async function call<T>(brandId: string, init: RequestInit = {}): Promise<WixResu
 
 /** The brand's connection, and whether this server can keep a Wix API key. */
 export function readWix(brandId: string) {
-  return call<{ configured: boolean; connection: WixConnection | null }>(brandId);
+  return call<{ configured: boolean; connection: WixConnection | null }>(brandId, {
+    signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS),
+  });
 }
 
 /** Connects the brand's site, or replaces its key: the API checks it with Wix first. */

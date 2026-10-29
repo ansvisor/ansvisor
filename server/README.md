@@ -6,7 +6,7 @@ It is designed to run alongside the `web/` app during local development and can 
 
 ## Prerequisites
 
-- Node.js 20 or newer
+- Node.js 24 or newer
 - npm, or Yarn if you prefer using it for package scripts
 - A configured Supabase project
 - At least one AI provider API key for tracking and content generation
@@ -79,7 +79,7 @@ The server exposes a small public surface plus authenticated API routes:
 | `/api/topics` | Topic grouping and topic-level prompt organization |
 | `/api/internal/daily-tracking` | Internal daily tracking trigger protected by `CRON_SECRET` |
 | `/api/internal/content/:id/brief` | Internal content brief trigger protected by `CRON_SECRET` |
-| `/api/internal/trigger-tracking` | Internal immediate tracking trigger protected by `CRON_SECRET` |
+| `/api/internal/trigger-tracking` | First tracking run after a payment (Stripe return page and webhook), one per purchase, with the brand's volume analysis; protected by `CRON_SECRET` |
 | `POST /cloro/callback` | Public Cloro scraper webhook callback |
 | `GET /t.js` | Public AI traffic tracking script |
 | `POST /track/:trackingCode` | Public AI traffic pixel ingestion endpoint |

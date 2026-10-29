@@ -6,7 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * post's address once its changes are live too.
  */
 
-const db = { connection: null, sends: [], brands: [], queries: [], updates: [] };
+const db = {
+  connection: null,
+  sends: [],
+  brands: [],
+  queries: [],
+  updates: [],
+  connectionReads: [],
+};
 vi.mock('../../config/supabase.js', () => ({
   default: {
     from: (table) => {
@@ -17,6 +24,7 @@ vi.mock('../../config/supabase.js', () => ({
           return { data: null, error: null };
         }
         if (table === 'brand_cms_connections') {
+          if (!q.single) db.connectionReads.push(q.filters);
           return { data: q.single ? db.connection : db.brands, error: null };
         }
         db.queries.push(q);
@@ -177,6 +185,8 @@ describe('sweepWixPublished', () => {
     vi.stubEnv('IS_CLOUD', 'true');
     expect(await sweepWixPublished()).toEqual({ brands: 1, published: 0 });
     vi.unstubAllEnvs();
+    // Never a demo brand's connection (00380).
+    expect(db.connectionReads.at(-1)).toContainEqual(['eq', 'brands.is_demo', false]);
   });
 
   it('does nothing on a server that can’t keep an API key', async () => {

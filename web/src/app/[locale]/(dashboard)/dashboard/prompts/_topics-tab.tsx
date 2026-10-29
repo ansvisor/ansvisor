@@ -7,7 +7,12 @@ import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { getTopicsOverview, type TopicOverviewRow } from '@/lib/actions/topic';
+import {
+  deleteTopic,
+  getPromptCountByTopic,
+  getTopicsOverview,
+  type TopicOverviewRow,
+} from '@/lib/actions/topic';
 import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
 import { customUtcWindow } from '@/lib/topic-trend';
 import type { PromptRange, PromptRangePreset } from '@/config/prompt-options';
@@ -34,6 +39,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -46,9 +57,11 @@ import {
   Flame,
   Layers,
   Minus,
+  MoreHorizontal,
   RotateCw,
   Settings2,
   Tag,
+  Trash2,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -210,6 +223,32 @@ function SortableHead({
   );
 }
 
+// ─── Row menu ────────────────────────────────────────────────────────────
+
+/** How long a deleted topic can be put back; it is deleted for real after. */
+const DELETE_UNDO_MS = 10_000;
+
+/** A leaderboard row's "…" menu, for admins and managers. */
+function TopicRowMenu({ name, onDelete }: { name: string; onDelete: () => void }) {
+  const t = useTranslations('topics.rowMenu');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-label={t('label', { name })}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem variant="destructive" onClick={onDelete}>
+          <Trash2 className="h-3.5 w-3.5" />
+          {t('delete')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── Tab ─────────────────────────────────────────────────────────────────
 
 /**
@@ -249,7 +288,7 @@ export function TopicsTab({
   // A read-only workspace (plan not active): Add Topic opens the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
-  const [topics, setTopics] = useState<TopicOverviewRow[]>([]);
+  const [loadedTopics, setTopics] = useState<TopicOverviewRow[]>([]);
   const [unassignedPromptCount, setUnassignedPromptCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +296,25 @@ export function TopicsTab({
   const [newName, setNewName] = useState('');
   const [open, setOpen] = useState(false);
   const openAddTopic = guard(() => setOpen(true), { action: tActions('addTopics') });
+  const tDelete = useTranslations('topics.delete');
+  // The topic whose delete is being confirmed, and the prompts each topic
+  // holds, paused ones too, read as its dialog opens ('failed' if they
+  // couldn't be). Deleting moves all of them to no topic, not only the active
+  // ones the Prompts column counts.
+  const [confirmDelete, setConfirmDelete] = useState<TopicOverviewRow | null>(null);
+  // Kept apart from the topic, so the dialog's text stays while it closes.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteCounts, setDeleteCounts] = useState<Record<string, number | 'failed'>>({});
+  // Topics deleted from the row menu, hidden at once and deleted for real
+  // after the Undo window, as the Prompts tab deletes prompts (PROMPT-006):
+  // an Undo inside it changes nothing in the database. A deleted topic stays
+  // in the set, so a read that started before the delete can't show it again.
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(() => new Set());
+  const deleteTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const topics = useMemo(
+    () => loadedTopics.filter((topic) => !pendingDeletes.has(topic.id)),
+    [loadedTopics, pendingDeletes],
+  );
   // Default matches the previous hard-coded order (#597): visibility descending.
   const [sortKey, setSortKey] = useState<TopicSortKey>('visibility');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -309,6 +367,26 @@ export function TopicsTab({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // A delete lands after its Undo window, and reads the tab again with the
+  // range picked by then.
+  const loadDataRef = useRef(loadData);
+  useEffect(() => {
+    loadDataRef.current = loadData;
+  }, [loadData]);
+
+  // A pending delete still lands if the tab unmounts inside the window
+  // (switching tabs); only an Undo or closing the page stops it.
+  useEffect(() => {
+    const timers = deleteTimers.current;
+    return () => {
+      for (const [id, timer] of timers) {
+        clearTimeout(timer);
+        deleteTopic(id).catch((err) => console.error('Failed to delete the topic', err));
+      }
+      timers.clear();
+    };
+  }, []);
 
   const sortedTopics = useMemo(() => {
     const valueOf = (row: TopicOverviewRow): number | null => {
@@ -408,7 +486,8 @@ export function TopicsTab({
     if (isAdding) return;
     const name = newName.trim();
     if (!name) return;
-    if (topics.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
+    // A topic waiting out its Undo window still exists.
+    if (loadedTopics.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
       toast.error(t('topicAlreadyExists'));
       return;
     }
@@ -425,6 +504,64 @@ export function TopicsTab({
       setIsAdding(false);
     }
   };
+
+  const askDelete = (topic: TopicOverviewRow) => {
+    setConfirmDelete(topic);
+    setConfirmOpen(true);
+    setDeleteCounts((counts) => {
+      const next = { ...counts };
+      delete next[topic.id];
+      return next;
+    });
+    getPromptCountByTopic(activeBrandId, topic.id).then(
+      (count) => setDeleteCounts((counts) => ({ ...counts, [topic.id]: count })),
+      () => setDeleteCounts((counts) => ({ ...counts, [topic.id]: 'failed' })),
+    );
+  };
+
+  const restoreTopic = (id: string) =>
+    setPendingDeletes((set) => {
+      const next = new Set(set);
+      next.delete(id);
+      return next;
+    });
+
+  const runDelete = async (topic: TopicOverviewRow) => {
+    try {
+      await deleteTopic(topic.id);
+    } catch (err) {
+      console.error('Failed to delete the topic', err);
+      restoreTopic(topic.id);
+      toast.error(tDelete('failed', { name: topic.name }));
+      return;
+    }
+    // Its prompts now count as prompts without a topic.
+    await loadDataRef.current();
+  };
+
+  const undoDelete = (id: string) => {
+    const timer = deleteTimers.current.get(id);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    deleteTimers.current.delete(id);
+    restoreTopic(id);
+  };
+
+  const deleteWithUndo = (topic: TopicOverviewRow) => {
+    setPendingDeletes((set) => new Set(set).add(topic.id));
+    const timer = setTimeout(() => {
+      deleteTimers.current.delete(topic.id);
+      void runDelete(topic);
+    }, DELETE_UNDO_MS);
+    deleteTimers.current.set(topic.id, timer);
+    toast(tDelete('deleted'), {
+      description: topic.name,
+      duration: DELETE_UNDO_MS,
+      action: { label: tDelete('undo'), onClick: () => undoDelete(topic.id) },
+    });
+  };
+
+  const deleteCount = confirmDelete ? deleteCounts[confirmDelete.id] : undefined;
 
   return (
     <div className="space-y-6">
@@ -499,6 +636,39 @@ export function TopicsTab({
                   <Plus className="h-4 w-4" />
                 )}
                 {t('addTopic')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {canManage && (
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="break-words text-base">
+                {tDelete('title', { name: confirmDelete?.name ?? '' })}
+              </DialogTitle>
+              <DialogDescription className="break-words">
+                {deleteCount === undefined
+                  ? tDelete('counting')
+                  : deleteCount === 'failed'
+                    ? tDelete('promptsKept')
+                    : tDelete('prompts', { count: deleteCount })}{' '}
+                {tDelete('undoHint')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>{tDelete('keep')}</DialogClose>
+              <Button
+                variant="destructive"
+                disabled={deleteCount === undefined}
+                onClick={() => {
+                  if (confirmDelete) deleteWithUndo(confirmDelete);
+                  setConfirmOpen(false);
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {tDelete('confirm')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -767,14 +937,26 @@ export function TopicsTab({
                     <TableCell className="text-right text-xs text-muted-foreground">
                       {formatRelative(topic.lastRunAt, common)}
                     </TableCell>
-                    <TableCell className="pr-6 text-right">
-                      <Link
-                        href={`/dashboard/prompts/topics/${topic.id}`}
-                        className="inline-flex opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label={t('openDetails')}
-                      >
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      </Link>
+                    {/* The menu's own padding stands in for the cell's, so the
+                        table still fits at 1024px. */}
+                    <TableCell className={cn('text-right', canManage ? 'pr-3' : 'pr-6')}>
+                      <div className="flex items-center justify-end">
+                        <Link
+                          href={`/dashboard/prompts/topics/${topic.id}`}
+                          className="inline-flex opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label={t('openDetails')}
+                        >
+                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        </Link>
+                        {canManage && (
+                          <TopicRowMenu
+                            name={topic.name}
+                            onDelete={guard(() => askDelete(topic), {
+                              action: tActions('deleteTopics'),
+                            })}
+                          />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

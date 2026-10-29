@@ -8,15 +8,19 @@ import { PlanProvider } from '@/components/providers/plan-provider';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
+import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
+import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
 import { getBrands } from '@/lib/actions/brand';
 import { menuOfProfile, readRoleHidden } from '@/lib/menu-access';
-import { getPlan, isCloud, type PlanId } from '@/config/plans';
+import { getPlan, isCloud, toPlanId } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { DemoBrandProvider } from '@/components/providers/demo-brand-provider';
 import { ReadOnlyBanner } from '@/components/billing/read-only-banner';
+import { DemoBanner } from '@/components/billing/demo-banner';
 import { TrackingJobHandoff } from '@/components/layout/tracking-job-handoff';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -55,13 +59,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
   const menu = menuOfProfile({ ...profile, role }, roleHidden);
 
+  // The organization's demo brand (sample data, 00380), shown or hidden: the
+  // dialog's offer reads whether the organization ever subscribed. Hidden
+  // (after a plan was bought), it is out of every brand list until it is
+  // shown again from the brand switcher.
+  const demoBrand = brands.find((b) => b.isDemo) ?? null;
+  const listedBrands = brands.filter((b) => !(b.isDemo && b.demoHiddenAt));
+
   // Cloud mode: when the subscription isn't active/trialing, the dashboard is
   // read-only — every page opens (Billing included, to choose a plan), and an
   // action opens the upgrade dialog instead of running. Only an admin of a
   // new account that never had a subscription goes back to onboarding's plan
-  // step, where its trial starts. An org row that couldn't be read decides
-  // nothing: no redirect and no lock (the API still refuses a lapsed plan's
-  // changes with 402).
+  // step, where its trial starts — unless the organization has a demo brand
+  // to explore (onboarding's "Explore the demo"). An org row that couldn't be
+  // read decides nothing: no redirect and no lock (the API still refuses a
+  // lapsed plan's changes with 402).
   const subscriptionStatus = (org?.subscription_status as string | null) ?? null;
   let subscriptionActive = true;
   let adminName: string | null = null;
@@ -72,6 +84,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       role,
       subscriptionStatus,
       Boolean(org?.stripe_subscription_id),
+      { hasDemoBrand: demoBrand !== null },
     );
     if (access.state === 'choose_plan') {
       redirect('/dashboard/onboarding');
@@ -88,7 +101,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/dashboard/welcome');
   }
 
-  const planId = (org?.plan ?? 'starter') as PlanId;
+  const planId = toPlanId(org?.plan);
 
   // Effective API-model allowlist for the client (null = all allowed).
   // Enterprise orgs can be switched on per customer via
@@ -106,7 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <>
       <AuthProvider user={user} />
-      <BrandLoader brands={brands} />
+      <BrandLoader brands={listedBrands} />
       <PlanProvider
         planId={planId}
         allowedModelIds={allowedModelIds}
@@ -114,34 +127,44 @@ export default async function DashboardLayout({ children }: { children: React.Re
         subscriptionStatus={subscriptionStatus}
       >
         <RoleProvider role={role}>
-          <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
-            {/* Inside the provider: it records nothing while the workspace is read-only. */}
-            <GettingStartedPageOpened />
-            <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
-              <AiUsageProvider>
-                <div className="flex h-screen overflow-hidden">
-                  {/* Desktop sidebar */}
-                  <div className="relative hidden md:flex md:flex-shrink-0">
-                    <SidebarErrorBoundary>
-                      <Sidebar />
-                    </SidebarErrorBoundary>
-                  </div>
+          <ChatAgenticProvider enabled={chatAgenticEnabled(profile.organization_id)}>
+            <DemoBrandProvider
+              demoBrand={
+                demoBrand ? { id: demoBrand.id, hidden: Boolean(demoBrand.demoHiddenAt) } : null
+              }
+              everSubscribed={Boolean(org?.stripe_subscription_id)}
+            >
+              <UpgradeDialogProvider adminName={adminName} organizationId={profile.organization_id}>
+                {/* Inside the provider: it records nothing while the workspace is read-only. */}
+                <GettingStartedPageOpened />
+                <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
+                  <AiUsageProvider>
+                    <div className="flex h-screen overflow-hidden">
+                      {/* Desktop sidebar */}
+                      <div className="relative hidden md:flex md:flex-shrink-0">
+                        <SidebarErrorBoundary>
+                          <Sidebar />
+                        </SidebarErrorBoundary>
+                      </div>
 
-                  {/* Main area */}
-                  <div className="flex flex-1 flex-col overflow-hidden">
-                    <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
-                      <MobileNav />
+                      {/* Main area */}
+                      <div className="flex flex-1 flex-col overflow-hidden">
+                        <div className="flex h-16 items-center border-b bg-card px-4 gap-3 md:hidden">
+                          <MobileNav />
+                        </div>
+                        <ReadOnlyBanner />
+                        <DemoBanner />
+                        <main className="flex-1 overflow-y-auto bg-background p-6">
+                          <BrandGuard>{children}</BrandGuard>
+                        </main>
+                        <TrackingJobHandoff />
+                      </div>
                     </div>
-                    <ReadOnlyBanner />
-                    <main className="flex-1 overflow-y-auto bg-background p-6">
-                      <BrandGuard>{children}</BrandGuard>
-                    </main>
-                    <TrackingJobHandoff />
-                  </div>
-                </div>
-              </AiUsageProvider>
-            </MenuAccessProvider>
-          </UpgradeDialogProvider>
+                  </AiUsageProvider>
+                </MenuAccessProvider>
+              </UpgradeDialogProvider>
+            </DemoBrandProvider>
+          </ChatAgenticProvider>
         </RoleProvider>
       </PlanProvider>
     </>

@@ -25,7 +25,11 @@ describe('wix-client', () => {
   it('reads the connection, sends the key once in the body, and disconnects', async () => {
     answer(200, { configured: true, connection: null });
     expect(await readWix('b1')).toEqual({ ok: true, configured: true, connection: null });
-    expect(fetchMock.mock.calls[0]).toEqual([BASE, { headers: { Authorization: 'Bearer tok' } }]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(BASE);
+    expect(init.headers).toEqual({ Authorization: 'Bearer tok' });
+    // The Wix card's read gives up in time, as the other integration cards' do.
+    expect(init.signal).toBeInstanceOf(AbortSignal);
 
     answer(200, { connection: { status: 'connected' } });
     expect(await connectWix('b1', input)).toEqual({

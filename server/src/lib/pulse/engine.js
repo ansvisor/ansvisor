@@ -150,10 +150,12 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
 
     const { data: brand } = await supabaseAdmin
       .from('brands')
-      .select('id, name, organization_id, is_active')
+      .select('id, name, organization_id, is_active, is_demo')
       .eq('id', brandId)
       .single();
     if (!brand?.is_active) return { skipped: 'brand_inactive' };
+    // A demo brand (00380) is sample data: nobody is mailed about it.
+    if (brand.is_demo) return { skipped: 'demo_brand' };
 
     // Hard requirement: never generate for orgs without an active or
     // trialing subscription (self-host always passes — isSubscriptionActive

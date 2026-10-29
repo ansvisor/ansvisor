@@ -44,6 +44,8 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     conversionsEnabled: brand.conversions_enabled === true,
     conversionsConsent: brand.conversions_consent === 'always' ? 'always' : 'wait',
     isActive: brand.is_active === undefined ? true : !!brand.is_active,
+    isDemo: brand.is_demo === true,
+    demoHiddenAt: (brand.demo_hidden_at as string | null | undefined) ?? null,
     domains: domains.map(mapDomainRow),
     createdAt: brand.created_at as string,
     updatedAt: brand.updated_at as string,
@@ -106,10 +108,12 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
   await assertWritable({ onboarding: true });
   const supabase = await createClient();
 
+  // The demo brand (00380) never counts against the plan.
   const { count } = await supabase
     .from('brands')
     .select('id', { count: 'exact', head: true })
-    .eq('organization_id', input.organizationId);
+    .eq('organization_id', input.organizationId)
+    .eq('is_demo', false);
 
   const plan = await getOrgPlan(input.organizationId);
   if (!isWithinLimit(plan, 'maxBrands', count ?? 0)) {
@@ -181,7 +185,7 @@ interface UpdateBrandInput {
 }
 
 export async function updateBrand(id: string, updates: UpdateBrandInput): Promise<Brand> {
-  await assertWritable();
+  await assertWritable({ brandId: id });
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -279,7 +283,7 @@ export async function setBrandShoppingMode(
   brandId: string,
   enabled: boolean,
 ): Promise<{ promptsUpdated: number }> {
-  await assertWritable();
+  await assertWritable({ brandId });
   return applyShoppingMode(await createClient(), brandId, enabled);
 }
 
@@ -357,6 +361,9 @@ async function applyShoppingMode(
   return { promptsUpdated };
 }
 
+/** Postgres' code for a column that doesn't exist (here: 00379 not applied). */
+const UNDEFINED_COLUMN = '42703';
+
 /**
  * Setup found the brand sells products online (competitor research's
  * isEcommerce): its site type becomes e-commerce, as a detection, unless a
@@ -368,28 +375,39 @@ async function applyShoppingMode(
 export async function markBrandAsEcommerce(
   brandId: string,
 ): Promise<{ industry: string | null; promptsUpdated: number; siteType: SiteType | null }> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
-  const { data: brand, error } = await supabase
+  const read = await supabase
     .from('brands')
     .select('industry, shopping_mode_enabled, site_type, site_type_source')
     .eq('id', brandId)
     .single();
+  // 00379 not applied yet (a deploy ahead of its migration): Shopping mode
+  // still goes on; the site type is left for detection once it is.
+  const typeKnown = read.error?.code !== UNDEFINED_COLUMN;
+  const { data: brand, error } = typeKnown
+    ? read
+    : await supabase
+        .from('brands')
+        .select('industry, shopping_mode_enabled, site_type')
+        .eq('id', brandId)
+        .single();
   if (error || !brand) throw new Error(error?.message ?? 'Brand not found');
 
   let siteType: SiteType | null = null;
-  if (brand.site_type_source !== 'manual' && brand.site_type !== 'ecommerce') {
+  const source = 'site_type_source' in brand ? brand.site_type_source : null;
+  if (typeKnown && source !== 'manual' && brand.site_type !== 'ecommerce') {
     // Stamped as a detection, so the trigger keeps it auto.
     const { data: typed, error: typeErr } = await supabase
       .from('brands')
       .update({ site_type: 'ecommerce', site_type_detected_at: new Date().toISOString() })
       .eq('id', brandId)
       .select('id');
-    if (typeErr) throw new Error(typeErr.message);
-    if (!typed || typed.length === 0) {
+    if (typeErr && typeErr.code !== UNDEFINED_COLUMN) throw new Error(typeErr.message);
+    if (!typeErr && (!typed || typed.length === 0)) {
       throw new Error('Brand not found or you do not have permission to update it.');
     }
-    siteType = 'ecommerce';
+    if (!typeErr) siteType = 'ecommerce';
   }
 
   if (brand.shopping_mode_enabled) {
@@ -427,7 +445,7 @@ export async function markBrandAsEcommerce(
  * brand via their org membership.
  */
 export async function setBrandActive(brandId: string, isActive: boolean): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   // Return the updated row so a no-op (invalid id, or RLS silently denying the
@@ -458,7 +476,7 @@ export async function setPinnedCompetitors(
   brandId: string,
   competitorIds: string[],
 ): Promise<string[]> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!Array.isArray(competitorIds) || competitorIds.some((id) => typeof id !== 'string')) {
     throw new Error('Pinned competitors must be a list of competitor ids.');
   }

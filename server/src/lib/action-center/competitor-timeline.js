@@ -292,8 +292,10 @@ export async function sweepCompetitorTimeline({
   const rows = await allRows(() =>
     supabaseAdmin
       .from('competitors')
-      .select('id, brand_id, brands!inner(organization_id, is_active)')
+      .select('id, brand_id, brands!inner(organization_id, is_active, is_demo)')
       .eq('brands.is_active', true)
+      // A demo brand's answers (00380) are sample data: none of its pages is read.
+      .eq('brands.is_demo', false)
       .neq('domain', '')
       .order('id'),
   );

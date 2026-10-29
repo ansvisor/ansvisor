@@ -1,6 +1,7 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
+import { INTEGRATION_READ_TIMEOUT_MS } from '@/lib/integrations-client';
 
 /**
  * A brand's Framer connection for Send to CMS (#1331, phase 2; 00295), from
@@ -145,7 +146,9 @@ async function call<T>(
 
 /** The brand's connection, and whether this server can keep a Framer key. */
 export function readFramer(brandId: string) {
-  return call<{ configured: boolean; connection: FramerConnection | null }>(brandId, '');
+  return call<{ configured: boolean; connection: FramerConnection | null }>(brandId, '', {
+    signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS),
+  });
 }
 
 /**

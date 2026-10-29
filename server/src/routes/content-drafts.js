@@ -12,7 +12,7 @@ import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
 import { checkWixPublished } from '../lib/cms/wix-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
-import { cmsLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
+import { cmsStatusLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -144,7 +144,7 @@ const webflowStatusBody = z.object({ brandId: z.guid() });
  * of the brand's workspace (the Library asks when it opens), a brand at most
  * every two minutes: { checked, published: [{ draftId, url }], recent? }.
  */
-router.post('/webflow-status', cmsLimiter, async (req, res) => {
+router.post('/webflow-status', cmsStatusLimiter, async (req, res) => {
   const parsed = webflowStatusBody.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   const { brandId } = parsed.data;
@@ -179,7 +179,7 @@ const wordpressChecked = new Map();
  * since, marked published at the post's link (cms/wordpress-status.js). As
  * /webflow-status: any member, a brand at most every two minutes.
  */
-router.post('/wordpress-status', cmsLimiter, async (req, res) => {
+router.post('/wordpress-status', cmsStatusLimiter, async (req, res) => {
   const parsed = webflowStatusBody.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   const { brandId } = parsed.data;
@@ -214,7 +214,7 @@ const framerChecked = new Map();
  * marked published at the item's page (cms/framer-status.js). As
  * /webflow-status: any member, a brand at most every two minutes.
  */
-router.post('/framer-status', cmsLimiter, async (req, res) => {
+router.post('/framer-status', cmsStatusLimiter, async (req, res) => {
   const parsed = webflowStatusBody.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   const { brandId } = parsed.data;
@@ -249,7 +249,7 @@ const wixChecked = new Map();
  * marked published at the post's address (cms/wix-status.js). As
  * /webflow-status: any member, a brand at most every two minutes.
  */
-router.post('/wix-status', cmsLimiter, async (req, res) => {
+router.post('/wix-status', cmsStatusLimiter, async (req, res) => {
   const parsed = webflowStatusBody.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   const { brandId } = parsed.data;

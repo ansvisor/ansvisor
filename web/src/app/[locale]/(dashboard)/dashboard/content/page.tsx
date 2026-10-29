@@ -355,6 +355,7 @@ export default function ContentPage() {
   // actions open the upgrade dialog instead; filters and Export stay open.
   const { guard, isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tManagers = useTranslations('managersOnly');
   // The bulk bar's Dismiss and Delete ask first: the upgrade dialog instead.
   const confirmUnlessLocked =
     (action: string) => (open: boolean, details: { cancel: () => void }) => {
@@ -882,7 +883,9 @@ export default function ContentPage() {
         timeZone: 'UTC',
       })
     : '';
-  const newButton = (
+  // Generating opportunities costs AI: admins and managers start it, and
+  // anyone else reads who can.
+  const newButton = canManage ? (
     <Button
       onClick={guard(() => setNewOpen(true), { action: tActions('generateOpportunities') })}
       disabled={generating || loading || limitReached}
@@ -893,6 +896,8 @@ export default function ContentPage() {
       {generating ? <LoadingDots /> : <Plus className="h-4 w-4" />}
       {generating ? t('generating') : t('new')}
     </Button>
+  ) : (
+    <span className="text-xs text-muted-foreground">{tManagers('generateOpportunities')}</span>
   );
 
   const handleSendWebhook = async (id: string) => {

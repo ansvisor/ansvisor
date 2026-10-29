@@ -222,6 +222,7 @@ describe('signalWhereFields', () => {
       'platforms (n/a)',
       'competitorPositions (n/a)',
       'winningSources (n/a)',
+      'competitorPageEvents (n/a)',
     ]);
   });
 
@@ -473,6 +474,86 @@ describe('a competitor signal with its evidence recorded', () => {
     expect(byKey.winningSources).toEqual({
       type: 'sources',
       items: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+    });
+  });
+
+  it("lists a competitor's page events newest first, and none as a finding too", () => {
+    const withEvents = {
+      ...recorded,
+      payload: {
+        ...recorded.payload,
+        competitorId: 'c1',
+        pageEventDays: 28,
+        pageEvents: [
+          {
+            kind: 'first_cited',
+            at: '2026-10-03T00:00:00Z',
+            url: 'https://profound.example/guide',
+            domain: 'profound.example',
+            detail: { answers: 2 },
+          },
+          {
+            kind: 'changed',
+            at: '2026-10-12T03:00:00Z',
+            url: 'https://profound.example/pricing',
+            domain: 'profound.example',
+            detail: { gained: [{ key: 'faq', label: 'FAQ section' }], lost: [] },
+          },
+          { kind: 'changed', at: 'not a date', url: 'https://x.example' },
+        ],
+      },
+    };
+    const events = (signal: typeof recorded) =>
+      signalWhereFields(signal).find((f) => f.key === 'competitorPageEvents')?.value;
+    expect(events(withEvents)).toEqual({
+      type: 'pageEvents',
+      competitorId: 'c1',
+      days: 28,
+      items: [
+        {
+          kind: 'changed',
+          at: '2026-10-12T03:00:00Z',
+          url: 'https://profound.example/pricing',
+          domain: 'profound.example',
+          answers: null,
+          gained: [{ key: 'faq', label: 'FAQ section' }],
+          lost: [],
+        },
+        {
+          kind: 'first_cited',
+          at: '2026-10-03T00:00:00Z',
+          url: 'https://profound.example/guide',
+          domain: 'profound.example',
+          answers: 2,
+          gained: [],
+          lost: [],
+        },
+      ],
+    });
+    expect(events({ ...recorded, payload: { ...recorded.payload, pageEvents: [] } })).toMatchObject(
+      { type: 'pageEvents', items: [], days: 28 },
+    );
+    // Recorded before page events were read: not looked at, not none.
+    expect(events(recorded)).toBeNull();
+
+    const { where } = signalDetailForApi(withEvents, []);
+    expect(where.competitor_page_events).toEqual({
+      days: 28,
+      items: [
+        {
+          kind: 'changed',
+          at: '2026-10-12T03:00:00Z',
+          url: 'https://profound.example/pricing',
+          gained: [{ key: 'faq', label: 'FAQ section' }],
+          lost: [],
+        },
+        {
+          kind: 'first_cited',
+          at: '2026-10-03T00:00:00Z',
+          url: 'https://profound.example/guide',
+          answers: 2,
+        },
+      ],
     });
   });
 

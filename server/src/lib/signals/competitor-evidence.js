@@ -7,7 +7,10 @@
  * "cited far more often") was recorded with the competitor's name and one
  * number. The positions come from the daily rollups through
  * ae_competitor_positions (00142); the sources from the newest answers on the
- * prompts where the competitor leads, read back for those prompts only.
+ * prompts where the competitor leads, read back for those prompts only; and
+ * what happened to its pages lately (learning C3, competitor_page_events,
+ * 00376): the days one was first cited in the brand's answers, and the days
+ * one changed, with the Site Audit checks it gained and lost.
  */
 
 import supabaseAdmin from '../../config/supabase.js';
@@ -22,6 +25,14 @@ const POSITIONS_PER_COMPETITOR = 5;
 /** Sources listed, and the newest answers read to find them. */
 const MAX_SOURCES = 3;
 const ANSWERS_READ = 60;
+
+/**
+ * A competitor's page events read, newest first, and how far back: a page
+ * change shows in AI answers over weeks, so four of them, not only the
+ * window the signal measured.
+ */
+const PAGE_EVENTS_PER_COMPETITOR = 5;
+const PAGE_EVENT_DAYS = 28;
 
 function isoDay(now, daysAgo) {
   return new Date(now.getTime() - daysAgo * DAY_MS).toISOString().slice(0, 10);
@@ -54,6 +65,26 @@ export function winningSources(answers, competitorId, isOwn) {
     .map(([domain, count]) => ({ domain, answers: count, answersRead: won.length }));
 }
 
+/**
+ * Page events as a signal keeps them: the table's rows without their ids,
+ * the detail cut to what the drawer and the task writer read.
+ */
+export function pageEventsOf(rows) {
+  return (rows ?? []).map((row) => {
+    const detail = row.detail ?? {};
+    return {
+      kind: row.kind,
+      at: row.at,
+      url: row.url,
+      domain: row.domain,
+      detail:
+        row.kind === 'changed'
+          ? { gained: detail.gained ?? [], lost: detail.lost ?? [] }
+          : { answers: detail.answers ?? null },
+    };
+  });
+}
+
 /** One position row, named for the panel. */
 export function toPosition(row, texts) {
   return {
@@ -67,9 +98,10 @@ export function toPosition(row, texts) {
 
 /**
  * The evidence for each competitor, by competitor id: its positions against
- * the brand's on the prompts where it leads most, and the sources behind its
- * wins there. Four reads: the positions, the prompts' texts, the brand's
- * domains, and the newest answers per competitor.
+ * the brand's on the prompts where it leads most, the sources behind its
+ * wins there, and its pages' newest events. Five reads: the positions, the
+ * prompts' texts, the brand's domains, and per competitor the newest
+ * answers and page events.
  */
 export async function competitorEvidence(brandId, competitorIds, { now, windowDays }) {
   const evidence = new Map();
@@ -101,25 +133,43 @@ export async function competitorEvidence(brandId, competitorIds, { now, windowDa
   if (domainsRes.error) throw new Error(domainsRes.error.message);
   const isOwn = ownDomainMatcher((domainsRes.data ?? []).map((r) => r.domain));
   const since = new Date(now.getTime() - windowDays * DAY_MS).toISOString();
+  const eventsSince = new Date(now.getTime() - PAGE_EVENT_DAYS * DAY_MS).toISOString();
 
   // Only answers that leave the brand out can be the competitor's wins, so
   // only those are read, the newest first, for every competitor at once.
   await Promise.all(
     [...byCompetitor].map(async ([competitorId, list]) => {
-      const { data: answers, error: answersErr } = await supabaseAdmin
-        .from('prompt_results')
-        .select('mention_count, competitor_mentions, citations')
-        .eq('brand_id', brandId)
-        .neq('platform', 'chatgpt-shopping')
-        .eq('mention_count', 0)
-        .in('prompt_id', [...new Set(list.map((row) => row.prompt_id))])
-        .gte('created_at', since)
-        .order('created_at', { ascending: false })
-        .limit(ANSWERS_READ);
-      if (answersErr) throw new Error(`competitor answers read failed: ${answersErr.message}`);
+      const [answersRes, eventsRes] = await Promise.all([
+        supabaseAdmin
+          .from('prompt_results')
+          .select('mention_count, competitor_mentions, citations')
+          .eq('brand_id', brandId)
+          .neq('platform', 'chatgpt-shopping')
+          .eq('mention_count', 0)
+          .in('prompt_id', [...new Set(list.map((row) => row.prompt_id))])
+          .gte('created_at', since)
+          .order('created_at', { ascending: false })
+          .limit(ANSWERS_READ),
+        supabaseAdmin
+          .from('competitor_page_events')
+          .select('kind, at, url, domain, detail')
+          .eq('brand_id', brandId)
+          .eq('competitor_id', competitorId)
+          .gte('at', eventsSince)
+          .order('at', { ascending: false })
+          .limit(PAGE_EVENTS_PER_COMPETITOR),
+      ]);
+      if (answersRes.error) {
+        throw new Error(`competitor answers read failed: ${answersRes.error.message}`);
+      }
+      if (eventsRes.error) {
+        throw new Error(`competitor page events read failed: ${eventsRes.error.message}`);
+      }
       evidence.set(competitorId, {
         positions: list.map((row) => toPosition(row, texts)),
-        winningSources: winningSources(answers ?? [], competitorId, isOwn),
+        winningSources: winningSources(answersRes.data ?? [], competitorId, isOwn),
+        pageEvents: pageEventsOf(eventsRes.data),
+        pageEventDays: PAGE_EVENT_DAYS,
       });
     }),
   );
