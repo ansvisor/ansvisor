@@ -64,7 +64,9 @@ class NoObjectGeneratedError extends Error {
     return err instanceof NoObjectGeneratedError;
   }
 }
-vi.mock('ai', () => ({
+// The real schema helpers: a Claude call's schema is built with them (structured-output.js).
+vi.mock('ai', async (importOriginal) => ({
+  ...(await importOriginal()),
   generateObject: (...args) => generateObject(...args),
   NoObjectGeneratedError,
 }));
@@ -186,7 +188,22 @@ beforeEach(() => {
   hasOpenSuggestions.mockReset().mockResolvedValue(false);
   fixUnderWay.mockReset().mockResolvedValue(false);
   stopIfStopped.mockReset().mockResolvedValue(undefined);
+  // The model as a server without an Anthropic key picks it, whatever the shell has.
+  vi.stubEnv('ANTHROPIC_API_KEY', '');
+  vi.stubEnv('CONTENT_WRITE_MODEL', '');
 });
+afterEach(() => vi.unstubAllEnvs());
+
+const SONNET = 'anthropic/claude-sonnet-5-5';
+/** A call as Claude 5.5 takes it: structured output, a token cap, no sampling. */
+const expectClaudeCall = (call) => {
+  expect(call.maxOutputTokens).toBe(32_000);
+  expect(call.providerOptions).toEqual({ anthropic: { structuredOutputMode: 'outputFormat' } });
+  for (const key of ['temperature', 'topP', 'topK']) expect(call).not.toHaveProperty(key);
+  expect(JSON.stringify(call.schema.jsonSchema)).not.toMatch(
+    /"(\$schema|maxItems|maxLength|minLength|minimum|maximum)"/,
+  );
+};
 
 const draftUpdates = () =>
   writes.filter((w) => w.table === 'content_drafts' && w.kind === 'update').map((w) => w.value);
@@ -295,6 +312,25 @@ describe('startDraftWriting', () => {
       writes.find((w) => w.table === 'content_agent_runs' && w.kind === 'insert').value,
     ).toMatchObject({ kind: 'write', claimed_at: draftUpdates()[0].agent_state_at });
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+  });
+
+  it('writes with Claude Sonnet with an Anthropic key', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
+    expect(resolveModel).toHaveBeenLastCalledWith(SONNET);
+    expect(reserveAiBudget).toHaveBeenCalledWith(
+      'org-1',
+      expect.objectContaining({ feature: 'content', modelId: SONNET }),
+    );
+    const call = generateObject.mock.calls[0][0];
+    expect(call.model).toBe(`model:${SONNET}`);
+    expectClaudeCall(call);
+    // Two to twelve sections, told in words: Claude takes minItems 0 or 1 only.
+    expect(call.schema.jsonSchema.properties.sections).toMatchObject({
+      minItems: 1,
+      description: '(at least 2 items, at most 12 items)',
+    });
   });
 
   it('says it reads as many rules as the editor counts, when it says so', async () => {
@@ -1149,6 +1185,29 @@ describe('Rewrite the page to these rules', () => {
       expect(row().after_text).toContain(QUOTED);
       expect(row().reason).toBe('answered each heading first');
       expect(row().after_chars).toBe(textLength(row().after_text));
+    });
+
+    it('rewrites and cuts with the model it was started with, held at its own id', async () => {
+      answers(long, short);
+      await runDraftWriting({
+        draft: existing,
+        brand,
+        model: `model:${SONNET}`,
+        modelId: SONNET,
+        input: input({ locked, ...toLength() }),
+        budget,
+        rewrite: true,
+      });
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      for (const [call] of generateObject.mock.calls) {
+        expect(call.model).toBe(`model:${SONNET}`);
+        expectClaudeCall(call);
+      }
+      expect(reserveAiBudget).toHaveBeenCalledWith('org-1', {
+        feature: 'content',
+        modelId: SONNET,
+        draftId: DRAFT,
+      });
     });
 
     it('keeps the first rewrite when the cut is no shorter, drops a kept line, fails or has no budget', async () => {

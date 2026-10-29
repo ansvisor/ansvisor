@@ -6,7 +6,9 @@
  * List prices in USD per million tokens. Update this table when a provider
  * changes its prices or a new model is configured; a model missing here is
  * charged at FALLBACK_PRICE, deliberately expensive, so an unknown model can
- * only use the budget up faster, never overspend it.
+ * only use the budget up faster, never overspend it. A model priced higher
+ * for a long prompt has its `long` rate, for a call whose input tokens pass
+ * `over`.
  */
 
 export const MODEL_PRICES = {
@@ -14,6 +16,13 @@ export const MODEL_PRICES = {
   'google/gemini-3-flash': { input: 0.5, output: 3 },
   'openai/gpt-5-mini': { input: 0.25, output: 2 },
   'anthropic/claude-haiku-4-5': { input: 1, output: 5 },
+  // The Content Editor's with an Anthropic key (content-brief.js): Haiku reads, Sonnet writes.
+  'anthropic/claude-haiku-5-5': {
+    input: 0.1,
+    output: 0.5,
+    long: { over: 100_000, input: 0.5, output: 2.5 },
+  },
+  'anthropic/claude-sonnet-5-5': { input: 2, output: 10 },
 };
 
 export const FALLBACK_PRICE = { input: 5, output: 25 };
@@ -34,11 +43,12 @@ export function priceFor(modelId) {
   return MODEL_PRICES[id] ?? FALLBACK_PRICE;
 }
 
-/** USD cost of one call from the AI SDK's `usage`. */
+/** USD cost of one call from the AI SDK's `usage`, at the long rate past its `over`. */
 export function generationCostUsd(modelId, usage) {
-  const price = priceFor(modelId);
+  const base = priceFor(modelId);
   const input = Number(usage?.inputTokens) || 0;
   const output = Number(usage?.outputTokens) || 0;
+  const price = base.long && input > base.long.over ? base.long : base;
   return (input * price.input + output * price.output) / 1_000_000;
 }
 

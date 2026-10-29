@@ -8,7 +8,9 @@
  * ones checked into recorded.json's `reviewed`, by draft.
  *
  * Run from server/, with .env holding the content model's provider key (the
- * model is IMPROVE_SUGGESTION_MODEL, else DEFAULT_SUGGESTION_MODEL, else
+ * Content Agent's writing model, contentWriteModelId: CONTENT_WRITE_MODEL,
+ * else anthropic/claude-sonnet-5-5 with ANTHROPIC_API_KEY, else
+ * IMPROVE_SUGGESTION_MODEL, DEFAULT_SUGGESTION_MODEL or
  * google/gemini-3-flash-preview) and the Supabase keys the agent's modules
  * load with (nothing is read or written there):
  *   node src/scripts/eval-no-fabrication.js [count]
@@ -33,9 +35,14 @@ import {
   draftPassages,
   suggestionsSchema,
 } from '../lib/content-agent.js';
-import { briefRulesOn, contentBriefModelId } from '../lib/content-brief.js';
+import {
+  CONTENT_WRITE_MAX_TOKENS,
+  briefRulesOn,
+  contentWriteModelId,
+} from '../lib/content-brief.js';
 import { inputSources } from '../lib/content-inputs.js';
 import { numberSources, sourcesPrompt } from '../lib/content-sources.js';
+import { objectOptions } from '../lib/structured-output.js';
 import {
   writeSystemPrompt,
   briefText,
@@ -55,7 +62,8 @@ const RULES = [
   { key: 'example', name: 'A real customer example', detail: 'missing' },
 ];
 
-const modelId = contentBriefModelId();
+const modelId = contentWriteModelId();
+const write = { maxOutputTokens: CONTENT_WRITE_MAX_TOKENS };
 const model = resolveModel(modelId);
 const recorded = {};
 const started = Date.now();
@@ -85,7 +93,7 @@ for (const c of CASES.slice(0, count)) {
     const [fix, page] = await Promise.all([
       generateObject({
         model,
-        schema: suggestionsSchema,
+        ...objectOptions(modelId, suggestionsSchema, write),
         system: SYSTEM_PROMPT,
         prompt: buildFixPrompt({
           brand,
@@ -98,7 +106,7 @@ for (const c of CASES.slice(0, count)) {
       }),
       generateObject({
         model,
-        schema: pageSchema,
+        ...objectOptions(modelId, pageSchema, write),
         system: writeSystemPrompt(),
         prompt: buildWritePrompt({ brand, draft, numbered, brief: briefText(null, null), input }),
       }),

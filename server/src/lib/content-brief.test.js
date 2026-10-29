@@ -48,7 +48,9 @@ class NoObjectGeneratedError extends Error {
     return err instanceof NoObjectGeneratedError;
   }
 }
-vi.mock('ai', () => ({
+// The real schema helpers: a Claude call's schema is built with them (structured-output.js).
+vi.mock('ai', async (importOriginal) => ({
+  ...(await importOriginal()),
   generateObject: (...args) => generateObject(...args),
   NoObjectGeneratedError,
 }));
@@ -88,6 +90,9 @@ const {
   briefForWriter,
   briefNumbered,
   briefRules,
+  contentBriefModelId,
+  contentReadModelId,
+  contentWriteModelId,
   rebuildDraftBrief,
   rebuildSources,
 } = await import('./content-brief.js');
@@ -163,6 +168,56 @@ beforeEach(() => {
     usage: { inputTokens: 1000, outputTokens: 500 },
   });
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
+  // The models as a server without an Anthropic key picks them, whatever the shell has.
+  vi.stubEnv('ANTHROPIC_API_KEY', '');
+  vi.stubEnv('CONTENT_READ_MODEL', '');
+  vi.stubEnv('CONTENT_WRITE_MODEL', '');
+});
+afterEach(() => vi.unstubAllEnvs());
+
+const GEMINI = 'google/gemini-3-flash-preview';
+const HAIKU = 'anthropic/claude-haiku-5-5';
+const SONNET = 'anthropic/claude-sonnet-5-5';
+
+describe("the Content Editor's models", () => {
+  const ids = () => ({
+    read: contentReadModelId(),
+    write: contentWriteModelId(),
+    improve: contentBriefModelId(),
+  });
+
+  it('stay on the model they had, the Improve tab’s, without an Anthropic key', () => {
+    vi.stubEnv('IMPROVE_SUGGESTION_MODEL', '');
+    vi.stubEnv('DEFAULT_SUGGESTION_MODEL', '');
+    expect(ids()).toEqual({ read: GEMINI, write: GEMINI, improve: GEMINI });
+    vi.stubEnv('IMPROVE_SUGGESTION_MODEL', 'openai/gpt-5-mini');
+    expect(ids()).toEqual({
+      read: 'openai/gpt-5-mini',
+      write: 'openai/gpt-5-mini',
+      improve: 'openai/gpt-5-mini',
+    });
+  });
+
+  it('read with Claude Haiku and write with Claude Sonnet with an Anthropic key; Improve keeps its own', () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    vi.stubEnv('IMPROVE_SUGGESTION_MODEL', GEMINI);
+    expect(ids()).toEqual({ read: HAIKU, write: SONNET, improve: GEMINI });
+  });
+
+  it('take CONTENT_READ_MODEL and CONTENT_WRITE_MODEL first, with the key or without it', () => {
+    vi.stubEnv('CONTENT_READ_MODEL', 'google/gemini-3-flash');
+    vi.stubEnv('CONTENT_WRITE_MODEL', 'openai/gpt-5-mini');
+    const set = { read: 'google/gemini-3-flash', write: 'openai/gpt-5-mini' };
+    expect(ids()).toMatchObject(set);
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    expect(ids()).toMatchObject(set);
+  });
+
+  it('read with the fallback a caller gives when there is no key', () => {
+    expect(contentReadModelId(() => 'openai/gpt-5-mini')).toBe('openai/gpt-5-mini');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    expect(contentReadModelId(() => 'openai/gpt-5-mini')).toBe(HAIKU);
+  });
 });
 
 describe('rebuildDraftBrief', () => {
@@ -221,16 +276,40 @@ describe('rebuildDraftBrief', () => {
     });
   });
 
+  it('writes the brief with Claude Haiku with an Anthropic key: structured output, a token cap, no sampling', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+
+    expect(reserveAiBudget).toHaveBeenCalledWith('o1', {
+      feature: 'content',
+      modelId: HAIKU,
+      draftId: DRAFT,
+    });
+    const call = generateObject.mock.calls[0][0];
+    expect(call.model).toBe(`model:${HAIKU}`);
+    expect(call.maxOutputTokens).toBe(16_000);
+    expect(call.providerOptions).toEqual({ anthropic: { structuredOutputMode: 'outputFormat' } });
+    for (const key of ['temperature', 'topP', 'topK']) expect(call).not.toHaveProperty(key);
+    // A schema Claude takes: none of the keywords it turns away.
+    expect(call.schema.jsonSchema).toMatchObject({ type: 'object', additionalProperties: false });
+    expect(JSON.stringify(call.schema.jsonSchema)).not.toMatch(
+      /"(\$schema|maxItems|maxLength|minLength|minimum|maximum)"/,
+    );
+  });
+
   it('writes the brief from the kept sources, charges AI usage, and saves it on the draft', async () => {
     const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
 
     expect(reserveAiBudget).toHaveBeenCalledWith('o1', {
       feature: 'content',
-      modelId: 'google/gemini-3-flash-preview',
+      modelId: GEMINI,
       draftId: DRAFT,
     });
     const call = generateObject.mock.calls[0][0];
-    expect(call.model).toBe('model:google/gemini-3-flash-preview');
+    expect(call.model).toBe(`model:${GEMINI}`);
+    // Another provider's call is sent as it was: no token cap, no provider options.
+    expect(call).not.toHaveProperty('maxOutputTokens');
+    expect(call).not.toHaveProperty('providerOptions');
     expect(call.prompt).toContain('- Best espresso machines under $500?');
     expect(call.prompt).toContain(
       '"Best espresso machine under 500" (perplexity-web, copilot-web)',
