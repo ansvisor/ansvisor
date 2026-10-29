@@ -54,6 +54,7 @@ create policy "gsc_shopping_page_stats: member select" on public.gsc_shopping_pa
         )
     );
 
+revoke all on table public.gsc_shopping_page_stats from anon, authenticated;
 grant select on public.gsc_shopping_page_stats to authenticated;
 
 comment on table public.gsc_shopping_page_stats is
