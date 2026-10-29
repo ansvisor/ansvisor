@@ -58,6 +58,7 @@ import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
 import { integrationsConfig } from './routes/integrations.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
+import { sweepCompetitorTimeline } from './lib/action-center/competitor-timeline.js';
 import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
@@ -190,9 +191,17 @@ async function runDailyTracking() {
   // in action_task_runs and, where the user needs to know, in the action's own
   // trail. Fire-and-forget like the rest — an unexecuted task is a step
   // somebody does by hand, not a reason to hold up tracking.
-  sweepTaskExecution().catch((err) => {
-    logger.error({ err }, '[task-run] sweep crashed');
-  });
+  sweepTaskExecution()
+    .catch((err) => {
+      logger.error({ err }, '[task-run] sweep crashed');
+    })
+    // Then a competitor's pages over time (learning C3): their first
+    // citations, and the weekly re-read of those cited most, within what is
+    // left of each brand's page reads after the tasks'.
+    .then(() => sweepCompetitorTimeline())
+    .catch((err) => {
+      logger.error({ err }, '[competitor-timeline] sweep crashed');
+    });
 
   // Write the tasks of recent actions whose writing a pass missed (AC-004):
   // the budget was spent, the model failed, or the process restarted.

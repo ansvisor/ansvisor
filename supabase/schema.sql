@@ -42714,6 +42714,56 @@ comment on function public.action_scorecard(uuid, timestamptz) is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00369_cited_page_features.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00369: what the pages AI answers cite have (learning C1)
+-- ============================================================================
+-- The Action Center's "Analyze competitor content" task was a step for a
+-- person: nothing read the competitor pages AI engines cite instead of the
+-- brand. The task now reads them (server action-center/competitor-pages.js):
+-- the public pages cited in the brand's own tracked answers for the action's
+-- prompts, and the brand's own page cited there, fetched free (safe-fetch,
+-- never a paid scraper) and run through Site Audit's own rule checks
+-- (structure, FAQ, schema, statistics, dates, length). Only what the checks
+-- found is kept here, never the page's text, and nothing is summarised by AI.
+--
+-- One row per brand and page: read again after two weeks, and a day's reads
+-- counted against the brand's daily cap. The server writes and reads it
+-- (service role); members see what it found on the task.
+
+create table if not exists public.cited_page_features (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  -- The page as Site Audit keys it: host and path, lower case.
+  page_key text not null,
+  url text not null,
+  domain text not null,
+  -- The brand's own page, cited for the same prompts.
+  own boolean not null default false,
+  -- { words, checks: { "<check key>": "pass" | "warn" | "fail" | "na" } }, or
+  -- { unreadable: true[, disallowed: true] } for a page that couldn't be read
+  -- (it blocks readers, a wall, robots.txt): kept so it counts against the
+  -- day's reads and isn't tried again while fresh.
+  features jsonb not null default '{}'::jsonb,
+  read_at timestamptz not null default now(),
+  unique (brand_id, page_key)
+);
+
+create index if not exists cited_page_features_brand_read_idx
+  on public.cited_page_features (brand_id, read_at desc);
+
+-- The server's alone: no member reads it directly.
+alter table public.cited_page_features enable row level security;
+revoke all on table public.cited_page_features from anon, authenticated;
+grant all on table public.cited_page_features to service_role;
+
+comment on table public.cited_page_features is
+  'Learning C1 (00369): Site Audit rule checks of the pages cited in a brand''s tracked answers for an action''s prompts (competitors'' and its own), read free (safe-fetch). Features only, never page text. Server only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00370_prompt_demand.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -42999,6 +43049,112 @@ comment on function public.catalog_suggestion_categories(uuid, integer, integer)
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00373_basket_positive_sentiment.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00373: a basket's positive sentiment (learning D1)
+-- ============================================================================
+-- An action sent from Mentions (MS-08) is measured on its answers' prompts
+-- (opportunity_basket_metrics, 00116), but the basket read mentions,
+-- visibility and citations only: an action sent to turn negative answers
+-- around was judged by how often the brand was named, not by how it was
+-- spoken of. The basket now reads its prompts' answers naming the brand
+-- (the rollup's mention_answers, 00130) and the positive ones among them;
+-- the server turns them into the positive share (basket-metrics.js). That is
+-- the base Insights' Positive Sentiment card divides by since 00191: an
+-- answer that only cites the brand is always neutral, so counting it (the
+-- rollup's mentioning_answers, naming OR citing) would pull the share down.
+-- Null while a day of the window isn't rewritten with them yet. Otherwise
+-- as 00116.
+
+create or replace function public.opportunity_basket_metrics(
+  p_brand_id uuid,
+  p_prompt_ids uuid[],
+  p_page_keys text[],
+  p_page_domains text[],
+  p_page_paths text[],
+  p_from date,
+  p_to date
+)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  with cells as (
+    select count(*) as cells,
+           count(*) filter (where has_mention or has_citation) as visible,
+           coalesce(sum(answer_count) filter (where has_mention), 0) as mention_answers,
+           -- Sentiment (00373): the answers naming the brand (the rollup's
+           -- column, not the alias above; never the ones only citing it), and
+           -- the positive ones among them, as Insights' Positive Sentiment
+           -- card counts them (00191).
+           coalesce(sum(d.mention_answers), 0) as named_answers,
+           coalesce(sum(d.positive_count), 0) as positive_answers,
+           count(*) filter (where d.mention_answers is null or d.positive_count is null) as unfilled
+    from insights_prompt_daily d
+    where brand_id = p_brand_id
+      and day between p_from and p_to
+      and prompt_id = any(p_prompt_ids)
+  ),
+  comp as (
+    select d.competitor_id, count(*) as visible
+    from insights_competitor_prompt_daily d
+    join competitors c on c.id::text = d.competitor_id and c.brand_id = p_brand_id
+    where d.brand_id = p_brand_id
+      and d.day between p_from and p_to
+      and d.prompt_id = any(p_prompt_ids)
+    group by d.competitor_id
+  ),
+  urls as (
+    select id
+    from citation_urls
+    where domain = any(p_page_domains)
+      and rtrim(
+            regexp_replace(split_part(split_part(lower(url), '#', 1), '?', 1), '^https?://(www\.)?', ''),
+            '/'
+          ) = any(p_page_keys)
+  )
+  select jsonb_build_object(
+    'cells', (select cells from cells),
+    'visible', (select visible from cells),
+    'mention_answers', (select mention_answers from cells),
+    -- Null while a day of the window isn't rewritten with them yet (00130):
+    -- a partial count would read as a change.
+    'named_answers', (select case when unfilled = 0 then named_answers end from cells),
+    'positive_answers', (select case when unfilled = 0 then positive_answers end from cells),
+    'competitor_visible_total', (select coalesce(sum(visible), 0) from comp),
+    'top_competitor_visible', (select coalesce(max(visible), 0) from comp),
+    'page_citations', (
+      select count(*)
+      from prompt_result_citations
+      where brand_id = p_brand_id
+        and created_at >= p_from
+        and created_at < p_to + 1
+        and url_id in (select id from urls)
+    ),
+    'ga_connected', exists (
+      select 1 from ga_ai_traffic_stats
+      where brand_id = p_brand_id and date between p_from and p_to
+    ),
+    'page_ai_sessions', (
+      select coalesce(sum(sessions), 0)
+      from ga_ai_traffic_stats
+      where brand_id = p_brand_id
+        and date between p_from and p_to
+        and coalesce(nullif(rtrim(split_part(landing_page, '?', 1), '/'), ''), '/') = any(p_page_paths)
+    )
+  );
+$$;
+
+revoke all on function public.opportunity_basket_metrics(uuid, uuid[], text[], text[], text[], date, date)
+  from public, anon, authenticated;
+grant execute on function public.opportunity_basket_metrics(uuid, uuid[], text[], text[], text[], date, date)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00374_menu_access.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -43280,6 +43436,242 @@ comment on function public.approve_action_task_review(uuid, text, jsonb, uuid) i
   'Action Center (AC-010): a task waiting for review (action_task_reviews) onto its action''s task list, after its last task, with the exact page, the change, Done when and how it is checked filled, as the reviewer''s (source reviewed); the review row goes and the trail says a task was added. Admins and managers of the brand''s organization only, on an action neither deleted nor closed; p_user_id is the person the service role approves for (00375), a signed-in caller is always auth.uid(). Null when the row is gone or another organization''s.';
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00376_competitor_page_timeline.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00376: a competitor's pages over time (learning C3)
+-- ============================================================================
+-- A competitor rising in AI answers had no "why" beside it. This keeps two
+-- kinds of dated events for each competitor page the brand's own tracked
+-- answers cite (server action-center/competitor-timeline.js):
+--
+--   first_cited  the first day the brand's answers cited the page, read from
+--                prompt_result_citations (no page read; the first night goes
+--                back 90 days, so it is the first since then);
+--   changed      a weekly re-read found the page's words changed by more than
+--                a date or a price moving (the Action Center's page checks'
+--                rule, task-checks.js), with the Site Audit checks it gained
+--                and lost.
+--
+-- The page is read free (safe-fetch), within the brand's daily page reads,
+-- as the pages "Analyze competitor content" reads (00369). What is kept of a
+-- read is what Site Audit's checks found and a sketch of its words (hashes
+-- of its 4-word runs, not the text), so the next read can tell it changed.
+-- Members read the events; the server writes them.
+
+alter table public.cited_page_features
+  add column if not exists sketch jsonb;
+
+comment on column public.cited_page_features.sketch is
+  'Learning C3 (00376): the read page''s word sketch (task-checks.js sketch(): hashes of its 4-word runs, never its text), compared with the next read to tell whether the page changed.';
+
+create table if not exists public.competitor_page_events (
+  id uuid primary key default gen_random_uuid(),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  competitor_id uuid not null references public.competitors(id) on delete cascade,
+  -- The page as Site Audit keys it: host and path, lower case.
+  page_key text not null,
+  url text not null,
+  domain text not null,
+  kind text not null check (kind in ('first_cited', 'changed')),
+  at timestamptz not null,
+  -- first_cited: { answers }; changed: { similarity, gained: [{ key, label }], lost: [{ key, label }] }.
+  detail jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- A page is first cited once.
+create unique index if not exists competitor_page_events_first_cited_uidx
+  on public.competitor_page_events (brand_id, page_key)
+  where kind = 'first_cited';
+
+-- The Competitors page reads one competitor's events, newest first.
+create index if not exists competitor_page_events_competitor_idx
+  on public.competitor_page_events (brand_id, competitor_id, at desc);
+
+alter table public.competitor_page_events enable row level security;
+
+create policy competitor_page_events_member_select on public.competitor_page_events
+  for select
+  using (
+    brand_id in (
+      select b.id from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid()
+    )
+  );
+
+revoke all on table public.competitor_page_events from anon, authenticated;
+grant select on table public.competitor_page_events to authenticated;
+grant all on table public.competitor_page_events to service_role;
+
+comment on table public.competitor_page_events is
+  'Learning C3 (00376): when a competitor page was first cited in the brand''s tracked answers, and when a weekly re-read found it changed (and which Site Audit checks it gained or lost). Server writes; members read.';
+
+-- When each competitor's citations were last read for first_cited events: a
+-- competitor never read is read back 90 days once, the rest from their last
+-- read, so a night doesn't read a brand's whole history again.
+create table if not exists public.competitor_timeline_scans (
+  competitor_id uuid primary key references public.competitors(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  scanned_at timestamptz not null
+);
+
+alter table public.competitor_timeline_scans enable row level security;
+revoke all on table public.competitor_timeline_scans from anon, authenticated;
+grant all on table public.competitor_timeline_scans to service_role;
+
+comment on table public.competitor_timeline_scans is
+  'Learning C3 (00376): when each competitor''s cited pages were last read for first_cited events. Server only.';
+
+-- ----------------------------------------------------------------------------
+-- The competitor pages the brand's answers cited since p_since: each cited
+-- URL on a competitor's domain (its subdomains too), its competitor, the
+-- first time it was cited and in how many answers. Read in the database so a
+-- brand's citations never travel; the server only.
+-- ----------------------------------------------------------------------------
+create or replace function public.competitor_cited_urls(p_brand_id uuid, p_since timestamptz)
+returns table (
+  url text,
+  domain text,
+  competitor_id uuid,
+  first_at timestamptz,
+  answers bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with rivals as (
+    select c.id,
+      -- As citation_urls.domain is kept: host without www., lower case.
+      regexp_replace(
+        regexp_replace(lower(trim(c.domain)), '^[a-z]+://', ''),
+        '^www\.|[/:?#].*$', '', 'g'
+      ) as host
+    from public.competitors c
+    where c.brand_id = p_brand_id and trim(c.domain) <> ''
+  )
+  select u.url, u.domain, r.id, min(prc.created_at), count(distinct prc.prompt_result_id)
+  from public.prompt_result_citations prc
+  join public.citation_urls u on u.id = prc.url_id
+  join rivals r on r.host <> '' and (u.domain = r.host or u.domain like '%.' || r.host)
+  where prc.brand_id = p_brand_id
+    and prc.created_at >= p_since
+  group by u.url, u.domain, r.id
+$$;
+
+revoke all on function public.competitor_cited_urls(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.competitor_cited_urls(uuid, timestamptz) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00379_brand_site_type_source.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00379: where a brand's site type came from (action plan by business type,
+--        Step 0)
+-- ============================================================================
+-- Setup now detects the kind of site from the brand's home page
+-- (server/src/lib/site-type-detect.js) instead of leaving it empty, where
+-- the app guessed B2B for most brands, shops included.
+--
+--   * brands.site_type_source: 'auto' when a detection set the type (the
+--     home page, Shopping mode, a catalog), 'manual' when a person chose it
+--     (Brand settings, the Content Editor). Setup's detection only fills an
+--     empty type; a catalog never writes over a manual one. Null while no
+--     type is set.
+--   * brands.site_type_detected_at: when a detection last set the type. A
+--     change of site_type that doesn't set it too is a person's, and the
+--     trigger below marks it manual: so every place a person picks a type
+--     wins without knowing about detection.
+--   * A catalog source added to a brand (a feed, an upload, a store) makes
+--     it an online shop, unless a person chose its type.
+
+alter table public.brands
+  add column if not exists site_type_source text
+    check (site_type_source in ('auto', 'manual')),
+  add column if not exists site_type_detected_at timestamptz;
+
+comment on column public.brands.site_type_source is
+  'Step 0 (action plan by business type): auto = detected (home page, Shopping mode, a catalog); manual = a person chose it. Detection only fills an empty type; a catalog never overwrites manual. Null while site_type is null.';
+comment on column public.brands.site_type_detected_at is
+  'Step 0: when a detection last set site_type. A site_type change without it is a person''s (marked manual).';
+
+-- A type set before today was a person's choice.
+update public.brands
+   set site_type_source = 'manual'
+ where site_type is not null
+   and site_type_source is null;
+
+-- A brand in Shopping mode, or with a catalog, already sells online.
+update public.brands b
+   set site_type = 'ecommerce',
+       site_type_source = 'auto',
+       site_type_detected_at = now()
+ where b.site_type is null
+   and (
+     b.shopping_mode_enabled
+     or exists (select 1 from public.catalog_sources s where s.brand_id = b.id)
+   );
+
+create or replace function public.mark_brand_site_type_source()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.site_type is null then
+    -- No type: nothing chosen or detected; the app guesses again.
+    new.site_type_source := null;
+  elsif tg_op = 'INSERT' then
+    new.site_type_source :=
+      case when new.site_type_detected_at is null then 'manual' else 'auto' end;
+  elsif new.site_type is distinct from old.site_type then
+    -- A detection stamps site_type_detected_at with the type; a person doesn't.
+    new.site_type_source :=
+      case
+        when new.site_type_detected_at is distinct from old.site_type_detected_at then 'auto'
+        else 'manual'
+      end;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists brands_site_type_source on public.brands;
+create trigger brands_site_type_source
+  before insert or update of site_type, site_type_source, site_type_detected_at
+  on public.brands
+  for each row execute function public.mark_brand_site_type_source();
+
+-- A catalog source makes the brand a shop, unless a person chose its type.
+-- As the person who adds it: admins and managers may add a source (00279)
+-- and update the brand alike; the server adds stores as the service role.
+create or replace function public.catalog_source_marks_ecommerce()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  update public.brands
+     set site_type = 'ecommerce',
+         site_type_detected_at = now()
+   where id = new.brand_id
+     and site_type_source is distinct from 'manual'
+     and site_type is distinct from 'ecommerce';
+  return new;
+end;
+$$;
+
+drop trigger if exists catalog_sources_mark_ecommerce on public.catalog_sources;
+create trigger catalog_sources_mark_ecommerce
+  after insert on public.catalog_sources
+  for each row execute function public.catalog_source_marks_ecommerce();
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00400_chat_core.sql
