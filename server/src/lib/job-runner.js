@@ -144,6 +144,7 @@ async function attemptTrackingJob(jobId, io, priority = false) {
       promptId,
       promptIds,
       source: immediate ? 'manual' : 'cron',
+      attempt: jobRow.attempts,
       job: proxy,
     });
 

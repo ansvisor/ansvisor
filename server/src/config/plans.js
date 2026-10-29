@@ -192,10 +192,11 @@ export const PLANS = {
 };
 
 /**
- * The free trial's AI budget, whatever the plan (2026-10-24): the plan's own
- * comes once the subscription is paid. See applyTrialAiBudget.
+ * The free trial's AI budget, whatever the plan: the plan's own comes once
+ * the subscription is paid. See applyTrialAiBudget. $2 since 2026-10-29
+ * (was $1), when the Content Editor started writing with Claude Sonnet 5.5.
  */
-export const TRIAL_AI_BUDGET_USD = 1;
+export const TRIAL_AI_BUDGET_USD = 2;
 
 export function isCloud() {
   return process.env.IS_CLOUD === 'true';

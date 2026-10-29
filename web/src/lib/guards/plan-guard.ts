@@ -8,9 +8,11 @@ import {
   isCloud,
   isWithinLimit,
 } from '@/config/plans';
-import { planFromOrgRow } from './plan-core';
+import { planFromOrgRow } from './plan-row';
 
-export { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from './plan-core';
+// The row-to-plan reads moved to plan-row.ts, which client components can
+// import; kept here for the server callers that already read them from here.
+export { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from './plan-row';
 
 export async function getOrgPlan(organizationId: string): Promise<Plan> {
   if (!isCloud()) return getPlan('self_hosted');

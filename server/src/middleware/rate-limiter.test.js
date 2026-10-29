@@ -190,7 +190,7 @@ describe('rate-limiter – CMS buckets', () => {
       return out;
     };
     try {
-      // Opening the Library 60 times (3 checks each) uses up its own 180…
+      // Opening the Library 45 times (4 checks each) uses up its own 180…
       const checks = await statuses('/webflow-status', 181);
       expect(new Set(checks.slice(0, 180))).toEqual(new Set([200]));
       expect(checks.at(-1)).toBe(429);

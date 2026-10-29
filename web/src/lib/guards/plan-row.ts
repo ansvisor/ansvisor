@@ -1,5 +1,12 @@
 import { type Plan, getPlan, isCloud, isSubscriptionActive } from '@/config/plans';
 
+/**
+ * Reading an organization row's plan, with no database client: plan-guard.ts
+ * imports the server's Supabase client (next/headers), so client components
+ * that need a row's plan (Settings › Roles & access through lib/chat) read it
+ * from here.
+ */
+
 /** The organization columns {@link planFromOrgRow} reads. */
 export const ORG_PLAN_COLUMNS = 'plan, subscription_status, plan_overrides';
 

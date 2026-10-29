@@ -43049,6 +43049,140 @@ comment on function public.catalog_suggestion_categories(uuid, integer, integer)
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00372_cms_wix.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00372: Wix for Send to CMS (#1331, phase 2)
+-- ============================================================================
+-- After Webflow (00283, 00284), WordPress (00294) and Framer (00295), a brand
+-- connects its Wix site: the site's id and an API key its owner made in Wix's
+-- API Keys Manager, with the Wix Blog permissions. Pages go to the site's
+-- Blog through Wix's REST API as draft posts.
+--
+--   * brand_cms_connections takes provider 'wix'. A Wix connection keeps the
+--     site's id (`site_id`), its name (`site_name`) and the member who owns
+--     the posts it writes (`account`: a Wix member id; Wix's Blog needs an
+--     owner for a post).
+--   * The API key is kept in brand_cms_credentials, sealed as WordPress's
+--     sign-in is (00294); the table itself doesn't change.
+--   * content_draft_deliveries.target takes 'wix'. `target_collection` keeps
+--     the site's id the post was written to, as it keeps WordPress's site.
+--   * reserve_content_deliveries: as 00295, a page already queued for the
+--     same CMS (Webflow, WordPress, Framer or Wix) isn't sent there again
+--     meanwhile.
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_check,
+  add constraint brand_cms_connections_provider_check
+    check (provider in ('webflow', 'wordpress', 'framer', 'wix'));
+
+alter table public.brand_cms_connections
+  drop constraint if exists brand_cms_connections_provider_fields,
+  add constraint brand_cms_connections_provider_fields check (
+    case provider
+      when 'webflow' then composio_account_id is not null and composio_entity_id is not null
+      when 'wordpress' then site_url is not null and account is not null
+      when 'framer' then site_id is not null
+      when 'wix' then site_id is not null and account is not null
+      else false
+    end
+  );
+
+comment on column public.brand_cms_connections.site_id is
+  'Webflow: the site pages go to (00283). Framer (00295): the project''s id, as Framer connects to it. Wix (00372): the site''s id.';
+comment on column public.brand_cms_connections.site_name is
+  'The site''s name (Webflow, WordPress, Wix (00372): its display name, when the API key may read it), or the Framer project''s (00295).';
+comment on column public.brand_cms_connections.account is
+  'WordPress (00294): the user the connection signs in as, with an Application Password. Framer (00295): the user the API key acts as. Both kept in brand_cms_credentials. Wix (00372): the member who owns the posts it writes.';
+
+comment on table public.brand_cms_credentials is
+  'Send to CMS (#1331, 00294, 00295, 00372): a CMS connection''s sign-in (WordPress: the user and the Application Password; Framer: the project''s API key; Wix: the site owner''s API key), encrypted by the API (AES-256-GCM, bound to the connection id). Service role only; removed with its connection.';
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_target_check,
+  add constraint content_draft_deliveries_target_check
+    check (target in ('webhook', 'webflow', 'wordpress', 'framer', 'wix'));
+
+comment on column public.content_draft_deliveries.target is
+  'Where the page was sent (00284, 00294, 00295, 00372): the brand''s webhook, its Webflow collection, its WordPress site, its Framer collection or its Wix site''s Blog (00283).';
+comment on column public.content_draft_deliveries.target_collection is
+  'The Webflow or Framer collection (00284, 00295), the WordPress site''s address (00294) or the Wix site''s id (00372) the page''s item or post was written to; its id is external_id.';
+
+-- ----------------------------------------------------------------------------
+-- As 00295, with Wix among the CMSs a page isn't sent to twice at once.
+-- ----------------------------------------------------------------------------
+create or replace function public.reserve_content_deliveries(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_sent_by uuid,
+  p_batch_id uuid,
+  p_items jsonb,
+  p_limit integer,
+  p_target text default 'webhook'
+)
+returns setof public.content_draft_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used integer;
+  room integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
+
+  -- sent_at stays empty: it was never sent, and its time stays its own.
+  update public.content_draft_deliveries
+  set status = 'failed', error = 'Not sent: interrupted'
+  where organization_id = p_organization_id
+    and status = 'queued'
+    and created_at < now() - interval '30 minutes';
+
+  select count(*) into used
+  from public.content_draft_deliveries
+  where organization_id = p_organization_id
+    and created_at > now() - interval '24 hours';
+
+  room := greatest(0, p_limit - used);
+  if room = 0 or jsonb_typeof(p_items) <> 'array' then
+    return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass: both would
+  -- make an item (Webflow refuses the second on its slug) or a post.
+  if p_target in ('webflow', 'wordpress', 'framer', 'wix') and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = p_target
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
+  end if;
+
+  return query
+  insert into public.content_draft_deliveries
+    (organization_id, brand_id, draft_id, sent_by, batch_id, title, slug, target)
+  select p_organization_id, p_brand_id, (item ->> 'draft_id')::uuid, p_sent_by, p_batch_id,
+         left(item ->> 'title', 300), nullif(left(item ->> 'slug', 200), ''),
+         coalesce(p_target, 'webhook')
+  from jsonb_array_elements(p_items) with ordinality as items(item, position)
+  order by position
+  limit room
+  returning *;
+end;
+$$;
+
+revoke all on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00373_basket_positive_sentiment.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -43568,6 +43702,99 @@ revoke all on function public.competitor_cited_urls(uuid, timestamptz) from publ
 grant execute on function public.competitor_cited_urls(uuid, timestamptz) to service_role;
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00377_gsc_shopping_appearance.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00377: does Google show the brand's products in its shopping results?
+-- ============================================================================
+-- Product Visibility's Readiness asked for a Google Merchant Center feed,
+-- which this deployment may not be able to connect. Search Console says it
+-- too, from the brand's own property: the pages Google shows as merchant
+-- listings (the free shopping listings, fed by Merchant Center or by the
+-- page's product schema) and as product snippets (a product's price,
+-- rating and stock under its result).
+--
+-- The Search Analytics API can't give search appearance as a column beside
+-- the page, so the sync (server/src/lib/gsc-sync.js) asks in two steps: the
+-- property's appearance types over the last 28 days, then each shopping one's
+-- pages by day, filtered to it. gsc_shopping_page_stats keeps those rows; the
+-- sync (service role) upserts on (brand_id, page, appearance, date), and
+-- members read them. Rows older than 90 days are pruned, as queries' are.
+--
+-- brands.gsc_shopping_property is the property whose shopping rows the brand
+-- has (another one's are dropped first), and gsc_shopping_synced_at when they
+-- were last read: before the first read, Readiness says it doesn't know yet
+-- rather than that no product shows.
+
+create table if not exists public.gsc_shopping_page_stats (
+    id uuid primary key default gen_random_uuid(),
+    brand_id uuid not null references public.brands(id) on delete cascade,
+    page text not null,
+    -- merchant_listings | product_snippets
+    appearance text not null check (appearance in ('merchant_listings', 'product_snippets')),
+    date date not null,
+    clicks integer not null default 0,
+    impressions integer not null default 0,
+    ctr double precision not null default 0,
+    position double precision not null default 0,
+    created_at timestamptz not null default now(),
+    unique (brand_id, page, appearance, date)
+);
+
+create index if not exists gsc_shopping_page_stats_brand_date_idx
+    on public.gsc_shopping_page_stats (brand_id, date desc);
+
+-- The sync's table-wide retention prune (date < 90 days ago).
+create index if not exists gsc_shopping_page_stats_date_idx
+    on public.gsc_shopping_page_stats (date);
+
+alter table public.gsc_shopping_page_stats enable row level security;
+
+create policy "gsc_shopping_page_stats: member select" on public.gsc_shopping_page_stats
+    for select using (
+        brand_id in (
+            select b.id
+            from public.brands b
+            join public.profiles p on p.organization_id = b.organization_id
+            where p.id = auth.uid()
+        )
+    );
+
+revoke all on table public.gsc_shopping_page_stats from anon, authenticated;
+grant select on public.gsc_shopping_page_stats to authenticated;
+
+comment on table public.gsc_shopping_page_stats is
+  'Product Visibility Readiness (00377): the brand''s Search Console pages Google showed as merchant listings or product snippets, by day. Synced from the brand''s own property (gsc-sync.js); members read.';
+
+alter table public.brands
+    add column if not exists gsc_shopping_property text,
+    add column if not exists gsc_shopping_synced_at timestamptz;
+
+comment on column public.brands.gsc_shopping_property is
+  '00377: the Search Console property gsc_shopping_page_stats''s rows for the brand come from; when it names another, they are dropped first (gsc-sync.js).';
+comment on column public.brands.gsc_shopping_synced_at is
+  '00377: when the brand''s shopping appearance rows were last read; null before the first read, when Readiness doesn''t know yet.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00378_cloro_pending_tasks_legacy.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00378: which pending Cloro tasks went to ChatGPT's legacy interface
+-- ============================================================================
+-- A prompt's ChatGPT task asks for its query fan-out one day a week through
+-- Cloro's legacy desktop interface (CLORO_CHATGPT_FANOUT), which Cloro calls
+-- best-effort and temporary. When Cloro takes such a task and then fails it,
+-- the webhook sends it again without legacy, so the day keeps its answer
+-- (server/src/routes/cloro-callback.js). The callback only has this row to
+-- go on, so the row says whether the task was a legacy one. Every other task,
+-- and every row from before this file, is not.
+
+alter table public.cloro_pending_tasks
+  add column if not exists legacy boolean not null default false;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00379_brand_site_type_source.sql
@@ -44153,6 +44380,100 @@ create or replace trigger prompt_notes_refuse_demo_brand_writes
 create or replace trigger prompt_target_urls_refuse_demo_brand_writes
   before insert or update or delete on public.prompt_target_urls
   for each row execute function public.refuse_demo_brand_writes('prompt_id', 'prompts', 'prompt_set_id', 'prompt_sets');
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00382_topics_manager_writes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00382: topic changes are an admin's or a manager's
+-- ============================================================================
+-- The app already keeps adding, renaming and deleting topics, and accepting
+-- or dismissing topic suggestions, to admins and managers (the Topics page,
+-- the API and the MCP check the role). The rows' rules now say the same:
+--
+--   * topics: every member of the brand's organization reads them; an admin
+--     or a manager of that organization adds, changes and deletes them.
+--   * topic_suggestions: every member reads them; an admin or a manager
+--     updates them (accept, dismiss). Nothing else changes: the server
+--     writes new suggestions with the service role, which these rules don't
+--     apply to.
+--
+-- Setting up a brand keeps working: a new organization's first person is
+-- its admin, and only admins and managers add brands.
+
+-- ── topics ──────────────────────────────────────────────────────────────────
+
+drop policy if exists "topics: member insert" on public.topics;
+drop policy if exists "topics: member update" on public.topics;
+drop policy if exists "topics: member delete" on public.topics;
+
+drop policy if exists "topics: admin/manager insert" on public.topics;
+create policy "topics: admin/manager insert" on public.topics
+  for insert
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+drop policy if exists "topics: admin/manager update" on public.topics;
+create policy "topics: admin/manager update" on public.topics
+  for update
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+drop policy if exists "topics: admin/manager delete" on public.topics;
+create policy "topics: admin/manager delete" on public.topics
+  for delete
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
+
+-- ── topic_suggestions ───────────────────────────────────────────────────────
+
+drop policy if exists "topic_suggestions: admin/manager/analyst update" on public.topic_suggestions;
+
+drop policy if exists "topic_suggestions: admin/manager update" on public.topic_suggestions;
+create policy "topic_suggestions: admin/manager update" on public.topic_suggestions
+  for update
+  using (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  )
+  with check (
+    brand_id in (
+      select b.id
+      from public.brands b
+      join public.profiles p on p.organization_id = b.organization_id
+      where p.id = auth.uid() and p.role in ('admin', 'manager')
+    )
+  );
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00400_chat_core.sql

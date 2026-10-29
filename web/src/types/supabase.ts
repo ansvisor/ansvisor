@@ -769,6 +769,8 @@ export type Database = {
           gsc_pages_backfill_from: string | null
           gsc_pages_backfilled_property: string | null
           gsc_property: string | null
+          gsc_shopping_property: string | null
+          gsc_shopping_synced_at: string | null
           id: string
           industry: string | null
           insights_pinned_competitors: string[]
@@ -804,6 +806,8 @@ export type Database = {
           gsc_pages_backfill_from?: string | null
           gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
+          gsc_shopping_property?: string | null
+          gsc_shopping_synced_at?: string | null
           id?: string
           industry?: string | null
           insights_pinned_competitors?: string[]
@@ -839,6 +843,8 @@ export type Database = {
           gsc_pages_backfill_from?: string | null
           gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
+          gsc_shopping_property?: string | null
+          gsc_shopping_synced_at?: string | null
           id?: string
           industry?: string | null
           insights_pinned_competitors?: string[]
@@ -2010,6 +2016,7 @@ export type Database = {
       cloro_pending_tasks: {
         Row: {
           brand_id: string
+          legacy: boolean
           prompt_id: string
           region: string | null
           scraper_id: string
@@ -2018,6 +2025,7 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          legacy?: boolean
           prompt_id: string
           region?: string | null
           scraper_id: string
@@ -2026,6 +2034,7 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          legacy?: boolean
           prompt_id?: string
           region?: string | null
           scraper_id?: string
@@ -3380,6 +3389,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "gsc_page_stats_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gsc_shopping_page_stats: {
+        Row: {
+          appearance: string
+          brand_id: string
+          clicks: number
+          created_at: string
+          ctr: number
+          date: string
+          id: string
+          impressions: number
+          page: string
+          position: number
+        }
+        Insert: {
+          appearance: string
+          brand_id: string
+          clicks?: number
+          created_at?: string
+          ctr?: number
+          date: string
+          id?: string
+          impressions?: number
+          page: string
+          position?: number
+        }
+        Update: {
+          appearance?: string
+          brand_id?: string
+          clicks?: number
+          created_at?: string
+          ctr?: number
+          date?: string
+          id?: string
+          impressions?: number
+          page?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gsc_shopping_page_stats_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"

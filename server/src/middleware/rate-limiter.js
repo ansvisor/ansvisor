@@ -191,7 +191,7 @@ export const cmsLimiter = rateLimit({
 });
 
 // The Library's checks whether pages sent to a CMS were published there:
-// three each time it opens, answered from a two-minute memory per brand. A
+// four each time it opens, answered from a two-minute memory per brand. A
 // bucket of their own, so opening the Library never uses up a member's
 // cmsLimiter, and connecting a CMS stays open to them.
 export const cmsStatusLimiter = rateLimit({
