@@ -389,7 +389,10 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
   const live = status.status === 'published' ? status.publishedUrl : null;
   // A send to a CMS (#1331, phase 2) says so: sent, it's a draft item or post there.
   const label = t(
-    status.target === 'webflow' || status.target === 'wordpress' || status.target === 'framer'
+    status.target === 'webflow' ||
+      status.target === 'wordpress' ||
+      status.target === 'framer' ||
+      status.target === 'wix'
       ? `${status.target}.${status.status}`
       : status.status,
     { when },
