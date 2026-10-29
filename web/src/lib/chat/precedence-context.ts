@@ -1,0 +1,152 @@
+import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-guard';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import type { Database } from '@/types/supabase';
+import { planFactsFromOrgRow } from './plan-facts';
+import {
+  ADMIN_POLICIES,
+  DEFAULT_CHAT_SETTINGS,
+  parseTeamRole,
+  type AdminPolicy,
+  type ChatMode,
+  type ChatSettings,
+  type ChatSurface,
+  type PrecedenceContext,
+  type ToolCall,
+} from './precedence';
+import { EXECUTE_GROUPS, type ExecuteGroup } from './registry/define-tool';
+
+/**
+ * What the approval precedence decides on, read fresh for each tool call:
+ * the person's live role, the workspace's plan, its Chat settings and the
+ * person's "Don't ask again" ticks. Nothing is kept between calls, so a role,
+ * a plan or a setting changed mid-run counts from the next call (CHAT-20 §4).
+ * Read with the service role: these are the server's facts, and a scheduled
+ * run has no session (CHAT-12). Server only.
+ */
+
+export interface PrecedenceRequest {
+  userId: string;
+  organizationId: string;
+  mode: ChatMode;
+  surface: ChatSurface;
+  /** An injection attempt was found earlier in the run. */
+  injectionDetected?: boolean;
+}
+
+type SettingsRow = Pick<
+  Database['public']['Tables']['chat_settings']['Row'],
+  'tool_policies' | 'full_auto_for_members' | 'dont_ask_again' | 'manager_execute_off'
+>;
+
+/** A chat_settings row as the precedence reads it; no row, the defaults. Unknown values are dropped. */
+export function parseChatSettings(row: SettingsRow | null): ChatSettings {
+  if (!row) return DEFAULT_CHAT_SETTINGS;
+  const toolPolicies: Record<string, AdminPolicy> = {};
+  const raw = row.tool_policies;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, value] of Object.entries(raw)) {
+      const policy = ADMIN_POLICIES.find((p) => p === value);
+      if (policy) toolPolicies[key] = policy;
+    }
+  }
+  return {
+    toolPolicies,
+    fullAutoForMembers: row.full_auto_for_members,
+    dontAskAgain: row.dont_ask_again,
+    managerExecuteOff: row.manager_execute_off.filter((group): group is ExecuteGroup =>
+      EXECUTE_GROUPS.some((known) => known === group),
+    ),
+  };
+}
+
+/**
+ * The brands a person may use. Every member uses every brand of their
+ * workspace today, as the app does: sharing chosen brands with an Agency
+ * partner is a Team feature of Wave 2, and until then they act as Analysts.
+ */
+export async function readBrandAccess(
+  userId: string,
+  organizationId: string,
+): Promise<PrecedenceContext['brandAccess']> {
+  void userId;
+  void organizationId;
+  return 'all';
+}
+
+/**
+ * Whether a brand is the demo brand of sample data. Always false for now:
+ * TODO wire to brands.is_demo when #1734 merges (the demo chain, 00380),
+ * as the server's demo guard reads it.
+ */
+export async function readBrandIsDemo(brandId: string): Promise<boolean> {
+  void brandId;
+  return false;
+}
+
+/**
+ * The context for one call, or null when the person can't act in that
+ * workspace now: no profile, a profile in another workspace (removed or
+ * moved), or a role that isn't a live one. A read that fails throws, so no
+ * call is decided on missing facts.
+ */
+export async function readPrecedenceContext(
+  req: PrecedenceRequest,
+): Promise<PrecedenceContext | null> {
+  const [profile, org, settings, choices, brandAccess] = await Promise.all([
+    supabaseAdmin
+      .from('profiles')
+      .select('role, organization_id')
+      .eq('id', req.userId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('organizations')
+      .select(ORG_PLAN_COLUMNS)
+      .eq('id', req.organizationId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('chat_settings')
+      .select('tool_policies, full_auto_for_members, dont_ask_again, manager_execute_off')
+      .eq('organization_id', req.organizationId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('chat_auto_choices')
+      .select('tool_key')
+      .eq('user_id', req.userId)
+      .eq('organization_id', req.organizationId),
+    readBrandAccess(req.userId, req.organizationId),
+  ]);
+  for (const result of [profile, org, settings, choices]) {
+    if (result.error) throw new Error(`Could not read Chat's permissions: ${result.error.message}`);
+  }
+
+  const role = parseTeamRole(profile.data?.role);
+  if (!role || profile.data?.organization_id !== req.organizationId || !org.data) return null;
+
+  return {
+    role,
+    plan: planFactsFromOrgRow(org.data),
+    settings: parseChatSettings(settings.data),
+    mode: req.mode,
+    surface: req.surface,
+    autoChoices: new Set((choices.data ?? []).map((row) => row.tool_key)),
+    brandAccess,
+    injectionDetected: req.injectionDetected ?? false,
+  };
+}
+
+/**
+ * A call as the precedence takes it. The demo flag is read only for a brand
+ * in the person's scope: one outside it is refused before its state matters.
+ */
+export async function readToolCall(
+  ctx: PrecedenceContext,
+  call: { brandId: string | null; tainted: boolean },
+): Promise<ToolCall> {
+  const inScope =
+    call.brandId !== null && (ctx.brandAccess === 'all' || ctx.brandAccess.includes(call.brandId));
+  return {
+    brandId: call.brandId,
+    brandIsDemo: inScope ? await readBrandIsDemo(call.brandId!) : false,
+    tainted: call.tainted,
+  };
+}

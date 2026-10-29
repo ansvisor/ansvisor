@@ -4,6 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
+import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool } from './define-tool';
 import { clientEventProblems, type ChatEvent } from '../events';
 
@@ -59,6 +60,8 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
 const { FIXTURE_IDS, defineTool } = await import('./define-tool');
+const { DEFAULT_CHAT_SETTINGS, allowedTools } = await import('../precedence');
+const { planFactsFromOrgRow } = await import('../plan-facts');
 
 const ctx = { userId: 'user-1', email: null, organizationId: 'org-1', apiKeyId: 'agent-internal' };
 const labels = (messages as Record<string, unknown>).chatTools as Record<string, unknown>;
@@ -258,9 +261,16 @@ describe('approval policies', () => {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['on', 'on']);
       } else if (tool.class === 'write') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'always']);
-        // Analysts and Agency partners are read-only (CHAT-20 §4).
-        expect(['admin', 'manager']).toContain(tool.minRole);
       }
+    }
+  });
+
+  it('opens daily work to every role and keeps the rest with Admins and Managers', () => {
+    // The role model of 2026-10-29: drafts are daily work; the other writes here stay closed.
+    const openToAll = CHAT_TOOLS.filter((t) => t.class !== 'read' && t.minRole === 'analyst');
+    expect(openToAll.map((t) => t.name)).toEqual(['create_draft']);
+    for (const tool of CHAT_TOOLS.filter((t) => t.class !== 'read' && t.minRole !== 'analyst')) {
+      expect(tool.minRole).toBe('manager');
     }
   });
 
@@ -268,8 +278,16 @@ describe('approval policies', () => {
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'execute')) {
       expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['click', 'click']);
     }
-    const execute = defineTool({ ...readRow, name: 'publish_test', class: 'execute' });
+    const execute = defineTool({
+      ...readRow,
+      name: 'publish_test',
+      class: 'execute',
+      executeGroup: 'publishing',
+    });
     expect([execute.defaultPolicy, execute.maxPolicy]).toEqual(['click', 'click']);
+    expect(execute.executeGroup).toBe('publishing');
+    // Every execute is in a go-live group, so the Managers' switch covers it.
+    expect(() => defineTool({ ...readRow, class: 'execute' } as never)).toThrow(/go-live group/);
     // A row that asks for less than a click isn't defined at all.
     expect(() =>
       defineTool({ ...readRow, class: 'execute', defaultPolicy: 'always' } as never),
@@ -358,5 +376,65 @@ describe('registryCatalog', () => {
     });
     expect(entry.planGate).not.toBe(row.planGate);
     expect(entry.flags).not.toBe(row.flags);
+  });
+});
+
+describe("the model's tool list on the registry's rows", () => {
+  // CHAT-20 §21: the list equals the rows the role, plan, brand access and policy allow.
+  const facts = (row: Parameters<typeof planFactsFromOrgRow>[0], cloud = true) => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', cloud ? 'true' : 'false');
+    try {
+      return planFactsFromOrgRow(row);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  };
+  const list = (
+    role: TeamRole,
+    plan: ReturnType<typeof facts>,
+    scope = { brandId: FIXTURE_IDS.brand as string | null, brandIsDemo: false },
+    brandAccess: 'all' | string[] = 'all',
+  ) =>
+    allowedTools(
+      CHAT_TOOLS,
+      {
+        role,
+        plan,
+        settings: DEFAULT_CHAT_SETTINGS,
+        mode: 'full_auto',
+        surface: 'chat',
+        autoChoices: new Set(),
+        brandAccess,
+        injectionDetected: false,
+      },
+      scope,
+    ).map((tool) => tool.name);
+
+  const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
+  const writes = CHAT_TOOLS.filter((tool) => tool.class === 'write').map((tool) => tool.name);
+  const starter = facts({ plan: 'starter', subscription_status: 'active' });
+  const growth = facts({ plan: 'growth', subscription_status: 'active' });
+  const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
+
+  it('gives every role the reads its plan opens, and Analysts daily work only', () => {
+    expect(list('analyst', starter)).toEqual([...withoutShopping, 'create_draft']);
+    expect(list('agency_partner', growth)).toEqual([...reads, 'create_draft']);
+    expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
+    expect(list('admin', growth)).toEqual([...reads, ...writes]);
+    expect(list('analyst', facts(null, false))).toEqual([...reads, 'create_draft']);
+  });
+
+  it('lists reads only on a read-only workspace and on the demo brand', () => {
+    const ended = facts({ plan: 'growth', subscription_status: 'canceled' });
+    expect(list('admin', ended)).toEqual(withoutShopping);
+    expect(list('admin', growth, { brandId: FIXTURE_IDS.brand, brandIsDemo: true })).toEqual(reads);
+  });
+
+  it("lists nothing for a brand outside the person's scope", () => {
+    expect(list('agency_partner', growth, undefined, [])).toEqual([]);
+    expect(list('agency_partner', growth, undefined, [FIXTURE_IDS.brand])).toEqual([
+      ...reads,
+      'create_draft',
+    ]);
   });
 });

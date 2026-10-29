@@ -12,7 +12,8 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * no class here: it is simply no row.
  *
  * A row only describes; the approval precedence that reads it (plan, role,
- * policy, mode) is checked on the server when a run calls the tool.
+ * policy, mode) is checked on the server when a run calls the tool
+ * (lib/chat/precedence.ts).
  */
 
 /** What a call does (CHAT-20 §3): reads, changes data in Ansvisor, or goes live / leaves it. */
@@ -32,6 +33,14 @@ export type ToolPolicy = (typeof TOOL_POLICIES)[number];
 /** The policies a WRITE row may start at or be raised to, least automatic first. */
 export const WRITE_POLICIES = ['ask', 'ask_full_auto', 'always'] as const;
 export type WritePolicy = (typeof WRITE_POLICIES)[number];
+
+/**
+ * The go-live groups an Admin may switch off for Managers (CHAT-20 §4
+ * refinements): publishing, email and outreach, code and pull requests,
+ * product feeds. Every EXECUTE row is in one.
+ */
+export const EXECUTE_GROUPS = ['publishing', 'email_outreach', 'code_prs', 'feeds'] as const;
+export type ExecuteGroup = (typeof EXECUTE_GROUPS)[number];
 
 /** CHAT-20 §9 cost: C0 no model, C1 a scoped read, C2 a model writing step, C3 heavy. */
 export type CostClass = 'C0' | 'C1' | 'C2' | 'C3';
@@ -117,7 +126,12 @@ type ClassFields =
       maxPolicy: WritePolicy;
       flags?: Partial<Pick<ToolFlags, 'alwaysCard' | 'costCard'>>;
     }
-  | { class: 'execute'; flags?: Partial<Pick<ToolFlags, 'costCard'>> };
+  | {
+      class: 'execute';
+      /** Its go-live group, which the Manager switch in Settings › Chat covers. */
+      executeGroup: ExecuteGroup;
+      flags?: Partial<Pick<ToolFlags, 'costCard'>>;
+    };
 
 export type ToolDefinition<S extends z.ZodObject> = ToolFields<S> & ClassFields;
 
@@ -126,6 +140,8 @@ export type ChatTool<S extends z.ZodObject = z.ZodObject> = ToolFields<S> & {
   defaultPolicy: ToolPolicy;
   maxPolicy: ToolPolicy;
   flags: ToolFlags;
+  /** An EXECUTE's go-live group; null on a read or a write. */
+  executeGroup: ExecuteGroup | null;
 };
 
 /** Ids for the rows' fixtures: any 8-4-4-4-12 hex id passes the inputs' uuid check. */
@@ -150,7 +166,7 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   };
   if (def.class === 'read') {
     if (flags.alwaysCard) throw new Error(`${def.name}: a read has no approval card`);
-    return { ...def, defaultPolicy: 'on', maxPolicy: 'on', flags };
+    return { ...def, defaultPolicy: 'on', maxPolicy: 'on', flags, executeGroup: null };
   }
   if (flags.adminMayTurnOff) throw new Error(`${def.name}: only a read is switched off`);
   if (def.class === 'execute') {
@@ -161,6 +177,9 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
       ('maxPolicy' in def && def.maxPolicy !== 'click')
     ) {
       throw new Error(`${def.name}: an execute always needs the user's click`);
+    }
+    if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
+      throw new Error(`${def.name}: an execute belongs to a go-live group`);
     }
     return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags };
   }
@@ -174,5 +193,5 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   if (flags.alwaysCard && def.maxPolicy !== 'ask') {
     throw new Error(`${def.name}: an always_card write never runs without a card`);
   }
-  return { ...def, flags };
+  return { ...def, flags, executeGroup: null };
 }

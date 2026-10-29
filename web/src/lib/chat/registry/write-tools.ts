@@ -14,6 +14,10 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
  * through their session, with the read-only workspace check those actions
  * already run. They need that session: a run with no request behind it
  * (a schedule, CHAT-12) can't call them as they are.
+ *
+ * minRole follows the role model of 2026-10-29: daily work (drafts, tasks,
+ * audits, reports) is open to every role; settings, deleting, adding prompts
+ * and costly work stay with Admins and Managers.
  */
 
 const BRAND = FIXTURE_IDS.brand;
@@ -28,7 +32,8 @@ export const WRITE_TOOLS = [
       "Save a page as a new draft in the brand's Content Library, as New content does: its title, page type, what it starts from (an opportunity, a tracked prompt, a topic, or content to optimize) and, when there is one, its HTML.",
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
-    minRole: 'manager',
+    // A draft is daily work; every member may already save one (content_drafts: member insert).
+    minRole: 'analyst',
     planGate: null,
     costClass: 'C2',
     labelKey: 'saveDraft',
