@@ -32,7 +32,12 @@ function getApiKey() {
   return key;
 }
 
-export function buildRequestBody(promptText, scraperId, region, state, location) {
+/**
+ * The task payload Cloro gets. `opts.legacy` asks ChatGPT for its fan-out
+ * through its legacy desktop interface; the caller decides when
+ * (chatgpt-fanout.js), and only `chatgpt-web` takes it.
+ */
+export function buildRequestBody(promptText, scraperId, region, state, location, opts = {}) {
   const country = region || 'US';
   // A city (PROMPT-015d): Google's canonical name, which the Google
   // endpoints take as `location` beside the country. Only they get it.
@@ -85,20 +90,26 @@ export function buildRequestBody(promptText, scraperId, region, state, location)
     };
   }
 
+  // ChatGPT's legacy desktop interface still carries the query text its
+  // default one dropped. Cloro calls it best-effort and temporary.
+  const chatgptFanout = scraperId === 'chatgpt-web' && opts.legacy === true;
+
   return {
     prompt: promptText,
     country,
     ...stateField,
+    ...(chatgptFanout ? { legacy: true } : {}),
     include: {
       html: false,
       markdown: true,
       rawResponse: false,
       // Opt in to the observed query fan-out (#332), which Copilot and
       // Perplexity populate; the health report's fan-out section flags one
-      // that stops. Not on ChatGPT: since 2026-09-30 its default (mobile-web)
-      // interface carries no query text, so the field came back empty on
-      // every answer while the add-on still cost +2 credits a task (#1119).
-      ...(scraperId === 'chatgpt-web' ? {} : { searchQueries: true }),
+      // that stops. Not on ChatGPT's default task: since 2026-09-30 its
+      // default (mobile-web) interface carries no query text, so the field
+      // came back empty on every answer while the add-on still cost +2
+      // credits a task (#1119). Only its legacy task asks.
+      ...(scraperId !== 'chatgpt-web' || chatgptFanout ? { searchQueries: true } : {}),
     },
   };
 }
@@ -264,17 +275,20 @@ export function parseScraperResponse(result, scraperId) {
  * @param {string} promptText
  * @param {string} scraperId
  * @param {string} [region]
- * @param {{ webhookUrl?: string, state?: string, location?: string }} [opts] - `state` is the
+ * @param {{ webhookUrl?: string, state?: string, location?: string, legacy?: boolean }} [opts] - `state` is the
  *   USPS code of the location this task targets (#554, per-prompt since
  *   #691); only forwarded on US AI-endpoint tasks. `location` is a city's
  *   Google canonical name (PROMPT-015d), forwarded on Google tasks only.
+ *   `legacy` asks a `chatgpt-web` task for its fan-out (chatgpt-fanout.js).
  * @returns {Promise<{ taskId: string, scraperId: string }>}
  */
 export async function submitScraperTask(promptText, scraperId, region, opts = {}) {
   const taskType = SCRAPER_TASK_TYPES[scraperId];
   if (!taskType) throw new Error(`Unknown scraper: ${scraperId}`);
 
-  const payload = buildRequestBody(promptText, scraperId, region, opts.state, opts.location);
+  const payload = buildRequestBody(promptText, scraperId, region, opts.state, opts.location, {
+    legacy: opts.legacy,
+  });
 
   logger.info(
     {
@@ -283,6 +297,7 @@ export async function submitScraperTask(promptText, scraperId, region, opts = {}
       region: region || 'US',
       state: payload.state,
       location: payload.location,
+      legacy: payload.legacy,
     },
     'submitting cloro scraper task',
   );

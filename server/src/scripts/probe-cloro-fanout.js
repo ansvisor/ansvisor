@@ -40,11 +40,14 @@ if (!taskType) {
   process.exit(1);
 }
 
-// The request production sends, plus the raw stream where the engine takes
-// it (Google's endpoints don't), to look for queries outside the documented
-// fields, and the fan-out flag, which production no longer sends to ChatGPT
-// (#1119). On ChatGPT the two share one add-on's +2 credits.
-const payload = buildRequestBody(prompt, platform, country);
+// The request production sends (on ChatGPT, the legacy task a prompt sends
+// on its fan-out day, CLORO_CHATGPT_FANOUT), plus the raw stream where the
+// engine takes it (Google's endpoints don't), to look for queries outside the
+// documented fields, and the fan-out flag. On ChatGPT the two share one
+// add-on's +2 credits.
+const payload = buildRequestBody(prompt, platform, country, undefined, undefined, {
+  legacy: true,
+});
 if (!['google-aio', 'google-aimode'].includes(platform)) {
   payload.include = { ...payload.include, rawResponse: true, searchQueries: true };
 }

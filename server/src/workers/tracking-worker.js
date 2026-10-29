@@ -5,6 +5,7 @@
 
 import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
 import { submitScraperTask, pollScraperResult } from '../lib/cloro-scraper.js';
+import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
 import { hasFeature, getPlan, isCloud } from '../config/plans.js';
@@ -171,6 +172,37 @@ export function tailRemainder(expected) {
 export function interactiveTailExhausted({ pending, expected, quietPolls, quietPollLimit }) {
   if (pending <= 0 || expected <= 0) return false;
   return pending <= tailRemainder(expected) && quietPolls >= quietPollLimit;
+}
+
+/**
+ * Submit one scraper task of a run. Targeting comes from the prompt's own
+ * location, not from the brand's single state column (#691): different
+ * prompts can target different places, and a brand-wide override would
+ * silently win over them.
+ *
+ * A task with `legacy` asks ChatGPT for its fan-out (chatgpt-fanout.js).
+ * Cloro calls that interface temporary, so if it refuses the task, the task
+ * goes again without it: the day's answer is still tracked.
+ */
+export async function submitTrackingTask({ prompt, scraperId, region, legacy }, { webhookUrl }) {
+  const { country, state, city } = parseLocation(region);
+  const submit = (withLegacy) =>
+    submitScraperTask(prompt.text, scraperId, country, {
+      webhookUrl,
+      state,
+      location: city?.google,
+      legacy: withLegacy,
+    });
+  if (!legacy) return submit(false);
+  try {
+    return await submit(true);
+  } catch (err) {
+    logger.warn(
+      { err, scraperId, promptId: prompt.id },
+      'chatgpt fan-out task refused; submitting it without fan-out',
+    );
+    return submit(false);
+  }
 }
 
 /**
@@ -389,16 +421,22 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   }
 
   // 6. Phase 1: Collect & run all scraper (platform) tasks first
+  // A prompt's ChatGPT answer asks for its fan-out on its day of the week
+  // (CLORO_CHATGPT_FANOUT, chatgpt-fanout.js), read once for the whole run.
+  const chatgptFanout = chatgptFanoutMode();
+  const runDate = new Date();
   const scraperTasks = [];
   for (const prompt of prompts) {
     const scrapersToRun = allowedPlatformsFor(prompt);
 
     for (const scraperId of scrapersToRun) {
+      const legacy =
+        scraperId === 'chatgpt-web' && chatgptFanoutDue(prompt.id, runDate, chatgptFanout);
       // `region` carries the full location code — it is what gets stamped on
       // the result row, so a Google run collapsed to its country is recorded
       // as the country it actually ran in, not the state that was asked for.
       for (const region of scraperLocations(prompt, scraperId)) {
-        scraperTasks.push({ prompt, scraperId, region });
+        scraperTasks.push({ prompt, scraperId, region, legacy });
       }
     }
   }
@@ -407,7 +445,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
   if (scraperTasks.length > 0) {
     logger.info(
-      { brandId, count: scraperTasks.length, mode: webhookUrl ? 'webhook' : 'polling' },
+      {
+        brandId,
+        count: scraperTasks.length,
+        chatgptFanout: scraperTasks.filter((t) => t.legacy).length,
+        mode: webhookUrl ? 'webhook' : 'polling',
+      },
       'submitting scraper tasks to cloro',
     );
 
@@ -423,21 +466,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
-      scraperTasks.map((t) => {
-        // Targeting comes from the prompt's own location, not from the
-        // brand's single state column (#691): different prompts can target
-        // different places, and a brand-wide override would silently win
-        // over them.
-        const { country, state, city } = parseLocation(t.region);
-        return submitScraperTask(t.prompt.text, t.scraperId, country, {
-          webhookUrl,
-          state,
-          location: city?.google,
-        }).then((res) => ({
+      scraperTasks.map((t) =>
+        submitTrackingTask(t, { webhookUrl }).then((res) => ({
           ...res,
           meta: t,
-        }));
-      }),
+        })),
+      ),
     );
 
     const submitted = [];

@@ -9,7 +9,7 @@ The **Prompts** page (`/dashboard/prompts`) has four tabs. The **Prompts** item 
 
 - **Prompts** — your prompt list. A switch above the filters picks **Tracked Prompts** (`/dashboard/prompts/tracked`) or **Prompt Suggestions** (`/dashboard/prompts/suggestions`)
 - **Topics** (`/dashboard/prompts/topics`) — your tracked prompts grouped by theme
-- **Query Fan-out** (`/dashboard/prompts/fan-outs`) — the searches AI engines ran behind their answers. Only Copilot and Perplexity share them
+- **Query Fan-out** (`/dashboard/prompts/fan-outs`) — the searches AI engines ran behind their answers. Copilot and Perplexity share them with every answer, ChatGPT one day a week for each prompt (see [ChatGPT fan-out](#chatgpt-fan-out))
 - **Insights** (`/dashboard/prompts/insights`) — estimated AI search volume, intent and the highest-demand prompts
 
 The date range (24h, 7d, 30d, 90d or custom) applies to Prompts, Topics and Query Fan-out, and carries over when you switch tabs. Insights has no range: volume estimates aren't tied to a period.
@@ -19,6 +19,18 @@ The date range (24h, 7d, 30d, 90d or custom) applies to Prompts, Topics and Quer
 Topics is a tab of the Prompts page. The old `/dashboard/topics` address, and a topic's old `/dashboard/topics/<id>` page, redirect to `/dashboard/prompts/topics`. The tab uses the page's date range and opens on the last 24 hours. It has no Location selector, because topics aren't split by location.
 
 What each column means, and how to use topics for planning, is in the [Topics](/guides/topics) guide.
+
+## Query Fan-out
+
+The Query Fan-out tab lists the searches an AI engine ran before it answered, as they came with the answers tracking stores. Google AI Overviews, AI Mode and Gemini don't share them.
+
+### ChatGPT fan-out
+
+ChatGPT's default interface stopped sharing its searches on 30 September 2026. Its older desktop interface still shares them, but asking for them costs extra on every ChatGPT answer, and our data provider calls that interface temporary. So each prompt's ChatGPT answer asks for its searches one day a week, on the same weekday every week, with prompts spread across the week. That day's answer is the one tracked as usual: nothing runs twice.
+
+Over 7 days or more, every prompt tracked daily has had its day. A 24-hour range shows only the prompts whose day it was. Not every ChatGPT answer has searches even then, because ChatGPT doesn't search for every prompt.
+
+Self-hosted instances choose this with `CLORO_CHATGPT_FANOUT` (see [Environment variables](/self-host/env-variables)).
 
 ## Adding prompts
 

@@ -449,6 +449,67 @@ describe('cloro-scraper – buildRequestBody query fan-out (#332, #1119)', () =>
   });
 });
 
+describe('cloro-scraper – buildRequestBody ChatGPT legacy fan-out (CLORO_CHATGPT_FANOUT)', () => {
+  const today = {
+    prompt: 'p',
+    country: 'US',
+    state: 'CA',
+    include: { html: false, markdown: true, rawResponse: false },
+  };
+
+  it("leaves ChatGPT's task as it is today without legacy", () => {
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA')).toEqual(today);
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA', undefined, {})).toEqual(today);
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA', undefined, { legacy: false })).toEqual(
+      today,
+    );
+  });
+
+  it('asks the legacy interface for the searches when legacy is on', () => {
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA', undefined, { legacy: true })).toEqual({
+      ...today,
+      legacy: true,
+      include: { ...today.include, searchQueries: true },
+    });
+  });
+
+  it('changes nothing on Google, ChatGPT Shopping or the other engines', () => {
+    const location = 'Istanbul,Istanbul,Turkiye';
+    for (const scraperId of [
+      'google-aio',
+      'google-aimode',
+      'chatgpt-shopping',
+      'copilot-web',
+      'perplexity-web',
+      'gemini-web',
+      'grok-web',
+    ]) {
+      expect(buildRequestBody('p', scraperId, 'US', 'CA', location, { legacy: true })).toEqual(
+        buildRequestBody('p', scraperId, 'US', 'CA', location),
+      );
+    }
+  });
+});
+
+describe('cloro-scraper – a legacy ChatGPT answer', () => {
+  it('stores its searches under ChatGPT, and its model', () => {
+    const parsed = parseScraperResponse(
+      {
+        markdown: 'answer',
+        model: 'gpt-6',
+        sources: [{ url: 'https://a.com', label: 'A' }],
+        searchQueries: ['best crm for startups 2026'],
+        mapSearchQueries: [],
+      },
+      'chatgpt-web',
+    );
+    expect(parsed.search_queries).toEqual([
+      { query: 'best crm for startups 2026', source_platform: 'chatgpt-web' },
+    ]);
+    expect(parsed.model).toBe('gpt-6');
+  });
+});
+
 describe('cloro-scraper – buildRequestBody state targeting (#554)', () => {
   const AI_ENDPOINTS = ['chatgpt-web', 'copilot-web', 'grok-web', 'perplexity-web', 'gemini-web'];
 
