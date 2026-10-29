@@ -8,19 +8,26 @@ import {
   chatEvent,
   clientEventProblems,
   isChatEventType,
+  isChatHref,
+  maskIds,
   type ChatDeliverable,
   type ChatEvent,
   type ChatEventPayloads,
   type ChatEventType,
+  type ChatForbiddenKey,
+  type ChatHref,
   type ChatStep,
 } from './events';
 
 /**
- * Chat's streamed events: one of every type goes to the browser, and none of
- * them can carry a tool's name, a debug record, an id or a dollar amount.
+ * Chat's streamed events: one of every type goes to the browser; none of
+ * them carries a tool's name, a debug record, an id field, money or a link
+ * out of the app, and a uuid in their text shows as "…".
  */
 
 const UUID = '7d3f2c1a-9b8e-4c6d-a5f4-3e2d1c0b9a87';
+const UUID_ANYWHERE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const EDITOR: ChatHref = `/dashboard/content/editor/${UUID}`;
 
 const STEP: ChatStep = {
   n: 2,
@@ -51,6 +58,7 @@ const DELIVERABLE: ChatDeliverable = {
   type: 'document',
   formats: ['md', 'docx'],
   status: 'draft',
+  href: EDITOR,
 };
 
 /** One of every type, as the stream would send it. */
@@ -93,7 +101,7 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
   'deliverable.updated': () => chatEvent('deliverable.updated', 13, { ...DELIVERABLE, version: 2 }),
   'suggestion.created': () => chatEvent('suggestion.created', 14, { count: 3 }),
   'suggestion.resolved': () => chatEvent('suggestion.resolved', 15, { count: 1 }),
-  'page.opened': () => chatEvent('page.opened', 16, { where: 'here' }),
+  'page.opened': () => chatEvent('page.opened', 16, { where: 'here', href: EDITOR }),
 };
 
 /** Every key in a type, at any depth. */
@@ -103,24 +111,28 @@ type KeysDeep<T> = T extends readonly (infer U)[]
     ? { [K in keyof T]-?: K | KeysDeep<T[K]> }[keyof T]
     : never;
 
-/** The keys no payload may have. */
-type ForbiddenKey =
-  | 'tool'
-  | 'tools'
-  | 'toolName'
-  | 'tool_name'
-  | 'debug'
-  | 'debugJson'
-  | 'debug_json'
-  | 'input'
-  | 'output'
-  | 'id'
-  | `${string}Id`
-  | `${string}Ids`
-  | `${string}_id`
-  | `${string}_ids`
-  | `${string}Usd`
-  | `${string}_usd`;
+/** Builds a step event with one key the types don't allow, as loose code could. */
+const stepWith = (key: string, value: unknown = 'x') =>
+  chatEvent('step.finished', 1, { step: { ...STEP, [key]: value } as ChatStep });
+
+/** The keys a payload may never have, each as loose code could spell it. */
+const FORBIDDEN = {
+  tool: [
+    'tool',
+    'tools',
+    'toolName',
+    'tool_name',
+    'toolCall',
+    'toolInput',
+    'toolOutput',
+    'toolResult',
+  ],
+  raw: ['input', 'output', 'args', 'arguments', 'params'],
+  debug: ['debug', 'debug_json', 'debugJson', 'tokens', 'tokensIn', 'promptTokens', 'latencyMs'],
+  money: ['usd', 'costUsd', 'cost_usd', 'dollars', 'price', 'priceCents', 'amount', 'spend'],
+  cost: ['cost', 'runCost', 'run_cost', 'cents', 'run_cents'],
+  id: ['id', 'ids', 'brandId', 'brand_id', 'promptIds', 'citation_ids'],
+};
 
 describe('chat events', () => {
   it('lists every type once, and builds each one for the browser', () => {
@@ -132,17 +144,38 @@ describe('chat events', () => {
     }
   });
 
-  it('sends no tool, debug, id or dollar field and no uuid in any of them', () => {
-    const wire = JSON.stringify(CHAT_EVENT_TYPES.map((type) => SAMPLES[type]()));
-    expect(wire).not.toMatch(/"(tools?|tool_?[nN]ame|debug(_?[jJ]son)?|input|output)"/);
+  it('sends no tool, debug, id or money field, and no uuid outside a link', () => {
+    const events = CHAT_EVENT_TYPES.map((type) => SAMPLES[type]());
+    const wire = JSON.stringify(events, (key, value) => (key === 'href' ? undefined : value));
+    expect(wire).not.toMatch(/"tools?([A-Z_]\w*)?":|"(input|output|args|arguments|params)":/);
+    expect(wire).not.toMatch(/"[^"]*(debug|token|latency|usd|dollar|price|amount|spend)[^"]*":/i);
+    expect(wire).not.toMatch(/"(\w*_)?(cost|cents?)":|"\w*[a-z0-9](Cost|Cents?)":/);
     expect(wire).not.toMatch(/"(\w*_ids?|\w*[a-z]Ids?|ids?)":/);
-    expect(wire).not.toMatch(/usd/i);
-    expect(wire).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    expect(wire).not.toMatch(UUID_ANYWHERE);
   });
 
-  it('has no tool, debug, id or dollar key in any payload type', () => {
+  it('has no forbidden key in any payload type', () => {
     type PayloadKey = KeysDeep<ChatEventPayloads[ChatEventType]>;
-    expectTypeOf<Extract<PayloadKey, ForbiddenKey>>().toBeNever();
+    expectTypeOf<Extract<PayloadKey, ChatForbiddenKey>>().toBeNever();
+  });
+
+  it('names every forbidden key in the type too', () => {
+    // Each spelling the run-time check refuses is a ChatForbiddenKey…
+    expectTypeOf<
+      'toolInput' | 'toolOutput' | 'toolResult' | 'params'
+    >().toExtend<ChatForbiddenKey>();
+    expectTypeOf<'tokensIn' | 'latencyMs' | 'debugJson'>().toExtend<ChatForbiddenKey>();
+    expectTypeOf<
+      'costUsd' | 'priceCents' | 'runCost' | 'run_cost' | 'amount'
+    >().toExtend<ChatForbiddenKey>();
+    expectTypeOf<'brandId' | 'brand_id' | 'promptIds'>().toExtend<ChatForbiddenKey>();
+    // …and the keys a payload has, or may, aren't.
+    expectTypeOf<
+      Extract<
+        'tooltip' | 'costMultiplier' | 'runPercent' | 'percentUsed' | 'href',
+        ChatForbiddenKey
+      >
+    >().toBeNever();
   });
 
   it("refuses a tool's name, even when the types are got around", () => {
@@ -157,49 +190,108 @@ describe('chat events', () => {
           tool: 'list_citations',
         },
       }),
-    ).toThrow(/event\.data\.step\.tool: a tool or debug field/);
-
-    const loose = { ...STEP, toolName: 'get_prompt_performance' } as ChatStep;
-    expect(() => chatEvent('step.finished', 2, { step: loose })).toThrow(/toolName/);
+    ).toThrow(/event\.data\.step\.tool: a tool or its input or output/);
+    for (const key of [...FORBIDDEN.tool, ...FORBIDDEN.raw]) {
+      expect(() => stepWith(key), key).toThrow(`step.${key}: a tool or its input or output`);
+    }
   });
 
-  it('refuses a debug record, a tool input or output', () => {
-    for (const key of ['debug_json', 'debugJson', 'input', 'output']) {
-      const step = { ...STEP, [key]: { brand: 'Northwind' } } as ChatStep;
-      expect(() => chatEvent('step.finished', 1, { step })).toThrow(`step.${key}`);
+  it('refuses a debug record, tokens or latency', () => {
+    for (const key of FORBIDDEN.debug) {
+      expect(() => stepWith(key, { brand: 'Northwind' }), key).toThrow(
+        `step.${key}: a debug record`,
+      );
+    }
+  });
+
+  it('refuses money: usage is a percent of the monthly limit', () => {
+    for (const key of [...FORBIDDEN.money, ...FORBIDDEN.cost]) {
+      const usage = { percentUsed: 44, [key]: 0.04 } as { percentUsed: number };
+      expect(() => chatEvent('usage.updated', 1, usage), key).toThrow(`data.${key}: money`);
     }
   });
 
   it('refuses an id field, by any name', () => {
-    for (const key of ['id', 'brandId', 'brand_id', 'promptIds', 'citation_ids']) {
+    for (const key of FORBIDDEN.id) {
       const step = { ...STEP, scope: { ...STEP.scope, [key]: 'x' } } as ChatStep;
-      expect(() => chatEvent('step.finished', 1, { step })).toThrow(/an id field/);
+      expect(() => chatEvent('step.finished', 1, { step }), key).toThrow(`scope.${key}: an id`);
     }
   });
 
-  it('refuses a uuid in any text the browser shows', () => {
-    expect(() =>
-      chatEvent('step.finished', 1, { step: { ...STEP, label: `Read prompt ${UUID}` } }),
-    ).toThrow(/event\.data\.step\.label: an id in the text/);
-    expect(() =>
-      chatEvent('step.finished', 1, {
-        step: { ...STEP, scope: { platforms: ['ChatGPT', UUID.toUpperCase()] } },
-      }),
-    ).toThrow(/event\.data\.step\.scope\.platforms\[1\]/);
-    expect(() =>
-      chatEvent('confirm.required', 1, { n: 1, action: 'Archive 3 prompts', target: UUID }),
-    ).toThrow(/event\.data\.target/);
+  it('lets through the keys that only look alike', () => {
+    for (const key of ['tooltip', 'costMultiplier', 'runPercent', 'percentUsed', 'stepCount']) {
+      expect(() => stepWith(key), key).not.toThrow();
+    }
+  });
+
+  it('shows a uuid in the text as "…" instead of stopping the run', () => {
+    const step = chatEvent('step.finished', 1, {
+      step: {
+        ...STEP,
+        label: `Opened /products/${UUID}`,
+        scope: { platforms: ['ChatGPT', UUID.toUpperCase()] },
+      },
+    }).data.step;
+    expect(step.label).toBe('Opened /products/…');
+    expect(step.scope?.platforms).toEqual(['ChatGPT', '…']);
+
+    const confirm = chatEvent('confirm.required', 1, {
+      n: 1,
+      action: 'Archive 3 prompts',
+      target: `See https://example.com/a/${UUID}?b=${UUID}`,
+    }).data;
+    expect(confirm.target).toBe('See https://example.com/a/…?b=…');
+    expect(maskIds('no ids here')).toBe('no ids here');
+  });
+
+  it("doesn't change what it's given", () => {
+    const step = { ...STEP, label: `Read prompt ${UUID}` };
+    chatEvent('step.finished', 1, { step });
+    expect(step.label).toBe(`Read prompt ${UUID}`);
   });
 
   it("leaves the answer's text to the engine, but not its keys", () => {
-    expect(() => chatEvent('text.delta', 1, { text: `You asked about ${UUID}` })).not.toThrow();
+    const delta = chatEvent('text.delta', 1, { text: `You asked about ${UUID}` });
+    expect(delta.data.text).toBe(`You asked about ${UUID}`);
     const text = { text: 'ok', brand_id: UUID } as { text: string };
-    expect(() => chatEvent('text.delta', 1, text)).toThrow(/event\.data\.brand_id: an id field/);
+    expect(() => chatEvent('text.delta', 1, text)).toThrow(/event\.data\.brand_id: an id/);
   });
 
-  it('refuses a dollar amount: usage is a percent of the monthly limit', () => {
-    const usage = { percentUsed: 44, costUsd: 0.04 } as { percentUsed: number };
-    expect(() => chatEvent('usage.updated', 1, usage)).toThrow(/costUsd: a dollar amount/);
+  it("keeps an app link whole, ids and all, so a card's Open works", () => {
+    expect(SAMPLES['deliverable.created']().data.href).toBe(EDITOR);
+    expect(SAMPLES['deliverable.updated']().data.href).toBe(EDITOR);
+    expect(SAMPLES['page.opened']().data.href).toBe(EDITOR);
+    const plain = chatEvent('deliverable.created', 1, { ...DELIVERABLE, href: undefined });
+    expect(clientEventProblems(plain)).toEqual([]);
+  });
+
+  it('refuses a link out of the app, a query or a step out of /dashboard/', () => {
+    const bad = [
+      'https://example.com/dashboard/x',
+      '//example.com/dashboard/x',
+      'javascript:alert(1)',
+      '/dashboard/content?draft=1',
+      '/dashboard/content#top',
+      '/dashboard//example.com',
+      '/dashboard/../admin',
+      '/dashboard/%2e%2e/admin',
+      '/dashboard/a\\b',
+      ' /dashboard/x',
+      '/settings',
+      '/dashboard',
+    ];
+    for (const href of bad) {
+      expect(isChatHref(href), href).toBe(false);
+      const page = { where: 'editor', href } as ChatEventPayloads['page.opened'];
+      expect(() => chatEvent('page.opened', 1, page), href).toThrow(
+        'event.data.href: not a path in the app',
+      );
+    }
+    expect(isChatHref('/dashboard/content/library')).toBe(true);
+    expect(isChatHref(`/dashboard/chat/files/${UUID}`)).toBe(true);
+    // @ts-expect-error an href is a path under /dashboard/
+    const outside: ChatHref = 'https://example.com';
+    expect(isChatHref(outside)).toBe(false);
   });
 
   it("knows its own types, so the browser can skip a newer server's", () => {

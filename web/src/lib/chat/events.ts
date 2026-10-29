@@ -5,11 +5,15 @@
  *
  * What a customer's browser never gets (CHAT-00 principle 3, CHAT-03 items
  * 22–23, DECISIONS R), held twice: by the payload types below, which have no
- * field for any of it, and by chatEvent(), which every event the stream sends
- * goes through and which refuses
- *   - a tool's name, its input or output, or a debug record;
- *   - an id: no `id`, `…Id` or `…_id` key, and no uuid in any text;
- *   - a dollar amount: usage is a percent of the monthly AI limit.
+ * field for any of it (ChatForbiddenKey), and by chatEvent(), which every
+ * event the stream sends goes through. It refuses
+ *   - a tool's name, its input, output or result, a debug record, tokens or
+ *     latency;
+ *   - an id field (`id`, `…Id`, `…_id`);
+ *   - a money field: usage is a percent of the monthly AI limit;
+ *   - a link that isn't a plain path in the app (`href`, ChatHref);
+ * and shows a uuid in any other text as "…" (an id is never shown, CHAT-03
+ * item 5), so a page path or a link the person pasted never stops the run.
  * A step is named by its place in the run (`n`, from 1), which is also how a
  * question or an approval points at its step; a reconnect resumes after the
  * last event's `seq`.
@@ -41,7 +45,15 @@ export const CHAT_STEP_KINDS = [
 export type ChatStepKind = (typeof CHAT_STEP_KINDS)[number];
 
 /** pending: in a plan, not started; waiting: on the person (chat_run_steps.status). */
-export type ChatStepStatus = 'pending' | 'running' | 'waiting' | 'done' | 'error' | 'skipped';
+export const CHAT_STEP_STATUSES = [
+  'pending',
+  'running',
+  'waiting',
+  'done',
+  'error',
+  'skipped',
+] as const;
+export type ChatStepStatus = (typeof CHAT_STEP_STATUSES)[number];
 
 /** What a read covered, in the app's words: never ids (CHAT-03 item 5). */
 export interface ChatStepScope {
@@ -72,6 +84,14 @@ export interface ChatStep {
 }
 
 // ─── Cards ──────────────────────────────────────────────────────────────────
+
+/**
+ * Where a card's Open goes: a path in the app, under /dashboard/, with no
+ * host, query or fragment ("/dashboard/content/editor/{draft}"). The one
+ * field that may name a record, since the app's own routes do; checked by
+ * chatEvent().
+ */
+export type ChatHref = `/dashboard/${string}`;
 
 /** One choice on a question card (CHAT-00 `ask`, CHAT-07). */
 export interface ChatAskOption {
@@ -113,6 +133,8 @@ export interface ChatDeliverable {
   /** "md", "docx", "pdf", "csv", "xlsx"… */
   formats: string[];
   status: 'draft' | 'attached' | 'done';
+  /** Its card's Open (CHAT-06): the file, or the page's draft in the editor. */
+  href?: ChatHref;
 }
 
 /** A next move: a chip that fills the composer (CHAT-07). In rank order. */
@@ -164,7 +186,8 @@ export interface ChatEventPayloads {
   /** Suggestions Chat made on the open page, for the editor to show. */
   'suggestion.created': { count: number };
   'suggestion.resolved': { count: number };
-  'page.opened': { where: ChatPageWhere };
+  /** href: the page's draft, in the editor beside the chat or the Content Editor. */
+  'page.opened': { where: ChatPageWhere; href?: ChatHref };
 }
 
 export type ChatEventType = keyof ChatEventPayloads;
@@ -203,54 +226,119 @@ export function isChatEventType(type: unknown): type is ChatEventType {
 
 // ─── What never goes to the browser ─────────────────────────────────────────
 
-/** A tool, its input or output, or a debug record. */
-const TOOL_OR_DEBUG_KEYS = new Set([
-  'tool',
-  'tools',
-  'toolName',
-  'tool_name',
-  'toolCall',
-  'tool_call',
-  'debug',
-  'debugJson',
-  'debug_json',
-  'input',
-  'output',
-  'args',
-  'arguments',
-]);
-
-/** An id: `id`, `ids`, `brandId`, `brand_id`, `promptIds`… */
-const ID_KEY = /^ids?$|_ids?$|[a-z0-9]Ids?$/;
-
-/** A dollar amount: `usd`, `costUsd`, `cost_usd`… (DECISIONS R). */
-const DOLLAR_KEY = /usd/i;
-
-const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+type Upper =
+  | 'A'
+  | 'B'
+  | 'C'
+  | 'D'
+  | 'E'
+  | 'F'
+  | 'G'
+  | 'H'
+  | 'I'
+  | 'J'
+  | 'K'
+  | 'L'
+  | 'M'
+  | 'N'
+  | 'O'
+  | 'P'
+  | 'Q'
+  | 'R'
+  | 'S'
+  | 'T'
+  | 'U'
+  | 'V'
+  | 'W'
+  | 'X'
+  | 'Y'
+  | 'Z';
+type LowerOrDigit = Lowercase<Upper> | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+type AnyCase<W extends string> = W | Capitalize<W> | Uppercase<W>;
 
 /**
- * Why this event can't go to a customer's browser: every tool, debug, id or
- * dollar key and every uuid in it, by path. Empty when it can.
- *
- * The answer's own text (`text.delta`) isn't searched for uuids: it is the
- * model's words, which may quote what the person wrote, and a uuid can be
- * split across two chunks, so a chunk can't tell. Keeping ids out of the
- * answer is the engine's, on the whole text.
+ * The keys no payload may have, as the types see them; chatEvent() refuses
+ * the same at run time (FORBIDDEN_KEYS).
+ */
+export type ChatForbiddenKey =
+  // A tool, its call, input, output or result: tool, tools, toolName, tool_name…
+  | 'tool'
+  | 'tools'
+  | `tool${Upper | '_'}${string}`
+  | `tools${Upper | '_'}${string}`
+  | 'input'
+  | 'output'
+  | 'args'
+  | 'arguments'
+  | 'params'
+  // A debug record and what it measures.
+  | `${string}${AnyCase<'debug' | 'token' | 'latency'>}${string}`
+  // Money: dollars, prices, amounts, spend, cost, cents (a cost multiplier is fine).
+  | `${string}${AnyCase<'usd' | 'dollar' | 'price' | 'amount' | 'spend'>}${string}`
+  | 'cost'
+  | 'cent'
+  | 'cents'
+  | `${string}_${'cost' | 'cent' | 'cents'}`
+  | `${string}${LowerOrDigit}${'Cost' | 'Cent' | 'Cents'}`
+  // An id.
+  | 'id'
+  | 'ids'
+  | `${string}_${'id' | 'ids'}`
+  | `${string}${LowerOrDigit}${'Id' | 'Ids'}`;
+
+/** ChatForbiddenKey at run time: each with what it is. */
+const FORBIDDEN_KEYS: [RegExp, string][] = [
+  [/^tools?($|[A-Z_])|^(input|output|args|arguments|params)$/, 'a tool or its input or output'],
+  [/debug|token|latency/i, 'a debug record'],
+  [/usd|dollar|price|amount|spend/i, 'money'],
+  [/(^|_)(cost|cents?)$|[a-z0-9](Cost|Cents?)$/, 'money'],
+  [/^ids?$|_ids?$|[a-z0-9]Ids?$/, 'an id'],
+];
+
+/** A path in the app: /dashboard/ and path characters only — no host, query or fragment. */
+const APP_PATH = /^\/dashboard\/[A-Za-z0-9\-._~%/]*$/;
+
+/**
+ * Whether an href is a plain path in the app (ChatHref): no `//`, and no
+ * `.` or `..` part, written out or encoded, that could step out of /dashboard/.
+ */
+export function isChatHref(href: unknown): href is ChatHref {
+  return (
+    typeof href === 'string' &&
+    APP_PATH.test(href) &&
+    !href.includes('//') &&
+    !href
+      .split('/')
+      .map((part) => part.replace(/%2e/gi, '.'))
+      .some((part) => part === '.' || part === '..')
+  );
+}
+
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/** Text with every uuid in it shown as "…": "/products/…" (CHAT-03 item 5). */
+export function maskIds(text: string): string {
+  return text.replace(UUID, '…');
+}
+
+/**
+ * Why this event can't go to a customer's browser: every forbidden key, and
+ * every href that isn't a plain path in the app, by path. Empty when it can.
+ * A uuid in text isn't a reason: chatEvent() shows it as "…".
  */
 export function clientEventProblems(event: ChatEvent): string[] {
   const problems: string[] = [];
-  const answerText = event.type === 'text.delta' ? 'event.data.text' : null;
   const walk = (value: unknown, path: string) => {
-    if (typeof value === 'string') {
-      if (path !== answerText && UUID.test(value)) problems.push(`${path}: an id in the text`);
-    } else if (Array.isArray(value)) {
+    if (Array.isArray(value)) {
       value.forEach((item, i) => walk(item, `${path}[${i}]`));
     } else if (value && typeof value === 'object') {
       for (const [key, item] of Object.entries(value)) {
         const at = `${path}.${key}`;
-        if (TOOL_OR_DEBUG_KEYS.has(key)) problems.push(`${at}: a tool or debug field`);
-        else if (ID_KEY.test(key)) problems.push(`${at}: an id field`);
-        else if (DOLLAR_KEY.test(key)) problems.push(`${at}: a dollar amount`);
+        const forbidden = FORBIDDEN_KEYS.find(([pattern]) => pattern.test(key));
+        if (forbidden) problems.push(`${at}: ${forbidden[1]}`);
+        else if (key === 'href' && item !== undefined && !isChatHref(item)) {
+          problems.push(`${at}: not a path in the app`);
+        }
         walk(item, at);
       }
     }
@@ -259,20 +347,36 @@ export function clientEventProblems(event: ChatEvent): string[] {
   return problems;
 }
 
+/** A copy with every uuid in its text shown as "…", but for links (href). */
+function masked(value: unknown, key?: string): unknown {
+  if (typeof value === 'string') return key === 'href' ? value : maskIds(value);
+  if (Array.isArray(value)) return value.map((item) => masked(item));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, item]) => [k, masked(item, k)]));
+  }
+  return value;
+}
+
 /**
- * An event for the stream to send, checked: throws on anything
- * clientEventProblems finds, so a tool's name or an id never reaches a
- * customer's browser, even from a payload built loosely.
+ * An event for the stream to send, made safe: throws on anything
+ * clientEventProblems finds — a tool's name, an id field, money, a link out
+ * of the app — even from a payload built loosely, and shows every uuid in
+ * the text as "…".
+ *
+ * The answer's own text (`text.delta`) is sent as it is: it is the model's
+ * words, which may quote what the person wrote, and a uuid can be split
+ * across two chunks, so a chunk can't tell. Keeping ids out of the answer is
+ * the engine's, on the whole text.
  */
 export function chatEvent<K extends ChatEventType>(
   type: K,
   seq: number,
   data: ChatEventPayloads[K],
 ): Extract<ChatEvent, { type: K }> {
-  const event = { type, seq, data } as Extract<ChatEvent, { type: K }>;
-  const problems = clientEventProblems(event);
+  const problems = clientEventProblems({ type, seq, data } as ChatEvent);
   if (problems.length > 0) {
     throw new Error(`Chat event "${type}" can't go to the browser: ${problems.join('; ')}`);
   }
-  return event;
+  const safe = type === 'text.delta' ? data : masked(data);
+  return { type, seq, data: safe } as Extract<ChatEvent, { type: K }>;
 }
