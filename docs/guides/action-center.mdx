@@ -203,6 +203,12 @@ Click an action to see **What was the goal?**, **What happened?** (the signals i
 
 Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range (90 days unless you pick another, since an action's final reading comes 30 days after it closes): how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, never another brand's.
 
+### Detector thresholds (self-hosted)
+
+The detectors' thresholds are first settings, not calibrations. To see how they did at a brand, export its closed actions with `server/src/scripts/export-detector-outcomes.sql` (psql, with the brand's id as `brand_id`; it stops without one) and read them with `node src/scripts/calibrate-detector-thresholds.js <outcomes.jsonl>` from `server/`. The report shows, per signal kind with 20 or more closed actions, how its actions turned out and why they were dismissed, by the signal's strength in quarters, and suggests a threshold where the weakest quarter rarely leads anywhere. A suggestion is a starting point; nothing changes until you edit `server/src/config/action-engine.js`.
+
+Run it on one brand (Ansvisor's own, or your own self-hosted data). Running it across customers' brands is not supported; it waits on the cross-brand learning decision (C5) and a privacy policy update.
+
 When an action is closed, its condition can open a new action after a two-week rest if it is still firing. The old one stays in History as the record of that round of work.
 
 ## Where actions come from
