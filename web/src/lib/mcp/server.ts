@@ -28,6 +28,8 @@ import {
   getPromptVolumesFor,
   listShoppingCards,
   getProductVisibility,
+  NOT_IN_PLAN,
+  SHOPPING_NOT_IN_PLAN,
   getPromptPerformanceFor,
   runSiteAuditFor,
   getSiteAuditFor,
@@ -1000,7 +1002,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_shopping_cards',
     {
       description:
-        'List normalized shopping cards for a brand, showing which products are surfaced by AI engines in commercial-intent contexts. Supports filtering by matched brand role ("own" | "competitor" | "other"), platform, and region. Pagination is cursor-based (default limit 50, max 200). Use this to see which product brands, URLs, and prices are visible in search results.',
+        'List normalized shopping cards for a brand, showing which products are surfaced by AI engines in commercial-intent contexts. Supports filtering by matched brand role ("own" | "competitor" | "other"), platform, and region. Pagination is cursor-based (default limit 50, max 200). Use this to see which product brands, URLs, and prices are visible in search results. Needs a plan with shopping analytics (Growth and above): on Starter it answers plan_limit.',
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         role: z
@@ -1038,6 +1040,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         limit: args.limit,
         cursor: args.cursor,
       });
+      if (result === NOT_IN_PLAN) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(SHOPPING_NOT_IN_PLAN, null, 2) }],
+          isError: true,
+        };
+      }
       if (result === null) {
         return {
           content: [{ type: 'text', text: 'Brand not found' }],
@@ -1054,7 +1062,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_product_visibility',
     {
       description:
-        "Get aggregate visibility metrics for a specific product title across platforms, regions, and dates. Returns total appearances, platform breakdown, region breakdown, chronological trend of dates, average rating, total reviews, and associated merchant domains. Use this to audit a single product's performance and organic footprint in AI-driven shopping results.",
+        "Get aggregate visibility metrics for a specific product title across platforms, regions, and dates. Returns total appearances, platform breakdown, region breakdown, chronological trend of dates, average rating, total reviews, and associated merchant domains. Use this to audit a single product's performance and organic footprint in AI-driven shopping results. Needs a plan with shopping analytics (Growth and above): on Starter it answers plan_limit.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         product_title: z.string().describe('The product title/name to query.'),
@@ -1065,6 +1073,12 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         brandId: args.brand_id,
         productTitle: args.product_title,
       });
+      if (result === NOT_IN_PLAN) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(SHOPPING_NOT_IN_PLAN, null, 2) }],
+          isError: true,
+        };
+      }
       if (result === null) {
         return {
           content: [{ type: 'text', text: 'Product or Brand not found' }],
