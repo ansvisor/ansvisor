@@ -15,7 +15,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         table === 'api_keys'
           ? { id: 'key-1', user_id: 'user-1', revoked_at: null }
           : table === 'profiles'
-            ? { organization_id: 'org-1' }
+            ? { organization_id: 'org-1', role: 'analyst' }
             : { subscription_status: status };
       const query = {
         select: () => query,
@@ -51,6 +51,10 @@ describe('authenticateMcpRequest on a read-only workspace', () => {
   it('lets a read through', async () => {
     const auth = await authenticateMcpRequest(request('GET'));
     expect(auth).toMatchObject({ userId: 'user-1', organizationId: 'org-1' });
+  });
+
+  it("carries the user's role, for the tools that check it", async () => {
+    expect(await authenticateMcpRequest(request('GET'))).toMatchObject({ role: 'analyst' });
   });
 
   it('answers a write with 402 subscription_inactive', async () => {
