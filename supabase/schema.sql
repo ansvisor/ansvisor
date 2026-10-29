@@ -43180,7 +43180,8 @@ notify pgrst, 'reload schema';
 --   * chat_conversations: one chat. Private to its author (CHAT-20 §16c):
 --     only they read it, admins included; the server writes it. brand_id is
 --     the brand it is about, null for the workspace as a whole (a Help
---     question); a deleted brand takes its chats with it.
+--     question). A deleted brand leaves its chats with their author, then
+--     about the workspace, as agent_conversations does (00009).
 --   * chat_messages: the person's messages and Chat's answers. An answer
 --     holds the answer only, never a tool's output (content_md; CHAT-03 item
 --     23), and when it was made: generated_at, the newest data it read
@@ -43237,7 +43238,7 @@ create table if not exists public.chat_conversations (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   -- Null: about the workspace as a whole, not one brand.
-  brand_id uuid references public.brands(id) on delete cascade,
+  brand_id uuid references public.brands(id) on delete set null,
   -- Null until Chat names it from the first message (CHAT-01 item 8); the
   -- web shows "New chat" meanwhile.
   title text check (char_length(title) between 1 and 200),
