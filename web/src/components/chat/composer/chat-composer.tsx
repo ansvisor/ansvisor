@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowUp } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -16,6 +16,28 @@ export type ComposerVariant = 'home' | 'dock' | 'panel';
 /** The tallest the box grows before it scrolls (CHAT-02 item 4). */
 const MAX_HEIGHT = 240;
 
+/** A chip's longest label; longer ones are cut, the whole one in its tooltip (item 5). */
+const CHIP_LABEL = 28;
+
+/**
+ * A context chip (CHAT-02 items 5–7): what Chat looks at, as the page names
+ * it ("Ansvisor", "Last 30 days"). `key` is the page's own handle for it,
+ * never shown; the label is a name, never an ID.
+ */
+export interface ComposerChip {
+  key: string;
+  label: string;
+}
+
+/** What goes with a sent text: the chips still in the box. */
+export interface ComposerSend {
+  context: ComposerChip[];
+}
+
+/** A chip's label as it shows: cut at CHIP_LABEL characters. */
+export const chipLabel = (label: string) =>
+  label.length > CHIP_LABEL ? `${label.slice(0, CHIP_LABEL - 1)}…` : label;
+
 /** Where a reader learns what their role can do (B1, Your access). */
 const ACCESS_HREF = '/dashboard/chat/capabilities';
 
@@ -27,6 +49,12 @@ const ACCESS_HREF = '/dashboard/chat/capabilities';
  * message (decided 2026-10-30). Analysts and Agency partners read only: no
  * mode switch and no skills, a "Read-only" link to what they can do. A send
  * the page refuses (it answers false) puts the text back.
+ *
+ * Context chips sit above the text (W1-11): × takes one off, and the page
+ * keeps it off for the rest of the chat; a send carries the chips left. The
+ * empty box can show one ghost suggestion, dim, with a Tab hint: Tab (or a
+ * click on it) makes it the text, to edit or send; typing replaces it; it
+ * never sends itself, and Enter and Send wait while only it shows.
  */
 export function ChatComposer({
   variant = 'dock',
@@ -37,6 +65,9 @@ export function ChatComposer({
   onSend,
   onStop,
   onSteer,
+  chips = [],
+  onRemoveChip,
+  ghost,
   placeholder,
   disabled = false,
   tools,
@@ -53,10 +84,20 @@ export function ChatComposer({
   fullAutoOpen: boolean;
   /** A run answers: Send is Stop, and the box steers. */
   running?: boolean;
-  onSend: (text: string) => boolean | void | Promise<boolean | void>;
+  onSend: (text: string, sent: ComposerSend) => boolean | void | Promise<boolean | void>;
   onStop?: () => void;
   /** Stops the run and sends the text: without it, Enter waits for the run. */
-  onSteer?: (text: string) => boolean | void | Promise<boolean | void>;
+  onSteer?: (text: string, sent: ComposerSend) => boolean | void | Promise<boolean | void>;
+  /** What Chat looks at, as chips above the text (the page's context, CHAT-01). */
+  chips?: ComposerChip[];
+  /** × on a chip: the page drops it for this chat. */
+  onRemoveChip?: (key: string) => void;
+  /**
+   * One suggestion for the empty box: the variant's starter before the first
+   * message, then a clear follow-up only (CHAT-07). A READ one for Analysts
+   * and Agency partners: the page picks it.
+   */
+  ghost?: string;
   /** The empty box's line; "Ask anything…" by default. */
   placeholder?: string;
   /** No sending at all (the usage cap's state, W1-23). */
@@ -78,6 +119,21 @@ export function ChatComposer({
   const [sending, setSending] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
   const hasText = text.trim().length > 0;
+  // The ghost shows in an empty box, not while a run answers or the box is off.
+  const ghostShown = !!ghost && text === '' && !running && !disabled;
+  const ghostId = useId();
+
+  /** The ghost as the box's text, to edit or send, the cursor after it. */
+  const acceptGhost = () => {
+    if (!ghost) return;
+    setText(ghost);
+    requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  };
 
   // The box grows with its lines, from its rows up to MAX_HEIGHT, then scrolls.
   useLayoutEffect(() => {
@@ -96,7 +152,7 @@ export function ChatComposer({
     setSending(true);
     setText('');
     try {
-      const sent = await handler(message);
+      const sent = await handler(message, { context: chips });
       if (sent === false) setText(message);
     } catch {
       setText(message);
@@ -112,7 +168,9 @@ export function ChatComposer({
       : t('under.answering')
     : readOnly
       ? t('under.readOnly')
-      : t('under.hint');
+      : ghostShown
+        ? t('under.ghostHint')
+        : t('under.hint');
 
   return (
     <div className={cn('w-full', className)}>
@@ -122,33 +180,88 @@ export function ChatComposer({
           disabled && 'bg-muted/40',
         )}
       >
-        <textarea
-          ref={box}
-          data-action="composer.input"
-          value={text}
-          rows={variant === 'home' ? 2 : 1}
-          disabled={disabled}
-          aria-label={t('message')}
-          placeholder={running ? t('steerPlaceholder') : (placeholder ?? t('placeholder'))}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            const action = composerKeyAction({
-              key: e.key,
-              shiftKey: e.shiftKey,
-              composing: e.nativeEvent.isComposing || e.keyCode === 229,
-              coarse: window.matchMedia?.('(pointer: coarse)')?.matches ?? false,
-              running,
-              hasText,
-              canSteer: !!onSteer,
-            });
-            if (!action) return;
-            e.preventDefault();
-            if (action === 'stop') onStop?.();
-            else if (action === 'send') void submit(false);
-            else if (action === 'steer') void submit(true);
-          }}
-          className="block w-full resize-none bg-transparent px-3 py-2 text-[14.5px] leading-6 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-        />
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-2.5 pt-2">
+            {chips.map((chip) => {
+              const shown = chipLabel(chip.label);
+              return (
+                <span
+                  key={chip.key}
+                  title={shown === chip.label ? undefined : chip.label}
+                  className="inline-flex h-[22px] items-center gap-0.5 rounded-[7px] border bg-muted/60 pr-1 pl-[7px] text-[11.5px] text-foreground/80"
+                >
+                  {shown}
+                  {onRemoveChip && (
+                    <button
+                      type="button"
+                      data-action="composer.removeChip"
+                      onClick={() => onRemoveChip(chip.key)}
+                      aria-label={t('removeChip', { label: chip.label })}
+                      className="inline-flex size-4 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        )}
+        <div className="relative">
+          <textarea
+            ref={box}
+            data-action="composer.input"
+            value={text}
+            rows={variant === 'home' ? 2 : 1}
+            disabled={disabled}
+            aria-label={t('message')}
+            aria-describedby={ghostShown ? ghostId : undefined}
+            placeholder={
+              ghostShown
+                ? undefined
+                : running
+                  ? t('steerPlaceholder')
+                  : (placeholder ?? t('placeholder'))
+            }
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              const action = composerKeyAction({
+                key: e.key,
+                shiftKey: e.shiftKey,
+                composing: e.nativeEvent.isComposing || e.keyCode === 229,
+                coarse: window.matchMedia?.('(pointer: coarse)')?.matches ?? false,
+                running,
+                hasText,
+                canSteer: !!onSteer,
+                ghost: ghostShown,
+              });
+              if (!action) return;
+              e.preventDefault();
+              if (action === 'stop') onStop?.();
+              else if (action === 'accept') acceptGhost();
+              else if (action === 'send') void submit(false);
+              else if (action === 'steer') void submit(true);
+            }}
+            className="block w-full resize-none bg-transparent px-3 py-2 text-[14.5px] leading-6 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+          />
+          {ghostShown && (
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex px-3 py-2 text-[14.5px] leading-6">
+              <span
+                id={ghostId}
+                data-action="composer.acceptGhost"
+                role="button"
+                tabIndex={-1}
+                onClick={acceptGhost}
+                className="pointer-events-auto flex min-w-0 cursor-pointer items-center text-muted-foreground/70"
+              >
+                <span className="truncate">{ghost}</span>
+                <kbd className="ml-1.5 shrink-0 rounded-[4px] border px-1 font-sans text-[11px] text-muted-foreground">
+                  {t('tab')}
+                </kbd>
+              </span>
+            </div>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2 pt-1.5 pr-2 pb-2 pl-2.5">
           {tools}
           {readOnly ? (

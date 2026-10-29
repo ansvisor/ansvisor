@@ -3548,8 +3548,11 @@
     "model": "Model",
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
+    "removeChip": "Remove {label}",
+    "tab": "Tab",
     "under": {
       "hint": "/ skills · @ data",
+      "ghostHint": "Tab to accept · / skills · @ data",
       "readOnly": "@ data · read-only",
       "answering": "Answering · Esc to stop",
       "steer": "Enter stops this run and sends your message"
@@ -3563,7 +3566,10 @@
       "readOnly": "Side panel · an Analyst reads only",
       "sent": "Sent: {text}",
       "steered": "Stopped the run and sent: {text}",
-      "stopped": "Stopped · done steps stay"
+      "stopped": "Stopped · done steps stay",
+      "homeGhost": "Why did our Perplexity citations drop this week?",
+      "dockGhost": "Start task 2: comparison page",
+      "panelGhost": "Show which pages Perplexity cites most"
     },
     "mode": {
       "label": "Run mode",

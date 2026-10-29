@@ -119,6 +119,15 @@ describe('composerKeyAction', () => {
     expect(key({ key: 'Escape', running: true })).toBe('stop');
     expect(key({ key: 'Escape' })).toBeNull();
   });
+
+  it('takes a ghost suggestion in on Tab only in an empty box', () => {
+    expect(key({ key: 'Tab', ghost: true, hasText: false })).toBe('accept');
+    expect(key({ key: 'Tab', ghost: true, hasText: true })).toBeNull();
+    expect(key({ key: 'Tab', ghost: true, hasText: false, shiftKey: true })).toBeNull();
+    expect(key({ key: 'Tab', hasText: false })).toBeNull();
+    // Only the ghost shows: Enter sends nothing.
+    expect(key({ ghost: true, hasText: false })).toBe('block');
+  });
 });
 
 describe('ChatComposer', () => {
@@ -133,7 +142,9 @@ describe('ChatComposer', () => {
     await press('Enter', { shiftKey: true });
     expect(handlers.onSend).not.toHaveBeenCalled();
     await press('Enter');
-    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Why did our citations drop?');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Why did our citations drop?', {
+      context: [],
+    });
     expect(box().value).toBe('');
   });
 
@@ -158,7 +169,7 @@ describe('ChatComposer', () => {
     await type('only blog pages');
     expect(under()).toContain('Enter stops this run and sends your message');
     await press('Enter');
-    expect(handlers.onSteer).toHaveBeenCalledExactlyOnceWith('only blog pages');
+    expect(handlers.onSteer).toHaveBeenCalledExactlyOnceWith('only blog pages', { context: [] });
     expect(handlers.onSend).not.toHaveBeenCalled();
   });
 
@@ -225,5 +236,69 @@ describe('ChatComposer', () => {
   it('shows the model on Auto in the line under the box', async () => {
     await render();
     expect(under()).toContain('Auto · Haiku reads, Sonnet writes');
+  });
+});
+
+describe('ChatComposer: context chips and the ghost suggestion (W1-11)', () => {
+  const chips = [
+    { key: 'brand', label: 'Ansvisor' },
+    { key: 'range', label: 'Last 30 days' },
+    { key: 'prompt', label: 'Best AI search visibility tools for small agencies' },
+  ];
+  const ghost = 'Why did our Perplexity citations drop this week?';
+  const chipTexts = () =>
+    [...container.querySelectorAll('[data-action="composer.removeChip"]')].map(
+      (b) => b.parentElement!.textContent,
+    );
+
+  it('shows the chips by name, cuts a long one with the whole name in its tooltip, and sends them', async () => {
+    const onRemoveChip = vi.fn();
+    await render({ chips, onRemoveChip });
+    expect(chipTexts()).toEqual(['Ansvisor×', 'Last 30 days×', 'Best AI search visibility t…×']);
+    const long = container.querySelectorAll('[data-action="composer.removeChip"]')[2];
+    expect(long.parentElement!.getAttribute('title')).toBe(chips[2].label);
+    expect(long.getAttribute('aria-label')).toBe(`Remove ${chips[2].label}`);
+    await act(async () => (long as HTMLButtonElement).click());
+    expect(onRemoveChip).toHaveBeenCalledExactlyOnceWith('prompt');
+
+    await type('What changed?');
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('What changed?', { context: chips });
+  });
+
+  it('shows one ghost suggestion in the empty box; Tab makes it the text, and nothing sends by itself', async () => {
+    await render({ ghost });
+    const shown = () => container.querySelector('[data-action="composer.acceptGhost"]');
+    expect(shown()!.textContent).toBe(`${ghost}Tab`);
+    expect(under()).toContain('Tab to accept · / skills · @ data');
+    expect(button('Send')!.disabled).toBe(true);
+    await press('Enter');
+    expect(handlers.onSend).not.toHaveBeenCalled();
+
+    await press('Tab');
+    expect(box().value).toBe(ghost);
+    expect(shown()).toBeNull();
+    expect(handlers.onSend).not.toHaveBeenCalled();
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith(ghost, { context: [] });
+  });
+
+  it('gives way to typing, comes back on an empty box, and fills the box on a click', async () => {
+    await render({ ghost });
+    const shown = () =>
+      container.querySelector<HTMLElement>('[data-action="composer.acceptGhost"]');
+    await type('O');
+    expect(shown()).toBeNull();
+    expect(box().value).toBe('O');
+    await type('');
+    expect(shown()).not.toBeNull();
+    await act(async () => shown()!.click());
+    expect(box().value).toBe(ghost);
+  });
+
+  it('shows no ghost while a run answers', async () => {
+    await render({ ghost, running: true, onStop: handlers.onStop });
+    expect(container.querySelector('[data-action="composer.acceptGhost"]')).toBeNull();
+    expect(box().placeholder).toBe('Steer while I work: “only blog pages”…');
   });
 });
