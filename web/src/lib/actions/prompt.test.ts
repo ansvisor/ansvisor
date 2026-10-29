@@ -28,6 +28,9 @@ let jsonRpcMissing = false;
 let positionCalls: { fn: string; ranged: boolean }[] = [];
 /** When set, each heavy read takes a moment, counted while it runs. */
 let slowReads: { running: number; most: number } | null = null;
+/** The prompts a bulk location change reads, and what it writes back. */
+let bulkRows: { id: string; regions: string[]; is_active: boolean }[] = [];
+let appliedLocations: unknown[] = [];
 const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
   if (!slowReads) return read();
   const reads = slowReads;
@@ -49,7 +52,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     // The position sums come as one jsonb value (00153), which PostgREST's
     // 1000-row cap doesn't cut; the old row-returning RPC would have been cut.
-    rpc: (fn: string, args?: { p_date_to?: string }) => {
+    rpc: (fn: string, args?: { p_date_to?: string; p_updates?: unknown[] }) => {
       const call = { fn, ranged: false };
       if (fn.startsWith('prompt_position_summaries')) positionCalls.push(call);
       const result = () => {
@@ -67,6 +70,10 @@ vi.mock('@/lib/supabase/server', () => ({
         }
         if (fn === 'prompt_position_summaries') {
           return { data: positionData.slice(0, 1000), error: null };
+        }
+        if (fn === 'apply_prompt_locations') {
+          appliedLocations.push(args?.p_updates);
+          return { data: args?.p_updates?.length ?? 0, error: null };
         }
         return usageFails
           ? { data: null, error: { message: 'rpc failed' } }
@@ -87,6 +94,13 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     from: (table: string) => ({
       select: () => ({
+        in: async () => ({
+          data: bulkRows.map((row) => ({
+            ...row,
+            prompt_sets: { brands: { organization_id: 'org-1' } },
+          })),
+          error: null,
+        }),
         eq: () => ({
           order: async () =>
             table === 'prompt_sets'
@@ -119,8 +133,13 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getPromptLocationMatrix, getPromptsPageData, setPromptActive, updatePromptLocations } =
-  await import('./prompt');
+const {
+  bulkUpdatePromptLocations,
+  getPromptLocationMatrix,
+  getPromptsPageData,
+  setPromptActive,
+  updatePromptLocations,
+} = await import('./prompt');
 
 const capped = (maxPrompts: number): Plan => ({
   ...PLANS.starter,
@@ -229,6 +248,34 @@ describe('updatePromptLocations on paused prompts', () => {
 
     expect(result).toMatchObject({ code: 'plan_limit' });
     expect(writes).toEqual([]);
+  });
+});
+
+describe('bulkUpdatePromptLocations (PROMPT-015)', () => {
+  beforeEach(() => {
+    appliedLocations = [];
+    usageFails = false;
+    plan = capped(50);
+    usedLocations = 10;
+    // A city no list names any more: never run, and still on the prompts.
+    bulkRows = [
+      { id: 'p1', regions: ['US', 'TR~ATLANTIS'], is_active: true },
+      { id: 'p2', regions: ['TR~ATLANTIS'], is_active: true },
+    ];
+  });
+
+  it("stops a location no list names any more, but never a prompt's last one", async () => {
+    const result = await bulkUpdatePromptLocations(['p1', 'p2'], 'remove', ['tr~atlantis']);
+
+    expect(result).toEqual({ updated: 1, unchanged: 0, blocked: 1, delta: -1 });
+    expect(appliedLocations).toEqual([[{ id: 'p1', regions: ['US'] }]]);
+  });
+
+  it('still refuses to add one, and writes nothing', async () => {
+    const result = await bulkUpdatePromptLocations(['p1'], 'add', ['TR~ATLANTIS', 'DE']);
+
+    expect(result).toEqual({ error: 'Unknown location code: TR~ATLANTIS' });
+    expect(appliedLocations).toEqual([]);
   });
 });
 
