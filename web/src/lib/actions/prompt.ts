@@ -512,7 +512,9 @@ export async function bulkUpdatePromptLocations(
 
   const locations = [...new Set(locationsInput.map((r) => r.trim().toUpperCase()))].filter(Boolean);
   if (locations.length === 0) return { error: 'Select at least one location.' };
-  const unknown = locations.filter((r) => !isValidLocation(r));
+  // Only a location being added must be one the product can track: stopping
+  // takes off whatever the prompts hold, a code no list names any more too.
+  const unknown = action === 'add' ? locations.filter((r) => !isValidLocation(r)) : [];
   if (unknown.length > 0) {
     return {
       error: `Unknown location code${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`,
