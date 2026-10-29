@@ -3,7 +3,8 @@
  * provider (Cloro) documents it. The Query Fan-out page uses this to tell
  * "this engine shares its searches, but none arrived" (worth flagging) apart
  * from "this engine never shares them" (nothing to wait for). The server's
- * daily health report keeps the same list (server/src/lib/health/report.js).
+ * daily health report keeps the same sharing list, and judges ChatGPT by its
+ * sampling (server/src/lib/health/report.js).
  */
 
 /** Platforms whose answers come with the searches the engine ran. */
@@ -11,14 +12,17 @@ export const FANOUT_SHARING_PLATFORMS: readonly string[] = ['copilot-web', 'perp
 
 /**
  * Platforms whose answers never come with their searches: those our provider
- * documents no fan-out for; ChatGPT, whose default interface carries no query
- * text since 2026-09-30 (#1119), so older answers in a long window may still
- * have some; and the API models (`claude`, `gemini`, `chatgpt`, see
- * resolveModelPlatform in the tracking worker), whose searches we don't
- * capture.
+ * documents no fan-out for, and the API models (`claude`, `gemini`,
+ * `chatgpt`, see resolveModelPlatform in the tracking worker), whose searches
+ * we don't capture.
+ *
+ * ChatGPT (`chatgpt-web`) is in neither list. Its default interface carries no
+ * query text since 2026-09-30 (#1119); the server asks its legacy interface on
+ * one day a week per prompt (CLORO_CHATGPT_FANOUT, off unless set on
+ * self-host). So a window may hold some of its searches or none, and neither
+ * is news: it reads as an ordinary engine, never flagged.
  */
 export const FANOUT_NOT_SHARED_PLATFORMS: readonly string[] = [
-  'chatgpt-web',
   'google-aio',
   'google-aimode',
   'gemini-web',

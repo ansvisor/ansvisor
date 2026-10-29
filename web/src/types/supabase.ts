@@ -2016,6 +2016,7 @@ export type Database = {
       cloro_pending_tasks: {
         Row: {
           brand_id: string
+          legacy: boolean
           prompt_id: string
           region: string | null
           scraper_id: string
@@ -2024,6 +2025,7 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          legacy?: boolean
           prompt_id: string
           region?: string | null
           scraper_id: string
@@ -2032,6 +2034,7 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          legacy?: boolean
           prompt_id?: string
           region?: string | null
           scraper_id?: string
