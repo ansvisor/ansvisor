@@ -6,7 +6,7 @@ vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 import { ConnectError } from '../errors.js';
 import { runSync, startFakeApi } from '../testing.js';
-import wooCommerce, { verifyWebhookSignature } from './index.js';
+import wooCommerce, { MAX_PAGES, verifyWebhookSignature } from './index.js';
 
 const CONSUMER_KEY = 'ck_test_woocommerce_readonly';
 const CONSUMER_SECRET = 'cs_test_woocommerce_secret';
@@ -23,7 +23,6 @@ const simple = (id, overrides = {}) => ({
   price: '19.00',
   regular_price: '19.00',
   sale_price: '',
-  currency: 'USD',
   stock_status: 'instock',
   images: [
     { src: `https://shop.example/wp-content/uploads/${id}.jpg` },
@@ -48,7 +47,6 @@ const variable = {
   price: '',
   regular_price: '',
   sale_price: '',
-  currency: 'USD',
   stock_status: 'instock',
   images: [{ src: 'https://shop.example/wp-content/uploads/trail-boot.jpg' }],
   categories: [{ id: 2, name: 'Boots' }],
@@ -104,6 +102,9 @@ beforeEach(async () => {
   };
 
   api = await startFakeApi({
+    'GET /wp-json/wc/store/v1/products': () => ({
+      json: [{ id: 101, prices: { currency_code: 'USD' } }],
+    }),
     'GET /wp-json/wc/v3/products': (req) => {
       if (!authorized(req)) return { status: 401, json: { message: 'Unauthorized' } };
       if (req.query.per_page === '1' && !req.query.page) {
@@ -152,7 +153,6 @@ beforeEach(async () => {
                   date_created_gmt: '2026-10-20T10:00:00',
                   date_modified_gmt: '2026-10-22T09:00:00',
                   status: 'completed',
-                  currency: 'USD',
                   total: '250.00',
                   created_via: 'checkout',
                   refunds: [{ id: 801, reason: 'private refund note', total: '-25.00' }],
@@ -284,7 +284,6 @@ describe('readCatalog through the connector harness', () => {
       gtin: '900000000002011',
       price: 129,
       sale_price: 99,
-      currency: 'USD',
       availability: 'in_stock',
       attributes: { color: 'Red', size: '42', material: 'Leather' },
     });
@@ -296,7 +295,6 @@ describe('readCatalog through the connector harness', () => {
       sku: 'SOCK-101',
       gtin: '00000000000101',
       price: 19,
-      currency: 'USD',
     });
 
     expect(products.find((p) => p.external_id === '101')?.description).toBe('Soft merino wool.');
@@ -309,6 +307,10 @@ describe('readCatalog through the connector harness', () => {
       .map((link) => categories.find((category) => category.id === link.category_id)?.name)
       .sort();
     expect(sockCategories).toEqual(['Accessories', 'Footwear > Boots']);
+
+    const currencyLookup = api.calls.find((call) => call.path === '/wp-json/wc/store/v1/products');
+    expect(currencyLookup?.query).toMatchObject({ per_page: '1', page: '1' });
+    expect(currencyLookup?.headers.authorization).toBeUndefined();
 
     const productPagesRead = api.calls.filter(
       (call) => call.path === '/wp-json/wc/v3/products' && call.query.per_page === '100',
@@ -343,7 +345,6 @@ describe('readCatalog through the connector harness', () => {
       external_id: '7001',
       status: 'completed',
       channel: 'checkout',
-      currency: 'USD',
       total: 250,
       refunded_total: 25,
     });
@@ -365,6 +366,52 @@ describe('readCatalog through the connector harness', () => {
     ]);
     expect(fake.rows('catalog_order_items')[0]).not.toHaveProperty('name');
     expect(fake.rows('catalog_sources')[0].last_orders_synced_at).toBeTruthy();
+  });
+
+  it('fails closed when the product pagination cap would make the snapshot incomplete', async () => {
+    await api.close();
+    api = await startFakeApi({
+      'GET /wp-json/wc/store/v1/products': () => ({
+        json: [{ id: 101, prices: { currency_code: 'USD' } }],
+      }),
+      'GET /wp-json/wc/v3/products/categories': () => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: [],
+      }),
+      'GET /wp-json/wc/v3/products': () => ({
+        headers: { 'x-wp-totalpages': String(MAX_PAGES + 1) },
+        json: [simple(999)],
+      }),
+    });
+
+    const { outcome, products, variants } = await runSync(wooCommerce, source(), {
+      credentials: { consumerKey: CONSUMER_KEY, consumerSecret: CONSUMER_SECRET },
+      request: api.request,
+    });
+
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error).toBeTruthy();
+    expect(api.calls.filter((call) => call.path === '/wp-json/wc/v3/products')).toHaveLength(
+      MAX_PAGES,
+    );
+    expect(products).toEqual([]);
+    expect(variants).toEqual([]);
+  });
+
+  it('overlaps the modified-after cursor to avoid misses from second-precision timestamps', async () => {
+    const { orders } = await wooCommerce.syncOrders(source(), {
+      credentials: { consumerKey: CONSUMER_KEY, consumerSecret: CONSUMER_SECRET },
+      request: api.request,
+      since: '2026-10-22T09:00:30.500Z',
+    });
+
+    expect(orders.length).toBeGreaterThan(0);
+    expect(api.calls.find((call) => call.path === '/wp-json/wc/v3/orders')?.query).toMatchObject({
+      modified_after: '2026-10-22T08:55:30.500Z',
+      status: 'any',
+      orderby: 'modified',
+      order: 'asc',
+    });
   });
 
   it('retries a 429 according to Retry-After and then continues the sync', async () => {
