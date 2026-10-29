@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import { MCP_TASK_STATUSES, updateTaskStatusFor, type McpTaskStatus } from '@/lib/mcp/data';
 
 /**
@@ -42,6 +43,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('update_task_status', auth.organizationId, {
+      task_id: id,
+    });
+    if (refused) return refused;
     const updated = await updateTaskStatusFor(auth, id, status as McpTaskStatus, skipReason);
     if (!updated) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
