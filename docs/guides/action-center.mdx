@@ -205,6 +205,12 @@ Switch History from **Actions** to **Scorecard** to see what each kind of action
 
 When an action is closed, its condition can open a new action after a two-week rest if it is still firing. The old one stays in History as the record of that round of work.
 
+### Detector thresholds (maintainers)
+
+The detectors' thresholds are first settings, not calibrations. To see how they did at a brand, export its closed actions with `server/src/scripts/export-detector-outcomes.sql` (psql, read-only, with the brand's id as `brand_id`; it stops without one), writing outside the repository, such as `> ~/outcomes.jsonl`, and read them with `node src/scripts/calibrate-detector-thresholds.js ~/outcomes.jsonl` from `server/`. Each action is read by its signals as they were when it opened, from its baseline; older actions without one are left out and counted. The report shows, per signal kind with 20 or more closed actions, how its actions turned out and why they were dismissed, by the signal's strength in quarters, in the unit of the kind's threshold (a topic's coverage, a relative fall, a competitor's multiple). Where the weakest quarter was mostly dismissed as not relevant or wrong data, or improves less often than the rest, it suggests a threshold in that unit; when strength doesn't spread enough to compare, it says so. A kind with no definition gets its distribution only. A suggestion is a starting point; nothing changes until you edit the threshold the report names.
+
+Run it on one brand (Ansvisor's own, or your own self-hosted data). Running it across customers' brands is not supported; it waits on a cross-brand learning decision and a privacy policy update.
+
 ## Where actions come from
 
 Most actions are generated from signals each night. You can also send work to the Action Center from other pages. A sent action has no detection signals; its evidence is what you sent, shown on its Overview tab.
