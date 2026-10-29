@@ -15,7 +15,7 @@ Behind an answer, an AI engine can run searches of its own. The **Query Fan-out*
 
 ## Which engines share their searches
 
-Only Copilot and Perplexity share the searches behind their answers. Answers from the other engines come without them, so those engines can't appear on this tab.
+Copilot and Perplexity share the searches behind their answers. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them, so those engines can't appear on this tab.
 
 ## Pick the date range
 

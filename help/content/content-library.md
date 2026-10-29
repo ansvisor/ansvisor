@@ -31,7 +31,7 @@ The columns are Content, Type, Method (Create or Optimize), By (you, the Content
 ## The row menu
 
 - **Status**: set the draft to In progress, In review, Ready or Published. Ready works like the editor's Mark ready, and Published asks for the page's live address. Moving a ready or published draft back to In progress or In review opens its task again.
-- **Export Word**, **Export HTML** or **Export Markdown** for that draft.
+- **Export Word**, **Export Excel**, **Export CSV**, **Export HTML** or **Export Markdown** for that draft.
 - **Send to CMS**: send the draft to your CMS. Tick several rows to send them at once.
 - **Send to Archive** or **Restore**.
 - **Delete**: the draft leaves the Library for good, with its versions and suggestions. An Action Center task it was sent as stays.

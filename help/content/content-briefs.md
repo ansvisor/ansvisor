@@ -15,15 +15,15 @@ A content brief tells a writer what to write to close an opportunity's gap: the 
 
 ## Generate a brief
 
-On **Opportunities**, open an opportunity. You see its full source data and any brief it already has. If it has none, click **Generate Brief**. Once it's written, the button reads **Brief Generated**.
+On **Opportunities**, open an opportunity. You see its full source data and any brief it already has. If it has none, an admin or a manager clicks **Generate Brief**. Once it's written, the button reads **Brief Generated**.
 
 ## What a brief holds
 
 - a suggested article title;
-- the content type, such as a comparison, a how-to or a listicle;
+- the content type, such as a blog post, a guide, a comparison page or an FAQ page;
 - a target word count;
-- an outline of five to eight sections, each with its key points;
-- five to eight target keywords, for search and AI answers alike;
+- an outline of three to eight sections, each with its key points;
+- three to ten target keywords, for search and AI answers alike;
 - competitor insights: what rivals do well, where the gap is and what to attack;
 - a recommended call to action.
 
@@ -33,8 +33,8 @@ Open the opportunity's **…** menu and click **Send to Workflow**. Ansvisor sen
 
 ## Set up your workflow once
 
-Click **Webhook Settings** in the toolbar of the Opportunities page. Enter the address of your workflow tool's automation, such as an n8n, Make or Zapier flow, in **Webhook URL**. Turn it **Active** and click **Save Webhook**. From then on, you can send briefs from any opportunity.
+Click **Webhook Settings** in the toolbar of the Opportunities page. Enter the address of your workflow tool's automation, such as an n8n, Make or Zapier flow, in **Webhook URL**. Turn it **Active** and click **Save Webhook**. Only admins and managers can change these settings. From then on, you can send briefs from any opportunity.
 
 ## After you publish
 
-When your team has published the article, mark the opportunity done: tick it on the Opportunities list and click **Done**.
+When your team has published the article, mark the opportunity done: tick it on the Opportunities list and click **Done** (admins and managers).

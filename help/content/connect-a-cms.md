@@ -1,7 +1,7 @@
 ---
-title: Connect Webflow, WordPress or Framer
+title: Connect Webflow, WordPress, Framer or Wix
 route: /dashboard/settings/integrations
-keywords: [connect cms, webflow, wordpress, framer, integrations, application password]
+keywords: [connect cms, webflow, wordpress, framer, wix, integrations, application password]
 synonyms: [cms integration, link my blog, set up send to cms, connect my website]
 plan: all
 updated: 2026-10-29
@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/send-to-cms.mdx]
 ---
-To send Content Editor pages straight to your CMS, connect it in **Settings › Integrations** with the brand selected. Each brand connects its own Webflow site, WordPress site or Framer project. Only admins and managers can connect, change or disconnect a CMS; members see where the brand's pages go.
+To send Content Editor pages straight to your CMS, connect it in **Settings › Integrations** with the brand selected. Each brand connects its own Webflow site, WordPress site, Framer project or Wix site. Only admins and managers can connect, change or disconnect a CMS; members see where the brand's pages go.
 
 ## Connect Webflow
 
@@ -41,9 +41,13 @@ In Framer, open the project's **Site Settings › General** and make a key, as a
 
 Pick the **Collection** your pages go to, then which field takes the title and the page content and, if you like, the meta title, meta description and structured data. Click **Save**. A collection with a required field Ansvisor can't fill is marked in the list and can't be saved: make that field optional in Framer first.
 
+## Connect Wix
+
+The site needs the Wix Blog: pages go there as draft posts. In Wix, the site's owner opens **Account Settings › API Keys Manager**, clicks **Generate API Key**, picks the site, gives the key **Manage Blog** and **Manage Ricos Document**, and copies it; Wix shows it once. In the **Wix** card, paste the **Site id** (or the whole address of the site's dashboard) and the **API key**, and click **Connect**. A Blog with no post can't be connected yet: write one post on it as the site's owner first.
+
 ## Replace or disconnect
 
-Each card has its own way to change the sign-in: **Replace token** for Webflow, **Change sign-in** for WordPress and **Replace key** for Framer. **Disconnect** removes the connection; pages already sent stay in your CMS. Framer doesn't let Ansvisor revoke a key, so delete it in the project's **Site Settings › General** too. If the CMS refuses the saved sign-in, the card says so, for example **Sign-in refused** or **Key refused**, and asks for a new one.
+Each card has its own way to change the sign-in: **Replace token** for Webflow, **Change sign-in** for WordPress, **Replace key** for Framer and **Change API key** for Wix. **Disconnect** removes the connection; pages already sent stay in your CMS. Framer and Wix don't let Ansvisor revoke a key, so delete it there too: in the project's **Site Settings › General**, or in Wix's **API Keys Manager**. If the CMS refuses the saved sign-in, the card says so, for example **Sign-in refused** or **Key refused**, and asks for a new one.
 
 ## Send through your workflow instead
 

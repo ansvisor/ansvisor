@@ -39,7 +39,7 @@ Keep prompts free of your brand name. A question about your brand by name almost
 
 ## Competitors
 
-Ansvisor suggests competitors for your brand. Check the real rivals, uncheck any that aren't comparable, and add your own at the bottom, by the name AI answers use rather than the website address. On the cloud, competitor tracking depends on your plan; a self-hosted install always has it.
+Ansvisor suggests competitors for your brand. Check the real rivals, uncheck any that aren't comparable, and add your own at the top, with the name AI answers use and, if you like, its domain. Every plan includes competitor tracking.
 
 ## The last steps on the cloud
 

@@ -26,7 +26,7 @@ When Search Console or Analytics is connected, a share of each refresh is drawn 
 
 ## Add, dismiss or refresh suggestions
 
-Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** dismisses the AI suggestions listed; Search Console and Analytics suggestions are kept, so dismiss those one by one.
+Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** asks first, then dismisses every suggestion listed. Those from Search Console or Analytics stay hidden for 30 days once dismissed.
 
 Suggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.
 

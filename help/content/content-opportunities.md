@@ -22,13 +22,13 @@ Open an opportunity to see its **Source Data**: the **Related Prompt**, **Est. A
 ## Act on an opportunity
 
 - **Send to Editor** starts a page from the opportunity in the Content Editor.
-- **Send to Plan** puts it at the top of the Content plan's priority list.
-- **Generate Brief** writes a content brief for it: a title, an outline, keywords and more.
+- **Send to Plan** (admins and managers) puts it at the top of the Content plan's priority list.
+- **Generate Brief** (admins and managers) writes a content brief for it: a title, an outline, keywords and more.
 - **Send to Workflow**, in the opportunity's **…** menu, sends it and its brief to your workflow tool. Its status becomes **Sent to Workflow**.
 
 ## Work on many at once
 
-On the list, tick several opportunities. **Send All** sends them all to your workflow, which suits kicking off a content sprint. **Dismiss All** sets a batch aside when it isn't relevant this quarter, and **Done** marks the ones your team has published.
+On the list, tick several opportunities. **Send All** sends them all to your workflow, which suits kicking off a content sprint. Admins and managers also see **Dismiss All**, which sets a batch aside when it isn't relevant this quarter, and **Done**, which marks the ones your team has published.
 
 ## Owned and earned
 

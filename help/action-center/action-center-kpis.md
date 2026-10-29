@@ -15,7 +15,7 @@ The **KPIs** tab tracks the goals you set for the brand. Each KPI shows its **Va
 
 ## KPIs you can track
 
-AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic, Positive Sentiment and Lead over top competitor.
+AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.
 
 A brand that never had KPIs starts with a suggested set, each aiming 20% above its last 30 days. It is saved the first time an admin or manager opens the tab.
 

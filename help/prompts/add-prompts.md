@@ -15,11 +15,11 @@ A prompt is a question Ansvisor asks the AI engines for your brand every day, su
 
 ## Add one prompt
 
-On **Prompts › Tracked Prompts**, click **Add prompt**. On the **Single** tab, type the question and pick its topic, platforms, AI models and location, then save.
+On **Prompts › Tracked Prompts**, click **Add prompt**. On the **Single** tab, type the question and pick its topic, platforms and AI models, then save. It is tracked in the brand's location; add more later with **Track in more locations**.
 
 ## Add many at once
 
-In the same dialog, open the **Bulk import** tab and paste your prompts, one per line.
+In the same dialog, open the **Bulk import** tab and upload a one-column Excel or CSV file of prompts. A preview marks each row as ready, a duplicate, an error or over your plan limit, and the rows that fit are imported. Set their topic and location afterwards from each prompt's **Edit**.
 
 ## Add from suggestions
 
@@ -31,4 +31,4 @@ A prompt has no results until it is first asked. **Add prompt** and **Bulk impor
 
 ## What counts on your plan
 
-Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor says how many are left and adds nothing.
+Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor adds the prompts that fit and says how many weren't added. Once the limit is reached, it adds nothing until you pause or remove prompts.

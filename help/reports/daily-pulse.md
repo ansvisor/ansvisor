@@ -48,7 +48,7 @@ The KPIs are **Visibility**, the **7-day trend**, **Mentions** and **Citations**
 - **Competitor crossed**: a competitor at or below your score last week is above it this week.
 - **Lost citations**: a prompt with an estimated AI volume above zero was cited on at least 60% of its result days in the last 14 days, then not at all on its 3 most recent.
 
-A smaller fall, **Visibility slipping**, goes to the webhook but isn't listed in the email.
+A smaller fall shows as **Visibility slipping**, in the email and the webhook alike.
 
 ## Repeats and collection problems
 

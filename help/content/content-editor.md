@@ -15,7 +15,7 @@ The Content Editor is where pages are written. It opens from the Library, from t
 
 ## The header
 
-The header shows the title, the page type, a **Rules** chip with how many rules the page meets now, and whether your changes are saved. Its buttons are **History**, **Copy HTML**, **Export** and **Mark ready**, and a button to show or hide the side panel.
+The header shows the title, the page type, a **Rules** chip with how many rules the page meets now, and whether your changes are saved. Its buttons are **History**, **Copy HTML**, **Export**, **Send to CMS** (admins and managers) and **Mark ready**, and a button to show or hide the side panel.
 
 ## Write and paste
 
@@ -27,7 +27,7 @@ The page starts with its H1, which is also its title. A page has one H1: the too
 
 Words in square brackets, such as [figure, source] or [competitor], are placeholders: the Content Agent leaves one where a real name, quote or number goes. Each is tinted amber, and the toolbar counts those left to fill. Click the count, or the arrows beside it, to go to the next or previous one, already selected, so you can type over it.
 
-A placeholder in an image's alt text, the structured data or an HTML block is counted too, and **Show in HTML** selects it in the HTML view. Export and Send to CMS wait until none is left.
+A placeholder in an image's alt text, the structured data or an HTML block is counted too, and **Show in HTML** selects it in the HTML view. Send to CMS waits until none is left.
 
 ## Brief and Sources
 
@@ -50,7 +50,7 @@ When a draft optimizes a live page brought in by its URL, the passages AI answer
 
 - **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, and the page before a restore. **Restore** makes a new version, so nothing is lost.
 - **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.
-- **Export** downloads the page as **Word**, **HTML** or **Markdown**. Only the HTML file carries the schema.
+- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Only the HTML file carries the schema.
 
 ## Add products from your catalog
 

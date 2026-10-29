@@ -11,11 +11,11 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/citations.mdx]
 ---
-The **Citations** page gathers every URL that AI engines cited across your tracked prompts, with its domain and the number of times it was cited. It shows which sources AI engines rely on when they answer questions in your category, and sorts them by source type.
+The **Citations** page gathers the URLs that AI engines cited across your tracked prompts, with its domain and the number of times it was cited. It shows which sources AI engines rely on when they answer questions in your category, and sorts them by source type.
 
 ## Domains and URLs
 
-Under **Top Sources**, the **Domains** tab lists the cited sources by domain and the **URLs** tab by single page. Click a URL to open its own page, which shows the AI answers that cited it and the prompt behind each. **Source Types** shows how the cited sources split by type.
+Under **Top Sources**, the **Domains** tab lists the cited sources by domain and the **URLs** tab by single page. Four buttons above them choose the sources listed: **Brand** (your own domains, the default), **Competitors**, **Third-Party** or **All**. Click a URL to open its own page, which shows the AI answers that cited it and the prompt behind each. **Source Types** shows how the cited sources split by type.
 
 ## Source types
 
