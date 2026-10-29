@@ -18,6 +18,7 @@ import { AttentionCount, AttentionDot } from '@/components/agentic/attention-bad
 import { DoneTick } from '@/components/agentic/done-tick';
 import { CardsPreview } from './_cards-preview';
 import { ComposerPreview } from './_composer-preview';
+import { RunPreview } from './_run-preview';
 
 const AVATAR_SIZES: readonly AgentAvatarSize[] = ['md', 'sm', 'xs'];
 
@@ -159,6 +160,8 @@ function ChatPiecesPreview() {
       </Section>
 
       <ComposerPreview />
+
+      <RunPreview />
 
       <CardsPreview />
     </div>
