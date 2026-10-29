@@ -6601,8 +6601,8 @@
         "label": "Your input needed",
         "left": "{count, plural, =0 {No input needed} one {Your input needed: #} other {Your input needed: #}}",
         "onOf": "Your input {on} of {count}",
-        "previous": "Previous placeholder",
-        "next": "Next placeholder",
+        "previous": "Previous input needed",
+        "next": "Next input needed",
         "showHidden": "Show in HTML",
         "hiddenHint": "In an image's alt text, the JSON-LD or an HTML block: the page doesn't show them.",
         "inHtmlView": "This placeholder is in an image's alt text, the JSON-LD or an HTML block. It's selected in the HTML view ({html}): type over it, then apply."

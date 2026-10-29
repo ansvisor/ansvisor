@@ -39,8 +39,10 @@ import {
   linkFacts,
   lookUpFacts,
   lookUpSuggestionFacts,
-  placeholdersIn,
+  pageOwn,
   settler,
+  sweepHtml,
+  sweeper,
   withFactLinks,
 } from './content-research.js';
 import { draftLanguage } from './content-language.js';
@@ -766,24 +768,30 @@ async function rewritePage({
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
   // The facts it asked for, and the figures it wrote with no source, looked
-  // up on the web and written in with their links, or their sentences
-  // written without them (content-research.js). Its kept lines are never read.
-  const allowed = new Set(placeholdersIn(htmlText(draft.body_html)));
+  // up on the web and written in with their links, or left for the person
+  // (content-research.js). Its kept lines are never read, nor its shopping
+  // path's products' specs.
   const looked = await lookUpFacts({
     map: (editsFor) => editHtml(cleaned, editsFor),
     known,
-    allowed,
+    own: pageOwn(draft.body_html),
+    products: shoppingGiven(shoppingPath).names,
     orgId: brand.organization_id,
     draftId: draft.id,
     modelId: contentReadModelId(),
     run,
     context: { brand: brand.name, title: draft.title, language: getLanguageName(language) },
   });
-  // No number without a source (CE-033): one the page, the brand, the brief,
-  // the data or the search doesn't have goes with its sentence, as what the
-  // search didn't settle does; a fact only the brand has stays for the person.
-  const settled = editHtml(placeholderNumbersInHtml(looked.page, known), settler(allowed));
-  const { html, missing } = restoreKept(linkFacts(settled, looked.links), page.kept, {
+  // No number without a source (CE-033): one nobody found is the person's
+  // to fill, as a fact only the brand has; a marker left broken goes with
+  // its sentence, in code or an attribute on its own (sweeper, sweepHtml).
+  const settled = editHtml(
+    editHtml(placeholderNumbersInHtml(looked.page, known), settler(looked.own, looked.stats)),
+    sweeper(looked.own, looked.stats),
+  );
+  logger.info({ draftId: draft.id, ...looked.stats }, '[content-writer] facts settled');
+  const linked = linkFacts(sweepHtml(settled, looked.own), looked.links);
+  const { html, missing } = restoreKept(linked, page.kept, {
     word: page.word,
     h1Token: page.h1Token,
   });
@@ -1123,22 +1131,26 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     await budget.charge(usage);
     await advanceRun(run, 3);
     // The facts it asked for, and the figures it wrote with no source,
-    // looked up on the web and written in with their links, or their
-    // sentences written without them (content-research.js).
-    const allowed = new Set(placeholdersIn(htmlText(draft.body_html)));
+    // looked up on the web and written in with their links, or left for the
+    // person (content-research.js); never its shopping path's products' specs.
     const looked = await lookUpFacts({
       map: (editsFor) => editPage(object, editsFor),
       known: knownInPage,
-      allowed,
+      own: pageOwn(draft.body_html),
+      products: shopping.names,
       orgId: brand.organization_id,
       draftId: draft.id,
       modelId: contentReadModelId(),
       run,
       context: { brand: brand.name, title: draft.title, language: getLanguageName(language) },
     });
-    // No number without a source (CE-033): what the search didn't settle goes
-    // with its sentence; a fact only the brand has stays for the person.
-    const written = editPage(sourcedPage(looked.page, knownInPage, people), settler(allowed));
+    // No number without a source (CE-033): one nobody found is the person's
+    // to fill, as a fact only the brand has; a marker left broken goes.
+    const written = editPage(
+      editPage(sourcedPage(looked.page, knownInPage, people), settler(looked.own, looked.stats)),
+      sweeper(looked.own, looked.stats),
+    );
+    logger.info({ draftId: draft.id, ...looked.stats }, '[content-writer] facts settled');
     // The title column as the H1 reads it: a capital first (headingCase).
     const title = headingCase(clean(written.title).slice(0, 300), language) || draft.title;
     // Stopped meanwhile: the page stays as it was, and History with it.
@@ -1217,7 +1229,8 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
   const looked = await lookUpSuggestionFacts({
     suggestions: object.suggestions,
     known: knownInPage,
-    allowed: new Set(placeholdersIn(htmlText(draft.body_html))),
+    own: pageOwn(draft.body_html),
+    products: shopping.names,
     orgId: brand.organization_id,
     draftId: draft.id,
     modelId: contentReadModelId(),

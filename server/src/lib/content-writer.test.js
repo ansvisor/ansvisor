@@ -844,7 +844,7 @@ describe('runDraftWriting on a new page', () => {
       object: {
         ...page,
         intro: [
-          'Good hiking boots keep you dry. The Summit GTX Boot costs $189, or 189.00 USD; the Trail 450 Boot [figure, source].',
+          'Good hiking boots keep you dry. The Summit GTX Boot costs $189, or 189.00 USD. The Trail 450 Boot weighs [figure, source].',
           'At 450 g it is light, and $199 elsewhere.',
         ],
       },
@@ -867,14 +867,14 @@ describe('runDraftWriting on a new page', () => {
       '<a href="https://shop.example/collections/hiking-boots">hiking boots</a>',
     );
     expect(written).toContain(
-      'The <a href="https://shop.example/products/p1">Summit GTX Boot</a> costs $189, or 189.00 USD;',
+      'The <a href="https://shop.example/products/p1">Summit GTX Boot</a> costs $189, or 189.00 USD.',
     );
+    // A product's spec is the catalog's, never looked up: the sentence asking for one goes.
+    expect(written).not.toContain('weighs');
+    expect(generateText.mock.calls[0][0].prompt).not.toContain('Trail 450');
     // A product's own number where its name is: nowhere else, nor another
-    // price. The gap it left is looked up, and with nothing found it goes;
-    // a sentence with figures no page has goes whole.
-    expect(written).toContain('Trail 450 Boot</a>.');
-    expect(written).not.toContain('At 450 g');
-    expect(written).not.toContain('[');
+    // price. Looked up, found nowhere: left for the person, not taken out.
+    expect(written).toContain('At [figure, source] g it is light, and [figure, source] elsewhere.');
   });
 
   it('writes a draft whose shopping path is broken as one with none', async () => {
@@ -892,9 +892,8 @@ describe('runDraftWriting on a new page', () => {
       await expect(run(draftRow({ shopping_path: broken }))).resolves.toEqual({ written: true });
       expect(generateObject.mock.calls[0][0].prompt).not.toContain('The shopping path');
       const written = draftUpdates().find((u) => u.body_html)?.body_html;
-      // Its price is no catalog's now: no page has it, so its sentence goes.
-      expect(written).not.toContain('The Summit GTX Boot costs');
-      expect(written).not.toContain('[');
+      // Its price is no catalog's now: no page has it, so it is the person's to fill.
+      expect(written).toContain('<p>The Summit GTX Boot costs [figure, source].</p>');
     }
   });
 
@@ -1240,15 +1239,16 @@ describe('Rewrite the page to these rules', () => {
       { kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' },
     ]);
     // 87% is in none of the data: it is looked up, never with the kept
-    // lines, and with no page that has it, its sentence goes, and the
-    // paragraph it was. A lone count stays; the kept table's 1:16 is the
-    // page's own.
+    // lines, and with no page that has it, left for the person ("Your
+    // input needed"), never taken out unseen. A lone count stays; the kept
+    // table's 1:16 is the page's own.
     expect(generateText.mock.calls[0][0].prompt).toContain(
       'G1: "Brew it in 4 minutes; 87% of baristas agree, as "pour over ratio" asks."\nneeds: check: 87%',
     );
     expect(generateText.mock.calls[0][0].prompt).not.toContain('KEEP');
-    expect(row.after_text).not.toContain('baristas');
-    expect(row.after_text).not.toContain('[');
+    expect(row.after_text).toContain(
+      '<p>Brew it in 4 minutes; [figure, source] of baristas agree, as "pour over ratio" asks.</p>',
+    );
     expect(row.after_text).toContain('<td>1:16</td>');
     expect(generateObject.mock.calls[0][0].system).toContain('Put the numbers (S1, S2…)');
   });
@@ -1717,9 +1717,8 @@ describe('the brief rules (2026) in the Content Agent', () => {
     // The rewrite is told of the links; its guards never read their addresses.
     expect(call.prompt).toContain('https://acme.example/top-37-tools');
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
-    // "37" is the link's, never the page's: looked up, found nowhere, its sentence goes.
-    expect(row.after_text).not.toContain('Try 37 tools');
-    expect(row.after_text).not.toContain('[figure, source]');
+    // "37" is the link's, never the page's: looked up, found nowhere, left for the person.
+    expect(row.after_text).toContain('<p>Try [figure, source] tools for it.</p>');
     // A person it wasn't given is the person's to name: "Your input needed".
     expect(row.after_text).toContain(`<p>${NAME_PLACEHOLDER} said the bloom matters.</p>`);
   });

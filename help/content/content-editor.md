@@ -25,9 +25,9 @@ The page starts with its H1, which is also its title. A page has one H1: the too
 
 ## Facts and your input
 
-The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact it can't find is left out of its sentence.
+The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact no trusted page has is left out of its sentence.
 
-Only a fact your brand alone has, such as your customer count, is left in square brackets for you, three at most on a page. Each is tinted amber, and **Your input needed** in the toolbar counts them. Click it, or the arrows beside it, to go to the next or previous one, already selected, so you can type over it.
+A fact it couldn't look up is left in square brackets for you, as are up to three only your brand has, such as your customer count. Each is tinted amber, and **Your input needed** in the toolbar counts them. Click it, or the arrows beside it, to go to the next or previous one, already selected, so you can type over it.
 
 One in an image's alt text, the structured data or an HTML block is counted too, and **Show in HTML** selects it in the HTML view. Send to CMS waits until none is left.
 
