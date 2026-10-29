@@ -155,6 +155,31 @@ describe('pageExcerpt', () => {
     expect(excerpt).not.toContain('Menu Login');
     expect(excerpt.length).toBeLessThanOrEqual(1500);
   });
+
+  it('takes the first title and heading outside an svg or the nav', () => {
+    const html = page(
+      '<nav><h1>Menu</h1></nav><svg><title>Logo</title></svg><h1>Seaside rooms</h1>',
+    );
+    expect(pageExcerpt(html).startsWith('Seaside rooms\n')).toBe(true);
+  });
+});
+
+describe('reading a page of many elements', () => {
+  it('reads tens of thousands of links, scripts and blocks in about a second, not minutes', () => {
+    const html = page(
+      '<a href="/products/x">p</a>'.repeat(20_000) +
+        '<script>a</script>'.repeat(20_000) +
+        '<script type="application/ld+json">1</script>'.repeat(5_000) +
+        '<p>add to cart</p>',
+    );
+    const started = Date.now();
+    const { reasons } = homePageSignals(html);
+    pageExcerpt(html);
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(reasons.map((r) => r.reason)).toEqual(
+      expect.arrayContaining(['shop_wording', 'product_links']),
+    );
+  });
 });
 
 describe('brandHost', () => {

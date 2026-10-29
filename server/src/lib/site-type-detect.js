@@ -72,6 +72,34 @@ const SHOP_PLATFORMS = [
 ];
 
 /**
+ * The text under a parsed node, leaving out the elements `skip` names, its
+ * pieces joined by `separator`. Walked by hand, not by wrapping each element
+ * in $(el) or removing the skipped ones: both grow with the square of the
+ * elements, and a page of tens of thousands of them took seconds to a
+ * minute.
+ */
+function textOf(node, { skip = new Set(), separator = '' } = {}) {
+  const parts = [];
+  const stack = node ? [node] : [];
+  while (stack.length) {
+    const current = stack.pop();
+    if (current.type === 'text') {
+      parts.push(current.data);
+      continue;
+    }
+    if (current.name && skip.has(current.name)) continue;
+    const children = current.children ?? [];
+    for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]);
+  }
+  return parts.join(separator);
+}
+
+/** What a visitor doesn't read as the page's words. */
+const NOT_TEXT = new Set(['script', 'style', 'noscript', 'template']);
+/** Left out of the excerpt the model reads: no words, or the same on every page. */
+const NOT_EXCERPT = new Set(['script', 'style', 'noscript', 'svg', 'nav', 'footer']);
+
+/**
  * The schema.org types a page's JSON-LD names, in lower case, @graph
  * included, and whether a product in it is sold (has offers): an offer on an
  * event or a course, or a product only reviewed, isn't a shop.
@@ -89,7 +117,7 @@ function ldFacts($) {
   };
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
-      walk(JSON.parse($(el).text()));
+      walk(JSON.parse(textOf(el)));
     } catch {
       // A broken block says nothing.
     }
@@ -107,25 +135,26 @@ function ldFacts($) {
 export function homePageSignals(html) {
   const $ = cheerio.load(String(html ?? ''));
   const { types, soldProduct } = ldFacts($);
+  // Attributes and text are read off the parsed elements (see textOf).
   const hrefs = $('a[href]')
-    .map((_, el) => String($(el).attr('href') ?? '').toLowerCase())
-    .get();
+    .get()
+    .map((el) => String(el.attribs?.href ?? '').toLowerCase());
   // Asset addresses, classes and inline scripts: where a platform leaves its traces.
   const traces = [
     ...$('[src], [href], [class]')
-      .map((_, el) => ['src', 'href', 'class'].map((a) => $(el).attr(a) ?? '').join(' '))
-      .get(),
+      .get()
+      .map((el) => ['src', 'href', 'class'].map((a) => el.attribs?.[a] ?? '').join(' ')),
     ...$('script:not([type="application/ld+json"])')
-      .map((_, el) => $(el).text())
-      .get(),
+      .get()
+      .map((el) => textOf(el)),
   ]
     .join(' ')
     .toLowerCase();
   // The words a visitor reads: without scripts and styles, with a space
   // between elements so a link's words don't run into the next's.
-  const $text = cheerio.load(String(html ?? '').replace(/</g, ' <'));
-  $text('script, style, noscript, template').remove();
-  const text = $text('body').text().replace(/\s+/g, ' ').toLowerCase();
+  const text = textOf($('body').get(0), { skip: NOT_TEXT, separator: ' ' })
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
 
   const scores = Object.fromEntries(SITE_TYPES.map((t) => [t, 0]));
   const reasons = [];
@@ -197,12 +226,22 @@ export function settledType({ scores, reasons = [] }) {
 /** The page's title, description, first heading and opening text, for the model. */
 export function pageExcerpt(html) {
   const $ = cheerio.load(String(html ?? ''));
-  $('script, style, noscript, svg, nav, footer').remove();
+  // The first one outside what the excerpt leaves out (an svg's title, a
+  // heading in the nav).
+  const first = (selector) =>
+    $(selector)
+      .get()
+      .find((el) => {
+        for (let p = el.parent; p; p = p.parent) {
+          if (p.name && NOT_EXCERPT.has(p.name)) return false;
+        }
+        return true;
+      });
   const parts = [
-    $('title').first().text(),
+    textOf(first('title'), { skip: NOT_EXCERPT }),
     $('meta[name="description"]').attr('content') ?? '',
-    $('h1').first().text(),
-    $('body').text(),
+    textOf(first('h1'), { skip: NOT_EXCERPT }),
+    textOf($('body').get(0), { skip: NOT_EXCERPT }),
   ];
   return parts
     .map((p) => p.replace(/\s+/g, ' ').trim())
