@@ -102,6 +102,8 @@ describe('every WRITE row has an Undo', () => {
     expect(UNDO_RULES.create_draft.windowMs).toBe(30 * DAY);
     expect(UNDO_RULES.update_opportunity.windowMs).toBe(7 * DAY);
     expect(UNDO_RULES.dismiss_prompt_suggestion.windowMs).toBe(7 * DAY);
+    // Ask your Admin: withdrawn while it waits, as long as Requests lists it.
+    expect(UNDO_RULES.request_access.windowMs).toBe(30 * DAY);
     for (const tool of writes) {
       expect(undoRule(tool)).not.toBeNull();
       expect(messages.chatActivity.summary).toHaveProperty(tool.labelKey);

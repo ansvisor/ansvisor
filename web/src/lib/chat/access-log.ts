@@ -1,3 +1,4 @@
+import { recordActivity } from './activity';
 import type { ChatSurface, ToolDenial } from './precedence';
 import type { ToolClass } from './registry/define-tool';
 
@@ -9,9 +10,9 @@ import type { ToolClass } from './registry/define-tool';
  *
  * One way in for every place that refuses a call: the run's tool-call step
  * when the precedence denies (decideOrDeny, then buildDenial for the
- * answer), and MCP's. Until the Activity log lands (A4, 00402) the event
- * goes to the server's log only; then this writes its row, and no caller
- * changes. Server only.
+ * answer), and MCP's. It writes the denial's row in the Activity log
+ * (chat_activity_log, 00402), which the person sees among their own rows and
+ * Admins among all. Server only.
  */
 
 export interface AccessDeniedContext {
@@ -52,8 +53,9 @@ export async function recordAccessDenied(
   denial: ToolDenial,
 ): Promise<void> {
   try {
-    console.info('[chat] access.denied', JSON.stringify(accessDeniedEvent(ctx, denial)));
-  } catch {
+    await recordActivity(accessDeniedEvent(ctx, denial));
+  } catch (err) {
     // Logging must not fail the run.
+    console.error('[chat] access.denied not logged:', err instanceof Error ? err.message : err);
   }
 }

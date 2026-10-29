@@ -27,12 +27,14 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
+const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
 const { decideToolCall } = await import('./precedence');
@@ -44,6 +46,8 @@ type ChatMode = import('./precedence').ChatMode;
 type ChatTool = import('./registry/define-tool').ChatTool;
 
 const WRITES = CHAT_TOOLS.filter((tool) => tool.class === 'write');
+// The writes Full auto may run without a card: an always-card row (Ask your Admin) never does.
+const AUTO_WRITES = WRITES.filter((tool) => !tool.flags.alwaysCard);
 const INPUTS: Record<string, unknown> = {
   create_draft: {
     brand_id: BRAND,
@@ -54,6 +58,7 @@ const INPUTS: Record<string, unknown> = {
   },
   update_opportunity: { opportunity_id: OPPORTUNITY, status: 'dismissed', reason: 'not_relevant' },
   dismiss_prompt_suggestion: { suggestion_id: SUGGESTION },
+  request_access: { asked: 'Add competitors · Peec AI', rule_kind: 'role' },
 };
 const toolCtx = {} as never;
 let step = 0;
@@ -66,6 +71,12 @@ beforeEach(() => {
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
   vi.mocked(dismissSuggestion).mockImplementation(fakeDismissSuggestion(db) as never);
+  db.tables.chat_access_requests = [];
+  vi.mocked(requestAccess).mockImplementation(async (input) => {
+    const id = `request-${db.tables.chat_access_requests.length + 1}`;
+    db.tables.chat_access_requests.push({ id, asked: input.asked, status: 'pending' });
+    return { ok: true, id };
+  });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -100,7 +111,7 @@ async function runAs(
 }
 
 describe('every WRITE that ran is in the Activity log (§21)', () => {
-  it.each(WRITES.map((tool) => [tool.name, tool] as const))(
+  it.each(AUTO_WRITES.map((tool) => [tool.name, tool] as const))(
     '%s in Full auto: mode, approval, Undo window, label key, target and summary',
     async (name, tool) => {
       const { decision, outcome } = await runAs(PEOPLE.admin, tool, 'full_auto');
@@ -135,6 +146,41 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
       expect(activitySummary(row.summary_key as string, row.summary_params as never)).not.toBe('');
     },
   );
+
+  it('logs Ask your Admin on its card, in every mode, with its Undo: withdraw while it waits', async () => {
+    const tool = chatTool('request_access')!;
+    const first = await runAs(PEOPLE.analyst, tool, 'full_auto');
+    expect(first.decision).toMatchObject({ kind: 'ask', reason: 'always_card' });
+    expect(requestAccess).not.toHaveBeenCalled(); // Only the person's click sends it.
+    const { outcome } = await runAs(PEOPLE.analyst, tool, 'ask_first', { approved: true });
+    expect(outcome).toMatchObject({ code: 'ok' });
+    const [row] = db.tables.chat_activity_log;
+    expect(row).toMatchObject({
+      user_id: PEOPLE.analyst,
+      brand_id: null,
+      tool_key: 'askAdmin',
+      approval_kind: 'ask',
+      target_type: 'access_request',
+      target_id: 'request-1',
+      summary_key: 'askAdmin',
+      summary_params: { asked: 'Add competitors · Peec AI' },
+      status: 'done',
+    });
+    expect(JSON.stringify(row)).not.toContain('request_access');
+    expect(activitySummary('askAdmin', row.summary_params as never)).toBe(
+      'Asked your Admins: “Add competitors · Peec AI”',
+    );
+
+    const { undoChange } = await import('./undo');
+    const undone = await undoChange({
+      activityId: row.id as string,
+      userId: PEOPLE.analyst,
+      organizationId: ORG,
+      surface: 'chat',
+    });
+    expect(undone).toMatchObject({ code: 'ok' });
+    expect(db.tables.chat_access_requests[0].status).toBe('withdrawn');
+  });
 
   it('records why a change ran without a card: Always, Full auto or "Don\'t ask again"', async () => {
     const tool = chatTool('dismiss_prompt_suggestion')!;

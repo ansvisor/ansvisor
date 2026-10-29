@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { accessDeniedEvent, recordAccessDenied, type AccessDeniedContext } from './access-log';
+
+const recordActivity = vi.hoisted(() => vi.fn());
+vi.mock('./activity', () => ({ recordActivity }));
+
+const { accessDeniedEvent, recordAccessDenied } = await import('./access-log');
+type AccessDeniedContext = import('./access-log').AccessDeniedContext;
 
 /** Every denial is an `access.denied` event (CHAT-20 §4c). */
 
@@ -39,19 +44,17 @@ describe('accessDeniedEvent', () => {
 });
 
 describe('recordAccessDenied', () => {
-  it('writes the event to the server log', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
-    await recordAccessDenied(ctx, { code: 'forbidden_role', role: 'analyst', roles: ['admin'] });
-    expect(info).toHaveBeenCalledWith(
-      '[chat] access.denied',
-      expect.stringContaining('"forbidden_role"'),
-    );
+  it("writes the denial's row in the Activity log", async () => {
+    recordActivity.mockResolvedValue('row-1');
+    const denial = { code: 'forbidden_role', role: 'analyst', roles: ['admin'] } as const;
+    await recordAccessDenied(ctx, denial);
+    expect(recordActivity).toHaveBeenCalledWith(accessDeniedEvent(ctx, denial));
   });
 
   it('never fails the run', async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => {
-      throw new Error('log down');
-    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    recordActivity.mockRejectedValue(new Error('log down'));
     await expect(recordAccessDenied(ctx, { code: 'policy_never' })).resolves.toBeUndefined();
+    expect(console.error).toHaveBeenCalled();
   });
 });
