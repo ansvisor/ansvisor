@@ -16,6 +16,7 @@ import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
+import { PLANS, type Feature, getMinimumPlanForFeature, hasFeature, isCloud } from '@/config/plans';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
 import { MEMBER_ROLES, requireManager, requireRole } from '@/lib/mcp/role-gate';
 import {
@@ -2451,6 +2452,37 @@ export async function getPromptVolumesFor(
 
 // ── Shopping Cards ────────────────────────────────────────────────────────────
 
+/** A read of a feature the organization's plan doesn't include. */
+export const NOT_IN_PLAN = 'not_in_plan';
+
+/**
+ * What a shopping read answers without the feature, as the API's
+ * requireFeature does: the tools' error text, and the REST routes' 403 body.
+ */
+export const SHOPPING_NOT_IN_PLAN = {
+  error: 'plan_limit',
+  message:
+    `Shopping analytics comes with the ${PLANS[getMinimumPlanForFeature('shopping_analytics')].name} ` +
+    "plan and above, and this workspace's plan doesn't include it. An admin can upgrade in " +
+    'Settings › Billing.',
+} as const;
+
+/**
+ * Whether the organization's plan includes `feature`, for a read: once a plan
+ * has ended (read-only), the plan it was on, as the dashboard and the API's
+ * readOnly reads keep it. Self-hosted has every feature.
+ */
+async function planIncludes(organizationId: string, feature: Feature): Promise<boolean> {
+  if (!isCloud()) return true;
+  const { data, error } = await supabaseAdmin
+    .from('organizations')
+    .select(ORG_PLAN_COLUMNS)
+    .eq('id', organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return hasFeature(usagePlanFromOrgRow(data).plan, feature);
+}
+
 export interface ListShoppingCardsParams {
   brandId: string;
   role?: 'own' | 'competitor' | 'other';
@@ -2487,10 +2519,11 @@ export interface ListShoppingCardsOutput {
   next_cursor: string | null;
 }
 
+/** The brand's shopping cards: NOT_IN_PLAN on a plan without shopping analytics (Starter). */
 export async function listShoppingCards(
   auth: McpAuthContext,
   params: ListShoppingCardsParams,
-): Promise<ListShoppingCardsOutput | null> {
+): Promise<ListShoppingCardsOutput | typeof NOT_IN_PLAN | null> {
   if (!auth.organizationId) return null;
 
   // Brand ownership check
@@ -2501,6 +2534,7 @@ export async function listShoppingCards(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
+  if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
   const finalLimit = Math.min(Math.max(params.limit ?? 50, 1), 200);
 
@@ -2570,10 +2604,11 @@ export interface ProductVisibilityOutput {
   merchant_domains: Array<{ domain: string; count: number }>;
 }
 
+/** One product's visibility: NOT_IN_PLAN on a plan without shopping analytics (Starter). */
 export async function getProductVisibility(
   auth: McpAuthContext,
   params: { brandId: string; productTitle: string },
-): Promise<ProductVisibilityOutput | null> {
+): Promise<ProductVisibilityOutput | typeof NOT_IN_PLAN | null> {
   if (!auth.organizationId) return null;
 
   // Brand ownership check
@@ -2584,6 +2619,7 @@ export async function getProductVisibility(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
+  if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
   const { data: cards, error } = await supabaseAdmin
     .from('prompt_result_shopping_cards')
