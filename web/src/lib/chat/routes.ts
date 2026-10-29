@@ -1,11 +1,14 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { dashboardNav } from '@/config/dashboard';
-import type { Feature } from '@/config/plans';
-import { ALL_DATE_PRESETS } from '@/components/filters/date-range-filter';
-import { PROMPT_RANGE_PRESETS } from '@/config/prompt-options';
+import { type Feature, isCloud } from '@/config/plans';
+import { ALL_DATE_PRESETS } from '@/config/date-presets';
+import { PROMPT_RANGE_PRESETS, SCRAPER_GROUPS } from '@/config/prompt-options';
 import { dashboardNavLabelKeys } from '@/lib/dashboard-navigation';
-import { SETTINGS_SECTIONS } from '@/app/[locale]/(dashboard)/dashboard/settings/_sections';
+import {
+  SETTINGS_SECTIONS,
+  hasSettingsSection,
+} from '@/app/[locale]/(dashboard)/dashboard/settings/_sections';
 import type { ChatHref } from './events';
 
 /**
@@ -23,8 +26,8 @@ export interface RouteFilter {
   key: 'range' | 'platform';
   /** The page's query parameter. */
   param: string;
-  /** The values the page accepts; none for any (a platform id). */
-  values?: readonly string[];
+  /** The values the page accepts. */
+  values: readonly string[];
 }
 
 export interface ChatRoute {
@@ -44,13 +47,19 @@ export interface ChatRoute {
 
 const navT = createTranslator({ locale: 'en', messages, namespace: 'nav' });
 const settingsT = createTranslator({ locale: 'en', messages, namespace: 'settings' });
+const actionCenterT = createTranslator({ locale: 'en', messages, namespace: 'actionCenter' });
+const brandsT = createTranslator({ locale: 'en', messages, namespace: 'brands' });
+
+/** The platform ids the pages filter by: the answer engines tracked. */
+export const PLATFORM_IDS = SCRAPER_GROUPS.flatMap((group) => group.scrapers.map((s) => s.id));
+export type PlatformId = (typeof PLATFORM_IDS)[number];
 
 const RANGE = (param: string, values: readonly string[]): RouteFilter => ({
   key: 'range',
   param,
   values: values.filter((v) => v !== 'custom'),
 });
-const PLATFORM = (param: string): RouteFilter => ({ key: 'platform', param });
+const PLATFORM = (param: string): RouteFilter => ({ key: 'platform', param, values: PLATFORM_IDS });
 
 /** What each page's address keeps (the pages' readUrlParam / readUrlChoice), by id. */
 const FILTERS: Record<string, readonly RouteFilter[]> = {
@@ -65,7 +74,8 @@ const FILTERS: Record<string, readonly RouteFilter[]> = {
 
 /** Other words for a page, by id. */
 const SYNONYMS: Record<string, readonly string[]> = {
-  insights: ['visibility', 'answer engine insights', 'visibility dashboard'],
+  // "insights" alone is this page's address and Prompts › Insights' name: the model asks.
+  insights: ['visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
   'action-center': ['actions', 'action centre'],
   'action-center/signals': ['signals'],
   'action-center/kpis': ['kpis', 'kpi', 'goals'],
@@ -92,12 +102,34 @@ const SYNONYMS: Record<string, readonly string[]> = {
 };
 
 /** Pages the sidebar doesn't list but people go to, named as their page names them. */
-const EXTRA_PAGES: { href: ChatHref; name: string; section: string | null }[] = [
-  { href: '/dashboard/action-center/signals', name: 'Signals', section: 'Action Center' },
-  { href: '/dashboard/action-center/kpis', name: 'KPIs', section: 'Action Center' },
-  { href: '/dashboard/action-center/history', name: 'History', section: 'Action Center' },
-  { href: '/dashboard/competitors', name: navT('competitors'), section: null },
-  { href: '/dashboard/brands', name: 'Brands', section: null },
+const EXTRA_PAGES: {
+  href: ChatHref;
+  name: string;
+  section: string | null;
+  requiredFeature?: Feature;
+}[] = [
+  {
+    href: '/dashboard/action-center/signals',
+    name: actionCenterT('tabs.signals'),
+    section: navT('actionCenter'),
+  },
+  {
+    href: '/dashboard/action-center/kpis',
+    name: actionCenterT('tabs.kpis'),
+    section: navT('actionCenter'),
+  },
+  {
+    href: '/dashboard/action-center/history',
+    name: actionCenterT('tabs.history'),
+    section: navT('actionCenter'),
+  },
+  {
+    href: '/dashboard/competitors',
+    name: navT('competitors'),
+    section: null,
+    requiredFeature: 'competitor_tracking',
+  },
+  { href: '/dashboard/brands', name: brandsT('title'), section: null },
 ];
 
 /** Settings sections by their Settings name. */
@@ -138,9 +170,10 @@ function route(
 
 /**
  * Every page Chat can open, from the live sidebar and Settings, in the
- * sidebar's order. Chat itself (its own page) isn't one.
+ * sidebar's order: Settings' sections this install shows (no Billing or AI
+ * Providers on a self-hosted one). Chat itself (its own page) isn't one.
  */
-export function routeRegistry(): ChatRoute[] {
+export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): ChatRoute[] {
   const out: ChatRoute[] = [];
   for (const group of dashboardNav) {
     for (const item of group.items) {
@@ -154,11 +187,15 @@ export function routeRegistry(): ChatRoute[] {
       }
     }
   }
-  for (const page of EXTRA_PAGES) out.push(route(page.href, page.name, page.section));
+  for (const page of EXTRA_PAGES) {
+    out.push(route(page.href, page.name, page.section, page.requiredFeature));
+  }
   out.push(route('/dashboard/settings', navT('settings'), null));
   for (const section of SETTINGS_SECTIONS) {
     const name = SETTINGS_NAMES[section];
-    if (name) out.push(route(`/dashboard/settings/${section}`, name, navT('settings')));
+    if (name && hasSettingsSection(section, { isCloud: cloud })) {
+      out.push(route(`/dashboard/settings/${section}`, name, navT('settings')));
+    }
   }
   return out;
 }
@@ -178,7 +215,7 @@ export function hrefWithFilters(
   const applied: { key: RouteFilter['key']; value: string }[] = [];
   for (const filter of route.filters) {
     const value = filters[filter.key];
-    if (!value || (filter.values && !filter.values.includes(value))) continue;
+    if (!value || !filter.values.includes(value)) continue;
     params.set(filter.param, value);
     applied.push({ key: filter.key, value });
   }
@@ -187,7 +224,7 @@ export function hrefWithFilters(
 }
 
 /** Platform names people say, to the ids the pages filter by. */
-const PLATFORM_WORDS: [string, string][] = [
+const PLATFORM_WORDS: [string, PlatformId][] = [
   ['google ai overviews', 'google-aio'],
   ['ai overviews', 'google-aio'],
   ['google ai mode', 'google-aimode'],
@@ -259,16 +296,22 @@ export function routeRequest(text: string, routes = routeRegistry()): RoutedRequ
   if (!verb) return null;
   let rest = ` ${said.slice(verb[0].length).trim()} `;
 
-  // The page: the longest phrase of any route found in the request.
+  // The page: the longest phrase of any route found in the request. Two
+  // pages it could be ("plan": Content › Plan or Billing) are the model's.
   let best: { route: ChatRoute; phrase: string } | null = null;
+  let tied = false;
   for (const route of routes) {
     for (const phrase of phrasesOf(route)) {
-      if (hasPhrase(rest.trim(), phrase) && (!best || phrase.length > best.phrase.length)) {
+      if (!hasPhrase(rest.trim(), phrase)) continue;
+      if (!best || phrase.length > best.phrase.length) {
         best = { route, phrase };
+        tied = false;
+      } else if (phrase.length === best.phrase.length && route.id !== best.route.id) {
+        tied = true;
       }
     }
   }
-  if (!best) return null;
+  if (!best || tied) return null;
   rest = rest.replace(` ${best.phrase} `, ' ');
 
   const filters: RoutedRequest['filters'] = {};

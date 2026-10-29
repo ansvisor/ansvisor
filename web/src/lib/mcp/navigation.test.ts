@@ -21,6 +21,8 @@ vi.mock('@/lib/supabase/admin', () => ({
 }));
 
 const { openPageFor } = await import('./navigation');
+const { routeRequest } = await import('@/lib/chat/routes');
+const { NAVIGATION_READS } = await import('@/lib/chat/registry/navigation');
 
 const auth: McpAuthContext = {
   userId: 'u1',
@@ -72,6 +74,25 @@ describe('openPageFor', () => {
     const shopping = await openPageFor(auth, { route: 'shopping' });
     expect(shopping).toMatchObject({ found: true, locked: true, needs: 'growth' });
     expect(shopping).not.toHaveProperty('href');
+  });
+
+  it('locks a page the router found when the plan lacks it', async () => {
+    org.row = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
+    const routed = routeRequest('Open Product Visibility');
+    expect(routed?.route.id).toBe('shopping');
+    expect(await openPageFor(auth, { route: routed!.route.id })).toMatchObject({
+      locked: true,
+      needs: 'growth',
+    });
+  });
+
+  it('takes only known platform ids, and opens no address it is given', async () => {
+    const schema = NAVIGATION_READS[0].inputSchema;
+    expect(schema.safeParse({ route: 'insights', platform: 'perplexity-web' }).success).toBe(true);
+    expect(schema.safeParse({ route: 'insights', platform: 'perplexity' }).success).toBe(false);
+    for (const route of ['//evil.com', 'https://evil.com', 'javascript:alert(1)']) {
+      expect(await openPageFor(auth, { route })).toEqual({ found: false });
+    }
   });
 
   it('says when there is no such page, and reads nothing without an organization', async () => {

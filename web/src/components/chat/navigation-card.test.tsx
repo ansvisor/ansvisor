@@ -42,13 +42,14 @@ async function render(node: React.ReactNode) {
 }
 
 describe('NavigationCard', () => {
-  it('names the page and its filters, says it costs nothing, and goes there', async () => {
+  it('names the page and its filters, says the router used no AI, and goes there', async () => {
     await render(
       <NavigationCard
         title="Tracked Prompts"
         section="Prompts"
         href="/dashboard/prompts/tracked?range=7d"
         filters={[{ key: 'range', value: '7d' }]}
+        ruleRouted
       />,
     );
     const text = container.textContent ?? '';
@@ -69,15 +70,19 @@ describe('NavigationCard', () => {
         section={null}
         href="/dashboard/citations?platform=perplexity-web"
         filters={[{ key: 'platform', value: 'perplexity-web' }]}
+        ruleRouted={false}
       />,
     );
     expect(container.textContent).toContain('Perplexity');
+    // The model routed it: AI was used.
+    expect(container.textContent).not.toContain('no AI usage');
     await render(
       <NavigationCard
         title="Competitors"
         section={null}
         href="/dashboard/competitors"
         filters={[]}
+        ruleRouted
       />,
     );
     expect(container.textContent).toContain('This chat stays open in the side panel.');

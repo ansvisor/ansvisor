@@ -89,3 +89,24 @@ describe('client components and the server Supabase client', () => {
     expect(reached).toEqual([]);
   });
 });
+
+/**
+ * The other way round: on the server, a 'use client' module's exports are
+ * client references, not its values, so a shared module (src/lib,
+ * src/config) that reads a value from one breaks every server path through
+ * it, as Chat's route registry did with the date range control's presets.
+ * Type-only imports are erased and fine.
+ */
+describe('shared modules and client components', () => {
+  it('read no value from a client component', () => {
+    const shared = ['lib', 'config']
+      .flatMap((dir) => files(join(SRC, dir)))
+      .filter((path) => !isDirective(path, 'use client'));
+    const reached = shared.flatMap((path) =>
+      runtimeImports(path)
+        .filter((target) => isDirective(target, 'use client'))
+        .map((target) => `${path.slice(SRC.length + 1)} → ${target.slice(SRC.length + 1)}`),
+    );
+    expect(reached).toEqual([]);
+  });
+});

@@ -25,7 +25,7 @@ function pageExists(route: string): boolean {
 }
 
 describe('routeRegistry', () => {
-  const routes = routeRegistry();
+  const routes = routeRegistry({ cloud: true });
 
   it('comes from the live sidebar and Settings, named as the sidebar names them', () => {
     expect(routeById('insights')).toMatchObject({ name: 'Brand Visibility', section: null });
@@ -37,12 +37,32 @@ describe('routeRegistry', () => {
       section: 'Content',
       requiredFeature: 'content_optimization',
     });
-    expect(routeById('settings/ai-providers')).toMatchObject({
+    expect(routeById('settings/ai-providers', routes)).toMatchObject({
       name: 'AI Providers',
       section: 'Settings',
     });
+    expect(routeById('action-center/signals')).toMatchObject({
+      name: 'Signals',
+      section: 'Action Center',
+    });
+    expect(routeById('competitors')).toMatchObject({ requiredFeature: 'competitor_tracking' });
     // Chat doesn't open itself.
     expect(routeById('agent')).toBeUndefined();
+  });
+
+  it('lists only the Settings sections this install shows: a self-hosted one has no Billing or AI Providers', () => {
+    const selfHosted = routeRegistry({ cloud: false });
+    expect(routeById('settings/billing', selfHosted)).toBeUndefined();
+    expect(routeById('settings/ai-providers', selfHosted)).toBeUndefined();
+    expect(routeById('settings/team', selfHosted)).toBeDefined();
+    expect(routeById('settings/billing', routes)).toBeDefined();
+  });
+
+  it('opens only pages of the app, whatever address it is asked for', () => {
+    expect(routes.every((r) => r.href.startsWith('/dashboard'))).toBe(true);
+    for (const address of ['//evil.com', 'https://evil.com', 'javascript:alert(1)', '../login']) {
+      expect(routeById(address, routes)).toBeUndefined();
+    }
   });
 
   it('points every route at a page of the app, once', () => {
@@ -63,12 +83,17 @@ describe('routeRegistry', () => {
     expect(hrefWithFilters(routeById('competitors')!, { range: '24h', platform: 'x' }).href).toBe(
       '/dashboard/competitors',
     );
+    // A platform the pages don't filter by isn't set.
+    expect(hrefWithFilters(insights, { platform: 'javascript:alert(1)' }).href).toBe(
+      '/dashboard/insights',
+    );
   });
 });
 
 describe('routeRequest', () => {
+  const cloud = routeRegistry({ cloud: true });
   const to = (text: string) => {
-    const routed = routeRequest(text);
+    const routed = routeRequest(text, cloud);
     return routed ? hrefWithFilters(routed.route, routed.filters).href : null;
   };
 
@@ -90,6 +115,23 @@ describe('routeRequest', () => {
 
   it('takes the longest name it finds: Prompts Insights over Insights', () => {
     expect(to('open prompt insights')).toBe('/dashboard/prompts/insights');
+    expect(to('open content plan')).toBe('/dashboard/content/plan');
+  });
+
+  it('leaves two pages of the same name to the model', () => {
+    // Content › Plan, or Billing's plan; a self-hosted install has no Billing.
+    expect(to('open plan')).toBeNull();
+    expect(routeRequest('open plan', routeRegistry({ cloud: false }))?.route.id).toBe(
+      'content/plan',
+    );
+    // Brand Visibility's address, or Prompts › Insights.
+    expect(to('open insights')).toBeNull();
+  });
+
+  it('opens no address it was given, only pages it knows', () => {
+    expect(to('open //evil.com')).toBeNull();
+    expect(to('go to javascript:alert(1)')).toBeNull();
+    expect(to('take me to https://evil.com/dashboard/insights')).toBeNull();
   });
 
   it('leaves to the model what it did not fully understand', () => {

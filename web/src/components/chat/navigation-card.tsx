@@ -10,7 +10,9 @@ import type { RouteFilter } from '@/lib/chat/routes';
 
 /**
  * The navigation card (CHAT-19 §2): the page Chat opens and the filters it
- * set, with Go to page. Plain navigation uses no AI, and the card says so.
+ * set, with Go to page. A request the rules-based router answered
+ * (lib/chat/routes.ts routeRequest) used no AI, and the card says so; one
+ * the model routed did, and it doesn't.
  * In the side panel the page opens behind it; on the full page it opens
  * with the chat docked in the side panel.
  */
@@ -19,11 +21,14 @@ export function NavigationCard({
   section,
   href,
   filters,
+  ruleRouted,
 }: {
   title: string;
   section: string | null;
   href: ChatHref;
   filters: { key: RouteFilter['key']; value: string }[];
+  /** Answered by the rules-based router, without the model. */
+  ruleRouted: boolean;
 }) {
   const t = useTranslations('chatNavigation');
   const label = (filter: { key: RouteFilter['key']; value: string }) =>
@@ -56,7 +61,9 @@ export function NavigationCard({
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="text-[11px] text-muted-foreground">{t('navigationOnly')}</span>
+        <span className="text-[11px] text-muted-foreground">
+          {ruleRouted ? t('navigationOnly') : null}
+        </span>
         <Link href={href} className={buttonVariants({ size: 'sm' })}>
           {t('goToPage')}
           <ArrowUpRight className="h-3.5 w-3.5" />

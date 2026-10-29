@@ -1,9 +1,9 @@
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { getMinimumPlanForFeature } from '@/config/plans';
 import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
-import { hrefWithFilters, routeById, type RouteFilter } from '@/lib/chat/routes';
+import { hrefWithFilters, routeById, type PlatformId, type RouteFilter } from '@/lib/chat/routes';
 
 /**
  * Chat's open_page (CHAT-19 §2, CHAT-20 §9 row 1): a page of the app, with
@@ -13,7 +13,7 @@ import { hrefWithFilters, routeById, type RouteFilter } from '@/lib/chat/routes'
  */
 export async function openPageFor(
   auth: McpAuthContext,
-  params: { route: string; range?: string; platform?: string },
+  params: { route: string; range?: string; platform?: PlatformId },
 ) {
   if (!auth.organizationId) return null;
   const route = routeById(params.route);
