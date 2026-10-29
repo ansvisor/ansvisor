@@ -61,7 +61,8 @@ vi.mock('./logger.js', () => ({
   logger: { warn: (...args) => events.push(args), error: () => {} },
 }));
 
-const { liveAddress, markDeliveryPublished, publishDraft } = await import('./content-published.js');
+const { liveAddress, markDeliveryPublished, publishDraft, publishDraftForKeyUser } =
+  await import('./content-published.js');
 
 const LIVE = 'https://www.acme.example/blog/cold-brew';
 
@@ -279,6 +280,64 @@ describe('publishDraft', () => {
     expect(published.taskCompleted).toBe(false);
     expect(tables.content_drafts[0].status).toBe('published');
     expect(events.length).toBe(1);
+  });
+});
+
+describe('publishDraftForKeyUser', () => {
+  // The fake database reads the embedded organization as a column of its own.
+  const ofOrg = (org) => Object.assign(tables.content_drafts[0], { 'brands.organization_id': org });
+
+  it('publishes the organization’s draft as the key’s user, as the route does', async () => {
+    ofOrg('org1');
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).toMatchObject({ publishedUrl: LIVE, taskCompleted: false, onBrandDomain: true });
+    expect(tables.content_drafts[0]).toMatchObject({ status: 'published', published_url: LIVE });
+  });
+
+  it('leaves another organization’s draft, and an archived one, alone', async () => {
+    ofOrg('org2');
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).toBeNull();
+    ofOrg('org1');
+    tables.content_drafts[0].archived_at = '2026-10-20T10:00:00Z';
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).toBeNull();
+    expect(tables.content_drafts[0].published_url ?? null).toBeNull();
+  });
+
+  it('changes nothing for a page already published at the address, its live-since kept', async () => {
+    ofOrg('org1');
+    const since = '2026-10-21T08:00:00Z';
+    Object.assign(tables.content_drafts[0], {
+      status: 'published',
+      published_url: LIVE,
+      published_at: since,
+      action_id: 'a1',
+    });
+    tables.action_tasks = [task('t1', 'publish_content')];
+    const before = clone(tables);
+
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: LIVE, userId: 'u1', orgId: 'org1' }),
+    ).toEqual({
+      publishedUrl: LIVE,
+      publishedAt: since,
+      taskCompleted: false,
+      onBrandDomain: true,
+    });
+    expect(tables).toEqual(before);
+    expect(rpcs).toEqual([]);
+
+    // At another address, it moves, as the editor's Mark published moves it.
+    const moved = 'https://www.acme.example/blog/cold-brew-at-home';
+    expect(
+      await publishDraftForKeyUser({ draftId: 'dr1', url: moved, userId: 'u1', orgId: 'org1' }),
+    ).toMatchObject({ publishedUrl: moved });
+    expect(tables.content_drafts[0].published_url).toBe(moved);
+    expect(tables.content_drafts[0].published_at).not.toBe(since);
   });
 });
 
