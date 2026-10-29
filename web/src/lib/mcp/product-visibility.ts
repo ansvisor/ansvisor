@@ -1,5 +1,6 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
+import { API_BASE_URL } from '@/config/api';
 import {
   getProductAiSays,
   getResellerPriceAlerts,
@@ -278,6 +279,27 @@ export interface McpReadiness {
   unread: ('sources' | 'products' | 'channels')[];
 }
 
+/**
+ * Whether this deployment can connect Google Merchant Center, as the page
+ * asks the API (/api/integrations/config), through the CRON_SECRET internal
+ * endpoint: the MCP has no member session. False when it can't be read.
+ */
+export async function merchantCenterOffered(): Promise<boolean> {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/internal/integrations-config`, {
+      headers: { Authorization: `Bearer ${cronSecret}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { config?: { googleMerchantCenter?: boolean } };
+    return Boolean(body.config?.googleMerchantCenter);
+  } catch {
+    return false;
+  }
+}
+
 /** A read the checklist can do without: null, logged, when it fails. */
 const orNull = <T>(what: string, read: Promise<T>): Promise<T | null> =>
   read.catch((err: unknown) => {
@@ -298,26 +320,29 @@ export async function getShoppingReadinessFor(
     const own = await marketOf(brandId, params.market);
     const market = own ?? 'us';
     const filters: ShoppingFilters = { datePreset: period, chatgptMarket: own ?? undefined };
-    const [sources, products, openAi, cheaper, amazonDrop, options, ownOn] = await Promise.all([
-      orNull('catalog sources', readCatalogSources(supabaseAdmin, brandId)),
-      getShoppingProducts(brandId, filters).then(
-        (read) => read?.rows ?? null,
-        (err: unknown) => {
-          console.error('[mcp] Readiness: failed to read the products:', err);
-          return 'failed' as const;
-        },
-      ),
-      // As on the page: only for a brand in the US market, not one that just falls back to it.
-      own === 'us' ? orNull('the OpenAI index', getOpenAiIndexRead(brandId, period)) : null,
-      orNull('reseller prices', getResellerPriceAlerts(brandId, filters)),
-      orNull('the Amazon share', getShoppingAmazonShareDropAlert(brandId)),
-      getShoppingFilterOptions(brandId),
-      // Which channels hold its products: one row a channel, not every card on the shelves.
-      orNull('the channels', getShoppingOwnChannels(brandId, filters)),
-    ]);
+    const [sources, products, openAi, cheaper, amazonDrop, options, ownOn, gmcOffered] =
+      await Promise.all([
+        orNull('catalog sources', readCatalogSources(supabaseAdmin, brandId)),
+        getShoppingProducts(brandId, filters).then(
+          (read) => read?.rows ?? null,
+          (err: unknown) => {
+            console.error('[mcp] Readiness: failed to read the products:', err);
+            return 'failed' as const;
+          },
+        ),
+        // As on the page: only for a brand in the US market, not one that just falls back to it.
+        own === 'us' ? orNull('the OpenAI index', getOpenAiIndexRead(brandId, period)) : null,
+        orNull('reseller prices', getResellerPriceAlerts(brandId, filters)),
+        orNull('the Amazon share', getShoppingAmazonShareDropAlert(brandId)),
+        getShoppingFilterOptions(brandId),
+        // Which channels hold its products: one row a channel, not every card on the shelves.
+        orNull('the channels', getShoppingOwnChannels(brandId, filters)),
+        merchantCenterOffered(),
+      ]);
     const { score, items } = readinessChecklist({
       market,
       catalog: sources,
+      merchantCenterOffered: gmcOffered,
       products: products === 'failed' ? null : products,
       openAi,
       cheaperResellers: cheaper?.length ?? null,

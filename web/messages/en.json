@@ -8251,7 +8251,7 @@
       "channelsLabel": "AI shopping channels",
       "market": {
         "us": "Market: United States. In the US, ChatGPT picks products from OpenAI's own product index, built from feeds.",
-        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so your Merchant Center feed decides ChatGPT too."
+        "europe": "Market: Europe. In Europe, ChatGPT still takes products from Google Shopping, so what Google Shopping has of yours (a Merchant Center feed or your pages' product schema) decides ChatGPT too."
       },
       "channels": {
         "showing": "Showing your products",
