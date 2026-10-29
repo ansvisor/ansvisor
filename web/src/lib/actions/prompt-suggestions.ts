@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { addPromptToSet } from '@/lib/actions/prompt';
+import { addPromptToSet, type PromptAddFailureCode } from '@/lib/actions/prompt';
 import { addPromptTargetUrl } from '@/lib/actions/prompt-workflow';
 import { API_BASE_URL } from '@/config/api';
 // Types only — this file is `'use server'`, so the guards that go with them
@@ -10,6 +10,7 @@ import { API_BASE_URL } from '@/config/api';
 import type { PromptSuggestionSource, SuggestionSourceData } from '@/lib/prompt-suggestion-source';
 import { assertWritable } from '@/lib/subscription-guard';
 import { NO_ANSWER, responseFailure, type ReadFailure } from '@/lib/api-failure';
+import { NO_TOPICS, NO_TOPICS_MESSAGE } from '@/lib/topics-required';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -112,7 +113,18 @@ export async function getPromptSuggestions(brandId: string): Promise<PromptSugge
   }
 }
 
-export async function refreshPromptSuggestions(brandId: string): Promise<PromptSuggestion[]> {
+export type RefreshPromptSuggestionsResult =
+  | { ok: true; suggestions: PromptSuggestion[] }
+  | { ok: false; failure: typeof NO_TOPICS };
+
+/**
+ * A fresh batch of suggestions. A brand with no topic yet gets `no_topics`
+ * as a value, before anything is generated: suggestions are prompts, which
+ * are grouped under topics, and production would hide a thrown message.
+ */
+export async function refreshPromptSuggestions(
+  brandId: string,
+): Promise<RefreshPromptSuggestionsResult> {
   const session = await getSession();
   const res = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${brandId}/refresh`, {
     method: 'POST',
@@ -120,10 +132,11 @@ export async function refreshPromptSuggestions(brandId: string): Promise<PromptS
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (body.code === NO_TOPICS) return { ok: false, failure: NO_TOPICS };
     throw new Error(body.error || `Server error: ${res.status}`);
   }
   const data = (await res.json()) as { suggestions: SuggestionRow[] };
-  return data.suggestions.map(mapRow);
+  return { ok: true, suggestions: data.suggestions.map(mapRow) };
 }
 
 export async function dismissSuggestion(suggestionId: string): Promise<{ success: boolean }> {
@@ -139,7 +152,9 @@ export async function dismissSuggestion(suggestionId: string): Promise<{ success
   return res.json();
 }
 
-export type AcceptSuggestionResult = { promptId: string } | { error: string; code?: 'plan_limit' };
+export type AcceptSuggestionResult =
+  | { promptId: string }
+  | { error: string; code?: PromptAddFailureCode };
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -236,9 +251,12 @@ export interface TrackSuggestionsResult {
   trackedIds: string[];
   /** Already accepted or dismissed elsewhere: skipped, nothing to track. */
   skippedIds: string[];
-  /** Why the rest weren't; `code` 'plan_limit' when the plan's prompt locations ran out. */
+  /**
+   * Why the rest weren't; `code` 'plan_limit' when the plan's prompt
+   * locations ran out, 'no_topics' when the brand has no topic yet.
+   */
   error?: string;
-  code?: 'plan_limit';
+  code?: PromptAddFailureCode;
 }
 
 /** More than an Opportunities item can hold: a refresh makes 25 suggestions. */
@@ -281,7 +299,7 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
   if ('error' in target) return { trackedIds: [], skippedIds, error: target.error };
 
   const added: { id: string; promptId: string }[] = [];
-  let failure: { error: string; code?: 'plan_limit' } | undefined;
+  let failure: { error: string; code?: PromptAddFailureCode } | undefined;
   for (const id of ids) {
     const row = byId.get(id);
     if (!row) continue;
@@ -305,9 +323,12 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
 export interface TrackPagePromptsResult {
   /** The prompts added, in the order given. */
   promptIds: string[];
-  /** Why the rest weren't; `code` 'plan_limit' when the plan's prompt locations ran out. */
+  /**
+   * Why the rest weren't; `code` 'plan_limit' when the plan's prompt
+   * locations ran out, 'no_topics' when the brand has no topic yet.
+   */
   error?: string;
-  code?: 'plan_limit';
+  code?: PromptAddFailureCode;
 }
 
 /** More than a page's suggestions: it gets five. */
@@ -321,7 +342,8 @@ const MAX_PAGE_PROMPTS = 10;
  * own spelling, or a new topic made for it, as an import does. Each added
  * prompt gets the page as its target URL, so its answers show whether AI
  * cites the page; a target that can't be saved leaves the prompt tracked.
- * Their first answers come with the next tracking run.
+ * Their first answers come with the next tracking run. A brand with no topic
+ * yet gets `no_topics` before any topic is made for it: the person adds one.
  */
 export async function trackPagePrompts(
   brandId: string,
@@ -339,11 +361,18 @@ export async function trackPagePrompts(
   if ('error' in target) return { promptIds: [], error: target.error };
 
   const keyOf = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
-  const { data: topicRows } = await supabase.from('topics').select('name').eq('brand_id', brandId);
+  const { data: topicRows, error: topicsError } = await supabase
+    .from('topics')
+    .select('name')
+    .eq('brand_id', brandId);
+  // A failed read isn't a brand without topics: the adds below say what went wrong.
+  if (!topicsError && !topicRows?.length) {
+    return { promptIds: [], error: NO_TOPICS_MESSAGE, code: NO_TOPICS };
+  }
   const topics = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.name as string]));
 
   const promptIds: string[] = [];
-  let failure: { error: string; code?: 'plan_limit' } | undefined;
+  let failure: { error: string; code?: PromptAddFailureCode } | undefined;
   for (const p of wanted) {
     const named = typeof p.topic === 'string' ? p.topic.trim().slice(0, 60) : '';
     let topic = named ? topics.get(keyOf(named)) : undefined;

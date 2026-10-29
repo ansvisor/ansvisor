@@ -36,7 +36,16 @@ vi.mock('@/lib/actions/volumes', () => volumes);
 vi.mock('@/lib/actions/tracking', () => ({
   getBrandFilterOptions: vi.fn(async () => ({ regions: [] })),
 }));
-vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
+// The brand's topics, as the Add Prompt dialog reads them: one unless a test says none.
+const topicActions = vi.hoisted(() => ({ getTopics: vi.fn() }));
+vi.mock('@/lib/actions/topic', () => topicActions);
+const COFFEE_TOPIC = {
+  id: 't1',
+  brandId: 'b1',
+  name: 'Coffee',
+  isActive: true,
+  createdAt: '2026-09-01T00:00:00.000Z',
+};
 const contentUsage = vi.hoisted(() => ({ value: null as object | null }));
 const getOpenSuggestionForPrompt = vi.hoisted(() =>
   vi.fn(async (): Promise<string | null> => null),
@@ -147,6 +156,7 @@ beforeEach(() => {
     positions: {},
   });
   actions.setPromptsActive.mockResolvedValue({ updated: 1 });
+  topicActions.getTopics.mockResolvedValue([COFFEE_TOPIC]);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -202,6 +212,63 @@ describe('Tracked Prompts on a read-only workspace', () => {
     await act(async () => button('Pause')!.click());
     expect(actions.setPromptsActive).toHaveBeenCalledWith(['p1'], false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('Add Prompt on a brand without topics', () => {
+  const addTopicHref = () =>
+    [...(dialog()?.querySelectorAll('a') ?? [])]
+      .find((a) => a.textContent === 'Add a topic')
+      ?.getAttribute('href');
+  const typePrompt = async (text: string) => {
+    const input = dialog()!.querySelector<HTMLInputElement>('input')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  it('asks for a topic first instead of the form, with a way to the Topics tab', async () => {
+    topicActions.getTopics.mockResolvedValue([]);
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).toContain('Add a topic first');
+    expect(addTopicHref()).toBe('/dashboard/prompts/topics?new=1');
+    expect(button('Save & close')).toBeUndefined();
+    expect(actions.importPrompts).not.toHaveBeenCalled();
+  });
+
+  it('shows the form as before when the brand has a topic', async () => {
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).not.toContain('Add a topic first');
+    expect(button('Save & close')).toBeDefined();
+  });
+
+  it('reads the topics again on every open, so one added since counts', async () => {
+    topicActions.getTopics.mockResolvedValueOnce([]);
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).toContain('Add a topic first');
+    await act(async () => button('Cancel')!.click());
+    await act(async () => button('Add prompt')!.click());
+    expect(dialog()?.textContent).not.toContain('Add a topic first');
+    expect(topicActions.getTopics).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks for a topic first when saving finds the brand has none left', async () => {
+    actions.importPrompts.mockResolvedValue({
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    await typePrompt('Best espresso beans?');
+    await act(async () => button('Save & close')!.click());
+    expect(actions.importPrompts).toHaveBeenCalled();
+    expect(dialog()?.textContent).toContain('Add a topic first');
+    expect(addTopicHref()).toBe('/dashboard/prompts/topics?new=1');
   });
 });
 

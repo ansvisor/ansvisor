@@ -326,6 +326,23 @@ describe('+ Track on a People Also Ask question', () => {
     expect(buttons('+ Track')).toHaveLength(2);
   });
 
+  it('asks for a topic first on a brand without one, with a way to the Topics tab', async () => {
+    trackDemandQuestion.mockResolvedValue({
+      promptIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    render(full());
+    await act(async () => buttons('+ Track')[0].click());
+    expect(document.body.textContent).toContain('Add a topic first');
+    const link = [...document.body.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Add a topic',
+    );
+    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(buttons('+ Track')).toHaveLength(2);
+  });
+
   it("is off for a person who can't add prompts", () => {
     render(full(), { canManage: false });
     expect(buttons('+ Track').every((b) => b.disabled)).toBe(true);

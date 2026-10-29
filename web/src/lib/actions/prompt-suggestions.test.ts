@@ -97,7 +97,7 @@ vi.mock('@/lib/actions/prompt-workflow', () => ({
 const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
 vi.stubGlobal('fetch', fetchMock);
 
-const { getPromptSuggestions, trackPagePrompts, trackSuggestions } =
+const { getPromptSuggestions, refreshPromptSuggestions, trackPagePrompts, trackSuggestions } =
   await import('./prompt-suggestions');
 
 beforeEach(() => {
@@ -165,6 +165,11 @@ describe('trackPagePrompts (AT-006 part B2)', () => {
     { text: 'Which coffee gift set suits a beginner?', topic: 'Gift Ideas' },
   ];
 
+  // The brand has a topic: prompts can be added (a brand without one is below).
+  beforeEach(() => {
+    brandTopics = ['Espresso'];
+  });
+
   it('tracks each prompt pointing at the page', async () => {
     const result = await trackPagePrompts('b1', 'https://acme.example/gifts', picked);
     expect(result).toEqual({ promptIds: ['p-1', 'p-2'] });
@@ -223,6 +228,54 @@ describe('trackPagePrompts (AT-006 part B2)', () => {
     await trackPagePrompts('b1', null, [{ text: 'Best coffee gifts?', topic: 'Coffee Gifts' }]);
     expect(madeTopics).toEqual(['Coffee Gifts']);
     expect(removedTopics).toEqual(['topic-1']);
+  });
+
+  it('asks for a topic first on a brand without one, before making a topic or a prompt', async () => {
+    brandTopics = [];
+    expect(await trackPagePrompts('b1', null, picked)).toEqual({
+      promptIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    expect(madeTopics).toEqual([]);
+    expect(added).toEqual([]);
+  });
+});
+
+/**
+ * refreshPromptSuggestions: a brand with no topic yet comes back as a value,
+ * as production hides a thrown message, so the card can ask for a topic.
+ */
+describe('refreshPromptSuggestions', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  it('returns the fresh suggestions', async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({ suggestions: [{ id: 's1', brand_id: 'b1', suggested_text: 'Best GEO tools?' }] }),
+    );
+    const result = await refreshPromptSuggestions('b1');
+    expect(result.ok && result.suggestions.map((x) => x.suggestedText)).toEqual([
+      'Best GEO tools?',
+    ]);
+  });
+
+  it('says the brand needs a topic first', async () => {
+    fetchMock.mockResolvedValueOnce(
+      json(
+        { error: 'Add a topic first: prompts are grouped under topics.', code: 'no_topics' },
+        409,
+      ),
+    );
+    expect(await refreshPromptSuggestions('b1')).toEqual({ ok: false, failure: 'no_topics' });
+  });
+
+  it('still throws any other failure, as before', async () => {
+    fetchMock.mockResolvedValueOnce(json({ error: 'Failed to generate suggestions' }, 500));
+    await expect(refreshPromptSuggestions('b1')).rejects.toThrow('Failed to generate suggestions');
   });
 });
 

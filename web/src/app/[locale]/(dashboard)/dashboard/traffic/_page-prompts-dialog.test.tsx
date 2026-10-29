@@ -185,6 +185,34 @@ describe('PagePromptsDialog', () => {
     expect(trackButton().disabled).toBe(true);
   });
 
+  it('asks for a topic first on a brand without one, before any prompt is suggested', async () => {
+    suggestPagePrompts.mockResolvedValue({
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    await render();
+    expect(text()).toContain('Add a topic first');
+    expect(text()).not.toContain("Couldn't suggest prompts for this page.");
+    const link = [...document.body.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Add a topic',
+    );
+    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
+    expect(trackButton()).toBeUndefined();
+  });
+
+  it('asks for a topic first when Track finds the brand has none left', async () => {
+    trackPagePrompts.mockResolvedValue({
+      promptIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    await render();
+    await act(async () => trackButton().click());
+    expect(text()).toContain('Add a topic first');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('says when every prompt the page answers is tracked already', async () => {
     suggestPagePrompts.mockResolvedValue({
       page: { path: '/gifts', title: null },

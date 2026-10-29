@@ -45,6 +45,7 @@ import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
+import { NO_TOPICS, brandHasTopics } from '@/lib/topics-required';
 import {
   filterPromptSuggestionEngines,
   promptSuggestionsAreStale,
@@ -637,7 +638,14 @@ export interface AcceptedPromptSuggestion {
 
 export type AcceptPromptSuggestionResult =
   | AcceptedPromptSuggestion
-  | { error: string; code?: 'plan_limit' };
+  | { error: string; code?: 'plan_limit' | typeof NO_TOPICS };
+
+/**
+ * The refusal for a brand with no topic yet, with what an agent can do about
+ * it: topic suggestions are the topics it can add itself.
+ */
+export const MCP_NO_TOPICS_MESSAGE =
+  'This brand has no topics yet. Prompts are grouped under topics, so add a topic first: accept one from list_topic_suggestions with accept_topic_suggestion, or add one in Ansvisor under Prompts › Topics. Then accept the prompt suggestion again.';
 
 /**
  * Accept one pending prompt suggestion by creating a tracked prompt, then
@@ -646,6 +654,7 @@ export type AcceptPromptSuggestionResult =
  * quota check. Every lookup is organization-scoped; duplicate acceptance
  * removes any losing concurrent insert rather than leaving duplicate prompts.
  * Adding a prompt is an admin's or a manager's call, as on the Prompts page.
+ * A brand with no topic yet is refused (`no_topics`), as on the dashboard.
  */
 export async function acceptPromptSuggestionFor(
   auth: McpAuthContext,
@@ -672,6 +681,10 @@ export async function acceptPromptSuggestionFor(
     .maybeSingle();
   if (brandError) throw new Error(brandError.message);
   if (!brand) return null;
+
+  if (!(await brandHasTopics(supabaseAdmin, brand.id))) {
+    return { error: MCP_NO_TOPICS_MESSAGE, code: NO_TOPICS };
+  }
 
   const { data: promptSet, error: promptSetError } = await supabaseAdmin
     .from('prompt_sets')

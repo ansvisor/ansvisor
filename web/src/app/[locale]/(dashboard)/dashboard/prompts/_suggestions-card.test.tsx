@@ -307,6 +307,68 @@ describe('SuggestionsCard on a read-only workspace (plan not active)', () => {
   });
 });
 
+describe('SuggestionsCard on a brand without topics', () => {
+  const button = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name || b.getAttribute('aria-label') === name,
+    )!;
+  // The dialog renders in a portal, outside the card.
+  const askedForTopic = () => document.body.textContent?.includes('Add a topic first') ?? false;
+  const addTopicHref = () =>
+    [...document.body.querySelectorAll('a')]
+      .find((a) => a.textContent === 'Add a topic')
+      ?.getAttribute('href');
+  const noTopics = {
+    error: 'Add a topic first: prompts are grouped under topics.',
+    code: 'no_topics',
+  };
+
+  it('asks for a topic first when Generate Suggestions finds none, and sends to Topics', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({ ok: false, failure: 'no_topics' });
+    await render(0);
+    await act(async () => button('Generate Suggestions').click());
+    expect(askedForTopic()).toBe(true);
+    expect(addTopicHref()).toBe('/dashboard/prompts/topics?new=1');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('asks for a topic first when New finds none, and keeps the list', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({ ok: false, failure: 'no_topics' });
+    await render(2);
+    await act(async () => button('New').click());
+    expect(askedForTopic()).toBe(true);
+    expect(rows()).toHaveLength(2);
+  });
+
+  it('asks for a topic first when adding a suggestion finds none, and keeps it listed', async () => {
+    actions.acceptSuggestion.mockResolvedValue(noTopics);
+    await render(2);
+    await act(async () => button('Add to tracked prompts').click());
+    expect(askedForTopic()).toBe(true);
+    expect(rows()).toHaveLength(2);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('asks for a topic first when Add All finds none', async () => {
+    actions.trackSuggestions.mockResolvedValue({ trackedIds: [], skippedIds: [], ...noTopics });
+    await render(3);
+    await clickAddAll();
+    expect(askedForTopic()).toBe(true);
+    expect(rows()).toHaveLength(3);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('generates as before once the brand has a topic', async () => {
+    actions.refreshPromptSuggestions.mockResolvedValue({ ok: true, suggestions: [suggestion(7)] });
+    await render(0);
+    await act(async () => button('Generate Suggestions').click());
+    expect(rows()).toHaveLength(1);
+    expect(askedForTopic()).toBe(false);
+    expect(toast.success).toHaveBeenCalledWith('Suggestions refreshed');
+  });
+});
+
 describe('SuggestionsCard by role', () => {
   const labels = () =>
     [...container.querySelectorAll('button')].map(

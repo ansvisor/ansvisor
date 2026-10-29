@@ -65,6 +65,8 @@ import {
 import { CompetitionBars } from '@/components/ui/competition-bars';
 import { WorkStatusBadge } from '@/components/prompts/work-status';
 import { BulkImportPrompts } from '@/components/prompts/bulk-import-prompts';
+import { AddTopicLink, TopicFirstNotice } from '@/components/prompts/topic-first';
+import { isNoTopics } from '@/lib/topics-required';
 import { promptKey } from '@/lib/prompt-import';
 import {
   DropdownMenu,
@@ -676,12 +678,15 @@ function AddPromptDialog({
     isPromptLimitReached(getPromptUsage(locationQuota.used, locationQuota.maxPrompts));
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
+  const tCommon = useTranslations('common');
 
   const [text, setText] = useState('');
   const [category, setCategory] = useState('');
   const [scrapers, setScrapers] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  // The brand has no topic yet: the dialog asks for one instead of the form.
+  const [noTopics, setNoTopics] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
@@ -698,15 +703,18 @@ function AddPromptDialog({
     if (!open) return;
     setText('');
     setError(null);
+    setNoTopics(false);
     setMode('single');
     setStaged([]);
     setScrapers(allowedScraperIds);
     setModels(allowedModelIds);
     let cancelled = false;
+    // Read on every open, so a topic added on the Topics tab counts on return.
     getTopics(brandId)
       .then((t) => {
         if (cancelled) return;
         setTopics(t);
+        setNoTopics(t.length === 0);
         setCategory((prev) => prev || (t[0]?.name ?? ''));
       })
       .catch(() => {});
@@ -773,7 +781,8 @@ function AddPromptDialog({
         })),
       );
       if ('error' in result) {
-        setError(result.error);
+        if (isNoTopics(result)) setNoTopics(true);
+        else setError(result.error);
         return;
       }
       const added = result.importedIdx.length;
@@ -843,6 +852,16 @@ function AddPromptDialog({
                 Close
               </Button>
               <PromptLimitActions planId={locationQuota.planId} />
+            </DialogFooter>
+          </>
+        ) : noTopics ? (
+          <>
+            <TopicFirstNotice />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>
+                {tCommon('cancel')}
+              </Button>
+              <AddTopicLink />
             </DialogFooter>
           </>
         ) : (

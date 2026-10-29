@@ -26,6 +26,7 @@ vi.mock('@/i18n/navigation', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const { QueryFanoutTab } = await import('./_fanout-tab');
+const { toast } = await import('sonner');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -113,5 +114,19 @@ describe('Track on the Query Fan-out tab', () => {
     expect(actions.trackFanoutQuery).toHaveBeenCalledWith('b1', 'best coffee beans');
     expect(openUpgrade).not.toHaveBeenCalled();
     expect(actions.classifyFanoutIntents).toHaveBeenCalledWith(['best coffee beans']);
+  });
+
+  it('asks for a topic first on a brand without one, with a way to the Topics tab', async () => {
+    actions.trackFanoutQuery.mockResolvedValue({
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    await render(false);
+    await act(async () => track().click());
+    expect(document.body.textContent).toContain('Add a topic first');
+    const link = [...document.querySelectorAll('a')].find((a) => a.textContent === 'Add a topic');
+    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

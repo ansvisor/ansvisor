@@ -192,4 +192,19 @@ describe('Opportunities on a read-only workspace (plan not active)', () => {
     expect(trackSuggestions).toHaveBeenCalledWith(['s1', 's2']);
     expect(openUpgrade).not.toHaveBeenCalled();
   });
+  it('asks for a topic first when the brand has none, with a way to the Topics tab', async () => {
+    vi.mocked(trackSuggestions).mockResolvedValue({
+      trackedIds: [],
+      skippedIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    render(false);
+    await act(async () => button('Track 2').click());
+    expect(document.body.textContent).toContain('Add a topic first');
+    const link = [...document.querySelectorAll('a')].find((a) => a.textContent === 'Add a topic');
+    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
+    // Nothing was tracked: the topic stays on the card.
+    expect(button('Track 2')).toBeDefined();
+  });
 });

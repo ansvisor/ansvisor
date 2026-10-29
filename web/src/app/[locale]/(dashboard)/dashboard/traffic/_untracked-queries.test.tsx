@@ -27,6 +27,11 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
 
 const { UntrackedQueriesCard } = await import('./_untracked-queries');
 
@@ -122,6 +127,23 @@ describe('UntrackedQueriesCard', () => {
     expect(toast.success).toHaveBeenCalledWith('Tracking 1 query as a prompt');
     expect(getUntrackedGoogleQueries).toHaveBeenCalledTimes(2);
     expect(onTracked).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for a topic first on a brand without one, with a way to the Topics tab', async () => {
+    trackPagePrompts.mockResolvedValue({
+      promptIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    await render();
+    await act(async () => button('Track')!.click());
+    expect(document.body.textContent).toContain('Add a topic first');
+    const link = [...document.body.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Add a topic',
+    );
+    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onTracked).not.toHaveBeenCalled();
   });
 
   it('tracks nothing on a read-only workspace: Track opens the upgrade dialog', async () => {
