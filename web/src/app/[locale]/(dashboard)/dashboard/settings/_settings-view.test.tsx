@@ -27,7 +27,7 @@ vi.mock('@/components/providers/chat-agentic-provider', () => ({
 vi.mock('@/lib/actions/organization', () => ({ updateAccountName: vi.fn() }));
 let pendingRequests = 0;
 vi.mock('@/lib/actions/chat-access-requests', () => ({
-  countPendingAccessRequests: async () => pendingRequests,
+  countPendingAccessRequests: async () => ({ ok: true, count: pendingRequests }),
 }));
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -46,6 +46,7 @@ for (const [path, name] of [
   ['@/components/settings/work-areas-card', 'WorkAreasCard'],
   ['@/components/chat-access/roles-access-section', 'RolesAccessSection'],
   ['@/components/chat-access/your-access-card', 'YourAccessSlot'],
+  ['@/components/chat-access/chat-settings-section', 'ChatSettingsSection'],
 ]) {
   vi.doMock(path, () => ({ [name]: () => null }));
 }
@@ -96,8 +97,11 @@ describe('SettingsView', () => {
     chatAgentic = true;
     const list = await sections();
     expect(list.indexOf('Roles & access')).toBe(list.indexOf('Team') + 1);
+    expect(list.at(-1)).toBe('Chat');
     chatAgentic = false;
-    expect(await sections()).not.toContain('Roles & access');
+    const off = await sections();
+    expect(off).not.toContain('Roles & access');
+    expect(off).not.toContain('Chat');
   });
 
   it("counts an Admin's waiting access requests on Roles & access", async () => {
