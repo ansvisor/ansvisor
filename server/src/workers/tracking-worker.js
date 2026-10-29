@@ -959,11 +959,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // for it, and late answers keep the rollups moving.
         firstRun ? { pollMs: FIRST_RUN_LATE_POLL_MS, rollups: firstRunRollups } : undefined,
       )
-    : { stamped: false, lateStamp: null };
+    : { stamped: false, lateStamp: null, resultCount: null };
 
   return {
-    resultCount: insertedCount,
+    // A webhook's answers are stored by /cloro/callback, never through
+    // insertResult: the settlement's count, read from the table, has them.
+    resultCount: settlement.resultCount ?? insertedCount,
     stamped: settlement.stamped,
+    // Still arriving: the run waits for its late answers before it stamps.
+    stillArriving: Boolean(settlement.lateStamp),
     lateStamp: settlement.lateStamp,
   };
 }

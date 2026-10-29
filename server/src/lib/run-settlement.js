@@ -153,9 +153,11 @@ async function awaitLateResults(run, { pollMs, waitMs, rollups }) {
  * days; and a run that has to wait for late answers refreshes once now, then
  * as they land.
  *
- * @returns {Promise<{ stamped: boolean, lateStamp: Promise<boolean> | null }>}
+ * @returns {Promise<{ stamped: boolean, lateStamp: Promise<boolean> | null, resultCount: number | null }>}
  *   `stamped` when the row stamped now; otherwise `lateStamp` resolves true
- *   if and when it stamps later, false if it never does.
+ *   if and when it stamps later, false if it never does. `resultCount` is
+ *   the run's answers stored so far, however they came (a webhook's
+ *   included); null when they couldn't be counted.
  */
 export async function settleTrackingRun(
   { brandId, runId, startedAt, plannedTasks },
@@ -167,14 +169,14 @@ export async function settleTrackingRun(
     // Leave the row uncompleted: the dashboard keeps the previous completed
     // run and the next run clears the dangling row.
     logger.error({ brandId, runId }, 'failed to count run results');
-    return { stamped: false, lateStamp: null };
+    return { stamped: false, lateStamp: null, resultCount: null };
   }
 
   const pending = await countRunPending(brandId, startedAt);
   const decision = settleDecision({ resultCount, plannedTasks, final: pending === 0 });
   if (decision !== 'wait') {
     await rollups?.idle();
-    return { stamped: await act(decision, run, resultCount), lateStamp: null };
+    return { stamped: await act(decision, run, resultCount), lateStamp: null, resultCount };
   }
 
   logger.info(
@@ -188,5 +190,5 @@ export async function settleTrackingRun(
     logger.error({ err, brandId, runId }, 'waiting for late results failed');
     return false;
   });
-  return { stamped: false, lateStamp };
+  return { stamped: false, lateStamp, resultCount };
 }

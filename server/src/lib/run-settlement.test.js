@@ -87,7 +87,7 @@ describe('settleTrackingRun', () => {
     db.results = 98;
     db.pending = 2;
     const out = await settleTrackingRun(run, fast);
-    expect(out).toEqual({ stamped: true, lateStamp: null });
+    expect(out).toEqual({ stamped: true, lateStamp: null, resultCount: 98 });
     expect(db.stamped.result_count).toBe(98);
   });
 
@@ -96,6 +96,8 @@ describe('settleTrackingRun', () => {
     db.pending = 46;
     const out = await settleTrackingRun(run, { pollMs: 5, waitMs: 1000 });
     expect(out.stamped).toBe(false);
+    // What is in so far, for the person waiting on it.
+    expect(out.resultCount).toBe(54);
     expect(db.stamped).toBeNull();
 
     db.results = 97;
@@ -178,7 +180,7 @@ describe('settleTrackingRun with a first run refresher', () => {
     expect(db.stamped).toBeNull();
 
     rollups.release();
-    expect(await settling).toEqual({ stamped: true, lateStamp: null });
+    expect(await settling).toEqual({ stamped: true, lateStamp: null, resultCount: 98 });
     expect(db.stamped.result_count).toBe(98);
     // A run that stamps at once needs no refresh of its own: the stamp's covers it.
     expect(rollups.flush).not.toHaveBeenCalled();
