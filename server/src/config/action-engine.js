@@ -414,6 +414,26 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      */
     finalReadingDay: 30,
   }),
+
+  /**
+   * What the "Analyze competitor content" task reads (learning C1): the
+   * pages cited in the brand's tracked answers for the action's prompts over
+   * the last `answersDays`, at most `perAction` competitor pages a run, at
+   * most `perBrandPerDay` new reads a day for the brand (its own page
+   * included; a run needing more than are left waits for the next night),
+   * and a page read within `freshDays` reused rather than read again. Read
+   * free, never through a paid scraper. Fewer than `minPages` competitor
+   * pages read are compared with nothing; a run that finds nothing to
+   * compare leaves the task to a person and tries again after `retryDays`.
+   */
+  competitorPages: Object.freeze({
+    answersDays: 14,
+    perAction: 3,
+    perBrandPerDay: 12,
+    freshDays: 14,
+    minPages: 2,
+    retryDays: 7,
+  }),
 });
 
 /**

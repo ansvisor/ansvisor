@@ -147,6 +147,8 @@ export const TASKS = Object.freeze({
   analyze_competitor_content: agent('analyze_competitor_content', {
     requires: ['competitors'],
     outputs: ['findings'],
+    // Read free from the pages the brand's answers cite (learning C1).
+    tool: 'competitor_page_features',
   }),
   analyze_ai_traffic: system('analyze_ai_traffic', {
     requires: ['ai_traffic'],

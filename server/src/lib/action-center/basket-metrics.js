@@ -118,15 +118,21 @@ export async function basketScope(action) {
     if (!promptIds.length && opp?.prompt_id) promptIds = [opp.prompt_id];
   }
   if (!promptIds.length && payload.topicId) {
-    const { data: prompts, error } = await supabaseAdmin
-      .from('prompts')
-      .select('id, prompt_sets!inner(brand_id)')
-      .eq('topic_id', payload.topicId)
-      .eq('prompt_sets.brand_id', action.brand_id);
-    if (error) throw new Error(error.message);
-    promptIds = (prompts || []).map((p) => p.id);
+    promptIds = await topicPromptIds(action.brand_id, [payload.topicId]);
   }
   return { promptIds, pages: scopePages(payload) };
+}
+
+/** The prompts the brand's topics have now, by id. */
+export async function topicPromptIds(brandId, topicIds) {
+  if (!topicIds.length) return [];
+  const { data: prompts, error } = await supabaseAdmin
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .in('topic_id', topicIds);
+  if (error) throw new Error(error.message);
+  return (prompts || []).map((p) => p.id);
 }
 
 /**
