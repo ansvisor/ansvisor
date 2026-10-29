@@ -8,7 +8,19 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  */
 
 const brandInOrg = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/mcp/data', () => ({ brandInOrg }));
+// The shopping reads' plan check: whether the plan has shopping analytics.
+const planIncludes = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/mcp/data', () => ({ brandInOrg, planIncludes }));
+// The REST mirror's key: the organization's.
+vi.mock('@/lib/mcp-auth', () => ({
+  authenticateMcpRequest: vi.fn(async () => ({
+    userId: 'user-1',
+    email: null,
+    organizationId: 'org-1',
+    apiKeyId: 'key-1',
+    role: 'admin',
+  })),
+}));
 
 // The paged reads and the Merchant Center check run as they are; the
 // Product Visibility reads answer what each test says.
@@ -100,6 +112,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 }));
 
 const { getCatalogSourcesFor, listCatalogProductsFor } = await import('./catalog');
+const { GET: productsRoute } = await import('@/app/api/mcp/catalog/products/route');
 
 const auth: McpAuthContext = {
   userId: 'user-1',
@@ -147,6 +160,7 @@ function expectBrandScoped(brandId: string) {
 
 beforeEach(() => {
   brandInOrg.mockReset().mockResolvedValue(true);
+  planIncludes.mockReset().mockResolvedValue(true);
   read.readCatalogSources.mockReset();
   read.readCatalogProducts.mockReset();
   tables = {};
@@ -250,7 +264,82 @@ describe('listCatalogProductsFor', () => {
       orders_30d: 0,
       revenue_30d: null,
     });
+    expect(planIncludes).toHaveBeenCalledWith('org-1', 'shopping_analytics');
     expectBrandScoped('brand-1');
+  });
+
+  describe('by plan: readiness, issues and AI visits are shopping analytics', () => {
+    /** One product with a Merchant Center issue and AI visits. */
+    const withAnalytics = () => {
+      tables.catalog_products = [{ id: 'p1' }];
+      tables.catalog_sources = merchantCenter();
+      tables.catalog_variants = [{ product_id: 'p1', external_id: 'offer-1' }];
+      tables.catalog_item_issues = [
+        { external_id: 'offer-1', severity: 'demoted', code: 'image_too_small', attribute: null },
+      ];
+      stats = [{ product_id: 'p1', ai_visits: 12, orders: 2, revenue: 240, currency: 'USD' }];
+      read.readCatalogProducts.mockResolvedValue([product('p1', { hasGtin: false })]);
+    };
+    const listed = {
+      id: 'p1',
+      title: 'Boots p1',
+      price: 120,
+      currency: 'USD',
+      in_stock: true,
+      has_gtin: false,
+    };
+    const rest = async () => {
+      const res = await productsRoute(
+        new Request('http://localhost/api/mcp/catalog/products?brand_id=brand-1'),
+      );
+      expect(res.status).toBe(200);
+      return res.json();
+    };
+
+    it('gives them on a plan with it (Growth), over MCP and REST', async () => {
+      withAnalytics();
+      const growth = {
+        ...listed,
+        readiness: { score: expect.any(Number), missing: ['gtin'], unknown: [] },
+        merchant_center_issues: { disapproved: 0, demoted: 1, not_impacted: 0 },
+        ai_visits_30d: 12,
+        orders_30d: 2,
+        revenue_30d: 240,
+        revenue_currency: 'USD',
+      };
+      const page = (await listCatalogProductsFor(auth, { brandId: 'brand-1' }))!;
+      expect(page.products).toEqual([expect.objectContaining(growth)]);
+      expect((await rest()).products).toEqual([expect.objectContaining(growth)]);
+    });
+
+    it('gives them as null without it (Starter), the products still listed, and reads neither', async () => {
+      withAnalytics();
+      planIncludes.mockResolvedValue(false);
+      const starter = {
+        ...listed,
+        readiness: null,
+        merchant_center_issues: null,
+        ai_visits_30d: null,
+        orders_30d: null,
+        revenue_30d: null,
+        revenue_currency: null,
+      };
+      const page = (await listCatalogProductsFor(auth, { brandId: 'brand-1' }))!;
+      expect(page).toMatchObject({ total: 1, next_offset: null });
+      expect(page.products).toEqual([expect.objectContaining(starter)]);
+      const body = await rest();
+      expect(body).toMatchObject({ total: 1, next_offset: null });
+      expect(body.products).toEqual([expect.objectContaining(starter)]);
+      expect(planIncludes).toHaveBeenCalledWith('org-1', 'shopping_analytics');
+      expect(filters.some(([table]) => table === 'catalog_item_issues')).toBe(false);
+      expect(rpcArgs).toEqual([]);
+    });
+
+    it("checks the plan only for the key's own brand", async () => {
+      brandInOrg.mockResolvedValue(false);
+      expect(await listCatalogProductsFor(auth, { brandId: 'brand-2' })).toBeNull();
+      expect(planIncludes).not.toHaveBeenCalled();
+    });
   });
 
   it('finds a search as written: its regex characters, % and _ stay themselves', async () => {

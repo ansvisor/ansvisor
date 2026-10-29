@@ -336,13 +336,13 @@ The MCP never sends a page to a CMS: Ansvisor's own **Send to CMS** stays in the
 
 ### Shopping
 
-Shopping analytics comes with the Growth plan and above. On Starter, `list_shopping_cards`, `get_product_visibility`, `get_shopping_shelf`, `get_shopping_readiness` and `get_product_ai_says` answer `plan_limit`; the catalog tools read on.
+Shopping analytics comes with the Growth plan and above. On Starter, `list_shopping_cards`, `get_product_visibility`, `get_shopping_shelf`, `get_shopping_readiness` and `get_product_ai_says` answer `plan_limit`. The catalog tools read on: on Starter, `list_catalog_products` lists the products with their `readiness`, Merchant Center issues and AI visits, orders and revenue as `null`.
 
 | Tool | What it does | Writes |
 | --- | --- | --- |
 | `list_shopping_cards` | Shopping cards surfaced in AI commercial contexts; filter by role, platform, and region. | |
 | `get_product_visibility` | Aggregate visibility for one product title across platforms, regions, and dates. | |
-| `get_catalog_sources` | Where the product catalog is read from (feed URLs, uploads, connected stores such as Shopify or Google Merchant Center) and how each last sync went: status, error, what it read and its products in the catalog now. | |
+| `get_catalog_sources` | Where the product catalog is read from (feed URLs, uploads, or a Google Merchant Center account where the server offers it) and how each last sync went: status, error, what it read and its products in the catalog now. | |
 | `list_catalog_products` | The live catalog products, by title, as Product Visibility reads them: price, stock, GTIN, `readiness` for AI shopping (`score` 0–100, the checks `missing`, and the `unknown` ones that can't be made), Merchant Center issues by severity (each issue once per product), and the AI visits, orders and revenue (`revenue_30d`) their pages brought over 30 days. Optional `search`; paged with `limit` (max 200) and `offset`. | |
 | `get_shopping_shelf` | Product Visibility's Shelf: for each shopping question and AI channel, the first 10 products the latest answer showed, in order (`products_total` counts them all), the brand's best place on it (`own_rank`) and its last 7 days there; on a shelf the brand isn't on, `why_not_you` names its catalog product the question asks for most, with its readiness. Optional `period` (7d, 30d, 90d, all), `platform`, `market` (us, europe), `absent_only`; paged with `limit` (default 10, max 50) and `offset`. | |
 | `get_shopping_readiness` | Product Visibility's Readiness: the checklist scored 0–100, each check's state (pass, warn, fail, unknown), its text as the page writes it and where its fix starts, and each AI channel's state (showing, notShowing, notTracked). Optional `period` and `market`. | |
