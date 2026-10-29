@@ -455,6 +455,25 @@ describe('writeTasksForAction', () => {
     expect(generateObject.mock.calls[0][0].prompt).not.toContain('Earlier rounds');
   });
 
+  it("tells the model the brand's kind of site and its page types, chosen or guessed", async () => {
+    db.brands[0] = { ...db.brands[0], site_type: 'ecommerce' };
+    generateObject.mockResolvedValueOnce(answer([task()]));
+    await writeTasksForAction('a1', { dryRun: true });
+    const { prompt, system } = generateObject.mock.calls[0][0];
+    expect(prompt).toContain(
+      'Site type: E-commerce (an online shop selling products). Its page types: product page, category page, collection page, buying guide,',
+    );
+    expect(system).toContain("Name pages and content the way the brand's kind of site does");
+
+    // None chosen: the guess, from Shopping mode or the industry, else B2B.
+    db.brands[0] = { ...db.brands[0], site_type: null, industry: 'Travel & Hospitality' };
+    generateObject.mockResolvedValueOnce(answer([task()]));
+    await writeTasksForAction('a1', { dryRun: true });
+    expect(generateObject.mock.calls[1][0].prompt).toContain(
+      'Site type: B2C (a service for consumers). Its page types: destination page, itinerary,',
+    );
+  });
+
   it('calls no model when the signals name nothing to work on', async () => {
     db.signals[0].payload = {};
     const result = await writeTasksForAction('a1', { trigger: 'regenerate' });

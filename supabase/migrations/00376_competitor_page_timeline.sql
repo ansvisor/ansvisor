@@ -61,6 +61,7 @@ create policy competitor_page_events_member_select on public.competitor_page_eve
     )
   );
 
+revoke all on table public.competitor_page_events from anon, authenticated;
 grant select on table public.competitor_page_events to authenticated;
 grant all on table public.competitor_page_events to service_role;
 
