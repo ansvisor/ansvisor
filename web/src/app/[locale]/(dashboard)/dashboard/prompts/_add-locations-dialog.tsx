@@ -21,26 +21,43 @@ import {
 } from '@/lib/actions/prompt';
 import { planBulkLocationChange } from '@/lib/prompt-locations';
 import { CITY_PLATFORMS } from '@/config/cities';
-import { parseLocation } from '@/lib/region';
+import { parseLocation, regionFlag, regionLabel } from '@/lib/region';
 import { cn } from '@/lib/utils';
 import type { Prompt } from '@/types';
 import { PromptLimitActions } from './_prompt-limit-actions';
 
 type Scope = 'one' | 'selected' | 'topic' | 'all';
+type Mode = 'add' | 'remove';
 
 export interface AddLocationsPreset {
-  /** One prompt, from a Locations view cell's + Track. */
+  /** Add (the default) or stop tracking. */
+  mode?: Mode;
+  /** One prompt, from a Locations view cell's + Track or Stop tracking here. */
   promptId?: string;
   locations?: string[];
 }
 
+/** Each location the prompts track, the most tracked first, with how many track it. */
+function trackedLocations(prompts: readonly Prompt[]): { code: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const p of prompts) {
+    for (const code of new Set(p.regions)) counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([code, count]) => ({ code, count }));
+}
+
 /**
- * Track in more locations (PROMPT-015c): the locations to add, the prompts
- * to add them to (one, the selected, a topic, or all shown), and what it
- * does to the plan's tracked locations before anything is saved. Past the
- * limit it says what the choice needs and what is left, with the plan's
- * way out, and saves nothing. The preview and the save run the same
+ * Track in more locations (PROMPT-015c), or stop tracking in some: the
+ * locations (to add, or among those the prompts track), the prompts (one,
+ * the selected, a topic, or all shown), and what it does to the plan's
+ * tracked locations before anything is saved. Adding past the limit says
+ * what the choice needs and what is left, with the plan's way out, and saves
+ * nothing. Removing never leaves a prompt without a location: those it would
+ * are left alone and counted. The preview and the save run the same
  * arithmetic (planBulkLocationChange), and the save checks the limit again.
+ * Past results stay: a removed location is only asked no more.
  */
 export function AddLocationsDialog({
   open,
@@ -61,6 +78,7 @@ export function AddLocationsDialog({
   onDone: () => void;
 }) {
   const t = useTranslations('prompts.addLocations');
+  const [mode, setMode] = useState<Mode>('add');
   const [locations, setLocations] = useState<string[]>([]);
   const [scope, setScope] = useState<Scope>('all');
   const [topic, setTopic] = useState('');
@@ -77,6 +95,7 @@ export function AddLocationsDialog({
   // Each opening starts from what opened it.
   useEffect(() => {
     if (!open) return;
+    setMode(preset?.mode ?? 'add');
     setLocations(preset?.locations ?? []);
     setScope(preset?.promptId ? 'one' : selectedIds.size ? 'selected' : 'all');
     setTopic('');
@@ -106,38 +125,56 @@ export function AddLocationsDialog({
         : scope === 'topic'
           ? prompts.filter((p) => p.category?.trim() === chosenTopic)
           : prompts;
+  const removing = mode === 'remove';
+  // What can be stopped: the locations the chosen prompts track, with how
+  // many of them track each, and any picked already, so choosing other
+  // prompts never hides a pick.
+  const tracked = trackedLocations(targets);
+  const trackedHere = [
+    ...tracked,
+    ...locations
+      .filter((code) => !tracked.some((l) => l.code === code))
+      .map((code) => ({ code, count: 0 })),
+  ];
   const change = planBulkLocationChange(
     targets.map((p) => ({ id: p.id, regions: p.regions, isActive: p.isActive })),
-    'add',
+    mode,
     locations,
   );
+  // Tracked locations it takes off, paused prompts' too; and what the plan gets back.
+  const removed = change.changes.reduce((n, c) => n - c.delta, 0);
   // A city is asked only by Google's engines and the API models (PROMPT-015d).
-  const askingCity = locations.some((code) => parseLocation(code)?.city);
+  const askingCity = !removing && locations.some((code) => parseLocation(code)?.city);
   const asksFromCity = (p: Prompt) =>
     (p.platforms ?? []).some((id) => CITY_PLATFORMS.has(id)) || (p.models?.length ?? 0) > 0;
   const noCityEngine = askingCity ? targets.filter((p) => !asksFromCity(p)).length : 0;
   const cityBlocked = askingCity && targets.length > 0 && noCityEngine === targets.length;
   const unlimited = quota === null || quota.maxPrompts === -1;
   const after = (quota?.used ?? 0) + change.delta;
-  const over = !unlimited && quota !== null && after > quota.maxPrompts;
+  const over = !removing && !unlimited && quota !== null && after > quota.maxPrompts;
   const left = quota ? Math.max(0, quota.maxPrompts - quota.used) : 0;
 
   const save = async () => {
     setSaving(true);
     setError(null);
-    const result = await bulkUpdatePromptLocations(
-      targets.map((p) => p.id),
-      'add',
-      locations,
-    );
-    setSaving(false);
-    if ('error' in result) {
-      setError(result.error);
-      return;
+    // A refused write (a plan no longer active) still rejects, for the
+    // dashboard's upgrade dialog; the button never stays spinning.
+    try {
+      const result = await bulkUpdatePromptLocations(
+        targets.map((p) => p.id),
+        mode,
+        locations,
+      );
+      if ('error' in result) {
+        setError(result.error);
+        return;
+      }
+      toast.success(t(removing ? 'removed' : 'done', { count: result.updated }));
+      onOpenChange(false);
+      onDone();
+    } finally {
+      setSaving(false);
     }
-    toast.success(t('done', { count: result.updated }));
-    onOpenChange(false);
-    onDone();
   };
 
   const scopes: { id: Scope; label: string; count: number }[] = [
@@ -167,21 +204,90 @@ export function AddLocationsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription>{t('lead')}</DialogDescription>
+          <DialogTitle>{t(removing ? 'removeTitle' : 'title')}</DialogTitle>
+          <DialogDescription>{t(removing ? 'removeLead' : 'lead')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <LocationPicker
-            value={locations}
-            onChange={setLocations}
-            maxSelectable={null}
-            label={t('locations')}
-            countNoun={t('picked')}
-            allowEmpty
-          />
+          <div
+            role="group"
+            aria-label={t('modes')}
+            className="inline-flex gap-0.5 rounded-full border bg-background p-0.5"
+          >
+            {(['add', 'remove'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={mode === m}
+                onClick={() => {
+                  if (m === mode) return;
+                  setMode(m);
+                  setLocations([]);
+                  setError(null);
+                }}
+                className={cn(
+                  'h-7 rounded-full px-3 text-xs transition-colors',
+                  mode === m
+                    ? 'bg-foreground font-medium text-background'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t(m === 'add' ? 'modeAdd' : 'modeRemove')}
+              </button>
+            ))}
+          </div>
+
+          {removing ? (
+            <fieldset>
+              <legend className="mb-1.5 text-xs font-medium text-muted-foreground">
+                {t('removeLocations')}
+              </legend>
+              {trackedHere.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t('removeNoLocations')}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {trackedHere.map(({ code, count }) => {
+                    const on = locations.includes(code);
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={t('removeChip', { location: regionLabel(code), count })}
+                        onClick={() =>
+                          setLocations((prev) =>
+                            on ? prev.filter((c) => c !== code) : [...prev, code],
+                          )
+                        }
+                        className={cn(
+                          'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors',
+                          on
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'text-muted-foreground hover:border-foreground/40 hover:text-foreground',
+                        )}
+                      >
+                        {`${regionFlag(code)} ${regionLabel(code)}`.trim()}
+                        <span className="tabular-nums opacity-70">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </fieldset>
+          ) : (
+            <LocationPicker
+              value={locations}
+              onChange={setLocations}
+              maxSelectable={null}
+              label={t('locations')}
+              countNoun={t('picked')}
+              allowEmpty
+            />
+          )}
 
           <fieldset className="space-y-2">
-            <legend className="mb-2 text-xs font-medium text-muted-foreground">{t('scope')}</legend>
+            <legend className="mb-2 text-xs font-medium text-muted-foreground">
+              {t(removing ? 'removeScope' : 'scope')}
+            </legend>
             {scopes.map((s) => (
               <label
                 key={s.id}
@@ -246,7 +352,17 @@ export function AddLocationsDialog({
                 />
               </div>
             )}
-            <p className="text-xs text-muted-foreground">{t('usageHint')}</p>
+            {removing && change.changes.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {t('removePreview', {
+                  removed,
+                  count: change.changes.length,
+                  freed: -change.delta,
+                })}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t('usageHint')}</p>
+            )}
           </div>
 
           {over && quota && (
@@ -263,6 +379,14 @@ export function AddLocationsDialog({
               </div>
             </div>
           )}
+          {removing && change.blocked > 0 && (
+            <p className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+              {t('removeBlocked', { count: change.blocked })}
+            </p>
+          )}
+          {removing && change.changes.length > 0 && (
+            <p className="text-xs font-medium">{t('removePast')}</p>
+          )}
           {noCityEngine > 0 && (
             <p
               role={cityBlocked ? 'alert' : undefined}
@@ -272,11 +396,16 @@ export function AddLocationsDialog({
             </p>
           )}
           {targets.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t('noPrompts')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t(removing ? 'removeNoPrompts' : 'noPrompts')}
+            </p>
           ) : (
             locations.length > 0 &&
-            change.changes.length === 0 && (
-              <p className="text-xs text-muted-foreground">{t('nothing')}</p>
+            change.changes.length === 0 &&
+            change.blocked === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t(removing ? 'removeNothing' : 'nothing')}
+              </p>
             )
           )}
           {error && (
@@ -296,7 +425,7 @@ export function AddLocationsDialog({
             }
           >
             {saving && <Loader2 className="animate-spin" />}
-            {t('submit', { count: locations.length })}
+            {t(removing ? 'removeSubmit' : 'submit', { count: locations.length })}
           </Button>
         </DialogFooter>
       </DialogContent>
