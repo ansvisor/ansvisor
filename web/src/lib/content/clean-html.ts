@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify';
+import { contentDom, parseHtml } from './dom';
 import {
   ALLOWED_ATTRIBUTES,
   ALLOWED_TAGS,
@@ -58,16 +59,16 @@ function keepStyledEmphasis(root: HTMLElement) {
       !el.closest('h1, h2, h3, h4, h5, h6');
     const italic = el.style.fontStyle === 'italic';
     if (!bold && !italic) continue;
-    const inner = document.createElement('span');
+    const inner = root.ownerDocument.createElement('span');
     inner.append(...el.childNodes);
     let wrapped: HTMLElement = inner;
     if (italic) {
-      const em = document.createElement('em');
+      const em = root.ownerDocument.createElement('em');
       em.append(wrapped);
       wrapped = em;
     }
     if (bold) {
-      const strong = document.createElement('strong');
+      const strong = root.ownerDocument.createElement('strong');
       strong.append(wrapped);
       wrapped = strong;
     }
@@ -78,7 +79,7 @@ function keepStyledEmphasis(root: HTMLElement) {
 function demoteHeadings(root: HTMLElement) {
   for (const tag of DEMOTED_HEADINGS) {
     for (const heading of root.querySelectorAll(tag)) {
-      const h3 = document.createElement('h3');
+      const h3 = root.ownerDocument.createElement('h3');
       h3.append(...heading.childNodes);
       heading.replaceWith(h3);
     }
@@ -95,14 +96,14 @@ export function cleanHtml(
   { keepImages, keepHtmlBlocks = false }: { keepImages: boolean; keepHtmlBlocks?: boolean },
 ): CleanedHtml {
   const { html, kept } = extractKeptBlocks(input, { htmlBlocks: keepHtmlBlocks });
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   // Counted in the whole document: a script before any text parses into <head>.
   const unsafeRemoved = doc.querySelectorAll(UNSAFE_TAGS.join(',')).length;
   keepStyledEmphasis(doc.body);
   demoteHeadings(doc.body);
 
   // A purifier of its own, so these hooks don't touch other uses of DOMPurify.
-  const purify = DOMPurify(window);
+  const purify = DOMPurify(contentDom());
   let imagesRemoved = 0;
   purify.addHook('afterSanitizeAttributes', (node) => {
     if (node.tagName === 'A') {

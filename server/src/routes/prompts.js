@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
+import { MANAGER_ROLES, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents } from '../lib/intent-extraction.js';
@@ -680,6 +681,9 @@ router.get('/untracked-queries/:brandId', async (req, res) => {
   }
 });
 
+/** Who may dismiss a prompt suggestion: every role but agency partners, as the table's update rule. */
+const DISMISS_SUGGESTION_ROLES = ['admin', 'manager', 'analyst'];
+
 router.post('/suggestions/:id/dismiss', async (req, res) => {
   try {
     const { data: suggestion } = await supabaseAdmin
@@ -689,6 +693,11 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    await assertRole(
+      req.user.id,
+      DISMISS_SUGGESTION_ROLES,
+      'Only admins, managers and analysts can dismiss prompt suggestions.',
+    );
 
     const { error } = await supabaseAdmin
       .from('prompt_suggestions')
@@ -716,6 +725,8 @@ router.post('/suggestions/:id/accept', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    // The prompt itself is added by admins and managers only (the prompts table's rule).
+    await assertRole(req.user.id, MANAGER_ROLES, 'Only admins and managers can add prompts.');
 
     const { error } = await supabaseAdmin
       .from('prompt_suggestions')
