@@ -5,6 +5,7 @@ import {
   updateOpportunityStatusFor,
   type ContentOpportunityStatus,
 } from '@/lib/mcp/data';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 
 /**
  * PATCH /api/mcp/content-opportunities/[id]/status
@@ -12,6 +13,8 @@ import {
  * Parallel REST surface for the `update_opportunity_status` MCP tool —
  * same data-layer function, same ownership guarantee, same enum validation.
  * Body: `{ "status": "in_progress" }` (one of new | sent | in_progress | done | dismissed).
+ * Dismissing one, or moving a dismissed one back, answers 403 unless the
+ * key's user is an admin or a manager.
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authenticateMcpRequest(req);
@@ -54,7 +57,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     return NextResponse.json(updated);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failedCallResponse(err);
   }
 }

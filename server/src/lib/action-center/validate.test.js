@@ -380,6 +380,46 @@ describe('validateAction', () => {
     expect(patch.validation.beforeWindow.to < patch.validation.afterWindow.from).toBe(true);
   });
 
+  /** Sent with negative answers, it's judged by how the brand is spoken of (learning D1). */
+  it('judges answers sent from Mentions by their positive sentiment', async () => {
+    const writes = mockWrites();
+    let reads = 0;
+    // Named as often after as before, but 2 of 10 positive became 6 of 10.
+    rpc.mockImplementation(async (name) => {
+      if (name !== 'opportunity_basket_metrics') return { data: {}, error: null };
+      const after = reads++ % 2 === 1;
+      return {
+        data: {
+          cells: 10,
+          visible: 10,
+          mention_answers: 10,
+          named_answers: 10,
+          positive_answers: after ? 6 : 2,
+        },
+        error: null,
+      };
+    });
+
+    await validateAction(
+      action({
+        kind: 'mention_review',
+        kpi_keys: ['positive_sentiment', 'mentions', 'ai_visibility'],
+        payload: { promptIds: ['p1'] },
+      }),
+      { now: NOW },
+    );
+
+    const patch = writes.updated.find((w) => w.table === 'actions').patch;
+    expect(patch.validation.primary).toBe('positive_sentiment');
+    expect(patch.validation.metrics).toContainEqual({
+      metric: 'positive_sentiment',
+      unit: 'percent',
+      before: 20,
+      after: 60,
+    });
+    expect(patch.outcome).toBe('improved');
+  });
+
   it("measures answers sent from Mentions on their prompts' basket", async () => {
     const writes = mockWrites();
     rpc.mockResolvedValue({ data: {}, error: null });

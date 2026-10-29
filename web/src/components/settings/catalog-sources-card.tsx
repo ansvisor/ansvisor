@@ -327,9 +327,18 @@ export function CatalogSourcesCard({
                         ` · ${t('issues', { count: source.lastCounts!.issues!.items })}`}
                       {(source.lastCounts?.repeated ?? 0) > 0 &&
                         ` · ${t('repeated', { count: source.lastCounts!.repeated! })}`}
-                      {source.lastSyncedAt &&
+                      {source.kind !== 'upload' &&
+                        source.lastSyncedAt &&
                         ` · ${t('lastSync', { when: format.relativeTime(new Date(source.lastSyncedAt), now) })}`}
                     </p>
+                    {/* An upload is read once: it says so, with when, rather than "synced". */}
+                    {source.kind === 'upload' && source.lastSyncedAt && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        {t('uploadStale', {
+                          when: format.relativeTime(new Date(source.lastSyncedAt), now),
+                        })}
+                      </p>
+                    )}
                     {source.lastStatus !== 'ok' && source.lastError && (
                       <p className="text-xs text-destructive">{source.lastError}</p>
                     )}
@@ -380,6 +389,10 @@ export function CatalogSourcesCard({
 
             {canManage ? (
               <div className="space-y-2">
+                <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="secondary">{t('recommended')}</Badge>
+                  {t('feedRecommended')}
+                </p>
                 <form
                   className="flex flex-col gap-2 sm:flex-row"
                   onSubmit={(e) => {

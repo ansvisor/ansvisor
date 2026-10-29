@@ -124,6 +124,12 @@ describe('server actions on a read-only workspace', () => {
     await expect(markBrandAsEcommerce('brand-1')).resolves.toEqual({
       industry: 'E-commerce & Retail',
       promptsUpdated: 1,
+      siteType: 'ecommerce',
+    });
+    // The site type too, as a detection (00379).
+    expect(updates).toContainEqual({
+      table: 'brands',
+      values: { site_type: 'ecommerce', site_type_detected_at: expect.any(String) },
     });
     expect(updates).toContainEqual({
       table: 'brands',
@@ -131,6 +137,7 @@ describe('server actions on a read-only workspace', () => {
     });
     expect(updates).toContainEqual({ table: 'brands', values: { shopping_mode_enabled: true } });
     expect(writes).toEqual([
+      'brands.update',
       'brands.update',
       'brands.update',
       'prompts.update',
