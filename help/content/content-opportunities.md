@@ -32,7 +32,7 @@ On the list, tick several opportunities. **Send All** sends them all to your wor
 
 ## Ask for new opportunities
 
-Admins and managers click **New**. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.
+Admins and managers click **New** to get suggestions now, instead of waiting for the next automatic run. Pick a **Focus**: **Let Ansvisor choose**, a **Topic** or a **Prompt**. You can add your own idea, up to 500 characters, and set **How many**.
 
 Opportunities are written per group of prompts: prompts of one topic that a single page could answer, and that already have tracked answers. Each group has at most one open opportunity.
 
@@ -50,7 +50,7 @@ For a second take on the same need, use **Another angle** on the opportunity.
 
 ## How many you get
 
-New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count. Ansvisor also writes up to three new opportunities by itself each night.
+New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. Ansvisor also writes up to three new opportunities by itself each night.
 
 ## Owned and earned
 
