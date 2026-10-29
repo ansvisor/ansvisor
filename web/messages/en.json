@@ -3549,6 +3549,39 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
+    "slash": {
+      "label": "Skills and shortcuts",
+      "title": "Shortcuts",
+      "keys": "type to filter · ↑↓ · Enter",
+      "none": "No shortcuts match",
+      "shortcuts": {
+        "analyze": { "name": "Analyze", "starter": "Analyze" },
+        "report": { "name": "Reports", "starter": "Create a report on" },
+        "create": { "name": "Create content", "starter": "Create content for" }
+      }
+    },
+    "reference": {
+      "label": "Reference a chart, metric, page or task",
+      "title": "Reference your data",
+      "loading": "Looking…",
+      "none": "Nothing matches",
+      "types": {
+        "chart": "Chart",
+        "metric": "Metric",
+        "table": "Table",
+        "prompt": "Prompt",
+        "page": "Page",
+        "task": "Action Center task"
+      }
+    },
+    "plus": {
+      "label": "Attach, read a page or connect a tool",
+      "attach": "Attach files",
+      "connect": "Connect a tool",
+      "connectAsk": "Ask your Admin to connect",
+      "connectNote": "Admins connect · others ask an Admin",
+      "connectAsked": "Connect a tool so Chat can use it"
+    },
     "tab": "Tab",
     "under": {
       "hint": "/ skills · @ data",
@@ -3569,7 +3602,8 @@
       "stopped": "Stopped · done steps stay",
       "homeGhost": "Why did our Perplexity citations drop this week?",
       "dockGhost": "Start task 2: comparison page",
-      "panelGhost": "Show which pages Perplexity cites most"
+      "panelGhost": "Show which pages Perplexity cites most",
+      "attach": "Attach files comes with W1-13"
     },
     "mode": {
       "label": "Run mode",
