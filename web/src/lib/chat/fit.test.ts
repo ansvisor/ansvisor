@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest';
+import type { Json } from '@/types/supabase';
+import { TEXT_FIELD_CHARS, fitResult, restOf } from './fit';
+
+/**
+ * Chat's data budgets on a tool's result (W1-18; CHAT-04 items 5–6): what
+ * fits stays as it is; a result over its budget is made smaller on the
+ * server, long texts first, then lists with a rest line, then text, and
+ * always says it was cut.
+ */
+
+const rows = (n: number, extra: Record<string, Json> = {}) =>
+  Array.from({ length: n }, (_, i) => ({ domain: `site-${i}.com`, citations: 10, ...extra }));
+
+describe('fitResult', () => {
+  it('leaves a result that fits as it is', () => {
+    const value = { items: rows(3) };
+    expect(fitResult(value, 10_000)).toEqual({
+      value,
+      chars: JSON.stringify(value).length,
+      cut: false,
+    });
+  });
+
+  it('shortens long texts first, and says so', () => {
+    const value = { answers: [{ id: 1, answer: 'x'.repeat(5_000) }] };
+    const fitted = fitResult(value, 1_000);
+    expect(fitted.cut).toBe(true);
+    expect(fitted.value).toMatchObject({ truncated: true, texts_shortened: true });
+    const answer = (fitted.value as { answers: { answer: string }[] }).answers[0].answer;
+    expect(answer).toHaveLength(TEXT_FIELD_CHARS);
+    expect(answer.endsWith('…')).toBe(true);
+    expect(fitted.chars).toBeLessThanOrEqual(1_000);
+  });
+
+  it('keeps the first rows of a long list and adds up the rest', () => {
+    const fitted = fitResult({ top_domains: rows(200), window: '30d' }, 2_000);
+    expect(fitted.chars).toBeLessThanOrEqual(2_000);
+    const value = fitted.value as Record<string, Json>;
+    const kept = (value.top_domains as Json[]).length;
+    expect(kept).toBeGreaterThan(0);
+    expect(value.top_domains_more).toBe(200 - kept);
+    expect(value.top_domains_rest).toEqual({
+      citations: { sum: (200 - kept) * 10, share_pct: Math.round(((200 - kept) / 200) * 100) },
+    });
+    expect(value).toMatchObject({ window: '30d', truncated: true });
+  });
+
+  it('adds to what an earlier row cut left out, and keeps an unknown count unknown', () => {
+    const known = fitResult({ items: rows(100), items_more: 12 }, 1_500).value as Record<
+      string,
+      Json
+    >;
+    expect(known.items_more).toBe(12 + 100 - (known.items as Json[]).length);
+    const unknown = fitResult({ items: rows(100), items_more: null }, 1_500).value as Record<
+      string,
+      Json
+    >;
+    expect(unknown.items_more).toBeNull();
+  });
+
+  it('cuts a top-level list into items, more and rest', () => {
+    const fitted = fitResult(rows(100), 1_500);
+    expect(fitted.value).toMatchObject({ truncated: true, rest: { citations: expect.anything() } });
+    const value = fitted.value as { items: Json[]; more: number };
+    expect(value.more).toBe(100 - value.items.length);
+  });
+
+  it('cuts what has no list as text', () => {
+    const fitted = fitResult({ a: { b: { c: 'y'.repeat(300).split('').join(' ') } } }, 600);
+    expect(fitted.value).toMatchObject({ truncated: true });
+    expect(fitted.chars).toBeLessThanOrEqual(600);
+  });
+});
+
+describe('restOf', () => {
+  it('adds up count-like fields only: never a score, a rate or a position', () => {
+    const list = [
+      { mentions: 5, visibility_score: 80, position: 1, mention_rate: 0.5 },
+      { mentions: 3, visibility_score: 60, position: 2, mention_rate: 0.3 },
+      { mentions: 2, visibility_score: 40, position: 3, mention_rate: 0.2 },
+    ];
+    expect(restOf(list, 1)).toEqual({ mentions: { sum: 5, share_pct: 50 } });
+    expect(restOf(list, 3)).toBeNull();
+    expect(restOf([{ name: 'a' }, { name: 'b' }], 1)).toBeNull();
+  });
+});
