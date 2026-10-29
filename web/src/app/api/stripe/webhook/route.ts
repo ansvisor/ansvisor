@@ -3,6 +3,7 @@ import { stripe } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
+import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import type Stripe from 'stripe';
 
 /**
@@ -89,6 +90,15 @@ export async function POST(req: NextRequest) {
               // ahead of the redirect (or that happen out-of-band entirely)
               // still get prompts in sync. Idempotent.
               await alignPromptsSafe(orgId, planId || 'starter', 'checkout');
+              // The first run too, after the alignment so it tracks the plan's
+              // engines: the return page may never load (a closed tab). One
+              // run per checkout, whichever of the two comes first.
+              await startFirstTrackingRun({
+                orgId,
+                subscriptionStatus: subscription.status,
+                checkoutCreated: session.created,
+                ctx: 'webhook:checkout',
+              });
             }
           }
         } else {

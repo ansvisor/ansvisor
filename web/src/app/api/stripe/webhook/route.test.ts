@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The Stripe webhook keeps the organization's plan, status and period end in
@@ -17,16 +17,24 @@ vi.mock('@/lib/stripe', () => ({
 const db = vi.hoisted(() => ({ update: vi.fn(), eq: vi.fn() }));
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    from: () => ({
-      update: (values: unknown) => {
-        db.update(values);
-        return { eq: db.eq };
-      },
-      // The plan before an update, to tell a plan change.
-      select: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: { id: 'org1', plan: 'starter' } }) }),
-      }),
-    }),
+    from: (table: string) => {
+      // The plan before an update, to tell a plan change; the organization's
+      // first brand, for its first run.
+      const row = table === 'brands' ? { id: 'brand1' } : { id: 'org1', plan: 'starter' };
+      const query = {
+        eq: () => query,
+        order: () => query,
+        limit: () => query,
+        maybeSingle: async () => ({ data: row }),
+      };
+      return {
+        update: (values: unknown) => {
+          db.update(values);
+          return { eq: db.eq };
+        },
+        select: () => query,
+      };
+    },
   },
 }));
 
@@ -55,12 +63,24 @@ const subscription = (status: string, end?: number) => ({
   items: { data: [end == null ? {} : { current_period_end: end }] },
 });
 
+// The API the first run is asked of.
+const api = vi.fn();
+const apiPaths = () => api.mock.calls.map(([url]) => new URL(String(url)).pathname);
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'log').mockImplementation(() => {});
   align.mockResolvedValue({ promptCount: 0, platforms: [], models: [] });
   db.eq.mockResolvedValue({ error: null });
+  api.mockReset().mockImplementation(async () => Response.json({ jobId: 'job1', created: true }));
+  vi.stubGlobal('fetch', api);
+  vi.stubEnv('CRON_SECRET', 'secret');
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe('checkout.session.completed', () => {
@@ -88,6 +108,57 @@ describe('checkout.session.completed', () => {
     stripeApi.retrieve.mockResolvedValue(subscription('active'));
     await deliver('checkout.session.completed', { customer: 'cus1', subscription: 'sub1' });
     expect(db.update.mock.calls[0][0]).not.toHaveProperty('subscription_ends_at');
+  });
+});
+
+/**
+ * The first run starts from the webhook too, as the return page may never
+ * load; the API keeps it to one run per checkout.
+ */
+describe('checkout.session.completed, the first run', () => {
+  const checkout = { customer: 'cus1', subscription: 'sub1', created: 1_800_000_000 };
+
+  it('starts the first run on its own, after the alignment, with when the checkout began', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('trialing'));
+    const res = await deliver('checkout.session.completed', checkout);
+
+    expect(res.status).toBe(200);
+    expect(apiPaths()).toEqual(['/api/internal/trigger-tracking', '/api/internal/analyze-volumes']);
+    expect(JSON.parse(api.mock.calls[0][1].body)).toEqual({
+      brandId: 'brand1',
+      since: '2027-01-15T08:00:00.000Z',
+    });
+    expect(align.mock.invocationCallOrder[0]).toBeLessThan(api.mock.invocationCallOrder[0]);
+  });
+
+  it('starts nothing for a subscription whose payment was not made', async () => {
+    for (const status of ['incomplete', 'incomplete_expired']) {
+      stripeApi.retrieve.mockResolvedValue(subscription(status));
+      const res = await deliver('checkout.session.completed', checkout);
+      expect(res.status).toBe(200);
+    }
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it('starts nothing when the organization could not be written', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('active'));
+    db.eq.mockResolvedValue({ error: { message: 'timeout' } });
+    await deliver('checkout.session.completed', checkout);
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it('still answers Stripe 200 when the API is down', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription('active'));
+    api.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    const res = await deliver('checkout.session.completed', checkout);
+    expect(res.status).toBe(200);
+    expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts nothing on a later update or a failed payment', async () => {
+    await deliver('customer.subscription.updated', subscription('active'));
+    await deliver('invoice.payment_failed', { customer: 'cus1' });
+    expect(api).not.toHaveBeenCalled();
   });
 });
 

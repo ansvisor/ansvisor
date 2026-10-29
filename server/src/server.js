@@ -26,6 +26,7 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
+import { startFirstRun } from './lib/first-run.js';
 import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
@@ -629,7 +630,16 @@ app.post('/api/internal/recount-citations', async (req, res) => {
   }
 });
 
-// --- Internal trigger-tracking endpoint (CRON_SECRET auth, called by Stripe success route) ---
+// --- Internal trigger-tracking endpoint (CRON_SECRET auth) ---
+// The first run after a payment, asked for by both the Stripe return page and
+// the checkout webhook: one run per checkout (lib/first-run.js). `since` is
+// when the checkout began; a call that finds the run already started gets its
+// id back with `created: false`.
+const triggerTrackingBody = z.object({
+  brandId: z.string().min(1),
+  since: z.iso.datetime({ offset: true }).optional(),
+});
+
 app.post('/api/internal/trigger-tracking', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -637,20 +647,17 @@ app.post('/api/internal/trigger-tracking', async (req, res) => {
   }
 
   try {
-    const { brandId } = req.body;
-    if (!brandId) {
-      return res.status(400).json({ success: false, message: 'brandId is required' });
+    const body = triggerTrackingBody.safeParse(req.body ?? {});
+    if (!body.success) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'brandId is required; since must be an ISO time' });
     }
 
-    const job = await createJob({
-      type: 'tracking',
-      brandId,
-      data: { brandId, immediate: true },
-      maxAttempts: 3,
-    });
-    runTrackingJob(job.id, io);
+    const { job, created } = await startFirstRun(body.data);
+    if (created) runTrackingJob(job.id, io);
 
-    return res.json({ success: true, jobId: job.id });
+    return res.json({ success: true, jobId: job.id, created });
   } catch (err) {
     req.log.error({ err }, 'internal trigger-tracking error');
     return res.status(500).json({ success: false, message: err.message });
