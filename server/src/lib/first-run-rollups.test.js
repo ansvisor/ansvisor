@@ -44,12 +44,14 @@ const { isFirstRun, progressiveRollups, PROGRESSIVE_REFRESH_MS } =
   await import('./first-run-rollups.js');
 
 const STARTED = '2026-10-29T10:00:00.000Z';
+const MINUTE = 60_000;
 let clock;
 const make = (enabled = true) =>
   progressiveRollups({ brandId: 'b1', startedAt: STARTED, enabled, now: () => clock });
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const releaseAll = async () => {
   refresh.releases.splice(0).forEach((release) => release());
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await tick();
 };
 
 beforeEach(() => {
@@ -91,6 +93,23 @@ describe('progressiveRollups', () => {
     expect(refresh.calls).toHaveLength(2);
   });
 
+  it('waits five times as long as a slow refresh took before the next', async () => {
+    const rollups = make();
+    rollups.note(3);
+    // This brand's refresh takes a minute.
+    clock += MINUTE;
+    await releaseAll();
+
+    // Two minutes since it started is not enough: five minutes are.
+    clock += 3 * MINUTE;
+    rollups.note(10);
+    expect(refresh.calls).toHaveLength(1);
+
+    clock += MINUTE;
+    rollups.note(10);
+    expect(refresh.calls).toHaveLength(2);
+  });
+
   it('never starts a refresh while one is running', () => {
     const rollups = make();
     rollups.note(3);
@@ -99,47 +118,71 @@ describe('progressiveRollups', () => {
     expect(refresh.calls).toHaveLength(1);
   });
 
-  it('on finish, waits for a running refresh, then takes in what landed since', async () => {
+  it('is idle only once the running refresh is done', async () => {
     const rollups = make();
     rollups.note(3);
 
-    let finished = false;
-    const finishing = rollups.finish(8).then(() => {
-      finished = true;
+    let idle = false;
+    const waiting = rollups.idle().then(() => {
+      idle = true;
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    // The stamp must not start while a refresh still runs.
+    await tick();
+    expect(idle).toBe(false);
+
+    await releaseAll();
+    await waiting;
+    expect(idle).toBe(true);
+    // No refresh of its own.
     expect(refresh.calls).toHaveLength(1);
-    expect(finished).toBe(false);
-
-    await releaseAll();
-    expect(refresh.calls).toHaveLength(2);
-    expect(finished).toBe(false);
-
-    await releaseAll();
-    await finishing;
-    expect(finished).toBe(true);
   });
 
-  it('on finish, refreshes nothing when everything landed is already in', async () => {
+  it('on flush, waits for the running refresh, then refreshes at once', async () => {
     const rollups = make();
-    rollups.note(5);
-    await releaseAll();
-    await rollups.finish(5);
+    rollups.note(3);
+
+    let flushed = false;
+    const flushing = rollups.flush(3).then(() => {
+      flushed = true;
+    });
+    await tick();
     expect(refresh.calls).toHaveLength(1);
+
+    await releaseAll();
+    // Within the interval and with the same count: refreshed all the same.
+    expect(refresh.calls).toHaveLength(2);
+    expect(flushed).toBe(false);
+
+    await releaseAll();
+    await flushing;
+    expect(flushed).toBe(true);
+  });
+
+  it('follows a new count after a flush, as the late answers land', async () => {
+    const rollups = make();
+    const flushing = rollups.flush(40);
+    await tick();
+    await releaseAll();
+    await flushing;
+
+    clock += PROGRESSIVE_REFRESH_MS;
+    rollups.note(40);
+    expect(refresh.calls).toHaveLength(1);
+    rollups.note(44);
+    expect(refresh.calls).toHaveLength(2);
   });
 
   it('does nothing for a run that is not a first run', async () => {
     const rollups = make(false);
     rollups.note(5);
-    await rollups.finish(9);
+    await rollups.flush(9);
+    await rollups.idle();
     expect(refresh.calls).toEqual([]);
   });
 
   it('does nothing without the run row to date it', async () => {
     const rollups = progressiveRollups({ brandId: 'b1', startedAt: null, enabled: true });
     rollups.note(5);
-    await rollups.finish(9);
+    await rollups.flush(9);
     expect(refresh.calls).toEqual([]);
   });
 });

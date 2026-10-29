@@ -249,9 +249,11 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   const isFullRun = !promptId && (!promptIds || promptIds.length === 0);
   let trackingRunId = null;
   let trackingRunStartedAt = null;
-  // A brand's first full run fills the rollups as its answers land, and
-  // checks for its stamp more often (first-run-rollups.js). Read before this
-  // run's own row exists.
+  // A brand's first full run (no run of it ever stamped) fills the rollups as
+  // its answers land, and checks for its stamp more often
+  // (first-run-rollups.js). Read before this run's own row exists. Not the
+  // job's `afterPayment`, which only orders the queue: a new brand's first
+  // run need not follow a payment.
   const firstRun = isFullRun && (await isFirstRun(brandId));
   if (isFullRun) {
     // A run that died mid-flight (crash, abort) leaves an uncompleted row;
@@ -939,10 +941,6 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     logger.error({ err, brandId }, 'failed to check opportunity generation eligibility');
   }
 
-  // Everything landed so far into the rollups, and no refresh left running
-  // when the stamp's own refresh starts.
-  await firstRunRollups.finish(landedSoFar());
-
   // Stamp the ledger row — or, when Cloro is still delivering, hand back a
   // promise that stamps it once the late answers are in (lib/run-settlement).
   // `stamped` / `lateStamp` gate the Daily Pulse and signal pass (#702): a
@@ -957,7 +955,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           startedAt: trackingRunStartedAt,
           plannedTasks: totalTasks,
         },
-        firstRun ? { pollMs: FIRST_RUN_LATE_POLL_MS } : undefined,
+        // A first run also hands over its rollup refresher: the stamp waits
+        // for it, and late answers keep the rollups moving.
+        firstRun ? { pollMs: FIRST_RUN_LATE_POLL_MS, rollups: firstRunRollups } : undefined,
       )
     : { stamped: false, lateStamp: null };
 

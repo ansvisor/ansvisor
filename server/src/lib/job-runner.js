@@ -355,7 +355,7 @@ export async function recoverWaitingJobs(io) {
       continue;
     }
     if (job.type === 'tracking') {
-      runTrackingJob(job.id, io, { priority: job.data?.firstRun === true });
+      runTrackingJob(job.id, io, { priority: job.data?.afterPayment === true });
     } else {
       runContentJob(job.id, io);
     }

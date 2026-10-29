@@ -119,7 +119,7 @@ export async function listWaitingJobs({ idleMs, maxAgeMs }) {
   const now = Date.now();
   const { data, error } = await supabaseAdmin
     .from('jobs')
-    // `data` too: a first run keeps its place ahead of the queue.
+    // `data` too: a run after a payment keeps its place ahead of the queue.
     .select('id, type, brand_id, data')
     .eq('status', 'waiting')
     .lt('updated_at', new Date(now - idleMs).toISOString())

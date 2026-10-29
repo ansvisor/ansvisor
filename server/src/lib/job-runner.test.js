@@ -172,6 +172,32 @@ describe('runTrackingJob, the first run after a payment', () => {
     expect(started()).toContain('brand-night-3');
   });
 
+  it('keeps its extra slot when it is retried after a failure', async () => {
+    const releases = heldRuns();
+    const held = processTrackingJob.getMockImplementation();
+    processTrackingJob.mockImplementation((job) =>
+      job.brandId === 'brand-first' && processTrackingJob.mock.calls.length <= MAX + 1
+        ? Promise.reject(new Error('cloro down'))
+        : held(job),
+    );
+    manager.getJob.mockResolvedValue({ attempts: 1, max_attempts: 3 });
+    runTrackingJob('night-1');
+    runTrackingJob('night-2');
+    await flush();
+    runTrackingJob('first', undefined, { priority: true });
+    await flush();
+    expect(manager.failJob).toHaveBeenCalledWith('first', 'cloro down');
+
+    // The retry waits attempts × 30 s; the nightly runs still hold both slots.
+    await vi.advanceTimersByTimeAsync(30_000);
+    const firstRuns = processTrackingJob.mock.calls.filter(
+      ([job]) => job.brandId === 'brand-first',
+    );
+    expect(firstRuns).toHaveLength(2);
+
+    await drain(releases);
+  });
+
   it('keeps its place when the recovery sweep restarts it', async () => {
     const releases = heldRuns();
     runTrackingJob('night-1');
@@ -179,7 +205,7 @@ describe('runTrackingJob, the first run after a payment', () => {
     await flush();
 
     manager.listWaitingJobs.mockResolvedValue([
-      { id: 'lost-first', type: 'tracking', brand_id: 'b', data: { firstRun: true } },
+      { id: 'lost-first', type: 'tracking', brand_id: 'b', data: { afterPayment: true } },
       { id: 'lost-night', type: 'tracking', brand_id: 'b', data: { immediate: false } },
     ]);
     await recoverWaitingJobs();

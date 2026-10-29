@@ -8,20 +8,28 @@
  * until it stamps — at 95% of its answers, or when nothing is pending, or up
  * to two hours later — every view that reads the rollups (Citations,
  * Mentions, Brand Visibility's 7/30/90-day ranges) shows nothing. So a first
- * run refreshes its days as answers land, at most once per
- * PROGRESSIVE_REFRESH_MS, and the stamp's own refresh settles them.
+ * run refreshes its days as answers land, now and then, and the stamp's own
+ * refresh settles them.
  *
- * The refreshes are one at a time, and the worker waits for the last one
- * before the run stamps: two refreshes of the same days at once can each
- * delete before the other inserts.
+ * The SQL refresh functions take a per-brand advisory lock, so two refreshes
+ * of the same days never interleave. They are still started one at a time
+ * here, and the stamp waits for the last (run-settlement.js): a refresh
+ * started while another holds the lock only sits on a database connection
+ * until it can go.
  */
 
 import supabaseAdmin from '../config/supabase.js';
 import { refreshRunDays } from './insights-rollups.js';
 import { logger } from './logger.js';
 
-/** At most one refresh of a first run's days this often. */
+/** At least this long between two refreshes of a first run's days. */
 export const PROGRESSIVE_REFRESH_MS = 2 * 60_000;
+
+/**
+ * And at least this many times as long as the last refresh took, so a brand
+ * whose refresh is slow does not refresh back to back.
+ */
+export const REFRESH_DURATION_FACTOR = 5;
 
 /**
  * How often a first run that ended short of complete checks again whether it
@@ -49,12 +57,14 @@ export async function isFirstRun(brandId) {
 }
 
 /**
- * The refresher for one run. `note(landed)` is called with how many answers
- * have landed so far (a count that only grows); it starts a refresh when more
- * have landed since the last one, none is running, and the last started at
- * least `intervalMs` ago. It never waits. `finish(landed)` waits for a
- * refresh still running, then refreshes once more if answers landed since.
- * Both do nothing unless `enabled`.
+ * The refresher for one run. All three do nothing unless `enabled`.
+ *
+ * - `note(landed)`, with a count that changes as answers land: starts a
+ *   refresh when it changed since the last one, none is running, and the
+ *   wait since the last one started is over. Never waits.
+ * - `idle()`: resolves once no refresh is running. The stamp waits for it.
+ * - `flush(landed)`: once idle, refreshes now, whatever the wait; for a run
+ *   whose stamp has to wait for late answers.
  *
  * @param {{ brandId: string, startedAt: string | null, enabled: boolean,
  *   intervalMs?: number, now?: () => number }} opts
@@ -68,32 +78,41 @@ export function progressiveRollups({
 }) {
   const on = Boolean(enabled && startedAt);
   let lastStartedAt = null;
+  let lastTookMs = 0;
   let lastLanded = 0;
   let inFlight = null;
 
   const start = (landed) => {
-    lastStartedAt = now();
+    const began = now();
+    lastStartedAt = began;
     lastLanded = landed;
     inFlight = refreshRunDays(brandId, startedAt)
       .catch((err) => {
         logger.warn({ err, brandId }, 'first-run rollup refresh failed');
       })
       .finally(() => {
+        lastTookMs = now() - began;
         inFlight = null;
       });
     return inFlight;
   };
 
+  const idle = async () => {
+    while (inFlight) await inFlight;
+  };
+
   return {
     note(landed) {
-      if (!on || inFlight || landed <= lastLanded) return;
-      if (lastStartedAt !== null && now() - lastStartedAt < intervalMs) return;
+      if (!on || inFlight || landed === lastLanded) return;
+      const wait = Math.max(intervalMs, REFRESH_DURATION_FACTOR * lastTookMs);
+      if (lastStartedAt !== null && now() - lastStartedAt < wait) return;
       start(landed);
     },
-    async finish(landed) {
+    idle,
+    async flush(landed) {
       if (!on) return;
-      await inFlight;
-      if (landed > lastLanded) await start(landed);
+      await idle();
+      await start(landed);
     },
   };
 }
