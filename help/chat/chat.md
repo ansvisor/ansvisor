@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, agent, new chat, open a chat, chat menu, agents at work, hide menu, pin chat, rename chat, share chat, archive chat, delete chat]
+keywords: [chat, ask chat, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, pin chat, rename chat, share chat, archive chat, delete chat]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -13,9 +13,19 @@ sources: [web/messages/en.json]
 ---
 Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Every chat is saved, so you can come back to it later and pick up where you left off.
 
+## Chat Home
+
+Chat opens on **Home**. It greets you by name, at your own time of day, and says when something needs you: click the link to open your **Inbox**. When nothing does, it says **All caught up.**
+
+When Action Center actions for the brand you have open are due by the end of this week, overdue ones included, Home says how many with **Complete with Chat**. Click it to start a new chat that works on them; the chat opens while it works.
+
+## Inbox
+
+**Inbox** in the chat menu lists what your agents did: chats waiting for your OK first, with **Review**, then chats still working, with their progress and **Watch**, then results you haven't opened yet, with **Open**. Click a row to open its chat. A result leaves the Inbox once you open it. The count next to **Inbox** shows how many items there are, with an amber dot when something needs you.
+
 ## The chat menu
 
-The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** shows a count when something needs you. **Governance** opens the **Activity** log, **What Chat can do** and the **Tool policy**.
+The chat menu on the left of Chat lists your chats. **New chat** starts a new one. **Home** and **Inbox** come first. **Governance** opens the **Activity** log, **What Chat can do** and the **Tool policy**.
 
 **Agents at work** lists the chats that need your OK, the ones still working, and finished results you haven't opened yet, with the step each one is on. It shows three at a time: **See all** lists the rest. A dot shows each chat's state; click **?** to see what the dots mean.
 

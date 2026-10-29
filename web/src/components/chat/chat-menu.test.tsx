@@ -126,8 +126,8 @@ describe('ChatMenuView', () => {
       '/dashboard/chat/activity',
     );
     expect(action('chatMenu.openPolicy')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
+    expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
     for (const unbuilt of [
-      'chatMenu.openInbox',
       'chatMenu.openSkills',
       'chatMenu.openScheduled',
       'chatMenu.openFiles',
@@ -139,7 +139,7 @@ describe('ChatMenuView', () => {
     expect(text()).toContain('No chats yet.');
   });
 
-  it('counts what needs the person on Home, and lists Agents at work in three rows until See all', async () => {
+  it('counts the Inbox, and lists Agents at work in three rows until See all', async () => {
     const chats = [
       chat('a', { state: 'needsYou', progress: { done: 3, total: 6 } }),
       chat('b', {
@@ -152,7 +152,10 @@ describe('ChatMenuView', () => {
       chat('e'),
     ];
     await render(menu(chats));
-    expect(action('chatMenu.openHome')[0].textContent).toContain('1');
+    // The Inbox counts what Agents at work lists, with a dot while one needs the person.
+    const inbox = action('chatMenu.openInbox')[0];
+    expect(inbox.textContent).toBe('Inbox4');
+    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 4 items · 1 needs you');
     expect(text()).toContain('Agents at work4');
     expect(text()).toContain('Needs your OK · step 4 of 6');
     expect(text()).toContain('Step 2 of 5 · Comparing cited pages');
@@ -209,6 +212,7 @@ describe('ChatShell', () => {
     );
     expect(strip.querySelector('[data-action="chat.new"]')).not.toBeNull();
     expect(strip.querySelector('[data-action="runs.toggleTray"]')).not.toBeNull();
+    expect(strip.querySelector('[data-action="chatMenu.openInbox"]')).not.toBeNull();
     await act(async () =>
       (strip.querySelector('[data-action="chatMenu.toggle"]') as HTMLElement).click(),
     );
