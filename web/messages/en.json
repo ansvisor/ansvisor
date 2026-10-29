@@ -4230,7 +4230,23 @@
       "lastRun": "Last run"
     },
     "appearedIn": "Appeared in {visible} of {active, plural, one {# prompt} other {# prompts}}",
-    "openDetails": "Open topic details"
+    "openDetails": "Open topic details",
+    "rowMenu": {
+      "label": "Actions for {name}",
+      "delete": "Delete topic"
+    },
+    "delete": {
+      "title": "Delete the topic \"{name}\"?",
+      "counting": "Counting the prompts in this topic…",
+      "prompts": "{count, plural, =0 {No prompts are in this topic.} one {# prompt is in this topic. It isn't deleted: it keeps its tracking and results, and moves to prompts without a topic.} other {# prompts are in this topic. They aren't deleted: they keep their tracking and results, and move to prompts without a topic.}}",
+      "promptsKept": "Its prompts aren't deleted: they keep their tracking and results, and move to prompts without a topic.",
+      "undoHint": "You can undo for 10 seconds.",
+      "keep": "Keep it",
+      "confirm": "Delete topic",
+      "deleted": "Topic deleted",
+      "undo": "Undo",
+      "failed": "Couldn't delete \"{name}\", so it's back in the list."
+    }
   },
   "contentEditor": {
     "publish": {
