@@ -8081,7 +8081,15 @@
       "loadFailed": "Couldn't load suggestions",
       "loadUnavailable": "Ansvisor isn't answering right now. Try again in a moment.",
       "retry": "Retry",
-      "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
+      "clearAllConfirm": {
+        "title": "Clear all suggestions?",
+        "body": "{count, plural, one {# suggestion} other {# suggestions}} listed will be dismissed.",
+        "measured": "{count, plural, one {# of them comes} other {# of them come}} from Search Console or Analytics: once dismissed, {count, plural, one {it stays} other {they stay}} hidden for 30 days.",
+        "confirm": "Clear all",
+        "cancel": "Cancel"
+      },
+      "clearAllPartial": "{count, plural, one {# suggestion} other {# suggestions}} couldn't be dismissed. Try again.",
+      "clearAllFailed": "Couldn't clear the suggestions. Try again.",
       "catalog": {
         "badge": "Your catalog",
         "tooltip": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}.",

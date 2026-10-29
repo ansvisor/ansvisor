@@ -139,6 +139,48 @@ export async function dismissSuggestion(suggestionId: string): Promise<{ success
   return res.json();
 }
 
+/** Suggestions one dismiss round sends at once. */
+const DISMISS_BATCH = 10;
+
+export type DismissSuggestionsResult =
+  | { ok: true; dismissed: string[]; failed: string[] }
+  | { ok: false; failure: 'failed' };
+
+/**
+ * Dismisses several suggestions, each through the same route as one by one
+ * (so a Search Console or Analytics one stays hidden for 30 days, as when
+ * dismissed alone), a few at a time. Never throws (#1777): what couldn't be
+ * dismissed is listed, and a call that couldn't start is `failed`.
+ */
+export async function dismissSuggestions(
+  suggestionIds: string[],
+): Promise<DismissSuggestionsResult> {
+  try {
+    const session = await getSession();
+    const ids = [...new Set(suggestionIds.filter((id) => typeof id === 'string' && id))];
+    const dismissed: string[] = [];
+    const failed: string[] = [];
+    for (let i = 0; i < ids.length; i += DISMISS_BATCH) {
+      await Promise.all(
+        ids.slice(i, i + DISMISS_BATCH).map(async (id) => {
+          try {
+            const res = await fetch(
+              `${AEO_SERVER_URL}/api/prompts/suggestions/${encodeURIComponent(id)}/dismiss`,
+              { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } },
+            );
+            (res.ok ? dismissed : failed).push(id);
+          } catch {
+            failed.push(id);
+          }
+        }),
+      );
+    }
+    return { ok: true, dismissed, failed };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
 export type AcceptSuggestionResult = { promptId: string } | { error: string; code?: 'plan_limit' };
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
