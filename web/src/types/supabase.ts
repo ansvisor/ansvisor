@@ -779,6 +779,8 @@ export type Database = {
           region: string | null
           shopping_mode_enabled: boolean
           site_type: string | null
+          site_type_detected_at: string | null
+          site_type_source: string | null
           slug: string
           state: string | null
           tracking_code: string
@@ -808,6 +810,8 @@ export type Database = {
           region?: string | null
           shopping_mode_enabled?: boolean
           site_type?: string | null
+          site_type_detected_at?: string | null
+          site_type_source?: string | null
           slug: string
           state?: string | null
           tracking_code?: string
@@ -837,6 +841,8 @@ export type Database = {
           region?: string | null
           shopping_mode_enabled?: boolean
           site_type?: string | null
+          site_type_detected_at?: string | null
+          site_type_source?: string | null
           slug?: string
           state?: string | null
           tracking_code?: string
@@ -1767,6 +1773,60 @@ export type Database = {
             columns: ["prompt_id"]
             isOneToOne: false
             referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_page_events: {
+        Row: {
+          at: string
+          brand_id: string
+          competitor_id: string
+          created_at: string
+          detail: Json
+          domain: string
+          id: string
+          kind: string
+          page_key: string
+          url: string
+        }
+        Insert: {
+          at: string
+          brand_id: string
+          competitor_id: string
+          created_at?: string
+          detail?: Json
+          domain: string
+          id?: string
+          kind: string
+          page_key: string
+          url: string
+        }
+        Update: {
+          at?: string
+          brand_id?: string
+          competitor_id?: string
+          created_at?: string
+          detail?: Json
+          domain?: string
+          id?: string
+          kind?: string
+          page_key?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_page_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_page_events_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
             referencedColumns: ["id"]
           },
         ]
@@ -5222,7 +5282,12 @@ export type Database = {
       }
       apply_prompt_locations: { Args: { p_updates: Json }; Returns: number }
       approve_action_task_review: {
-        Args: { p_details: Json; p_review_id: string; p_title: string }
+        Args: {
+          p_details: Json
+          p_review_id: string
+          p_title: string
+          p_user_id?: string
+        }
         Returns: string
       }
       brand_ai_conversions: {

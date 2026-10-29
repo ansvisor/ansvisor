@@ -31,6 +31,10 @@ import { findActionDraft, type ActionDraft } from '@/lib/content/action-drafts';
 import { contentEditorPath, type DraftMethod } from '@/lib/content/drafts';
 import { pagePath } from '@/lib/content/overlap';
 import { cn } from '@/lib/utils';
+import type { CompetitorFindings } from '@/lib/action-center/competitor-findings';
+import type { WinningFindings } from '@/lib/action-center/winning-findings';
+import { CompetitorFindingsView } from './competitor-findings';
+import { WinningFindingsView } from './winning-findings';
 
 /** The type of work, beside the task's text (AC-004). */
 export function TaskTypeBadge({ type }: { type: ActionTaskDetails['type'] }) {
@@ -133,6 +137,8 @@ export function TaskDetailView({
   send,
   draftWork,
   check,
+  competitor = null,
+  winning = null,
 }: {
   details: ActionTaskDetails | null;
   disabled: boolean;
@@ -142,6 +148,10 @@ export function TaskDetailView({
   draftWork?: TaskDraftWork;
   /** Check now, for a task checked automatically (AC-010). */
   check?: TaskCheckOptions;
+  /** What Analyze competitor content found (learning C1). */
+  competitor?: CompetitorFindings | null;
+  /** What Find what sets your winning pages apart found (learning C4). */
+  winning?: WinningFindings | null;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.task');
   const tChecks = useTranslations('actionCenter.taskChecks');
@@ -154,6 +164,8 @@ export function TaskDetailView({
 
   return (
     <div className="space-y-2 border-t px-4 py-3">
+      {competitor && <CompetitorFindingsView findings={competitor} />}
+      {winning && <WinningFindingsView findings={winning} />}
       {details?.body && (
         <p className="text-xs leading-relaxed whitespace-pre-line text-muted-foreground">
           {details.body}

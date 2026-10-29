@@ -3077,7 +3077,7 @@ const templateDoneWhen = (taskKey: string) =>
   doneWhenT.has(taskKey as never) ? doneWhenT(taskKey as never) : null;
 
 /** A task's details in the snake_case the rest of the MCP output uses. */
-function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
+export function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
   const d = withTemplateCheck(
     withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen),
     taskKey,
