@@ -15,9 +15,11 @@ import {
   dashboardNavBadge,
   getDashboardNavLabel,
   getDashboardNavGroupLabel,
+  navItemHref,
   shouldShowDashboardNavItem,
 } from '@/lib/dashboard-navigation';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -148,6 +150,7 @@ export function Sidebar() {
   const agentKeyMissing = isCloud && agentKeyStatus === 'missing';
   // On the demo brand, Chat says it comes next week (its page is the preview).
   const { isDemo } = useDemoBrand();
+  const chatAgentic = useChatAgentic();
   const tDemo = useTranslations('demo.chat');
   const chatSoon = isDemo ? tDemo('soon') : null;
   // Brand-scoped gates follow the active brand, not the org. Selecting the
@@ -368,10 +371,11 @@ export function Sidebar() {
               {group.title && compact && i > 0 && <Separator className="my-2" />}
               <nav className="space-y-0.5">
                 {group.items.map((item) => {
+                  const href = navItemHref(item, chatAgentic);
                   const isActive =
                     item.href === '/dashboard'
                       ? pathname === '/dashboard'
-                      : pathname.startsWith(item.href);
+                      : pathname.startsWith(href);
                   const label = getDashboardNavLabel(item.title, t);
 
                   // Chat's own badge: "Soon (next week)" on the demo brand,
@@ -504,7 +508,7 @@ export function Sidebar() {
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
+                      href={href}
                       data-nav-item="link"
                       aria-current={isActive ? 'page' : undefined}
                     >

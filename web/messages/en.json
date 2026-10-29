@@ -3561,6 +3561,12 @@
     "stopped": "Stopped. What's done so far is kept.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here."
   },
+  "chatShell": {
+    "unavailable": {
+      "title": "This chat isn't available.",
+      "newChat": "New chat"
+    }
+  },
   "chatAccess": {
     "roleNames": {
       "admin": "Admin",
