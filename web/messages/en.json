@@ -3049,6 +3049,7 @@
     "asked": "You asked: {action}.",
     "askedTarget": "You asked: {action} · {target}.",
     "rule": {
+      "no_access": "You're not a member of this workspace now, so I can't act in it.",
       "brand_scope": "I can only see the brands shared with you.",
       "subscription_inactive": "This workspace's plan isn't active, so it's read-only: reading still works, but nothing can be changed, run or generated.",
       "demo_brand": "This is the demo brand: its data is sample data, so it can't be changed or run. Make the change on your own brand.",
@@ -3072,6 +3073,7 @@
     "whoCan": {
       "roles": "{roles} can do this.",
       "brands": "Admins can share more brands with you.",
+      "noAccess": "Its Admins can add you to it.",
       "choosePlan": "Admins can choose a plan.",
       "demo": "No one: the demo brand keeps its sample data."
     }

@@ -36,6 +36,7 @@ export const WRITE_TOOLS = [
     // A draft is daily work; every member may already save one (content_drafts: member insert).
     minRole: 'analyst',
     planGate: null,
+    brandOf: { input: 'brand_id' },
     costClass: 'C2',
     labelKey: 'saveDraft',
     route: '/dashboard/content/library',
@@ -93,6 +94,7 @@ export const WRITE_TOOLS = [
     // Dismissing is Admin and Manager work, as the server's content routes and RLS have it.
     minRole: 'manager',
     planGate: null,
+    brandOf: { lookup: 'content_opportunities', idField: 'opportunity_id' },
     costClass: 'C0',
     labelKey: 'opportunityStatus',
     route: '/dashboard/content',
@@ -126,6 +128,7 @@ export const WRITE_TOOLS = [
     minRole: 'analyst',
     excludeRoles: ['agency_partner'],
     planGate: null,
+    brandOf: { lookup: 'prompt_suggestions', idField: 'suggestion_id' },
     costClass: 'C0',
     labelKey: 'dismissSuggestion',
     route: '/dashboard/prompts/suggestions',

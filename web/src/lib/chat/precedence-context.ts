@@ -4,6 +4,8 @@ import type { Database } from '@/types/supabase';
 import { planFactsFromOrgRow } from './plan-facts';
 import {
   ADMIN_POLICIES,
+  CHAT_MODES,
+  CHAT_SURFACES,
   DEFAULT_CHAT_SETTINGS,
   parseTeamRole,
   type AdminPolicy,
@@ -13,7 +15,7 @@ import {
   type PrecedenceContext,
   type ToolCall,
 } from './precedence';
-import { EXECUTE_GROUPS, type ExecuteGroup } from './registry/define-tool';
+import { EXECUTE_GROUPS, type ChatTool, type ExecuteGroup } from './registry/define-tool';
 
 /**
  * What the approval precedence decides on, read fresh for each tool call:
@@ -27,7 +29,9 @@ import { EXECUTE_GROUPS, type ExecuteGroup } from './registry/define-tool';
 export interface PrecedenceRequest {
   userId: string;
   organizationId: string;
+  /** Checked against CHAT_MODES: one it doesn't know is Ask me first. */
   mode: ChatMode;
+  /** Checked against CHAT_SURFACES: one it doesn't know is MCP's, the closed side. */
   surface: ChatSurface;
   /** An injection attempt was found earlier in the run. */
   injectionDetected?: boolean;
@@ -123,11 +127,12 @@ export async function readPrecedenceContext(
   if (!role || profile.data?.organization_id !== req.organizationId || !org.data) return null;
 
   return {
+    organizationId: req.organizationId,
     role,
     plan: planFactsFromOrgRow(org.data),
     settings: parseChatSettings(settings.data),
-    mode: req.mode,
-    surface: req.surface,
+    mode: CHAT_MODES.find((mode) => mode === req.mode) ?? 'ask_first',
+    surface: CHAT_SURFACES.find((surface) => surface === req.surface) ?? 'mcp',
     autoChoices: new Set((choices.data ?? []).map((row) => row.tool_key)),
     brandAccess,
     injectionDetected: req.injectionDetected ?? false,
@@ -135,18 +140,63 @@ export async function readPrecedenceContext(
 }
 
 /**
- * A call as the precedence takes it. The demo flag is read only for a brand
- * in the person's scope: one outside it is refused before its state matters.
+ * The brand a call is about, found in the person's workspace: the input's
+ * brand_id, or the brand of the row its id names (the row's brandOf). Null
+ * when the row is about no brand, when the input names none, or when the
+ * brand isn't one of this workspace's, an id of another workspace's object
+ * included: the precedence refuses a brand-bound call without one
+ * (brand_scope), so 'all' never reaches past the workspace.
+ */
+export async function resolveCallBrand(
+  tool: Pick<ChatTool, 'brandOf'>,
+  input: Record<string, unknown>,
+  organizationId: string,
+): Promise<string | null> {
+  const brandOf = tool.brandOf;
+  if (!brandOf) return null;
+  let brandId: unknown;
+  if ('input' in brandOf) {
+    brandId = input[brandOf.input];
+  } else {
+    const id = input[brandOf.idField];
+    if (typeof id !== 'string' || !id) return null;
+    // Every lookup table has brand_id; the client's types take one table at a time.
+    const { data, error } = await supabaseAdmin
+      .from(brandOf.lookup as 'actions')
+      .select('brand_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(`Could not read the call's brand: ${error.message}`);
+    brandId = data?.brand_id;
+  }
+  if (typeof brandId !== 'string' || !brandId) return null;
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the call's brand: ${error.message}`);
+  return data ? brandId : null;
+}
+
+/**
+ * A call as the precedence takes it: its brand found in the workspace, and
+ * that brand's demo flag, read only for a brand in the person's scope (one
+ * outside it is refused before its state matters).
  */
 export async function readToolCall(
   ctx: PrecedenceContext,
-  call: { brandId: string | null; tainted: boolean },
+  tool: Pick<ChatTool, 'brandOf'>,
+  input: Record<string, unknown>,
+  tainted: boolean,
 ): Promise<ToolCall> {
+  const brandId = await resolveCallBrand(tool, input, ctx.organizationId);
   const inScope =
-    call.brandId !== null && (ctx.brandAccess === 'all' || ctx.brandAccess.includes(call.brandId));
+    brandId !== null && (ctx.brandAccess === 'all' || ctx.brandAccess.includes(brandId));
   return {
-    brandId: call.brandId,
-    brandIsDemo: inScope ? await readBrandIsDemo(call.brandId!) : false,
-    tainted: call.tainted,
+    brandId,
+    brandIsDemo: inScope ? await readBrandIsDemo(brandId) : false,
+    tainted,
   };
 }

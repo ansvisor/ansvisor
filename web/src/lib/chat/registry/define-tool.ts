@@ -42,6 +42,25 @@ export type WritePolicy = (typeof WRITE_POLICIES)[number];
 export const EXECUTE_GROUPS = ['publishing', 'email_outreach', 'code_prs', 'feeds'] as const;
 export type ExecuteGroup = (typeof EXECUTE_GROUPS)[number];
 
+/** The tables whose rows name their brand, for a row whose input names an object, not a brand. */
+export const BRAND_LOOKUP_TABLES = [
+  'actions',
+  'content_drafts',
+  'content_opportunities',
+  'prompt_results',
+  'prompt_suggestions',
+  'site_audits',
+] as const;
+export type BrandLookupTable = (typeof BRAND_LOOKUP_TABLES)[number];
+
+/**
+ * Where a call's brand comes from, so the brand scope and the demo rule see
+ * it (CHAT-20 §15b): the input's brand_id, or the brand of the row the
+ * input's id names. A row about the person or the workspace (a profile,
+ * usage, the brand list) has none: brandOf null.
+ */
+export type BrandOf = { input: 'brand_id' } | { lookup: BrandLookupTable; idField: string };
+
 /** CHAT-20 §9 cost: C0 no model, C1 a scoped read, C2 a model writing step, C3 heavy. */
 export type CostClass = 'C0' | 'C1' | 'C2' | 'C3';
 
@@ -106,6 +125,8 @@ interface ToolFields<S extends z.ZodObject> {
    */
   excludeRoles?: readonly TeamRole[];
   planGate: PlanGate | null;
+  /** Where a call's brand comes from; null for a row about no brand. */
+  brandOf: BrandOf | null;
   costClass: CostClass;
   /**
    * The key under `chatTools` in messages/en.json (`name` for Settings, `step`
@@ -172,6 +193,12 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     adminMayTurnOff: false,
     ...def.flags,
   };
+  if (def.brandOf) {
+    const field = 'input' in def.brandOf ? def.brandOf.input : def.brandOf.idField;
+    if (!(field in def.inputSchema.shape)) {
+      throw new Error(`${def.name}: its brand comes from ${field}, which its input lacks`);
+    }
+  }
   const excludeRoles = [...(def.excludeRoles ?? [])];
   if (excludeRoles.length > 0 && (def.minRole !== 'analyst' || excludeRoles.includes('admin'))) {
     throw new Error(`${def.name}: only a row open to every role leaves roles out, never an Admin`);

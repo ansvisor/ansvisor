@@ -59,7 +59,7 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 }));
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
-const { FIXTURE_IDS, defineTool } = await import('./define-tool');
+const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool } = await import('./define-tool');
 const { DEFAULT_CHAT_SETTINGS, allowedRoles, allowedTools } = await import('../precedence');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 
@@ -106,6 +106,7 @@ const readRow = {
   description: 'test',
   minRole: 'analyst' as const,
   planGate: null,
+  brandOf: null,
   costClass: 'C0' as const,
   labelKey: 'brands',
   route: null,
@@ -278,6 +279,33 @@ describe('approval policies', () => {
     }
   });
 
+  it('says where every row that takes a brand or an object finds its brand', () => {
+    const problems = CHAT_TOOLS.flatMap((tool) => {
+      const fields = Object.keys(tool.inputSchema.shape);
+      const ids = fields.filter((field) => field === 'id' || field.endsWith('_id'));
+      const brandOf = tool.brandOf;
+      if (fields.includes('brand_id')) {
+        return brandOf && 'input' in brandOf ? [] : [`${tool.name}: takes brand_id`];
+      }
+      if (ids.length > 0) {
+        return brandOf && 'lookup' in brandOf && ids.includes(brandOf.idField)
+          ? []
+          : [`${tool.name}: takes ${ids.join(', ')}, so its brand is looked up`];
+      }
+      return brandOf === null ? [] : [`${tool.name}: names no brand or object`];
+    });
+    expect(problems).toEqual([]);
+    for (const tool of CHAT_TOOLS) {
+      if (tool.brandOf && 'lookup' in tool.brandOf) {
+        expect(BRAND_LOOKUP_TABLES).toContain(tool.brandOf.lookup);
+      }
+    }
+    // A row can't name a field its input lacks.
+    expect(() => defineTool({ ...readRow, brandOf: { input: 'brand_id' } })).toThrow(
+      /brand_id, which its input lacks/,
+    );
+  });
+
   it('leaves roles out only of a row open to every role, and never an Admin', () => {
     const write = { ...readRow, class: 'write' as const, defaultPolicy: 'ask', maxPolicy: 'ask' };
     expect(
@@ -415,6 +443,7 @@ describe("the model's tool list on the registry's rows", () => {
     allowedTools(
       CHAT_TOOLS,
       {
+        organizationId: 'org-1',
         role,
         plan,
         settings: DEFAULT_CHAT_SETTINGS,

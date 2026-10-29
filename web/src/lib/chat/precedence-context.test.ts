@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Database } from '@/types/supabase';
+import type { BrandLookupTable } from './registry/define-tool';
 
 /**
  * The precedence's facts, read fresh for every call with the service role:
@@ -12,7 +14,9 @@ const OTHER_ORG = '33333333-3333-4333-8333-333333333333';
 const USER = 'user-1';
 
 type Result = { data: unknown; error: { message: string } | null };
+type Filters = [string, unknown][];
 const db = vi.hoisted(() => ({
+  /** A table's rows, or a function of the read's filters for one that answers per id. */
   tables: {} as Record<string, unknown>,
   errors: {} as Record<string, string>,
   reads: [] as { table: string; filters: [string, unknown][] }[],
@@ -23,8 +27,14 @@ vi.mock('@/lib/supabase/admin', () => ({
     from(table: string) {
       const read = { table, filters: [] as [string, unknown][] };
       db.reads.push(read);
+      const rows = () => {
+        const value = db.tables[table];
+        return typeof value === 'function'
+          ? (value as (f: Filters) => unknown)(read.filters)
+          : value;
+      };
       const result = (): Result => ({
-        data: db.tables[table] ?? null,
+        data: rows() ?? null,
         error: db.errors[table] ? { message: db.errors[table] } : null,
       });
       const builder = {
@@ -35,15 +45,20 @@ vi.mock('@/lib/supabase/admin', () => ({
         },
         maybeSingle: async () => result(),
         then: (resolve: (r: Result) => unknown) =>
-          resolve({ ...result(), data: (db.tables[table] as unknown[]) ?? [] }),
+          resolve({ ...result(), data: (rows() as unknown[]) ?? [] }),
       };
       return builder;
     },
   },
 }));
 
-const { readPrecedenceContext, readToolCall, parseChatSettings, readBrandIsDemo } =
-  await import('./precedence-context');
+const {
+  readPrecedenceContext,
+  readToolCall,
+  resolveCallBrand,
+  parseChatSettings,
+  readBrandIsDemo,
+} = await import('./precedence-context');
 const { decideToolCall, DEFAULT_CHAT_SETTINGS } = await import('./precedence');
 const { defineTool } = await import('./registry/define-tool');
 const { z } = await import('zod');
@@ -55,6 +70,7 @@ const addPrompts = defineTool({
   description: 'fixture',
   minRole: 'manager',
   planGate: null,
+  brandOf: null,
   costClass: 'C1',
   labelKey: 'addPrompts',
   route: null,
@@ -154,6 +170,18 @@ describe('readPrecedenceContext', () => {
     ]);
   });
 
+  it('reads a mode or a surface it does not know as the closed side', async () => {
+    const context = await readPrecedenceContext({
+      ...request,
+      mode: 'yolo' as never,
+      surface: 'email' as never,
+    });
+    expect(context).toMatchObject({ organizationId: ORG, mode: 'ask_first', surface: 'mcp' });
+    expect(
+      await readPrecedenceContext({ ...request, mode: 'full_auto', surface: 'mcp' }),
+    ).toMatchObject({ mode: 'full_auto', surface: 'mcp' });
+  });
+
   it('decides on the defaults when the workspace has no settings row', async () => {
     const context = await readPrecedenceContext(request);
     expect(context?.settings).toEqual(DEFAULT_CHAT_SETTINGS);
@@ -166,23 +194,88 @@ describe('readPrecedenceContext', () => {
   });
 });
 
-describe('the demo flag', () => {
-  it('is false until the demo chain merges; a call keeps its brand and its taint', async () => {
-    expect(await readBrandIsDemo(ORG)).toBe(false);
+// The demo chain (#1734, 00380) adds brands.is_demo. This stops compiling then, so the demo
+// flag gets wired to it (readBrandIsDemo) in the same change.
+type BrandRow = Database['public']['Tables']['brands']['Row'];
+const demoColumnNotYetThere: 'is_demo' extends keyof BrandRow ? never : true = true;
+
+// Every table a row looks its brand up in has brand_id; a new one that lacks it doesn't compile.
+type Tables = Database['public']['Tables'];
+const lookupTablesNameTheirBrand: {
+  [T in BrandLookupTable]: 'brand_id' extends keyof Tables[T]['Row'] ? true : never;
+} = {
+  actions: true,
+  content_drafts: true,
+  content_opportunities: true,
+  prompt_results: true,
+  prompt_suggestions: true,
+  site_audits: true,
+};
+
+const BRAND_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const BRAND_ELSEWHERE = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const OPPORTUNITY = '44444444-4444-4444-8444-444444444444';
+
+/** brands: found only for brand A, in ORG. content_opportunities: the opportunity's brand. */
+function seedBrands(opportunityBrand: string | null = BRAND_A) {
+  const filter = (filters: Filters, column: string) => filters.find(([c]) => c === column)?.[1];
+  db.tables.brands = (filters: Filters) =>
+    filter(filters, 'id') === BRAND_A && filter(filters, 'organization_id') === ORG
+      ? { id: BRAND_A }
+      : null;
+  db.tables.content_opportunities = (filters: Filters) =>
+    filter(filters, 'id') === OPPORTUNITY && opportunityBrand
+      ? { brand_id: opportunityBrand }
+      : null;
+}
+
+const byInput = { brandOf: { input: 'brand_id' } as const };
+const byLookup = {
+  brandOf: { lookup: 'content_opportunities', idField: 'opportunity_id' } as const,
+};
+
+describe("a call's brand", () => {
+  beforeEach(() => seedBrands());
+
+  it("is the input's brand_id, found in the person's workspace", async () => {
+    expect(await resolveCallBrand(byInput, { brand_id: BRAND_A }, ORG)).toBe(BRAND_A);
+    // Another workspace's brand id doesn't pass for 'all'.
+    expect(await resolveCallBrand(byInput, { brand_id: BRAND_ELSEWHERE }, ORG)).toBeNull();
+    expect(await resolveCallBrand(byInput, { brand_id: BRAND_A }, OTHER_ORG)).toBeNull();
+    expect(await resolveCallBrand(byInput, {}, ORG)).toBeNull();
+    expect(await resolveCallBrand({ brandOf: null }, { brand_id: BRAND_A }, ORG)).toBeNull();
+  });
+
+  it("is the brand of the row an id names, for a row that takes an object's id", async () => {
+    expect(await resolveCallBrand(byLookup, { opportunity_id: OPPORTUNITY }, ORG)).toBe(BRAND_A);
+    const lookup = db.reads.find((read) => read.table === 'content_opportunities');
+    expect(lookup?.filters).toEqual([['id', OPPORTUNITY]]);
+    expect(await resolveCallBrand(byLookup, { opportunity_id: BRAND_ELSEWHERE }, ORG)).toBeNull();
+    seedBrands(BRAND_ELSEWHERE);
+    expect(await resolveCallBrand(byLookup, { opportunity_id: OPPORTUNITY }, ORG)).toBeNull();
+  });
+
+  it("is refused when it isn't found: an object of another workspace stays out of reach", async () => {
+    const context = (await readPrecedenceContext({ ...request }))!;
+    seedBrands(BRAND_ELSEWHERE);
+    const toolCall = await readToolCall(context, byLookup, { opportunity_id: OPPORTUNITY }, false);
+    expect(toolCall).toEqual({ brandId: null, brandIsDemo: false, tainted: false });
+    const updateOpportunity = { ...addPrompts, ...byLookup };
+    expect(decideToolCall(updateOpportunity, context, toolCall)).toEqual({
+      kind: 'deny',
+      denial: { code: 'brand_scope' },
+    });
+  });
+
+  it('reads the demo flag, false until the demo chain merges', async () => {
+    expect(demoColumnNotYetThere).toBe(true);
+    expect(Object.values(lookupTablesNameTheirBrand).every(Boolean)).toBe(true);
+    expect(await readBrandIsDemo(BRAND_A)).toBe(false);
     const context = (await readPrecedenceContext(request))!;
-    expect(await readToolCall(context, { brandId: 'brand-a', tainted: true })).toEqual({
-      brandId: 'brand-a',
+    expect(await readToolCall(context, byInput, { brand_id: BRAND_A }, true)).toEqual({
+      brandId: BRAND_A,
       brandIsDemo: false,
       tainted: true,
-    });
-    const scoped = { ...context, brandAccess: ['brand-a'] };
-    expect(await readToolCall(scoped, { brandId: 'brand-b', tainted: false })).toEqual({
-      brandId: 'brand-b',
-      brandIsDemo: false,
-      tainted: false,
-    });
-    expect(await readToolCall(context, { brandId: null, tainted: false })).toMatchObject({
-      brandIsDemo: false,
     });
   });
 });

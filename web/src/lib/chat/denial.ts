@@ -50,9 +50,10 @@ export interface ChatDenial {
 
 export interface DenialInput {
   tool: ChatTool;
-  /** The person's live role, the one the precedence decided with. */
-  role: TeamRole;
-  plan: PlanFacts;
+  /** The person's live role, the one the precedence decided with; null without a context (no_access). */
+  role: TeamRole | null;
+  /** Null without a context (no_access). */
+  plan: PlanFacts | null;
   /** What the call was about, in names the person can see ("Pricing FAQ"). */
   target?: string | null;
 }
@@ -65,7 +66,7 @@ const roleName = (role: TeamRole) => roleT(`team_role_${role}`);
 const planName = (id: PlanId) => PLANS[id].name;
 
 /** Admins never get "Ask your Admin"; everyone else does. */
-const askOrOwn = (role: TeamRole, own: DenialNextAction[]): DenialNextAction[] =>
+const askOrOwn = (role: TeamRole | null, own: DenialNextAction[]): DenialNextAction[] =>
   role === 'admin' ? own : ['ask_admin', ...own];
 
 const roleList = new Intl.ListFormat('en-US', { type: 'conjunction' });
@@ -86,6 +87,15 @@ export function buildDenial(denial: ToolDenial, input: DenialInput): ChatDenial 
   const base = { code: denial.code, asked };
 
   switch (denial.code) {
+    case 'no_access':
+      return {
+        ...base,
+        status: 403,
+        rule: { kind: 'workspace', detail: t('rule.no_access'), source: null },
+        whoCanRoles: ['admin'],
+        whoCan: t('whoCan.noAccess'),
+        nextActions: [],
+      };
     case 'brand_scope':
       return {
         ...base,
@@ -144,6 +154,8 @@ export function buildDenial(denial: ToolDenial, input: DenialInput): ChatDenial 
         nextActions: askOrOwn(role, ['see_access']),
       };
     case 'plan_locked': {
+      // A plan gate is only decided with a context, which has the plan.
+      if (!plan) throw new Error('A plan gate is refused with the plan it was decided on');
       const needs = planName(denial.needs);
       return {
         ...base,

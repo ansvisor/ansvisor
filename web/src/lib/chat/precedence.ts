@@ -5,6 +5,7 @@ import {
   WRITE_POLICIES,
   type ChatTool,
   type ExecuteGroup,
+  type PlanGate,
   type ToolPolicy,
   type WritePolicy,
 } from './registry/define-tool';
@@ -21,14 +22,17 @@ import {
  *
  *   0. Brand scope: a brand the person can't access doesn't exist for Chat
  *      (§15b), so it's refused before anything about it is used, its demo
- *      flag included, and the refusal names nothing.
+ *      flag included, and the refusal names nothing. So is a call on a
+ *      brand-bound row whose brand wasn't found in the workspace (an id of
+ *      another workspace's object, or of none).
  *   1. Hard rules: a read-only workspace refuses what changes, goes live or
  *      spends (402); the demo brand's sample data the same; a tool an Admin
  *      set to Never is refused; an EXECUTE is at most a click and an
  *      always_card WRITE at most a card, in every mode.
  *   2. Plan gates (§7): the tool's own; Full auto, "Don't ask again" and an
  *      Admin's Always are Growth and up, paid (below it they ask, as Ask
- *      does). None on self-hosted.
+ *      does). MCP (§17): not in the trial, reads only on Starter, the rest
+ *      from Growth. None on self-hosted.
  *   3. The live role (§4), against the row's minRole and the roles it
  *      leaves out. The roles follow the role model of 2026-10-29: daily work
  *      (drafts, tasks, audits, reports) open to every role; settings,
@@ -41,7 +45,9 @@ import {
  *   5. The run mode: Ask me first shows a card for every WRITE. Auto shows
  *      one too, except for a tool whose policy is Always, which runs in Auto
  *      and Full auto alike. Full auto also runs "Ask (auto allowed in Full
- *      auto)". No WRITE runs by itself over MCP in v1.
+ *      auto)". No WRITE runs by itself anywhere but Chat: over MCP (v1), or
+ *      from a surface this code doesn't know. A mode it doesn't know is Ask
+ *      me first.
  *      Differs from §5 step 5 as written ("Auto: each WRITE shows a card"),
  *      by decision of 2026-10-29: otherwise Always and "Ask (auto allowed in
  *      Full auto)" would do the same. Step 5's card in Auto holds for every
@@ -88,7 +94,8 @@ export const CHAT_MODES = ['ask_first', 'auto', 'full_auto'] as const;
 export type ChatMode = (typeof CHAT_MODES)[number];
 
 /** Where a call comes from. MCP has no Full auto and no "Don't ask again" in v1 (§17). */
-export type ChatSurface = 'chat' | 'mcp';
+export const CHAT_SURFACES = ['chat', 'mcp'] as const;
+export type ChatSurface = (typeof CHAT_SURFACES)[number];
 
 /** What an Admin may set a tool to in Settings › Chat (chat_settings.tool_policies, 00401). */
 export const ADMIN_POLICIES = ['never', 'ask', 'ask_full_auto', 'always'] as const;
@@ -106,16 +113,18 @@ export interface ChatSettings {
   managerExecuteOff: readonly ExecuteGroup[];
 }
 
-/** A workspace without a chat_settings row. */
-export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
-  toolPolicies: {},
+/** A workspace without a chat_settings row. Frozen: every such workspace shares it. */
+export const DEFAULT_CHAT_SETTINGS: ChatSettings = Object.freeze({
+  toolPolicies: Object.freeze({}),
   fullAutoForMembers: true,
   dontAskAgain: true,
-  managerExecuteOff: [],
-};
+  managerExecuteOff: Object.freeze([]),
+});
 
 /** Everything a call is decided on but the call itself. */
 export interface PrecedenceContext {
+  /** The workspace the person acts in: a call's brand must belong to it. */
+  organizationId: string;
   /** Read for this call: never a role kept from earlier in the run (§4 "Role change mid-run"). */
   role: TeamRole;
   plan: PlanFacts;
@@ -133,7 +142,11 @@ export interface PrecedenceContext {
 
 /** What a call is about. */
 export interface ToolCall {
-  /** The brand it reads or changes; null for none (the workspace, Help). */
+  /**
+   * The brand it reads or changes, found in the person's workspace
+   * (precedence-context.ts readToolCall). Null: none, which a brand-bound
+   * row is refused for, since its brand wasn't found.
+   */
   brandId: string | null;
   /** That brand is the demo brand (brands.is_demo). */
   brandIsDemo: boolean;
@@ -143,6 +156,8 @@ export interface ToolCall {
 
 /** Why a call is refused, with what the denial says (denial.ts). Codes as §11a's where it has one. */
 export type ToolDenial =
+  /** No context: the person isn't a member of the workspace now (decideOrDeny). */
+  | { code: 'no_access' }
   | { code: 'brand_scope' }
   | { code: 'subscription_inactive' }
   | { code: 'demo_brand' }
@@ -223,17 +238,60 @@ function canAccessBrand(access: PrecedenceContext['brandAccess'], brandId: strin
 const deny = (denial: ToolDenial): ToolDecision => ({ kind: 'deny', denial });
 
 /**
+ * What a surface other than Chat needs of the plan (§7, §17): MCP isn't in
+ * the trial, its reads are Starter and up, its writes and executes Growth
+ * and up. A surface this code doesn't know gets MCP's, the closed side.
+ */
+function surfaceGate(ctx: PrecedenceContext, tool: ChatTool): PlanGate | null {
+  if (ctx.surface === 'chat') return null;
+  return { minPlan: tool.class === 'read' ? 'starter' : 'growth' };
+}
+
+/**
  * The decision for one call. Run it before every tool call, with a context
  * read for that call: a role, a plan or a setting changed mid-run counts
  * from the next call.
+ *
+ * For the engine (C3): an `ask` or a `click` is not a permission kept for
+ * later. When the person approves the card or clicks, read the context and
+ * the call again and decide again; run only if that answer still lets it
+ * (the approval stands for the card, a `click` for the click). A role, a
+ * plan, a policy or the brand that changed while the card waited wins.
  */
 export function decideToolCall(
   tool: ChatTool,
   ctx: PrecedenceContext,
   call: ToolCall,
 ): ToolDecision {
-  // 0. A brand outside the person's scope doesn't exist for Chat.
-  if (call.brandId !== null && !canAccessBrand(ctx.brandAccess, call.brandId)) {
+  return decide(tool, ctx, call, false);
+}
+
+/**
+ * decideToolCall for a context that may be missing: readPrecedenceContext
+ * returns null when the person isn't a member of the workspace now (no
+ * profile, another workspace, no live role), and then nothing runs.
+ */
+export function decideOrDeny(
+  tool: ChatTool,
+  ctx: PrecedenceContext | null,
+  call: ToolCall,
+): ToolDecision {
+  return ctx ? decideToolCall(tool, ctx, call) : deny({ code: 'no_access' });
+}
+
+/** listing: for the model's tool list, where a run may not have named its brand yet. */
+function decide(
+  tool: ChatTool,
+  ctx: PrecedenceContext,
+  call: ToolCall,
+  listing: boolean,
+): ToolDecision {
+  // 0. A brand outside the person's scope doesn't exist for Chat, nor one not found in the
+  // workspace. A list for a run without a brand keeps the brand-bound rows: each call
+  // names its own, and is decided with it.
+  if (call.brandId === null) {
+    if (tool.brandOf && !listing) return deny({ code: 'brand_scope' });
+  } else if (!canAccessBrand(ctx.brandAccess, call.brandId)) {
     return deny({ code: 'brand_scope' });
   }
 
@@ -246,8 +304,10 @@ export function decideToolCall(
   const policy = effectivePolicy(tool, ctx.settings);
   if (policy === 'never') return deny({ code: 'policy_never' });
 
-  // 2. The plan. While read-only, choosing a plan is what opens it, whatever it needs.
-  const needs = planGateLock(ctx.plan, tool.planGate);
+  // 2. The plan, the tool's and its surface's. While read-only, choosing a plan is what
+  // opens it, whatever it needs.
+  const needs =
+    planGateLock(ctx.plan, tool.planGate) ?? planGateLock(ctx.plan, surfaceGate(ctx, tool));
   if (needs) {
     return deny(
       ctx.plan.writable ? { code: 'plan_locked', needs } : { code: 'subscription_inactive' },
@@ -281,31 +341,33 @@ function decideWrite(
   policy: WritePolicy,
 ): ToolDecision {
   const tainted = call.tainted || ctx.injectionDetected;
+  // A mode this code doesn't know is the most careful one.
+  const mode: ChatMode = ctx.mode === 'auto' || ctx.mode === 'full_auto' ? ctx.mode : 'ask_first';
   const ask = (reason: AskReason): ToolDecision => ({
     kind: 'ask',
     reason,
     // The tick is offered only where it would count (§6): in Auto, for a change Full auto could run.
     offerDontAskAgain:
-      reason === 'mode' && ctx.mode === 'auto' && !tainted && tickWouldCount(tool, ctx, policy),
+      reason === 'mode' && mode === 'auto' && !tainted && tickWouldCount(tool, ctx, policy),
   });
 
   // 1. A card in every mode.
   if (tool.flags.alwaysCard) return ask('always_card');
   // 5. The person asked to be asked first: their mode wins over every policy.
-  if (ctx.mode === 'ask_first') return ask('mode');
+  if (mode === 'ask_first') return ask('mode');
   // 4–5. Set to Always by an Admin: runs in Auto and Full auto (see the header).
   if (policy === 'always') {
     // 2. Under Full auto's plan lock: Always mustn't get past the plan difference (Starter, trial).
     if (!ctx.plan.fullAuto) return ask('full_auto_locked');
     // Not under "Full auto for members": Always is the Admin's own choice for this one tool,
     // so it runs for every role it allows even with that switch off.
-    if (ctx.surface === 'mcp') return ask('mcp');
+    if (ctx.surface !== 'chat') return ask('mcp');
     if (tainted) return ask('tainted');
     return { kind: 'run', via: 'always' };
   }
   // 5–6. What the person asked for: Full auto, or in Auto their tick on this tool.
   const via =
-    ctx.mode === 'full_auto'
+    mode === 'full_auto'
       ? 'full_auto'
       : ctx.autoChoices.has(tool.labelKey)
         ? 'dont_ask_again'
@@ -316,8 +378,8 @@ function decideWrite(
   // 4. The Admin's policy.
   if (policy === 'ask') return ask('policy');
   if (ctx.role !== 'admin' && !ctx.settings.fullAutoForMembers) return ask('full_auto_off');
-  // 5. MCP writes always ask (v1).
-  if (ctx.surface === 'mcp') return ask('mcp');
+  // 5. Writes asked for from MCP (v1), or from a surface this code doesn't know, always ask.
+  if (ctx.surface !== 'chat') return ask('mcp');
   // 6. An Admin switched "Don't ask again" off: the ticks stop at once.
   if (via === 'dont_ask_again' && !ctx.settings.dontAskAgain) return ask('dont_ask_again_off');
   // 7. Untrusted content chose the target or the text.
@@ -344,7 +406,9 @@ function tickWouldCount(tool: ChatTool, ctx: PrecedenceContext, policy: WritePol
  * The tools the model gets for a run (§9: its list equals the rows the
  * person's role, plan, brand access and policy allow): every row whose call
  * on the run's brand wouldn't be refused. A tool that only asks or waits on
- * a click stays: the card or the click is how it runs.
+ * a click stays: the card or the click is how it runs. A run about no brand
+ * yet (brandId null) keeps the brand-bound rows; each call is decided with
+ * the brand it names.
  */
 export function allowedTools<T extends ChatTool>(
   tools: readonly T[],
@@ -352,6 +416,6 @@ export function allowedTools<T extends ChatTool>(
   scope: { brandId: string | null; brandIsDemo: boolean },
 ): T[] {
   return tools.filter(
-    (tool) => decideToolCall(tool, ctx, { ...scope, tainted: false }).kind !== 'deny',
+    (tool) => decide(tool, ctx, { ...scope, tainted: false }, true).kind !== 'deny',
   );
 }

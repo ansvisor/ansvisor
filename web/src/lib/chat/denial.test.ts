@@ -16,6 +16,7 @@ const base = {
   area: 'content' as const,
   description: 'fixture',
   planGate: null,
+  brandOf: null,
   costClass: 'C1' as const,
   route: null,
   mcpTool: null,
@@ -81,6 +82,7 @@ const build = (
   });
 
 const ALL_DENIALS: ToolDenial[] = [
+  { code: 'no_access' },
   { code: 'brand_scope' },
   { code: 'subscription_inactive' },
   { code: 'demo_brand' },
@@ -201,6 +203,23 @@ describe('buildDenial', () => {
       asked: 'You asked: Dismiss prompt suggestions · Brewline Coffee.',
       rule: { kind: 'demo', source: null },
       whoCanRoles: [],
+      nextActions: [],
+    });
+  });
+
+  it('answers a person who is not a member now, without a role or a plan', () => {
+    const denial = buildDenial({ code: 'no_access' }, { tool: dismiss, role: null, plan: null });
+    expect(denial).toEqual({
+      code: 'no_access',
+      status: 403,
+      asked: 'You asked: Dismiss prompt suggestions.',
+      rule: {
+        kind: 'workspace',
+        detail: "You're not a member of this workspace now, so I can't act in it.",
+        source: null,
+      },
+      whoCanRoles: ['admin'],
+      whoCan: 'Its Admins can add you to it.',
       nextActions: [],
     });
   });

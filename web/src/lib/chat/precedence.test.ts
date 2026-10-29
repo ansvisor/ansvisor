@@ -5,9 +5,11 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from './plan-facts';
 import {
   CHAT_MODES,
+  CHAT_SURFACES,
   DEFAULT_CHAT_SETTINGS,
   TEAM_ROLES,
   allowedTools,
+  decideOrDeny,
   decideToolCall,
   effectivePolicy,
   parseTeamRole,
@@ -39,9 +41,11 @@ const base = {
   route: null,
   mcpTool: null,
   specRow: '0',
-  inputSchema: z.object({}),
+  // Most rows are about a brand, named in the input (the registry's usual brandOf).
+  brandOf: { input: 'brand_id' as const },
+  inputSchema: z.object({ brand_id: z.string() }),
   run: async () => null,
-  fixture: { input: {} },
+  fixture: { input: { brand_id: 'brand' } },
 };
 
 type Def = ToolDefinition<z.ZodObject>;
@@ -49,7 +53,8 @@ const row = (name: string, def: Partial<Def> & Pick<Def, 'class'>): ChatTool =>
   defineTool({ ...base, name, labelKey: name, minRole: 'analyst', ...def } as Def);
 
 const ROWS = {
-  read: row('read', { class: 'read' }),
+  // About no brand: the person or the workspace (a profile, usage).
+  read: row('read', { class: 'read', brandOf: null }),
   readOff: row('readOff', { class: 'read', flags: { adminMayTurnOff: true } }),
   readSpends: row('readSpends', { class: 'read', minRole: 'manager', costClass: 'C2' }),
   readShopping: row('readShopping', {
@@ -138,6 +143,7 @@ type PlanKey = keyof typeof PLAN;
 function ctx(over: Partial<PrecedenceContext> & { planKey?: PlanKey } = {}): PrecedenceContext {
   const { planKey = 'growth', ...rest } = over;
   return {
+    organizationId: 'org-1',
     role: 'manager',
     plan: PLAN[planKey],
     settings: DEFAULT_CHAT_SETTINGS,
@@ -291,7 +297,7 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
     ask('full_auto_locked'),
   ],
   [
-    'the plan lock comes before MCP for an Always write',
+    "MCP's plan gate refuses an Always write on Starter",
     ROWS.addPrompts,
     ctx({
       planKey: 'starter',
@@ -299,7 +305,7 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
       settings: settings({ toolPolicies: { addPrompts: 'always' } }),
     }),
     call(),
-    ask('full_auto_locked'),
+    deny({ code: 'plan_locked', needs: 'growth' }),
   ],
   [
     'Always runs on self-hosted',
@@ -660,6 +666,102 @@ const TABLE: [string, ChatTool, PrecedenceContext, ToolCall, ToolDecision][] = [
     call({ brandId: null }),
     RUN_READ,
   ],
+  [
+    "a brand-bound call whose brand wasn't found in the workspace is refused",
+    ROWS.draft,
+    ctx({ role: 'admin', mode: 'full_auto' }),
+    call({ brandId: null }),
+    deny({ code: 'brand_scope' }),
+  ],
+  [
+    "a brand-bound read whose brand wasn't found is refused, with access to every brand",
+    ROWS.readPlatforms,
+    ctx({ role: 'admin' }),
+    call({ brandId: null }),
+    deny({ code: 'brand_scope' }),
+  ],
+  // MCP (§7, §17): not in the trial, reads on Starter, the rest from Growth
+  [
+    'MCP is not in the trial, reads included',
+    ROWS.read,
+    ctx({ planKey: 'trial', surface: 'mcp', role: 'admin' }),
+    call(),
+    deny({ code: 'plan_locked', needs: 'starter' }),
+  ],
+  [
+    'MCP writes are not in the trial',
+    ROWS.draft,
+    ctx({ planKey: 'trial', surface: 'mcp' }),
+    call(),
+    deny({ code: 'plan_locked', needs: 'growth' }),
+  ],
+  [
+    'MCP reads run on Starter',
+    ROWS.readPlatforms,
+    ctx({ planKey: 'starter', surface: 'mcp' }),
+    call(),
+    RUN_READ,
+  ],
+  [
+    'MCP writes need Growth',
+    ROWS.draft,
+    ctx({ planKey: 'starter', surface: 'mcp' }),
+    call(),
+    deny({ code: 'plan_locked', needs: 'growth' }),
+  ],
+  [
+    'MCP executes need Growth',
+    ROWS.publish,
+    ctx({ planKey: 'starter', surface: 'mcp' }),
+    call(),
+    deny({ code: 'plan_locked', needs: 'growth' }),
+  ],
+  [
+    'an MCP write on self-hosted asks in Full auto',
+    ROWS.draft,
+    ctx({ planKey: 'selfHosted', surface: 'mcp', mode: 'full_auto' }),
+    call(),
+    ask('mcp'),
+  ],
+  // A surface or a mode this code doesn't know is the closed side
+  [
+    'a write from an unknown surface asks, even in Full auto',
+    ROWS.draft,
+    ctx({ surface: 'email' as never, mode: 'full_auto' }),
+    call(),
+    ask('mcp'),
+  ],
+  [
+    'an Always write from an unknown surface asks',
+    ROWS.addPrompts,
+    ctx({
+      surface: 'email' as never,
+      settings: settings({ toolPolicies: { addPrompts: 'always' } }),
+    }),
+    call(),
+    ask('mcp'),
+  ],
+  [
+    "an unknown surface gets MCP's plan gates",
+    ROWS.draft,
+    ctx({ surface: 'email' as never, planKey: 'starter' }),
+    call(),
+    deny({ code: 'plan_locked', needs: 'growth' }),
+  ],
+  [
+    'an unknown mode asks first, even for an Always write',
+    ROWS.addPrompts,
+    ctx({ mode: 'yolo' as never, settings: settings({ toolPolicies: { addPrompts: 'always' } }) }),
+    call(),
+    ask('mode'),
+  ],
+  [
+    'an unknown mode counts no tick and offers none',
+    ROWS.draft,
+    ctx({ mode: 'yolo' as never, autoChoices: new Set(['draft']) }),
+    call(),
+    ask('mode'),
+  ],
   // Self-hosted
   ['self-hosted has no plan gate', ROWS.openPr, ctx({ planKey: 'selfHosted' }), call(), CLICK],
   [
@@ -680,13 +782,18 @@ describe('the approval precedence, case by case', () => {
 // ─── Every combination ──────────────────────────────────────────────────────
 
 const LABELS = ALL_ROWS.map((tool) => tool.labelKey);
-const STORED: (AdminPolicy | undefined)[] = [undefined, 'never', 'ask', 'always'];
-// The Admin's switches: as they come, the ticks off, and everything off.
+// A stored Ask is covered by the rows fixed at Ask and by the table.
+const STORED: (AdminPolicy | undefined)[] = [undefined, 'never', 'always'];
+// The Admin's switches: as they come, the ticks off, Full auto off for members (ticks on),
+// and everything off.
 const SWITCHES: Partial<ChatSettings>[] = [
   {},
   { dontAskAgain: false },
+  { fullAutoForMembers: false },
   { fullAutoForMembers: false, dontAskAgain: false, managerExecuteOff: ['publishing', 'code_prs'] },
 ];
+// Enterprise decides as Growth does here; the table covers it.
+const LOOP_PLANS: PlanKey[] = ['starter', 'growth', 'trial', 'readOnly', 'selfHosted'];
 
 interface Variant {
   ctx: PrecedenceContext;
@@ -696,32 +803,43 @@ interface Variant {
   ticked: boolean;
 }
 
-/** Every context, shared by the rows: role × plan × mode × surface × policy × switches × tick. */
+/**
+ * Every context, shared by the rows: role × plan × mode × surface × policy ×
+ * switches × tick × a detected injection.
+ */
 const VARIANTS: Variant[] = [];
 for (const role of TEAM_ROLES)
-  for (const planKey of Object.keys(PLAN) as PlanKey[])
+  for (const planKey of LOOP_PLANS)
     for (const mode of CHAT_MODES)
-      for (const surface of ['chat', 'mcp'] as const)
+      for (const surface of CHAT_SURFACES)
         for (const stored of STORED)
           for (const switches of SWITCHES)
-            for (const ticked of [false, true]) {
-              const context = ctx({
-                role,
-                planKey,
-                mode,
-                surface,
-                autoChoices: new Set(ticked ? LABELS : []),
-                settings: settings({
-                  toolPolicies: stored
-                    ? Object.fromEntries(LABELS.map((key) => [key, stored]))
-                    : {},
-                  ...switches,
-                }),
-              });
-              VARIANTS.push({ ctx: context, stored, ticked });
-            }
+            for (const ticked of [false, true])
+              for (const injectionDetected of [false, true]) {
+                const context = ctx({
+                  role,
+                  planKey,
+                  mode,
+                  surface,
+                  injectionDetected,
+                  autoChoices: new Set(ticked ? LABELS : []),
+                  settings: settings({
+                    toolPolicies: stored
+                      ? Object.fromEntries(LABELS.map((key) => [key, stored]))
+                      : {},
+                    ...switches,
+                  }),
+                });
+                VARIANTS.push({ ctx: context, stored, ticked });
+              }
 
-const CALLS = [call(), call({ brandIsDemo: true }), call({ tainted: true })];
+// On brand A, on the demo brand, with untrusted content, and with a brand not found.
+const CALLS = [
+  call(),
+  call({ brandIsDemo: true }),
+  call({ tainted: true }),
+  call({ brandId: null }),
+];
 
 /** Every combination's decision, decided once for the tests below. */
 const DECIDED = VARIANTS.flatMap((variant) =>
@@ -735,6 +853,9 @@ const DECIDED = VARIANTS.flatMap((variant) =>
   ),
 );
 type Decided = (typeof DECIDED)[number];
+
+/** The call's brand was found, or the row is about no brand. */
+const resolved = (d: Decided) => d.call.brandId !== null || d.tool.brandOf === null;
 
 const failures = (keep: (d: Decided) => boolean) =>
   DECIDED.filter(keep).map(
@@ -756,7 +877,19 @@ describe('CHAT-20 §21 acceptance criteria', () => {
         ).map((t) => t.name);
         expect(listed).toEqual(allowed);
       }
+      // A run about no brand yet lists what one on an accessible, ordinary brand does.
+      expect(allowedTools(ALL_ROWS, context, { brandId: null, brandIsDemo: false })).toEqual(
+        allowedTools(ALL_ROWS, context, { brandId: BRAND_A, brandIsDemo: false }),
+      );
     }
+    // Over MCP: nothing in the trial, reads only on Starter, everything from Growth.
+    const overMcp = (planKey: PlanKey) =>
+      allowedTools(ALL_ROWS, ctx({ role: 'admin', planKey, surface: 'mcp' }), call()).map(
+        (t) => t.name,
+      );
+    expect(overMcp('trial')).toEqual([]);
+    expect(overMcp('starter')).toEqual(['read', 'readOff', 'readSpends', 'readPlatforms']);
+    expect(overMcp('growth')).toEqual(ALL_ROWS.map((t) => t.name));
     // …so for an Analyst on Starter, the reads its plan opens and daily work, and nothing else.
     expect(
       allowedTools(ALL_ROWS, ctx({ role: 'analyst', planKey: 'starter' }), call()).map(
@@ -853,6 +986,7 @@ describe('CHAT-20 §21 acceptance criteria', () => {
 
   it("refuses an Analyst's or Agency partner's change outside daily work with forbidden_role", () => {
     const readOnlyRoles = (d: Decided) =>
+      resolved(d) &&
       (d.ctx.role === 'analyst' || d.ctx.role === 'agency_partner') &&
       d.tool.class !== 'read' &&
       !roleAllowed(d.tool, d.ctx.role);
@@ -893,8 +1027,25 @@ describe('CHAT-20 §21 acceptance criteria', () => {
     );
   });
 
+  it("refuses every brand-bound call whose brand wasn't found in the workspace", () => {
+    expect(
+      failures(
+        (d) =>
+          !resolved(d) && !(d.decision.kind === 'deny' && d.decision.denial.code === 'brand_scope'),
+      ),
+    ).toEqual([]);
+    expect(
+      failures(
+        (d) =>
+          d.tool.brandOf === null &&
+          d.decision.kind === 'deny' &&
+          d.decision.denial.code === 'brand_scope',
+      ),
+    ).toEqual([]);
+  });
+
   it('keeps a read-only workspace to reading: 402 subscription_inactive for the rest', () => {
-    const readOnly = (d: Decided) => !d.ctx.plan.writable;
+    const readOnly = (d: Decided) => !d.ctx.plan.writable && resolved(d);
     expect(
       failures(
         (d) =>
@@ -970,7 +1121,73 @@ describe('CHAT-20 §21 acceptance criteria', () => {
   });
 });
 
+describe('MCP and the surfaces (§7, §17)', () => {
+  it('keeps MCP out of the trial and to reads on Starter', () => {
+    const mcp = (d: Decided) => d.ctx.surface === 'mcp' && resolved(d) && !d.ctx.plan.selfHosted;
+    expect(failures((d) => mcp(d) && d.ctx.plan.isTrial && d.decision.kind !== 'deny')).toEqual([]);
+    expect(
+      failures(
+        (d) =>
+          mcp(d) &&
+          d.ctx.plan.planId === 'starter' &&
+          d.ctx.plan.writable &&
+          d.tool.class !== 'read' &&
+          d.decision.kind !== 'deny',
+      ),
+    ).toEqual([]);
+    // Where nothing else refuses it, the refusal is the plan's.
+    expect(
+      decideToolCall(ROWS.addPrompts, ctx({ planKey: 'starter', surface: 'mcp' }), call()),
+    ).toEqual(deny({ code: 'plan_locked', needs: 'growth' }));
+  });
+});
+
 describe('the rest of the precedence', () => {
+  it('runs a tick exactly where every rule it depends on allows it', () => {
+    const counts = (d: Decided) =>
+      d.ctx.mode === 'auto' &&
+      d.ticked &&
+      d.ctx.surface === 'chat' &&
+      (d.ctx.role === 'admin' || d.ctx.settings.fullAutoForMembers) &&
+      d.ctx.plan.fullAuto &&
+      d.ctx.settings.dontAskAgain &&
+      effectivePolicy(d.tool, d.ctx.settings) === 'ask_full_auto' &&
+      !d.tool.flags.alwaysCard &&
+      !d.call.tainted &&
+      !d.ctx.injectionDetected;
+    const viaTick = (d: Decided) =>
+      d.decision.kind === 'run' && d.decision.via === 'dont_ask_again';
+    expect(failures((d) => viaTick(d) && !counts(d))).toEqual([]);
+    // …and wherever it counts, a WRITE the earlier steps allow runs by it.
+    expect(
+      failures(
+        (d) => counts(d) && d.tool.class === 'write' && d.decision.kind !== 'deny' && !viaTick(d),
+      ),
+    ).toEqual([]);
+    expect(DECIDED.some((d) => viaTick(d) && d.ctx.role !== 'admin')).toBe(true);
+  });
+
+  it('runs no WRITE by itself for the rest of a run that met an injection attempt', () => {
+    expect(
+      failures(
+        (d) => d.ctx.injectionDetected && d.tool.class === 'write' && d.decision.kind === 'run',
+      ),
+    ).toEqual([]);
+  });
+
+  it('decides nothing but a refusal without a context', () => {
+    for (const tool of ALL_ROWS) {
+      expect(decideOrDeny(tool, null, call())).toEqual(deny({ code: 'no_access' }));
+    }
+    expect(decideOrDeny(ROWS.read, ctx(), call())).toEqual(RUN_READ);
+  });
+
+  it("shares frozen defaults, which a workspace can't change for another", () => {
+    expect(Object.isFrozen(DEFAULT_CHAT_SETTINGS)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_CHAT_SETTINGS.toolPolicies)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_CHAT_SETTINGS.managerExecuteOff)).toBe(true);
+  });
+
   it('runs a WRITE without a card only under Always, in Full auto or under a counted tick', () => {
     expect(
       failures(
@@ -1008,7 +1225,11 @@ describe('the rest of the precedence', () => {
         (d) =>
           d.decision.kind === 'run' &&
           d.decision.via === 'always' &&
-          (!always(d) || d.ctx.mode === 'ask_first' || d.ctx.surface === 'mcp' || d.call.tainted),
+          (!always(d) ||
+            d.ctx.mode === 'ask_first' ||
+            d.ctx.surface !== 'chat' ||
+            d.call.tainted ||
+            d.ctx.injectionDetected),
       ),
     ).toEqual([]);
     // Wherever nothing else stops it, it runs: a card only for the person's mode, the plan
@@ -1021,6 +1242,7 @@ describe('the rest of the precedence', () => {
           d.ctx.plan.fullAuto &&
           d.ctx.surface === 'chat' &&
           !d.call.tainted &&
+          !d.ctx.injectionDetected &&
           d.decision.kind === 'ask',
       ),
     ).toEqual([]);
