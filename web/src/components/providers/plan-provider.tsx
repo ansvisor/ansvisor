@@ -1,10 +1,19 @@
 'use client';
 
 import { createContext, useContext } from 'react';
-import type { PlanId } from '@/config/plans';
+import { PLANS, type PlanId } from '@/config/plans';
+import { effectivePlanIdForBrand, isDemoSelected } from '@/lib/demo/demo-brand';
+import { useBrandStore } from '@/stores/use-brand-store';
 
 interface PlanContextValue {
+  /**
+   * The plan the brand on screen is shown with: the organization's, or
+   * Growth's on the demo brand (effectivePlanIdForBrand), so the demo opens
+   * the whole product. What it locks and marks follows this one.
+   */
   planId: PlanId;
+  /** The organization's own plan, whichever brand is on screen (Billing). */
+  ownPlanId: PlanId;
   isCloud: boolean;
   /**
    * Effective API-model allowlist for the org, with Enterprise
@@ -28,6 +37,7 @@ interface PlanContextValue {
 
 const PlanContext = createContext<PlanContextValue>({
   planId: 'self_hosted',
+  ownPlanId: 'self_hosted',
   isCloud: false,
   allowedModelIds: null,
   subscriptionActive: true,
@@ -49,13 +59,21 @@ export function PlanProvider({
 }) {
   const isCloud = process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
   const effectivePlan: PlanId = isCloud ? planId : 'self_hosted';
+  const demoSelected = useBrandStore(isDemoSelected);
+  const shownPlan = effectivePlanIdForBrand(effectivePlan, isCloud && demoSelected);
+  // The demo's plan brings its own model allow-list; the layout's is the
+  // organization's (Enterprise overrides merged).
+  const demoModels = PLANS[shownPlan].limits.allowedModels;
+  const shownModels =
+    shownPlan === effectivePlan ? allowedModelIds : demoModels ? [...demoModels] : null;
 
   return (
     <PlanContext.Provider
       value={{
-        planId: effectivePlan,
+        planId: shownPlan,
+        ownPlanId: effectivePlan,
         isCloud,
-        allowedModelIds: isCloud ? allowedModelIds : null,
+        allowedModelIds: isCloud ? shownModels : null,
         subscriptionActive: isCloud ? subscriptionActive : true,
         subscriptionStatus: isCloud ? subscriptionStatus : null,
       }}

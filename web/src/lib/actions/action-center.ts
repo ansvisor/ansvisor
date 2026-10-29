@@ -336,7 +336,7 @@ export async function updateActionStatus(
   status: ActionStatus,
   reason: ActionDismissReason | null = null,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const dismissReason =
     status === 'dismissed' && reason && ACTION_DISMISS_REASONS.includes(reason) ? reason : null;
@@ -385,7 +385,7 @@ export async function assignAction(
   actionId: string,
   assigneeId: string | null,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('actions')
@@ -401,7 +401,7 @@ export async function setActionDueDate(
   actionId: string,
   dueDate: string | null,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('actions')
@@ -419,7 +419,7 @@ export async function updateTaskStatus(
   status: TaskStatus,
   skipReason?: string,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   // A skip records why. "We decided not to" is only useful to the next reader
@@ -461,7 +461,7 @@ function cleanTaskTitle(raw: string): string {
  * as many as someone types.
  */
 export async function addTask(brandId: string, actionId: string, title: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const text = cleanTaskTitle(title);
 
@@ -502,7 +502,7 @@ export async function updateTaskDetails(
   taskId: string,
   edit: TaskDetailsEdit & { title: string | null },
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!isTaskDetailsEdit(edit) || (edit.title !== null && typeof edit.title !== 'string')) {
     throw new Error('Invalid task details');
   }
@@ -552,7 +552,7 @@ export async function updateTaskDetails(
  * action makes that a non-issue.
  */
 export async function deleteTask(brandId: string, actionId: string, taskId: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   const { error } = await supabase

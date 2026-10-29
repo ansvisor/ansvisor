@@ -338,6 +338,8 @@ export async function runPageOpportunityDetection({ organizationId } = {}) {
     .from('brands')
     .select('id, organization_id')
     .eq('is_active', true)
+    // A demo brand's pages (00380) are sample data: nothing is found for it.
+    .eq('is_demo', false)
     .not('ga_property_id', 'is', null);
   if (organizationId) brandQuery = brandQuery.eq('organization_id', organizationId);
   const { data: rows, error } = await brandQuery;

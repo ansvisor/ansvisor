@@ -59,6 +59,7 @@
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
       "payment_failed": "Your last payment didn't go through, so your workspace is read-only. You can look around; adding, running and AI need the payment method updated.",
+      "trial": "Your brand isn't tracked yet. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} other {Start a {days}-day free trial.}}",
       "seePlans": "See plans"
     },
     "dialog": {
@@ -78,39 +79,37 @@
       "ended": "Ask your admin to choose a plan.",
       "endedNamed": "Ask {name}, your workspace admin, to choose a plan.",
       "payment_failed": "Ask your workspace admin to update the payment method.",
-      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method."
+      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method.",
+      "demo": "Ask your admin to choose a plan.",
+      "demoNamed": "Ask {name}, your workspace admin, to choose a plan.",
+      "trial": "Ask your admin to choose a plan.",
+      "trialNamed": "Ask {name}, your workspace admin, to choose a plan."
     },
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
     "portalFailed": "Couldn't open the billing page. Try again.",
-    "plans": {
-      "perMonthBilledYearly": "{price} a month, billed yearly",
-      "chooseToday": "Choose {plan} · {price} today",
-      "openingCheckout": "Opening checkout…",
-      "payByCard": "You'll pay by card on Stripe's checkout.",
-      "askAdmin": "Ask your admin to choose a plan",
-      "customName": "Custom",
-      "customTagline": "For large companies and agencies managing AI visibility at scale.",
-      "startingAt": "Starting at",
-      "customAiUsage": "Custom AI usage, from {count}x",
-      "contactUs": "Contact us",
-      "pricesInUsd": "Prices in USD.",
-      "promo": {
-        "apply": "Apply",
-        "checking": "Checking…",
-        "remove": "Remove the code",
-        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
-        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
-        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
-        "then": "then {price}/mo",
-        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
-        "monthlyOnly": "{code} is for monthly plans: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
-        "switchToMonthly": "Switch to Monthly",
-        "invalid": "“{code}” isn’t a valid code.",
-        "failed": "Couldn't check the code. Try again."
-      }
-    },
     "noPlan": "No active plan",
+    "demo": {
+      "dialog": {
+        "title": "Use Ansvisor for your own brand",
+        "titleFor": "Use Ansvisor for {brand}",
+        "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
+        "bodyFor": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for {brand}.",
+        "action": "{action} works on your own brand",
+        "label": "This is a demo brand with sample data"
+      },
+      "ownBrand": {
+        "title": "This is a demo brand",
+        "body": "It shows Ansvisor with sample data, so nothing here runs. Switch to your own brand to do this."
+      },
+      "switchToOwnBrand": "Switch to your brand"
+    },
+    "trialOffer": {
+      "title": "Choose how to start",
+      "body": "Everything you set up is here. Pick a plan and Ansvisor starts tracking, writing and fixing for your brand.",
+      "bodyFor": "Everything you set up for {brand} is here. Pick a plan and Ansvisor starts tracking, writing and fixing for it.",
+      "label": "Your brand isn't tracked yet"
+    },
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
       "removeLocations": "Removing locations needs a plan",
@@ -249,7 +248,110 @@
       "removeAuthors": "Removing authors needs a plan",
       "setDefaultAuthor": "Setting a default author needs a plan",
       "setByline": "Changing the byline setting needs a plan",
-      "changeContentSettings": "Changing content settings needs a plan"
+      "changeContentSettings": "Changing content settings needs a plan",
+      "disconnectIntegrations": "Disconnecting an integration needs a plan"
+    },
+    "plans": {
+      "perMonthBilledYearly": "{price} a month, billed yearly",
+      "openingCheckout": "Opening checkout…",
+      "askAdmin": "Ask your admin to choose a plan",
+      "customName": "Custom",
+      "customTagline": "For large companies and agencies managing AI visibility at scale.",
+      "startingAt": "Starting at",
+      "customAiUsage": "Custom AI usage, from {count}x",
+      "contactUs": "Contact us",
+      "pricesInUsd": "Prices in USD.",
+      "promo": {
+        "apply": "Apply",
+        "checking": "Checking…",
+        "remove": "Remove the code",
+        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
+        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
+        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
+        "then": "then {price}/mo",
+        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
+        "monthlyOnly": "{code} is for buying monthly: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
+        "switchToMonthly": "Switch to Monthly",
+        "invalid": "“{code}” isn’t a valid code.",
+        "failed": "Couldn't check the code. Try again."
+      }
+    }
+  },
+  "planOffer": {
+    "buyNow": "Buy now",
+    "startTrial": "Start {days}-day free trial",
+    "fullPlan": "Full plan from day one",
+    "limitedAi": "Limited AI usage for {days} days",
+    "cardNote": "{both, select, yes {Card required for both.} other {Card required.}}",
+    "limitedOffer": "Limited offer",
+    "trialUsed": "This workspace's free trial has been used. Buy now to start the plan.",
+    "chooseHowToStart": "Choose how to start",
+    "choosePlan": "Choose Your Plan",
+    "choice": {
+      "label": "How to start",
+      "trial": "{days}-day trial",
+      "month": "Monthly",
+      "monthOffer": "{discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}",
+      "year": "Yearly"
+    },
+    "dueToday": "Due today",
+    "freeUntil": "Free until {date}, then {price}/month",
+    "trustLine": "<part>Secure checkout with Stripe</part> · <part>Cancel any time</part>",
+    "haveCode": "Have a code?",
+    "showDetails": "Show plan details",
+    "hideDetails": "Hide plan details",
+    "readyToTrack": "Ready to track for <b>{brand}</b>: {prompts, plural, one {# prompt} other {# prompts}} · {topics, plural, one {# topic} other {# topics}} · {competitors, plural, one {# competitor} other {# competitors}}"
+  },
+  "demo": {
+    "band": {
+      "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {Pick a plan to use it for your own brand.}}",
+      "textFor": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start tracking <b>{ownBrand}</b> with a {days}-day free trial, or get 50% off your first month.} trial {Start tracking <b>{ownBrand}</b> with a {days}-day free trial.} discount {Get 50% off your first month of tracking <b>{ownBrand}</b>.} other {Pick a plan to track <b>{ownBrand}</b>.}}",
+      "textPlanActive": "You're exploring <b>{brand}</b>, a demo brand with sample data. Nothing here runs or uses AI.",
+      "switchToOwnBrand": "Switch to your brand",
+      "switchToBrand": "Switch to {brand}"
+    },
+    "switcher": {
+      "sampleData": "Demo · sample data",
+      "notTracked": "Not tracked yet",
+      "show": "Show the demo brand",
+      "hide": "Hide the demo brand",
+      "failed": "Couldn't change the demo brand. Try again."
+    },
+    "explore": {
+      "failed": "Couldn't open the demo brand. Try again."
+    },
+    "onboarding": {
+      "title": "Not ready to add a card? Explore a demo brand",
+      "body": "See Ansvisor with sample data: prompts, AI answers, content and reports. No card needed. {brand} stays saved, and tracking starts when you pick a plan.",
+      "yourBrand": "Your brand",
+      "cta": "Explore the demo"
+    },
+    "seeTheDemo": "See the demo",
+    "settingUp": "Setting up the demo…",
+    "setup": {
+      "title": "Preparing your demo",
+      "body": "{brand} is a made-up coffee brand with a month of sample data. Nothing here runs or costs anything.",
+      "steps": {
+        "brand": "Setting up {brand}",
+        "answers": "Preparing sample AI answers from {platforms} platforms",
+        "citations": "Adding the sources they cite",
+        "mentions": "Scoring mentions and sentiment",
+        "audit": "Auditing the site's pages",
+        "actions": "Building the Action Center",
+        "content": "Finding content opportunities",
+        "reports": "Preparing reports"
+      },
+      "usual": "This takes a few seconds the first time.",
+      "slow": "This is taking longer than usual.",
+      "ready": "Ready. Opening the Action Center…",
+      "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "retry": "Try again",
+      "close": "Close"
+    },
+    "chat": {
+      "soon": "Soon (next week)",
+      "note": "Chat arrives next week. This is a preview of it.",
+      "frameTitle": "Chat preview"
     }
   },
   "managersOnly": {
@@ -3101,7 +3203,8 @@
     "dismissSuggestion": {
       "name": "Dismiss prompt suggestions",
       "step": "Dismissed prompt suggestion"
-    }
+    },
+    "askAdmin": { "name": "Ask your Admin", "step": "Sent to your Admins" }
   },
   "agentic": {
     "avatar": {
@@ -3229,6 +3332,276 @@
       "demo": "No one: the demo brand keeps its sample data."
     }
   },
+  "chatAccess": {
+    "roleNames": {
+      "admin": "Admin",
+      "manager": "Manager",
+      "analyst": "Analyst",
+      "agency_partner": "Agency partner"
+    },
+    "classes": { "read": "READ", "write": "WRITE", "execute": "EXECUTE", "never": "NEVER" },
+    "plan": {
+      "yourPlan": "Your plan",
+      "perMonth": "{price}/mo",
+      "trial": "Trial",
+      "custom": "Custom contract",
+      "chips": {
+        "platforms": "{count, plural, one {# AI platform} other {# AI platforms}}",
+        "fullAuto": "Full auto",
+        "ownKeys": "Own AI keys",
+        "mcp": "{access, select, read {MCP read} read_write {MCP read + write} other {MCP}}",
+        "openPr": "Open PR",
+        "claude": "Claude tracking"
+      },
+      "locked": "Needs {plan} · you're on {current}",
+      "lockedTrial": "Not in the trial · {plan} and up",
+      "aiLimit": "AI limit",
+      "aiUsed": "{percent} used",
+      "comparePlans": "Compare plans",
+      "upgrade": "Upgrade",
+      "choosePlan": "Choose a plan",
+      "next": "With {plan} you'd also get",
+      "afterTrial": "After your trial",
+      "priceDiff": "+{price}/mo",
+      "afterTrialPrice": "{plan} · {price}/mo after the trial",
+      "customPrice": "Custom price",
+      "benefits": {
+        "morePlatforms": "See your brand in {count, plural, one {# more AI platform} other {# more AI platforms}}",
+        "fullAuto": "Let Chat make routine changes for you with Full auto",
+        "mcpWrite": "Open pull requests and make changes from Claude, ChatGPT or Cursor",
+        "claude": "Track how Claude answers about your brand",
+        "contract": "AI limit, storage and prompt limits set in your contract",
+        "aiLimit": "{times}× the monthly AI limit",
+        "keepEverything": "Keep everything you're using now",
+        "mcp": "Use Ansvisor inside Claude, ChatGPT and Cursor (MCP)",
+        "monthlyLimit": "A monthly AI limit that resets, instead of the trial's one-time limit",
+        "packs": "Buy extra AI credits and storage when you need them"
+      }
+    },
+    "roles": {
+      "title": "Roles & access",
+      "lead": "Who can do what in this workspace, in the app and through Chat. Chat acts as the signed-in person and never has more rights than they do.",
+      "readOnly": "You're {role, select, manager {a Manager} analyst {an Analyst} other {an Agency partner}} · read-only here",
+      "readOnlyNote": "Only Admins change roles",
+      "members": "Members",
+      "manageInTeam": "Invite or remove in Team",
+      "columns": {
+        "member": "Member",
+        "role": "Role",
+        "brands": "Brands",
+        "throughChat": "Through Chat",
+        "lastActive": "Last active"
+      },
+      "you": "You",
+      "allBrands": "All brands",
+      "neverSignedIn": "Not yet",
+      "roleChanged": "Role changed",
+      "roleChangeFailed": "Couldn't change the role. Try again.",
+      "loadError": "Couldn't load Roles & access. Try again in a moment.",
+      "throughChat": {
+        "admin": "Everything, incl. policy, keys, connections",
+        "manager": "WRITE with approval · EXECUTE after click",
+        "analyst": "Read-only composer · asks an Admin",
+        "agency_partner": "Read-only composer · asks an Admin"
+      },
+      "matrix": {
+        "title": "What each role can do",
+        "count": "app and Chat",
+        "actsAsUser": "Chat acts as the signed-in person",
+        "capability": "Capability",
+        "adminNote": "Changes roles",
+        "groups": {
+          "everyone": "Everyone · app and Chat",
+          "workspace": "Workspace changes",
+          "admin": "Admin only",
+          "never": "Never through Chat"
+        },
+        "rows": {
+          "readApp": { "name": "See dashboards, prompts, citations and reports", "scope": "App" },
+          "askChat": {
+            "name": "Ask Chat, create files and downloads for yourself",
+            "scope": "Chat"
+          },
+          "personal": {
+            "name": "Personal memory and personal in-app watch rules",
+            "scope": "Chat · only you"
+          },
+          "actions": {
+            "name": "Create or attach actions · prompts, topics, competitors",
+            "scope": "App and Chat"
+          },
+          "drafts": {
+            "name": "Drafts, briefs, schedules, CMS drafts",
+            "scope": "App and Chat · approval card"
+          },
+          "agents": { "name": "Create triggered agents", "scope": "Run with the creator's role" },
+          "shared": {
+            "name": "Workspace memory, shared skills, marketplace skills",
+            "scope": "Chat"
+          },
+          "execute": {
+            "name": "Publish, open a PR, send external email",
+            "scope": "Always after a click"
+          },
+          "billing": {
+            "name": "Billing, plan, AI credit and storage packs",
+            "scope": "Settings › Billing"
+          },
+          "team": { "name": "Team: invite, change roles, remove", "scope": "Settings › Team" },
+          "policy": {
+            "name": "Chat tool policy, Full auto availability",
+            "scope": "Settings › Chat"
+          },
+          "keys": {
+            "name": "Connections, MCP server keys, API and AI provider keys",
+            "scope": "Settings › Integrations · Keys"
+          },
+          "never": {
+            "name": "Mark a task done, change roles or billing, delete a brand, reveal keys",
+            "scope": "Not a Chat tool"
+          }
+        },
+        "cells": {
+          "yes": "Yes",
+          "approves": "approves",
+          "request": "Request",
+          "after_click": "after click",
+          "no": "No",
+          "not_tool": "Not a tool"
+        }
+      },
+      "switches": {
+        "title": "Admin switches",
+        "onlyAdmins": "Only Admins change these",
+        "managerExecute": "Managers can publish, open PRs and send external email after the click",
+        "managerExecuteNote": "EXECUTE always needs a click, whoever runs it",
+        "fullAuto": "Members can use Full auto",
+        "fullAutoNote": "Chat makes routine changes without asking each time",
+        "on": "On",
+        "off": "Off",
+        "offFor": "Off for {groups}",
+        "needsPlan": "Needs {plan}",
+        "setBy": "Set by {name}",
+        "groups": {
+          "publishing": "publishing",
+          "email_outreach": "email and outreach",
+          "code_prs": "pull requests",
+          "feeds": "feed pushes"
+        }
+      }
+    },
+    "askAdmin": {
+      "button": "Ask your Admin",
+      "title": "Ask your Admin",
+      "lead": "Your Admins get this in Settings › Team › Roles & access. They can change your role, or make the change themselves.",
+      "label": "What do you need?",
+      "send": "Send",
+      "cancel": "Cancel",
+      "sent": "Sent to your Admins",
+      "tooMany": "You have {count} requests waiting. Withdraw one, or wait for your Admins.",
+      "dailyLimit": "You've sent {count} requests today. Try again tomorrow.",
+      "alreadyToday": "You already asked for this today.",
+      "failed": "Couldn't send it. Try again.",
+      "defaults": {
+        "role": "Change my role so I can make changes in this workspace",
+        "plan": "Upgrade to {plan}"
+      },
+      "roleDetail": "Your role is {role}.",
+      "planDetail": "Needs {plan} · you're on {current}"
+    },
+    "requests": {
+      "title": "Requests",
+      "yours": "Your requests",
+      "lead": "Ask your Admin requests from Chat and Settings. The first Admin who acts decides it.",
+      "leadYours": "What you asked your Admins for, and what they decided.",
+      "empty": "No requests.",
+      "emptyYours": "You haven't asked for anything.",
+      "from": "From {name}",
+      "approve": "Approve",
+      "dismiss": "Dismiss",
+      "withdraw": "Withdraw",
+      "approved": "Approved. Change their role in Members, or make the change yourself.",
+      "dismissed": "Dismissed",
+      "withdrawn": "Withdrawn",
+      "alreadyDecided": "Another Admin already decided it.",
+      "failed": "Couldn't update it. Try again.",
+      "status": {
+        "pending": "Waiting",
+        "approved": "Approved",
+        "rejected": "Dismissed",
+        "withdrawn": "Withdrawn"
+      }
+    },
+    "yourAccess": {
+      "title": "Your access",
+      "brands": "Brands",
+      "actsAsYou": "Chat acts as you",
+      "yourRole": "Your role: {role}",
+      "rows": {
+        "read": "Read data, ask Chat, files for yourself",
+        "personal": "Personal memory and in-app watch rules",
+        "workspace": "Actions, prompts, drafts, schedules",
+        "agents": "Create triggered agents",
+        "execute": "Publish, open a PR, external email",
+        "settings": "Billing, team, tool policy, connections, keys"
+      },
+      "values": {
+        "yes": "Yes",
+        "yes_card": "Yes · approval card",
+        "after_click": "After your click",
+        "after_click_except": "After your click, except {groups}",
+        "execute_off": "Off: an Admin turned it off for Managers",
+        "ask_admin": "Ask your Admin"
+      },
+      "seeRoles": "See what each role can do",
+      "seeCapabilities": "What Chat can do"
+    },
+    "capabilities": {
+      "title": "What Chat can do",
+      "areas": "{count, plural, one {# area} other {# areas}}",
+      "lead": "Every tool Chat may use, by area: what it reads, what it may change, and who may change it. Anything not listed here, Chat doesn't do.",
+      "search": "Search areas or actions",
+      "filters": {
+        "all": "All",
+        "write": "Has WRITE",
+        "execute": "Has EXECUTE",
+        "read": "Read only"
+      },
+      "columns": {
+        "area": "Area",
+        "read": "Read",
+        "write": "Write",
+        "execute": "Execute",
+        "who": "Who can change"
+      },
+      "legend": {
+        "none": "No approval",
+        "card": "Approval card",
+        "auto": "Can auto-run in Full auto",
+        "click": "Needs your click"
+      },
+      "readAll": "Read: all roles",
+      "locked": "Needs {plan}",
+      "empty": "No area matches your search.",
+      "areaNames": {
+        "account": "Account",
+        "usage": "AI usage",
+        "brands": "Brands",
+        "visibility": "Visibility",
+        "prompts": "Prompts",
+        "topics": "Topics",
+        "mentions": "Mentions",
+        "citations": "Citations",
+        "competitors": "Competitors",
+        "product_visibility": "Product Visibility",
+        "ai_traffic": "AI Referral Traffic",
+        "site_audit": "Site Audit",
+        "action_center": "Action Center",
+        "content": "Content",
+        "reports": "Reports"
+      }
+    }
+  },
   "chatActivity": {
     "summary": {
       "saveDraft": "Saved the draft “{title}”",
@@ -3237,6 +3610,8 @@
       "opportunityStatusUndo": "Put the opportunity “{title}” back as it was",
       "dismissSuggestion": "Dismissed the prompt suggestion “{text}”",
       "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
+      "askAdmin": "Asked your Admins: “{asked}”",
+      "askAdminUndo": "Withdrew the request “{asked}”",
       "accessDenied": "Not allowed: {tool}"
     },
     "undo": {
@@ -3957,7 +4332,23 @@
       "lastRun": "Last run"
     },
     "appearedIn": "Appeared in {visible} of {active, plural, one {# prompt} other {# prompts}}",
-    "openDetails": "Open topic details"
+    "openDetails": "Open topic details",
+    "rowMenu": {
+      "label": "Actions for {name}",
+      "delete": "Delete topic"
+    },
+    "delete": {
+      "title": "Delete the topic \"{name}\"?",
+      "counting": "Counting the prompts in this topic…",
+      "prompts": "{count, plural, =0 {No prompts are in this topic.} one {# prompt is in this topic. It isn't deleted: it keeps its tracking and results, and moves to prompts without a topic.} other {# prompts are in this topic. They aren't deleted: they keep their tracking and results, and move to prompts without a topic.}}",
+      "promptsKept": "Its prompts aren't deleted: they keep their tracking and results, and move to prompts without a topic.",
+      "undoHint": "You can undo for 10 seconds.",
+      "keep": "Keep it",
+      "confirm": "Delete topic",
+      "deleted": "Topic deleted",
+      "undo": "Undo",
+      "failed": "Couldn't delete \"{name}\", so it's back in the list."
+    }
   },
   "contentEditor": {
     "publish": {
@@ -9131,6 +9522,7 @@
     "general": "General",
     "apiKeys": "API Keys",
     "team": "Team",
+    "rolesAccess": "Roles & access",
     "menuAccess": {
       "title": "Menu access",
       "new": "New",
@@ -9305,6 +9697,8 @@
     "signOut": "Sign out",
     "billingDescription": "Manage your subscription and billing details.",
     "currentPlan": "Current Plan",
+    "noPlanYet": "No plan yet",
+    "noPlanYetHint": "Your brands are saved. Tracking starts once you choose a plan below.",
     "month": "mo",
     "year": "yr",
     "renewsOn": "Renews on {date}",
@@ -9347,6 +9741,7 @@
     "choosePlanTitle": "Choose a plan",
     "choosePlanFor": "Choose {plan}",
     "planEnded": "Your plan isn't active. Choose one to start it again; you'll pay on Stripe's secure checkout.",
+    "planNotStarted": "Buy a plan now, or try one free for {days} days first. Either way you add a card on Stripe's secure checkout.",
     "checkoutFailed": "Couldn't open the checkout. Try again.",
     "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
     "seeAllPlanFeatures": "See everything each plan includes",
@@ -9905,6 +10300,26 @@
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
+    "integrations_comingSoon": "Coming soon",
+    "demoIntegrations": {
+      "sampleData": "Sample data",
+      "shopify": {
+        "label": "Shopify",
+        "description": "Your Shopify store's products, for Product Visibility and its pages."
+      },
+      "wordpress": {
+        "label": "WordPress",
+        "description": "Where Send to CMS puts a brand's pages on your WordPress site."
+      },
+      "framer": {
+        "label": "Framer",
+        "description": "Where Send to CMS puts a brand's pages on your Framer site."
+      },
+      "wix": {
+        "label": "Wix",
+        "description": "Where Send to CMS puts a brand's pages on your Wix site."
+      }
+    },
     "integrations_disconnect": "Disconnect",
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",
@@ -10101,6 +10516,7 @@
       "deleteButton": "Delete Brand Permanently",
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
+      "demoCantDelete": "The demo brand can't be deleted; hide it from the brand menu instead.",
       "conversions": {
         "title": "Conversions from AI visits",
         "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",

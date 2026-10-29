@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -12,23 +14,42 @@ let calls: { fn: string; args: Record<string, unknown> }[] = [];
 let windowRows: Record<string, unknown>[] | 'missing' = [];
 let fixedRows: Record<string, unknown>[] = [];
 
+// The signed-in member's role, for deleteTopic.
+let role: string | null = 'admin';
 const tables: Record<string, unknown[]> = {
-  topics: [{ id: 't1', name: 'Espresso', created_at: '2026-01-01T00:00:00Z' }],
+  topics: [{ id: 't1', name: 'Espresso', brand_id: 'b1', created_at: '2026-01-01T00:00:00Z' }],
   prompt_sets: [{ id: 's1' }],
   prompts: [
     { id: 'p1', topic_id: 't1' },
     { id: 'p2', topic_id: 't1' },
   ],
 };
+/** Every delete and update asked for, by table. */
+let writes: { table: string; op: string }[] = [];
 
-/** A query builder whose every call chains, resolving to the table's rows. */
+/**
+ * A query builder whose every call chains, resolving to the table's rows
+ * (single and maybeSingle to the first one).
+ */
 function query(table: string): unknown {
-  const result = { data: tables[table] ?? [], error: null };
+  const rows = table === 'profiles' ? [{ role }] : (tables[table] ?? []);
+  const resolveTo = (data: unknown) => ({
+    then: (resolve: (value: unknown) => void) => resolve({ data, error: null }),
+  });
   const builder: unknown = new Proxy(
     {},
     {
-      get: (_, prop) =>
-        prop === 'then' ? (resolve: (value: unknown) => void) => resolve(result) : () => builder,
+      get: (_, prop) => {
+        if (prop === 'then') return resolveTo(rows).then;
+        if (prop === 'single' || prop === 'maybeSingle') return () => resolveTo(rows[0] ?? null);
+        if (prop === 'delete' || prop === 'update') {
+          return () => {
+            writes.push({ table, op: prop });
+            return builder;
+          };
+        }
+        return () => builder;
+      },
     },
   );
   return builder;
@@ -36,6 +57,7 @@ function query(table: string): unknown {
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
+    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: (table: string) => query(table),
     rpc: async (fn: string, args: Record<string, unknown>) => {
       calls.push({ fn, args });
@@ -72,6 +94,8 @@ const shared = {
 
 beforeEach(() => {
   calls = [];
+  writes = [];
+  role = 'admin';
   const today = new Date().toISOString().slice(0, 10);
   windowRows = [
     {
@@ -151,5 +175,37 @@ describe('topic names', () => {
     await expect(createTopics('b1', ['Espresso', long])).rejects.toThrow('100 characters');
     // Spaces around it don't count.
     await expect(createTopic('b1', ` ${'x'.repeat(100)} `)).resolves.toBeDefined();
+  });
+});
+
+describe('deleteTopic', () => {
+  it('lets an admin or a manager delete a topic, and never deletes its prompts', async () => {
+    const { deleteTopic } = await import('./topic');
+    for (const r of ['admin', 'manager']) {
+      role = r;
+      writes = [];
+      await expect(deleteTopic('t1')).resolves.toBeUndefined();
+      expect(writes).toContainEqual({ table: 'topics', op: 'delete' });
+      expect(writes).not.toContainEqual({ table: 'prompts', op: 'delete' });
+    }
+  });
+
+  it('refuses an analyst or an agency partner before anything is written', async () => {
+    const { deleteTopic } = await import('./topic');
+    for (const r of ['analyst', 'agency_partner', null]) {
+      role = r;
+      await expect(deleteTopic('t1')).rejects.toThrow(
+        'Only an admin or a manager can delete topics.',
+      );
+    }
+    expect(writes).toEqual([]);
+  });
+
+  it("keeps the topic's prompts in the database: their topic is set to none", () => {
+    // The delete leans on this rule to keep the prompts and their results.
+    const schema = readFileSync(join(__dirname, '../../../../supabase/schema.sql'), 'utf8');
+    expect(schema).toMatch(
+      /"prompts_topic_id_fkey" FOREIGN KEY \("topic_id"\) REFERENCES "public"\."topics"\("id"\) ON DELETE SET NULL/,
+    );
   });
 });

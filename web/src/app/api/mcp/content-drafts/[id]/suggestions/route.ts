@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import { suggestContentChangesFor } from '@/lib/mcp/content';
 import { contentUuid, suggestionsShape } from '@/lib/mcp/content-schemas';
 
@@ -17,6 +18,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('suggest_content_changes', auth.organizationId, {
+      draft_id: id,
+    });
+    if (refused) return refused;
     const result = await suggestContentChangesFor(auth, id, parsed.data.suggestions);
     if (result === 'published') {
       return NextResponse.json(

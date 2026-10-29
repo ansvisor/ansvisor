@@ -209,7 +209,11 @@ export async function refreshImproveOutcome(action, { now = new Date() } = {}) {
 export async function sweepImproveOutcomes({ now = new Date() } = {}) {
   const { data: actions, error } = await supabaseAdmin
     .from('actions')
-    .select('id, brand_id, status, payload, baseline, completed_at, position_outcome')
+    .select(
+      'id, brand_id, status, payload, baseline, completed_at, position_outcome, brands!inner(is_demo)',
+    )
+    // A demo brand's actions (00380) are sample data, measured as written.
+    .eq('brands.is_demo', false)
     .eq('kind', 'prompt_improve')
     .in('status', [...OPEN, 'completed'])
     .or('position_outcome.is.null,position_outcome->>final.neq.true')
