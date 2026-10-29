@@ -2983,6 +2983,59 @@
     "planGateTitle": "Agent is a {plan} feature",
     "planGateBody": "Upgrade your plan to chat with your dashboard about visibility, competitors, citations, and content gaps."
   },
+  "chatTools": {
+    "profile": { "name": "Read your profile", "step": "Read your profile" },
+    "aiUsage": { "name": "Read AI usage", "step": "Read AI usage" },
+    "brands": { "name": "Read brands", "step": "Read Brands" },
+    "visibility": { "name": "Read visibility", "step": "Read Visibility" },
+    "visibilityTrend": { "name": "Read the visibility trend", "step": "Read Visibility trend" },
+    "trackedPrompts": { "name": "Read tracked prompts", "step": "Read Prompts" },
+    "promptPerformance": {
+      "name": "Read prompt performance",
+      "step": "Read Prompt performance"
+    },
+    "promptSuggestions": {
+      "name": "Read prompt suggestions",
+      "step": "Read Prompt Suggestions"
+    },
+    "promptVolumes": { "name": "Read prompt volumes", "step": "Read Prompt volumes" },
+    "topics": { "name": "Read topics", "step": "Read Topics" },
+    "mentionsSummary": { "name": "Read the mentions summary", "step": "Read Mentions" },
+    "mentions": { "name": "Read mentions", "step": "Read Mentions" },
+    "citations": { "name": "Read citations", "step": "Read Citations" },
+    "competitors": { "name": "Read competitors", "step": "Read Competitors" },
+    "competitorComparison": {
+      "name": "Compare competitors",
+      "step": "Read Competitors"
+    },
+    "productVisibility": { "name": "Read Product Visibility", "step": "Read Product Visibility" },
+    "aiReferralTraffic": {
+      "name": "Read AI Referral Traffic",
+      "step": "Read AI Referral Traffic"
+    },
+    "siteAudits": { "name": "Read Site Audits", "step": "Read Site Audit" },
+    "siteAuditIssues": { "name": "Read Site Audit issues", "step": "Read Site Audit" },
+    "actions": { "name": "Read Action Center actions", "step": "Read Action Center" },
+    "action": { "name": "Read an action", "step": "Read action" },
+    "signals": { "name": "Read signals", "step": "Read Signals" },
+    "actionHistory": { "name": "Read Action History", "step": "Read Action History" },
+    "contentOpportunities": {
+      "name": "Read content opportunities",
+      "step": "Read Content opportunities"
+    },
+    "drafts": { "name": "Read the Content Library", "step": "Read Library" },
+    "draft": { "name": "Read a draft", "step": "Read draft" },
+    "reports": { "name": "Read reports", "step": "Read Reports" },
+    "saveDraft": { "name": "Save drafts in Content", "step": "Saved draft in Content" },
+    "opportunityStatus": {
+      "name": "Review or dismiss opportunities",
+      "step": "Updated opportunity"
+    },
+    "dismissSuggestion": {
+      "name": "Dismiss prompt suggestions",
+      "step": "Dismissed prompt suggestion"
+    }
+  },
   "audit": {
     "title": "Site Audit",
     "description": "Score any page against the 48-signal AEO/GEO",
