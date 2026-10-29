@@ -13,7 +13,16 @@ import type { ShelfRow } from '@/lib/shopping/shelf';
  */
 
 const brandInOrg = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/mcp/data', () => ({ brandInOrg }));
+// The plan check and its answer are the other shopping reads' own.
+vi.mock('@/lib/mcp/data', async (importOriginal) => {
+  const data = await importOriginal<typeof import('@/lib/mcp/data')>();
+  return {
+    brandInOrg,
+    planIncludes: data.planIncludes,
+    NOT_IN_PLAN: data.NOT_IN_PLAN,
+    SHOPPING_NOT_IN_PLAN: data.SHOPPING_NOT_IN_PLAN,
+  };
+});
 
 // The organization's plan row, and a catalog product, as the service role reads them.
 const tables = vi.hoisted(() => ({
@@ -66,8 +75,9 @@ vi.mock('@/lib/actions/shopping-openai-index', () => ({ getOpenAiIndexRead }));
 const readCatalogSources = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/shopping/catalog-read', () => ({ readCatalogSources }));
 
-const { getProductAiSaysFor, getShoppingReadinessFor, getShoppingShelfFor, PLAN_LOCKED } =
+const { getProductAiSaysFor, getShoppingReadinessFor, getShoppingShelfFor } =
   await import('./product-visibility');
+const { NOT_IN_PLAN, planIncludes, SHOPPING_NOT_IN_PLAN } = await import('./data');
 
 const BRAND = '11111111-1111-1111-1111-111111111111';
 const PRODUCT = '22222222-2222-2222-2222-222222222222';
@@ -76,6 +86,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  role: 'admin',
 };
 
 const row = (over: Partial<ShelfRow>): ShelfRow => ({
@@ -187,13 +198,16 @@ describe('who may read it', () => {
 
   it('needs a plan with Product Visibility, as the page’s tabs do', async () => {
     tables.organizations[0].plan = 'starter';
-    expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toEqual(PLAN_LOCKED);
-    expect(await getShoppingReadinessFor(auth, { brandId: BRAND })).toEqual(PLAN_LOCKED);
-    expect(await getProductAiSaysFor(auth, { brandId: BRAND, productId: PRODUCT })).toEqual(
-      PLAN_LOCKED,
+    expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toBe(NOT_IN_PLAN);
+    expect(await getShoppingReadinessFor(auth, { brandId: BRAND })).toBe(NOT_IN_PLAN);
+    expect(await getProductAiSaysFor(auth, { brandId: BRAND, productId: PRODUCT })).toBe(
+      NOT_IN_PLAN,
     );
-    // A plan with it says which: the first one, by name.
-    expect(PLAN_LOCKED.message).toContain('Growth or above');
+    expect(shopping.getShoppingShelf).not.toHaveBeenCalled();
+    // The same check as the other shopping reads (list_shopping_cards,
+    // get_product_visibility), so a client gets one answer: plan_limit.
+    expect(await planIncludes('org-1', 'shopping_analytics')).toBe(false);
+    expect(SHOPPING_NOT_IN_PLAN.error).toBe('plan_limit');
   });
 
   it('reads on for a trial that ended, as the read-only page does, and on a self-hosted one', async () => {
@@ -206,7 +220,7 @@ describe('who may read it', () => {
     expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toMatchObject({ total: 0 });
     // Its own plan, ended, without Product Visibility stays locked.
     tables.organizations[0].plan = 'starter';
-    expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toEqual(PLAN_LOCKED);
+    expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toBe(NOT_IN_PLAN);
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toMatchObject({ total: 0 });
   });
@@ -239,7 +253,7 @@ describe('get_shopping_shelf', () => {
       total: 1,
       next_offset: null,
     });
-    expect(page && 'shelves' in page && page.shelves[0]).toEqual({
+    expect(page !== NOT_IN_PLAN && page && 'shelves' in page && page.shelves[0]).toEqual({
       prompt_id: 'q1',
       prompt: 'best trail running shoes',
       platform: 'chatgpt-shopping',
@@ -298,13 +312,13 @@ describe('get_shopping_shelf', () => {
       ),
     );
     const page = await getShoppingShelfFor(auth, { brandId: BRAND });
-    if (!page || !('shelves' in page)) throw new Error('no shelves');
+    if (!page || page === NOT_IN_PLAN || !('shelves' in page)) throw new Error('no shelves');
     expect(page).toMatchObject({ total: 60, next_offset: 10 });
     expect(page.shelves).toHaveLength(10);
     expect(page.shelves[0].products.map((p) => p.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(page.shelves[0].products_total).toBe(12);
     const most = await getShoppingShelfFor(auth, { brandId: BRAND, limit: 500 });
-    expect(most && 'shelves' in most && most.shelves).toHaveLength(50);
+    expect(most !== NOT_IN_PLAN && most && 'shelves' in most && most.shelves).toHaveLength(50);
   });
 
   it('says which of its products a shelf it isn’t on asks for most', async () => {
@@ -324,7 +338,9 @@ describe('get_shopping_shelf', () => {
       platforms: undefined,
       chatgptMarket: 'europe',
     });
-    expect(page && 'shelves' in page && page.shelves[0].why_not_you).toEqual({
+    expect(
+      page !== NOT_IN_PLAN && page && 'shelves' in page && page.shelves[0].why_not_you,
+    ).toEqual({
       product_id: 'p-ridge',
       title: 'Ridge Trail 2 Running Shoes',
       url: 'https://shop.example/p-ridge',
@@ -354,10 +370,17 @@ describe('get_shopping_shelf', () => {
       chatgptMarket: undefined,
     });
     // No catalog: no "Why not you?" to give.
-    expect(first && 'shelves' in first && first.shelves[0].why_not_you).toBeNull();
+    expect(
+      first !== NOT_IN_PLAN && first && 'shelves' in first && first.shelves[0].why_not_you,
+    ).toBeNull();
     const absent = await getShoppingShelfFor(auth, { brandId: BRAND, absentOnly: true, offset: 1 });
     expect(absent).toMatchObject({ total: 2, next_offset: null });
-    expect(absent && 'shelves' in absent && absent.shelves.map((s) => s.prompt_id)).toEqual(['b']);
+    expect(
+      absent !== NOT_IN_PLAN &&
+        absent &&
+        'shelves' in absent &&
+        absent.shelves.map((s) => s.prompt_id),
+    ).toEqual(['b']);
   });
 });
 
@@ -397,7 +420,7 @@ describe('get_shopping_readiness', () => {
       vi.fn(async () => Response.json({ success: true, config: { googleMerchantCenter: false } })),
     );
     let read = await getShoppingReadinessFor(auth, { brandId: BRAND });
-    if (!read || !('checks' in read)) throw new Error('no readiness');
+    if (!read || read === NOT_IN_PLAN || !('checks' in read)) throw new Error('no readiness');
     expect(read.checks.map((c) => c.key)).not.toContain('merchantCenter');
     vi.stubGlobal(
       'fetch',
@@ -406,7 +429,7 @@ describe('get_shopping_readiness', () => {
       }),
     );
     read = await getShoppingReadinessFor(auth, { brandId: BRAND });
-    if (!read || !('checks' in read)) throw new Error('no readiness');
+    if (!read || read === NOT_IN_PLAN || !('checks' in read)) throw new Error('no readiness');
     expect(read.checks.map((c) => c.key)).not.toContain('merchantCenter');
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/internal/integrations-config'),
@@ -419,7 +442,7 @@ describe('get_shopping_readiness', () => {
     expect(clients).toEqual([supabaseAdmin]);
     expect(readCatalogSources).toHaveBeenCalledWith(supabaseAdmin, BRAND);
     expect(getOpenAiIndexRead).toHaveBeenCalledWith(BRAND, '30d');
-    if (!read || !('checks' in read)) throw new Error('no readiness');
+    if (!read || read === NOT_IN_PLAN || !('checks' in read)) throw new Error('no readiness');
     expect(read.market).toBe('us');
     expect(read.unread).toEqual([]);
     expect(typeof read.score).toBe('number');
@@ -448,7 +471,7 @@ describe('get_shopping_readiness', () => {
     });
     expect(check('resellerCheaper')).toMatchObject({
       state: 'fail',
-      title: 'Reseller cheaper than you · 1 products',
+      title: 'Reseller cheaper than you · 1 product',
     });
     expect(check('amazonShare')).toBeUndefined();
     expect(read.channels).toEqual([
@@ -470,7 +493,7 @@ describe('get_shopping_readiness', () => {
     shopping.getShoppingOwnChannels.mockRejectedValue(new Error('timeout'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const read = await getShoppingReadinessFor(auth, { brandId: BRAND });
-    if (!read || !('checks' in read)) throw new Error('no readiness');
+    if (!read || read === NOT_IN_PLAN || !('checks' in read)) throw new Error('no readiness');
     expect(read.channels).toBeNull();
     expect(read.unread).toEqual(['channels']);
     expect(typeof read.score).toBe('number');
@@ -487,7 +510,7 @@ describe('get_shopping_readiness', () => {
       ],
     });
     const read = await getShoppingReadinessFor(auth, { brandId: BRAND });
-    if (!read || !('checks' in read)) throw new Error('no readiness');
+    if (!read || read === NOT_IN_PLAN || !('checks' in read)) throw new Error('no readiness');
     expect(read.checks.find((c) => c.key === 'wrongPrice')).toMatchObject({
       state: 'fail',
       detail: 'AI shows $99 for Ridge Trail 2, your price is $120.',
@@ -499,7 +522,7 @@ describe('get_shopping_readiness', () => {
     shopping.getShoppingProducts.mockRejectedValue(new Error('timeout'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const read = await getShoppingReadinessFor(auth, { brandId: BRAND, market: 'europe' });
-    if (!read || !('checks' in read)) throw new Error('no readiness');
+    if (!read || read === NOT_IN_PLAN || !('checks' in read)) throw new Error('no readiness');
     expect(getOpenAiIndexRead).not.toHaveBeenCalled();
     expect(read.market).toBe('europe');
     expect(read.score).toBeNull();
@@ -511,7 +534,7 @@ describe('get_shopping_readiness', () => {
   it("checks a brand with no market as the US's, without reading OpenAI's index for it", async () => {
     getBrandMarketCountries.mockResolvedValue(['BR']);
     const read = await getShoppingReadinessFor(auth, { brandId: BRAND });
-    if (!read || !('checks' in read)) throw new Error('no readiness');
+    if (!read || read === NOT_IN_PLAN || !('checks' in read)) throw new Error('no readiness');
     expect(read.market).toBe('us');
     expect(getOpenAiIndexRead).not.toHaveBeenCalled();
     expect(read.checks.map((c) => c.key)).not.toContain('openAiIndex');

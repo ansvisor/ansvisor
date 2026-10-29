@@ -25,9 +25,11 @@ vi.mock('@/lib/actions/competitor', () => ({ addCompetitor: vi.fn() }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
 const suggestTopics = vi.hoisted(() => vi.fn());
+const detectSiteType = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/ai-brand-setup', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai-brand-setup')>()),
   suggestTopics,
+  detectSiteType,
   generatePromptsFromTopics: vi.fn(),
   suggestCompetitors: vi.fn(),
 }));
@@ -66,6 +68,7 @@ beforeEach(() => {
     brand: { id: 'b1', name: 'Acme', domains: [{ domain: 'acme.com', isPrimary: true }] },
   });
   suggestTopics.mockResolvedValue({ topics: [] });
+  detectSiteType.mockResolvedValue({ siteType: null, industry: null });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -117,6 +120,7 @@ describe('the new brand page', () => {
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding brands needs a plan');
     expect(brandActions.createBrand).not.toHaveBeenCalled();
     expect(suggestTopics).not.toHaveBeenCalled();
+    expect(detectSiteType).not.toHaveBeenCalled();
   });
 
   it('creates the brand on an active plan', async () => {
@@ -127,5 +131,32 @@ describe('the new brand page', () => {
       expect.objectContaining({ organizationId: 'org-1', name: 'Acme' }),
     );
     expect(openUpgrade).not.toHaveBeenCalled();
+    // Its kind of site is read from its home page (Step 0), in the background.
+    expect(detectSiteType).toHaveBeenCalledExactlyOnceWith('b1');
+  });
+
+  it('takes the detected site type into the brand', async () => {
+    detectSiteType.mockResolvedValue({ siteType: 'ecommerce', industry: 'E-commerce & Retail' });
+    await render(false);
+    await reachCreate();
+    await clickContinue();
+    expect(store.updateBrand).toHaveBeenCalledWith('b1', {
+      siteType: 'ecommerce',
+      siteTypeSource: 'auto',
+      industry: 'E-commerce & Retail',
+    });
+  });
+
+  it('goes on to the topics when the detection fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    detectSiteType.mockRejectedValue(new Error('down'));
+    await render(false);
+    await reachCreate();
+    await clickContinue();
+    expect(suggestTopics).toHaveBeenCalled();
+    expect(store.updateBrand).not.toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({ siteType: expect.anything() }),
+    );
   });
 });

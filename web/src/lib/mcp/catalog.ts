@@ -10,7 +10,7 @@ import {
   readForIds,
 } from '@/lib/shopping/catalog-read';
 import { readiness, type ReadinessCheck } from '@/lib/shopping/products';
-import { brandInOrg } from './data';
+import { brandInOrg, planIncludes } from './data';
 
 /**
  * A brand's product catalog (#1263) for the MCP tools get_catalog_sources and
@@ -19,7 +19,10 @@ import { brandInOrg } from './data';
  * Visibility reads them (readCatalogProducts), each with its readiness for
  * AI shopping, its Google Merchant Center issues (00296) and the AI visits
  * and orders its page brought (00361). Read through the service role once
- * the brand is the key's.
+ * the brand is the key's. The readiness, the issues and the AI visits are
+ * Product Visibility's Products tab, so like that tab (and the other shopping
+ * reads) they need a plan with shopping analytics: on another plan they are
+ * null and only the products themselves are read.
  */
 
 /** A catalog source and its last sync, as Settings › Integrations › Catalog shows it. */
@@ -79,9 +82,10 @@ export interface McpCatalogProduct {
   has_gtin: boolean;
   /**
    * How ready it is for AI shopping, 0–100, the checks it misses, and those
-   * that can't be made (left out of the score).
+   * that can't be made (left out of the score). Null on a plan without
+   * shopping analytics, as are the issues and the AI visits below.
    */
-  readiness: { score: number; missing: ReadinessCheck[]; unknown: ReadinessCheck[] };
+  readiness: { score: number; missing: ReadinessCheck[]; unknown: ReadinessCheck[] } | null;
   /**
    * Google Merchant Center's issues on its offers by severity, each issue
    * (its code and attribute) once however many of its variants and
@@ -90,8 +94,8 @@ export interface McpCatalogProduct {
    */
   merchant_center_issues: McpIssueCounts | null;
   /** AI-referred visits to its page and the orders they led to, over the last 30 days. */
-  ai_visits_30d: number;
-  orders_30d: number;
+  ai_visits_30d: number | null;
+  orders_30d: number | null;
   /** Those orders' revenue, in their main currency; null without orders. */
   revenue_30d: number | null;
   revenue_currency: string | null;
@@ -134,13 +138,16 @@ const literal = (text: string) => text.replace(/[\\^$.*+?()[\]{}|]/g, (c) => `\\
 /**
  * A page of the brand's live catalog products, by title, each read as
  * Product Visibility reads it; `search` narrows to titles containing it.
- * Null for a brand outside the key's organization.
+ * Null for a brand outside the key's organization. Without shopping
+ * analytics in the plan, each product's readiness, issues and AI visits are
+ * null, and neither the issues nor the visits are read.
  */
 export async function listCatalogProductsFor(
   auth: McpAuthContext,
   params: { brandId: string; search?: string; limit?: number; offset?: number },
 ): Promise<McpCatalogPage | null> {
   if (!(await brandInOrg(auth, params.brandId))) return null;
+  const analytics = await planIncludes(auth.organizationId!, 'shopping_analytics');
   const limit = Math.min(Math.max(params.limit ?? PRODUCTS_DEFAULT, 1), PRODUCTS_MAX);
   const offset = Math.max(params.offset ?? 0, 0);
   const search = params.search?.trim();
@@ -172,17 +179,19 @@ export async function listCatalogProductsFor(
   const since = new Date(Date.now() - STATS_DAYS * 86_400_000).toISOString();
   const [catalog, issues, stats] = await Promise.all([
     readCatalogProducts(supabaseAdmin, params.brandId, ids),
-    issuesOf(params.brandId, ids),
-    readAllRpcRows<ProductAiStatsRow>(
-      (start, end) =>
-        supabaseAdmin
-          .rpc('catalog_product_ai_stats', { p_brand_id: params.brandId, p_from: since })
-          .order('product_id')
-          .range(start, end) as unknown as PromiseLike<{
-          data: ProductAiStatsRow[] | null;
-          error: { message: string } | null;
-        }>,
-    ),
+    analytics ? issuesOf(params.brandId, ids) : null,
+    analytics
+      ? readAllRpcRows<ProductAiStatsRow>(
+          (start, end) =>
+            supabaseAdmin
+              .rpc('catalog_product_ai_stats', { p_brand_id: params.brandId, p_from: since })
+              .order('product_id')
+              .range(start, end) as unknown as PromiseLike<{
+              data: ProductAiStatsRow[] | null;
+              error: { message: string } | null;
+            }>,
+        )
+      : [],
   ]);
   const statsOf = new Map(stats.map((row) => [row.product_id, row]));
   const byId = new Map(catalog.map((product) => [product.id, product]));
@@ -204,10 +213,10 @@ export async function listCatalogProductsFor(
         currency: product.currency,
         in_stock: product.inStock,
         has_gtin: product.hasGtin,
-        readiness: readiness(product),
+        readiness: analytics ? readiness(product) : null,
         merchant_center_issues: issues && (issues.get(id) ?? noIssues()),
-        ai_visits_30d: Number(stat?.ai_visits ?? 0),
-        orders_30d: Number(stat?.orders ?? 0),
+        ai_visits_30d: analytics ? Number(stat?.ai_visits ?? 0) : null,
+        orders_30d: analytics ? Number(stat?.orders ?? 0) : null,
         revenue_30d: stat?.revenue == null ? null : Number(stat.revenue),
         revenue_currency: stat?.currency ?? null,
       },

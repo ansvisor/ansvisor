@@ -1,7 +1,6 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { API_BASE_URL } from '@/config/api';
-import { PLANS, getMinimumPlanForFeature, hasFeature } from '@/config/plans';
 import {
   getProductAiSays,
   getResellerPriceAlerts,
@@ -16,7 +15,6 @@ import {
 } from '@/lib/actions/shopping';
 import { getBrandMarketCountries } from '@/lib/actions/shopping-market';
 import { getOpenAiIndexRead } from '@/lib/actions/shopping-openai-index';
-import { ORG_PLAN_COLUMNS, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { readCatalogSources } from '@/lib/shopping/catalog-read';
 import { defaultMarket, type ShoppingMarket } from '@/lib/shopping/markets';
@@ -33,7 +31,7 @@ import {
 import { whyNotYou } from '@/lib/shopping/shelf';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { dbClient, withDbClient } from '@/lib/supabase/scoped';
-import { brandInOrg } from './data';
+import { NOT_IN_PLAN, brandInOrg, planIncludes } from './data';
 
 /**
  * Product Visibility over MCP (plan B6b): the Shelf with "Why not you?", the
@@ -42,23 +40,6 @@ import { brandInOrg } from './data';
  * the key's, so the tools and the page can't drift apart. Like the page's
  * tabs they need a plan with Product Visibility (shopping_analytics).
  */
-
-/** A brand outside the key's organization reads as null; a plan without Product Visibility as this. */
-export interface PlanLocked {
-  error: 'plan';
-  message: string;
-}
-
-/** The first plan with Product Visibility, by its name ("Growth"). */
-const PV_PLAN = PLANS[getMinimumPlanForFeature('shopping_analytics')].name;
-
-export const PLAN_LOCKED: PlanLocked = {
-  error: 'plan',
-  message: `Product Visibility's Shelf, Readiness and What AI says need a plan with Product Visibility: ${PV_PLAN} or above.`,
-};
-
-export const isPlanLocked = (read: unknown): read is PlanLocked =>
-  typeof read === 'object' && read !== null && (read as Partial<PlanLocked>).error === 'plan';
 
 /** The windows a read takes, as the page's date filter. */
 export const PV_PERIODS: readonly ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
@@ -73,20 +54,17 @@ const asService = <T>(read: () => Promise<T>) =>
   withDbClient(supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>, read);
 
 /**
- * Null for another organization's brand, PLAN_LOCKED without Product
- * Visibility, else nothing in the way. The plan is the one the organization
- * is on, as the page reads it: a trial or subscription that ended leaves the
- * workspace read-only, its reads open.
+ * Null for another organization's brand, NOT_IN_PLAN without Product
+ * Visibility, else nothing in the way. The plan check is the other shopping
+ * reads' (planIncludes): the plan the organization is on, as the page reads
+ * it, so a trial or subscription that ended leaves the reads open.
  */
-async function access(auth: McpAuthContext, brandId: string): Promise<null | PlanLocked | true> {
+async function access(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<null | typeof NOT_IN_PLAN | true> {
   if (!(await brandInOrg(auth, brandId))) return null;
-  const { data, error } = await supabaseAdmin
-    .from('organizations')
-    .select(ORG_PLAN_COLUMNS)
-    .eq('id', auth.organizationId!)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return hasFeature(usagePlanFromOrgRow(data).plan, 'shopping_analytics') ? true : PLAN_LOCKED;
+  return (await planIncludes(auth.organizationId!, 'shopping_analytics')) ? true : NOT_IN_PLAN;
 }
 
 /**
@@ -183,7 +161,7 @@ export async function getShoppingShelfFor(
     limit?: number;
     offset?: number;
   },
-): Promise<McpShelfPage | PlanLocked | null> {
+): Promise<McpShelfPage | typeof NOT_IN_PLAN | null> {
   const allowed = await access(auth, params.brandId);
   if (allowed !== true) return allowed;
   const period = params.period ?? '30d';
@@ -333,7 +311,7 @@ const orNull = <T>(what: string, read: Promise<T>): Promise<T | null> =>
 export async function getShoppingReadinessFor(
   auth: McpAuthContext,
   params: { brandId: string; period?: ShoppingDatePreset; market?: ShoppingMarket },
-): Promise<McpReadiness | PlanLocked | null> {
+): Promise<McpReadiness | typeof NOT_IN_PLAN | null> {
   const allowed = await access(auth, params.brandId);
   if (allowed !== true) return allowed;
   const period = params.period ?? '30d';
@@ -426,7 +404,7 @@ export interface McpProductAiSays {
 export async function getProductAiSaysFor(
   auth: McpAuthContext,
   params: { brandId: string; productId: string; period?: ShoppingDatePreset },
-): Promise<McpProductAiSays | PlanLocked | null> {
+): Promise<McpProductAiSays | typeof NOT_IN_PLAN | null> {
   const allowed = await access(auth, params.brandId);
   if (allowed !== true) return allowed;
   const { data: product, error } = await supabaseAdmin

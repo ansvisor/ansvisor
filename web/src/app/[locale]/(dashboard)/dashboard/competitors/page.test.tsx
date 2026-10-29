@@ -14,6 +14,7 @@ const competitorActions = vi.hoisted(() => ({
   getCompetitors: vi.fn(),
   addCompetitor: vi.fn(),
   deleteCompetitor: vi.fn(),
+  getCompetitorTimeline: vi.fn(async () => ({ weeks: [], events: [] })),
 }));
 vi.mock('@/lib/actions/competitor', () => competitorActions);
 vi.mock('@/lib/actions/tracking', () => ({
