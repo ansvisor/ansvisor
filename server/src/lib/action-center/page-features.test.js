@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FEATURE_CHECKS, featureGaps, pageFeatures } from './page-features.js';
+import * as cheerio from 'cheerio';
+import { FEATURE_CHECKS, bodyText, featureGaps, pageFeatures } from './page-features.js';
 import { signalRegistry } from '../audit/signals/index.js';
 
 /**
@@ -70,5 +71,32 @@ describe('featureGaps', () => {
     expect(featureGaps([page(['tables'])], null)).toEqual([]);
     expect(featureGaps([page(['tables'])], page([]))).toEqual([]);
     expect(featureGaps([], null)).toEqual([]);
+  });
+});
+
+describe('reading a page AI cites, whatever it holds', () => {
+  it("reads the body's words as Site Audit does, its scripts, styles and drawings left out", () => {
+    const html =
+      '<html><head><title>T</title><style>a{}</style></head><body><h1>Hi</h1><script>x=1</script>' +
+      '<p>a <b>b</b> c</p><svg><text>no</text></svg><noscript>ns</noscript>' +
+      '<template><p>tp</p></template>tail</body></html>';
+    const removed = cheerio.load(html);
+    removed('script, style, noscript, template, svg').remove();
+    expect(bodyText(cheerio.load(html))).toBe(removed('body').text());
+    expect(bodyText(cheerio.load(html))).toBe('Hia b ctail');
+  });
+
+  it('reads a page of tens of thousands of empty styles in a second, not a minute', async () => {
+    const html = `<html><body>${PROSE}${'<style></style>'.repeat(100_000)}</body></html>`;
+    const started = Date.now();
+    expect(await pageFeatures('https://example.com/a', html)).not.toBeNull();
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('reads a page of tens of thousands of empty list items in seconds, not a minute', async () => {
+    const html = `<html><body>${PROSE}${'<li></li>'.repeat(40_000)}</body></html>`;
+    const started = Date.now();
+    expect(await pageFeatures('https://example.com/a', html)).not.toBeNull();
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 });
