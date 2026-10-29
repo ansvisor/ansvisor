@@ -8,6 +8,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import {
   GETTING_STARTED_STEPS,
   buildGettingStarted,
@@ -19,7 +20,7 @@ import { assertWritable } from '@/lib/subscription-guard';
 
 /** The brand's steps, or null for a brand the caller can't see. */
 export async function getGettingStarted(brandId: string): Promise<GettingStartedStatus | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('getting_started_facts', { p_brand_id: brandId });
   if (error) throw new Error(error.message);
   const facts = parseGettingStartedFacts(data);

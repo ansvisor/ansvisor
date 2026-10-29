@@ -16,6 +16,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import {
   DEFAULT_KPI_SET,
   KPI_REGISTRY,
@@ -156,7 +157,7 @@ async function fetchWindowMetrics(
 }
 
 async function fetchDailyInsightTotals(brandId: string) {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const days = Array.from({ length: TREND_DAYS }, (_, i) => daysAgo(TREND_DAYS - 1 - i));
   const rows = await Promise.all(
     days.map(async (day) => {
@@ -308,7 +309,7 @@ export async function getKpiSnapshots(
   brandId: string,
   window?: KpiWindow,
 ): Promise<KpiSnapshotsResult> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase
     .from('kpi_definitions')
     .select('kpi_key, target, timeframe, is_active')

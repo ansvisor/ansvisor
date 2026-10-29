@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { addPromptToSet } from '@/lib/actions/prompt';
 import { API_BASE_URL } from '@/config/api';
 import { FANOUT_MIN_SILENT_ANSWERS, FANOUT_SHARING_PLATFORMS } from '@/config/fanout-platforms';
@@ -236,7 +237,7 @@ export async function getQueryFanout(
   brandId: string,
   opts?: { days?: number; from?: string; to?: string },
 ): Promise<QueryFanoutData> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   // Clamp the window to a sane range so a crafted call can't force an
   // unbounded prompt_results scan + in-memory aggregation. The custom range
   // (#713) is clamped by the caller to the same ceiling, and re-clamped here
