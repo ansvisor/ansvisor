@@ -401,7 +401,7 @@ async function syncOnce(
         storeRequest &&
         typeof connector.syncOrders === 'function'
       ) {
-        const checkpointAt = new Date().toISOString();
+        const checkpointAt = at;
         const orderResult = await connector.syncOrders(source, {
           request: storeRequest,
           credentials,
