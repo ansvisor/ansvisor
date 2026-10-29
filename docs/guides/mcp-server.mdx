@@ -301,7 +301,7 @@ curl "https://app.ansvisor.com/api/mcp/mentions/summary?brand_id=<brand_id>&plat
 | --- | --- | --- |
 | `list_content_opportunities` | Content gaps ranked by opportunity score — where the brand is losing visibility. | |
 | `get_content_opportunity` | Full details for one opportunity, including metrics, intent, competitors, and any existing brief. | |
-| `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** |
+| `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** (admin, manager) |
 | `update_opportunity_status` | Move an opportunity through workflow states (`new`, `reviewed`, `sent`, `in_progress`, `done`, `dismissed`). Dismissing one, or moving a dismissed one back, needs an admin or a manager. | **yes** |
 
 ### Content Editor
@@ -347,7 +347,7 @@ Shopping analytics comes with the Growth plan and above. On Starter these tools 
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results, each with `net_of_control` (its change net of the brand's prompts it didn't touch, so a market-wide swing doesn't read as its effect) and `dismiss_reason` (`not_relevant`, `already_done`, `wrong_data` or `not_now`). | |
 | `get_action_scorecard` | What each kind of action did at the brand, as the History tab's scorecard shows it: completed and their results, `success_rate` (from three verdicts), `median_change_percent`, and dismissals by reason. Optional `date_from`. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
-| `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
+| `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** (admin, manager) |
 
 The scorecard is also available over REST: `GET /api/mcp/action-scorecard?brand_id=<brand_id>&date_from=2026-09-01`.
 
@@ -386,10 +386,10 @@ answers in plain English using the returned data.
 
 A key acts as the person who created it, with their role in the
 organization. `get_me` returns it. Day-to-day work is open to every role:
-reading, drafts and suggestions in the Content Editor, briefs, Site Audits,
-task progress and an opportunity's progress. Adding prompts or topics and
-dismissing are for admins and managers. Dismissing a prompt suggestion is open
-to analysts too. The tools marked with roles above refuse anyone else before
+reading, drafts and suggestions in the Content Editor, Site Audits, task
+progress and an opportunity's progress. Adding prompts or topics, dismissing,
+and work that costs AI (briefs and Improve actions) are for admins and
+managers. Dismissing a prompt suggestion is open to analysts too. The tools marked with roles above refuse anyone else before
 they change anything. The call fails with text like this:
 
 ```text

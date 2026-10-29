@@ -596,7 +596,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'generate_content_brief',
     {
       description:
-        'Generate a fresh AI-powered content brief for a specific content opportunity. WARNING: this triggers an LLM call (cost + latency) and ALWAYS re-generates, overwriting any existing brief on the opportunity. Use only after list_content_opportunities + get_content_opportunity and only when the user has explicitly asked to generate or refresh a brief for a specific opportunity — never as part of exploratory queries. To read an existing brief without an LLM call, use get_content_opportunity instead.',
+        'Generate a fresh AI-powered content brief for a specific content opportunity. WARNING: this triggers an LLM call (cost + latency) and ALWAYS re-generates, overwriting any existing brief on the opportunity. Use only after list_content_opportunities + get_content_opportunity and only when the user has explicitly asked to generate or refresh a brief for a specific opportunity — never as part of exploratory queries. To read an existing brief without an LLM call, use get_content_opportunity instead. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         opportunity_id: relaxedUuid.describe(
           'Content opportunity UUID, from list_content_opportunities.',
@@ -1355,7 +1355,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'create_improve_action',
     {
       description:
-        'Send Improve suggestions for one prompt to Action Center as a new `prompt_improve` action, one human task per suggestion — the same as the Positions panel\'s Improve tab "Send Actions". The prompt must already have an Improve suggestion set for this exact range (generated in the dashboard); otherwise it errors with "Generate suggestions for this range first". Needs a plan that includes Improve. Reuse the same idempotency_key when retrying: a repeated call returns the action the first one created (created: false) instead of a duplicate. It is a write logged under the API key\'s user — only fire on explicit user intent, never as part of an exploratory query.',
+        'Send Improve suggestions for one prompt to Action Center as a new `prompt_improve` action, one human task per suggestion — the same as the Positions panel\'s Improve tab "Send Actions". The prompt must already have an Improve suggestion set for this exact range (generated in the dashboard); otherwise it errors with "Generate suggestions for this range first". Needs a plan that includes Improve. Reuse the same idempotency_key when retrying: a repeated call returns the action the first one created (created: false) instead of a duplicate. It is a write logged under the API key\'s user — only fire on explicit user intent, never as part of an exploratory query. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         prompt_id: relaxedUuid.describe('Prompt UUID, from list_prompts.'),
         range: z
