@@ -331,3 +331,33 @@ export function capabilityAreas(catalog: readonly ToolCatalogEntry[]): Capabilit
   }
   return [...areas.values()];
 }
+
+/**
+ * What a tool does in Full auto, as Settings › Chat's last column says it
+ * (mockup #g-policy): a read runs, an EXECUTE waits for the click, a WRITE
+ * by its policy. Below Growth, Full auto isn't open: a WRITE always asks.
+ */
+export type FullAutoBehaviour =
+  | 'off'
+  | 'runs'
+  | 'click'
+  | 'card'
+  | 'always_card'
+  | 'auto_full_auto'
+  | 'auto_always';
+
+export function fullAutoBehaviour(
+  row: {
+    class: ToolClass;
+    policy: ToolPolicy;
+    flags: Pick<ToolCatalogEntry['flags'], 'alwaysCard'>;
+  },
+  fullAutoOpen: boolean,
+): FullAutoBehaviour {
+  if (row.policy === 'never') return 'off';
+  if (row.class === 'read') return 'runs';
+  if (row.class === 'execute') return 'click';
+  if (row.flags.alwaysCard) return 'always_card';
+  if (!fullAutoOpen || row.policy === 'ask') return 'card';
+  return row.policy === 'always' ? 'auto_always' : 'auto_full_auto';
+}
