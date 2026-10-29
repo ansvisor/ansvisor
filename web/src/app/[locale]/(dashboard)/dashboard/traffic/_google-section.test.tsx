@@ -35,6 +35,11 @@ vi.mock('./_page-prompts-dialog', () => ({
 
 // The untracked queries card has its own tests.
 vi.mock('./_untracked-queries', () => ({ UntrackedQueriesCard: () => null }));
+// The viewer: a manager unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ canManage: viewer.canManage }),
+}));
 
 const { GoogleSection } = await import('./_google-section');
 
@@ -88,6 +93,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  viewer.canManage = true;
   dialogPages.length = 0;
   getTrafficGooglePages.mockReset().mockResolvedValue(pages());
   container = document.createElement('div');
@@ -157,6 +163,15 @@ describe('GoogleSection', () => {
     );
     await act(async () => add!.click());
     expect(dialogPages.at(-1)).toBe('/faq');
+  });
+
+  it('says who adds prompts for a page, instead of Add prompts, to an analyst', async () => {
+    viewer.canManage = false;
+    await render();
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).not.toContain(
+      'Add prompts',
+    );
+    expect(text()).toContain('Ask an admin or a manager to add prompts.');
   });
 
   it('says how many more pages the export has', async () => {

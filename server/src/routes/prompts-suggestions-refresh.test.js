@@ -27,7 +27,7 @@ function table(name) {
       const brand = { id: 'b1', name: 'Acme', language: 'en', organization_id: 'o1' };
       return { data: brand, error: null };
     }
-    if (name === 'profiles') return { data: { organization_id: 'o1' }, error: null };
+    if (name === 'profiles') return { data: { organization_id: 'o1', role: 'admin' }, error: null };
     // The topic lookup for each suggestion finds one; the topic list is empty.
     if (name === 'topics') return { data: single ? { id: 't1' } : [], error: null };
     return { data: [], error: null };

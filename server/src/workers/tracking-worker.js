@@ -17,6 +17,7 @@ import { persistCitationRows } from '../lib/citation-rows.js';
 import {
   isUnknownCity,
   locationsForModels,
+  googleLocationFor,
   locationsForScraper,
   parseLocation,
 } from '../lib/locations.js';
@@ -347,9 +348,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     supportedLocations(locationsFor(prompt), scraperId, supportedCountries);
 
   // 4. Count total tasks: one per prompt × engine × location that engine can
-  // actually run. Google AIO / AI Mode have no sub-country mechanism, so
-  // their state locations collapse to one country-wide task — counting them
-  // per state would promise the progress bar work that is never submitted.
+  // actually run: a city only by Google's engines, a US state by every one.
   let totalTasks = 0;
   let unsupported = 0;
   for (const prompt of prompts) {
@@ -450,11 +449,13 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // brand's single state column (#691): different prompts can target
         // different places, and a brand-wide override would silently win
         // over them.
-        const { country, state, city } = parseLocation(t.region);
+        // Google's engines take a city or a US state as `location`, the AI
+        // endpoints a state as `state`; buildRequestBody gives each its own.
+        const { country, state } = parseLocation(t.region);
         return submitScraperTask(t.prompt.text, t.scraperId, country, {
           webhookUrl,
           state,
-          location: city?.google,
+          location: googleLocationFor(t.region),
         }).then((res) => ({
           ...res,
           meta: t,

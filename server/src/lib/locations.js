@@ -73,19 +73,11 @@ export const US_STATE_NAMES = {
 };
 
 /**
- * Scrapers with no sub-country targeting mechanism. Google AIO / AI Mode
- * locate through location/uule parameters Cloro's AI endpoints don't accept,
- * so a state code means nothing to them: they can only be run country-wide
- * (#691, carried over from #554). The web's location picker lists the same
- * engines (cities.test.js keeps them together).
- */
-export const COUNTRY_ONLY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
-
-/**
  * Scrapers that can ask from a city (PROMPT-015d): Google's, through the
  * provider's `location`. The others answer per country (or US state), so a
  * city code is skipped for them rather than run again country-wide. The
- * web's CITY_PLATFORMS is the same list (cities.test.js).
+ * web's CITY_PLATFORMS is the same list (cities.test.js). A US state they
+ * ask from through `location` too (googleLocationFor).
  */
 export const CITY_SCRAPERS = new Set(['google-aio', 'google-aimode']);
 
@@ -137,36 +129,31 @@ export function isUnknownCity(code) {
  * a city (CITY_SCRAPERS) and dropped for the rest: they answer per country,
  * and the prompt's country, when tracked, already runs them.
  *
- * Every code a state-capable engine can use survives as-is. For the
- * country-only engines the list collapses to its distinct countries, so a
- * prompt targeting California and Texas submits ONE country-wide Google task
- * instead of two identical ones — which would have doubled the spend and
- * written two rows differing only in a state label neither run honoured.
+ * Every other code survives as-is, a US state included: the AI endpoints
+ * take it as `state`, Google's engines as `location` (googleLocationFor).
+ * Until 2026-10 Google's engines ran a state country-wide, once per country.
  *
  * Order is preserved so task submission stays deterministic.
  */
 export function locationsForScraper(locations, scraperId) {
   const given = locationsForModels(locations);
   // A city is run only by the engines that can ask from one (PROMPT-015d).
-  const list = CITY_SCRAPERS.has(scraperId) ? given : given.filter((code) => !isCityCode(code));
-  if (!COUNTRY_ONLY_SCRAPERS.has(scraperId)) return list;
+  return CITY_SCRAPERS.has(scraperId) ? given : given.filter((code) => !isCityCode(code));
+}
 
-  const seen = new Set();
-  const collapsed = [];
-  for (const code of list) {
-    // A city is asked from the city itself; only states collapse to their country.
-    if (isCityCode(code)) {
-      if (!seen.has(code)) collapsed.push(code);
-      seen.add(code);
-      continue;
-    }
-    const { country } = parseLocation(code);
-    const key = country ?? '';
-    if (seen.has(key)) continue;
-    seen.add(key);
-    collapsed.push(country);
-  }
-  return collapsed;
+/**
+ * Where Google's engines (CITY_SCRAPERS) ask from, as the provider's
+ * `location` takes it: Google's canonical name of a city
+ * ("Los Angeles,California,United States", cities.js) or of a US state
+ * ("California,United States"); undefined for a country, which goes as
+ * `country` alone. Never sent with `state`: the Google endpoints take one
+ * place, and the AI endpoints' `state` isn't theirs.
+ */
+export function googleLocationFor(code) {
+  const { state, city } = parseLocation(code);
+  if (city) return city.google;
+  if (state) return `${US_STATE_NAMES[state]},United States`;
+  return undefined;
 }
 
 /**
