@@ -59,8 +59,9 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     if (!chatAgentic) return;
     let live = true;
     countPendingAccessRequests()
-      .then((count) => {
-        if (live) setPendingRequests(count);
+      .then((read) => {
+        // A failed count shows none: the list itself says it couldn't load.
+        if (live) setPendingRequests(read.ok ? read.count : 0);
       })
       .catch(() => {});
     return () => {

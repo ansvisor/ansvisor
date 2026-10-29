@@ -223,8 +223,9 @@ describe('listAccessRequests and countPendingAccessRequests', () => {
         ? { data: [{ id: OTHER, full_name: 'Taylor Brooks' }], error: null }
         : { data: { organization_id: ORG, role }, error: null };
     const listed = await listAccessRequests();
-    expect(listed?.isAdmin).toBe(true);
-    expect(listed?.requests.map((r) => [r.id, r.status, r.requester])).toEqual([
+    if (!listed.ok) throw new Error('expected a list');
+    expect(listed.isAdmin).toBe(true);
+    expect(listed.requests.map((r) => [r.id, r.status, r.requester])).toEqual([
       ['r1', 'pending', 'Taylor Brooks'],
       ['r2', 'approved', 'Taylor Brooks'],
     ]);
@@ -241,8 +242,19 @@ describe('listAccessRequests and countPendingAccessRequests', () => {
 
   it('counts the waiting requests for an Admin only', async () => {
     answers['chat_access_requests.count'] = { count: 3, error: null };
-    expect(await countPendingAccessRequests()).toBe(0);
+    expect(await countPendingAccessRequests()).toEqual({ ok: true, count: 0 });
     role = 'admin';
-    expect(await countPendingAccessRequests()).toBe(3);
+    expect(await countPendingAccessRequests()).toEqual({ ok: true, count: 3 });
+  });
+
+  it('answers a failed read in its result, never by throwing (#1777)', async () => {
+    role = 'admin';
+    answers['chat_access_requests.select'] = { data: null, error: { message: 'db down' } };
+    answers['chat_access_requests.count'] = { count: null, error: { message: 'db down' } };
+    expect(await listAccessRequests()).toEqual({ ok: false, failure: 'failed' });
+    expect(await countPendingAccessRequests()).toEqual({ ok: false, failure: 'failed' });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await listAccessRequests()).toEqual({ ok: false, failure: 'chat_off' });
+    expect(await countPendingAccessRequests()).toEqual({ ok: false, failure: 'chat_off' });
   });
 });

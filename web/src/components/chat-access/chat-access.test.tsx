@@ -68,7 +68,7 @@ beforeEach(() => {
     fn.mockReset();
   }
   listAccessRequests.mockReset();
-  listAccessRequests.mockResolvedValue({ isAdmin: false, requests: [] });
+  listAccessRequests.mockResolvedValue({ ok: true, isAdmin: false, requests: [] });
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -202,8 +202,11 @@ describe('YourAccessCard', () => {
 
 describe('RolesAccessSection', () => {
   it("is read-only for a Manager: no e-mails, no role picker, the switches' state", async () => {
-    getChatAccess.mockResolvedValue(access());
-    listRoleMembers.mockResolvedValue(members.map((m) => ({ ...m, email: null })));
+    getChatAccess.mockResolvedValue({ ok: true, access: access() });
+    listRoleMembers.mockResolvedValue({
+      ok: true,
+      members: members.map((m) => ({ ...m, email: null })),
+    });
     await render(<RolesAccessSection />);
     expect(text()).toContain("You're a Manager · read-only here");
     expect(text()).not.toContain('@');
@@ -218,19 +221,34 @@ describe('RolesAccessSection', () => {
   });
 
   it('gives an Admin the e-mails and a role picker for everyone but themselves', async () => {
-    getChatAccess.mockResolvedValue(access({ role: 'admin' }));
-    listRoleMembers.mockResolvedValue(members);
+    getChatAccess.mockResolvedValue({ ok: true, access: access({ role: 'admin' }) });
+    listRoleMembers.mockResolvedValue({ ok: true, members });
     await render(<RolesAccessSection />);
     expect(text()).not.toContain('read-only here');
     expect(text()).toContain('sam@ansvisor.example');
     expect(container.querySelectorAll('[aria-label="Role"]')).toHaveLength(1);
   });
 
-  it('says so when it cannot be read', async () => {
-    getChatAccess.mockRejectedValue(new Error('down'));
-    listRoleMembers.mockResolvedValue([]);
+  it('says so in plain words when it cannot be read, and reads again on Retry', async () => {
+    getChatAccess.mockResolvedValue({ ok: false, failure: 'failed' });
+    listRoleMembers.mockResolvedValue({ ok: true, members: [] });
     await render(<RolesAccessSection />);
     expect(text()).toContain("Couldn't load Roles & access");
+    getChatAccess.mockResolvedValue({ ok: true, access: access() });
+    await act(async () =>
+      [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry')!.click(),
+    );
+    expect(getChatAccess).toHaveBeenCalledTimes(2);
+    expect(text()).toContain('What each role can do');
+  });
+
+  it("says the requests couldn't load, apart from the rest of the page", async () => {
+    getChatAccess.mockResolvedValue({ ok: true, access: access() });
+    listRoleMembers.mockResolvedValue({ ok: true, members: [] });
+    listAccessRequests.mockResolvedValue({ ok: false, failure: 'failed' });
+    await render(<RolesAccessSection />);
+    expect(text()).toContain("Couldn't load the requests.");
+    expect(text()).toContain('What each role can do');
   });
 });
 
@@ -306,8 +324,8 @@ const button = (label: string, root: ParentNode = container) =>
 
 describe('Ask your Admin', () => {
   it('sends what the person needs, with the rule, after their click', async () => {
-    getChatAccess.mockResolvedValue(access());
-    listRoleMembers.mockResolvedValue([]);
+    getChatAccess.mockResolvedValue({ ok: true, access: access() });
+    listRoleMembers.mockResolvedValue({ ok: true, members: [] });
     requestAccess.mockResolvedValue({ ok: true, id: 'r1' });
     await render(<RolesAccessSection />);
     expect(requestAccess).not.toHaveBeenCalled();
@@ -365,9 +383,10 @@ describe('Requests', () => {
   });
 
   it("lets an Admin approve or dismiss a workspace's waiting request, with a count", async () => {
-    getChatAccess.mockResolvedValue(access({ role: 'admin' }));
-    listRoleMembers.mockResolvedValue([]);
+    getChatAccess.mockResolvedValue({ ok: true, access: access({ role: 'admin' }) });
+    listRoleMembers.mockResolvedValue({ ok: true, members: [] });
     listAccessRequests.mockResolvedValue({
+      ok: true,
       isAdmin: true,
       requests: [request(), request({ id: 'r2', status: 'approved' })],
     });
@@ -393,9 +412,10 @@ describe('Requests', () => {
   });
 
   it('lets anyone else withdraw their own waiting request', async () => {
-    getChatAccess.mockResolvedValue(access());
-    listRoleMembers.mockResolvedValue([]);
+    getChatAccess.mockResolvedValue({ ok: true, access: access() });
+    listRoleMembers.mockResolvedValue({ ok: true, members: [] });
     listAccessRequests.mockResolvedValue({
+      ok: true,
       isAdmin: false,
       requests: [request({ isYours: true })],
     });

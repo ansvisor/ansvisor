@@ -27,7 +27,7 @@ vi.mock('@/components/providers/chat-agentic-provider', () => ({
 vi.mock('@/lib/actions/organization', () => ({ updateAccountName: vi.fn() }));
 let pendingRequests = 0;
 vi.mock('@/lib/actions/chat-access-requests', () => ({
-  countPendingAccessRequests: async () => pendingRequests,
+  countPendingAccessRequests: async () => ({ ok: true, count: pendingRequests }),
 }));
 vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

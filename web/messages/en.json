@@ -3146,6 +3146,7 @@
       "roleChanged": "Role changed",
       "roleChangeFailed": "Couldn't change the role. Try again.",
       "loadError": "Couldn't load Roles & access. Try again in a moment.",
+      "retry": "Retry",
       "throughChat": {
         "admin": "Everything, incl. policy, keys, connections",
         "manager": "WRITE with approval · EXECUTE after click",
@@ -3263,6 +3264,8 @@
       "leadYours": "What you asked your Admins for, and what they decided.",
       "empty": "No requests.",
       "emptyYours": "You haven't asked for anything.",
+      "loadError": "Couldn't load the requests.",
+      "retry": "Retry",
       "from": "From {name}",
       "approve": "Approve",
       "dismiss": "Dismiss",
@@ -3434,6 +3437,8 @@
       "readAll": "Read: all roles",
       "locked": "Needs {plan}",
       "empty": "No area matches your search.",
+      "loadError": "Couldn't load what Chat can do. Try again in a moment.",
+      "retry": "Retry",
       "areaNames": {
         "account": "Account",
         "usage": "AI usage",

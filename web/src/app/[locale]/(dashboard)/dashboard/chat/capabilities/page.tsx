@@ -2,7 +2,10 @@ import { notFound } from 'next/navigation';
 import { getChatAccess } from '@/lib/actions/chat-access';
 import { capabilityAreas } from '@/lib/chat/access';
 import { registryCatalog } from '@/lib/chat/registry/tools';
-import { CapabilitiesView } from '@/components/chat-access/capabilities-view';
+import {
+  CapabilitiesUnavailable,
+  CapabilitiesView,
+} from '@/components/chat-access/capabilities-view';
 
 /**
  * "What Chat can do" (CHAT-20 §8, mockup #g-capabilities): every tool in
@@ -12,7 +15,9 @@ import { CapabilitiesView } from '@/components/chat-access/capabilities-view';
  * Chat on for the workspace.
  */
 export default async function ChatCapabilitiesPage() {
-  const access = await getChatAccess();
-  if (!access) notFound();
-  return <CapabilitiesView access={access} areas={capabilityAreas(registryCatalog())} />;
+  const result = await getChatAccess();
+  if (!result.ok && result.failure === 'chat_off') notFound();
+  // The database didn't answer: say so in plain words, with a way to try again.
+  if (!result.ok) return <CapabilitiesUnavailable />;
+  return <CapabilitiesView access={result.access} areas={capabilityAreas(registryCatalog())} />;
 }
