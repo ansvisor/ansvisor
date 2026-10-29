@@ -92,11 +92,17 @@ const createClient = vi.hoisted(() =>
 vi.mock('@/lib/supabase/server', () => ({ createClient }));
 
 const { createMcpServer } = await import('./server');
-const { PLAN_LOCKED } = await import('./product-visibility');
+const { SHOPPING_NOT_IN_PLAN } = await import('./data');
 
 /** A client talking to a server built for one request, as the MCP route builds it. */
 async function connect(organizationId = ORG) {
-  const server = createMcpServer({ userId: 'user-1', email: null, organizationId, apiKeyId: 'k' });
+  const server = createMcpServer({
+    userId: 'user-1',
+    email: null,
+    organizationId,
+    apiKeyId: 'k',
+    role: 'admin',
+  });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: 'test', version: '1.0.0' });
@@ -245,7 +251,9 @@ describe('Product Visibility over MCP, with the service role', () => {
     ] as const) {
       const result = await client.callTool({ name, arguments: args });
       expect(result.isError, name).toBe(true);
-      expect(text(result), name).toBe(PLAN_LOCKED.message);
+      // The answer list_shopping_cards and get_product_visibility give.
+      expect(JSON.parse(text(result)), name).toEqual(SHOPPING_NOT_IN_PLAN);
+      expect(JSON.parse(text(result)).error, name).toBe('plan_limit');
     }
     expect(new Set(db.reads.map((read) => read.table))).toEqual(
       new Set(['brands', 'organizations']),

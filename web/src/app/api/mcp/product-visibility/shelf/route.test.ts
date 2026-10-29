@@ -10,21 +10,19 @@ vi.mock('@/lib/mcp-auth', () => ({
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    role: 'admin',
   })),
 }));
-// The read is the test's; the plan answer and the parameter checks are the module's own.
-const PLAN_LOCKED = vi.hoisted(() => ({
-  error: 'plan' as const,
-  message: 'Needs Product Visibility.',
-}));
+// The read and the periods are the test's; the plan answer is lib/mcp/data's own (no
+// database is read).
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/mcp/product-visibility', () => ({
   getShoppingShelfFor,
-  PLAN_LOCKED,
   PV_PERIODS: ['7d', '30d', '90d', 'all'],
-  isPlanLocked: (read: unknown) => read === PLAN_LOCKED,
 }));
 
 const { GET } = await import('./route');
+const { NOT_IN_PLAN, SHOPPING_NOT_IN_PLAN } = await import('@/lib/mcp/data');
 
 const get = (query: string) =>
   GET(new Request(`http://localhost/api/mcp/product-visibility/shelf${query}`));
@@ -71,10 +69,12 @@ describe('GET /api/mcp/product-visibility/shelf', () => {
     expect(getShoppingShelfFor).not.toHaveBeenCalled();
     getShoppingShelfFor.mockResolvedValue(null);
     expect((await get('?brand_id=brand-2')).status).toBe(404);
-    getShoppingShelfFor.mockResolvedValue(PLAN_LOCKED);
+    getShoppingShelfFor.mockResolvedValue(NOT_IN_PLAN);
     const locked = await get('?brand_id=brand-1');
     expect(locked.status).toBe(403);
-    expect(await locked.json()).toEqual({ error: PLAN_LOCKED.message });
+    // The other shopping reads' answer, as the API's requireFeature gives it.
+    expect(await locked.json()).toEqual(SHOPPING_NOT_IN_PLAN);
+    expect(SHOPPING_NOT_IN_PLAN.error).toBe('plan_limit');
     getShoppingShelfFor.mockRejectedValue(new Error('timeout'));
     expect((await get('?brand_id=brand-1')).status).toBe(500);
   });

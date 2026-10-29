@@ -26,11 +26,21 @@
  *
  * Pure: the caller reads the signals and the prompts' demand and passes them
  * in. Alongside the score it returns the facts it rests on, from which the
- * app writes "Why this priority?" in the reader's language.
+ * app writes "Why this priority?" in the reader's language. Its scales, sum,
+ * past success and levels are the ones every screen's score shares
+ * (priority-core.js, learning D4).
  */
 
 import { resolve } from '../../config/action-engine.js';
-import { INTENT_WEIGHTS } from '../opportunity-limits.js';
+import {
+  INTENT_WEIGHTS,
+  clamp,
+  levelOf,
+  logScale,
+  pastSuccessOf as pastSuccessAt,
+  round,
+  weightedScore,
+} from '../priority-core.js';
 
 const DAY_MS = 86_400_000;
 
@@ -204,9 +214,6 @@ function realDemandOf(payloads, prompts) {
   return { level, floor };
 }
 
-const clamp01 = (n) => Math.min(1, Math.max(0, n));
-const round2 = (n) => Math.round(n * 100) / 100;
-
 /** What kind of change a finding is; a kind this table has not met counts as a gap. */
 function changeOf(kind) {
   return KIND_CHANGE[kind] ?? 'gap';
@@ -214,7 +221,7 @@ function changeOf(kind) {
 
 /** Demand on the shared log scale: 0 → 0, `demandFullAt` and above → 1. */
 function demandScale(value) {
-  return clamp01(Math.log10(1 + value) / Math.log10(1 + P.demandFullAt));
+  return logScale(value, P.demandFullAt);
 }
 
 /** The sum of the `demandTopTargets` largest values. */
@@ -345,7 +352,7 @@ function demandAndValue(payloads, signals, prompts) {
 function confidenceOf(signals) {
   const kinds = new Set(signals.map((s) => s.kind));
   const sources = new Set(signals.flatMap((s) => (Array.isArray(s.source) ? s.source : [])));
-  const value = clamp01(
+  const value = clamp(
     0.3 + 0.2 * Math.max(kinds.size - 1, 0) + 0.2 * Math.max(sources.size - 1, 0),
   );
   return { value, kinds: kinds.size, sources: sources.size };
@@ -374,7 +381,7 @@ function sentByHand(action) {
     return {
       change: 'gap',
       severity,
-      confidence: clamp01(0.3 + 0.15 * gaps.length),
+      confidence: clamp(0.3 + 0.15 * gaps.length),
       recoverability: 0.7,
       subject: { entity: 'platforms', count: gaps.length },
     };
@@ -440,6 +447,17 @@ function sentByHand(action) {
   return null;
 }
 
+/** The factors' weights, in the order they add up. */
+const WEIGHTS = {
+  impact: P.weightImpact,
+  demand: P.weightDemand,
+  severity: P.weightSeverity,
+  businessValue: P.weightBusinessValue,
+  confidence: P.weightConfidence,
+  recoverability: P.weightRecoverability,
+  recency: P.weightRecency,
+};
+
 /**
  * Past success (learning B4): from a kind's results at this brand, the
  * share that improved, shrunk toward the prior by a few imagined results,
@@ -448,20 +466,16 @@ function sentByHand(action) {
  * @param {{ improved?: number, results?: number } | undefined} track
  */
 export function pastSuccessOf(track) {
-  const improved = Math.max(0, Math.floor(Number(track?.improved) || 0));
-  const results = Math.max(improved, Math.floor(Number(track?.results) || 0));
-  const rate =
-    (improved + P.pastSuccessPseudoCount * P.pastSuccessPrior) /
-    (results + P.pastSuccessPseudoCount);
-  return { rate, points: (rate - P.pastSuccessPrior) * P.pastSuccessSwing, improved, results };
+  return pastSuccessAt(track, {
+    prior: P.pastSuccessPrior,
+    pseudoCount: P.pastSuccessPseudoCount,
+    swing: P.pastSuccessSwing,
+  });
 }
 
 /** The level a score falls in. */
 export function priorityLevel(score) {
-  if (score >= P.levelCritical) return 'critical';
-  if (score >= P.levelHigh) return 'high';
-  if (score >= P.levelMedium) return 'medium';
-  return 'low';
+  return levelOf(score, { critical: P.levelCritical, high: P.levelHigh, medium: P.levelMedium });
 }
 
 /**
@@ -538,16 +552,7 @@ export function scorePriority(
     recency,
   };
   const past = pastSuccessOf(track.get(action.kind));
-  const score = Math.round(
-    factors.impact * P.weightImpact +
-      factors.demand * P.weightDemand +
-      factors.severity * P.weightSeverity +
-      factors.businessValue * P.weightBusinessValue +
-      factors.confidence * P.weightConfidence +
-      factors.recoverability * P.weightRecoverability +
-      factors.recency * P.weightRecency +
-      past.points,
-  );
+  const score = Math.round(weightedScore(factors, WEIGHTS).total + past.points);
   const bounded = Math.min(100, Math.max(0, score));
 
   const p = action.payload ?? {};
@@ -577,13 +582,13 @@ export function scorePriority(
       sources: confidence.sources,
       // How its kind did here before (learning B4); null with nothing to go on.
       pastSuccess: past.results
-        ? { improved: past.improved, results: past.results, points: round2(past.points) }
+        ? { improved: past.improved, results: past.results, points: round(past.points) }
         : null,
       // Its rate only with a result behind it: with none, the prior would
       // read as a measured 0.5.
       factors: Object.fromEntries(
         Object.entries({ ...factors, ...(past.results ? { pastSuccess: past.rate } : {}) }).map(
-          ([k, v]) => [k, round2(v)],
+          ([k, v]) => [k, round(v)],
         ),
       ),
     },
