@@ -12,7 +12,8 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * no class here: it is simply no row.
  *
  * A row only describes; the approval precedence that reads it (plan, role,
- * policy, mode) is checked on the server when a run calls the tool.
+ * policy, mode) is checked on the server when a run calls the tool
+ * (lib/chat/precedence.ts).
  */
 
 /** What a call does (CHAT-20 §3): reads, changes data in Ansvisor, or goes live / leaves it. */
@@ -32,6 +33,33 @@ export type ToolPolicy = (typeof TOOL_POLICIES)[number];
 /** The policies a WRITE row may start at or be raised to, least automatic first. */
 export const WRITE_POLICIES = ['ask', 'ask_full_auto', 'always'] as const;
 export type WritePolicy = (typeof WRITE_POLICIES)[number];
+
+/**
+ * The go-live groups an Admin may switch off for Managers (CHAT-20 §4
+ * refinements): publishing, email and outreach, code and pull requests,
+ * product feeds. Every EXECUTE row is in one.
+ */
+export const EXECUTE_GROUPS = ['publishing', 'email_outreach', 'code_prs', 'feeds'] as const;
+export type ExecuteGroup = (typeof EXECUTE_GROUPS)[number];
+
+/** The tables whose rows name their brand, for a row whose input names an object, not a brand. */
+export const BRAND_LOOKUP_TABLES = [
+  'actions',
+  'content_drafts',
+  'content_opportunities',
+  'prompt_results',
+  'prompt_suggestions',
+  'site_audits',
+] as const;
+export type BrandLookupTable = (typeof BRAND_LOOKUP_TABLES)[number];
+
+/**
+ * Where a call's brand comes from, so the brand scope and the demo rule see
+ * it (CHAT-20 §15b): the input's brand_id, or the brand of the row the
+ * input's id names. A row about the person or the workspace (a profile,
+ * usage, the brand list) has none: brandOf null.
+ */
+export type BrandOf = { input: 'brand_id' } | { lookup: BrandLookupTable; idField: string };
 
 /** CHAT-20 §9 cost: C0 no model, C1 a scoped read, C2 a model writing step, C3 heavy. */
 export type CostClass = 'C0' | 'C1' | 'C2' | 'C3';
@@ -90,7 +118,15 @@ interface ToolFields<S extends z.ZodObject> {
   description: string;
   /** The lowest role that may call it: `analyst` means every role (CHAT-20 §20). */
   minRole: TeamRole;
+  /**
+   * Roles left out of a row open to every role, where the server and the
+   * database refuse them (an Agency partner dismissing a prompt suggestion).
+   * Never an Admin.
+   */
+  excludeRoles?: readonly TeamRole[];
   planGate: PlanGate | null;
+  /** Where a call's brand comes from; null for a row about no brand. */
+  brandOf: BrandOf | null;
   costClass: CostClass;
   /**
    * The key under `chatTools` in messages/en.json (`name` for Settings, `step`
@@ -117,15 +153,24 @@ type ClassFields =
       maxPolicy: WritePolicy;
       flags?: Partial<Pick<ToolFlags, 'alwaysCard' | 'costCard'>>;
     }
-  | { class: 'execute'; flags?: Partial<Pick<ToolFlags, 'costCard'>> };
+  | {
+      class: 'execute';
+      /** Its go-live group, which the Manager switch in Settings › Chat covers. */
+      executeGroup: ExecuteGroup;
+      flags?: Partial<Pick<ToolFlags, 'costCard'>>;
+    };
 
 export type ToolDefinition<S extends z.ZodObject> = ToolFields<S> & ClassFields;
 
-export type ChatTool<S extends z.ZodObject = z.ZodObject> = ToolFields<S> & {
+export type ChatTool<S extends z.ZodObject = z.ZodObject> = Omit<ToolFields<S>, 'excludeRoles'> & {
+  /** Roles left out of the row; empty for most. */
+  excludeRoles: readonly TeamRole[];
   class: ToolClass;
   defaultPolicy: ToolPolicy;
   maxPolicy: ToolPolicy;
   flags: ToolFlags;
+  /** An EXECUTE's go-live group; null on a read or a write. */
+  executeGroup: ExecuteGroup | null;
 };
 
 /** Ids for the rows' fixtures: any 8-4-4-4-12 hex id passes the inputs' uuid check. */
@@ -148,9 +193,26 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     adminMayTurnOff: false,
     ...def.flags,
   };
+  if (def.brandOf) {
+    const field = 'input' in def.brandOf ? def.brandOf.input : def.brandOf.idField;
+    if (!(field in def.inputSchema.shape)) {
+      throw new Error(`${def.name}: its brand comes from ${field}, which its input lacks`);
+    }
+  }
+  const excludeRoles = [...(def.excludeRoles ?? [])];
+  if (excludeRoles.length > 0 && (def.minRole !== 'analyst' || excludeRoles.includes('admin'))) {
+    throw new Error(`${def.name}: only a row open to every role leaves roles out, never an Admin`);
+  }
   if (def.class === 'read') {
     if (flags.alwaysCard) throw new Error(`${def.name}: a read has no approval card`);
-    return { ...def, defaultPolicy: 'on', maxPolicy: 'on', flags };
+    return {
+      ...def,
+      defaultPolicy: 'on',
+      maxPolicy: 'on',
+      flags,
+      excludeRoles,
+      executeGroup: null,
+    };
   }
   if (flags.adminMayTurnOff) throw new Error(`${def.name}: only a read is switched off`);
   if (def.class === 'execute') {
@@ -162,7 +224,10 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     ) {
       throw new Error(`${def.name}: an execute always needs the user's click`);
     }
-    return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags };
+    if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
+      throw new Error(`${def.name}: an execute belongs to a go-live group`);
+    }
+    return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags, excludeRoles };
   }
   if (def.class !== 'write') throw new Error('A tool is a read, a write or an execute');
   if (!WRITE_POLICIES.includes(def.defaultPolicy) || !WRITE_POLICIES.includes(def.maxPolicy)) {
@@ -174,5 +239,5 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
   if (flags.alwaysCard && def.maxPolicy !== 'ask') {
     throw new Error(`${def.name}: an always_card write never runs without a card`);
   }
-  return { ...def, flags };
+  return { ...def, flags, excludeRoles, executeGroup: null };
 }

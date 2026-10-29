@@ -14,6 +14,11 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
  * through their session, with the read-only workspace check those actions
  * already run. They need that session: a run with no request behind it
  * (a schedule, CHAT-12) can't call them as they are.
+ *
+ * minRole follows the role model of 2026-10-29: daily work (drafts, tasks,
+ * audits, reports) is open to every role; settings, deleting, adding prompts
+ * and costly work stay with Admins and Managers. Where the server leaves a
+ * role out of daily work, excludeRoles says so.
  */
 
 const BRAND = FIXTURE_IDS.brand;
@@ -28,8 +33,10 @@ export const WRITE_TOOLS = [
       "Save a page as a new draft in the brand's Content Library, as New content does: its title, page type, what it starts from (an opportunity, a tracked prompt, a topic, or content to optimize) and, when there is one, its HTML.",
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
-    minRole: 'manager',
+    // A draft is daily work; every member may already save one (content_drafts: member insert).
+    minRole: 'analyst',
     planGate: null,
+    brandOf: { input: 'brand_id' },
     costClass: 'C2',
     labelKey: 'saveDraft',
     route: '/dashboard/content/library',
@@ -84,8 +91,10 @@ export const WRITE_TOOLS = [
       'Mark a content opportunity reviewed, or dismiss it, optionally saying why (not relevant, or the wrong angle).',
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
+    // Dismissing is Admin and Manager work, as the server's content routes and RLS have it.
     minRole: 'manager',
     planGate: null,
+    brandOf: { lookup: 'content_opportunities', idField: 'opportunity_id' },
     costClass: 'C0',
     labelKey: 'opportunityStatus',
     route: '/dashboard/content',
@@ -115,8 +124,11 @@ export const WRITE_TOOLS = [
       'Dismiss a pending prompt suggestion so it leaves the suggestion list. Only when the user asked for that suggestion to go.',
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
-    minRole: 'manager',
+    // Admins, Managers and Analysts, as the server (#1763), MCP (#1762) and RLS allow.
+    minRole: 'analyst',
+    excludeRoles: ['agency_partner'],
     planGate: null,
+    brandOf: { lookup: 'prompt_suggestions', idField: 'suggestion_id' },
     costClass: 'C0',
     labelKey: 'dismissSuggestion',
     route: '/dashboard/prompts/suggestions',

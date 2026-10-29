@@ -1370,6 +1370,35 @@ export type Database = {
           },
         ]
       }
+      chat_auto_choices: {
+        Row: {
+          created_at: string
+          organization_id: string
+          tool_key: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          organization_id: string
+          tool_key: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          organization_id?: string
+          tool_key?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_auto_choices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_conversations: {
         Row: {
           archived_at: string | null
@@ -1581,6 +1610,44 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "chat_messages"
             referencedColumns: ["id", "conversation_id"]
+          },
+        ]
+      }
+      chat_settings: {
+        Row: {
+          dont_ask_again: boolean
+          full_auto_for_members: boolean
+          manager_execute_off: string[]
+          organization_id: string
+          tool_policies: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          dont_ask_again?: boolean
+          full_auto_for_members?: boolean
+          manager_execute_off?: string[]
+          organization_id: string
+          tool_policies?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          dont_ask_again?: boolean
+          full_auto_for_members?: boolean
+          manager_execute_off?: string[]
+          organization_id?: string
+          tool_policies?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5229,6 +5296,10 @@ export type Database = {
       }
       chat_text_array_distinct: {
         Args: { p_values: string[] }
+        Returns: boolean
+      }
+      chat_tool_policies_valid: {
+        Args: { p_policies: Json }
         Returns: boolean
       }
       citation_competitor_sources: {

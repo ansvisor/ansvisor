@@ -3180,6 +3180,39 @@
       "tickPop": "Pops in once"
     }
   },
+  "chatDenial": {
+    "asked": "You asked: {action}.",
+    "askedTarget": "You asked: {action} · {target}.",
+    "rule": {
+      "no_access": "You're not a member of this workspace now, so I can't act in it.",
+      "brand_scope": "I can only see the brands shared with you.",
+      "subscription_inactive": "This workspace's plan isn't active, so it's read-only: reading still works, but nothing can be changed, run or generated.",
+      "demo_brand": "This is the demo brand: its data is sample data, so it can't be changed or run. Make the change on your own brand.",
+      "policy_never": "An Admin turned “{action}” off for Chat.",
+      "execute_off": "An Admin turned {group, select, publishing {publishing} email_outreach {email and outreach} code_prs {pull requests} other {feed pushes}} off for Managers.",
+      "plan_locked": "This needs the {needs} plan. You're on {current}.",
+      "plan_locked_trial": "This isn't in the trial. It needs the {needs} plan.",
+      "forbidden_role": "Your role is {roleName}, and {rolePlural} can't do this."
+    },
+    "rolesPlural": {
+      "admin": "Admins",
+      "manager": "Managers",
+      "analyst": "Analysts",
+      "agency_partner": "Agency Partners"
+    },
+    "source": {
+      "roles": "Settings › Team › Roles & access",
+      "chat": "Settings › Chat",
+      "billing": "Settings › Billing"
+    },
+    "whoCan": {
+      "roles": "{roles} can do this.",
+      "brands": "Admins can share more brands with you.",
+      "noAccess": "Its Admins can add you to it.",
+      "choosePlan": "Admins can choose a plan.",
+      "demo": "No one: the demo brand keeps its sample data."
+    }
+  },
   "audit": {
     "title": "Site Audit",
     "description": "Score any page against the 48-signal AEO/GEO",
