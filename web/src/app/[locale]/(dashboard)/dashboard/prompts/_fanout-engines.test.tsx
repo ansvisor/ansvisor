@@ -22,7 +22,8 @@ const engine = (over: Partial<FanoutEngineCoverage>): FanoutEngineCoverage => ({
 });
 
 // Copilot shares; Perplexity usually does but went silent after Sep 29;
-// ChatGPT (since 2026-09-30, #1119) and Google's engines don't share.
+// ChatGPT's are sampled on some days (none in this window); Google's engines
+// don't share.
 const engines = [
   engine({}),
   engine({
@@ -77,9 +78,11 @@ describe('FanoutEngineStrip', () => {
       'All engines706',
       'Microsoft Copilot21% of answers · 706',
       'Perplexitynone since Sep 29',
+      // Sampled: an ordinary engine, neither flagged nor "not shared".
+      'ChatGPT0% of answers · 0',
     ]);
     // Never-sharing engines are labels, not filters.
-    expect(container.textContent).toContain('ChatGPT · not shared');
+    expect(container.textContent).not.toContain('ChatGPT · not shared');
     expect(container.textContent).toContain('Google AI Overviews · not shared');
     expect(container.textContent).toContain('Google Gemini · not shared');
 
@@ -87,7 +90,7 @@ describe('FanoutEngineStrip', () => {
     expect(onSelect).toHaveBeenCalledWith('perplexity-web');
   });
 
-  it('still lets ChatGPT filter a long window that holds its older searches', () => {
+  it('lets ChatGPT filter a window that holds its sampled searches', () => {
     render(
       <FanoutEngineStrip
         engines={[engine({ platform: 'chatgpt-web', answersWithFanout: 12, subQueries: 30 })]}
@@ -122,8 +125,9 @@ describe('FanoutEngineNotices', () => {
       'Perplexity usually shares the searches behind its answers, but none arrived since Sep 29.',
     );
     expect(container.textContent).toContain(
-      "ChatGPT, Google AI Overviews, and Google Gemini don't come with the searches behind their answers",
+      "Google AI Overviews and Google Gemini don't come with the searches behind their answers",
     );
+    expect(container.textContent).not.toContain('ChatGPT');
   });
 
   it('says nothing once every sharing engine shares again', () => {
@@ -136,7 +140,7 @@ describe('isSilentEngine', () => {
   it('is only an engine that shares searches, answered, and shared none', () => {
     expect(isSilentEngine(engines[1])).toBe(true);
     expect(isSilentEngine(engines[0])).toBe(false);
-    // ChatGPT no longer shares searches, so its none is no outage (#1119).
+    // ChatGPT's searches are sampled on some days, so its none is no outage.
     expect(isSilentEngine(engines[2])).toBe(false);
     expect(isSilentEngine(engines[3])).toBe(false);
     // Four answers with none is chance, not an outage.

@@ -11,6 +11,7 @@ import { credentialsConfigured } from './catalog/credentials.js';
 import { sendToWebflow } from './cms/webflow-delivery.js';
 import { sendToWordPress } from './cms/wordpress-delivery.js';
 import { sendToFramer } from './cms/framer-delivery.js';
+import { sendToWix } from './cms/wix-delivery.js';
 
 /**
  * Send to CMS, phase 1 (#1331): an admin or manager sends Content Editor
@@ -29,8 +30,9 @@ import { sendToFramer } from './cms/framer-delivery.js';
  *
  * Phase 2: a page can go to the brand's Webflow collection instead (00283,
  * cms/webflow-delivery.js), as a draft item, to its WordPress site (00294,
- * cms/wordpress-delivery.js), as a draft post, or to its Framer collection
- * (00295, cms/framer-delivery.js), as a draft item, under the same cap,
+ * cms/wordpress-delivery.js), as a draft post, to its Framer collection
+ * (00295, cms/framer-delivery.js), as a draft item, or to its Wix site's
+ * Blog (00372, cms/wix-delivery.js), as a draft post, under the same cap,
  * batches and delivery rows; a delivery says where it went (`target`).
  */
 
@@ -67,9 +69,9 @@ export const deliveryPage = z.object({
 
 /**
  * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
- * WordPress site or its Framer collection (phase 2).
+ * WordPress site, its Framer collection or its Wix site's Blog (phase 2).
  */
-const DELIVERY_TARGETS = ['webhook', 'webflow', 'wordpress', 'framer'];
+const DELIVERY_TARGETS = ['webhook', 'webflow', 'wordpress', 'framer', 'wix'];
 
 export const sendInput = z.object({
   // guid, not uuid: brand ids aren't all RFC 4122 versions (seeded ones).
@@ -84,7 +86,8 @@ export class DeliveryError extends Error {
    * @param {'no_webhook'|'webhook_not_subscribed'|'webflow_not_configured'|'no_webflow'|
    *   'webflow_refused'|'webflow_not_ready'|'wordpress_not_configured'|'no_wordpress'|
    *   'wordpress_refused'|'framer_not_configured'|'no_framer'|'framer_refused'|
-   *   'framer_not_ready'|'in_progress'|'not_found'|'daily_limit'} code
+   *   'framer_not_ready'|'wix_not_configured'|'no_wix'|'wix_refused'|'in_progress'|
+   *   'not_found'|'daily_limit'} code
    */
   constructor(code, message, status) {
     super(message);
@@ -334,11 +337,37 @@ async function framerFor(brandId) {
   return data;
 }
 
+/** The brand's Wix connection, its API key kept by the API (00372). */
+async function wixFor(brandId) {
+  if (!credentialsConfigured()) {
+    throw new DeliveryError('wix_not_configured', 'Wix is not set up on this server.', 503);
+  }
+  const { data, error } = await supabaseAdmin
+    .from('brand_cms_connections')
+    .select('id, brand_id, status, site_id, account, updated_at')
+    .eq('brand_id', brandId)
+    .eq('provider', 'wix')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new DeliveryError('no_wix', 'Connect Wix in Settings › Integrations.', 409);
+  }
+  if (data.status === 'auth_failed') {
+    throw new DeliveryError(
+      'wix_refused',
+      'Wix refused the API key. Connect it again in Settings › Integrations.',
+      409,
+    );
+  }
+  return data;
+}
+
 /** A CMS a page goes to itself, not through the webhook: its connection, and how a page is sent. */
 const NATIVE = {
   webflow: { label: 'Webflow', connect: webflowFor, send: sendToWebflow },
   wordpress: { label: 'WordPress', connect: wordpressFor, send: sendToWordPress },
   framer: { label: 'Framer', connect: framerFor, send: sendToFramer },
+  wix: { label: 'Wix', connect: wixFor, send: sendToWix },
 };
 
 async function brandFor(brandId) {

@@ -4,6 +4,7 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
+import { CONTENT_READ_MAX_TOKENS } from './content-brief.js';
 import {
   PAGE_READS_PER_DAY,
   QUALITY_CALLS_PER_DAY,
@@ -12,6 +13,7 @@ import {
 import { SOURCE_READS_PER_DAY, sourceClassModelId } from './content-source-class.js';
 import { logger } from './logger.js';
 import { reserveAiBudget } from './plan-guard.js';
+import { objectOptions } from './structured-output.js';
 
 /**
  * The claims in a draft's own words (Quality CE-045, spec §3: "Claim
@@ -184,7 +186,7 @@ async function readCall({ orgId, draftId, modelId, paragraphs }) {
   try {
     const generated = await generateObject({
       model: resolveModel(modelId),
-      schema: answerSchema,
+      ...objectOptions(modelId, answerSchema, { maxOutputTokens: CONTENT_READ_MAX_TOKENS }),
       system: SYSTEM_PROMPT,
       prompt: buildClaimsPrompt(paragraphs),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),

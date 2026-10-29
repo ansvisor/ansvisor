@@ -47,7 +47,7 @@ export interface PlanLimits {
    * Monthly USD budget for AI usage: Improve-tab model calls (Positions
    * panel, PROMPT-003), the Content Editor's AI and the Action Center's task
    * writing. Starter $5, Growth $25, Enterprise $50 (or more, set per
-   * customer), and $1 in the free trial (the server's rule); the billing cards
+   * customer), and $2 in the free trial (the server's rule); the billing cards
    * show them as multiples of Starter's. Enforced on the server from each
    * call's real token cost so it holds whichever model is configured.
    * -1 = unlimited (self-host).
@@ -179,7 +179,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: 10,
       // The workspace's one AI budget, in tiers the billing cards show as
       // multiples of Starter's: $5 here (1x), Growth $25 (5x), Enterprise $50
-      // or more, set per customer (2026-10-27); the server gives the free trial $1.
+      // or more, set per customer (2026-10-27); the server gives the free trial $2.
       improveMonthlyBudgetUsd: 5,
       // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.049,

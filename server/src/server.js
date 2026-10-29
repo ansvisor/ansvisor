@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
 
 import logger from './lib/logger.js';
+import { handleProcessErrors } from './lib/process-errors.js';
 import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
@@ -46,6 +47,7 @@ import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepFramerPublished } from './lib/cms/framer-status.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
+import { sweepWixPublished } from './lib/cms/wix-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -74,6 +76,9 @@ import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
 import { startModelPriceSync } from './lib/model-prices.js';
+
+// Before anything starts: a stray rejection is logged, not a crash.
+handleProcessErrors();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -380,6 +385,10 @@ async function runDailyTracking() {
   // And to Framer (00295), once a day too.
   sweepFramerPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[framer-status] daily sweep failed');
+  });
+  // And to Wix (00372), once a day too.
+  sweepWixPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wix-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
