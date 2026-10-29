@@ -56,6 +56,7 @@ const rows = [
 ];
 const onOpenCell = vi.fn();
 const onTrack = vi.fn();
+const onStopTracking = vi.fn();
 
 async function render(canTrack = true) {
   await act(async () => {
@@ -68,6 +69,7 @@ async function render(canTrack = true) {
           window={{ from: '2026-10-21T00:00:00Z' }}
           onOpenCell={onOpenCell}
           onTrack={canTrack ? onTrack : undefined}
+          onStopTracking={canTrack ? onStopTracking : undefined}
         />
       </NextIntlClientProvider>,
     );
@@ -101,6 +103,7 @@ beforeEach(() => {
   });
   onOpenCell.mockReset();
   onTrack.mockReset();
+  onStopTracking.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -174,9 +177,52 @@ describe('LocationMatrix', () => {
     expect(onTrack).toHaveBeenCalledWith(rows[1], 'TR');
   });
 
+  it('stops a location for the prompts shown from its column, and for one prompt from its cell', async () => {
+    await render();
+    const trigger = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Actions for Türkiye"]',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.map((i) => i.textContent)).toEqual(['Stop tracking in Türkiye']);
+    await act(async () => items[0].click());
+    expect(onStopTracking).toHaveBeenCalledWith(null, 'TR');
+
+    // Each tracked cell has its own, the counterpart of + Track, and it opens
+    // no Positions panel: the cell's own button is beside it, not under it.
+    const stop = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Stop tracking “best specialty coffee subscription” in United States"]',
+    )!;
+    expect(stop.title).toBe('Stop tracking here');
+    // Clickable only while it shows: a touch screen, with no hover, can't hit it unseen.
+    expect(stop.className).toContain('pointer-events-none');
+    expect(stop.className).toContain('group-hover/cell:pointer-events-auto');
+    expect(stop.className).toContain('focus-visible:pointer-events-auto');
+    await act(async () => stop.click());
+    expect(onStopTracking).toHaveBeenLastCalledWith(rows[0], 'US');
+    expect(onOpenCell).not.toHaveBeenCalled();
+    // An untracked cell has none, and neither has a prompt's last location.
+    expect(
+      container.querySelector(
+        'button[aria-label="Stop tracking “same day coffee delivery near me” in Türkiye"]',
+      ),
+    ).toBeNull();
+    expect(
+      container.querySelector(
+        'button[aria-label="Stop tracking “same day coffee delivery near me” in United States"]',
+      ),
+    ).toBeNull();
+    expect(container.querySelectorAll('button[aria-label^="Stop tracking “"]')).toHaveLength(2);
+  });
+
   it("offers no + Track to a member who can't edit, and says when nothing is tracked in a location", async () => {
     await render(false);
     expect(container.textContent).not.toContain('+ Track');
+    expect(container.querySelector('button[aria-label^="Stop tracking"]')).toBeNull();
+    expect(container.querySelector('button[aria-label^="Actions for"]')).toBeNull();
     act(() => root.unmount());
     root = createRoot(container);
     await act(async () => {

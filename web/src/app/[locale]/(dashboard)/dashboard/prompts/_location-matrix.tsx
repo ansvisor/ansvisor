@@ -2,8 +2,14 @@
 
 import { useEffect, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Clock, Lock } from 'lucide-react';
+import { Clock, Lock, MoreHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -217,7 +223,8 @@ function locationKind(code: string): 'country' | 'state' | 'city' {
  * location the brand tracks, side by side, for one metric at a time, in
  * Brand Visibility's Topics vs competitors shades. A cell opens the
  * prompt's Positions panel for that location; one the prompt isn't tracked
- * in offers + Track.
+ * in offers + Track, one it is (and not only there) offers Stop tracking
+ * here, and a location's column menu stops it for the prompts shown.
  */
 export function LocationMatrix({
   brandId,
@@ -226,6 +233,7 @@ export function LocationMatrix({
   window,
   onOpenCell,
   onTrack,
+  onStopTracking,
   onAddLocations,
 }: {
   brandId: string;
@@ -238,6 +246,11 @@ export function LocationMatrix({
   onOpenCell: (promptId: string, region: string) => void;
   /** Adds the location to the prompt; undefined for members who can't edit. */
   onTrack?: (prompt: Prompt, region: string) => void;
+  /**
+   * Opens stop tracking for the location, for one prompt or (null) the
+   * prompts shown; undefined for members who can't edit.
+   */
+  onStopTracking?: (prompt: Prompt | null, region: string) => void;
   /** Opens Track in more locations; undefined for members who can't edit. */
   onAddLocations?: () => void;
 }) {
@@ -411,7 +424,24 @@ export function LocationMatrix({
             <TableHead>{t('topic')}</TableHead>
             {regions.map((r) => (
               <TableHead key={r} className="min-w-[96px] text-center">
-                <span className="block text-xs font-medium text-foreground">{label(r)}</span>
+                <span className="flex items-center justify-center gap-0.5 text-xs font-medium text-foreground">
+                  {label(r)}
+                  {onStopTracking && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        aria-label={t('columnMenu', { location: regionLabel(r) })}
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuItem onClick={() => onStopTracking(null, r)}>
+                          {t('stopColumn', { location: regionLabel(r) })}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </span>
                 <span className="block text-[11px] font-normal text-muted-foreground">
                   {t(`kind.${locationKind(r)}`)}
                 </span>
@@ -508,9 +538,23 @@ export function LocationMatrix({
                       </TableCell>
                     );
                   }
+                  // The counterpart of + Track, on hover or keyboard focus; never
+                  // clickable unseen (a touch screen has no hover), and not on a
+                  // prompt's last location, which it keeps.
+                  const stop = onStopTracking && p.regions.some((code) => code !== r) && (
+                    <button
+                      type="button"
+                      aria-label={t('stopLabel', { prompt: p.text, location: where })}
+                      title={t('stop')}
+                      onClick={() => onStopTracking(p, r)}
+                      className="pointer-events-none absolute right-1.5 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full border bg-background text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/cell:pointer-events-auto group-hover/cell:opacity-100"
+                    >
+                      <X className="h-2.5 w-2.5" aria-hidden />
+                    </button>
+                  );
                   if (!cell || cell.runs === 0) {
                     return (
-                      <TableCell key={r} className="px-1 py-1.5 text-center">
+                      <TableCell key={r} className="group/cell relative px-1 py-1.5 text-center">
                         <LocationPending
                           prompt={p}
                           region={r}
@@ -518,11 +562,12 @@ export function LocationMatrix({
                           awaiting={awaiting}
                           className="w-full py-1.5"
                         />
+                        {stop}
                       </TableCell>
                     );
                   }
                   return (
-                    <TableCell key={r} className="px-1 py-1.5">
+                    <TableCell key={r} className="group/cell relative px-1 py-1.5">
                       <button
                         type="button"
                         aria-label={t('open', { prompt: p.text, location: where })}
@@ -534,6 +579,7 @@ export function LocationMatrix({
                       >
                         {v === null ? t('notNamed') : shown(v)}
                       </button>
+                      {stop}
                     </TableCell>
                   );
                 })}
