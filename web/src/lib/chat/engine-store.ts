@@ -95,6 +95,12 @@ export interface RunProgress {
   sources: Record<string, number>;
   timezone: string;
   brandId: string | null;
+  /**
+   * A read this run returned text from outside the workspace's own numbers
+   * (AI answers, cited pages, drafts, generated tasks): every change after
+   * it shows a card, in every mode (CHAT-20 §16a).
+   */
+  tainted?: boolean;
 }
 
 export function newProgress(timezone: string, brandId: string | null, phase: ChatPhase) {

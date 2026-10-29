@@ -14,11 +14,17 @@ const RUN = '33333333-3333-4333-8333-333333333333';
 const state = vi.hoisted(() => ({
   user: { id: 'user-1', email: 'me@example.com' } as { id: string; email: string } | null,
   org: '11111111-1111-4111-8111-111111111111' as string | null,
+  reads: 0,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: state.user } }) },
+    auth: {
+      getUser: async () => {
+        state.reads += 1;
+        return { data: { user: state.user } };
+      },
+    },
   }),
 }));
 vi.mock('@/lib/supabase/admin', () => ({
@@ -87,10 +93,18 @@ afterEach(() => vi.unstubAllEnvs());
 describe('the run routes', () => {
   it('are not there while Chat is off for the workspace', async () => {
     vi.stubEnv('CHAT_AGENTIC', 'false');
+    state.reads = 0;
     const res = await POST(post({ message: 'Hi' }));
     expect(res.status).toBe(404);
     expect(await res.json()).toMatchObject({ ok: false, failure: 'not_found' });
     expect((await STOP(new Request('http://localhost'), params(RUN))).status).toBe(404);
+    expect(engine.startChatRun).not.toHaveBeenCalled();
+    // Off for the deployment: not even the session is read.
+    expect(state.reads).toBe(0);
+    // Off for this workspace only: found out from its profile, still 404.
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '99999999-9999-4999-8999-999999999999');
+    expect((await POST(post({ message: 'Hi' }))).status).toBe(404);
     expect(engine.startChatRun).not.toHaveBeenCalled();
   });
 

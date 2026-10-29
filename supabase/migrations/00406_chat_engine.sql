@@ -100,7 +100,8 @@ grant all on table public.chat_run_state to service_role;
 -- ─── Limits (CHAT-20 §14) ───────────────────────────────────────────────────
 
 -- A person's runs working now, their workspace's, and the messages they sent
--- in the last hour and day: what the limits are checked against.
+-- in the last hour and day: what the limits are checked against. A running
+-- run with no sign of life for 10 minutes was lost and isn't counted.
 create or replace function public.chat_run_limits(
   p_organization_id uuid,
   p_user_id uuid
@@ -116,7 +117,9 @@ as $$
       select count(*)
       from public.chat_runs r
       join public.chat_run_state s on s.run_id = r.id
-      where s.organization_id = p_organization_id and r.status = 'running'
+      where s.organization_id = p_organization_id
+        and r.status = 'running'
+        and coalesce(s.heartbeat_at, s.updated_at) > now() - interval '10 minutes'
     ),
     'userRunning', (
       select count(*)
@@ -125,6 +128,7 @@ as $$
       where s.organization_id = p_organization_id
         and s.user_id = p_user_id
         and r.status = 'running'
+        and coalesce(s.heartbeat_at, s.updated_at) > now() - interval '10 minutes'
     ),
     'messagesHour', (
       select count(*)
@@ -179,7 +183,11 @@ begin
   into v_workspace, v_person
   from public.chat_runs r
   join public.chat_run_state s on s.run_id = r.id
-  where s.organization_id = v_org and r.status = 'running';
+  where s.organization_id = v_org
+    and r.status = 'running'
+    -- A run whose driver was lost (no sign of life for 10 minutes, the
+    -- sweep's measure) frees its slot even before the sweep ends it.
+    and coalesce(s.heartbeat_at, s.updated_at) > now() - interval '10 minutes';
 
   if v_workspace >= p_workspace_limit or v_person >= p_user_limit then
     return false;

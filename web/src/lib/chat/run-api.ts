@@ -42,6 +42,10 @@ export function engineFailureResponse(f: EngineFailure): NextResponse {
  * a session, 404 while the new Chat is off for their workspace (CHAT_AGENTIC).
  */
 export async function chatActor(): Promise<ChatActor | NextResponse> {
+  // Off for the whole deployment: not found, before any session or table is read.
+  if (process.env.CHAT_AGENTIC !== 'true') {
+    return runFailure(404, 'not_found', 'not_found', 'Not found');
+  }
   const supabase = await createClient();
   const {
     data: { user },

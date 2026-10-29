@@ -83,7 +83,14 @@ vi.mock('./registry/tools', async (importOriginal) => {
     run: (ctx, input) => fakes.publishRun(ctx, input),
     fixture: { input: { brand_id: 'x', title: 'x' } },
   });
-  const tools = [readVisibility, ...real.CHAT_TOOLS.filter((t) => t.class !== 'read'), publishPage];
+  // The same read under a name the engine trusts: the workspace's own numbers (§16a).
+  const ownNumbers = { ...readVisibility, name: 'get_visibility_summary' };
+  const tools = [
+    readVisibility,
+    ownNumbers,
+    ...real.CHAT_TOOLS.filter((t) => t.class !== 'read'),
+    publishPage,
+  ];
   return {
     ...real,
     CHAT_TOOLS: tools,
@@ -328,7 +335,7 @@ describe('a turn', () => {
 
     // Haiku got the reads only, a structured "ready" and Claude 5.5's settings.
     const read = haiku.seen[0];
-    expect(read.tools?.map((t) => t.name)).toEqual(['read_visibility']);
+    expect(read.tools?.map((t) => t.name)).toEqual(['read_visibility', 'get_visibility_summary']);
     expect(read.responseFormat).toMatchObject({ type: 'json' });
     expect(read.toolChoice).toEqual({ type: 'auto' });
     expect(read.maxOutputTokens).toBe(8_000);
@@ -506,6 +513,29 @@ describe('changes wait for the person', () => {
     expect(runRow(runId).status).toBe('done');
   });
 
+  it('runs the arguments the card showed, as the tool reads them: defaults filled, text trimmed', async () => {
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'create_draft', {
+            brand_id: BRAND,
+            title: '  Pricing FAQ  ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+          }),
+        ),
+        text('Saved the draft.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Draft a pricing FAQ', 'ask_first');
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(createContentDraft).toHaveBeenCalledWith(
+      BRAND,
+      expect.objectContaining({ method: 'create', title: 'Pricing FAQ' }),
+    );
+  });
+
   it("doesn't take the same approval twice", async () => {
     useModels(
       [READY],
@@ -554,6 +584,40 @@ describe('changes wait for the person', () => {
     expect(createContentDraft).not.toHaveBeenCalled();
     expect(stepsOf(runId)[0]).toMatchObject({ status: 'skipped', detail: 'Skipped' });
     expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('skipped');
+    expect(runRow(runId).status).toBe('done');
+  });
+});
+
+describe('what a read brings in (§16a)', () => {
+  const draftCall = calls(
+    toolCall('w1', 'create_draft', {
+      brand_id: BRAND,
+      title: 'Pricing FAQ',
+      page_type: 'docs_faq',
+      source: { kind: 'content' },
+    }),
+  );
+
+  it('shows a card for a change after a read of outside text, even in Full auto', async () => {
+    const { sonnet } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [draftCall, text('Saved.')],
+    );
+    const runId = await turn(ADMIN, 'Draft a page from what AI says', 'full_auto');
+    expect(createContentDraft).not.toHaveBeenCalled();
+    expect(runRow(runId).status).toBe('waiting');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toHaveLength(1);
+    // What was read reaches the writer as data, marked so.
+    expect(JSON.stringify(sonnet.seen[0].prompt)).toContain('<read_results>');
+  });
+
+  it("runs it without a card in Full auto after reading the workspace's own numbers only", async () => {
+    useModels(
+      [calls(toolCall('r1', 'get_visibility_summary', { brand_id: BRAND })), READY],
+      [draftCall, text('Saved.')],
+    );
+    const runId = await turn(ADMIN, 'Draft a pricing FAQ', 'full_auto');
+    expect(createContentDraft).toHaveBeenCalledTimes(1);
     expect(runRow(runId).status).toBe('done');
   });
 });

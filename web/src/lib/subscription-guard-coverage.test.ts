@@ -85,6 +85,12 @@ const OPEN_ROUTES: Record<string, string> = {
   'stripe/subscription:DELETE': 'billing: canceling the plan',
   'stripe/webhook:POST': "Stripe's own calls",
   'traffic/read:POST': 'reads only',
+  // Chat's runs: the engine answers 402 with the server's body itself
+  // (startChatRun, prepareResume), but for a request to the Admins.
+  'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
+  'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
+  'chat/runs/[id]/skip:POST': 'saying no to a change starts no cost',
+  'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
 };
 
 /** What checks a route's plan before it writes. */
