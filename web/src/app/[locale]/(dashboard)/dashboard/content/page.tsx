@@ -1070,7 +1070,7 @@ export default function ContentPage() {
   return (
     <div className="space-y-6">
       <HeaderWithAiUsage>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground text-sm">{t('description')}</p>
