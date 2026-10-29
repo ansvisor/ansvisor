@@ -106,7 +106,33 @@ describe('FirstRunNote', () => {
     loadTrackingJob.mockReturnValue({ jobId: 'j1', brandId: 'b1', startedAt: 1 });
     getJobStatus.mockResolvedValue(job({ progress: { current: 12, total: 40 } }));
     await render();
-    expect(text()).toContain('First analysis running12 of 40 answers');
+    // Checks, not answers: a task can end without one.
+    expect(text()).toContain('First analysis running12 of 40 checks');
+  });
+
+  it('reads again every 12 seconds, and says about how long is left once the pace shows', async () => {
+    getTrackingWindow.mockResolvedValue(
+      win({ activeRun: { startedAt: '2026-10-20T09:00:00Z', source: 'manual' } }),
+    );
+    loadTrackingJob.mockReturnValue({ jobId: 'j1', brandId: 'b1', startedAt: 1 });
+    let reads = 0;
+    getJobStatus.mockImplementation(async () =>
+      job({ progress: { current: 12 + 4 * reads++, total: 400 } }),
+    );
+    await render();
+    expect(text()).toContain('12 of 400 checks');
+    expect(text()).not.toContain('left');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12_000);
+    });
+    expect(getTrackingWindow).toHaveBeenCalledTimes(2);
+
+    // A minute in: 20 checks done, 368 to go at that pace, about 18 min.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(48_000);
+    });
+    expect(text()).toContain('32 of 400 checks · about 20 min left');
   });
 
   it('shows nothing once the brand has a completed run, and stops reading', async () => {
@@ -146,15 +172,16 @@ describe('FirstRunNote', () => {
     await render();
     expect(text()).toContain('First analysis running');
 
+    // One read each: the note reads again every 12 seconds.
     getTrackingWindow.mockRejectedValueOnce(new Error('timeout'));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(12_000);
     });
     expect(text()).toContain('First analysis running');
 
     getTrackingWindow.mockResolvedValueOnce(win({ lastRunAt: '2026-10-20T09:40:00Z' }));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(12_000);
     });
     expect(text()).toBe('');
   });
