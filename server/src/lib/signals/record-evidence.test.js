@@ -170,6 +170,16 @@ describe('attachCompetitorEvidence', () => {
       { promptId: 'p1', platform: 'chatgpt-web', competitor: { now: 1 }, you: { now: 3 } },
     ],
     winningSources: [{ domain: 'g2.example', answers: 2, answersRead: 3 }],
+    pageEvents: [
+      {
+        kind: 'changed',
+        at: '2026-10-12T03:00:00Z',
+        url: 'https://rival.example/pricing',
+        domain: 'rival.example',
+        detail: { gained: [{ key: 'faq', label: 'FAQ section' }], lost: [] },
+      },
+    ],
+    pageEventDays: 28,
   };
 
   it('finds the competitor in the payload or the key, and writes its evidence', async () => {

@@ -119,6 +119,108 @@ describe('runTrackingJob', () => {
 });
 
 /**
+ * The first run after a payment goes ahead of the queue: someone is watching
+ * it, and the nightly runs can hold every slot for an hour.
+ */
+describe('runTrackingJob, the first run after a payment', () => {
+  it('starts at once in its extra slot while the nightly runs hold every slot', async () => {
+    const releases = heldRuns();
+    runTrackingJob('night-1');
+    runTrackingJob('night-2');
+    await flush();
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX);
+
+    runTrackingJob('first', undefined, { priority: true });
+    await flush();
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 1);
+    expect(processTrackingJob.mock.calls[MAX][0].brandId).toBe('brand-first');
+
+    // The extra slot is the first run's only: a regular job still waits.
+    runTrackingJob('night-3');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 1);
+
+    await drain(releases);
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 2);
+  });
+
+  it('takes the next free slot when even its extra one is taken, ahead of regular jobs', async () => {
+    const releases = heldRuns();
+    for (const id of ['night-1', 'night-2', 'night-3']) runTrackingJob(id);
+    runTrackingJob('first-1', undefined, { priority: true });
+    await flush();
+    // night-3 waits, retrying every 5 s from now.
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 1);
+
+    // Another payment, every slot still taken.
+    await vi.advanceTimersByTimeAsync(4500);
+    runTrackingJob('first-2', undefined, { priority: true });
+    await flush();
+
+    // Two slots free up just before night-3 tries again: night-3 steps aside.
+    releases[0]();
+    releases[1]();
+    await vi.advanceTimersByTimeAsync(500);
+    const started = () => processTrackingJob.mock.calls.map(([job]) => job.brandId);
+    expect(started()).not.toContain('brand-night-3');
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(started()).toContain('brand-first-2');
+    expect(started()).not.toContain('brand-night-3');
+
+    await drain(releases);
+    expect(started()).toContain('brand-night-3');
+  });
+
+  it('keeps its extra slot when it is retried after a failure', async () => {
+    const releases = heldRuns();
+    const held = processTrackingJob.getMockImplementation();
+    processTrackingJob.mockImplementation((job) =>
+      job.brandId === 'brand-first' && processTrackingJob.mock.calls.length <= MAX + 1
+        ? Promise.reject(new Error('cloro down'))
+        : held(job),
+    );
+    manager.getJob.mockResolvedValue({ attempts: 1, max_attempts: 3 });
+    runTrackingJob('night-1');
+    runTrackingJob('night-2');
+    await flush();
+    runTrackingJob('first', undefined, { priority: true });
+    await flush();
+    expect(manager.failJob).toHaveBeenCalledWith('first', 'cloro down');
+
+    // The retry waits attempts × 30 s; the nightly runs still hold both slots.
+    await vi.advanceTimersByTimeAsync(30_000);
+    const firstRuns = processTrackingJob.mock.calls.filter(
+      ([job]) => job.brandId === 'brand-first',
+    );
+    expect(firstRuns).toHaveLength(2);
+
+    await drain(releases);
+  });
+
+  it('keeps its place when the recovery sweep restarts it', async () => {
+    const releases = heldRuns();
+    runTrackingJob('night-1');
+    runTrackingJob('night-2');
+    await flush();
+
+    manager.listWaitingJobs.mockResolvedValue([
+      { id: 'lost-first', type: 'tracking', brand_id: 'b', data: { afterPayment: true } },
+      { id: 'lost-night', type: 'tracking', brand_id: 'b', data: { immediate: false } },
+    ]);
+    await recoverWaitingJobs();
+    await flush();
+
+    expect(processTrackingJob.mock.calls.map(([job]) => job.brandId)).toEqual([
+      'brand-night-1',
+      'brand-night-2',
+      'brand-lost-first',
+    ]);
+    await drain(releases);
+  });
+});
+
+/**
  * Once the plan has ended (2026-10-27): a job is cancelled when it is
  * claimed, however it was started, before anything is tracked or written.
  */

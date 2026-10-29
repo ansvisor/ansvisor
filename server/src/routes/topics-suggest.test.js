@@ -17,7 +17,12 @@ let baseUrl;
 async function startApp() {
   vi.resetModules();
   vi.doMock('ai', () => ({ generateObject }));
-  vi.doMock('../lib/access.js', () => ({ assertBrandAccess: vi.fn() }));
+  // Generating topic ideas is a manager's (2026-10-29): the caller is one here.
+  vi.doMock('../lib/access.js', () => ({
+    MANAGER_ROLES: ['admin', 'manager'],
+    assertBrandAccess: vi.fn(),
+    assertRole: vi.fn(async () => 'manager'),
+  }));
   vi.doMock('../lib/action-center/from-topic-opportunity.js', () => ({
     sendTopicOpportunityToActionCenter: vi.fn(),
   }));

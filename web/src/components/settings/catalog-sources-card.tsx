@@ -12,6 +12,7 @@ import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { addFeedSource, listCatalogSources, removeCatalogSource } from '@/lib/actions/catalog';
+import { withReadTimeout } from '@/lib/integrations-client';
 import { isStoreSource, SIGN_IN_PLATFORM_LABELS, type CatalogSource } from '@/lib/catalog';
 import {
   connectStore,
@@ -106,7 +107,8 @@ export function CatalogSourcesCard({
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
-    listCatalogSources(activeBrandId).then(
+    // A read that takes too long says the sources can't be read, like one that fails.
+    withReadTimeout(listCatalogSources(activeBrandId)).then(
       (sources) => {
         if (!cancelled) setLoaded({ brandId: activeBrandId, sources, at: new Date() });
       },
