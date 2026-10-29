@@ -10,7 +10,8 @@ import { failedCallResponse } from '@/lib/mcp/subscription-gate';
  * function, same ownership check. Body:
  * `{ "range": { "preset": "7d", "from": "…", "to": "…", "region": "US" },
  *    "idempotency_key": "…", "suggestions": [{ "id", "platform", "title", "body", "sources" }] }`.
- * The server validates the range and suggestions and checks the plan.
+ * The server validates the range and suggestions and checks the plan. 403
+ * unless the key's user is an admin or a manager.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authenticateMcpRequest(req);
