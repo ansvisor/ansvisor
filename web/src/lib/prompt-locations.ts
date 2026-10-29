@@ -167,13 +167,16 @@ export function planBulkLocationChange(
   const wanted = [...new Set(locations.map((code) => code.trim().toUpperCase()))].filter(Boolean);
   const plan: BulkLocationPlan = { changes: [], unchanged: 0, blocked: 0, delta: 0 };
   if (wanted.length === 0) return plan;
+  // A removal's codes aren't checked against the known locations, so the
+  // list can be long: look each one up rather than scan it per prompt.
+  const removing = new Set(wanted);
 
   for (const prompt of prompts) {
     const current = prompt.regions ?? [];
     const next =
       action === 'add'
         ? [...current, ...wanted.filter((code) => !current.includes(code))]
-        : current.filter((code) => !wanted.includes(code));
+        : current.filter((code) => !removing.has(code));
 
     if (next.length === current.length) {
       plan.unchanged++;

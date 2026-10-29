@@ -2,6 +2,7 @@ import type { CatalogSource } from '@/lib/catalog';
 import type { ShoppingMarket } from '@/lib/shopping/markets';
 import { openAiIndexStatus, type OpenAiIndexRead } from '@/lib/shopping/openai-index';
 import type { ProductRow, ReadinessCheck } from '@/lib/shopping/products';
+import { priceText } from '@/lib/shopping/price';
 
 /**
  * Product Visibility's Readiness (ECOM-015, spec §3.4 / §3.4b): how ready
@@ -184,6 +185,17 @@ export function readinessChecklist(input: ReadinessInput): {
       : null,
     items,
   };
+}
+
+/** The values a check's copy reads (en.json shopping.readiness.checks), prices written as prices. */
+export function copyValues(item: ReadinessItem): Record<string, string | number> {
+  const values = { ...(item.values ?? {}) };
+  if (item.key === 'wrongPrice' && typeof values.seen === 'number') {
+    const currency = String(values.currency ?? 'USD');
+    values.seen = priceText(Number(values.seen), currency);
+    values.yours = priceText(Number(values.yours), currency);
+  }
+  return values;
 }
 
 /** The AI channels a shop sells through, in the spec's priority order. */
