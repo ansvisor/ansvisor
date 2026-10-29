@@ -28,14 +28,12 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
-vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
-const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { runLoggedWrite } = await import('./write');
 const { undoChange, undoRule, UNDO_RULES } = await import('./undo');
 const { chatTool, CHAT_TOOLS } = await import('./registry/tools');
@@ -104,7 +102,6 @@ describe('every WRITE row has an Undo', () => {
     expect(UNDO_RULES.create_draft.windowMs).toBe(30 * DAY);
     expect(UNDO_RULES.update_opportunity.windowMs).toBe(7 * DAY);
     expect(UNDO_RULES.dismiss_prompt_suggestion.windowMs).toBe(7 * DAY);
-    expect(UNDO_RULES.request_access.windowMs).toBe(30 * DAY);
     for (const tool of writes) {
       expect(undoRule(tool)).not.toBeNull();
       expect(messages.chatActivity.summary).toHaveProperty(tool.labelKey);
@@ -424,34 +421,31 @@ describe('a double-clicked Undo', () => {
   });
 });
 
-describe('request_access: withdraw the request while it is pending', () => {
-  const ask = async () => {
-    db.tables.chat_access_requests = [];
-    vi.mocked(requestAccess).mockImplementation(async () => {
-      db.tables.chat_access_requests.push({ id: 'req-1', status: 'pending', decided_at: null });
-      return { ok: true, id: 'req-1' };
-    });
-    return change(PEOPLE.analyst, 'request_access', {
-      asked: 'Add competitors · Peec AI',
-      rule_kind: 'role',
-    });
-  };
+describe('request_access: withdraw it while it waits', () => {
+  const rule = UNDO_RULES.request_access;
+  const REQUEST = '66666666-6666-4666-8666-666666666666';
 
-  it('withdraws it, and says so in the person’s words', async () => {
-    const row = await ask();
-    expect(row).toMatchObject({ target_type: 'access_request', target_id: 'req-1' });
-    const result = await undo(row.id, PEOPLE.analyst);
-    expect(result).toMatchObject({ code: 'ok' });
-    expect(db.tables.chat_access_requests[0].status).toBe('withdrawn');
+  it('records the request it sent, and nothing to undo for one it refused', async () => {
+    const sent = await rule.record({ asked: 'Change my role' }, { ok: true, id: REQUEST }, null);
+    expect(sent).toMatchObject({
+      target: { type: 'access_request', id: REQUEST },
+      summaryParams: { asked: 'Change my role' },
+    });
+    expect(sent.undo).not.toBeNull();
+    const refused = await rule.record({ asked: 'x' }, { ok: false, reason: 'too_many' }, null);
+    expect(refused).toMatchObject({ target: { id: null }, undo: null });
   });
 
-  it('leaves a request an Admin already decided', async () => {
-    const row = await ask();
-    db.tables.chat_access_requests[0].status = 'approved';
-    expect(await undo(row.id, PEOPLE.analyst)).toMatchObject({
-      code: 'conflict',
-      reason: 'changed',
-    });
-    expect(db.tables.chat_access_requests[0].status).toBe('approved');
+  it('withdraws a waiting request, and leaves one an Admin decided', async () => {
+    db.tables.chat_access_requests = [
+      { id: REQUEST, status: 'pending', decided_at: null },
+      { id: OPPORTUNITY, status: 'approved', decided_at: '2026-10-29T00:00:00Z' },
+    ];
+    expect(await rule.inverse({ id: REQUEST, brandId: null, data: {} })).toBe('ok');
+    expect(db.tables.chat_access_requests[0]).toMatchObject({ status: 'withdrawn' });
+    expect(db.tables.chat_access_requests[0].decided_at).toEqual(expect.any(String));
+    expect(await rule.inverse({ id: OPPORTUNITY, brandId: null, data: {} })).toBe('changed');
+    expect(db.tables.chat_access_requests[1]).toMatchObject({ status: 'approved' });
+    expect(await rule.inverse({ id: SUGGESTION, brandId: null, data: {} })).toBe('gone');
   });
 });

@@ -43,8 +43,7 @@ const { UNDO_RULES } = await import('./undo');
 type ChatMode = import('./precedence').ChatMode;
 type ChatTool = import('./registry/define-tool').ChatTool;
 
-// The writes Full auto may run without a card: an always_card one (Ask your Admin) never does.
-const WRITES = CHAT_TOOLS.filter((tool) => tool.class === 'write' && !tool.flags.alwaysCard);
+const WRITES = CHAT_TOOLS.filter((tool) => tool.class === 'write');
 const INPUTS: Record<string, unknown> = {
   create_draft: {
     brand_id: BRAND,
@@ -101,7 +100,10 @@ async function runAs(
 }
 
 describe('every WRITE that ran is in the Activity log (§21)', () => {
-  it.each(WRITES.map((tool) => [tool.name, tool] as const))(
+  // Ask your Admin is always a card, in Full auto too (CHAT-20 row 80a).
+  it.each(
+    WRITES.filter((tool) => !tool.flags.alwaysCard).map((tool) => [tool.name, tool] as const),
+  )(
     '%s in Full auto: mode, approval, Undo window, label key, target and summary',
     async (name, tool) => {
       const { decision, outcome } = await runAs(PEOPLE.admin, tool, 'full_auto');
@@ -465,5 +467,17 @@ describe('00402', () => {
     for (const column of ['tool_key', 'mode', 'approval_kind', 'undo_until', 'status']) {
       expect(columns).toContain(column);
     }
+  });
+});
+
+describe('Ask your Admin in Full auto', () => {
+  it('is still a card: only the person’s click sends it', async () => {
+    const tool = chatTool('request_access')!;
+    const { decision, outcome } = await runAs(PEOPLE.manager, tool, 'full_auto', {
+      input: { asked: 'Change my role', rule_kind: 'role' },
+    });
+    expect(decision).toMatchObject({ kind: 'ask', reason: 'always_card' });
+    expect(outcome).toBeNull();
+    expect(db.tables.chat_activity_log ?? []).toHaveLength(0);
   });
 });

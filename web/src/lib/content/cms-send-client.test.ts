@@ -529,6 +529,28 @@ describe('readCmsStatuses', () => {
     });
   });
 
+  it('says which sends went to Wix, and one removed there since as failed', async () => {
+    statusReads = [
+      {
+        data: [
+          delivery('d1', 'sent', '2026-10-24T10:00:00Z', { target: 'wix' }),
+          delivery('d2', 'failed', '2026-10-24T10:00:00Z', {
+            target: 'wix',
+            error: 'Removed in Wix',
+          }),
+        ],
+        error: null,
+      },
+    ];
+    const statuses = await readCmsStatuses(['d1', 'd2']);
+    expect(statuses.get('d1')).toMatchObject({ status: 'sent', target: 'wix' });
+    expect(statuses.get('d2')).toMatchObject({
+      status: 'failed',
+      target: 'wix',
+      error: 'Removed in Wix',
+    });
+  });
+
   it('leaves a read that fails with no sends, as before its table is there', async () => {
     statusReads = [{ data: null, error: { message: 'relation does not exist' } }];
     expect((await readCmsStatuses(['d1'])).size).toBe(0);

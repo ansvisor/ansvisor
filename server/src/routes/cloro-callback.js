@@ -12,7 +12,11 @@
 
 import { Router } from 'express';
 import supabaseAdmin from '../config/supabase.js';
-import { parseScraperResponse } from '../lib/cloro-scraper.js';
+import {
+  isLegacyChatgptTask,
+  parseScraperResponse,
+  submitPromptTask,
+} from '../lib/cloro-scraper.js';
 import { handleScraperResult } from '../lib/cloro-result-handler.js';
 import { verifyCloroWebhook } from '../lib/cloro-webhook-verify.js';
 import { isBrandActive, isBrandActiveCached } from '../lib/active-subscriptions.js';
@@ -33,6 +37,50 @@ async function droppedForPlan(brandId, log) {
   } catch (err) {
     log.warn({ err, brandId }, 'cloro callback: plan check failed; stored as usual');
     return false;
+  }
+}
+
+/**
+ * A legacy ChatGPT task (00378) that Cloro failed goes once more without
+ * legacy, so the day keeps its answer: Cloro calls that interface temporary.
+ * The new task takes the old one's place among the brand's pending tasks. Not
+ * for a brand whose plan has ended, nor without a webhook to deliver it.
+ */
+async function resubmitWithoutLegacy(pending, log) {
+  const webhookUrl = process.env.CLORO_WEBHOOK_URL;
+  if (!webhookUrl || (await droppedForPlan(pending.brand_id, log))) return;
+  try {
+    const { data: prompt } = await supabaseAdmin
+      .from('prompts')
+      .select('text')
+      .eq('id', pending.prompt_id)
+      .maybeSingle();
+    if (!prompt?.text) return;
+    const again = await submitPromptTask({
+      promptText: prompt.text,
+      promptId: pending.prompt_id,
+      scraperId: pending.scraper_id,
+      region: pending.region,
+      webhookUrl,
+    });
+    const { error } = await supabaseAdmin.from('cloro_pending_tasks').insert({
+      task_id: again.taskId,
+      prompt_id: pending.prompt_id,
+      brand_id: pending.brand_id,
+      scraper_id: pending.scraper_id,
+      region: pending.region,
+      legacy: false,
+    });
+    if (error) throw error;
+    log.warn(
+      { taskId: pending.task_id, newTaskId: again.taskId, scraperId: pending.scraper_id },
+      'cloro callback: chatgpt fan-out task failed; submitted again without fan-out',
+    );
+  } catch (err) {
+    log.error(
+      { err, taskId: pending.task_id },
+      'cloro callback: could not submit the failed fan-out task again',
+    );
   }
 }
 
@@ -93,6 +141,9 @@ router.post('/', async (req, res) => {
 
     if (status === 'FAILED') {
       req.log.error({ taskId, scraperId: pending.scraper_id }, 'cloro callback: task failed');
+      if (isLegacyChatgptTask({ scraperId: pending.scraper_id, legacy: pending.legacy })) {
+        await resubmitWithoutLegacy(pending, req.log);
+      }
       await supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
       return;
     }

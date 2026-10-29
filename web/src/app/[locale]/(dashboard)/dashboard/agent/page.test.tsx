@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { DemoBrandContext } from '@/components/providers/demo-brand-provider';
 
 /**
  * Chat on a read-only workspace (plan not active): New chat and sending open
@@ -81,15 +82,25 @@ afterEach(() => {
   Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
-async function render(isLocked: boolean) {
+async function render(isLocked: boolean, isDemo = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        <DemoBrandContext.Provider
+          value={{ isDemo, demoBrand: null, offer: 'trial', neverSubscribed: true }}
         >
-          <AgentPage />
-        </UpgradeDialogContext.Provider>
+          <UpgradeDialogContext.Provider
+            value={{
+              isLocked,
+              isDemo,
+              reason: isDemo ? 'demo' : 'ended',
+              adminName: null,
+              openUpgrade,
+            }}
+          >
+            <AgentPage />
+          </UpgradeDialogContext.Provider>
+        </DemoBrandContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -153,5 +164,19 @@ describe('Chat on a read-only workspace', () => {
     expect(writes()).toEqual([['/api/agent/conversations/c1', { method: 'DELETE' }]]);
     expect(container.textContent).not.toContain('Pricing questions');
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+});
+
+describe('Chat on the demo brand', () => {
+  it('shows the Chat v2 preview, next week, and reads or sends nothing', async () => {
+    await render(true, true);
+    expect(container.textContent).toContain('Soon (next week)');
+    expect(container.textContent).toContain('Chat arrives next week. This is a preview of it.');
+    const frame = container.querySelector('iframe')!;
+    expect(frame.getAttribute('src')).toBe('/demo/chat/CHAT-mockup-v2.html#s-home');
+    expect(frame.getAttribute('title')).toBe('Chat preview');
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

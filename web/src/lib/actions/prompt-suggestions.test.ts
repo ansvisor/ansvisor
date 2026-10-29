@@ -97,7 +97,8 @@ vi.mock('@/lib/actions/prompt-workflow', () => ({
 const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
 vi.stubGlobal('fetch', fetchMock);
 
-const { trackPagePrompts, trackSuggestions } = await import('./prompt-suggestions');
+const { dismissSuggestions, getPromptSuggestions, trackPagePrompts, trackSuggestions } =
+  await import('./prompt-suggestions');
 
 beforeEach(() => {
   slotsLeft = Infinity;
@@ -222,5 +223,88 @@ describe('trackPagePrompts (AT-006 part B2)', () => {
     await trackPagePrompts('b1', null, [{ text: 'Best coffee gifts?', topic: 'Coffee Gifts' }]);
     expect(madeTopics).toEqual(['Coffee Gifts']);
     expect(removedTopics).toEqual(['topic-1']);
+  });
+});
+
+/**
+ * getPromptSuggestions: its failures come back as values, as production
+ * hides a thrown server action's message behind React's #441.
+ */
+describe('getPromptSuggestions', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  it('returns the open suggestions', async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({
+        suggestions: [{ id: 's1', brand_id: 'b1', suggested_text: 'Best GEO tools?' }],
+        stale: false,
+      }),
+    );
+    const read = await getPromptSuggestions('b1');
+    expect(read).toMatchObject({ ok: true, stale: false });
+    expect(read.ok && read.suggestions.map((x) => x.suggestedText)).toEqual(['Best GEO tools?']);
+  });
+
+  it('marks a proxy that says the API is down as worth retrying', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('<html>Bad Gateway</html>', { status: 502 }));
+    expect(await getPromptSuggestions('b1')).toEqual({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
+  });
+
+  it('returns no answer, never throws, when the request fails or times out', async () => {
+    fetchMock.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'));
+    expect(await getPromptSuggestions('b1')).toEqual({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
+  });
+
+  it("says why when trying again wouldn't help", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({ error: "This brand isn't in your workspace", code: 'not_in_workspace' }, 403),
+    );
+    expect(await getPromptSuggestions('b1')).toEqual({
+      ok: false,
+      failure: 'workspace',
+      retryable: false,
+    });
+  });
+});
+
+describe('dismissSuggestions', () => {
+  it('dismisses each one through the route one by one uses, a few at a time', async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `s${i + 1}`);
+    expect(await dismissSuggestions([...ids, 's1'])).toEqual({
+      ok: true,
+      dismissed: ids,
+      failed: [],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(12);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://server/api/prompts/suggestions/s1/dismiss',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer t' } }),
+    );
+  });
+
+  it('lists the ones that could not be dismissed, and never throws', async () => {
+    fetchMock.mockImplementation((async (url: string) => {
+      if (url.includes('/s2/')) return new Response('{}', { status: 403 });
+      if (url.includes('/s3/')) throw new Error('network down');
+      return new Response('{}', { status: 200 });
+    }) as never);
+    expect(await dismissSuggestions(['s1', 's2', 's3'])).toEqual({
+      ok: true,
+      dismissed: ['s1'],
+      failed: ['s2', 's3'],
+    });
+    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }));
   });
 });

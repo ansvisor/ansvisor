@@ -288,27 +288,28 @@ const dismissSuggestion: UndoRule = {
   href: () => '/dashboard/prompts/suggestions',
 };
 
-// ─── request_access: withdraw it while it is pending (§9 row 80a) ───────────
+// ─── request_access: withdraw it while it waits ────────────────────────────
 
-const askAdmin: UndoRule = {
+const requestAccessRule: UndoRule = {
   targetType: 'access_request',
-  // "Withdraw while pending": a request waits on its Admins as long as it takes.
-  windowMs: 30 * DAY_MS,
+  // As long as a dismissed suggestion's; a request an Admin decided stays.
+  windowMs: 7 * DAY_MS,
   async before() {
     return null;
   },
   async record(input, output) {
-    const sent = asObject(output);
-    const id = sent.ok === true ? textOf(sent.id) : null;
+    const result = asObject(output);
+    const id = result.ok === true ? textOf(result.id) : null;
     return {
       target: { type: 'access_request', id },
       summaryParams: { asked: summaryValue(asObject(input).asked) },
-      undo: id ? { status: 'pending' } : null,
+      // Refused (too many, already asked today, an Admin): nothing was sent.
+      undo: id ? { before: { status: null }, after: { status: 'pending' } } : null,
     };
   },
   async inverse({ id }) {
-    // Only a pending request: one an Admin decided is theirs now.
-    const { data, error } = await supabaseAdmin
+    // Only while it waits: once an Admin decided it, it's theirs.
+    const { data: withdrawn, error } = await supabaseAdmin
       .from('chat_access_requests')
       .update({ status: 'withdrawn', decided_at: new Date().toISOString() })
       .eq('id', id)
@@ -316,7 +317,7 @@ const askAdmin: UndoRule = {
       .select('id')
       .maybeSingle();
     if (error) throw new Error(`Could not withdraw the request: ${error.message}`);
-    if (data) return 'ok';
+    if (withdrawn) return 'ok';
     const { data: row, error: readError } = await supabaseAdmin
       .from('chat_access_requests')
       .select('id')
@@ -325,7 +326,7 @@ const askAdmin: UndoRule = {
     check(readError, 'the request');
     return row ? 'changed' : 'gone';
   },
-  href: () => '/dashboard/settings/team',
+  href: () => '/dashboard/settings/roles-access',
 };
 
 /** Each WRITE row's Undo, by tool name. A WRITE without one has no Undo. */
@@ -333,7 +334,7 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   create_draft: createDraft,
   update_opportunity: updateOpportunity,
   dismiss_prompt_suggestion: dismissSuggestion,
-  request_access: askAdmin,
+  request_access: requestAccessRule,
 };
 
 /** A tool's Undo, or null: a read or an EXECUTE has none (§10b). */

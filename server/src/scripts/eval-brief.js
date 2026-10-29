@@ -6,10 +6,12 @@
  * content-brief-eval.test.js to read on every test run.
  *
  * Run from server/, with .env holding the providers' keys for both models
- * (the brief's is IMPROVE_SUGGESTION_MODEL, else DEFAULT_SUGGESTION_MODEL,
- * else google/gemini-3-flash-preview; the judge's BRIEF_EVAL_JUDGE_MODEL,
- * else anthropic/claude-haiku-4-5) and the Supabase keys the modules load
- * with (nothing is read or written there):
+ * (the brief's is the Content Editor's read model, contentReadModelId:
+ * CONTENT_READ_MODEL, else anthropic/claude-haiku-5-5 with
+ * ANTHROPIC_API_KEY, else IMPROVE_SUGGESTION_MODEL, DEFAULT_SUGGESTION_MODEL
+ * or google/gemini-3-flash-preview; the judge's BRIEF_EVAL_JUDGE_MODEL, else
+ * anthropic/claude-haiku-4-5) and the Supabase keys the modules load with
+ * (nothing is read or written there):
  *   node src/scripts/eval-brief.js [count]
  *   count defaults to every case: two calls each, the brief and its judge.
  *
@@ -30,11 +32,12 @@ import { generateObject } from 'ai';
 import { CASES } from '../lib/__fixtures__/brief-eval/cases.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import {
+  CONTENT_READ_MAX_TOKENS,
   briefRulesOn,
   briefSchema,
   briefSystemPrompt,
   buildBriefPrompt,
-  contentBriefModelId,
+  contentReadModelId,
   shapeBrief,
 } from '../lib/content-brief.js';
 import { qualityPhase } from '../lib/content-quality.js';
@@ -49,6 +52,7 @@ import {
   readJudged,
   summarize,
 } from '../lib/content-brief-eval.js';
+import { objectOptions } from '../lib/structured-output.js';
 
 const count = Math.max(
   1,
@@ -58,7 +62,7 @@ const count = Math.max(
 /** How long one call may take before the case is recorded as failed. */
 const CALL_TIMEOUT_MS = 120_000;
 
-const modelId = contentBriefModelId();
+const modelId = contentReadModelId();
 const judgeModelId = briefEvalJudgeModelId();
 const model = resolveModel(modelId);
 const judge = resolveModel(judgeModelId);
@@ -70,7 +74,7 @@ for (const c of CASES.slice(0, count)) {
   try {
     const written = await generateObject({
       model,
-      schema: briefSchema(),
+      ...objectOptions(modelId, briefSchema(), { maxOutputTokens: CONTENT_READ_MAX_TOKENS }),
       system: briefSystemPrompt(),
       prompt: buildBriefPrompt(c),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
@@ -79,7 +83,7 @@ for (const c of CASES.slice(0, count)) {
     // The judge at its model's own temperature: newer models take no other.
     const graded = await generateObject({
       model: judge,
-      schema: judgeSchema,
+      ...objectOptions(judgeModelId, judgeSchema, { maxOutputTokens: CONTENT_READ_MAX_TOKENS }),
       system: JUDGE_SYSTEM_PROMPT,
       prompt: buildJudgePrompt(c, brief),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),

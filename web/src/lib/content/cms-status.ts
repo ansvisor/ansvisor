@@ -29,7 +29,10 @@ export function lastSend(row: {
   return {
     status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
     target:
-      row.target === 'webflow' || row.target === 'wordpress' || row.target === 'framer'
+      row.target === 'webflow' ||
+      row.target === 'wordpress' ||
+      row.target === 'framer' ||
+      row.target === 'wix'
         ? row.target
         : 'webhook',
     at: row.published_at ?? row.sent_at ?? row.created_at,

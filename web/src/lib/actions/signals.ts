@@ -204,7 +204,7 @@ export async function updateSignalStatus(
   signalIds: string[],
   status: SignalStatus,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (signalIds.length === 0) return;
   const supabase = await createClient();
   const { data: before } = await supabase

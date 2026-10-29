@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const from = vi.fn();
 vi.mock('../../config/supabase.js', () => ({ default: { from: (...a) => from(...a) } }));
 
-import { pulseWindowKey, runPulseCatchUp } from './engine.js';
+import { generatePulseForBrand, pulseWindowKey, runPulseCatchUp } from './engine.js';
 
 /**
  * Pulse window dedupe (#701).
@@ -128,5 +128,29 @@ describe('runPulseCatchUp', () => {
 
     expect(res).toEqual({ sent: 0, skipped: 0 });
     expect(queriedTables).toContain('sent_pulses');
+  });
+});
+
+/** A demo brand (00380) is sample data: no pulse is ever written or mailed for it. */
+describe('generatePulseForBrand', () => {
+  beforeEach(() => from.mockReset());
+
+  it('skips a demo brand before reading anything else', async () => {
+    const queried = [];
+    from.mockImplementation((table) => {
+      queried.push(table);
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        single: async () => ({
+          data: { id: 'demo', name: 'Brewline Coffee', is_active: true, is_demo: true },
+          error: null,
+        }),
+      };
+      return builder;
+    });
+
+    expect(await generatePulseForBrand('demo')).toEqual({ skipped: 'demo_brand' });
+    expect(queried).toEqual(['brands']);
   });
 });

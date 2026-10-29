@@ -78,13 +78,17 @@ export async function readBrandAccess(
 }
 
 /**
- * Whether a brand is the demo brand of sample data. Always false for now:
- * TODO wire to brands.is_demo when #1734 merges (the demo chain, 00380),
- * as the server's demo guard reads it.
+ * Whether a brand is the demo brand of sample data (brands.is_demo, 00380),
+ * as the server's demo guard reads it. A brand that isn't found isn't one.
  */
 export async function readBrandIsDemo(brandId: string): Promise<boolean> {
-  void brandId;
-  return false;
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('is_demo')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the call's brand: ${error.message}`);
+  return data?.is_demo === true;
 }
 
 /**

@@ -9,7 +9,9 @@
  * doesn't have, or every model with the flag off. Update it when a provider
  * changes its prices or a new model is configured; a model missing from both
  * is charged at FALLBACK_PRICE, deliberately expensive, so an unknown model
- * can only use the budget up faster, never overspend it.
+ * can only use the budget up faster, never overspend it. A model here priced
+ * higher for a long prompt has its `long` rate, for a call whose input tokens
+ * pass `over`.
  */
 
 import { syncedPriceFor } from './model-price-cache.js';
@@ -19,6 +21,13 @@ export const MODEL_PRICES = {
   'google/gemini-3-flash': { input: 0.5, output: 3 },
   'openai/gpt-5-mini': { input: 0.25, output: 2 },
   'anthropic/claude-haiku-4-5': { input: 1, output: 5 },
+  // The Content Editor's with an Anthropic key (content-brief.js): Haiku reads, Sonnet writes.
+  'anthropic/claude-haiku-5-5': {
+    input: 0.1,
+    output: 0.5,
+    long: { over: 100_000, input: 0.5, output: 2.5 },
+  },
+  'anthropic/claude-sonnet-5-5': { input: 2, output: 10 },
 };
 
 export const FALLBACK_PRICE = { input: 5, output: 25 };
@@ -40,7 +49,8 @@ export function priceFor(modelId, { promptTokens = 0 } = {}) {
   const synced = syncedPriceFor(modelId, { promptTokens });
   if (synced) return synced;
   const id = String(modelId ?? '').replace(/^openrouter\//, '');
-  return MODEL_PRICES[id] ?? FALLBACK_PRICE;
+  const price = MODEL_PRICES[id] ?? FALLBACK_PRICE;
+  return price.long && promptTokens > price.long.over ? price.long : price;
 }
 
 /** USD cost of one call from the AI SDK's `usage`. */

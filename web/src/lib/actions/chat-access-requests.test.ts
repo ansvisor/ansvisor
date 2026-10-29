@@ -142,6 +142,34 @@ describe('requestAccess', () => {
     expect(await requestAccess(ask)).toEqual({ ok: false, reason: 'already_today' });
   });
 
+  it('refuses past twenty requests a day, withdrawn ones too', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    answers['chat_access_requests.count'] = (call: Call) =>
+      call.filters.some(
+        ([op, col, value]) => op === 'eq' && col === 'requested_on' && value === today,
+      )
+        ? { count: 20, error: null }
+        : { count: 0, error: null };
+    expect(await requestAccess(ask)).toEqual({ ok: false, reason: 'daily_limit' });
+    expect(inserted()).toBeUndefined();
+    const daily = calls.find((c) => c.filters.some(([, col]) => col === 'requested_on'))!;
+    expect(daily.filters).toContainEqual(['eq', 'requester_id', ME]);
+    expect(daily.filters.some(([, col]) => col === 'status')).toBe(false);
+  });
+
+  it('refuses a drafted change longer than 8,000 characters of JSON', async () => {
+    expect(await requestAccess({ ...ask, draftedChange: { body: 'x'.repeat(8_000) } })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(inserted()).toBeUndefined();
+    expect(await requestAccess({ ...ask, draftedChange: { body: 'x'.repeat(100) } })).toEqual({
+      ok: true,
+      id: REQUEST,
+    });
+    expect(inserted().drafted_change).toEqual({ body: 'x'.repeat(100) });
+  });
+
   it('turns an Admin away, and does nothing while Chat is off or for a bad ask', async () => {
     role = 'admin';
     expect(await requestAccess(ask)).toEqual({ ok: false, reason: 'admin' });

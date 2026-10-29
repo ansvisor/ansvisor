@@ -176,6 +176,17 @@ describe('analyzeBrandVolumes', () => {
     expect(queries.map((q) => q.table)).toEqual(['brands']);
   });
 
+  it('looks up nothing for a demo brand (00380), whose volumes are sample data', async () => {
+    const db = seed({ activeCount: 3 });
+    db.brands[0].is_demo = true;
+    const { analyzeBrandVolumes, queries } = await load(db);
+
+    expect(await analyzeBrandVolumes('b1', { onlyMissing: true })).toEqual([]);
+    expect(extractIntentKeywords).not.toHaveBeenCalled();
+    expect(getSearchVolumes).not.toHaveBeenCalled();
+    expect(queries.map((q) => q.table)).toEqual(['brands']);
+  });
+
   it("asks about the brand's own organization, and goes on when it is on a plan", async () => {
     const { analyzeBrandVolumes } = await load(seed({ activeCount: 2 }));
 
