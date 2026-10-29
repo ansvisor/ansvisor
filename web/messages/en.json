@@ -3229,6 +3229,234 @@
       "demo": "No one: the demo brand keeps its sample data."
     }
   },
+  "chatAccess": {
+    "roleNames": {
+      "admin": "Admin",
+      "manager": "Manager",
+      "analyst": "Analyst",
+      "agency_partner": "Agency partner"
+    },
+    "classes": { "read": "READ", "write": "WRITE", "execute": "EXECUTE", "never": "NEVER" },
+    "plan": {
+      "yourPlan": "Your plan",
+      "perMonth": "{price}/mo",
+      "trial": "Trial",
+      "custom": "Custom contract",
+      "chips": {
+        "platforms": "{count, plural, one {# AI platform} other {# AI platforms}}",
+        "fullAuto": "Full auto",
+        "ownKeys": "Own AI keys",
+        "mcp": "{access, select, read {MCP read} read_write {MCP read + write} other {MCP}}",
+        "openPr": "Open PR",
+        "claude": "Claude tracking"
+      },
+      "locked": "Needs {plan} · you're on {current}",
+      "lockedTrial": "Not in the trial · {plan} and up",
+      "aiLimit": "AI limit",
+      "aiUsed": "{percent} used",
+      "comparePlans": "Compare plans",
+      "upgrade": "Upgrade",
+      "choosePlan": "Choose a plan",
+      "next": "With {plan} you'd also get",
+      "afterTrial": "After your trial",
+      "priceDiff": "+{price}/mo",
+      "afterTrialPrice": "{plan} · {price}/mo after the trial",
+      "customPrice": "Custom price",
+      "benefits": {
+        "morePlatforms": "See your brand in {count, plural, one {# more AI platform} other {# more AI platforms}}",
+        "fullAuto": "Let Chat make routine changes for you with Full auto",
+        "mcpWrite": "Open pull requests and make changes from Claude, ChatGPT or Cursor",
+        "claude": "Track how Claude answers about your brand",
+        "contract": "AI limit, storage and prompt limits set in your contract",
+        "aiLimit": "{times}× the monthly AI limit",
+        "keepEverything": "Keep everything you're using now",
+        "mcp": "Use Ansvisor inside Claude, ChatGPT and Cursor (MCP)",
+        "monthlyLimit": "A monthly AI limit that resets, instead of the trial's one-time limit",
+        "packs": "Buy extra AI credits and storage when you need them"
+      }
+    },
+    "roles": {
+      "title": "Roles & access",
+      "lead": "Who can do what in this workspace, in the app and through Chat. Chat acts as the signed-in person and never has more rights than they do.",
+      "readOnly": "You're {role, select, manager {a Manager} analyst {an Analyst} other {an Agency partner}} · read-only here",
+      "readOnlyNote": "Only Admins change roles",
+      "members": "Members",
+      "manageInTeam": "Invite or remove in Team",
+      "columns": {
+        "member": "Member",
+        "role": "Role",
+        "brands": "Brands",
+        "throughChat": "Through Chat",
+        "lastActive": "Last active"
+      },
+      "you": "You",
+      "allBrands": "All brands",
+      "neverSignedIn": "Not yet",
+      "roleChanged": "Role changed",
+      "roleChangeFailed": "Couldn't change the role. Try again.",
+      "loadError": "Couldn't load Roles & access. Try again in a moment.",
+      "throughChat": {
+        "admin": "Everything, incl. policy, keys, connections",
+        "manager": "WRITE with approval · EXECUTE after click",
+        "analyst": "Read-only composer · asks an Admin",
+        "agency_partner": "Read-only composer · asks an Admin"
+      },
+      "matrix": {
+        "title": "What each role can do",
+        "count": "app and Chat",
+        "actsAsUser": "Chat acts as the signed-in person",
+        "capability": "Capability",
+        "adminNote": "Changes roles",
+        "groups": {
+          "everyone": "Everyone · app and Chat",
+          "workspace": "Workspace changes",
+          "admin": "Admin only",
+          "never": "Never through Chat"
+        },
+        "rows": {
+          "readApp": { "name": "See dashboards, prompts, citations and reports", "scope": "App" },
+          "askChat": {
+            "name": "Ask Chat, create files and downloads for yourself",
+            "scope": "Chat"
+          },
+          "personal": {
+            "name": "Personal memory and personal in-app watch rules",
+            "scope": "Chat · only you"
+          },
+          "actions": {
+            "name": "Create or attach actions · prompts, topics, competitors",
+            "scope": "App and Chat"
+          },
+          "drafts": {
+            "name": "Drafts, briefs, schedules, CMS drafts",
+            "scope": "App and Chat · approval card"
+          },
+          "agents": { "name": "Create triggered agents", "scope": "Run with the creator's role" },
+          "shared": {
+            "name": "Workspace memory, shared skills, marketplace skills",
+            "scope": "Chat"
+          },
+          "execute": {
+            "name": "Publish, open a PR, send external email",
+            "scope": "Always after a click"
+          },
+          "billing": {
+            "name": "Billing, plan, AI credit and storage packs",
+            "scope": "Settings › Billing"
+          },
+          "team": { "name": "Team: invite, change roles, remove", "scope": "Settings › Team" },
+          "policy": {
+            "name": "Chat tool policy, Full auto availability",
+            "scope": "Settings › Chat"
+          },
+          "keys": {
+            "name": "Connections, MCP server keys, API and AI provider keys",
+            "scope": "Settings › Integrations · Keys"
+          },
+          "never": {
+            "name": "Mark a task done, change roles or billing, delete a brand, reveal keys",
+            "scope": "Not a Chat tool"
+          }
+        },
+        "cells": {
+          "yes": "Yes",
+          "approves": "approves",
+          "request": "Request",
+          "after_click": "after click",
+          "no": "No",
+          "not_tool": "Not a tool"
+        }
+      },
+      "switches": {
+        "title": "Admin switches",
+        "onlyAdmins": "Only Admins change these",
+        "managerExecute": "Managers can publish, open PRs and send external email after the click",
+        "managerExecuteNote": "EXECUTE always needs a click, whoever runs it",
+        "fullAuto": "Members can use Full auto",
+        "fullAutoNote": "Chat makes routine changes without asking each time",
+        "on": "On",
+        "off": "Off",
+        "offFor": "Off for {groups}",
+        "needsPlan": "Needs {plan}",
+        "setBy": "Set by {name}",
+        "groups": {
+          "publishing": "publishing",
+          "email_outreach": "email and outreach",
+          "code_prs": "pull requests",
+          "feeds": "feed pushes"
+        }
+      }
+    },
+    "yourAccess": {
+      "title": "Your access",
+      "brands": "Brands",
+      "actsAsYou": "Chat acts as you",
+      "yourRole": "Your role: {role}",
+      "rows": {
+        "read": "Read data, ask Chat, files for yourself",
+        "personal": "Personal memory and in-app watch rules",
+        "workspace": "Actions, prompts, drafts, schedules",
+        "agents": "Create triggered agents",
+        "execute": "Publish, open a PR, external email",
+        "settings": "Billing, team, tool policy, connections, keys"
+      },
+      "values": {
+        "yes": "Yes",
+        "yes_card": "Yes · approval card",
+        "after_click": "After your click",
+        "after_click_except": "After your click, except {groups}",
+        "execute_off": "Off: an Admin turned it off for Managers",
+        "ask_admin": "Ask your Admin"
+      },
+      "seeRoles": "See what each role can do",
+      "seeCapabilities": "What Chat can do"
+    },
+    "capabilities": {
+      "title": "What Chat can do",
+      "areas": "{count, plural, one {# area} other {# areas}}",
+      "lead": "Every tool Chat may use, by area: what it reads, what it may change, and who may change it. Anything not listed here, Chat doesn't do.",
+      "search": "Search areas or actions",
+      "filters": {
+        "all": "All",
+        "write": "Has WRITE",
+        "execute": "Has EXECUTE",
+        "read": "Read only"
+      },
+      "columns": {
+        "area": "Area",
+        "read": "Read",
+        "write": "Write",
+        "execute": "Execute",
+        "who": "Who can change"
+      },
+      "legend": {
+        "none": "No approval",
+        "card": "Approval card",
+        "auto": "Can auto-run in Full auto",
+        "click": "Needs your click"
+      },
+      "readAll": "Read: all roles",
+      "locked": "Needs {plan}",
+      "empty": "No area matches your search.",
+      "areaNames": {
+        "account": "Account",
+        "usage": "AI usage",
+        "brands": "Brands",
+        "visibility": "Visibility",
+        "prompts": "Prompts",
+        "topics": "Topics",
+        "mentions": "Mentions",
+        "citations": "Citations",
+        "competitors": "Competitors",
+        "product_visibility": "Product Visibility",
+        "ai_traffic": "AI Referral Traffic",
+        "site_audit": "Site Audit",
+        "action_center": "Action Center",
+        "content": "Content",
+        "reports": "Reports"
+      }
+    }
+  },
   "chatActivity": {
     "summary": {
       "saveDraft": "Saved the draft “{title}”",
@@ -9147,6 +9375,7 @@
     "general": "General",
     "apiKeys": "API Keys",
     "team": "Team",
+    "rolesAccess": "Roles & access",
     "menuAccess": {
       "title": "Menu access",
       "new": "New",
