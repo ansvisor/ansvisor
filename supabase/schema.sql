@@ -43196,14 +43196,16 @@ notify pgrst, 'reload schema';
 --   * chat_step_kinds: the kinds a step can be. A table, not a check: a new
 --     kind (CHAT-03 added `execute`; the Content Editor and images add more)
 --     is a row a later migration inserts, with no constraint to rewrite and
---     no scan of the steps, and a kind no step uses can go again. The web's
---     CHAT_STEP_KINDS (lib/chat/events.ts) lists the same kinds; its test
---     reads them from the migrations.
+--     no scan of the steps. Kinds aren't taken away: a step keeps its kind
+--     (the key refuses deleting one in use, and finding out reads every step,
+--     with no index on kind). The web's CHAT_STEP_KINDS (lib/chat/events.ts)
+--     lists the same kinds; its test reads them from the migrations.
 --   * chat_user_prefs: a person's Chat settings, on the server so they follow
 --     them to every device (DECISIONS N3): the chat menu open or closed
 --     (CHAT-01 9a–9f), where pages open (CHAT-25 §12), what Chat focuses on
 --     (CHAT-24 §3), and their model and effort (CHAT-16; null = the
---     workspace's default, Auto and Normal). Theirs to write.
+--     workspace's default, Auto and Normal). Theirs to write; the server
+--     checks the model against its catalog before a run uses it.
 --
 -- Messages, runs and steps are readable where their chat is (they follow its
 -- policies), so sharing a chat with the team is one more policy on
@@ -43248,7 +43250,8 @@ create table if not exists public.chat_conversations (
   origin_page text check (char_length(origin_page) between 1 and 500),
   pinned_at timestamptz,
   archived_at timestamptz,
-  -- Recents' order: the last message, not a rename or a pin.
+  -- Recents' order: the last message, not a rename or a pin. Kept by the
+  -- trigger on chat_messages below.
   last_message_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -43294,6 +43297,31 @@ create index if not exists chat_messages_conversation_created_idx
 
 comment on table public.chat_messages is
   'Chat (00400): a chat''s messages and answers. An answer holds the answer only, with when it was made and the newest data it read (CHAT-06 38–42). Written by the server.';
+
+-- A new message moves its chat up Recents (last_message_at). Security
+-- definer, so the update reaches the chat whoever writes the message: today
+-- only the server does (service role), and members may not update chats.
+-- greatest(): a message written late never moves its chat back. Not covered
+-- by a test (the repository has no database tests); nothing else sets
+-- last_message_at.
+create or replace function public.chat_touch_last_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.chat_conversations
+  set last_message_at = greatest(last_message_at, new.created_at)
+  where id = new.conversation_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_messages_touch_conversation on public.chat_messages;
+create trigger trg_chat_messages_touch_conversation
+  after insert on public.chat_messages
+  for each row execute function public.chat_touch_last_message();
 
 -- ─── Runs ───────────────────────────────────────────────────────────────────
 
@@ -43375,6 +43403,16 @@ comment on column public.chat_run_steps.debug_json is
 
 -- ─── A person's Chat settings ───────────────────────────────────────────────
 
+-- Whether a list has no value twice: a check can't hold a subquery.
+create or replace function public.chat_text_array_distinct(p_values text[])
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select count(*) = count(distinct v) from unnest(p_values) as t(v);
+$$;
+
 create table if not exists public.chat_user_prefs (
   user_id uuid primary key references auth.users(id) on delete cascade,
   -- The chat menu beside the conversation (CHAT-01 9a–9f); open by default.
@@ -43382,13 +43420,19 @@ create table if not exists public.chat_user_prefs (
   -- Where a page Chat writes opens (CHAT-25 §12): ask each time, keep working
   -- in chat, the editor inside Chat, or the Content Editor.
   page_open text not null default 'ask' check (page_open in ('ask', 'chat', 'here', 'editor')),
-  -- What Chat focuses on (CHAT-24 §2). Null: not asked yet (the picker shows
-  -- once); empty: skipped, or none picked.
+  -- What Chat focuses on (CHAT-24 §2), in the order picked: the first one
+  -- leads Home. Null: not asked yet (the picker shows once); empty: skipped,
+  -- or none picked. Each area once.
   focus text[] check (
     focus <@ array['lead', 'comp', 'growth', 'seo', 'content', 'brand', 'pd', 'bd']::text[]
+    and cardinality(focus) <= 8
+    and public.chat_text_array_distinct(focus)
   ),
-  -- Null: the workspace's default (Auto, Normal).
+  -- Null: the workspace's default (Auto). Only its length is checked here:
+  -- the server checks it against the model catalog and the plan before a
+  -- run uses it (CHAT-16; the price sync and the engine, C1 and C3).
   model text check (char_length(model) between 1 and 200),
+  -- Null: the workspace's default (Normal). CHAT-16 §E: Normal, High, Max.
   effort text check (effort in ('normal', 'high', 'max')),
   updated_at timestamptz not null default now()
 );

@@ -5162,6 +5162,10 @@ export type Database = {
         Args: { p_brand_id: string; p_days?: number }
         Returns: Json
       }
+      chat_text_array_distinct: {
+        Args: { p_values: string[] }
+        Returns: boolean
+      }
       citation_competitor_sources: {
         Args: {
           p_brand_domains: string[]
