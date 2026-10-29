@@ -45,7 +45,7 @@ function table(name) {
     if (name === 'brands') {
       return { data: { id: 'b1', name: 'Acme', organization_id: 'o1' }, error: null };
     }
-    if (name === 'profiles') return { data: { organization_id: 'o1' }, error: null };
+    if (name === 'profiles') return { data: { organization_id: 'o1', role: 'admin' }, error: null };
     if (name === 'prompt_results') return { data: answers, error: null };
     if (name === 'prompt_improve_suggestions') {
       return {

@@ -128,6 +128,8 @@ GET /api/v1/shopping-cards?brand_id=<uuid>&role=own&limit=50
 
 Normalized shopping-card rows (product title, brand, price, merchant, rating, position) captured from AI shopping surfaces. `role` filters to `own`, `competitor` or `other` matches; cursor-paginated via `limit` (default 50, max 200) and the returned `next_cursor`.
 
+Shopping analytics comes with the Growth plan and above. On Starter the endpoint answers `403` with `{ "error": "plan_limit", "message": "…" }`.
+
 ## Using it from Looker Studio
 
 Until a native Community Connector ships, any generic JSON/API connector (or a small Apps Script that calls these endpoints with `UrlFetchApp`) works: point it at `/api/v1/visibility-trend` with your key in the `Authorization` header and join on the `date` column. The endpoints are also what a future official connector will consume.

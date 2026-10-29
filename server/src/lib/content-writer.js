@@ -298,6 +298,40 @@ export function sourcedPage(page, known, people = knownPeople()) {
   };
 }
 
+/**
+ * The cited pages' checks the writer can give a page in its body HTML. Not
+ * its schema (FAQ schema, JSON-LD), date markup or freshness, which the
+ * site's template or CMS sets, nor its byline, which would name a person the
+ * writer doesn't know. The Brief tab still shows them all.
+ */
+export const WRITER_CHECKS = Object.freeze([
+  'length',
+  'structural-depth',
+  'h2-coverage',
+  'lists',
+  'tables',
+  'statistic-density',
+  'quotations',
+  'citation-density',
+  'outbound-authority-links',
+  'readability',
+]);
+
+/**
+ * What the pages AI cites for the draft's prompts have (learning C2), as the
+ * brief's rebuild read them through Site Audit's checks: seen, not guessed.
+ * Only what the writer can give the page (WRITER_CHECKS).
+ */
+export function citedHave(features) {
+  const checks = (features?.checks ?? []).filter(
+    (c) => c?.label && c.pages > 0 && WRITER_CHECKS.includes(c.key),
+  );
+  if (!checks.length) return '';
+  return `\nWhat the pages AI cites for these prompts have (Site Audit's checks, ${features.pages} pages read): ${checks
+    .map((c) => `${c.label} on ${c.pages}`)
+    .join('; ')}. Give the page these where they serve its readers.`;
+}
+
 /** The brief as the model reads it: the draft's own, else its opportunity's. */
 export function briefText(draftBrief, opportunityBrief, { links = true } = {}) {
   if (draftBrief?.outline?.length || draftBrief?.goal) {
@@ -311,7 +345,7 @@ export function briefText(draftBrief, opportunityBrief, { links = true } = {}) {
 Audience: ${draftBrief.audience || '—'}
 Outline:
 ${list(sections)}
-Keywords: ${(draftBrief.keywords ?? []).join(', ') || '—'}${plan ? `\n${plan}` : ''}`;
+Keywords: ${(draftBrief.keywords ?? []).join(', ') || '—'}${citedHave(draftBrief.citedFeatures)}${plan ? `\n${plan}` : ''}`;
   }
   if (opportunityBrief?.outline?.length) {
     const sections = opportunityBrief.outline.map(

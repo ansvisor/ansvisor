@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { setSyncedPrices } from './model-price-cache.js';
 import {
   FALLBACK_PRICE,
   MODEL_PRICES,
@@ -67,6 +68,46 @@ describe('generationCostUsd', () => {
     expect(
       generationCostUsd('anthropic/claude-sonnet-5-5', { inputTokens: 200_000, outputTokens: 0 }),
     ).toBe(0.4);
+  });
+});
+
+describe('priceFor with synced prices (CHAT-16 §A)', () => {
+  afterEach(() => setSyncedPrices([]));
+
+  const HAIKU = {
+    model_id: 'anthropic/claude-haiku-5.5',
+    input_per_m: 0.1,
+    output_per_m: 0.5,
+    overrides: [{ min_prompt_tokens: 100000, prompt: '0.0000005', completion: '0.0000025' }],
+  };
+
+  it('reads the synced price first, under its hyphened or OpenRouter id too', () => {
+    setSyncedPrices([HAIKU]);
+    for (const id of [
+      'anthropic/claude-haiku-5.5',
+      'anthropic/claude-haiku-5-5',
+      'openrouter/anthropic/claude-haiku-5.5',
+    ]) {
+      expect(priceFor(id)).toEqual({ input: 0.1, output: 0.5 });
+    }
+  });
+
+  it("falls back to the server's own table for a model that isn't synced", () => {
+    setSyncedPrices([HAIKU]);
+    expect(priceFor('google/gemini-3-flash-preview')).toBe(
+      MODEL_PRICES['google/gemini-3-flash-preview'],
+    );
+    expect(priceFor('someone/new-model')).toBe(FALLBACK_PRICE);
+  });
+
+  it('prices a call at the prompt-size override once its input is that large', () => {
+    setSyncedPrices([HAIKU]);
+    expect(
+      generationCostUsd('anthropic/claude-haiku-5.5', { inputTokens: 10_000, outputTokens: 1000 }),
+    ).toBeCloseTo(0.0015, 8);
+    expect(
+      generationCostUsd('anthropic/claude-haiku-5.5', { inputTokens: 100_000, outputTokens: 1000 }),
+    ).toBeCloseTo(0.0525, 8);
   });
 });
 

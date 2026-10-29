@@ -3,13 +3,18 @@
  * quota can be a dollar budget — a share of what the customer pays — and stay
  * there whichever model IMPROVE_SUGGESTION_MODEL points at.
  *
- * List prices in USD per million tokens. Update this table when a provider
- * changes its prices or a new model is configured; a model missing here is
- * charged at FALLBACK_PRICE, deliberately expensive, so an unknown model can
- * only use the budget up faster, never overspend it. A model priced higher
- * for a long prompt has its `long` rate, for a call whose input tokens pass
- * `over`.
+ * List prices in USD per million tokens. While CHAT_AGENTIC is on, the
+ * prices synced daily from OpenRouter's catalog come first (model-prices.js,
+ * CHAT-16 §A), at the price in effect; this table prices a model the sync
+ * doesn't have, or every model with the flag off. Update it when a provider
+ * changes its prices or a new model is configured; a model missing from both
+ * is charged at FALLBACK_PRICE, deliberately expensive, so an unknown model
+ * can only use the budget up faster, never overspend it. A model here priced
+ * higher for a long prompt has its `long` rate, for a call whose input tokens
+ * pass `over`.
  */
+
+import { syncedPriceFor } from './model-price-cache.js';
 
 export const MODEL_PRICES = {
   'google/gemini-3-flash-preview': { input: 0.5, output: 3 },
@@ -35,20 +40,24 @@ export const FALLBACK_PRICE = { input: 5, output: 25 };
 const TYPICAL_TOKENS = { input: 7000, output: 2000 };
 
 /**
+ * A model's price: the synced one in effect now (for a call of
+ * `promptTokens`, which may cross a prompt-size price), else this table's.
  * OpenRouter ids carry the provider id after an `openrouter/` prefix
  * (`openrouter/google/gemini-3-flash-preview`); they're priced as that model.
  */
-export function priceFor(modelId) {
+export function priceFor(modelId, { promptTokens = 0 } = {}) {
+  const synced = syncedPriceFor(modelId, { promptTokens });
+  if (synced) return synced;
   const id = String(modelId ?? '').replace(/^openrouter\//, '');
-  return MODEL_PRICES[id] ?? FALLBACK_PRICE;
+  const price = MODEL_PRICES[id] ?? FALLBACK_PRICE;
+  return price.long && promptTokens > price.long.over ? price.long : price;
 }
 
-/** USD cost of one call from the AI SDK's `usage`, at the long rate past its `over`. */
+/** USD cost of one call from the AI SDK's `usage`. */
 export function generationCostUsd(modelId, usage) {
-  const base = priceFor(modelId);
   const input = Number(usage?.inputTokens) || 0;
+  const price = priceFor(modelId, { promptTokens: input });
   const output = Number(usage?.outputTokens) || 0;
-  const price = base.long && input > base.long.over ? base.long : base;
   return (input * price.input + output * price.output) / 1_000_000;
 }
 

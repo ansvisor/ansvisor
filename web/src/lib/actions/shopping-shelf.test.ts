@@ -6,7 +6,13 @@ const BRAND = '33333333-3333-3333-3333-333333333333';
 
 let tables: Record<string, Record<string, unknown>[]>;
 let catalogCount: number | null;
-const reads: { table: string; eq: Record<string, unknown>; gte?: [string, string] }[] = [];
+const reads: {
+  table: string;
+  eq: Record<string, unknown>;
+  gte?: [string, string];
+  in?: Record<string, unknown[]>;
+  limit?: number;
+}[] = [];
 
 function query(table: string) {
   const state: {
@@ -15,6 +21,8 @@ function query(table: string) {
     gte?: [string, string];
     range?: [number, number];
     head?: boolean;
+    in?: Record<string, unknown[]>;
+    limit?: number;
   } = {
     table,
     eq: {},
@@ -23,19 +31,28 @@ function query(table: string) {
     select: (_columns: string, opts?: { head?: boolean }) => ((state.head = opts?.head), q),
     eq: (column: string, value: unknown) => ((state.eq[column] = value), q),
     is: () => q,
-    in: () => q,
+    in: (column: string, values: unknown[]) => ((state.in = { ...state.in, [column]: values }), q),
+    limit: (count: number) => ((state.limit = count), q),
     lte: () => q,
     or: () => q,
     gte: (column: string, value: string) => ((state.gte = [column, value]), q),
     order: () => q,
     range: (from: number, to: number) => ((state.range = [from, to]), q),
     then: (resolve: (value: unknown) => void) => {
-      reads.push({ table: state.table, eq: state.eq, gte: state.gte });
+      reads.push({
+        table: state.table,
+        eq: state.eq,
+        gte: state.gte,
+        ...(state.in ? { in: state.in } : {}),
+        ...(state.limit === undefined ? {} : { limit: state.limit }),
+      });
       if (state.head) return resolve({ data: null, count: catalogCount, error: null });
-      const rows = (tables[table] ?? []).filter((row) =>
-        Object.entries(state.eq).every(([k, v]) => !(k in row) || row[k] === v),
+      const rows = (tables[table] ?? []).filter(
+        (row) =>
+          Object.entries(state.eq).every(([k, v]) => !(k in row) || row[k] === v) &&
+          Object.entries(state.in ?? {}).every(([k, vs]) => vs.includes(row[k])),
       );
-      const [from, to] = state.range ?? [0, 999];
+      const [from, to] = state.range ?? [0, (state.limit ?? 1000) - 1];
       resolve({ data: rows.slice(from, to + 1), error: null });
     },
   };
@@ -46,7 +63,8 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({ from: query })),
 }));
 
-const { getShoppingAiOrders, getShoppingShelf } = await import('./shopping');
+const { getShoppingAiOrders, getShoppingOwnChannels, getShoppingShelf } =
+  await import('./shopping');
 
 beforeEach(() => {
   tables = {};
@@ -89,6 +107,51 @@ describe('getShoppingShelf', () => {
   it('reads no catalog as none', async () => {
     catalogCount = 0;
     expect((await getShoppingShelf(BRAND, { datePreset: '7d' })).catalogProducts).toBeNull();
+  });
+});
+
+describe('getShoppingOwnChannels', () => {
+  it("names the channels with the brand's own products, one row read a channel", async () => {
+    const card = (platform: string, role: string) => ({
+      id: `${platform}-${role}`,
+      platform,
+      matched_brand_role: role,
+    });
+    tables.prompt_result_shopping_cards = [
+      card('chatgpt-shopping', 'own'),
+      card('chatgpt-shopping', 'own'),
+      card('google-aio', 'competitor'),
+      card('gemini-web', 'own'),
+    ];
+    expect(await getShoppingOwnChannels(BRAND, { datePreset: '30d' })).toEqual([
+      'chatgpt-shopping',
+      'gemini-web',
+    ]);
+    expect(reads).toHaveLength(5);
+    for (const read of reads) {
+      expect(read).toMatchObject({
+        table: 'prompt_result_shopping_cards',
+        eq: { brand_id: BRAND, matched_brand_role: 'own' },
+        limit: 1,
+      });
+    }
+    expect(reads.map((read) => read.in?.platform)).toEqual([
+      ['chatgpt-shopping'],
+      ['google-aio'],
+      ['google-aimode'],
+      ['gemini-web'],
+      ['copilot-web'],
+    ]);
+  });
+
+  it('reads every channel whatever the platform filter, and no brand that isn’t an id', async () => {
+    tables.prompt_result_shopping_cards = [
+      { id: 'c1', platform: 'google-aimode', matched_brand_role: 'own' },
+    ];
+    expect(
+      await getShoppingOwnChannels(BRAND, { datePreset: '7d', platforms: ['chatgpt-shopping'] }),
+    ).toEqual(['google-aimode']);
+    await expect(getShoppingOwnChannels('nope', { datePreset: '7d' })).rejects.toThrow('invalid');
   });
 });
 

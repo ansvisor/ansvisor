@@ -96,6 +96,7 @@ vi.mock('./content-agent.js', async (importOriginal) => ({
 }));
 
 const {
+  WRITER_CHECKS,
   WRITE_SYSTEM_PROMPT,
   buildWritePrompt,
   headingCase,
@@ -112,6 +113,7 @@ const {
 const { WRITING_GUARDRAIL } = await import('./content-brief.js');
 const { REWRITE_SYSTEM_PROMPT } = await import('./content-rewrite.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
+const { FEATURE_CHECKS } = await import('./action-center/page-features.js');
 const { textLength } = await import('./content-rewrite.js');
 const {
   PLACEHOLDER_RULE,
@@ -293,6 +295,53 @@ describe('briefText', () => {
       }),
     ).toContain('- Gear');
     expect(briefText(null, null)).toMatch(/^No brief/);
+  });
+
+  /** What the pages AI cites have (learning C2), as the brief's rebuild read them. */
+  it('tells the writer what the cited pages have, seen rather than guessed', () => {
+    const text = briefText(
+      {
+        goal: 'Sell beans',
+        outline: [{ heading: 'Ratio' }],
+        citedFeatures: {
+          pages: 4,
+          checks: [
+            { key: 'statistic-density', label: 'Statistics', pages: 3 },
+            { key: 'tables', label: 'Tables', pages: 2 },
+          ],
+        },
+      },
+      null,
+    );
+    expect(text).toContain(
+      "What the pages AI cites for these prompts have (Site Audit's checks, 4 pages read): Statistics on 3; Tables on 2. Give the page these where they serve its readers.",
+    );
+    expect(briefText({ goal: 'Sell beans', outline: [] }, null)).not.toContain('pages AI cites');
+  });
+
+  it("doesn't ask the writer for what the page's body can't give: schema, dates, a byline", () => {
+    const template = [
+      { key: 'faq-schema', label: 'FAQ schema', pages: 4 },
+      { key: 'json-ld-presence', label: 'JSON-LD', pages: 4 },
+      { key: 'date-markup', label: 'Date markup', pages: 3 },
+      { key: 'freshness', label: 'Freshness', pages: 3 },
+      { key: 'author-byline', label: 'Author byline', pages: 2 },
+    ];
+    const brief = (checks) => ({
+      goal: 'Sell beans',
+      outline: [{ heading: 'Ratio' }],
+      citedFeatures: { pages: 4, checks },
+    });
+    const text = briefText(
+      brief([...template, { key: 'tables', label: 'Tables', pages: 2 }]),
+      null,
+    );
+    expect(text).toContain("(Site Audit's checks, 4 pages read): Tables on 2.");
+    for (const { label } of template) expect(text).not.toContain(label);
+    // Nothing the body can give: no line at all.
+    expect(briefText(brief(template), null)).not.toContain('pages AI cites');
+    // Each is a check the cited pages are read for.
+    expect(WRITER_CHECKS.filter((key) => !FEATURE_CHECKS.includes(key))).toEqual([]);
   });
 });
 
