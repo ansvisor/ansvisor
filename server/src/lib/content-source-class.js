@@ -2,9 +2,11 @@ import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
+import { CONTENT_READ_MAX_TOKENS, contentReadModelId } from './content-brief.js';
 import { QUALITY_CALLS_PER_DAY, qualityCallsToday } from './content-quality-calls.js';
 import { logger } from './logger.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
+import { objectOptions } from './structured-output.js';
 
 /**
  * The kind of source a site is (Quality CE-046, part b), read by the model
@@ -46,11 +48,18 @@ export const SOURCE_CLASS_HOLD_USD = 0.001;
 export const SOURCE_READS_PER_DAY = 40;
 const CALL_TIMEOUT_MS = 30_000;
 
+/**
+ * The model Quality's reads use (the sources' kinds, the claims, the page
+ * read, the brand's facts): QUALITY_CHECK_MODEL, else the Content Editor's
+ * read model (contentReadModelId: Claude Haiku with an Anthropic key), else
+ * the one they ran on before.
+ */
 export function sourceClassModelId() {
   return (
     process.env.QUALITY_CHECK_MODEL ||
-    process.env.DEFAULT_SUGGESTION_MODEL ||
-    'google/gemini-3-flash-preview'
+    contentReadModelId(
+      () => process.env.DEFAULT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview',
+    )
   );
 }
 
@@ -138,7 +147,7 @@ async function readSite({ orgId, draftId, site, modelId }) {
   try {
     const generated = await generateObject({
       model: resolveModel(modelId),
-      schema: answerSchema,
+      ...objectOptions(modelId, answerSchema, { maxOutputTokens: CONTENT_READ_MAX_TOKENS }),
       system: SYSTEM_PROMPT,
       prompt: buildSourceClassPrompt(site),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),

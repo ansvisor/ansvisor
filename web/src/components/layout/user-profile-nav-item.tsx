@@ -1,11 +1,14 @@
 'use client';
 
+import { useContext } from 'react';
 import { useTranslations } from 'next-intl';
 import { Settings } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/use-auth-store';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { RoleContext } from '@/components/providers/role-provider';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 
 interface UserProfileNavItemProps {
   collapsed?: boolean;
@@ -19,6 +22,10 @@ export function UserProfileNavItem({
   className,
 }: UserProfileNavItemProps) {
   const t = useTranslations('nav');
+  const tAccess = useTranslations('chatAccess');
+  // With the new Chat on, the row says the person's role (CHAT-20 §4b).
+  const { role } = useContext(RoleContext);
+  const showRole = useChatAgentic();
   const pathname = usePathname();
   // The row is the sidebar's way into Settings, so it marks Settings as current.
   const active = pathname.startsWith('/dashboard/settings');
@@ -58,7 +65,14 @@ export function UserProfileNavItem({
       </Avatar>
       {!collapsed && (
         <>
-          <span className="truncate text-sm font-medium capitalize">{label}</span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium capitalize">{label}</span>
+            {showRole && (
+              <span className="block truncate text-xs text-muted-foreground">
+                {tAccess(`roleNames.${role}`)}
+              </span>
+            )}
+          </span>
           {/* The whole row opens Settings; the gear says so. */}
           <Settings
             className={cn(

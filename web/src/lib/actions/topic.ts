@@ -29,7 +29,7 @@ function assertTopicNames(names: string[]) {
 }
 
 export async function createTopics(brandId: string, names: string[]): Promise<Topic[]> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId });
   assertTopicNames(names);
   const supabase = await createClient();
 
@@ -85,7 +85,7 @@ export async function getTopicById(brandId: string, topicId: string): Promise<To
 }
 
 export async function createTopic(brandId: string, name: string): Promise<Topic> {
-  await assertWritable();
+  await assertWritable({ brandId });
   assertTopicNames([name]);
   const supabase = await createClient();
 

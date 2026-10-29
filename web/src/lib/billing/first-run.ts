@@ -7,8 +7,7 @@ const API_TIMEOUT_MS = 5_000;
 
 /**
  * The organization's first brand that is not paused: the one onboarding
- * created. Once the demo brand lands (00380, not on main yet), it is skipped
- * too: `.eq('is_demo', false)`.
+ * created. Never the demo brand (00380): it is sample data and never tracked.
  */
 async function firstBrandId(orgId: string): Promise<string | null> {
   const { data: brand } = await supabaseAdmin
@@ -16,6 +15,7 @@ async function firstBrandId(orgId: string): Promise<string | null> {
     .select('id')
     .eq('organization_id', orgId)
     .eq('is_active', true)
+    .eq('is_demo', false)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();

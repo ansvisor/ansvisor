@@ -3,6 +3,7 @@ import type { ShoppingMarket } from '@/lib/shopping/markets';
 import { openAiIndexStatus, type OpenAiIndexRead } from '@/lib/shopping/openai-index';
 import type { ProductRow, ReadinessCheck } from '@/lib/shopping/products';
 import { priceText } from '@/lib/shopping/price';
+import { pageKey } from '@/lib/content/feed-match';
 
 /**
  * Product Visibility's Readiness (ECOM-015, spec §3.4 / §3.4b): how ready
@@ -19,6 +20,7 @@ export type CheckState = 'pass' | 'warn' | 'fail' | 'unknown';
 export type ReadinessKey =
   | 'catalog'
   | 'merchantCenter'
+  | 'googleShopping'
   | 'openAiIndex'
   | 'verifiedSeller'
   | 'firstWords'
@@ -37,6 +39,19 @@ export interface ReadinessItem {
   action?: 'products' | 'settings';
 }
 
+/**
+ * The brand's pages Google showed as merchant listings or product snippets
+ * over the last 28 days (Search Console, 00377), by page key; or why it
+ * can't say: no property mapped, or not read yet.
+ */
+export interface ShoppingSearchAppearance {
+  state: 'not_connected' | 'not_synced' | 'read';
+  pages: string[];
+}
+
+/** At least this share of the products with a page shown passes; fewer, but some, warns. */
+export const SHOWN_PASS_SHARE = 0.5;
+
 export interface ReadinessInput {
   market: ShoppingMarket;
   /** The brand's catalog sources; null when they couldn't be read. */
@@ -49,6 +64,8 @@ export interface ReadinessInput {
   merchantCenterOffered: boolean;
   /** The catalog's products; null without a catalog, or while unread. */
   products: ProductRow[] | null;
+  /** Google's shopping results from Search Console; null when it couldn't be read. */
+  searchAppearance: ShoppingSearchAppearance | null;
   /** OpenAI's product index (US); null when not read. */
   openAi: OpenAiIndexRead | null;
   /** Resellers cheaper than the brand in AI answers; null when not read. */
@@ -98,6 +115,29 @@ export function readinessChecklist(input: ReadinessInput): {
               : 'warn',
       action: merchantCenter || input.catalog === null ? undefined : 'settings',
     });
+  }
+  if (products.length) {
+    // The products with a page, as Search Console's pages are keyed.
+    const linked = new Set(products.flatMap((row) => pageKey(row.product.url) ?? []));
+    const search = input.searchAppearance;
+    if (!search || search.state !== 'read' || linked.size === 0) {
+      items.push({
+        key: 'googleShopping',
+        state: 'unknown',
+        values: {
+          reason: !search ? 'unread' : search.state === 'read' ? 'no_pages' : search.state,
+        },
+        action: search?.state === 'not_connected' ? 'settings' : undefined,
+      });
+    } else {
+      const shownPages = new Set(search.pages);
+      const shown = [...linked].filter((key) => shownPages.has(key)).length;
+      items.push({
+        key: 'googleShopping',
+        state: shown === 0 ? 'fail' : shown / linked.size >= SHOWN_PASS_SHARE ? 'pass' : 'warn',
+        values: { count: shown, total: linked.size },
+      });
+    }
   }
   if (input.market === 'us') {
     if (input.openAi) {

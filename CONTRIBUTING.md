@@ -165,6 +165,15 @@ We follow [GitHub Flow](https://docs.github.com/en/get-started/using-github/gith
    migration, and the other half is applying it to the hosted database. You do
    not need to do anything about the label yourself.
 
+   If the migration adds a table with a `brand_id`, say what the
+   [demo brand](docs/guides/demo-brand.mdx) shows for it: build its rows in a
+   module under `server/src/lib/demo/`, or list it in `SKIPPED` in
+   `server/src/lib/demo/coverage.js` with the reason. `coverage.test.js` fails
+   until you do. A change to what the demo's data looks like (a module's rows,
+   or a column a page reads from them) also bumps `DEMO_VERSION` in
+   `server/src/lib/demo/index.js`, so every demo brand is rebuilt on its next
+   visit.
+
 5. If your change alters what a user sees or does, add or update its Help
    article under `help/` in the same pull request ("Help article updated"):
    one article per page, feature, setting and main task, in the format of

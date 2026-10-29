@@ -92,7 +92,7 @@ export async function approveTaskReview(
   reviewId: string,
   edit: TaskDetailsEdit & { title: string },
 ): Promise<ApproveTaskReviewResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!isTaskDetailsEdit(edit) || typeof edit.title !== 'string') return { error: 'invalid' };
   const supabase = await createClient();
   const { data: row, error: readError } = await supabase
@@ -125,7 +125,7 @@ export async function approveTaskReview(
 
 /** A task waiting for review dropped: it never reaches the action. */
 export async function dismissTaskReview(brandId: string, reviewId: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { data: row, error: readError } = await supabase
     .from('action_task_reviews')
