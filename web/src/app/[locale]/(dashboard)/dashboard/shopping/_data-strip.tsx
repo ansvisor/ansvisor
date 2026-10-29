@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatRelative } from '@/lib/format-relative';
 import { listCatalogSources } from '@/lib/actions/catalog';
+import { getMerchantCenterOffered } from '@/lib/actions/integrations';
 import { getTrafficSources, type TrafficSources } from '@/lib/actions/traffic';
 import type { CatalogSource } from '@/lib/catalog';
 import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
@@ -19,6 +20,11 @@ export interface ProductSources {
   /** Null while loading, or when it couldn't be read. */
   catalog: CatalogSource[] | null;
   google: TrafficSources | null;
+  /**
+   * Whether this deployment can connect Google Merchant Center. Where it
+   * can't and the brand has none, the page doesn't ask for one.
+   */
+  merchantCenterOffered: boolean;
 }
 
 /** The brand's sources, read once per brand and again after a connection made on the page. */
@@ -27,6 +33,7 @@ export function useProductSources(brandId: string | null) {
     brandId: null,
     catalog: null,
     google: null,
+    merchantCenterOffered: false,
   });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -35,8 +42,9 @@ export function useProductSources(brandId: string | null) {
     void Promise.all([
       listCatalogSources(brandId).catch(() => null),
       getTrafficSources(brandId).catch(() => null),
-    ]).then(([catalog, google]) => {
-      if (!cancelled) setSources({ brandId, catalog, google });
+      getMerchantCenterOffered(),
+    ]).then(([catalog, google, merchantCenterOffered]) => {
+      if (!cancelled) setSources({ brandId, catalog, google, merchantCenterOffered });
     });
     return () => {
       cancelled = true;
@@ -44,11 +52,15 @@ export function useProductSources(brandId: string | null) {
   }, [brandId, attempt]);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
   // A read for another brand (just switched) counts as still loading.
-  const current = sources.brandId === brandId ? sources : { catalog: null, google: null };
+  const current =
+    sources.brandId === brandId
+      ? sources
+      : { catalog: null, google: null, merchantCenterOffered: false };
   return {
     loaded: sources.brandId === brandId,
     catalog: current.catalog,
     google: current.google,
+    merchantCenterOffered: current.merchantCenterOffered,
     reload,
   };
 }
@@ -56,7 +68,8 @@ export function useProductSources(brandId: string | null) {
 /**
  * The marketplaces and feeds a brand's products also sell through (ECOM-spec
  * §3.0). Google Merchant Center connects in Settings › Integrations, as a
- * catalog source; the marketplaces have no connector yet.
+ * catalog source, where the deployment offers it; else it is Soon, as the
+ * marketplaces with no connector yet.
  */
 const MARKETPLACES = [
   { id: 'merchant_center', name: 'Google Merchant Center', mark: 'G' },
@@ -70,9 +83,13 @@ const MARKETPLACES = [
 
 type ChipState = 'connected' | 'connect' | 'soon';
 
-function chipState(id: string, catalog: CatalogSource[]): ChipState {
+function chipState(
+  id: string,
+  catalog: CatalogSource[],
+  merchantCenterOffered: boolean,
+): ChipState {
   if (catalog.some((source) => source.kind === id)) return 'connected';
-  return id === 'merchant_center' ? 'connect' : 'soon';
+  return id === 'merchant_center' && merchantCenterOffered ? 'connect' : 'soon';
 }
 
 /** The newest sync of the brand's sources, or null when none has synced. */
@@ -188,7 +205,7 @@ export function ProductDataStrip({
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-xs font-medium text-muted-foreground">{t('marketplaces')}</span>
         {MARKETPLACES.map((place) => {
-          const state = chipState(place.id, catalog);
+          const state = chipState(place.id, catalog, sources.merchantCenterOffered);
           return (
             <span
               key={place.id}

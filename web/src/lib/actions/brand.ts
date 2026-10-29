@@ -37,6 +37,10 @@ function mapBrandRow(brand: Record<string, unknown>, domains: Record<string, unk
     trackingCode: (brand.tracking_code as string | null) ?? undefined,
     shoppingModeEnabled: !!brand.shopping_mode_enabled,
     siteType: (brand.site_type as string | null) ?? undefined,
+    siteTypeSource:
+      brand.site_type_source === 'auto' || brand.site_type_source === 'manual'
+        ? brand.site_type_source
+        : undefined,
     conversionsEnabled: brand.conversions_enabled === true,
     conversionsConsent: brand.conversions_consent === 'always' ? 'always' : 'wait',
     isActive: brand.is_active === undefined ? true : !!brand.is_active,
@@ -358,23 +362,42 @@ async function applyShoppingMode(
 
 /**
  * Setup found the brand sells products online (competitor research's
- * isEcommerce): its industry becomes E-commerce & Retail when it has none,
- * and Shopping mode goes on, so Product Visibility shows in the menu. A
- * brand already in Shopping mode is left as it is.
+ * isEcommerce): its site type becomes e-commerce, as a detection, unless a
+ * person chose one (00379); its industry becomes E-commerce & Retail when it
+ * has none; and Shopping mode goes on, so Product Visibility shows in the
+ * menu. A brand already in Shopping mode keeps its industry and mode.
+ * `siteType` is the type written, null when it was left as it was.
  */
 export async function markBrandAsEcommerce(
   brandId: string,
-): Promise<{ industry: string | null; promptsUpdated: number }> {
+): Promise<{ industry: string | null; promptsUpdated: number; siteType: SiteType | null }> {
   await assertWritable({ onboarding: true });
   const supabase = await createClient();
   const { data: brand, error } = await supabase
     .from('brands')
-    .select('industry, shopping_mode_enabled')
+    .select('industry, shopping_mode_enabled, site_type, site_type_source')
     .eq('id', brandId)
     .single();
   if (error || !brand) throw new Error(error?.message ?? 'Brand not found');
 
-  if (brand.shopping_mode_enabled) return { industry: brand.industry ?? null, promptsUpdated: 0 };
+  let siteType: SiteType | null = null;
+  if (brand.site_type_source !== 'manual' && brand.site_type !== 'ecommerce') {
+    // Stamped as a detection, so the trigger keeps it auto.
+    const { data: typed, error: typeErr } = await supabase
+      .from('brands')
+      .update({ site_type: 'ecommerce', site_type_detected_at: new Date().toISOString() })
+      .eq('id', brandId)
+      .select('id');
+    if (typeErr) throw new Error(typeErr.message);
+    if (!typed || typed.length === 0) {
+      throw new Error('Brand not found or you do not have permission to update it.');
+    }
+    siteType = 'ecommerce';
+  }
+
+  if (brand.shopping_mode_enabled) {
+    return { industry: brand.industry ?? null, promptsUpdated: 0, siteType };
+  }
 
   let industry: string | null = brand.industry ?? null;
   if (!industry) {
@@ -391,7 +414,7 @@ export async function markBrandAsEcommerce(
     industry = ecommerce;
   }
   const { promptsUpdated } = await applyShoppingMode(supabase, brandId, true);
-  return { industry, promptsUpdated };
+  return { industry, promptsUpdated, siteType };
 }
 
 /**

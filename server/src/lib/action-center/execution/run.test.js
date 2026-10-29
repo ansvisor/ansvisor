@@ -15,6 +15,7 @@ import { ENGINE_THRESHOLDS } from '../../../config/action-engine.js';
 
 const { maxTaskRunsPerNight } = ENGINE_THRESHOLDS.noise;
 import { TOOLS } from './tools.js';
+import { ReadLaterError } from '../competitor-pages.js';
 
 const TASK = 'task-1';
 const ACTION = 'action-1';
@@ -160,6 +161,48 @@ describe('runTask', () => {
     const run = writes.inserted.find((w) => w.table === 'action_task_runs');
     expect(run.row).toMatchObject({ status: 'failed' });
     expect(run.row.error).toContain('timeout');
+  });
+
+  /** A tool whose reads for the day are spent (learning C1) tries again the next night. */
+  it('leaves the task as it was when its tool can only go on tomorrow', async () => {
+    rpc.mockRejectedValue(Object.assign(new Error('reads for today spent'), { retryLater: true }));
+    const writes = mockDb({ task: task(), action });
+
+    const result = await runTask(TASK, { now: NOW, sources: ALL });
+
+    expect(result).toEqual({ status: 'blocked', reason: 'reads for today spent' });
+    expect(writes.updated.some((w) => w.table === 'action_tasks')).toBe(false);
+    expect(writes.inserted.find((w) => w.table === 'action_task_runs').row).toMatchObject({
+      status: 'blocked',
+      error: 'reads for today spent',
+    });
+    expect(writes.inserted.some((w) => w.table === 'action_events')).toBe(false);
+  });
+
+  /**
+   * A tool with nothing to work on (learning C1: no page cited) doesn't
+   * complete its task: the task stays a person's, shows why, and the sweep
+   * passes it over for a week.
+   */
+  it('leaves the task to a person, with why, when its tool found nothing to work on', async () => {
+    const why = { competitorPages: [], gaps: [], reason: 'none_cited' };
+    rpc.mockRejectedValue(new ReadLaterError('no page cited', { output: why, retryDays: 7 }));
+    const writes = mockDb({ task: task(), action });
+
+    const result = await runTask(TASK, { now: NOW, sources: ALL });
+
+    const retryAfter = '2026-10-02T06:00:00.000Z';
+    expect(result).toEqual({ status: 'blocked', reason: 'no page cited', retryAfter });
+    const [kept, ...more] = writes.updated.filter((w) => w.table === 'action_tasks');
+    expect(more).toEqual([]);
+    expect(kept.patch).not.toHaveProperty('status');
+    expect(kept.patch.output).toEqual({ ...why, retryAfter });
+    expect(writes.inserted.find((w) => w.table === 'action_task_runs').row).toMatchObject({
+      status: 'blocked',
+      output: why,
+      error: 'no page cited',
+    });
+    expect(writes.inserted.some((w) => w.table === 'action_events')).toBe(false);
   });
 
   it('records a blocked attempt rather than passing over it in silence', async () => {
@@ -408,6 +451,28 @@ describe('sweepTaskExecution', () => {
     expect(summary.succeeded + summary.failed + summary.blocked).toBe(maxTaskRunsPerNight);
   });
 
+  it('passes over a task waiting to be tried again, without it taking a place', async () => {
+    const waiting = {
+      task_key: 'validate',
+      action_id: ACTION,
+      retry_after: '2026-10-01T00:00:00Z',
+    };
+    const due = Array.from({ length: maxTaskRunsPerNight }, (_, i) => ({
+      id: `t${i}`,
+      task_key: 'validate',
+      action_id: ACTION,
+      // Its week is over: tried again.
+      ...(i === 0 ? { retry_after: '2026-09-24T00:00:00Z' } : {}),
+    }));
+    mockSweep([{ id: 'w1', ...waiting }, { id: 'w2', ...waiting }, ...due]);
+
+    const summary = await sweepTaskExecution({ now: NOW });
+
+    expect(summary.waitingToRetry).toBe(2);
+    expect(summary.skippedForCeiling).toBe(0);
+    expect(summary.succeeded + summary.failed + summary.blocked).toBe(maxTaskRunsPerNight);
+  });
+
   it('carries on past a task that throws unexpectedly', async () => {
     mockSweep([
       { id: 't1', task_key: 'validate', action_id: ACTION },
@@ -527,7 +592,7 @@ describe('sweepTaskExecution', () => {
       const asked = mockPlanSweep(lapsedThenPaying());
       await sweepTaskExecution({ now: NOW });
       expect(asked.select).toBe(
-        'id, task_key, action_id, actions!inner(status, brands!inner(is_demo))',
+        'id, task_key, action_id, retry_after:output->>retryAfter, actions!inner(status, brands!inner(is_demo))',
       );
       expect(asked.filters.map(([column]) => column)).not.toContain(
         'actions.brands.organizations.subscription_status',
