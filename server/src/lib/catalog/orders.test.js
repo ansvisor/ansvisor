@@ -113,6 +113,45 @@ describe('syncCatalogOrders', () => {
     expect(fake.rows('catalog_order_items')[0]).toMatchObject({ quantity: 1, revenue: 250 });
   });
 
+  it('retries an order when a line-item write fails after the order header was upserted', async () => {
+    let failOnce = true;
+    const db = {
+      from(table) {
+        const builder = fake.db.from(table);
+        if (table !== 'catalog_order_items') return builder;
+
+        const insertRows = builder.insert.bind(builder);
+        builder.insert = (payload) => ({
+          then(resolve, reject) {
+            if (failOnce) {
+              failOnce = false;
+              return Promise.resolve({
+                data: null,
+                error: { message: 'simulated line-item insert failure' },
+              }).then(resolve, reject);
+            }
+            return Promise.resolve(insertRows(payload)).then(resolve, reject);
+          },
+        });
+        return builder;
+      },
+    };
+
+    await expect(syncCatalogOrders(BRAND, SOURCE, [ORDER], { db })).rejects.toThrow(
+      'catalog_order_items write: simulated line-item insert failure',
+    );
+    expect(fake.rows('catalog_orders')).toHaveLength(1);
+    expect(fake.rows('catalog_order_items')).toEqual([]);
+
+    const recovered = await syncCatalogOrders(BRAND, SOURCE, [ORDER], { db });
+    expect(recovered).toMatchObject({ added: 0, changed: 1, unchanged: 0, items: 1 });
+    expect(fake.rows('catalog_order_items')).toHaveLength(1);
+
+    const subsequent = await syncCatalogOrders(BRAND, SOURCE, [ORDER], { db });
+    expect(subsequent).toMatchObject({ added: 0, changed: 0, unchanged: 1, items: 0 });
+    expect(fake.rows('catalog_order_items')).toHaveLength(1);
+  });
+
   it('skips orders without a valid id/date and drops malformed line items', async () => {
     const counts = await syncCatalogOrders(
       BRAND,
