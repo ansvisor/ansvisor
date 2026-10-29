@@ -70,16 +70,18 @@ export default async function BrandsPage() {
     orgId ? getOrgPlan(orgId) : getPlan(null),
   ]);
 
+  // The demo brand (sample data) is none of the plan's brands: never counted,
+  // and not listed while hidden.
+  const listed = brands.filter((b) => !(b.isDemo && b.demoHiddenAt));
+  const counted = brands.filter((b) => !b.isDemo).length;
   const maxBrands = plan.limits.maxBrands;
-  // The demo brand (00380) never counts against the plan.
-  const ownBrands = brands.filter((b) => !b.isDemo).length;
-  const canAddBrand = maxBrands === -1 || ownBrands < maxBrands;
+  const canAddBrand = maxBrands === -1 || counted < maxBrands;
   const needsUpgrade = !canAddBrand && checkIsCloud();
 
   return (
     <div className="space-y-6">
       <BrandsHeader canManage={canManage} canAddBrand={canAddBrand} needsUpgrade={needsUpgrade} />
-      <BrandsClient brands={brands} />
+      <BrandsClient brands={listed} />
     </div>
   );
 }

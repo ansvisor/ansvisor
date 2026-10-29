@@ -59,6 +59,7 @@
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
       "payment_failed": "Your last payment didn't go through, so your workspace is read-only. You can look around; adding, running and AI need the payment method updated.",
+      "trial": "Your brand isn't tracked yet. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} other {Start a {days}-day free trial.}}",
       "seePlans": "See plans"
     },
     "dialog": {
@@ -78,39 +79,37 @@
       "ended": "Ask your admin to choose a plan.",
       "endedNamed": "Ask {name}, your workspace admin, to choose a plan.",
       "payment_failed": "Ask your workspace admin to update the payment method.",
-      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method."
+      "payment_failedNamed": "Ask {name}, your workspace admin, to update the payment method.",
+      "demo": "Ask your admin to choose a plan.",
+      "demoNamed": "Ask {name}, your workspace admin, to choose a plan.",
+      "trial": "Ask your admin to choose a plan.",
+      "trialNamed": "Ask {name}, your workspace admin, to choose a plan."
     },
     "choosePlan": "Choose a plan",
     "updatePayment": "Update payment method",
     "portalFailed": "Couldn't open the billing page. Try again.",
-    "plans": {
-      "perMonthBilledYearly": "{price} a month, billed yearly",
-      "chooseToday": "Choose {plan} · {price} today",
-      "openingCheckout": "Opening checkout…",
-      "payByCard": "You'll pay by card on Stripe's checkout.",
-      "askAdmin": "Ask your admin to choose a plan",
-      "customName": "Custom",
-      "customTagline": "For large companies and agencies managing AI visibility at scale.",
-      "startingAt": "Starting at",
-      "customAiUsage": "Custom AI usage, from {count}x",
-      "contactUs": "Contact us",
-      "pricesInUsd": "Prices in USD.",
-      "promo": {
-        "apply": "Apply",
-        "checking": "Checking…",
-        "remove": "Remove the code",
-        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
-        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
-        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
-        "then": "then {price}/mo",
-        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
-        "monthlyOnly": "{code} is for monthly plans: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
-        "switchToMonthly": "Switch to Monthly",
-        "invalid": "“{code}” isn’t a valid code.",
-        "failed": "Couldn't check the code. Try again."
-      }
-    },
     "noPlan": "No active plan",
+    "demo": {
+      "dialog": {
+        "title": "Use Ansvisor for your own brand",
+        "titleFor": "Use Ansvisor for {brand}",
+        "body": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for your own brand.",
+        "bodyFor": "This is a demo brand with sample data, so nothing here runs or costs anything. Pick a plan and Ansvisor starts tracking, writing and fixing for {brand}.",
+        "action": "{action} works on your own brand",
+        "label": "This is a demo brand with sample data"
+      },
+      "ownBrand": {
+        "title": "This is a demo brand",
+        "body": "It shows Ansvisor with sample data, so nothing here runs. Switch to your own brand to do this."
+      },
+      "switchToOwnBrand": "Switch to your brand"
+    },
+    "trialOffer": {
+      "title": "Choose how to start",
+      "body": "Everything you set up is here. Pick a plan and Ansvisor starts tracking, writing and fixing for your brand.",
+      "bodyFor": "Everything you set up for {brand} is here. Pick a plan and Ansvisor starts tracking, writing and fixing for it.",
+      "label": "Your brand isn't tracked yet"
+    },
     "actions": {
       "addPrompts": "Adding prompts needs a plan",
       "removeLocations": "Removing locations needs a plan",
@@ -249,7 +248,110 @@
       "removeAuthors": "Removing authors needs a plan",
       "setDefaultAuthor": "Setting a default author needs a plan",
       "setByline": "Changing the byline setting needs a plan",
-      "changeContentSettings": "Changing content settings needs a plan"
+      "changeContentSettings": "Changing content settings needs a plan",
+      "disconnectIntegrations": "Disconnecting an integration needs a plan"
+    },
+    "plans": {
+      "perMonthBilledYearly": "{price} a month, billed yearly",
+      "openingCheckout": "Opening checkout…",
+      "askAdmin": "Ask your admin to choose a plan",
+      "customName": "Custom",
+      "customTagline": "For large companies and agencies managing AI visibility at scale.",
+      "startingAt": "Starting at",
+      "customAiUsage": "Custom AI usage, from {count}x",
+      "contactUs": "Contact us",
+      "pricesInUsd": "Prices in USD.",
+      "promo": {
+        "apply": "Apply",
+        "checking": "Checking…",
+        "remove": "Remove the code",
+        "applied": "{code} · {discount} off {duration, select, once {your first month} repeating {your first {months, plural, one {month} other {# months}}} other {every month}}",
+        "deal": "{code}: {duration, select, once {first month} repeating {first {months, plural, one {month} other {# months}}} other {every month}} {discount} off",
+        "per": "{duration, select, once {first month} repeating {/mo for {months, plural, one {# month} other {# months}}} other {/mo}}",
+        "then": "then {price}/mo",
+        "appliedNote": "{duration, select, once {Code applied. You pay {discount} less for the first month, then the plan’s usual price each month.} repeating {Code applied. You pay {discount} less for the first {months, plural, one {month} other {# months}}, then the plan’s usual price each month.} other {Code applied. You pay {discount} less every month.}}",
+        "monthlyOnly": "{code} is for buying monthly: {discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}.",
+        "switchToMonthly": "Switch to Monthly",
+        "invalid": "“{code}” isn’t a valid code.",
+        "failed": "Couldn't check the code. Try again."
+      }
+    }
+  },
+  "planOffer": {
+    "buyNow": "Buy now",
+    "startTrial": "Start {days}-day free trial",
+    "fullPlan": "Full plan from day one",
+    "limitedAi": "Limited AI usage for {days} days",
+    "cardNote": "{both, select, yes {Card required for both.} other {Card required.}}",
+    "limitedOffer": "Limited offer",
+    "trialUsed": "This workspace's free trial has been used. Buy now to start the plan.",
+    "chooseHowToStart": "Choose how to start",
+    "choosePlan": "Choose Your Plan",
+    "choice": {
+      "label": "How to start",
+      "trial": "{days}-day trial",
+      "month": "Monthly",
+      "monthOffer": "{discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}",
+      "year": "Yearly"
+    },
+    "dueToday": "Due today",
+    "freeUntil": "Free until {date}, then {price}/month",
+    "trustLine": "<part>Secure checkout with Stripe</part> · <part>Cancel any time</part>",
+    "haveCode": "Have a code?",
+    "showDetails": "Show plan details",
+    "hideDetails": "Hide plan details",
+    "readyToTrack": "Ready to track for <b>{brand}</b>: {prompts, plural, one {# prompt} other {# prompts}} · {topics, plural, one {# topic} other {# topics}} · {competitors, plural, one {# competitor} other {# competitors}}"
+  },
+  "demo": {
+    "band": {
+      "text": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start a {days}-day free trial, or get 50% off your first month.} trial {Start a {days}-day free trial.} discount {Get 50% off your first month.} other {Pick a plan to use it for your own brand.}}",
+      "textFor": "You're exploring <b>{brand}</b>, a demo brand with sample data. {offer, select, both {Start tracking <b>{ownBrand}</b> with a {days}-day free trial, or get 50% off your first month.} trial {Start tracking <b>{ownBrand}</b> with a {days}-day free trial.} discount {Get 50% off your first month of tracking <b>{ownBrand}</b>.} other {Pick a plan to track <b>{ownBrand}</b>.}}",
+      "textPlanActive": "You're exploring <b>{brand}</b>, a demo brand with sample data. Nothing here runs or uses AI.",
+      "switchToOwnBrand": "Switch to your brand",
+      "switchToBrand": "Switch to {brand}"
+    },
+    "switcher": {
+      "sampleData": "Demo · sample data",
+      "notTracked": "Not tracked yet",
+      "show": "Show the demo brand",
+      "hide": "Hide the demo brand",
+      "failed": "Couldn't change the demo brand. Try again."
+    },
+    "explore": {
+      "failed": "Couldn't open the demo brand. Try again."
+    },
+    "onboarding": {
+      "title": "Not ready to add a card? Explore a demo brand",
+      "body": "See Ansvisor with sample data: prompts, AI answers, content and reports. No card needed. {brand} stays saved, and tracking starts when you pick a plan.",
+      "yourBrand": "Your brand",
+      "cta": "Explore the demo"
+    },
+    "seeTheDemo": "See the demo",
+    "settingUp": "Setting up the demo…",
+    "setup": {
+      "title": "Preparing your demo",
+      "body": "{brand} is a made-up coffee brand with a month of sample data. Nothing here runs or costs anything.",
+      "steps": {
+        "brand": "Setting up {brand}",
+        "answers": "Preparing sample AI answers from {platforms} platforms",
+        "citations": "Adding the sources they cite",
+        "mentions": "Scoring mentions and sentiment",
+        "audit": "Auditing the site's pages",
+        "actions": "Building the Action Center",
+        "content": "Finding content opportunities",
+        "reports": "Preparing reports"
+      },
+      "usual": "This takes a few seconds the first time.",
+      "slow": "This is taking longer than usual.",
+      "ready": "Ready. Opening the Action Center…",
+      "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "retry": "Try again",
+      "close": "Close"
+    },
+    "chat": {
+      "soon": "Soon (next week)",
+      "note": "Chat arrives next week. This is a preview of it.",
+      "frameTitle": "Chat preview"
     }
   },
   "managersOnly": {
@@ -9595,6 +9697,8 @@
     "signOut": "Sign out",
     "billingDescription": "Manage your subscription and billing details.",
     "currentPlan": "Current Plan",
+    "noPlanYet": "No plan yet",
+    "noPlanYetHint": "Your brands are saved. Tracking starts once you choose a plan below.",
     "month": "mo",
     "year": "yr",
     "renewsOn": "Renews on {date}",
@@ -9637,6 +9741,7 @@
     "choosePlanTitle": "Choose a plan",
     "choosePlanFor": "Choose {plan}",
     "planEnded": "Your plan isn't active. Choose one to start it again; you'll pay on Stripe's secure checkout.",
+    "planNotStarted": "Buy a plan now, or try one free for {days} days first. Either way you add a card on Stripe's secure checkout.",
     "checkoutFailed": "Couldn't open the checkout. Try again.",
     "planAdminOnly": "Only admins can buy or change the plan. Ask an admin in your organization.",
     "seeAllPlanFeatures": "See everything each plan includes",
@@ -10195,6 +10300,26 @@
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
+    "integrations_comingSoon": "Coming soon",
+    "demoIntegrations": {
+      "sampleData": "Sample data",
+      "shopify": {
+        "label": "Shopify",
+        "description": "Your Shopify store's products, for Product Visibility and its pages."
+      },
+      "wordpress": {
+        "label": "WordPress",
+        "description": "Where Send to CMS puts a brand's pages on your WordPress site."
+      },
+      "framer": {
+        "label": "Framer",
+        "description": "Where Send to CMS puts a brand's pages on your Framer site."
+      },
+      "wix": {
+        "label": "Wix",
+        "description": "Where Send to CMS puts a brand's pages on your Wix site."
+      }
+    },
     "integrations_disconnect": "Disconnect",
     "integrations_disconnectDescription": "The stored connection is removed for the whole organization. You can reconnect at any time.",
     "removeMember": "Remove team member",
@@ -10391,6 +10516,7 @@
       "deleteButton": "Delete Brand Permanently",
       "managersOnlyEdit": "Only admins and managers can change these settings.",
       "adminsOnlyDelete": "Only admins can delete a brand.",
+      "demoCantDelete": "The demo brand can't be deleted; hide it from the brand menu instead.",
       "conversions": {
         "title": "Conversions from AI visits",
         "description": "Follow visitors who came from an AI assistant to a signup, a demo form or an order, so the Content Editor shows what each page earns.",

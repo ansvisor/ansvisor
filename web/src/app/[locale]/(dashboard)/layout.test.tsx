@@ -11,6 +11,20 @@ import messages from '../../../../messages/en.json';
  * onboarding's plan step.
  */
 
+// An in-memory localStorage for the brand store: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
+
 let profile: Record<string, unknown> | null;
 let org: Record<string, unknown> | null;
 let orgError: { message: string } | null;
@@ -46,6 +60,13 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
   usePathname: () => '/dashboard/insights',
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+vi.mock('@/lib/demo/demo-client', () => ({
+  ensureDemoBrand: vi.fn(),
+  prepareDemoBrand: vi.fn(async () => ({ ok: false, status: 0 })),
+  demoPreparation: () => null,
+  setDemoHidden: vi.fn(),
 }));
 
 const pass = ({ children }: { children: ReactNode }) => <>{children}</>;
@@ -56,12 +77,25 @@ vi.mock('@/components/layout/mobile-nav', () => ({ MobileNav: none }));
 vi.mock('@/components/layout/tracking-job-handoff', () => ({ TrackingJobHandoff: none }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({ AiUsageProvider: pass }));
-vi.mock('@/components/providers/brand-loader', () => ({ BrandLoader: none }));
+// The brands the layout hands the brand store (the store is marked loaded
+// in beforeEach, as BrandLoader leaves it).
+let loaded: { id: string }[] = [];
+vi.mock('@/components/providers/brand-loader', () => ({
+  BrandLoader: ({ brands }: { brands: { id: string }[] }) => {
+    loaded = brands;
+    return null;
+  },
+}));
 vi.mock('@/components/providers/brand-guard', () => ({ BrandGuard: pass }));
 vi.mock('@/components/getting-started/page-opened', () => ({ GettingStartedPageOpened: none }));
-vi.mock('@/lib/actions/brand', () => ({ getBrands: async () => [] }));
+let orgBrands: { id: string; isDemo?: boolean; demoHiddenAt?: string | null }[] = [];
+vi.mock('@/lib/actions/brand', () => ({
+  getBrands: async () => orgBrands,
+  getBrandById: vi.fn(),
+}));
 
 const { default: DashboardLayout } = await import('./layout');
+const { useBrandStore } = await import('@/stores/use-brand-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -103,6 +137,9 @@ beforeEach(() => {
   };
   orgError = null;
   owner = null;
+  orgBrands = [];
+  loaded = [];
+  useBrandStore.setState({ loaded: true });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -170,5 +207,35 @@ describe('the dashboard layout', () => {
     expect(await open()).toBeNull();
     expect(container.textContent).toContain('Page content');
     expect(band()).toBeNull();
+  });
+});
+
+describe('the dashboard layout and the demo brand', () => {
+  it('lists the demo brand with the others', async () => {
+    orgBrands = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: null }];
+    expect(await open()).toBeNull();
+    expect(loaded.map((b) => b.id)).toEqual(['b1', 'demo']);
+  });
+
+  it('leaves a hidden demo brand out of the brand list', async () => {
+    orgBrands = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: '2026-10-28T00:00:00Z' }];
+    expect(await open()).toBeNull();
+    expect(loaded.map((b) => b.id)).toEqual(['b1']);
+  });
+
+  it('lets an admin who never subscribed explore the demo brand instead of the plan step', async () => {
+    org = { ...org, subscription_status: null, stripe_subscription_id: null };
+    orgBrands = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: null }];
+    expect(await open()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Page content');
+    // Read-only on the own brand, with its free trial and the way to the demo.
+    expect(band()?.textContent).toContain(
+      "Your brand isn't tracked yet. Start a 14-day free trial, or get 50% off your first month.",
+    );
+    expect([...band()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'See plans',
+      'See the demo',
+    ]);
   });
 });
