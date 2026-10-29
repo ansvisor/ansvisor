@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
 
 import logger from './lib/logger.js';
+import { handleProcessErrors } from './lib/process-errors.js';
 import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
@@ -75,6 +76,9 @@ import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
 import { startModelPriceSync } from './lib/model-prices.js';
+
+// Before anything starts: a stray rejection is logged, not a crash.
+handleProcessErrors();
 
 const app = express();
 app.set('trust proxy', 1);
