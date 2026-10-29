@@ -34,6 +34,10 @@ Over 7 days or more, every prompt tracked daily has had its day. A 24-hour range
 
 Self-hosted instances turn this on with `CLORO_CHATGPT_FANOUT` (off unless set; see [Environment variables](/self-host/env-variables)). The extra cost is per ChatGPT task, and a prompt has one task per location: a prompt tracked in 3 locations pays it 3 times on its day. The day is the UTC day the nightly run starts, so with a schedule close to midnight UTC a prompt can be asked 0 or 2 times in a week.
 
+### API models' fan-out
+
+A prompt tracked with an OpenAI model (an AI model, not the ChatGPT platform) shares the searches that model ran, from the same answer: they show as **ChatGPT API**, at no extra cost. The model doesn't search for every prompt, so some answers have none. We don't capture Claude and Gemini models' searches yet.
+
 ## Adding prompts
 
 Three ways:

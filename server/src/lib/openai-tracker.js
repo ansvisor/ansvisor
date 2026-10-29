@@ -1,6 +1,8 @@
 /**
  * OpenAI Responses API client with web_search tool for prompt tracking.
- * Sends prompts to OpenAI and returns the response with citations.
+ * Sends prompts to OpenAI and returns the response with citations, and the
+ * searches the model ran (its query fan-out, #332), read from the same
+ * response: no other call.
  */
 
 import OpenAI from 'openai';
@@ -21,6 +23,39 @@ function getClient() {
   return client;
 }
 
+/** The platform API-model answers are stored under (the tracking worker's resolveModelPlatform). */
+const SOURCE_PLATFORM = 'chatgpt';
+
+/**
+ * The searches a response's web_search calls ran, as the query fan-out is
+ * kept (#332, as Cloro's engines give it): `[{ query, source_platform }]`,
+ * each once, trimmed. A search action lists them in `queries`; the single
+ * `query` it carried before is deprecated, and still read while responses
+ * may hold it. Opening or searching within a page is no search, and a call
+ * whose `status` is `failed` ran none.
+ *
+ * @param {Array<{ type?: string, status?: string, action?: { type?: string, queries?: unknown, query?: unknown } }>} output
+ */
+export function searchQueriesOf(output) {
+  const seen = new Set();
+  const queries = [];
+  for (const item of output || []) {
+    if (item?.type !== 'web_search_call' || item.action?.type !== 'search') continue;
+    if (item.status === 'failed') continue;
+    const asked = [
+      ...(Array.isArray(item.action.queries) ? item.action.queries : []),
+      item.action.query,
+    ];
+    for (const value of asked) {
+      const query = typeof value === 'string' ? value.trim() : '';
+      if (!query || seen.has(query)) continue;
+      seen.add(query);
+      queries.push({ query, source_platform: SOURCE_PLATFORM });
+    }
+  }
+  return queries;
+}
+
 /**
  * Run a single prompt through OpenAI Responses API with web_search enabled.
  * @param {string} promptText - The prompt to send
@@ -28,7 +63,7 @@ function getClient() {
  * @param {string} [region] - Location code for web_search user_location: an
  *   ISO country (`DE`) or a US state (`US-CA`, #691). Country-only codes
  *   produce exactly the payload they did before states existed.
- * @returns {Promise<{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }>, model: string }>}
+ * @returns {Promise<{ text: string, citations: Array<{ url: string, title: string, startIndex: number, endIndex: number }>, model: string, search_queries: Array<{ query: string, source_platform: string }> }>}
  */
 export async function runPrompt(promptText, model, region) {
   const openai = getClient();
@@ -68,7 +103,7 @@ export async function runPrompt(promptText, model, region) {
     }
   }
 
-  return { text, citations, model: modelName };
+  return { text, citations, model: modelName, search_queries: searchQueriesOf(response.output) };
 }
 
 const SENTIMENT_MODEL = 'gpt-5-mini';

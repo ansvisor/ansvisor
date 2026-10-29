@@ -8191,8 +8191,8 @@
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
       "emptyTitle": "No fan-out captured yet",
-      "emptyBody": "Copilot and Perplexity share the searches behind their answers, and ChatGPT's are sampled on some days; Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
-      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Copilot and Perplexity share them, and ChatGPT's are sampled on some days."
+      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Copilot and Perplexity share them, ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",

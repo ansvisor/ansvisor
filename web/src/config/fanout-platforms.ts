@@ -12,15 +12,17 @@ export const FANOUT_SHARING_PLATFORMS: readonly string[] = ['copilot-web', 'perp
 
 /**
  * Platforms whose answers never come with their searches: those our provider
- * documents no fan-out for, and the API models (`claude`, `gemini`,
- * `chatgpt`, see resolveModelPlatform in the tracking worker), whose searches
- * we don't capture.
+ * documents no fan-out for, and the API models whose searches we don't
+ * capture (`claude`, `gemini`, see resolveModelPlatform in the tracking
+ * worker).
  *
- * ChatGPT (`chatgpt-web`) is in neither list. Its default interface carries no
- * query text since 2026-09-30 (#1119); the server asks its legacy interface on
- * one day a week per prompt (CLORO_CHATGPT_FANOUT, off unless set on
- * self-host). So a window may hold some of its searches or none, and neither
- * is news: it reads as an ordinary engine, never flagged.
+ * Two are in neither list, so a window may hold some of their searches or
+ * none and neither is news: they read as ordinary engines, never flagged.
+ *  - ChatGPT (`chatgpt-web`): its default interface carries no query text
+ *    since 2026-09-30 (#1119); the server asks its legacy interface on one day
+ *    a week per prompt (CLORO_CHATGPT_FANOUT, off unless set on self-host).
+ *  - The OpenAI API model (`chatgpt`): its web_search calls carry their
+ *    queries, but gpt-5-chat-latest may search rarely or not at all.
  */
 export const FANOUT_NOT_SHARED_PLATFORMS: readonly string[] = [
   'google-aio',
@@ -28,7 +30,6 @@ export const FANOUT_NOT_SHARED_PLATFORMS: readonly string[] = [
   'gemini-web',
   'claude',
   'gemini',
-  'chatgpt',
 ];
 
 /**

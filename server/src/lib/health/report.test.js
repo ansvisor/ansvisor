@@ -264,6 +264,22 @@ describe('query fan-out', () => {
     expect(fanoutDropped({ ...silent, platform: 'chatgpt-web', chatgptFanout: 'off' })).toBe(false);
     // When every ChatGPT task asks, it should fan out like Copilot.
     expect(fanoutDropped({ ...silent, platform: 'chatgpt-web', chatgptFanout: 'all' })).toBe(true);
+    // The OpenAI API model may search rarely or not at all, so a silent day
+    // is no news for it either...
+    expect(fanoutDropped({ ...silent, platform: 'chatgpt' })).toBe(false);
+    // ...but a fall from what it shared the days before is, and it's OpenAI's.
+    const fell = { ...silent, platform: 'chatgpt', withFanout: 4, rate: 0.01, baselineRate: 0.3 };
+    expect(fanoutDropped(fell)).toBe(true);
+    expect(
+      findIssues({
+        probes: {},
+        nightly: {},
+        cloro: {},
+        fanout: { platforms: [fell] },
+      }).filter((i) => i.includes('fan-out')),
+    ).toEqual([
+      "chatgpt query fan-out fell to 1% of answers (30% the days before) — check what OpenAI's web_search returns",
+    ]);
   });
 
   describe("ChatGPT's sample, one day a week per prompt", () => {
