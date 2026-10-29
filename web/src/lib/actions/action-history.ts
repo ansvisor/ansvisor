@@ -19,6 +19,7 @@ import type { ActionCategory } from '@/lib/action-center/registry';
 import {
   ACTION_OUTCOMES,
   dismissReasonOf,
+  missingDismissReason,
   type ActionOutcome,
   type ActionStatus,
   type TaskStatus,
@@ -271,7 +272,7 @@ export async function getActionHistory(
   let { data, error } = await read(HISTORY_COLUMNS);
   // A database without 00366 has no dismiss_reason (42703): the tab reads
   // the rest, and no action says why it was dismissed.
-  if (error?.code === '42703') ({ data, error } = await read(HISTORY_COLUMNS_BEFORE_00366));
+  if (missingDismissReason(error)) ({ data, error } = await read(HISTORY_COLUMNS_BEFORE_00366));
   if (error) throw new Error(error.message);
 
   const rows = (data ?? []) as unknown as HistoryRow[];

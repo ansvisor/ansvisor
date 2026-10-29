@@ -30,7 +30,10 @@ function builder(table: string) {
     then: (resolve: (v: { data: unknown; error: unknown }) => void) =>
       resolve(
         table === 'actions' && without00366 && columns.includes('dismiss_reason')
-          ? { data: null, error: { code: '42703', message: 'column does not exist' } }
+          ? {
+              data: null,
+              error: { code: '42703', message: 'column actions.dismiss_reason does not exist' },
+            }
           : { data: table === 'actions' ? actionRows : [], error: null },
       ),
   };

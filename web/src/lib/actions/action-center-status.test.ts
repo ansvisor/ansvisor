@@ -66,16 +66,14 @@ describe('updateActionStatus', () => {
     });
   });
 
-  it('writes no reason on any other status, and keeps none it doesn’t know', async () => {
+  it('clears the reason on any other status, and keeps none it doesn’t know', async () => {
     await updateActionStatus('b1', 'a1', 'in_progress', 'not_now');
-    expect(update()).toMatchObject({ status: 'in_progress' });
-    expect(update()).not.toHaveProperty('dismiss_reason');
+    expect(update()).toMatchObject({ status: 'in_progress', dismiss_reason: null });
     expect(event()).toMatchObject({ data: { to: 'in_progress' } });
 
     writes.length = 0;
     await updateActionStatus('b1', 'a1', 'completed');
-    expect(update()).toMatchObject({ status: 'completed' });
-    expect(update()).not.toHaveProperty('dismiss_reason');
+    expect(update()).toMatchObject({ status: 'completed', dismiss_reason: null });
 
     writes.length = 0;
     await updateActionStatus('b1', 'a1', 'dismissed', 'bored' as never);
@@ -86,7 +84,10 @@ describe('updateActionStatus', () => {
     without00366 = true;
     await expect(updateActionStatus('b1', 'a1', 'in_progress')).resolves.toBeUndefined();
     await expect(updateActionStatus('b1', 'a1', 'completed')).resolves.toBeUndefined();
-    expect(updates()).toHaveLength(2);
+    // Each tried with dismiss_reason first, then without it.
+    expect(updates()).toHaveLength(4);
+    expect(updates()[1].payload).not.toHaveProperty('dismiss_reason');
+    expect(updates()[3].payload).not.toHaveProperty('dismiss_reason');
   });
 
   it('still dismisses on a database without 00366, the reason kept in its event', async () => {
@@ -107,6 +108,15 @@ describe('updateActionStatus', () => {
     await expect(updateActionStatus('b1', 'a1', 'dismissed', 'not_now')).rejects.toThrow(
       'permission denied',
     );
+    expect(updates()).toHaveLength(1);
+  });
+
+  it('fails on a missing column of another name, without trying again', async () => {
+    writeError = {
+      code: 'PGRST204',
+      message: "Could not find the 'completed_at' column of 'actions'",
+    };
+    await expect(updateActionStatus('b1', 'a1', 'completed')).rejects.toThrow('completed_at');
     expect(updates()).toHaveLength(1);
   });
 });

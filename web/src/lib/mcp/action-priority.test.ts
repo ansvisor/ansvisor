@@ -68,7 +68,10 @@ function builder(table: string) {
     limit: () => chain,
     maybeSingle: async () =>
       table === 'actions' && without00366 && columns.includes('dismiss_reason')
-        ? { data: null, error: { code: '42703', message: 'column does not exist' } }
+        ? {
+            data: null,
+            error: { code: '42703', message: 'column actions.dismiss_reason does not exist' },
+          }
         : {
             data:
               table === 'actions'

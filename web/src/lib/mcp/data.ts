@@ -41,7 +41,11 @@ import {
   withTemplateDoneWhen,
 } from '@/lib/action-center/task-details';
 import { controlNetOf } from '@/lib/action-center/history';
-import { dismissReasonOf, type ActionDismissReason } from '@/lib/action-center/registry';
+import {
+  dismissReasonOf,
+  missingDismissReason,
+  type ActionDismissReason,
+} from '@/lib/action-center/registry';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
@@ -3171,7 +3175,7 @@ export async function getActionFor(
       .maybeSingle();
   let { data, error } = await read(`${ACTION_DETAIL_COLUMNS}, dismiss_reason`);
   // A database without 00366 has no dismiss_reason (42703): the rest is read, no reason given.
-  if (error?.code === '42703') ({ data, error } = await read(ACTION_DETAIL_COLUMNS));
+  if (missingDismissReason(error)) ({ data, error } = await read(ACTION_DETAIL_COLUMNS));
   if (error) throw new Error(error.message);
   const action = data as unknown as ActionDetailRow | null;
   if (!action) return null;
@@ -3464,7 +3468,7 @@ export async function listActionHistoryFor(
       .limit(limit);
   let { data, error } = await read(`${ACTION_HISTORY_COLUMNS}, dismiss_reason`);
   // A database without 00366 has no dismiss_reason (42703): the rest is read, no reason given.
-  if (error?.code === '42703') ({ data, error } = await read(ACTION_HISTORY_COLUMNS));
+  if (missingDismissReason(error)) ({ data, error } = await read(ACTION_HISTORY_COLUMNS));
   if (error) throw new Error(error.message);
 
   return ((data ?? []) as unknown as ActionHistoryDbRow[]).map((r) => {

@@ -114,4 +114,10 @@ describe('getActionHistory', () => {
     await expect(getActionHistory('b1')).rejects.toThrow('statement timeout');
     expect(selected).toHaveLength(1);
   });
+
+  it('fails on a missing column of another name, without reading again', async () => {
+    readError = { code: '42703', message: 'column actions.priority_level does not exist' };
+    await expect(getActionHistory('b1')).rejects.toThrow('priority_level');
+    expect(selected).toHaveLength(1);
+  });
 });
