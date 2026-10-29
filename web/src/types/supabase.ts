@@ -779,6 +779,8 @@ export type Database = {
           region: string | null
           shopping_mode_enabled: boolean
           site_type: string | null
+          site_type_detected_at: string | null
+          site_type_source: string | null
           slug: string
           state: string | null
           tracking_code: string
@@ -808,6 +810,8 @@ export type Database = {
           region?: string | null
           shopping_mode_enabled?: boolean
           site_type?: string | null
+          site_type_detected_at?: string | null
+          site_type_source?: string | null
           slug: string
           state?: string | null
           tracking_code?: string
@@ -837,6 +841,8 @@ export type Database = {
           region?: string | null
           shopping_mode_enabled?: boolean
           site_type?: string | null
+          site_type_detected_at?: string | null
+          site_type_source?: string | null
           slug?: string
           state?: string | null
           tracking_code?: string

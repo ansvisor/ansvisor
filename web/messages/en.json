@@ -9933,6 +9933,7 @@
       "stateHint": "Localizes AI answers to this state from the next tracking run onward.",
       "siteTypeHint": "Sets the page types the Content Editor offers: feature and comparison pages for B2B SaaS, product and category pages for e-commerce, destination and help pages for B2C.",
       "siteTypeGuessed": "Guessed from the industry and Shopping mode until you pick one.",
+      "siteTypeDetected": "Detected automatically from your website. Pick another if it's wrong.",
       "deleteWarning": "This action cannot be undone. All data for this brand (insights, content, competitors) will be permanently deleted.",
       "confirmDelete": "Type the brand name to confirm:",
       "deleteConfirmPlaceholder": "Brand name",
