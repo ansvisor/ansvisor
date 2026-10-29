@@ -11,17 +11,31 @@ let inserts;
 let upserts;
 let rpcCalls;
 let todayReads;
+/** The values of each `in` filter, and the pages each read asked for. */
+let inFilters;
+let ranges;
+
+/** A read's rows, past the cap a page at a time as PostgREST's `range` gives them. */
+const paged = (rows, range) => (range ? rows.slice(range[0], range[1] + 1) : rows.slice(0, 1000));
 
 /** A table as the service role reads it: `eq`, `neq` and `in` keep the rows that match. */
 vi.mock('../../config/supabase.js', () => ({
   default: {
-    rpc: async (name, args) => {
+    rpc: (name, args) => {
       rpcCalls.push([name, args]);
-      return { data: tables[`rpc:${name}`] ?? [], error: null };
+      let range = null;
+      const chain = {
+        order: () => chain,
+        range: (from, to) => ((range = [from, to]), ranges.push([`rpc:${name}`, from]), chain),
+        then: (resolve) =>
+          resolve({ data: paged(tables[`rpc:${name}`] ?? [], range), error: null }),
+      };
+      return chain;
     },
     from: (table) => {
       const where = [];
       let head = false;
+      let range = null;
       const chain = {
         select: (_cols, opts) => ((head = opts?.head ?? false), chain),
         eq: (column, value) => {
@@ -30,7 +44,12 @@ vi.mock('../../config/supabase.js', () => ({
           return chain;
         },
         neq: (column, value) => (where.push((row) => row[column] !== value), chain),
-        in: (column, values) => (where.push((row) => values.includes(row[column])), chain),
+        in: (column, values) => (
+          inFilters.push([table, values.length]),
+          where.push((row) => values.includes(row[column])),
+          chain
+        ),
+        range: (from, to) => ((range = [from, to]), ranges.push([table, from]), chain),
         gte: () => chain,
         order: () => chain,
         limit: () => chain,
@@ -41,7 +60,10 @@ vi.mock('../../config/supabase.js', () => ({
             head
               ? { count: todayReads, error: null }
               : {
-                  data: (tables[table] ?? []).filter((row) => where.every((keep) => keep(row))),
+                  data: paged(
+                    (tables[table] ?? []).filter((row) => where.every((keep) => keep(row))),
+                    range,
+                  ),
                   error: null,
                 },
           ),
@@ -93,6 +115,8 @@ beforeEach(() => {
   inserts = [];
   upserts = [];
   rpcCalls = [];
+  inFilters = [];
+  ranges = [];
   todayReads = 0;
   tables = {
     competitors: [{ id: 'c1', brand_id: BRAND, domain: 'rival.com' }],
@@ -186,6 +210,24 @@ describe('recordFirstCitations', () => {
         [{ competitor_id: 'c1', brand_id: BRAND, scanned_at: NOW.toISOString() }],
       ],
     ]);
+  });
+
+  it("reads every page a brand cited past a read's row cap, and asks for the known ones in parts", async () => {
+    tables['rpc:competitor_cited_urls'] = Array.from({ length: 2_500 }, (_, i) =>
+      cited(`https://rival.com/page-${i}`, 1),
+    );
+    tables.competitor_page_events = [
+      { brand_id: BRAND, kind: 'first_cited', page_key: 'rival.com/page-2400' },
+    ];
+    expect(await recordFirstCitations(BRAND, NOW)).toBe(2_499);
+    expect(ranges.filter(([name]) => name === 'rpc:competitor_cited_urls')).toEqual([
+      ['rpc:competitor_cited_urls', 0],
+      ['rpc:competitor_cited_urls', 1000],
+      ['rpc:competitor_cited_urls', 2000],
+    ]);
+    const keyReads = inFilters.filter(([table]) => table === 'competitor_page_events');
+    expect(keyReads.length).toBeGreaterThan(1);
+    expect(Math.max(...keyReads.map(([, n]) => n))).toBeLessThanOrEqual(30);
   });
 
   it('reads a competitor read before from a day before its last read', async () => {
@@ -304,5 +346,22 @@ describe('sweepCompetitorTimeline', () => {
     vi.unstubAllEnvs();
     expect(outcome).toMatchObject({ brands: 1, failed: 0 });
     expect(rpcCalls.map(([, args]) => args.p_brand_id)).toEqual([BRAND, BRAND]);
+  });
+
+  it('reaches a brand past the first thousand competitors read', async () => {
+    tables.competitors = Array.from({ length: 1_200 }, (_, i) => ({
+      id: `c${String(i).padStart(4, '0')}`,
+      brand_id: i < 1_100 ? 'brand-busy' : BRAND,
+      domain: 'rival.com',
+      brands: { organization_id: 'o1', is_active: true },
+    }));
+    // The busy brand was read last night; the other never was, so it goes first.
+    tables.competitor_timeline_scans = Array.from({ length: 1_100 }, (_, i) => ({
+      competitor_id: `c${String(i).padStart(4, '0')}`,
+      brand_id: 'brand-busy',
+      scanned_at: '2026-10-28T03:00:00Z',
+    }));
+    await sweepCompetitorTimeline({ now: NOW, read: reader({}), limit: 1 });
+    expect(rpcCalls[0][1].p_brand_id).toBe(BRAND);
   });
 });
