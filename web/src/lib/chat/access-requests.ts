@@ -9,6 +9,15 @@ import type { DenialRuleKind } from './denial';
 /** Pending requests a person may have at once. */
 export const MAX_PENDING_REQUESTS = 10;
 
+/**
+ * Requests a person may send in a UTC day, withdrawn ones too: withdrawing
+ * frees a pending place, so this is what bounds a day's rows.
+ */
+export const MAX_REQUESTS_PER_DAY = 20;
+
+/** The longest drafted change a request keeps, as JSON text. */
+export const MAX_DRAFTED_CHANGE_CHARS = 8_000;
+
 /** How far back Requests lists the decided ones. */
 export const REQUEST_HISTORY_DAYS = 30;
 

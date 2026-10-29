@@ -43,12 +43,20 @@ import {
  */
 let brandRows = [];
 let brandsError = null;
+const brandFilters = [];
 let queueRows = [];
 const queueDeletes = [];
 function tables() {
   from.mockImplementation((table) => {
     if (table === 'brands') {
-      return { select: () => Promise.resolve({ data: brandRows, error: brandsError }) };
+      return {
+        select: () => ({
+          eq: (...a) => {
+            brandFilters.push(a);
+            return Promise.resolve({ data: brandRows, error: brandsError });
+          },
+        }),
+      };
     }
     const filters = [];
     const chain = {
@@ -170,6 +178,13 @@ describe('sweepInsightsRollups', () => {
     brandRows = rows;
     brandsError = error;
   }
+
+  it('leaves out demo brands (00380), whose rollups their generator refreshes', async () => {
+    brandsList([]);
+    brandFilters.length = 0;
+    await sweepInsightsRollups();
+    expect(brandFilters).toEqual([['is_demo', false]]);
+  });
 
   it('refreshes the trailing window for every brand, today included', async () => {
     brandsList([{ id: 'a' }, { id: 'b' }]);

@@ -666,7 +666,9 @@ const TRACKED_TOPIC_ROWS = 1000;
  */
 async function getInsightsOpportunities(brandId: string): Promise<InsightsOpportunities> {
   try {
-    const { suggestions } = await getPromptSuggestions(brandId);
+    const read = await getPromptSuggestions(brandId);
+    if (!read.ok) return { suggestions: [], trackedTopicIds: [], contentUsage: null };
+    const { suggestions } = read;
     const topicIds = [...new Set(suggestions.flatMap((s) => (s.topicId ? [s.topicId] : [])))];
     const readTrackedTopics = async (): Promise<string[] | null> => {
       if (topicIds.length === 0) return [];

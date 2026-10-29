@@ -15,6 +15,8 @@ import logger from '../lib/logger.js';
  *   - COST_STOPPING: stopping work under way, and taking back the access to
  *     an outside account (Google, a CMS, a bot log, a store) the person gave us;
  *   - DATA_REMOVAL: deleting what the person gave us (a brand and its data);
+ *   - DEMO_ROUTES: opening, hiding and showing the demo brand (00380),
+ *     whose data the server writes as a sample and which costs nothing;
  *   - ONBOARDING_ROUTES, for an organization that never had a subscription:
  *     setup suggests the brand's topics, prompts and competitors before the
  *     plan step, and again when the person comes back from it, up to
@@ -63,6 +65,8 @@ export const COST_STOPPING = [
   { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/wordpress\/?$/ },
   // Disconnects a brand's Framer project (cms-framer.js): its API key is deleted.
   { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/framer\/?$/ },
+  // Disconnects a brand's Wix site (cms-wix.js): its API key is deleted.
+  { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/wix\/?$/ },
   // Removes an AI-bot log connection (bots.js): its secret stops working.
   { method: 'DELETE', path: /^\/bots\/connections\/[^/]+\/[^/]+\/?$/ },
   // Removes a store from the catalog (catalog.js): its sign-in is revoked at
@@ -77,6 +81,19 @@ export const COST_STOPPING = [
 export const DATA_REMOVAL = [
   // Deletes a brand and all its data (brands.js); admins only, as before.
   { method: 'DELETE', path: /^\/brands\/[^/]+\/?$/ },
+];
+
+/**
+ * The demo brand (00380), under /api: open whatever the plan. Opening it
+ * writes the organization's sample brand (no tracking, no AI, no outside
+ * service), and the people it is for are the ones without a plan; hiding
+ * or showing it changes nothing else.
+ */
+export const DEMO_ROUTES = [
+  // Creates or rebuilds the demo brand (demo.js).
+  { method: 'POST', path: /^\/demo\/?$/ },
+  // Hides or shows it (demo.js).
+  { method: 'PATCH', path: /^\/demo\/?$/ },
 ];
 
 /**
@@ -140,7 +157,12 @@ function matches(routes, { method, path }) {
 }
 
 function isOpen(req) {
-  return matches(BILLING_ROUTES, req) || matches(COST_STOPPING, req) || matches(DATA_REMOVAL, req);
+  return (
+    matches(BILLING_ROUTES, req) ||
+    matches(COST_STOPPING, req) ||
+    matches(DATA_REMOVAL, req) ||
+    matches(DEMO_ROUTES, req)
+  );
 }
 
 /**

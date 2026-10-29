@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Ansvisor demo: follow the app's light/dark theme. Inside the app's frame, read the parent page's <html class="dark">
+   (same origin) and keep watching it; opened on its own, follow the system setting. Dark sets <html data-theme="dark">. */
+(function(){var d=document.documentElement,p=null,mq=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');
+try{if(window.parent!==window)p=window.parent.document.documentElement}catch(e){p=null}
+function apply(){var dark=p?p.classList.contains('dark'):!!(mq&&mq.matches);if(dark)d.setAttribute('data-theme','dark');else d.removeAttribute('data-theme')}
+apply();
+if(p&&window.MutationObserver)new MutationObserver(apply).observe(p,{attributes:true,attributeFilter:['class']});
+else if(mq)(mq.addEventListener?mq.addEventListener('change',apply):mq.addListener(apply))})();
+</script>
+<title>Chat · Editor in Chat (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:#efeeec;color:#1c1a17}
+/* Ansvisor demo: the light palette is the default; dark follows <html data-theme="dark"> (set from the app's theme) */
+body{--bg:#fafaf9;--card:#ffffff;--ink:#1c1a17;--muted:#5f5d59;--line:#e7e5e2;--soft:#f4f3f1;--rail:#f7f7f6;--primary:#1c1a17;--onprimary:#ffffff;--green:#15803d;--greenbg:#ecfdf3;--amber:#a14a07;--amberbg:#fff7ed;--red:#b91c1c;--redbg:#fef2f2;--blue:#1d4ed8;--bluebg:#eff6ff;--scrim:rgba(28,26,23,0.35);--tileA:#e9e4dc;--tileB:#d9d3c9;--tileC:#cfd8dc;--focus:#2563eb;--page:#efeeec}
+/* Ansvisor demo: dark palette moved to the neutral greys of the app's dark theme */
+html[data-theme="dark"] body{color-scheme:dark;--bg:#121212;--card:#1a1a1a;--ink:#ececec;--muted:#a3a3a3;--line:#2e2e2e;--soft:#242424;--rail:#161616;--primary:#ececec;--onprimary:#141414;--green:#5fd38d;--greenbg:#173322;--amber:#f0b45a;--amberbg:#352a10;--red:#f38b8b;--redbg:#311818;--blue:#93c5fd;--bluebg:#16213a;--scrim:rgba(0,0,0,0.55);--tileA:#3a3631;--tileB:#4a453e;--tileC:#34404a;--focus:#60a5fa;--page:#0e0e0e}
+body{background:var(--page);color:var(--ink)}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.mock-bar{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line)}
+.mock-bar a{font-size:13px;color:var(--ink);text-decoration:none;padding:4px 10px;border:1px solid var(--line);border-radius:999px}
+.mock-bar a:hover{background:var(--soft)}
+.mock-bar strong{font-size:14px;margin-right:8px}
+.mock-bar .sp{flex:1}
+.mock-bar button{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-size:12px;font-weight:500}
+.screen{max-width:1320px;margin:24px auto;padding:0 16px}
+.screen h2{font-size:18px;margin:0 0 4px}
+.screen p.lead{margin:0 0 12px;font-size:13px;color:var(--muted)}
+.screen .frame{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg)}
+.screen-root{min-height:760px}
+</style>
+</head>
+<body class="t-light">
+<nav class="mock-bar" aria-label="Screens"><strong>Editor in Chat</strong><a href="#e-open">1 Where should we open this page?</a> <a href="#e-here">2 Open here</a> <a href="#e-full">3 Open in Content Editor</a> <a href="#e-chat">4 Keep working in chat</a> <a href="#e-settings">5 Settings › Chat</a> <a href="#e-library">6 Content › Library</a> <a href="#e-image">7 Generate an image in the editor inside Chat</a> <a href="#e-insert">8 Empty line</a><span class="sp"></span><button type="button" id="theme">Dark</button></nav>
+<section class="screen" id="e-open"><h2>1 · Where should we open this page?</h2><p class="lead">A question card after Chat writes or is asked to edit a page. Three equal choices, no Recommended. "Don't ask again" saves the choice per user.</p><div class="frame"><div class="screen-root" style="font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 800px; display: flex; flex-wrap: wrap; font-size: 14px">
+
+  <nav aria-label="App" style="width: 56px; background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0">
+    <div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary); margin-bottom: 12px"></div>
+    <button aria-label="Action Center" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle></svg></button>
+    <button aria-label="Content" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M9 10h6M9 14h6M9 18h4"></path></svg></button>
+    <button aria-label="Chat" aria-current="page" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg></button>
+  </nav>
+
+  
+
+  
+    <section aria-label="Chat" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line)">
+      <header style="display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card)">
+        <strong style="font-size: 15px">FAQ for /subscriptions</strong>
+        <span style="flex: 1"></span>
+        
+      </header>
+
+      <div style="flex: 1; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; max-width: 760px; width: 100%; box-sizing: border-box; margin: 0 auto">
+        <div style="align-self: flex-end; max-width: 80%; background: var(--soft); border-radius: 14px; padding: 10px 14px; line-height: 1.5">Write a FAQ block for /subscriptions from the questions buyers ask AI.</div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted)">
+            <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 7px; background: var(--primary); display: inline-flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="stroke:var(--onprimary)" stroke-width="2" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"></rect><path d="M12 4v4M9 13h.01M15 13h.01"></path></svg></span>
+            Worked for 38s · 4 steps · 12 sources
+          </div>
+          <p style="margin: 0; line-height: 1.6">Drafted a FAQ block for /subscriptions: 6 questions, 820 characters, built from 9 buyer prompts and 3 cited pages.</p>
+
+          
+            <div role="group" aria-label="Where should we open this page?" style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 16px; display: flex; flex-direction: column; gap: 10px; max-width: 560px">
+              <strong style="font-size: 15px">Where should we open this page?</strong>
+              <button style="text-align: left; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start">
+                <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); flex: none">1</span>
+                <span style="display: flex; flex-direction: column; gap: 3px">
+                  <span style="font-weight: 600">Open here</span>
+                  <span style="font-size: 13px; color: var(--muted)">Edit it next to this chat. Ask for changes in plain words.</span>
+                </span>
+              </button>
+              <button style="text-align: left; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start">
+                <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); font-size: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); flex: none">2</span>
+                <span style="display: flex; flex-direction: column; gap: 3px">
+                  <span style="font-weight: 600">Open in Content Editor</span>
+                  <span style="font-size: 13px; color: var(--muted)">The full editor with Brief, Rules and Quality.</span>
+                </span>
+              </button>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 4px">
+                <button style="height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: underline">Keep working in chat</button>
+                <span style="font-size: 12px; color: var(--muted)">No editor needed: ask for changes here.</span>
+                <span style="flex: 1"></span>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px"><input type="checkbox">Don't ask again</label>
+              </div>
+              
+            </div>
+          
+
+          
+
+          
+        </div>
+      </div>
+
+      <div style="padding: 12px 20px 20px; max-width: 760px; width: 100%; box-sizing: border-box; margin: 0 auto">
+        <div style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px">
+          
+          <label style="display: flex; align-items: center; gap: 8px">
+            <span style="position: absolute; left: -9999px">Message</span>
+            <input type="text" placeholder="Ask for a change…" style="flex: 1; border: 0; background: transparent; color: var(--ink); font-size: 14px; font-family: inherit; padding: 6px 0">
+            <button aria-label="Send" style="width: 32px; height: 32px; border: 0; border-radius: 10px; background: var(--primary); color: var(--onprimary); display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+          </label>
+        </div>
+      </div>
+    </section>
+  
+
+  
+</div></div></section>
+<section class="screen" id="e-here"><h2>2 · Open here: the editor inside Chat</h2><p class="lead">The same editor, embedded beside the chat: full top menu and formatting toolbar; chat requests arrive as Accept / Reject suggestions; Brief, Rules and Quality fold at the bottom.</p><div class="frame"><div class="screen-root" style="font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 800px; display: flex; flex-wrap: wrap; font-size: 14px">
+
+  <nav aria-label="App" style="width: 56px; background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0">
+    <div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary); margin-bottom: 12px"></div>
+    <button aria-label="Chat" aria-current="page" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg></button>
+  </nav>
+
+  <section aria-label="Chat" style="flex: 0 1 420px; min-width: 300px; display: flex; flex-direction: column; border-right: 1px solid var(--line)">
+    <header style="display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card)">
+      <strong style="font-size: 15px">FAQ for /subscriptions</strong>
+    </header>
+    <div style="flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="align-self: flex-end; max-width: 85%; background: var(--soft); border-radius: 14px; padding: 10px 14px; line-height: 1.5">Write a FAQ block for /subscriptions from the questions buyers ask AI.</div>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted)">
+        <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 7px; background: var(--primary); display: inline-flex"></span>
+        Worked for 38s · 4 steps · 12 sources
+      </div>
+      <p style="margin: 0; line-height: 1.6">Drafted a FAQ block: 6 questions, 820 characters. Opened it on the right.</p>
+      <div style="align-self: flex-end; max-width: 85%; background: var(--soft); border-radius: 14px; padding: 10px 14px; line-height: 1.5">Make answer 3 shorter.</div>
+      <p style="margin: 0; line-height: 1.6">Shortened answer 3: 212 → 140 characters. It's waiting for you on the right: Accept or Reject.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Add a refunds question</button>
+        <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Fix the open rule</button>
+      </div>
+    </div>
+    <div style="padding: 12px 20px 20px">
+      <div style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px">
+        <span style="align-self: flex-start; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted)">Page: FAQ: Subscriptions ×</span>
+        <label style="display: flex; align-items: center; gap: 8px">
+          <span style="position: absolute; left: -9999px">Message</span>
+          <input type="text" placeholder="Ask for a change…" style="flex: 1; border: 0; background: transparent; color: var(--ink); font-size: 14px; font-family: inherit; padding: 6px 0">
+          <button aria-label="Send" style="width: 32px; height: 32px; border: 0; border-radius: 10px; background: var(--primary); color: var(--onprimary); display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Editor" style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; background: var(--card)">
+    <header style="display: flex; flex-direction: column; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line)">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+        <strong style="font-size: 15px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="FAQ: Subscriptions">FAQ: Subscriptions</strong>
+        <span style="font-size: 12px; color: var(--muted)">Saved</span>
+        <span style="flex: 1"></span>
+        <button title="Next step" style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="letter-spacing: -1px">●●●○○</span>Next · Check and mark ready</button>
+        <button title="AI usage this month" style="height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">AI 1.7%</button>
+        <button aria-label="History" title="History" style="width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg></button>
+        <button aria-label="Copy HTML" title="Copy HTML" style="width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h8"></path></svg></button>
+        <button aria-label="Export" title="Export" style="width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg></button>
+        <button aria-label="Send to CMS" title="Send to CMS" style="width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg></button>
+        <button style="height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--primary); color: var(--onprimary); font-size: 12px; font-weight: 500">Mark ready</button>
+        <button aria-label="Open full editor" title="Open full editor" style="width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 3h6v6M21 3l-8 8M9 21H3v-6M3 21l8-8"></path></svg></button>
+        <button aria-label="Close editor" title="Close editor" style="width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px">
+        <span style="padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line)">FAQ · /subscriptions ▾</span>
+        <span style="padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line)">By Brewline Team ▾</span>
+        <span style="padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted)">Create</span>
+        <span style="padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted)">Draft</span>
+        <span style="padding: 2px 8px; border-radius: 999px; background: var(--amberbg); color: var(--amber)">Rules 11/12</span>
+        <span style="padding: 2px 8px; border-radius: 999px; background: var(--greenbg); color: var(--green)">Quality 88</span>
+        <span style="padding: 2px 8px; border-radius: 999px; background: var(--greenbg); color: var(--green)">2 cited passages kept</span>
+      </div>
+    </header>
+
+    <div role="toolbar" aria-label="Formatting" style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--line)">
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600">H1</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600">H2</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600">H3</button>
+      <span aria-hidden="true" style="width: 1px; height: 18px; background: var(--line); margin: 0 4px"></span>
+      <button aria-label="Bold" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 700">B</button>
+      <button aria-label="Italic" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; font-style: italic">I</button>
+      <button aria-label="Link with anchor text" title="Link (anchor text)" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">Link</button>
+      <span aria-hidden="true" style="width: 1px; height: 18px; background: var(--line); margin: 0 4px"></span>
+      <button aria-label="Bulleted list" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">• List</button>
+      <button aria-label="Numbered list" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">1. List</button>
+      <button aria-label="Quote" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">❝</button>
+      <span aria-hidden="true" style="width: 1px; height: 18px; background: var(--line); margin: 0 4px"></span>
+      <button aria-label="Table" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">Table</button>
+      <button aria-label="Image" style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">Image</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">&lt;/&gt; Add HTML</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">HTML</button>
+      <span style="flex: 1"></span>
+      <span style="font-size: 12px; color: var(--muted)">905 / 1,000 characters · 148 words</span>
+    </div>
+
+    <div style="flex: 1; padding: 24px 28px; line-height: 1.6">
+      <h2 style="margin: 0 0 14px; font-size: 22px">Frequently asked questions</h2>
+      <h3 style="margin: 0 0 4px; font-size: 15px">How much is a Brewline Coffee subscription?</h3>
+      <p style="margin: 0 0 14px">[YOUR PRICE] a bag for the House Blend. Single origins and decaf cost a little more.</p>
+      <h3 style="margin: 0 0 4px; font-size: 15px">Is there a first-order discount?</h3>
+      <p style="margin: 0 0 6px">Yes, 20% off your first bag or subscription. See <a href="#pricing" style="color: var(--ink); text-decoration: underline">what each subscription includes</a>.</p>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 12px; color: var(--muted)">
+        <span style="padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card)">Link · anchor text "what each subscription includes" → /subscriptions</span>
+        <button style="height: 24px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); font-size: 12px">Edit</button>
+        <button style="height: 24px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); font-size: 12px">Remove</button>
+      </div>
+      <div style="border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; background: var(--bg); display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 12px; color: var(--muted)">&lt;/&gt; HTML block · Subscription table embed</span>
+        <code style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--ink); white-space: pre-wrap">&lt;div class="subscription-embed" data-plan="house-blend"&gt;&lt;/div&gt;</code>
+      </div>
+      <h3 style="margin: 0 0 4px; font-size: 15px">Can I pause or skip a delivery?</h3>
+      <div style="border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg)">
+        <span style="font-size: 12px; color: var(--muted)">Content Agent · from your chat</span>
+        <p style="margin: 0; text-decoration: line-through; color: var(--red); background: var(--redbg); padding: 2px 4px; border-radius: 4px">You can change your delivery schedule once a month, by email to our support team.</p>
+        <p style="margin: 0; color: var(--green); background: var(--greenbg); padding: 2px 4px; border-radius: 4px">Yes. Pause or skip any delivery from your account, anytime.</p>
+        <div style="display: flex; gap: 8px">
+          <button style="height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--primary); color: var(--onprimary); font-size: 12px; font-weight: 500">Accept</button>
+          <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Reject</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--soft)">
+      <button aria-expanded="false" style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Brief ▾</button>
+      <button aria-expanded="false" style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Rules · 1 open ▾</button>
+      <button aria-expanded="false" style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Quality 88 ▾</button>
+    </div>
+  </section>
+</div></div></section>
+<section class="screen" id="e-full"><h2>3 · Open in Content Editor: Chat on the right</h2><p class="lead">The full editor; its side panel opens on the Chat tab and continues the conversation.</p><div class="frame"><div class="screen-root" style="font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 800px; display: flex; flex-wrap: wrap; font-size: 14px">
+  <nav aria-label="App" style="width: 56px; background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0">
+    <div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary); margin-bottom: 12px"></div>
+    <button aria-label="Content" aria-current="page" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M9 10h6M9 14h6M9 18h4"></path></svg></button>
+  </nav>
+
+  <main style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card)">
+      <strong style="font-size: 16px">FAQ: Subscriptions</strong>
+      <span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted)">Draft</span>
+      <span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line)">Next · Check and mark ready</span>
+      <span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--amberbg); color: var(--amber)">Rules 11/12</span>
+      <span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--greenbg); color: var(--green)">Quality 88</span>
+      <span style="flex: 1"></span>
+      <button style="height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 500">Export</button>
+      <button style="height: 32px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--primary); color: var(--onprimary); font-size: 14px; font-weight: 500">Mark ready</button>
+    </header>
+    <div style="display: flex; flex-wrap: wrap; flex: 1">
+      <section aria-label="Page" style="flex: 999 1 420px; min-width: 0; padding: 32px 48px; background: var(--card); line-height: 1.6">
+        <h2 style="margin: 0 0 16px; font-size: 24px">Frequently asked questions</h2>
+        <h3 style="margin: 0 0 6px; font-size: 16px">How much is a Brewline Coffee subscription?</h3>
+        <p style="margin: 0 0 16px">[YOUR PRICE] a bag for the House Blend. Single origins and decaf cost a little more.</p>
+        <h3 style="margin: 0 0 6px; font-size: 16px">Is there a first-order discount?</h3>
+        <p style="margin: 0 0 16px">Yes, 20% off your first bag or subscription.</p>
+        <h3 style="margin: 0 0 6px; font-size: 16px">Can I pause or skip a delivery?</h3>
+        <p style="margin: 0">Yes. Pause or skip any delivery from your account, anytime.</p>
+      </section>
+
+      <aside aria-label="Side panel" style="flex: 1 1 340px; max-width: 420px; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg)">
+        <div role="tablist" style="display: flex; gap: 16px; padding: 12px 16px 0; font-size: 13px; font-weight: 500; border-bottom: 1px solid var(--line)">
+          <button role="tab" aria-selected="true" style="height: 32px; padding: 0; border: 0; border-bottom: 2px solid var(--ink); background: transparent; color: var(--ink); font-size: 13px; font-weight: 600">Chat</button>
+          <button role="tab" aria-selected="false" style="height: 32px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 500">Instructions</button>
+          <button role="tab" aria-selected="false" style="height: 32px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 500">Sources</button>
+          <button role="tab" aria-selected="false" style="height: 32px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 500">Live page</button>
+        </div>
+        <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 13px">
+          <span style="font-size: 12px; color: var(--muted)">Continued from your chat "FAQ for /subscriptions"</span>
+          <div style="align-self: flex-end; max-width: 85%; background: var(--soft); border-radius: 12px; padding: 8px 12px; line-height: 1.5">Make answer 3 shorter.</div>
+          <p style="margin: 0; line-height: 1.6">Done: 212 → 140 characters. Accepted.</p>
+          <div style="align-self: flex-end; max-width: 85%; background: var(--soft); border-radius: 12px; padding: 8px 12px; line-height: 1.5">Is the page ready?</div>
+          <p style="margin: 0; line-height: 1.6">Almost. One rule is open: internal links (2 of 3). Want me to add a link to /coffee/espresso-roast?</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Add the link</button>
+            <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Mark ready anyway</button>
+          </div>
+        </div>
+        <div style="padding: 12px 16px 16px">
+          <label style="display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 6px 8px 6px 12px">
+            <span style="position: absolute; left: -9999px">Message</span>
+            <input type="text" placeholder="Ask Chat about this page…" style="flex: 1; border: 0; background: transparent; color: var(--ink); font-size: 13px; font-family: inherit; padding: 6px 0">
+            <button aria-label="Send" style="width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--primary); color: var(--onprimary); display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+          </label>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div></div></section>
+<section class="screen" id="e-chat"><h2>4 · Keep working in chat: versions and Optimize</h2><p class="lead">No editor: each change is a new version card with What changed; Optimize offers three equal ways. Every version is saved to the Library.</p><div class="frame"><div class="screen-root" style="font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 800px; display: flex; flex-wrap: wrap; font-size: 14px">
+  <nav aria-label="App" style="width: 56px; background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0">
+    <div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary); margin-bottom: 12px"></div>
+    <button aria-label="Chat" aria-current="page" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg></button>
+  </nav>
+  <section aria-label="Chat" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card)">
+      <strong style="font-size: 15px">FAQ for /subscriptions</strong>
+    </header>
+    <div style="flex: 1; padding: 24px 20px; display: flex; flex-direction: column; gap: 14px; max-width: 760px; width: 100%; box-sizing: border-box; margin: 0 auto">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 10px 14px; font-size: 13px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path></svg>
+        <strong>FAQ: Subscriptions</strong>
+        <span style="color: var(--muted)">Version 1 · 6 questions · 820 characters</span>
+      </div>
+      <div style="align-self: flex-end; max-width: 80%; background: var(--soft); border-radius: 14px; padding: 10px 14px; line-height: 1.5">Make answer 3 shorter and add a question about refunds.</div>
+      <p style="margin: 0; line-height: 1.6">Done. Answer 3 is shorter and there's a new refunds question. The refund period isn't in your sources, so I left a placeholder.</p>
+      <div style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path></svg>
+          <strong>FAQ: Subscriptions</strong>
+          <span style="font-size: 12px; color: var(--muted)">Version 2 · 7 questions · 905 characters</span>
+          <span style="flex: 1"></span>
+          <span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--greenbg); color: var(--green)">Rules 12/12</span>
+          <span style="font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--greenbg); color: var(--green)">Quality 90</span>
+        </div>
+        <div style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--line); font-size: 13px">
+          <span style="font-size: 12px; font-weight: 600; color: var(--muted)">What changed</span>
+          <span>• Answer 3 shortened: 212 → 140 characters</span>
+          <span>• New question: "Can I get a refund?"</span>
+          <span style="color: var(--amber)">• 1 placeholder to fill: [REFUND PERIOD]</span>
+        </div>
+        <div style="padding: 14px; line-height: 1.6; font-size: 13px">
+          <p style="margin: 0 0 4px; font-weight: 600">Can I pause or skip a delivery?</p>
+          <p style="margin: 0 0 10px">Yes. Pause or skip any delivery from your account, anytime.</p>
+          <p style="margin: 0 0 4px; font-weight: 600">Can I get a refund?</p>
+          <p style="margin: 0">Yes, within [REFUND PERIOD] of your first payment.</p>
+          <button style="margin-top: 8px; height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 500; text-decoration: underline">Show all 7 questions</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--soft)">
+          <button aria-haspopup="menu" aria-expanded="true" style="height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--primary); color: var(--onprimary); font-size: 12px; font-weight: 500">Optimize ▾</button>
+          <button style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Copy</button>
+          <button style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Download ▾</button>
+          <button style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Send to CMS</button>
+          <button style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Undo to version 1</button>
+          <span style="flex: 1"></span>
+          <button style="height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 500; text-decoration: underline">Open in editor</button>
+        </div>
+      </div>
+      <div role="menu" aria-label="Optimize" style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 8px; display: flex; flex-direction: column; gap: 4px; max-width: 520px; box-shadow: 0 8px 24px rgba(0,0,0,0.08)">
+        <span style="font-size: 12px; color: var(--muted); padding: 4px 8px">How should we optimize it? 1 rule is open · Quality 90</span>
+        <button role="menuitem" style="text-align: left; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); padding: 10px 12px; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-weight: 600; font-size: 13px">Optimize here, no editor</span>
+          <span style="font-size: 12px; color: var(--muted)">The agent fixes the open rules and quality checks. You get version 3 with what changed.</span>
+        </button>
+        <button role="menuitem" style="text-align: left; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); padding: 10px 12px; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-weight: 600; font-size: 13px">Optimize in the editor here</span>
+          <span style="font-size: 12px; color: var(--muted)">Opens next to this chat. See each suggestion on the page; accept or reject it.</span>
+        </button>
+        <button role="menuitem" style="text-align: left; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); padding: 10px 12px; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-weight: 600; font-size: 13px">Optimize in Content Editor</span>
+          <span style="font-size: 12px; color: var(--muted)">The full editor with Brief, Rules, Quality and the agent's next steps.</span>
+        </button>
+      </div>
+      <p style="margin: 0; font-size: 12px; color: var(--muted)">Saved to the Library as a draft after each change, so the editor can open it anytime.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Fill the refund period</button>
+        <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Check it against the rules</button>
+        <button style="height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Mark ready</button>
+      </div>
+    </div>
+    <div style="padding: 12px 20px 20px; max-width: 760px; width: 100%; box-sizing: border-box; margin: 0 auto">
+      <div style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px">
+        <span style="align-self: flex-start; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted)">Page: FAQ: Subscriptions ×</span>
+        <label style="display: flex; align-items: center; gap: 8px">
+          <span style="position: absolute; left: -9999px">Message</span>
+          <input type="text" placeholder="Ask for a change…" style="flex: 1; border: 0; background: transparent; color: var(--ink); font-size: 14px; font-family: inherit; padding: 6px 0">
+          <button aria-label="Send" style="width: 32px; height: 32px; border: 0; border-radius: 10px; background: var(--primary); color: var(--onprimary); display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+        </label>
+      </div>
+    </div>
+  </section>
+</div></div></section>
+<section class="screen" id="e-settings"><h2>5 · Settings › Chat: where pages open</h2><p class="lead">The per-user preference behind "Don't ask again".</p><div class="frame"><div class="screen-root" style="width: 880px; height: 460px; box-sizing: border-box; padding: 32px 40px; font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; display: flex; flex-direction: column; gap: 16px">
+  <div style="font-size: 13px; color: var(--muted)">Settings › Chat</div>
+  <div style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <strong style="font-size: 16px">Where pages open</strong>
+      <span style="font-size: 13px; color: var(--muted)">When Chat writes or edits a page. Your choice only; others keep theirs.</span>
+    </div>
+    <fieldset style="border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <legend style="position: absolute; left: -9999px">Where pages open</legend>
+      <label style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--ink); border-radius: 12px; padding: 12px 14px">
+        <input type="radio" name="open" checked>
+        <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">Ask me each time</span><span style="font-size: 13px; color: var(--muted)">Chat asks which one, every time.</span></span>
+      </label>
+      <label style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px">
+        <input type="radio" name="open">
+        <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">Keep working in chat</span><span style="font-size: 13px; color: var(--muted)">No editor. Ask for changes in the chat; each version is saved.</span></span>
+      </label>
+      <label style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px">
+        <input type="radio" name="open">
+        <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">Open here</span><span style="font-size: 13px; color: var(--muted)">The editor opens next to the chat.</span></span>
+      </label>
+      <label style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px">
+        <input type="radio" name="open">
+        <span style="display: flex; flex-direction: column; gap: 3px"><span style="font-weight: 600">Open in Content Editor</span><span style="font-size: 13px; color: var(--muted)">The full editor with Brief, Rules and Quality.</span></span>
+      </label>
+    </fieldset>
+    <span style="font-size: 12px; color: var(--muted)">Saved to your account, so it's the same on every device.</span>
+  </div>
+</div></div></section>
+<section class="screen" id="e-library"><h2>6 · Content › Library: Made in</h2><p class="lead">Pages made in Chat are the same drafts, with a Made in column, an Open chat link and a filter.</p><div class="frame"><div class="screen-root" style="font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 800px; display: flex; flex-wrap: wrap; font-size: 14px">
+  <nav aria-label="App" style="width: 56px; background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0">
+    <div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary); margin-bottom: 12px"></div>
+    <button aria-label="Content" aria-current="page" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M9 10h6M9 14h6M9 18h4"></path></svg></button>
+  </nav>
+  <main style="flex: 999 1 640px; min-width: 0; padding: 28px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 1180px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 700">Library</h1>
+      <span style="flex: 1"></span>
+      <button style="height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 500">Export</button>
+      <button style="height: 32px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--primary); color: var(--onprimary); font-size: 14px; font-weight: 500">New content</button>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px">
+      <span style="padding: 4px 10px; border-radius: 999px; background: var(--ink); color: var(--bg)">All 16</span>
+      <span style="padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line)">In progress 4</span>
+      <span style="padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line)">In review 9</span>
+      <span style="padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line)">Ready 3</span>
+      <span style="flex: 1"></span>
+      <span style="padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line)">Made in: Any ▾</span>
+    </div>
+    <div style="border: 1px solid var(--line); border-radius: 14px; background: var(--card); overflow-x: auto">
+      <table style="width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 860px; font-size: 13px">
+        <thead>
+          <tr style="text-align: left; color: var(--muted); font-size: 12px">
+            <th style="width: 34%; padding: 10px 14px; font-weight: 500; border-bottom: 1px solid var(--line)">Content</th>
+            <th style="width: 12%; padding: 10px 14px; font-weight: 500; border-bottom: 1px solid var(--line)">Type</th>
+            <th style="width: 16%; padding: 10px 14px; font-weight: 500; border-bottom: 1px solid var(--line)">Made in</th>
+            <th style="width: 10%; padding: 10px 14px; font-weight: 500; border-bottom: 1px solid var(--line)">By</th>
+            <th style="width: 12%; padding: 10px 14px; font-weight: 500; border-bottom: 1px solid var(--line)">Status</th>
+            <th style="width: 16%; padding: 10px 14px; font-weight: 500; border-bottom: 1px solid var(--line)">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">FAQ: Subscriptions</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)">FAQ</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)"><span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: var(--bluebg); color: var(--blue); font-size: 12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>Chat</span> <a href="#chat" style="font-size: 12px; color: var(--ink)">Open chat</a></td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)">You</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)"><span style="padding: 2px 8px; border-radius: 999px; background: var(--greenbg); color: var(--green); font-size: 12px">Ready</span></td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--muted)">Today, 10:42</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Guide: What is generative engine optimization</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)">Blog post</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)"><span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: var(--bluebg); color: var(--blue); font-size: 12px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg>Chat</span> <a href="#chat" style="font-size: 12px; color: var(--ink)">Open chat</a></td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)">Agent</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)"><span style="padding: 2px 8px; border-radius: 999px; background: var(--amberbg); color: var(--amber); font-size: 12px">In progress</span></td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--muted)">Today, 10:15</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Best LLM Visibility Tracking Tools (2026)</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)">Blog post</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)"><span style="padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px">Content Editor</span></td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)">You</td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line)"><span style="padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px">In review</span></td>
+            <td style="padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--muted)">Oct 26</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Comparison: Brewline Coffee vs [COMPETITOR]</td>
+            <td style="padding: 12px 14px">Comparison</td>
+            <td style="padding: 12px 14px"><span style="padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px">Action Center</span></td>
+            <td style="padding: 12px 14px">Team</td>
+            <td style="padding: 12px 14px"><span style="padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 12px">In review</span></td>
+            <td style="padding: 12px 14px; color: var(--muted)">Oct 25</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin: 0; font-size: 12px; color: var(--muted)">Pages made in Chat land here from their first version and follow the same statuses. Mark ready in Chat sets Ready here.</p>
+  </main>
+</div></div></section>
+<section class="screen" id="e-image"><h2>7 · Generate an image in the editor inside Chat</h2><p class="lead">Image › Generate with AI: prompt, style, model with multiplier and the share of the monthly AI limit per image on the plan (no dollars), options, alt text.</p><div class="frame"><div class="screen-root" style="font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 800px; display: flex; flex-wrap: wrap; font-size: 14px">
+  <nav aria-label="App" style="width: 56px; background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0">
+    <div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary); margin-bottom: 12px"></div>
+    <button aria-label="Chat" aria-current="page" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"></path></svg></button>
+  </nav>
+
+  <section aria-label="Chat" style="flex: 0 1 380px; min-width: 300px; display: flex; flex-direction: column; border-right: 1px solid var(--line)">
+    <header style="display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card)">
+      <strong style="font-size: 15px">FAQ for /subscriptions</strong>
+    </header>
+    <div style="flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="align-self: flex-end; max-width: 85%; background: var(--soft); border-radius: 14px; padding: 10px 14px; line-height: 1.5">Add a cover image to this page.</div>
+      <p style="margin: 0; line-height: 1.6">I made 3 options in your brand style. Pick one on the right, or change the prompt. No real people, no product screenshots.</p>
+      <div style="border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-weight: 600">Model: Nano Banana 2 Lite</span>
+        <span style="color: var(--muted)">3 images · about 1% of this month's AI</span>
+      </div>
+    </div>
+    <div style="padding: 12px 20px 20px">
+      <label style="display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 8px 8px 8px 12px">
+        <span style="position: absolute; left: -9999px">Message</span>
+        <input type="text" placeholder="Ask for a change…" style="flex: 1; border: 0; background: transparent; color: var(--ink); font-size: 14px; font-family: inherit; padding: 6px 0">
+        <button aria-label="Send" style="width: 32px; height: 32px; border: 0; border-radius: 10px; background: var(--primary); color: var(--onprimary); display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+      </label>
+    </div>
+  </section>
+
+  <section aria-label="Editor" style="flex: 999 1 560px; min-width: 0; position: relative; display: flex; flex-direction: column; background: var(--card)">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line)">
+      <strong style="font-size: 15px">FAQ: Subscriptions</strong>
+      <span style="font-size: 12px; color: var(--muted)">Saved</span>
+      <span style="flex: 1"></span>
+      <button style="height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">Next · Check and mark ready</button>
+      <button style="height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; font-weight: 500">AI 1.7%</button>
+      <button style="height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--primary); color: var(--onprimary); font-size: 12px; font-weight: 500">Mark ready</button>
+    </header>
+    <div role="toolbar" aria-label="Formatting" style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px">
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600">H1</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600">H2</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600">H3</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 700">B</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">Link</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: var(--soft); color: var(--ink); font-size: 12px; font-weight: 600">Image ▾</button>
+      <button style="height: 28px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font-size: 12px">&lt;/&gt; Add HTML</button>
+    </div>
+    <div style="flex: 1; padding: 24px 28px; line-height: 1.6; color: var(--muted)">
+      <div style="height: 120px; border: 1px dashed var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; font-size: 13px">Cover image goes here</div>
+      <h2 style="margin: 0 0 12px; font-size: 22px; color: var(--ink)">Frequently asked questions</h2>
+      <p style="margin: 0">How much is a Brewline Coffee subscription? …</p>
+    </div>
+
+    <div aria-hidden="true" style="position: absolute; inset: 0; background: var(--scrim)"></div>
+    <div role="dialog" aria-modal="true" aria-label="Generate an image" style="position: absolute; top: 56px; left: 50%; transform: translateX(-50%); width: min(640px, calc(100% - 32px)); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <strong style="font-size: 16px">Generate with AI</strong>
+        <span style="flex: 1"></span>
+        <button aria-label="Close" style="width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+      </div>
+      <div style="display: flex; gap: 6px; font-size: 13px">
+        <span style="padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted)">Upload</span>
+        <span style="padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted)">From URL</span>
+        <span style="padding: 4px 10px; border-radius: 999px; background: var(--ink); color: var(--bg)">Generate with AI</span>
+      </div>
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500">Prompt
+        <textarea rows="2" style="font-family: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; resize: vertical">Cover for "FAQ: Subscriptions": a calm, abstract scene of three coffee bags side by side, in the brand's colors. No text, no people.</textarea>
+      </label>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px">
+        <span style="padding: 3px 10px; border-radius: 999px; background: var(--ink); color: var(--bg)">Brand style</span>
+        <span style="padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line)">Illustration</span>
+        <span style="padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line)">Photo-like</span>
+        <span style="padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line)">16:9</span>
+      </div>
+      <fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+        <legend style="font-size: 13px; font-weight: 500; margin-bottom: 6px">Model</legend>
+        <label style="display: flex; align-items: center; gap: 10px; border: 1px solid var(--ink); border-radius: 10px; padding: 8px 12px; font-size: 13px">
+          <input type="radio" name="model" checked>
+          <span style="font-weight: 600">Nano Banana 2 Lite</span>
+          <span style="font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--greenbg); color: var(--green)">Recommended</span>
+          <span style="flex: 1"></span>
+          <span style="color: var(--muted)">1x · ≈0.3% per image</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px">
+          <input type="radio" name="model">
+          <span style="font-weight: 600">Nano Banana 2</span>
+          <span style="flex: 1"></span>
+          <span style="color: var(--muted)">2x · ≈0.6% per image</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px">
+          <input type="radio" name="model">
+          <span style="font-weight: 600">Nano Banana Pro</span>
+          <span style="flex: 1"></span>
+          <span style="color: var(--muted)">4x · ≈1.3% per image</span>
+        </label>
+        <span style="font-size: 12px; color: var(--muted)">Share of your monthly AI limit on your plan (Growth). Starter's limit is smaller, so each image uses more of it.</span>
+      </fieldset>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+        <button aria-label="Option 1, selected" style="border: 2px solid var(--ink); border-radius: 12px; padding: 0; overflow: hidden; background: var(--tileA); height: 104px; position: relative">
+          <svg width="100%" height="100%" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true"><rect x="22" y="22" width="34" height="46" rx="4" fill="var(--card)"></rect><rect x="63" y="16" width="34" height="58" rx="4" fill="var(--card)"></rect><rect x="104" y="22" width="34" height="46" rx="4" fill="var(--card)"></rect></svg>
+          <span style="position: absolute; left: 6px; top: 6px; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--card); color: var(--ink)">AI-generated</span>
+        </button>
+        <button aria-label="Option 2" style="border: 1px solid var(--line); border-radius: 12px; padding: 0; overflow: hidden; background: var(--tileB); height: 104px">
+          <svg width="100%" height="100%" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true"><circle cx="50" cy="45" r="22" fill="var(--card)"></circle><rect x="84" y="24" width="50" height="42" rx="6" fill="var(--card)"></rect></svg>
+        </button>
+        <button aria-label="Option 3" style="border: 1px solid var(--line); border-radius: 12px; padding: 0; overflow: hidden; background: var(--tileC); height: 104px">
+          <svg width="100%" height="100%" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true"><path d="M10 70 L50 40 L80 55 L120 25 L150 45" stroke="var(--card)" stroke-width="6" fill="none"></path></svg>
+        </button>
+      </div>
+
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500">Alt text
+        <input type="text" value="Three coffee bags side by side" style="font-family: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px">
+      </label>
+
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+        <span style="font-size: 12px; color: var(--muted)">AI images don't count as your own visual proof in Quality.</span>
+        <span style="flex: 1"></span>
+        <button style="height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 500">Regenerate · ≈1%</button>
+        <button style="height: 32px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--primary); color: var(--onprimary); font-size: 14px; font-weight: 500">Use this image</button>
+      </div>
+    </div>
+  </section>
+</div></div></section>
+<section class="screen" id="e-insert"><h2>8 · Empty line: + / menu</h2><p class="lead">Clicking an empty line shows + and a / menu with text blocks, media and blocks (Generate image with AI, HTML block) and Ask the agent.</p><div class="frame"><div class="screen-root" style="font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 800px; display: flex; flex-wrap: wrap; font-size: 14px">
+  <nav aria-label="App" style="width: 56px; background: var(--rail); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0">
+    <div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary); margin-bottom: 12px"></div>
+  </nav>
+  <section aria-label="Chat" style="flex: 0 1 380px; min-width: 300px; border-right: 1px solid var(--line); display: flex; flex-direction: column">
+    <header style="padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card)"><strong style="font-size: 15px">FAQ for /subscriptions</strong></header>
+    <div style="flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 12px; color: var(--muted); font-size: 13px">
+      <p style="margin: 0">The chat stays here. The menu on the right opens from the page itself, without asking Chat.</p>
+    </div>
+  </section>
+  <section aria-label="Editor" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; background: var(--card)">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line)">
+      <strong style="font-size: 15px">FAQ: Subscriptions</strong>
+      <span style="font-size: 12px; color: var(--muted)">Saved</span>
+    </header>
+    <div style="flex: 1; padding: 24px 28px; line-height: 1.6; position: relative">
+      <h2 style="margin: 0 0 12px; font-size: 22px">Frequently asked questions</h2>
+      <h3 style="margin: 0 0 4px; font-size: 15px">How much is a Brewline Coffee subscription?</h3>
+      <p style="margin: 0 0 16px">[YOUR PRICE] a bag for the House Blend. Single origins and decaf cost a little more.</p>
+      <div style="display: flex; align-items: center; gap: 10px; margin-left: -34px">
+        <button aria-label="Insert a block" aria-expanded="true" style="width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); font-size: 16px; line-height: 1">+</button>
+        <span style="color: var(--muted)">Type / for blocks, or just write…</span>
+      </div>
+      <div role="menu" aria-label="Insert" style="margin: 8px 0 0 0; width: 300px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 6px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 8px 24px rgba(0,0,0,0.08)">
+        <span style="font-size: 11px; color: var(--muted); padding: 6px 8px 2px">Text</span>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">Heading 2</button>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">Heading 3</button>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">Bulleted list</button>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">Quote</button>
+        <span style="font-size: 11px; color: var(--muted); padding: 6px 8px 2px">Media and blocks</span>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">Table</button>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">Image: upload or URL</button>
+        <button role="menuitem" style="text-align: left; height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--soft); color: var(--ink); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between">Generate image with AI <span style="font-size: 11px; font-weight: 500; color: var(--muted)">≈0.3% each</span></button>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">&lt;/&gt; HTML block</button>
+        <span style="font-size: 11px; color: var(--muted); padding: 6px 8px 2px">Ask the agent</span>
+        <button role="menuitem" style="text-align: left; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px">Write a paragraph here…</button>
+      </div>
+    </div>
+  </section>
+</div></div></section>
+<script>/* Ansvisor demo: the Dark/Light button switches <html data-theme>; its label follows the theme the app sets too */
+(function(){var d=document.documentElement,b=document.getElementById("theme");function lab(){b.textContent=d.getAttribute("data-theme")==="dark"?"Light":"Dark"}lab();if(window.MutationObserver)new MutationObserver(lab).observe(d,{attributes:true,attributeFilter:["data-theme"]});b.addEventListener("click",function(){if(d.getAttribute("data-theme")==="dark")d.removeAttribute("data-theme");else d.setAttribute("data-theme","dark")})})();</script>
+</body></html>

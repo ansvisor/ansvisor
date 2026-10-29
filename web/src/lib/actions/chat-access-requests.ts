@@ -10,7 +10,9 @@ import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { parseTeamRole } from '@/lib/chat/precedence';
 import {
   ACCESS_REQUEST_RULES,
+  MAX_DRAFTED_CHANGE_CHARS,
   MAX_PENDING_REQUESTS,
+  MAX_REQUESTS_PER_DAY,
   REQUEST_HISTORY_DAYS,
   type AccessRequest,
   type AccessRequestStatus,
@@ -60,14 +62,22 @@ const requestSchema = z.object({
     .nullish(),
   brandId: z.string().uuid().nullish(),
   conversationId: z.string().uuid().nullish(),
-  draftedChange: z.record(z.string(), z.unknown()).nullish(),
+  draftedChange: z
+    .record(z.string(), z.unknown())
+    .nullish()
+    .refine(
+      (change) => change == null || JSON.stringify(change).length <= MAX_DRAFTED_CHANGE_CHARS,
+    ),
 });
 
 export type AccessRequestInput = z.input<typeof requestSchema>;
 
 export type RequestAccessResult =
   | { ok: true; id: string }
-  | { ok: false; reason: 'chat_off' | 'admin' | 'invalid' | 'too_many' | 'already_today' };
+  | {
+      ok: false;
+      reason: 'chat_off' | 'admin' | 'invalid' | 'too_many' | 'daily_limit' | 'already_today';
+    };
 
 /** The fingerprint of an asked change: one request a day for the same one. */
 function askedHash(toolKey: string | null, asked: string): string {
@@ -85,12 +95,18 @@ export async function requestAccess(input: AccessRequestInput): Promise<RequestA
   if (!parsed.success) return { ok: false, reason: 'invalid' };
   const req = parsed.data;
 
-  const [pending, brand, conversation] = await Promise.all([
+  const [pending, sentToday, brand, conversation] = await Promise.all([
     supabaseAdmin
       .from('chat_access_requests')
       .select('id', { count: 'exact', head: true })
       .eq('requester_id', who.userId)
       .eq('status', 'pending'),
+    // The table's requested_on: today in UTC.
+    supabaseAdmin
+      .from('chat_access_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('requester_id', who.userId)
+      .eq('requested_on', new Date().toISOString().slice(0, 10)),
     req.brandId
       ? supabaseAdmin
           .from('brands')
@@ -111,6 +127,8 @@ export async function requestAccess(input: AccessRequestInput): Promise<RequestA
   ]);
   if (pending.error) throw new Error(pending.error.message);
   if ((pending.count ?? 0) >= MAX_PENDING_REQUESTS) return { ok: false, reason: 'too_many' };
+  if (sentToday.error) throw new Error(sentToday.error.message);
+  if ((sentToday.count ?? 0) >= MAX_REQUESTS_PER_DAY) return { ok: false, reason: 'daily_limit' };
 
   const toolKey = req.toolKey ?? null;
   const { data, error } = await supabaseAdmin

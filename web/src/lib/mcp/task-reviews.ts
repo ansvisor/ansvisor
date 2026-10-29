@@ -21,13 +21,10 @@ import { requireManager } from './role-gate';
  * (requireManager): everyone else reads and changes none, as the table's RLS
  * has it.
  *
- * TODO(demo-brand-mcp): approve_task_review and dismiss_task_review find
- * their brand through action_task_reviews → actions.brand_id. When
- * feature/demo-brand-mcp merges, add them to WRITE_TOOL_BRANDS
- * (lib/mcp/demo-gate.ts) and call assertNotDemoBrand in
- * approveTaskReviewFor and dismissTaskReviewFor, so the REST mirrors refuse
- * a demo brand too: they write as the service role, which the demo trigger
- * (00381) lets through.
+ * On a demo brand (00380) the tools and their REST mirrors refuse both
+ * (WRITE_TOOL_BRANDS, demoBrandRefusal in lib/mcp/demo-gate.ts) before
+ * anything is written: these write as the service role, which the demo
+ * trigger (00381) lets through.
  */
 
 /** A field a task waiting for review was written without, as the MCP names it. */

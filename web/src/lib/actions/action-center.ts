@@ -17,6 +17,7 @@ import {
   type ActionCategory,
   type ActionDismissReason,
   type ActionImpact,
+  missingDismissReason,
   taskProgress,
   type ActionStatus,
   type TaskStatus,
@@ -328,7 +329,8 @@ async function touchAction(
 
 /**
  * Sets an action's status. A dismissal keeps why, when the person said
- * (learning A5); any other status clears it, as a dismissal it no longer is.
+ * (learning A5); any other status clears it, as a dismissal it no longer is
+ * (00366). A database without dismiss_reason still changes the status.
  */
 export async function updateActionStatus(
   brandId: string,
@@ -336,20 +338,22 @@ export async function updateActionStatus(
   status: ActionStatus,
   reason: ActionDismissReason | null = null,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const dismissReason =
     status === 'dismissed' && reason && ACTION_DISMISS_REASONS.includes(reason) ? reason : null;
-  const { error } = await supabase
-    .from('actions')
-    .update({
-      status,
-      completed_at: status === 'completed' ? new Date().toISOString() : null,
-      dismiss_reason: dismissReason,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('brand_id', brandId)
-    .eq('id', actionId);
+  const change = {
+    status,
+    completed_at: status === 'completed' ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+  const write = (values: typeof change & { dismiss_reason?: string | null }) =>
+    supabase.from('actions').update(values).eq('brand_id', brandId).eq('id', actionId);
+  let { error } = await write({ ...change, dismiss_reason: dismissReason });
+  // A database without 00366 has no dismiss_reason (PGRST204 from PostgREST's
+  // schema cache, 42703 from Postgres): the status changes anyway, a
+  // dismissal's reason kept in the event below only. Any other error stands.
+  if (missingDismissReason(error)) ({ error } = await write(change));
   if (error) throw new Error(error.message);
   await logEvent(supabase, actionId, 'status_changed', {
     to: status,
@@ -385,7 +389,7 @@ export async function assignAction(
   actionId: string,
   assigneeId: string | null,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('actions')
@@ -401,7 +405,7 @@ export async function setActionDueDate(
   actionId: string,
   dueDate: string | null,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const { error } = await supabase
     .from('actions')
@@ -419,7 +423,7 @@ export async function updateTaskStatus(
   status: TaskStatus,
   skipReason?: string,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   // A skip records why. "We decided not to" is only useful to the next reader
@@ -461,7 +465,7 @@ function cleanTaskTitle(raw: string): string {
  * as many as someone types.
  */
 export async function addTask(brandId: string, actionId: string, title: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
   const text = cleanTaskTitle(title);
 
@@ -502,7 +506,7 @@ export async function updateTaskDetails(
   taskId: string,
   edit: TaskDetailsEdit & { title: string | null },
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!isTaskDetailsEdit(edit) || (edit.title !== null && typeof edit.title !== 'string')) {
     throw new Error('Invalid task details');
   }
@@ -552,7 +556,7 @@ export async function updateTaskDetails(
  * action makes that a non-issue.
  */
 export async function deleteTask(brandId: string, actionId: string, taskId: string): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const supabase = await createClient();
 
   const { error } = await supabase

@@ -34,6 +34,13 @@ export interface Brand {
   /** 'wait' keeps the snippet's visitor id only after the site's consent, 'always' at once. */
   conversionsConsent?: 'wait' | 'always';
   isActive: boolean;
+  /**
+   * The workspace's demo brand: sample data in the real tables, shown as the
+   * product is, with every action opening the plan dialog (00380).
+   */
+  isDemo?: boolean;
+  /** When an admin hid the demo brand (after buying a plan); it is never deleted. */
+  demoHiddenAt?: string | null;
   domains: BrandDomain[];
   createdAt: string;
   updatedAt: string;

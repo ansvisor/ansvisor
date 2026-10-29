@@ -161,7 +161,9 @@ export async function sweepWebflowPublished() {
   const started = Date.now();
   const { data, error } = await supabaseAdmin
     .from('brand_cms_connections')
-    .select('brand_id, brands!inner(organizations!inner(subscription_status))')
+    .select('brand_id, brands!inner(is_demo, organizations!inner(subscription_status))')
+    // A demo brand's connection (00380) is shown, never used.
+    .eq('brands.is_demo', false)
     .eq('provider', 'webflow')
     .eq('status', 'connected')
     .not('site_id', 'is', null)

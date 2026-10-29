@@ -6,7 +6,23 @@ import messages from '../../../messages/en.json';
 import { PlanProvider } from '@/components/providers/plan-provider';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { UpgradeDialogProvider } from '@/components/providers/upgrade-dialog-provider';
+import { DemoBrandContext } from '@/components/providers/demo-brand-provider';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { ReadOnlyBanner } from './read-only-banner';
+
+// An in-memory localStorage for the brand store: the test environment has none.
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => memory.get(key) ?? null,
+      setItem: (key: string, value: string) => memory.set(key, String(value)),
+      removeItem: (key: string) => memory.delete(key),
+      clear: () => memory.clear(),
+    },
+  });
+});
 
 let pathname = '/dashboard/insights';
 vi.mock('@/i18n/navigation', () => ({
@@ -16,7 +32,16 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
   usePathname: () => pathname,
+  useRouter: () => ({ push, refresh: vi.fn() }),
 }));
+const push = vi.hoisted(() => vi.fn());
+const ensureDemoBrand = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/demo/demo-client', () => ({
+  prepareDemoBrand: ensureDemoBrand,
+  demoPreparation: () => null,
+  setDemoHidden: vi.fn(),
+}));
+vi.mock('@/lib/actions/brand', () => ({ getBrandById: vi.fn() }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -29,15 +54,28 @@ async function render({
   status = 'canceled',
   role = 'admin',
   adminName = null,
-}: { active?: boolean; status?: string; role?: TeamRole; adminName?: string | null } = {}) {
+  neverSubscribed = false,
+  demoBrand = null,
+}: {
+  active?: boolean;
+  status?: string | null;
+  role?: TeamRole;
+  adminName?: string | null;
+  neverSubscribed?: boolean;
+  demoBrand?: { id: string; hidden: boolean } | null;
+} = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <PlanProvider planId="starter" subscriptionActive={active} subscriptionStatus={status}>
           <RoleProvider role={role}>
-            <UpgradeDialogProvider adminName={adminName}>
-              <ReadOnlyBanner />
-            </UpgradeDialogProvider>
+            <DemoBrandContext.Provider
+              value={{ isDemo: false, demoBrand, offer: 'trial', neverSubscribed }}
+            >
+              <UpgradeDialogProvider adminName={adminName}>
+                <ReadOnlyBanner />
+              </UpgradeDialogProvider>
+            </DemoBrandContext.Provider>
           </RoleProvider>
         </PlanProvider>
       </NextIntlClientProvider>,
@@ -48,8 +86,10 @@ async function render({
 const link = () => container.querySelector('a');
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   pathname = '/dashboard/insights';
+  useBrandStore.setState({ loaded: true });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -64,6 +104,13 @@ afterEach(() => {
 describe('ReadOnlyBanner', () => {
   const seePlans = () =>
     [...container.querySelectorAll('button')].find((b) => b.textContent === 'See plans');
+
+  // A new browser: the brand on screen may be the demo brand, which has its own band.
+  it('shows nothing until the brands are loaded', async () => {
+    useBrandStore.setState({ loaded: false });
+    await render({ status: 'canceled' });
+    expect(container.textContent).toBe('');
+  });
 
   it('says the workspace is read-only, and See plans opens the dialog', async () => {
     await render({ status: 'canceled' });
@@ -106,6 +153,91 @@ describe('ReadOnlyBanner', () => {
 
   it('offers every member See plans once the plan ended', async () => {
     await render({ role: 'analyst' });
+    expect(seePlans()).toBeDefined();
+  });
+
+  const seeTheDemo = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'See the demo');
+
+  it('offers an admin or a manager See the demo once the plan ended', async () => {
+    await render();
+    expect(seeTheDemo()).toBeDefined();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ role: 'manager' });
+    expect(seeTheDemo()).toBeDefined();
+  });
+
+  it('opens the demo brand from See the demo', async () => {
+    ensureDemoBrand.mockResolvedValue({ ok: false, status: 500 });
+    await render();
+    // Once ahead, as the band shows, and once more for the click.
+    expect(ensureDemoBrand).toHaveBeenCalledTimes(1);
+    await act(async () => seeTheDemo()!.click());
+    expect(ensureDemoBrand).toHaveBeenCalledTimes(2);
+  });
+
+  it('says the demo is being set up while it opens', async () => {
+    ensureDemoBrand.mockReturnValue(new Promise(() => {}));
+    await render();
+    await act(async () => seeTheDemo()!.click());
+    expect(seeTheDemo()).toBeUndefined();
+    const setting = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Setting up the demo…',
+    );
+    expect(setting?.disabled).toBe(true);
+  });
+
+  it('starts the setup ahead only for an admin or a manager with no demo brand yet', async () => {
+    await render({ role: 'analyst', demoBrand: { id: 'demo', hidden: false } });
+    expect(ensureDemoBrand).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ demoBrand: { id: 'demo', hidden: true } });
+    expect(ensureDemoBrand).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ status: 'past_due' });
+    expect(ensureDemoBrand).not.toHaveBeenCalled();
+  });
+
+  it('offers no demo while a payment is being retried, nor to a member with none to see', async () => {
+    await render({ status: 'past_due' });
+    expect(seeTheDemo()).toBeUndefined();
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ role: 'analyst' });
+    expect(seeTheDemo()).toBeUndefined();
+  });
+
+  it('offers a workspace that never had a plan its free trial', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ valid: false })),
+    );
+    await render({ status: null, neverSubscribed: true });
+    expect(container.textContent).toContain(
+      "Your brand isn't tracked yet. Start a 14-day free trial, or get 50% off your first month.",
+    );
+    const start = seePlans()!;
+    expect(seeTheDemo()).toBeDefined();
+    await act(async () => start.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Choose how to start');
+    vi.unstubAllGlobals();
+  });
+
+  it('says only the trial with the first-month offer off', async () => {
+    vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
+    await render({ status: null, neverSubscribed: true });
+    expect(container.textContent).toContain(
+      "Your brand isn't tracked yet. Start a 14-day free trial.",
+    );
+    expect(container.textContent).not.toContain('50%');
+  });
+
+  it('offers another member of such a workspace See plans', async () => {
+    await render({ status: null, neverSubscribed: true, role: 'analyst' });
+    expect(container.textContent).toContain("Your brand isn't tracked yet.");
     expect(seePlans()).toBeDefined();
   });
 

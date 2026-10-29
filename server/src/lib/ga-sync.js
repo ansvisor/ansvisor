@@ -588,6 +588,8 @@ export async function runGaSync({ organizationId, brandId, aiHistory = false } =
     .from('brands')
     .select('id, organization_id, ga_property_id')
     .eq('is_active', true)
+    // A demo brand's figures (00380) are sample data, never synced.
+    .eq('is_demo', false)
     .not('ga_property_id', 'is', null)
     .in('organization_id', connectedOrgIds);
   if (brandId) brandQuery = brandQuery.eq('id', brandId);
