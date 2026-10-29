@@ -11,7 +11,9 @@
  * is taken out: blocks named for it (author, share, related…), blocks that
  * are mostly links (breadcrumbs, a table of contents, icon rows, post
  * lists), bylines ("8 min read"), and avatars, logos, icons and cover
- * images.
+ * images. A page builder's copy of a block for another screen size (Framer
+ * prints one per breakpoint and its CSS shows one) is taken out first, and
+ * any block saying just what the one before it says goes last.
  */
 
 import * as cheerio from 'cheerio';
@@ -26,6 +28,19 @@ const MAX_JSON_LD_LENGTH = 50_000;
 
 /** Where a page's own content usually is, the most telling first. */
 const MAIN_SELECTORS = ['main', 'article', '[role="main"]', '#content', '#main'];
+
+/**
+ * A block named #main or #content holding this much of the page's text is
+ * an app's root (Framer's #main is the whole site), no sign of the content.
+ */
+const APP_ROOT_SHARE = 0.95;
+
+/**
+ * The screen width a page is read at: a page builder (Framer) puts a copy of
+ * a block in the page for each breakpoint and its CSS shows one, so the
+ * copies hidden on this screen are taken out.
+ */
+const DESKTOP_WIDTH = 1440;
 
 /** The site's frame, and what can't be content. */
 const FRAME =
@@ -168,9 +183,12 @@ function nameWords(className, id) {
     .filter(Boolean);
 }
 
-/** A block's class and id, as lower-case words. */
+/** A block's class, id and Framer layer name ("Avatar with text"), as lower-case words. */
 function wordsOf($el) {
-  return nameWords($el.attr('class'), $el.attr('id'));
+  return nameWords(
+    `${$el.attr('class') ?? ''} ${$el.attr('data-framer-name') ?? ''}`,
+    $el.attr('id'),
+  );
 }
 
 /** An element's class and id, as lower-case words, from its attributes. */
@@ -484,6 +502,140 @@ function commonAncestor($, a, b) {
   return el;
 }
 
+/**
+ * Whether a media query holds on a DESKTOP_WIDTH screen: one of its
+ * comma-separated queries does, each part a screen type or a min/max width.
+ * A part it can't read ("print", an orientation) holds nowhere.
+ */
+export function onDesktop(query) {
+  return query.split(',').some((alternative) =>
+    alternative
+      .toLowerCase()
+      .split(/\band\b/)
+      .map((part) => part.trim())
+      .every((part) => {
+        if (/^(?:only\s+)?(?:screen|all)$/.test(part)) return true;
+        const width = /^\(\s*(min|max)-width\s*:\s*(\d+(?:\.\d+)?)(px|em|rem)\s*\)$/.exec(part);
+        if (!width) return false;
+        const px = Number(width[2]) * (width[3] === 'px' ? 1 : 16);
+        return width[1] === 'min' ? DESKTOP_WIDTH >= px : DESKTOP_WIDTH <= px;
+      }),
+  );
+}
+
+/**
+ * The classes a page's own CSS hides on a desktop screen: rules of only
+ * class selectors and display:none, inside a media query that holds there.
+ * Read in one pass however the CSS is written.
+ */
+export function classesHiddenOnDesktop(css) {
+  const hidden = new Set();
+  for (let at = css.indexOf('@media'); at !== -1; ) {
+    const open = css.indexOf('{', at);
+    if (open === -1) break;
+    let depth = 1;
+    let end = open + 1;
+    for (; end < css.length && depth > 0; end += 1) {
+      if (css[end] === '{') depth += 1;
+      else if (css[end] === '}') depth -= 1;
+    }
+    if (onDesktop(css.slice(at + '@media'.length, open))) {
+      for (const rule of css.slice(open + 1, end - 1).split('}')) {
+        const brace = rule.indexOf('{');
+        if (brace === -1) continue;
+        const selectors = rule
+          .slice(0, brace)
+          .split(',')
+          .map((selector) => selector.trim());
+        const declaration = rule
+          .slice(brace + 1)
+          .replace(/\s+/g, '')
+          .replace(/;$/, '')
+          .toLowerCase();
+        if (
+          (declaration === 'display:none' || declaration === 'display:none!important') &&
+          selectors.every((selector) => /^\.[a-z_-][\w-]*$/i.test(selector))
+        ) {
+          for (const selector of selectors) hidden.add(selector.slice(1));
+        }
+      }
+    }
+    at = css.indexOf('@media', end);
+  }
+  return hidden;
+}
+
+/**
+ * What a block says, its words and pictures, for telling a copy: null when
+ * it says nothing (a spacer). Its words are read only when it has some.
+ */
+function signatureOf($, el, length) {
+  // A builder's copies ask for the same picture in other sizes.
+  const pictures = [...(el.name === 'img' ? [el] : []), ...findIn($, el, 'img').toArray()].map(
+    (img) => (img.attribs?.src ?? '').split('?')[0],
+  );
+  const text = length > 0 ? clean($(el).text()) : '';
+  return text || pictures.some(Boolean) ? `${text}|${pictures.join(' ')}` : null;
+}
+
+/** The blocks a run of copies is looked for in: not a list's items or a table's cells. */
+const REPEATABLE = new Set([
+  'div',
+  'section',
+  'figure',
+  'picture',
+  'img',
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+]);
+
+/**
+ * Each block saying the same as the block of its tag right before it, at
+ * any depth: a copy the page shows on another screen, or a builder's
+ * leftover. Only blocks of the same length are read in full, so a page is
+ * read about once. When the copy holds the text or its title (`kept`), the
+ * block before it goes instead.
+ */
+function repeatedBlocks($, root, kept) {
+  const { read } = blockReader();
+  const signatures = new Map();
+  const signature = (el) => {
+    if (!signatures.has(el)) signatures.set(el, signatureOf($, el, read(el).length));
+    return signatures.get(el);
+  };
+  const repeats = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const parent = stack.pop();
+    let before = null;
+    for (const child of parent.children ?? []) {
+      if (!isElement(child)) continue;
+      if (
+        before?.name === child.name &&
+        REPEATABLE.has(child.name) &&
+        read(child).length === read(before).length &&
+        signature(child) !== null &&
+        signature(child) === signature(before)
+      ) {
+        if (!kept.has(child)) {
+          repeats.push(child);
+          continue;
+        }
+        repeats.push(before);
+      }
+      before = child;
+      stack.push(child);
+    }
+  }
+  return repeats;
+}
+
 /*
  * The tag passes below read each '<' once, left to right, and give what the
  * regex each names would, in time near the text's length however its tags
@@ -606,6 +758,22 @@ export function extractPageContent(html, pageUrl) {
     .filter((text) => text && text.length <= MAX_JSON_LD_LENGTH)
     .slice(0, MAX_JSON_LD);
 
+  // The copies a desktop screen doesn't show, by the page's own CSS, go
+  // before anything is read: the text, its title and its pictures once.
+  const desktopHidden = classesHiddenOnDesktop(
+    $('style')
+      .map((_, el) => $(el).text())
+      .get()
+      .join('\n'),
+  );
+  if (desktopHidden.size > 0) {
+    removeAll(
+      findIn($, $.root()[0], '[class]')
+        .toArray()
+        .filter((el) => el.attribs.class.split(/\s+/).some((name) => desktopHidden.has(name))),
+    );
+  }
+
   // The H1s with words, and the page's order, before the frame goes: an
   // article's title often sits in its own <header>.
   const order = new Map(
@@ -650,9 +818,15 @@ export function extractPageContent(html, pageUrl) {
     clean($('title').first().text());
   // Still on the page (not in a header that went with the frame).
   const heading = titleH1 && $(titleH1).closest('body').length > 0 ? titleH1 : null;
+  let pageLength = null;
+  const appRoot = (el) => {
+    if (el.name === 'main' || el.name === 'article' || el.attribs.role === 'main') return false;
+    pageLength ??= clean(body.text()).length;
+    return clean($(el).text()).length >= pageLength * APP_ROOT_SHARE;
+  };
   const main = MAIN_SELECTORS.map((selector) => $(selector).toArray())
     .flat()
-    .find((el) => !textArea || inside(textArea, el));
+    .find((el) => (!textArea || inside(textArea, el)) && !appRoot(el));
   const root = main
     ? $(main)
     : textArea
@@ -770,6 +944,7 @@ export function extractPageContent(html, pageUrl) {
     }
   }
   removeAll(unaddressed);
+  removeAll(repeatedBlocks($, root[0], kept));
 
   // One H1 per page, its title: any other becomes an H2, and one without
   // words (a logo) is no heading.

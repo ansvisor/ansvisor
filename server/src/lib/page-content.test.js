@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractPageContent } from './page-content.js';
+import { classesHiddenOnDesktop, extractPageContent, onDesktop } from './page-content.js';
 
 /** A page brought into the Content Editor: its own content, not the site's frame. */
 
@@ -317,6 +317,120 @@ describe('extractPageContent', () => {
     }
   });
 
+  it('reads a Framer page once, as a desktop screen shows it, without the site around the post', () => {
+    // Framer's #main is the whole site, and each breakpoint has its own copy
+    // of a block, the others hidden by the page's CSS.
+    const desktop = 'ssr-variant hidden-tab hidden-phone';
+    const tablet = 'ssr-variant hidden-wide hidden-phone';
+    const phone = 'ssr-variant hidden-wide hidden-tab';
+    const copies = (block) =>
+      [desktop, tablet, phone].map((variant) => `<div class="${variant}">${block}</div>`).join('');
+    const { title, html } = extractPageContent(
+      `<html><head><style data-framer-breakpoint-css>
+        @media(min-width: 1200px){.hidden-wide{display:none!important}}
+        @media(min-width: 810px) and (max-width: 1199.98px){.hidden-tab{display:none!important}}
+        @media(max-width: 809.98px){.hidden-phone{display:none!important}}
+        @media print{.hidden-print{display:none!important}}
+      </style></head><body><div id="main" data-framer-hydrate-v2="{}"><div class="framer-page">
+        ${copies('<div id="navigation" data-framer-name="Desktop"><a href="/"><p class="framer-text">Acme Roasters</p></a><a href="/shop"><p class="framer-text">Shop</p></a><a href="/pricing"><p class="framer-text">Pricing</p></a><a href="/login"><p class="framer-text">Log in</p></a></div>')}
+        <div class="framer-1abc hidden-wide" data-framer-name="Page header"><a href="/blog"><p class="framer-text">Blog</p></a><p class="framer-text">how-to-brew-pour-over</p></div>
+        <div class="framer-post" data-framer-name="Post">
+          ${copies('<div data-framer-name="Heading"><h1 class="framer-text">How to brew pour-over coffee</h1></div>')}
+          <div data-framer-name="Subcontent">
+            <div data-framer-name="Avatar with text"><div data-framer-name="Avatar"><img src="https://framerusercontent.com/images/ada.png?width=800" width="800"></div><p class="framer-text">Ada Lovelace</p></div>
+            <div data-framer-name="Reading time"><p class="framer-text">6</p><p class="framer-text">min read</p></div>
+            <div data-framer-name="Date"><p class="framer-text"><time>Aug 15, 2024</time></p></div>
+          </div>
+          <div data-framer-name="Content">
+            ${copies('<div data-framer-name="Image"><img src="https://framerusercontent.com/images/cover.png?width=1920" alt="A pour-over dripper" width="1920"></div>')}
+            <div data-framer-name="Content">
+              <p class="framer-text">Pour-over coffee tastes cleaner than a French press, with brighter notes.</p>
+              <p class="framer-text"><br class="trailing-break"></p>
+              <h2 class="framer-text">What you need</h2>
+              <p class="framer-text">A dripper, paper filters, a kettle and freshly ground beans, medium-fine.</p>
+              <p class="framer-text">Pour in slow circles, and aim for a total brew time of about three minutes.</p>
+            </div>
+          </div>
+        </div>
+        <div data-framer-name="Pivot"><p>Like this blog post?</p><a href="/blog"><div>Visit All Posts</div></a></div>
+        <div data-framer-name="Blog filter">
+          ${copies('<p class="framer-text">RELATED BLOGS</p><h2 class="framer-text">Our latest news and articles</h2>')}
+          <div><a href="/blog/espresso"><p>Espresso at home, from the grind to the crema, in five steps.</p><p>5</p><p>min read</p></a></div>
+        </div>
+        <div id="faq" data-framer-name="FAQ">${copies('<h2>FAQ</h2><div data-framer-name="Accordion group"><div data-framer-name="Close"><p class="framer-text">Do you ship your coffee beans abroad?</p></div></div>')}</div>
+        ${copies('<div data-framer-name="Footer item"><p class="framer-text">© 2026 Acme Roasters Inc. All rights reserved.</p></div>')}
+      </div></div></body></html>`,
+      'https://acme-coffee.example/blog/how-to-brew-pour-over',
+    );
+    expect(title).toBe('How to brew pour-over coffee');
+    expect(html.match(/How to brew pour-over coffee/g)).toHaveLength(1);
+    expect(html).toContain('<h1 class="framer-text">How to brew pour-over coffee</h1>');
+    expect(html.match(/cover\.png/g)).toHaveLength(1);
+    for (const kept of [
+      'tastes cleaner',
+      'What you need',
+      'freshly ground beans',
+      'slow circles',
+    ]) {
+      expect(html.match(new RegExp(kept, 'g'))).toHaveLength(1);
+    }
+    for (const gone of [
+      'Log in',
+      'Pricing',
+      'how-to-brew-pour-over<',
+      'Ada Lovelace',
+      'ada.png',
+      'min read',
+      'Visit All Posts',
+      'RELATED BLOGS',
+      'Espresso at home',
+      'Do you ship',
+      'All rights reserved',
+    ]) {
+      expect(html).not.toContain(gone);
+    }
+  });
+
+  it('takes out an author box named only by its Framer layer', () => {
+    const { html } = extractPageContent(
+      `<body><div class="framer-page">
+        <h1>How to brew pour-over coffee</h1>
+        <div class="framer-x1">
+          <p>Pour-over coffee tastes cleaner than a French press, with brighter notes.</p>
+          <p>Pour in slow circles, and aim for a total brew time of about three minutes.</p>
+        </div>
+        <div class="framer-x2" data-framer-name="Author card"><img src="/ada.png" width="800"><p>Ada writes about coffee, slowly and with care.</p></div>
+      </div></body>`,
+      'https://acme-coffee.example/blog/pour-over',
+    );
+    expect(html).toContain('slow circles');
+    expect(html).not.toContain('Ada writes');
+    expect(html).not.toContain('ada.png');
+  });
+
+  it('keeps one of each run of copies, but not a list’s or a table’s repeats', () => {
+    const { html } = extractPageContent(
+      `<body><main>
+        <div><h1>Cold brew at home</h1></div><div><h1>Cold brew at home</h1></div>
+        <img src="/jar.jpg?w=800" alt="A jar"><img src="/jar.jpg?w=1600" alt="A jar">
+        <p>Cold brew takes time, coarse grounds and cold water, nothing more.</p>
+        <p>Cold brew takes time, coarse grounds and cold water, nothing more.</p>
+        <p><br></p><p><br></p>
+        <p>Steep it for twelve to eighteen hours, then strain it twice.</p>
+        <ul><li>Coarse grounds</li><li>Coarse grounds</li></ul>
+        <table><tr><td>Yes</td><td>Yes</td></tr></table>
+      </main></body>`,
+      'https://coffee.example/cold-brew',
+    );
+    expect(html.match(/Cold brew at home/g)).toHaveLength(1);
+    expect(html).toContain('<h1>Cold brew at home</h1>');
+    expect(html.match(/jar\.jpg/g)).toHaveLength(1);
+    expect(html.match(/coarse grounds and cold water/g)).toHaveLength(1);
+    expect(html.match(/<p><br><\/p>/g)).toHaveLength(2);
+    expect(html.match(/<li>Coarse grounds<\/li>/g)).toHaveLength(2);
+    expect(html.match(/<td>Yes<\/td>/g)).toHaveLength(2);
+  });
+
   it('judges images in the text as the text’s when the text area is the root', () => {
     const { html } = extractPageContent(
       `<body><article>
@@ -367,4 +481,26 @@ describe('extractPageContent on a long or deep page', () => {
     },
     10_000,
   );
+});
+
+describe('classesHiddenOnDesktop', () => {
+  it('reads the classes a desktop screen hides, from rules of classes and display:none only', () => {
+    const hidden = classesHiddenOnDesktop(`
+      @media (min-width: 768px) { .mobile-only, .phone-menu { display: none; } }
+      @media screen and (max-width: 767px) { .desktop-only { display: none } }
+      @media (min-width: 48em) { .small-only { display:none !important } }
+      @media print { .no-print { display: none } }
+      @media (orientation: landscape) { .portrait { display: none } }
+      @media (min-width: 1024px) { div.card { display: none } .wide-pad { display: none; padding: 0 } }
+      .closed { display: none }
+    `);
+    expect([...hidden].sort()).toEqual(['mobile-only', 'phone-menu', 'small-only']);
+  });
+
+  it('reads a media query as a 1440px screen does', () => {
+    expect(onDesktop('(min-width: 1440px)')).toBe(true);
+    expect(onDesktop('(min-width: 1280px) and (max-width: 1439.98px)')).toBe(false);
+    expect(onDesktop('only screen and (max-width: 639.98px), (min-width: 1200px)')).toBe(true);
+    expect(onDesktop('print')).toBe(false);
+  });
 });
