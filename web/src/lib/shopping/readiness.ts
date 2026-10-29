@@ -41,6 +41,12 @@ export interface ReadinessInput {
   market: ShoppingMarket;
   /** The brand's catalog sources; null when they couldn't be read. */
   catalog: CatalogSource[] | null;
+  /**
+   * Whether this deployment can connect Google Merchant Center. Where it
+   * can't and the brand has no Merchant Center source, the check isn't
+   * listed, nor scored: nothing the brand can do about it here.
+   */
+  merchantCenterOffered: boolean;
   /** The catalog's products; null without a catalog, or while unread. */
   products: ProductRow[] | null;
   /** OpenAI's product index (US); null when not read. */
@@ -77,20 +83,22 @@ export function readinessChecklist(input: ReadinessInput): {
     action: catalog.length ? undefined : 'settings',
   });
   const merchantCenter = catalog.some((source) => source.kind === 'merchant_center');
-  items.push({
-    key: 'merchantCenter',
-    // In Europe the Merchant Center feed decides ChatGPT too (§3.4b). Sources
-    // that couldn't be read say nothing either way.
-    state:
-      input.catalog === null
-        ? 'unknown'
-        : merchantCenter
-          ? 'pass'
-          : input.market === 'europe'
-            ? 'fail'
-            : 'warn',
-    action: merchantCenter || input.catalog === null ? undefined : 'settings',
-  });
+  if (merchantCenter || input.merchantCenterOffered) {
+    items.push({
+      key: 'merchantCenter',
+      // In Europe the Merchant Center feed decides ChatGPT too (§3.4b). Sources
+      // that couldn't be read say nothing either way.
+      state:
+        input.catalog === null
+          ? 'unknown'
+          : merchantCenter
+            ? 'pass'
+            : input.market === 'europe'
+              ? 'fail'
+              : 'warn',
+      action: merchantCenter || input.catalog === null ? undefined : 'settings',
+    });
+  }
   if (input.market === 'us') {
     if (input.openAi) {
       const status = openAiIndexStatus(input.openAi);

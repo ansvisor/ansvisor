@@ -55,6 +55,7 @@ import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
+import { integrationsConfig } from './routes/integrations.js';
 import { sweepTaskExecution } from './lib/action-center/execution/run.js';
 import { sweepActionTasks } from './lib/action-center/task-writer/index.js';
 import { sweepTaskChecks } from './lib/action-center/task-checks.js';
@@ -562,6 +563,19 @@ app.get('/api/internal/ai-usage', async (req, res) => {
     req.log.error({ err }, 'internal AI usage error');
     return res.status(500).json({ success: false, message: err.message });
   }
+});
+
+// --- Internal integrations config (CRON_SECRET auth, called by web MCP layer) ---
+// Which integrations this deployment has credentials for, as GET
+// /api/integrations/config answers a member: the MCP tools have no member
+// session to ask with (Product Visibility's readiness checks Merchant Center
+// only where it is offered). Booleans only.
+app.get('/api/internal/integrations-config', (req, res) => {
+  const secret = req.headers.authorization?.replace('Bearer ', '');
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  return res.json({ success: true, config: integrationsConfig() });
 });
 
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---

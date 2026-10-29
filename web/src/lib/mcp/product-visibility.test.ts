@@ -376,6 +376,39 @@ describe('get_shopping_readiness', () => {
       regions: [],
     });
     shopping.getShoppingOwnChannels.mockImplementation(loader(() => ['google-aimode']));
+    // The API offers Merchant Center (its internal config, read with the cron secret).
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ success: true, config: { googleMerchantCenter: true } })),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("neither lists nor scores Merchant Center where the API doesn't offer it, or can't say", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ success: true, config: { googleMerchantCenter: false } })),
+    );
+    let read = await getShoppingReadinessFor(auth, { brandId: BRAND });
+    if (!read || !('checks' in read)) throw new Error('no readiness');
+    expect(read.checks.map((c) => c.key)).not.toContain('merchantCenter');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('down');
+      }),
+    );
+    read = await getShoppingReadinessFor(auth, { brandId: BRAND });
+    if (!read || !('checks' in read)) throw new Error('no readiness');
+    expect(read.checks.map((c) => c.key)).not.toContain('merchantCenter');
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/internal/integrations-config'),
+      expect.objectContaining({ headers: { Authorization: 'Bearer cron-secret' } }),
+    );
   });
 
   it('checks the catalog as the Readiness tab does, in its words, with where each fix starts', async () => {
