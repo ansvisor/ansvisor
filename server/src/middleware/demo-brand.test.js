@@ -425,6 +425,8 @@ describe('coverage of the write routes', () => {
     expect(outside.sort()).toEqual([
       'bot-ingest.js',
       'cloro-callback.js',
+      // Chat's budget holds (CRON_SECRET, called by the web's engine): keyed by run, no brand.
+      'internal-chat-budget.js',
       // The first run after a payment (CRON_SECRET): refuses a demo brand itself.
       'internal-trigger-tracking.js',
       'traffic.js',
