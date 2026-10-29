@@ -16,7 +16,7 @@ A new brand starts with **Getting started**: a fixed list of 17 steps on the Act
 ## The four stages
 
 - **Set up**, ready now: set your KPIs, add at least 3 competitors and 3 topics, add 3 prompts per topic, connect Google Search Console and Google Analytics, and add the AI Traffic snippet.
-- **Explore**, when the first AI answers are in (about 3 hours): see where you stand in Brand Visibility, read your first AI answers, track high-value prompt suggestions, check what AI says about you, see who AI quotes and see visits from AI.
+- **Explore**, when the first AI answers are in (usually within an hour): see where you stand in Brand Visibility, read your first AI answers, track high-value prompt suggestions, check what AI says about you, see who AI quotes and see visits from AI.
 - **Act**, when the first content suggestions are in (about 24 hours): pick content from suggestions, create your first content, optimize a page.
 - **Ready**, after every step above is done or skipped.
 

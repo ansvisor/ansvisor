@@ -20,7 +20,7 @@ When you finish setting up a brand, the first round of questions to the AI engin
 
 ## While the first tracking runs
 
-Where a page has nothing to show yet, such as Brand Visibility before the first answers or the **Tracked Prompts** table, it says "Your first answers are arriving", with how many are in and about how long is left. It fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**.
+Brand Visibility says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says "Your first answers are arriving", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**.
 
 ## My visibility score is 0
 
