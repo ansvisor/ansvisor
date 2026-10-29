@@ -16,8 +16,9 @@
  *     check and never counts: the provider bills the workspace (item 26).
  *   - With no budget to hold against (self-hosted), it is written unchecked.
  * The charge then turns the row into the step's real cost: 1x, what the
- * model costs at the price in effect (generationCostUsd). The margin on
- * purchased AI credits (CHAT-16 30a) is never here.
+ * model costs at the price in effect (generationCostUsd: the synced catalog
+ * price first, for Chat's steps only, and never a $0 one for a paid model).
+ * The margin on purchased AI credits (CHAT-16 30a) is never here.
  *
  * The trial's budget is the plan's in its trial (applyTrialAiBudget), over a
  * period that runs the whole trial (aiBudgetOf): it never resets.
@@ -51,7 +52,11 @@ export class ChatBudgetError extends Error {
  * assumes no prompt-cache hit (§D item 29), so a cache miss can't pass it.
  */
 export function stepWorstCaseUsd(modelId, { inputTokens, maxOutputTokens }) {
-  return generationCostUsd(modelId, { inputTokens, outputTokens: maxOutputTokens });
+  return generationCostUsd(
+    modelId,
+    { inputTokens, outputTokens: maxOutputTokens },
+    { synced: true },
+  );
 }
 
 function assertChatOn(orgId) {
@@ -112,7 +117,7 @@ export async function chargeChatStep(orgId, usageId, { modelId, usage }) {
             model: modelId,
             input_tokens: usage.inputTokens ?? null,
             output_tokens: usage.outputTokens ?? null,
-            cost_usd: generationCostUsd(modelId, usage),
+            cost_usd: generationCostUsd(modelId, usage, { synced: true }),
           }
         : { model: modelId },
     )
