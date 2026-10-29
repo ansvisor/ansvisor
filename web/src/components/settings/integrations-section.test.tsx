@@ -76,6 +76,7 @@ vi.mock('./catalog-category-pages', () => ({
   ),
 }));
 vi.mock('./webflow-card', () => ({ WebflowCard: () => <div data-card="webflow">Webflow</div> }));
+vi.mock('./wix-card', () => ({ WixCard: () => <div data-card="wix">Wix</div> }));
 
 const { IntegrationsSection } = await import('./integrations-section');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
@@ -449,13 +450,14 @@ describe('IntegrationsSection on the demo brand', () => {
     await render(false, true);
     expect(badges(merchantCenter()!)).toEqual(['Coming soon']);
     expect(groupOf(row('shopify'))).toBe('Stores and marketplaces');
-    expect(groupOf(row('wix'))).toBe('Content management systems');
     expect(row('shopify')!.textContent).toContain('Shopify');
-    expect(row('wix')!.textContent).toContain('Wix');
-    expect(badges(row('wix')!)).toEqual(['Coming soon']);
     // Live now, with cards of their own: no Coming soon row.
     expect(row('wordpress')).toBeNull();
     expect(row('framer')).toBeNull();
+    expect(row('wix')).toBeNull();
+    expect(groupOf(container.querySelector('[data-card="wix"]'))).toBe(
+      'Content management systems',
+    );
   });
 
   it('shows none of those rows on another brand', async () => {

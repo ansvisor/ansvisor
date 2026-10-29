@@ -12,7 +12,7 @@
  * here becomes `{ id, state: 'connected' }` and its new card reads
  * demoIntegration(id), as the cards below do.
  *
- * One not named here (WordPress, Framer) shows on the demo brand as on any
+ * One not named here (WordPress, Framer, Wix) shows on the demo brand as on any
  * brand, not connected: its buttons open the plan dialog.
  */
 export type DemoIntegrationState = 'connected' | 'soon';
@@ -29,7 +29,6 @@ export const DEMO_INTEGRATIONS: readonly DemoIntegration[] = [
   { id: 'google-merchant-center', state: 'soon' },
   { id: 'shopify', state: 'soon', group: 'stores' },
   { id: 'webflow', state: 'connected' },
-  { id: 'wix', state: 'soon', group: 'cms' },
 ];
 
 /** What an integration's card shows on the demo brand; null when the list doesn't name it. */

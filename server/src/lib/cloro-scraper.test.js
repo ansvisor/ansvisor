@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { buildRequestBody, parseScraperResponse } from './cloro-scraper.js';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import {
+  buildRequestBody,
+  parseScraperResponse,
+  pollScraperResult,
+  submitPromptTask,
+} from './cloro-scraper.js';
+
+const log = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }));
+vi.mock('./logger.js', () => ({ default: log, logger: log }));
 
 describe('cloro-scraper – parseScraperResponse', () => {
   describe('chatgpt-shopping', () => {
@@ -449,6 +457,67 @@ describe('cloro-scraper – buildRequestBody query fan-out (#332, #1119)', () =>
   });
 });
 
+describe('cloro-scraper – buildRequestBody ChatGPT legacy fan-out (CLORO_CHATGPT_FANOUT)', () => {
+  const today = {
+    prompt: 'p',
+    country: 'US',
+    state: 'CA',
+    include: { html: false, markdown: true, rawResponse: false },
+  };
+
+  it("leaves ChatGPT's task as it is today without legacy", () => {
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA')).toEqual(today);
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA', undefined, {})).toEqual(today);
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA', undefined, { legacy: false })).toEqual(
+      today,
+    );
+  });
+
+  it('asks the legacy interface for the searches when legacy is on', () => {
+    expect(buildRequestBody('p', 'chatgpt-web', 'US', 'CA', undefined, { legacy: true })).toEqual({
+      ...today,
+      legacy: true,
+      include: { ...today.include, searchQueries: true },
+    });
+  });
+
+  it('changes nothing on Google, ChatGPT Shopping or the other engines', () => {
+    const location = 'Istanbul,Istanbul,Turkiye';
+    for (const scraperId of [
+      'google-aio',
+      'google-aimode',
+      'chatgpt-shopping',
+      'copilot-web',
+      'perplexity-web',
+      'gemini-web',
+      'grok-web',
+    ]) {
+      expect(buildRequestBody('p', scraperId, 'US', 'CA', location, { legacy: true })).toEqual(
+        buildRequestBody('p', scraperId, 'US', 'CA', location),
+      );
+    }
+  });
+});
+
+describe('cloro-scraper – a legacy ChatGPT answer', () => {
+  it('stores its searches under ChatGPT, and its model', () => {
+    const parsed = parseScraperResponse(
+      {
+        markdown: 'answer',
+        model: 'gpt-6',
+        sources: [{ url: 'https://a.com', label: 'A' }],
+        searchQueries: ['best crm for startups 2026'],
+        mapSearchQueries: [],
+      },
+      'chatgpt-web',
+    );
+    expect(parsed.search_queries).toEqual([
+      { query: 'best crm for startups 2026', source_platform: 'chatgpt-web' },
+    ]);
+    expect(parsed.model).toBe('gpt-6');
+  });
+});
+
 describe('cloro-scraper – buildRequestBody state targeting (#554)', () => {
   const AI_ENDPOINTS = ['chatgpt-web', 'copilot-web', 'grok-web', 'perplexity-web', 'gemini-web'];
 
@@ -512,5 +581,130 @@ describe('cloro-scraper – buildRequestBody city targeting (PROMPT-015d)', () =
     expect(
       buildRequestBody('p', 'chatgpt-web', 'TR', undefined, 'Istanbul,Istanbul,Turkiye'),
     ).not.toHaveProperty('location');
+  });
+});
+
+describe('cloro-scraper – submitPromptTask', () => {
+  /** Cloro's answers to the submissions, in order: an HTTP status, or a thrown network error. */
+  let answers;
+  const sent = () => fetch.mock.calls.map(([, init]) => JSON.parse(init.body));
+
+  beforeEach(() => {
+    vi.stubEnv('CLORO_API_KEY', 'test-key');
+    answers = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const next = answers.shift() ?? 200;
+        if (next instanceof Error) throw next;
+        return next === 200
+          ? {
+              ok: true,
+              json: async () => ({ success: true, task: { id: `task-${sent().length}` } }),
+            }
+          : { ok: false, status: next, text: async () => 'refused' };
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    log.warn.mockClear();
+  });
+
+  const task = {
+    promptText: 'best crm for startups',
+    promptId: 'prompt-1',
+    scraperId: 'chatgpt-web',
+    region: 'US-CA',
+    webhookUrl: 'https://api.example.com/cloro/callback',
+  };
+
+  it("asks for the fan-out with the prompt's own targeting, and says so", async () => {
+    await expect(submitPromptTask({ ...task, legacy: true })).resolves.toEqual({
+      taskId: 'task-1',
+      scraperId: 'chatgpt-web',
+      legacy: true,
+    });
+    expect(sent()).toEqual([
+      {
+        taskType: 'CHATGPT',
+        payload: expect.objectContaining({ country: 'US', state: 'CA', legacy: true }),
+        webhook: { url: task.webhookUrl },
+      },
+    ]);
+  });
+
+  it('sends a task Cloro turned down (400, 422) again without legacy', async () => {
+    for (const status of [400, 422]) {
+      answers = [status];
+      fetch.mockClear();
+      await expect(submitPromptTask({ ...task, legacy: true })).resolves.toMatchObject({
+        legacy: false,
+      });
+      expect(sent().map(({ payload }) => payload.legacy)).toEqual([true, undefined]);
+    }
+    expect(log.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('never sends it twice on a failure that may have billed it, or would fail again', async () => {
+    for (const answer of [429, 500, 503, 401, 402, new TypeError('fetch failed')]) {
+      answers = [answer];
+      fetch.mockClear();
+      const failure = submitPromptTask({ ...task, legacy: true });
+      if (answer instanceof Error) await expect(failure).rejects.toThrow('fetch failed');
+      else await expect(failure).rejects.toMatchObject({ status: answer });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("keeps the prompt's US state or city as a Google task's location", async () => {
+    await submitPromptTask({ ...task, scraperId: 'google-aio' });
+    await submitPromptTask({ ...task, scraperId: 'google-aimode', region: 'TR~ISTANBUL' });
+    expect(sent().map(({ payload }) => payload)).toEqual([
+      expect.objectContaining({ country: 'US', location: 'California,United States' }),
+      expect.objectContaining({ country: 'TR', location: 'Istanbul,Istanbul,Turkiye' }),
+    ]);
+  });
+
+  it('sends a refused fan-out task again for the same state', async () => {
+    answers = [400];
+    await submitPromptTask({ ...task, legacy: true });
+    expect(sent().map(({ payload }) => [payload.country, payload.state, payload.legacy])).toEqual([
+      ['US', 'CA', true],
+      ['US', 'CA', undefined],
+    ]);
+  });
+
+  it('never retries a task that did not ask', async () => {
+    answers = [400];
+    await expect(submitPromptTask({ ...task, scraperId: 'copilot-web' })).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(sent()[0].payload).not.toHaveProperty('legacy');
+  });
+});
+
+describe('cloro-scraper – pollScraperResult', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('marks a task Cloro took and then failed, which a legacy task answers', async () => {
+    vi.stubEnv('CLORO_API_KEY', 'test-key');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ task: { status: 'FAILED', failedReason: 'legacy unavailable' } }),
+      })),
+    );
+    await expect(pollScraperResult('task-1', 'chatgpt-web')).rejects.toMatchObject({
+      taskFailed: true,
+      message: 'Cloro task task-1 failed: legacy unavailable',
+    });
   });
 });
