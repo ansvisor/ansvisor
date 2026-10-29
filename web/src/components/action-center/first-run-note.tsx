@@ -7,9 +7,13 @@ import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { getJobStatus, getTrackingWindow, type TrackingJobStatus } from '@/lib/actions/tracking';
 import { loadTrackingJob } from '@/lib/tracking-job-store';
+import { etaParts, minutesLeft, withSample, type ProgressSample } from '@/lib/tracking-eta';
 
-/** How often the note reads again while the first run goes on. */
-const POLL_MS = 30_000;
+/**
+ * How often the note reads again while the first run goes on: often, since
+ * it is someone's first look and the count is what tells them it's working.
+ */
+const POLL_MS = 12_000;
 
 /** A saved job the worker hasn't finished: queued, delayed or running. */
 const LIVE_JOB = new Set<TrackingJobStatus['status']>(['waiting', 'delayed', 'active']);
@@ -34,6 +38,8 @@ export function FirstRunNote() {
   const t = useTranslations('actionCenter.firstRun');
   const brandId = useBrandStore((s) => s.activeBrandId);
   const [run, setRun] = useState<FirstRun | null>(null);
+  // The run's pace while this page watches it, for "about N min left".
+  const [pace, setPace] = useState<ProgressSample[]>([]);
 
   useEffect(() => {
     if (!brandId) return;
@@ -55,6 +61,8 @@ export function FirstRunNote() {
           saved?.brandId === brandId ? await getJobStatus(saved.jobId).catch(() => null) : null;
         if (cancelled) return;
         const live = job !== null && LIVE_JOB.has(job.status);
+        const current = live ? job.progress?.current : undefined;
+        if (current !== undefined) setPace((prev) => withSample(prev, { at: Date.now(), current }));
         setRun(
           win.activeRun || live
             ? {
@@ -78,6 +86,8 @@ export function FirstRunNote() {
   // Another brand's run never shows under this one.
   if (!run || run.brandId !== brandId) return null;
   const { progress } = run;
+  const eta = progress ? minutesLeft(pace, progress.total) : null;
+  const left = eta === null ? null : etaParts(eta);
 
   return (
     <div role="status" className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
@@ -87,6 +97,7 @@ export function FirstRunNote() {
         {progress && progress.total > 0 && (
           <span className="text-xs text-muted-foreground tabular-nums">
             {t('progress', { current: progress.current, total: progress.total })}
+            {left && ` · ${'hours' in left ? t('hoursLeft', left) : t('minutesLeft', left)}`}
           </span>
         )}
         <Link

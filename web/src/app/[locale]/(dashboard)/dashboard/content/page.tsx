@@ -355,6 +355,7 @@ export default function ContentPage() {
   // actions open the upgrade dialog instead; filters and Export stay open.
   const { guard, isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const tManagers = useTranslations('managersOnly');
   // The bulk bar's Dismiss and Delete ask first: the upgrade dialog instead.
   const confirmUnlessLocked =
     (action: string) => (open: boolean, details: { cancel: () => void }) => {
@@ -882,7 +883,9 @@ export default function ContentPage() {
         timeZone: 'UTC',
       })
     : '';
-  const newButton = (
+  // Generating opportunities costs AI: admins and managers start it, and
+  // anyone else reads who can.
+  const newButton = canManage ? (
     <Button
       onClick={guard(() => setNewOpen(true), { action: tActions('generateOpportunities') })}
       disabled={generating || loading || limitReached}
@@ -893,6 +896,8 @@ export default function ContentPage() {
       {generating ? <LoadingDots /> : <Plus className="h-4 w-4" />}
       {generating ? t('generating') : t('new')}
     </Button>
+  ) : (
+    <span className="text-xs text-muted-foreground">{tManagers('generateOpportunities')}</span>
   );
 
   const handleSendWebhook = async (id: string) => {
@@ -1070,7 +1075,7 @@ export default function ContentPage() {
   return (
     <div className="space-y-6">
       <HeaderWithAiUsage>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <p className="text-muted-foreground text-sm">{t('description')}</p>
@@ -1431,91 +1436,99 @@ export default function ContentPage() {
                     {t('bulk.sendAll')}
                   </Button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1.5"
-                    onClick={guard(handleBulkDone, { action: tActions('markOpportunitiesDone') })}
-                    disabled={bulkSending}
-                  >
-                    <Check className="h-3 w-3" />
-                    {t('status.done')}
-                  </Button>
+                  {/* Bulk changes, dismissing and deleting are for admins and
+                      managers, as the server and the database allow them. */}
+                  {canManage && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={guard(handleBulkDone, {
+                          action: tActions('markOpportunitiesDone'),
+                        })}
+                        disabled={bulkSending}
+                      >
+                        <Check className="h-3 w-3" />
+                        {t('status.done')}
+                      </Button>
 
-                  <Dialog onOpenChange={confirmUnlessLocked(tActions('dismissOpportunities'))}>
-                    <DialogTrigger
-                      render={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1.5 text-muted-foreground"
-                          disabled={bulkSending}
-                        />
-                      }
-                    >
-                      <X className="h-3 w-3" />
-                      {t('bulk.dismissAll')}
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle>{t('bulk.dismissAllTitle')}</DialogTitle>
-                        <DialogDescription>
-                          {t('bulk.dismissAllConfirm', { count: selectedIds.size })}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <DialogClose render={<Button variant="outline" />}>
-                          {t('cancel')}
-                        </DialogClose>
-                        <DialogClose
-                          render={<Button variant="destructive" onClick={handleBulkDismiss} />}
+                      <Dialog onOpenChange={confirmUnlessLocked(tActions('dismissOpportunities'))}>
+                        <DialogTrigger
+                          render={
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1.5 text-muted-foreground"
+                              disabled={bulkSending}
+                            />
+                          }
                         >
+                          <X className="h-3 w-3" />
                           {t('bulk.dismissAll')}
-                        </DialogClose>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-sm">
+                          <DialogHeader>
+                            <DialogTitle>{t('bulk.dismissAllTitle')}</DialogTitle>
+                            <DialogDescription>
+                              {t('bulk.dismissAllConfirm', { count: selectedIds.size })}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <DialogClose render={<Button variant="outline" />}>
+                              {t('cancel')}
+                            </DialogClose>
+                            <DialogClose
+                              render={<Button variant="destructive" onClick={handleBulkDismiss} />}
+                            >
+                              {t('bulk.dismissAll')}
+                            </DialogClose>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
 
-                  {/* Last in the row, and the only destructive-styled trigger:
-                      this one does not move a row, it removes it. */}
-                  <Dialog onOpenChange={confirmUnlessLocked(tActions('deleteOpportunities'))}>
-                    <DialogTrigger
-                      render={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
-                          disabled={bulkSending}
-                        />
-                      }
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      {t('bulk.deleteAll')}
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle>{t('bulk.deleteAllTitle')}</DialogTitle>
-                        <DialogDescription>
-                          {t('bulk.deleteAllConfirm', { count: selectedIds.size })}
-                          {selectedWithBrief > 0 && (
-                            <span className="mt-2 block font-medium text-foreground">
-                              {t('bulk.deleteAllBriefWarning', { count: selectedWithBrief })}
-                            </span>
-                          )}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <DialogClose render={<Button variant="outline" />}>
-                          {t('cancel')}
-                        </DialogClose>
-                        <DialogClose
-                          render={<Button variant="destructive" onClick={handleBulkDelete} />}
+                      {/* Last in the row, and the only destructive-styled trigger:
+                          this one does not move a row, it removes it. */}
+                      <Dialog onOpenChange={confirmUnlessLocked(tActions('deleteOpportunities'))}>
+                        <DialogTrigger
+                          render={
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
+                              disabled={bulkSending}
+                            />
+                          }
                         >
+                          <Trash2 className="h-3 w-3" />
                           {t('bulk.deleteAll')}
-                        </DialogClose>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-sm">
+                          <DialogHeader>
+                            <DialogTitle>{t('bulk.deleteAllTitle')}</DialogTitle>
+                            <DialogDescription>
+                              {t('bulk.deleteAllConfirm', { count: selectedIds.size })}
+                              {selectedWithBrief > 0 && (
+                                <span className="mt-2 block font-medium text-foreground">
+                                  {t('bulk.deleteAllBriefWarning', { count: selectedWithBrief })}
+                                </span>
+                              )}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <DialogClose render={<Button variant="outline" />}>
+                              {t('cancel')}
+                            </DialogClose>
+                            <DialogClose
+                              render={<Button variant="destructive" onClick={handleBulkDelete} />}
+                            >
+                              {t('bulk.deleteAll')}
+                            </DialogClose>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1738,7 +1751,7 @@ export default function ContentPage() {
                           }
                           pageHref={`/dashboard/content/${opp.id}`}
                           onDismiss={
-                            opp.status === 'new'
+                            canManage && opp.status === 'new'
                               ? guard(() => void handleDismiss(opp.id), {
                                   action: tActions('dismissOpportunities'),
                                 })

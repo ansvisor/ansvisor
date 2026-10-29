@@ -17,11 +17,17 @@ import { persistCitationRows } from '../lib/citation-rows.js';
 import {
   isUnknownCity,
   locationsForModels,
+  googleLocationFor,
   locationsForScraper,
   parseLocation,
 } from '../lib/locations.js';
 import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
+import {
+  FIRST_RUN_LATE_POLL_MS,
+  isFirstRun,
+  progressiveRollups,
+} from '../lib/first-run-rollups.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -244,6 +250,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   const isFullRun = !promptId && (!promptIds || promptIds.length === 0);
   let trackingRunId = null;
   let trackingRunStartedAt = null;
+  // A brand's first full run (no run of it ever stamped) fills the rollups as
+  // its answers land, and checks for its stamp more often
+  // (first-run-rollups.js). Read before this run's own row exists. Not the
+  // job's `afterPayment`, which only orders the queue: a new brand's first
+  // run need not follow a payment.
+  const firstRun = isFullRun && (await isFirstRun(brandId));
   if (isFullRun) {
     // A run that died mid-flight (crash, abort) leaves an uncompleted row;
     // clear those so at most one in-progress row exists per brand.
@@ -336,9 +348,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     supportedLocations(locationsFor(prompt), scraperId, supportedCountries);
 
   // 4. Count total tasks: one per prompt × engine × location that engine can
-  // actually run. Google AIO / AI Mode have no sub-country mechanism, so
-  // their state locations collapse to one country-wide task — counting them
-  // per state would promise the progress bar work that is never submitted.
+  // actually run: a city only by Google's engines, a US state by every one.
   let totalTasks = 0;
   let unsupported = 0;
   for (const prompt of prompts) {
@@ -361,6 +371,16 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   let insertedCount = 0;
   let completedTasks = 0;
 
+  const firstRunRollups = progressiveRollups({
+    brandId,
+    startedAt: trackingRunStartedAt,
+    enabled: firstRun,
+  });
+  // Answers landed so far, for the refresher: those this worker stored, and
+  // in webhook mode the Cloro tasks answered (the callback stores those).
+  let scraperProcessed = 0;
+  const landedSoFar = () => insertedCount + scraperProcessed;
+
   async function insertResult(row) {
     // `created_at` comes back from the insert rather than being stamped here:
     // the citation rows copy it, and a value computed in app code would drift
@@ -375,6 +395,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       throw error;
     }
     insertedCount++;
+    firstRunRollups.note(landedSoFar());
     // Best-effort: mark target URLs cited by this answer (00032).
     await updateTargetUrlStats(row.prompt_id, row.citations, new Date().toISOString());
     // Best-effort: expand the citation array into rows (#732). The jsonb
@@ -428,11 +449,13 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         // brand's single state column (#691): different prompts can target
         // different places, and a brand-wide override would silently win
         // over them.
-        const { country, state, city } = parseLocation(t.region);
+        // Google's engines take a city or a US state as `location`, the AI
+        // endpoints a state as `state`; buildRequestBody gives each its own.
+        const { country, state } = parseLocation(t.region);
         return submitScraperTask(t.prompt.text, t.scraperId, country, {
           webhookUrl,
           state,
-          location: city?.google,
+          location: googleLocationFor(t.region),
         }).then((res) => ({
           ...res,
           meta: t,
@@ -609,6 +632,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           const pending = ourRows.length;
           pendingAtExit = pending;
           const processed = expectedSubmitted - pending;
+          scraperProcessed = processed;
+          firstRunRollups.note(landedSoFar());
           const allPendingAreOld = allTasksAreStale(ourRows, ghostTaskAgeMs);
 
           // "Delivery started" has to mean a result actually landed, not just
@@ -924,17 +949,26 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // would recompute the previous run's window and mail numbers the recipient
   // already has.
   const settlement = trackingRunId
-    ? await settleTrackingRun({
-        brandId,
-        runId: trackingRunId,
-        startedAt: trackingRunStartedAt,
-        plannedTasks: totalTasks,
-      })
-    : { stamped: false, lateStamp: null };
+    ? await settleTrackingRun(
+        {
+          brandId,
+          runId: trackingRunId,
+          startedAt: trackingRunStartedAt,
+          plannedTasks: totalTasks,
+        },
+        // A first run also hands over its rollup refresher: the stamp waits
+        // for it, and late answers keep the rollups moving.
+        firstRun ? { pollMs: FIRST_RUN_LATE_POLL_MS, rollups: firstRunRollups } : undefined,
+      )
+    : { stamped: false, lateStamp: null, resultCount: null };
 
   return {
-    resultCount: insertedCount,
+    // A webhook's answers are stored by /cloro/callback, never through
+    // insertResult: the settlement's count, read from the table, has them.
+    resultCount: settlement.resultCount ?? insertedCount,
     stamped: settlement.stamped,
+    // Still arriving: the run waits for its late answers before it stamps.
+    stillArriving: Boolean(settlement.lateStamp),
     lateStamp: settlement.lateStamp,
   };
 }
