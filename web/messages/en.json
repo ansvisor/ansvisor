@@ -484,11 +484,12 @@
       "history": "History"
     },
     "firstRun": {
-      "running": "First analysis running",
-      "queued": "First analysis queued",
+      "running": "First tracking running",
+      "queued": "First tracking queued",
       "progress": "{current} of {total} checks",
-      "minutesLeft": "about {minutes} min left",
-      "hoursLeft": "{hours, plural, one {about # hour left} other {about # hours left}}",
+      "minutesLeft": "~{minutes} min left",
+      "hoursLeft": "{hours, plural, one {~# hour left} other {~# hours left}}",
+      "details": "Details",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
       "link": "Follow it on Brand Visibility"
