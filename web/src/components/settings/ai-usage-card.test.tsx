@@ -210,7 +210,9 @@ describe('AiUsageCard', () => {
     act(() => root.unmount());
     root = createRoot(container);
     await render('manager');
-    expect(container.textContent).toContain('To start the plan now, ask an admin of your workspace.');
+    expect(container.textContent).toContain(
+      'To start the plan now, ask an admin of your workspace.',
+    );
     expect(container.querySelector('button')).toBeNull();
   });
 
