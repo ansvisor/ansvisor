@@ -737,8 +737,10 @@ export async function sweepTaskChecks({
     const { data: rows, error } = await supabaseAdmin
       .from('action_tasks')
       .select(
-        'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at)',
+        'id, action_id, task_key, title, status, details, updated_at, actions!inner(brand_id, status, deleted_at, brands!inner(is_demo))',
       )
+      // A demo brand's tasks (00380) are sample data: their pages aren't read.
+      .eq('actions.brands.is_demo', false)
       .in('status', OPEN)
       .eq('details->>check', 'auto')
       .not('details->>url', 'is', null)

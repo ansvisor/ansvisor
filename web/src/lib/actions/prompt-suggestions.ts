@@ -9,6 +9,7 @@ import { API_BASE_URL } from '@/config/api';
 // live in a plain module (every runtime export here must be a server action).
 import type { PromptSuggestionSource, SuggestionSourceData } from '@/lib/prompt-suggestion-source';
 import { assertWritable } from '@/lib/subscription-guard';
+import { NO_ANSWER, responseFailure, type ReadFailure } from '@/lib/api-failure';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -72,29 +73,43 @@ async function getSession() {
   return session;
 }
 
-export async function getPromptSuggestions(
-  brandId: string,
-): Promise<{ suggestions: PromptSuggestion[]; stale: boolean }> {
-  const session = await getSession();
-  const res = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${brandId}`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-    cache: 'no-store',
-    // Read-only cache lookup — a hung upstream must not pin the suggestions
-    // card (and the serialized server-action queue behind it) indefinitely.
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Server error: ${res.status}`);
+export type PromptSuggestionsRead =
+  | { ok: true; suggestions: PromptSuggestion[]; stale: boolean }
+  | ReadFailure;
+
+/**
+ * The brand's open suggestions. A failure comes back as a value, never
+ * thrown: production hides a thrown message (React's #441), and an API that
+ * didn't answer is marked retryable for the card's one automatic retry.
+ */
+export async function getPromptSuggestions(brandId: string): Promise<PromptSuggestionsRead> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, failure: 'session', retryable: false };
+  try {
+    const res = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${brandId}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: 'no-store',
+      // Read-only cache lookup — a hung upstream must not pin the suggestions
+      // card (and the serialized server-action queue behind it) indefinitely.
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return await responseFailure(res);
+    const data = (await res.json()) as {
+      suggestions: SuggestionRow[];
+      stale: boolean;
+    };
+    return {
+      ok: true,
+      suggestions: data.suggestions.map(mapRow),
+      stale: data.stale,
+    };
+  } catch {
+    // No answer, or one cut off: a dropped connection or the timeout.
+    return NO_ANSWER;
   }
-  const data = (await res.json()) as {
-    suggestions: SuggestionRow[];
-    stale: boolean;
-  };
-  return {
-    suggestions: data.suggestions.map(mapRow),
-    stale: data.stale,
-  };
 }
 
 export async function refreshPromptSuggestions(brandId: string): Promise<PromptSuggestion[]> {
@@ -313,7 +328,7 @@ export async function trackPagePrompts(
   pageUrl: string | null,
   prompts: { text: string; topic: string }[],
 ): Promise<TrackPagePromptsResult> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const wanted = (Array.isArray(prompts) ? prompts : [])
     .filter((p) => typeof p?.text === 'string' && p.text.trim())
     .slice(0, MAX_PAGE_PROMPTS);

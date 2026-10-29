@@ -965,7 +965,7 @@ export async function startDraftFromAction(
   | { draftId: string; created: boolean; importFailed: boolean }
   | { error: 'invalid' | 'not_found' | 'failed' }
 > {
-  await assertWritable();
+  await assertWritable({ brandId });
   const parsed = actionStartInput.safeParse({ brandId, actionId, taskId, ...options });
   if (!parsed.success) return { error: 'invalid' };
   const { page } = parsed.data;
@@ -1235,7 +1235,7 @@ export async function getContentOverlap(
  * stored as detected, so it follows the page (CE-023).
  */
 export async function createContentDraft(brandId: string, start: DraftStart): Promise<string> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const parsed = startInput.safeParse(start);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
   const { method, pageType, typePicked, source, bodyHtml, sourceUrl } = parsed.data;
@@ -2661,7 +2661,7 @@ export async function saveMyRuleSet(
   pageType: PageType,
   set: SavedRuleSet,
 ): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   const parsed = savedRuleSetSchema.safeParse(set);
   if (
     !draftId.safeParse(brandId).success ||

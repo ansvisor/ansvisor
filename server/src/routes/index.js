@@ -21,6 +21,7 @@ import cmsRoutes from './cms.js';
 import cmsWordPressRoutes from './cms-wordpress.js';
 import cmsFramerRoutes from './cms-framer.js';
 import cmsWixRoutes from './cms-wix.js';
+import demoRoutes from './demo.js';
 
 const router = Router();
 
@@ -46,6 +47,7 @@ router.use('/cms', cmsRoutes);
 router.use('/cms', cmsWordPressRoutes);
 router.use('/cms', cmsFramerRoutes);
 router.use('/cms', cmsWixRoutes);
+router.use('/demo', demoRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });

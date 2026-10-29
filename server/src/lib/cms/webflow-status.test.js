@@ -5,7 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * read from the items the sends made, marked published at their address.
  */
 
-const db = { connection: null, sends: [], brands: [], queries: [], updates: [] };
+const db = {
+  connection: null,
+  sends: [],
+  brands: [],
+  queries: [],
+  updates: [],
+  connectionReads: [],
+};
 vi.mock('../../config/supabase.js', () => ({
   default: {
     from: (table) => {
@@ -16,6 +23,7 @@ vi.mock('../../config/supabase.js', () => ({
           return { data: null, error: null };
         }
         if (table === 'brand_cms_connections') {
+          if (!q.single) db.connectionReads.push(q.filters);
           return { data: q.single ? db.connection : db.brands, error: null };
         }
         db.queries.push(q);
@@ -219,6 +227,8 @@ describe('sweepWebflowPublished', () => {
     // The brand that failed (the order is shuffled daily) is logged; the other went on.
     expect(logged).toHaveLength(1);
     expect(logged[0]).toMatch(/"brandId":"b[13]"/);
+    // Never a demo brand's connection (00380).
+    expect(db.connectionReads.at(-1)).toContainEqual(['eq', 'brands.is_demo', false]);
     configured.on = false;
     expect(await sweepWebflowPublished()).toEqual({ brands: 0, published: 0 });
   });

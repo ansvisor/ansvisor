@@ -17,7 +17,9 @@ function table(name) {
       return { data: { id: 'p1', text: 'best crm', prompt_sets: { brand_id: 'b1' } }, error: null };
     }
     if (name === 'brands') return { data: { id: 'b1', organization_id: 'o1' }, error: null };
-    if (name === 'profiles') return { data: { organization_id: 'o1' }, error: null };
+    // Improve is an admin's or a manager's (costly-roles.test.js).
+    if (name === 'profiles')
+      return { data: { organization_id: 'o1', role: 'manager' }, error: null };
     if (name === 'prompt_improve_suggestions') {
       return {
         data: { range_key: '7d', region: '', platform_states: [], suggestions: [] },

@@ -14,15 +14,15 @@ const manager = vi.hoisted(() => ({
 }));
 const processTrackingJob = vi.hoisted(() => vi.fn());
 const processContentJob = vi.hoisted(() => vi.fn());
-const activeBrandFilter = vi.hoisted(() => vi.fn());
-const isBrandActive = vi.hoisted(() => vi.fn());
+const brandStopReasons = vi.hoisted(() => vi.fn());
+const brandStopReason = vi.hoisted(() => vi.fn());
 
 vi.mock('./job-manager.js', () => manager);
 // A retry sets its job back to waiting itself.
 vi.mock('../config/supabase.js', () => ({
   default: { from: () => ({ update: () => ({ eq: async () => ({ error: null }) }) }) },
 }));
-vi.mock('./active-subscriptions.js', () => ({ activeBrandFilter, isBrandActive }));
+vi.mock('./active-subscriptions.js', () => ({ brandStopReasons, brandStopReason }));
 vi.mock('../workers/tracking-worker.js', () => ({ processTrackingJob }));
 vi.mock('../workers/content-worker.js', () => ({ processContentJob }));
 vi.mock('./pulse/engine.js', () => ({ generatePulseForBrand: vi.fn() }));
@@ -64,8 +64,8 @@ beforeEach(() => {
   processTrackingJob.mockReset();
   processContentJob.mockReset();
   // Every organization on a plan unless a test says otherwise.
-  activeBrandFilter.mockReset().mockResolvedValue(() => true);
-  isBrandActive.mockReset().mockResolvedValue(true);
+  brandStopReasons.mockReset().mockResolvedValue(() => null);
+  brandStopReason.mockReset().mockResolvedValue(null);
   manager.cancelClaimedJob.mockResolvedValue(true);
   // The claim resolves a tick later, as a network call would.
   manager.claimWaitingJob.mockImplementation(async (id) => {
@@ -119,18 +119,122 @@ describe('runTrackingJob', () => {
 });
 
 /**
+ * The first run after a payment goes ahead of the queue: someone is watching
+ * it, and the nightly runs can hold every slot for an hour.
+ */
+describe('runTrackingJob, the first run after a payment', () => {
+  it('starts at once in its extra slot while the nightly runs hold every slot', async () => {
+    const releases = heldRuns();
+    runTrackingJob('night-1');
+    runTrackingJob('night-2');
+    await flush();
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX);
+
+    runTrackingJob('first', undefined, { priority: true });
+    await flush();
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 1);
+    expect(processTrackingJob.mock.calls[MAX][0].brandId).toBe('brand-first');
+
+    // The extra slot is the first run's only: a regular job still waits.
+    runTrackingJob('night-3');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 1);
+
+    await drain(releases);
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 2);
+  });
+
+  it('takes the next free slot when even its extra one is taken, ahead of regular jobs', async () => {
+    const releases = heldRuns();
+    for (const id of ['night-1', 'night-2', 'night-3']) runTrackingJob(id);
+    runTrackingJob('first-1', undefined, { priority: true });
+    await flush();
+    // night-3 waits, retrying every 5 s from now.
+    expect(processTrackingJob).toHaveBeenCalledTimes(MAX + 1);
+
+    // Another payment, every slot still taken.
+    await vi.advanceTimersByTimeAsync(4500);
+    runTrackingJob('first-2', undefined, { priority: true });
+    await flush();
+
+    // Two slots free up just before night-3 tries again: night-3 steps aside.
+    releases[0]();
+    releases[1]();
+    await vi.advanceTimersByTimeAsync(500);
+    const started = () => processTrackingJob.mock.calls.map(([job]) => job.brandId);
+    expect(started()).not.toContain('brand-night-3');
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(started()).toContain('brand-first-2');
+    expect(started()).not.toContain('brand-night-3');
+
+    await drain(releases);
+    expect(started()).toContain('brand-night-3');
+  });
+
+  it('keeps its extra slot when it is retried after a failure', async () => {
+    const releases = heldRuns();
+    const held = processTrackingJob.getMockImplementation();
+    processTrackingJob.mockImplementation((job) =>
+      job.brandId === 'brand-first' && processTrackingJob.mock.calls.length <= MAX + 1
+        ? Promise.reject(new Error('cloro down'))
+        : held(job),
+    );
+    manager.getJob.mockResolvedValue({ attempts: 1, max_attempts: 3 });
+    runTrackingJob('night-1');
+    runTrackingJob('night-2');
+    await flush();
+    runTrackingJob('first', undefined, { priority: true });
+    await flush();
+    expect(manager.failJob).toHaveBeenCalledWith('first', 'cloro down');
+
+    // The retry waits attempts × 30 s; the nightly runs still hold both slots.
+    await vi.advanceTimersByTimeAsync(30_000);
+    const firstRuns = processTrackingJob.mock.calls.filter(
+      ([job]) => job.brandId === 'brand-first',
+    );
+    expect(firstRuns).toHaveLength(2);
+
+    await drain(releases);
+  });
+
+  it('keeps its place when the recovery sweep restarts it', async () => {
+    const releases = heldRuns();
+    runTrackingJob('night-1');
+    runTrackingJob('night-2');
+    await flush();
+
+    manager.listWaitingJobs.mockResolvedValue([
+      { id: 'lost-first', type: 'tracking', brand_id: 'b', data: { afterPayment: true } },
+      { id: 'lost-night', type: 'tracking', brand_id: 'b', data: { immediate: false } },
+    ]);
+    await recoverWaitingJobs();
+    await flush();
+
+    expect(processTrackingJob.mock.calls.map(([job]) => job.brandId)).toEqual([
+      'brand-night-1',
+      'brand-night-2',
+      'brand-lost-first',
+    ]);
+    await drain(releases);
+  });
+});
+
+/**
  * Once the plan has ended (2026-10-27): a job is cancelled when it is
  * claimed, however it was started, before anything is tracked or written.
  */
 describe('a job of an organization whose plan has ended', () => {
   it('is cancelled once claimed, not tracked, and gives its slot back', async () => {
     const releases = heldRuns();
-    isBrandActive.mockImplementation(async (brandId) => brandId !== 'brand-lapsed');
+    brandStopReason.mockImplementation(async (brandId) =>
+      brandId === 'brand-lapsed' ? 'subscription_inactive' : null,
+    );
 
     for (const id of ['lapsed', 'a', 'b']) runTrackingJob(id);
     await vi.advanceTimersByTimeAsync(5000);
 
-    expect(isBrandActive).toHaveBeenCalledWith('brand-lapsed');
+    expect(brandStopReason).toHaveBeenCalledWith('brand-lapsed');
     expect(manager.cancelClaimedJob).toHaveBeenCalledWith('lapsed', 'subscription_inactive');
     expect(processTrackingJob.mock.calls.map(([job]) => job.brandId)).toEqual([
       'brand-a',
@@ -142,7 +246,7 @@ describe('a job of an organization whose plan has ended', () => {
   });
 
   it('is failed, never left active, when it cannot be cancelled', async () => {
-    isBrandActive.mockResolvedValue(false);
+    brandStopReason.mockResolvedValue('subscription_inactive');
     manager.cancelClaimedJob.mockResolvedValue(false);
     const { default: logger } = await import('./logger.js');
     vi.mocked(logger.warn).mockClear();
@@ -157,7 +261,7 @@ describe('a job of an organization whose plan has ended', () => {
   });
 
   it('is only cancelled, not failed, when the cancel is written', async () => {
-    isBrandActive.mockResolvedValue(false);
+    brandStopReason.mockResolvedValue('subscription_inactive');
     manager.cancelClaimedJob.mockResolvedValue(true);
 
     runTrackingJob('cancelled');
@@ -167,7 +271,7 @@ describe('a job of an organization whose plan has ended', () => {
   });
 
   it('writes no content either', async () => {
-    isBrandActive.mockResolvedValue(false);
+    brandStopReason.mockResolvedValue('subscription_inactive');
 
     runContentJob('lapsed-content');
     await flush();
@@ -182,7 +286,7 @@ describe('a job of an organization whose plan has ended', () => {
   it('is not retried once the plan ends between two attempts', async () => {
     processTrackingJob.mockRejectedValueOnce(new Error('cloro down'));
     manager.getJob.mockResolvedValue({ attempts: 1, max_attempts: 3 });
-    isBrandActive.mockResolvedValueOnce(true).mockResolvedValue(false);
+    brandStopReason.mockResolvedValueOnce(null).mockResolvedValue('subscription_inactive');
 
     runTrackingJob('retry');
     await flush();
@@ -196,7 +300,7 @@ describe('a job of an organization whose plan has ended', () => {
   });
 
   it('tracks nothing when it cannot tell, and retries as after any failure', async () => {
-    isBrandActive.mockRejectedValueOnce(new Error('brands read: timeout'));
+    brandStopReason.mockRejectedValueOnce(new Error('brands read: timeout'));
     manager.getJob.mockResolvedValue({ attempts: 1, max_attempts: 3 });
     processTrackingJob.mockResolvedValue({ resultCount: 0, stamped: false });
 
@@ -209,6 +313,55 @@ describe('a job of an organization whose plan has ended', () => {
 
     await vi.advanceTimersByTimeAsync(30_000);
     expect(processTrackingJob).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A demo brand (00380): its data is sample data, so a job for it ("Run now",
+ * the internal trigger) is cancelled once claimed, saying so, before
+ * anything is tracked, generated or counted.
+ */
+describe('a job of a demo brand', () => {
+  it('is cancelled as demo_brand, not as an ended plan, and nothing runs', async () => {
+    brandStopReason.mockImplementation(async (brandId) =>
+      brandId === 'brand-demo' || brandId === 'brand-demo-content' ? 'demo_brand' : null,
+    );
+
+    runTrackingJob('demo');
+    runContentJob('demo-content');
+    await flush();
+
+    expect(manager.cancelClaimedJob.mock.calls).toEqual([
+      ['demo', 'demo_brand'],
+      ['demo-content', 'demo_brand'],
+    ]);
+    expect(processTrackingJob).not.toHaveBeenCalled();
+    expect(processContentJob).not.toHaveBeenCalled();
+    expect(manager.completeJob).not.toHaveBeenCalled();
+    expect(manager.failJob).not.toHaveBeenCalled();
+  });
+
+  it('is failed as demo_brand when it cannot be cancelled', async () => {
+    brandStopReason.mockResolvedValue('demo_brand');
+    manager.cancelClaimedJob.mockResolvedValue(false);
+
+    runTrackingJob('demo-stuck');
+    await flush();
+
+    expect(manager.failJob).toHaveBeenCalledWith('demo-stuck', 'demo_brand');
+    expect(processTrackingJob).not.toHaveBeenCalled();
+  });
+
+  it('is cancelled as demo_brand when the recovery finds it waiting', async () => {
+    brandStopReasons.mockResolvedValue((brandId) => (brandId === 'demo' ? 'demo_brand' : null));
+    manager.cancelWaitingJob.mockResolvedValue(true);
+    manager.listWaitingJobs.mockResolvedValue([
+      { id: 'demo-tracking', type: 'tracking', brand_id: 'demo' },
+    ]);
+
+    expect(await recoverWaitingJobs()).toBe(0);
+    expect(manager.cancelWaitingJob.mock.calls).toEqual([['demo-tracking', 'demo_brand']]);
+    expect(manager.claimWaitingJob).not.toHaveBeenCalled();
   });
 });
 
@@ -246,13 +399,15 @@ describe('recoverWaitingJobs', () => {
     manager.listWaitingJobs.mockResolvedValue([]);
     expect(await recoverWaitingJobs()).toBe(0);
     expect(manager.claimWaitingJob).not.toHaveBeenCalled();
-    expect(activeBrandFilter).not.toHaveBeenCalled();
+    expect(brandStopReasons).not.toHaveBeenCalled();
   });
 
   it('cancels, rather than runs, the waiting jobs of an organization whose plan has ended', async () => {
     const releases = heldRuns();
     processContentJob.mockResolvedValue({ generated: 0 });
-    activeBrandFilter.mockResolvedValue((brandId) => brandId === 'paying');
+    brandStopReasons.mockResolvedValue((brandId) =>
+      brandId === 'paying' ? null : 'subscription_inactive',
+    );
     manager.cancelWaitingJob.mockResolvedValue(true);
     manager.listWaitingJobs.mockResolvedValue([
       { id: 'kept', type: 'tracking', brand_id: 'paying' },
@@ -264,7 +419,7 @@ describe('recoverWaitingJobs', () => {
     await flush();
 
     expect(recovered).toBe(1);
-    expect(activeBrandFilter).toHaveBeenCalledWith(['paying', 'lapsed', 'lapsed']);
+    expect(brandStopReasons).toHaveBeenCalledWith(['paying', 'lapsed', 'lapsed']);
     // Only while still waiting, saying why.
     expect(manager.cancelWaitingJob.mock.calls).toEqual([
       ['lapsed-tracking', 'subscription_inactive'],
@@ -276,7 +431,7 @@ describe('recoverWaitingJobs', () => {
   });
 
   it('runs nothing when it cannot tell which organizations are on a plan', async () => {
-    activeBrandFilter.mockRejectedValue(new Error('organizations read: timeout'));
+    brandStopReasons.mockRejectedValue(new Error('organizations read: timeout'));
     manager.listWaitingJobs.mockResolvedValue([{ id: 'lost', type: 'tracking', brand_id: 'b' }]);
 
     await expect(recoverWaitingJobs()).rejects.toThrow('organizations read');

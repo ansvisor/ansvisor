@@ -920,7 +920,9 @@ export async function sweepPromptDemand({
   const { data: brands, error } = await supabaseAdmin
     .from('brands')
     .select('id, organization_id, gsc_property')
-    .eq('is_active', true);
+    .eq('is_active', true)
+    // A demo brand's prompts (00380) are sample data: nothing is read or paid for them.
+    .eq('is_demo', false);
   if (error) throw new Error(`brands read failed: ${error.message}`);
   const isActive = await activeOrgFilter((brands ?? []).map((b) => b.organization_id));
   const active = (brands ?? []).filter((b) => isActive(b.organization_id));

@@ -23,6 +23,10 @@ import { OrganizationSection } from '@/components/settings/organization-section'
 import { MenuAccessSection } from '@/components/settings/menu-access-section';
 import { WorkAreasCard } from '@/components/settings/work-areas-card';
 import { useCanManageMenus } from '@/components/providers/menu-access-provider';
+import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
+import { RolesAccessSection } from '@/components/chat-access/roles-access-section';
+import { YourAccessSlot } from '@/components/chat-access/your-access-card';
+import { countPendingAccessRequests } from '@/lib/actions/chat-access-requests';
 import { Badge } from '@/components/ui/badge';
 import { updateAccountName } from '@/lib/actions/organization';
 import { Loader2 } from 'lucide-react';
@@ -46,7 +50,26 @@ export function SettingsView({ section }: { section: SettingsSection }) {
   const router = useRouter();
   const { isCloud } = usePlanContext();
   const canManageMenus = useCanManageMenus();
-  const [active, setActive] = useState<SettingsSection>(section);
+  const chatAgentic = useChatAgentic();
+  // Ask your Admin requests waiting for an Admin: the count on Roles & access.
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [requestsRead, setRequestsRead] = useState(0);
+  useEffect(() => {
+    if (!chatAgentic) return;
+    let live = true;
+    countPendingAccessRequests()
+      .then((count) => {
+        if (live) setPendingRequests(count);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [chatAgentic, requestsRead]);
+  // Roles & access is Chat's: with Chat off, its address opens Account.
+  const [active, setActive] = useState<SettingsSection>(
+    section === 'roles-access' && !chatAgentic ? 'account' : section,
+  );
 
   const show = (next: SettingsSection) => {
     setActive(next);
@@ -87,6 +110,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     account: t('account'),
     organization: t('organization'),
     team: t('team'),
+    'roles-access': t('rolesAccess'),
     'menu-access': t('menuAccess.title'),
     authors: t('authors.title'),
     content: t('content.title'),
@@ -98,9 +122,13 @@ export function SettingsView({ section }: { section: SettingsSection }) {
   };
   // AI Providers (bring your own key) and Billing are cloud-only: self-host
   // operators set ANTHROPIC_API_KEY in their own env.
-  // Menu access is listed for admins and the managers they let change menus.
+  // Menu access is listed for admins and the managers they let change menus,
+  // Roles & access for everyone while the new Chat is on.
   const navItems = SETTINGS_SECTIONS.filter(
-    (id) => hasSettingsSection(id, { isCloud }) && (id !== 'menu-access' || canManageMenus),
+    (id) =>
+      hasSettingsSection(id, { isCloud }) &&
+      (id !== 'menu-access' || canManageMenus) &&
+      (id !== 'roles-access' || chatAgentic),
   ).map((id) => ({ id, label: labels[id] }));
 
   return (
@@ -129,6 +157,11 @@ export function SettingsView({ section }: { section: SettingsSection }) {
               )}
             >
               {item.label}
+              {item.id === 'roles-access' && pendingRequests > 0 && (
+                <Badge className="ml-2 px-1.5 py-0 text-[10px] tabular-nums">
+                  {pendingRequests}
+                </Badge>
+              )}
               {item.id === 'menu-access' && (
                 <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
                   {t('menuAccess.new')}
@@ -184,6 +217,9 @@ export function SettingsView({ section }: { section: SettingsSection }) {
             </Card>
           )}
 
+          {/* What the person may do, in the app and through Chat (CHAT-20 §4b). */}
+          {active === 'account' && chatAgentic && <YourAccessSlot className="mt-6" />}
+
           {/* What the person works on or leads: it narrows their own menu. */}
           {active === 'account' && (
             <div className="mt-6">
@@ -196,6 +232,10 @@ export function SettingsView({ section }: { section: SettingsSection }) {
 
           {/* Team */}
           {active === 'team' && <TeamSection />}
+
+          {active === 'roles-access' && chatAgentic && (
+            <RolesAccessSection onRequestsChanged={() => setRequestsRead((n) => n + 1)} />
+          )}
 
           {active === 'menu-access' && <MenuAccessSection />}
 

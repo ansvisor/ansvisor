@@ -44,7 +44,9 @@ class NoObjectGeneratedError extends Error {
     return err instanceof NoObjectGeneratedError;
   }
 }
-vi.mock('ai', () => ({
+// The real schema helpers: a Claude call's schema is built with them (structured-output.js).
+vi.mock('ai', async (importOriginal) => ({
+  ...(await importOriginal()),
   generateObject: (...args) => generateObject(...args),
   NoObjectGeneratedError,
 }));
@@ -166,7 +168,11 @@ beforeEach(() => {
   generateObject.mockReset();
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
   readLinkTargets.mockReset().mockResolvedValue(NO_LINK_TARGETS);
+  // The model as a server without an Anthropic key picks it, whatever the shell has.
+  vi.stubEnv('ANTHROPIC_API_KEY', '');
+  vi.stubEnv('CONTENT_WRITE_MODEL', '');
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe('the page as the agent reads it', () => {
   it('reads headings and paragraphs in order, as the editor does', () => {
@@ -2028,6 +2034,35 @@ describe('fixDraftRules', () => {
     });
     const { count } = await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input() });
     expect(count).toBe(1);
+  });
+
+  it('writes its suggestions with Claude Sonnet with an Anthropic key, charged at its price', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    generateObject.mockResolvedValue({
+      object: { suggestions: [suggestion()] },
+      usage: { inputTokens: 900, outputTokens: 200 },
+    });
+    await fixDraftRules({ draftId: DRAFT, brandId: BRAND, input: input({ sources: SOURCES }) });
+
+    const sonnet = 'anthropic/claude-sonnet-5-5';
+    expect(reserveAiBudget).toHaveBeenCalledWith(
+      'org-1',
+      expect.objectContaining({ feature: 'content', modelId: sonnet }),
+    );
+    const call = generateObject.mock.calls[0][0];
+    expect(call.model).toBe(`model:${sonnet}`);
+    expect(call.maxOutputTokens).toBe(32_000);
+    expect(call.providerOptions).toEqual({ anthropic: { structuredOutputMode: 'outputFormat' } });
+    for (const key of ['temperature', 'topP', 'topK']) expect(call).not.toHaveProperty(key);
+    // At most 8 suggestions, told in words: Claude takes no maxItems.
+    expect(call.schema.jsonSchema.properties.suggestions).toMatchObject({
+      description: '(at most 8 items)',
+    });
+    expect(call.schema.jsonSchema.properties.suggestions).not.toHaveProperty('maxItems');
+    // $2 / $10 per million: 900 in and 200 out.
+    const usage = writes.find((w) => w.table === 'prompt_improve_usage');
+    expect(usage.value).toMatchObject({ model: sonnet, input_tokens: 900, output_tokens: 200 });
+    expect(usage.value.cost_usd).toBeCloseTo(0.0038, 6);
   });
 
   it('charges the budget, asks the model and keeps one batch for review', async () => {

@@ -40,7 +40,9 @@ export async function sweepAutoAudits({ readInbox, startAudits, now = new Date()
     let query = supabaseAdmin
       .from('brands')
       .select('id, name, organization_id')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      // A demo brand's site (00380) is a `.example` domain: never audited.
+      .eq('is_demo', false);
     if (orgIds) query = query.in('organization_id', orgIds);
     return query.order('id', { ascending: true }).range(from, to);
   });

@@ -18,6 +18,7 @@ import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { PLANS, type Feature, getMinimumPlanForFeature, hasFeature, isCloud } from '@/config/plans';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
+import { DemoBrandError, assertNotDemoBrand, callOnDemoBrand } from '@/lib/mcp/demo-gate';
 import { MEMBER_ROLES, requireManager, requireRole } from '@/lib/mcp/role-gate';
 import {
   fetchPromptUsageRow,
@@ -64,15 +65,23 @@ export interface BrandRow {
   industry: string | null;
   region: string | null;
   created_at: string;
+  /** The demo brand (00380): sample data, read like any brand; nothing on it is written or run. */
+  is_demo: boolean;
 }
 
+/**
+ * The organization's brands, newest first. The demo brand is one of them,
+ * marked is_demo, unless the organization hid it (once a plan was bought, or
+ * from the brand menu).
+ */
 export async function listBrandsFor(auth: McpAuthContext): Promise<BrandRow[]> {
   if (!auth.organizationId) return [];
 
   const { data, error } = await supabaseAdmin
     .from('brands')
-    .select('id, name, slug, industry, region, created_at')
+    .select('id, name, slug, industry, region, created_at, is_demo')
     .eq('organization_id', auth.organizationId)
+    .or('is_demo.eq.false,demo_hidden_at.is.null')
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -1029,6 +1038,8 @@ export async function generateBriefFor(
   opportunityId: string,
 ): Promise<GeneratedBrief | null> {
   if (!auth.organizationId) return null;
+  // Generating costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   // Ownership check first — wrong-org or missing id returns null with no
   // outbound call, so no LLM cost or data leak for an attacker probing ids.
@@ -1039,7 +1050,15 @@ export async function generateBriefFor(
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
-  // No brief (an LLM call) for a read-only workspace, whoever asks.
+  // No brief (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
+  // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
+  if (
+    await callOnDemoBrand('generate_content_brief', auth.organizationId, {
+      opportunity_id: opportunityId,
+    })
+  ) {
+    throw new DemoBrandError();
+  }
   await assertSubscriptionActive(auth.organizationId);
 
   const apiUrl = API_BASE_URL;
@@ -1225,7 +1244,8 @@ export async function runSiteAuditFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
-  // No audit (quota and crawling) for a read-only workspace, whoever asks.
+  // No audit (quota and crawling) on the demo brand, nor for a read-only workspace, whoever asks.
+  await assertNotDemoBrand(auth.organizationId, brandId);
   await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;
@@ -3549,6 +3569,8 @@ export async function createImproveActionFor(
   input: CreateImproveActionInput,
 ): Promise<CreatedImproveAction | null> {
   if (!auth.organizationId) return null;
+  // Improve costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   const { data: ownership } = await supabaseAdmin
     .from('prompts')
@@ -3557,7 +3579,15 @@ export async function createImproveActionFor(
     .eq('prompt_sets.brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
-  // No Improve action (an LLM call) for a read-only workspace, whoever asks.
+  // No Improve action (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
+  // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
+  if (
+    await callOnDemoBrand('create_improve_action', auth.organizationId, {
+      prompt_id: input.promptId,
+    })
+  ) {
+    throw new DemoBrandError();
+  }
   await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;

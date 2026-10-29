@@ -3,6 +3,7 @@ import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
   childLinkHref,
+  dashboardNavBadge,
   dashboardNavLabelKeys,
   getDashboardNavGroupLabel,
   getDashboardNavLabel,
@@ -201,5 +202,26 @@ describe('childLinkHref', () => {
     expect(childLinkHref(library, '/dashboard/content/library')).toBe('/dashboard/content/library');
     const topics = { title: 'Topics', href: '/dashboard/prompts/topics' };
     expect(childLinkHref(topics, '/dashboard/prompts/topics/t1')).toBe('/dashboard/prompts/topics');
+  });
+});
+
+describe('dashboardNavBadge', () => {
+  const items = dashboardNav.flatMap((group) => group.items);
+  const chat = items.find((item) => item.title === 'Chat')!;
+  const actionCenter = items.find((item) => item.title === 'Action Center')!;
+
+  it("says Chat comes next week on the demo brand, before it's set up", () => {
+    expect(dashboardNavBadge(chat, { chatSoon: 'Soon (next week)', agentKeyMissing: true })).toBe(
+      'Soon (next week)',
+    );
+  });
+
+  it('asks to set Chat up without a provider key, else shows its own', () => {
+    expect(dashboardNavBadge(chat, { agentKeyMissing: true })).toBe('Set up');
+    expect(dashboardNavBadge(chat, {})).toBe(chat.badge);
+  });
+
+  it("keeps every other item's own badge", () => {
+    expect(dashboardNavBadge(actionCenter, { chatSoon: 'Soon (next week)' })).toBe('New');
   });
 });
