@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 import { listTaskReviewsFor } from '@/lib/mcp/task-reviews';
 
-/** GET /api/mcp/task-reviews — REST mirror of the `list_task_reviews` MCP tool. */
+/**
+ * GET /api/mcp/task-reviews — REST mirror of the `list_task_reviews` MCP tool.
+ * 403 role_required unless the key's user is an admin or a manager.
+ */
 export async function GET(req: Request) {
   const auth = await authenticateMcpRequest(req);
   if (auth instanceof NextResponse) return auth;
@@ -23,12 +27,8 @@ export async function GET(req: Request) {
     if (reviews === null) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
-    if ('error' in reviews) {
-      return NextResponse.json({ error: reviews.message }, { status: 403 });
-    }
     return NextResponse.json({ reviews });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failedCallResponse(err);
   }
 }

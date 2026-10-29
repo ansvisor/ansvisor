@@ -11,8 +11,6 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * user (00375).
  */
 
-let role: string | null = 'manager';
-let profileOrg = 'org-1';
 let brandFound = true;
 let reviewRows: Record<string, unknown>[] = [];
 /** The review as ownedReview reads it; null for none of the organization's. */
@@ -39,12 +37,7 @@ function builder(table: string) {
     order: () => chain,
     limit: async () => ({ data: reviewRows, error: null }),
     maybeSingle: async () => ({
-      data:
-        table === 'profiles'
-          ? role && { role, organization_id: profileOrg }
-          : table === 'brands'
-            ? brandFound && { id: 'brand-1' }
-            : owned,
+      data: table === 'brands' ? brandFound && { id: 'brand-1' } : owned,
       error: null,
     }),
     delete: () => ({
@@ -72,13 +65,16 @@ vi.mock('@/lib/supabase/admin', () => ({
 const { listTaskReviewsFor, approveTaskReviewFor, dismissTaskReviewFor } =
   await import('./task-reviews');
 const { createMcpServer } = await import('./server');
+const { RoleRequiredError } = await import('./role-gate');
 
-const auth: McpAuthContext = {
+const manager: McpAuthContext = {
   userId: 'user-1',
   email: null,
   organizationId: 'org-1',
+  role: 'manager',
   apiKeyId: 'key-1',
 };
+let auth = manager;
 
 const WRITTEN = {
   where: 'Pricing page',
@@ -92,8 +88,7 @@ const WRITTEN = {
 };
 
 beforeEach(() => {
-  role = 'manager';
-  profileOrg = 'org-1';
+  auth = manager;
   brandFound = true;
   reviewRows = [];
   owned = { id: 'review-1', action_id: 'action-1', title: 'Add an FAQ', details: WRITTEN };
@@ -138,16 +133,15 @@ describe('listTaskReviewsFor', () => {
     expect(await listTaskReviewsFor(auth, { brandId: 'brand-2' })).toBeNull();
   });
 
-  it('refuses anyone but an admin or a manager of the organization', async () => {
-    role = 'analyst';
-    expect(await listTaskReviewsFor(auth, { brandId: 'brand-1' })).toMatchObject({
-      error: 'forbidden',
-    });
-    role = 'admin';
-    profileOrg = 'org-2';
-    expect(await listTaskReviewsFor(auth, { brandId: 'brand-1' })).toMatchObject({
-      error: 'forbidden',
-    });
+  it('refuses anyone but an admin or a manager', async () => {
+    for (const role of ['analyst', 'agency_partner', null] as const) {
+      auth = { ...manager, role };
+      await expect(listTaskReviewsFor(auth, { brandId: 'brand-1' })).rejects.toThrow(
+        RoleRequiredError,
+      );
+    }
+    auth = { ...manager, role: 'admin' };
+    expect(await listTaskReviewsFor(auth, { brandId: 'brand-1' })).toEqual([]);
   });
 });
 
@@ -197,11 +191,19 @@ describe('approveTaskReviewFor', () => {
   };
 
   it('refuses anyone but an admin or a manager, before reading the review', async () => {
-    role = 'analyst';
+    auth = { ...manager, role: 'analyst' };
+    await expect(approveTaskReviewFor(auth, 'review-1', complete)).rejects.toThrow(
+      RoleRequiredError,
+    );
+    expect(filters).toEqual([]);
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('answers forbidden when the database refuses the approval', async () => {
+    rpcResult = { data: null, error: { code: '42501', message: 'not allowed' } };
     expect(await approveTaskReviewFor(auth, 'review-1', complete)).toMatchObject({
       error: 'forbidden',
     });
-    expect(rpcCalls).toEqual([]);
   });
 
   it("reads the review within the key's organization", async () => {
@@ -260,9 +262,10 @@ describe('dismissTaskReviewFor', () => {
   });
 
   it("refuses an analyst, and leaves another organization's review alone", async () => {
-    role = 'analyst';
-    expect(await dismissTaskReviewFor(auth, 'review-1')).toMatchObject({ error: 'forbidden' });
-    role = 'admin';
+    auth = { ...manager, role: 'analyst' };
+    await expect(dismissTaskReviewFor(auth, 'review-1')).rejects.toThrow(RoleRequiredError);
+    expect(deleted).toEqual([]);
+    auth = { ...manager, role: 'admin' };
     owned = null;
     expect(await dismissTaskReviewFor(auth, 'review-1')).toMatchObject({ error: 'missing' });
     expect(deleted).toEqual([]);
@@ -290,5 +293,27 @@ describe('the task review tools', () => {
     for (const name of ['list_task_reviews', 'approve_task_review', 'dismiss_task_review']) {
       expect(tool(name)?.title, name).toBeTruthy();
     }
+  });
+
+  it("answer an analyst's call with the role refusal, as a tool error", async () => {
+    const server = createMcpServer({ ...manager, role: 'analyst' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientTransport);
+    for (const [name, args] of [
+      ['list_task_reviews', { brand_id: '11111111-1111-4111-8111-111111111111' }],
+      ['approve_task_review', { review_id: '11111111-1111-4111-8111-111111111111' }],
+      ['dismiss_task_review', { review_id: '11111111-1111-4111-8111-111111111111' }],
+    ] as const) {
+      const result = (await client.callTool({ name, arguments: args })) as {
+        isError?: boolean;
+        content: { text: string }[];
+      };
+      expect(result.isError, name).toBe(true);
+      expect(result.content[0].text, name).toContain('Only an admin or a manager can do this');
+    }
+    expect(rpcCalls).toEqual([]);
+    expect(deleted).toEqual([]);
   });
 });

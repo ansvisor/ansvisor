@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 import {
   TASK_REVIEW_ERROR_STATUS,
   approveTaskReviewFor,
@@ -41,7 +42,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failedCallResponse(err);
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 import { TASK_REVIEW_ERROR_STATUS, dismissTaskReviewFor } from '@/lib/mcp/task-reviews';
 
 /** POST /api/mcp/task-reviews/[id]/dismiss — REST mirror of the `dismiss_task_review` MCP tool. */
@@ -18,7 +19,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return failedCallResponse(err);
   }
 }

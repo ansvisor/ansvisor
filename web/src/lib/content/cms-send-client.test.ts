@@ -44,6 +44,7 @@ const {
   readDeliveries,
   readDraftCms,
   readKeptFields,
+  refreshFramerPublished,
   refreshWebflowPublished,
   refreshWordPressPublished,
   sendPagesToCms,
@@ -122,6 +123,24 @@ describe('sendPagesToCms', () => {
     expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toMatchObject({
       target: 'wordpress',
     });
+    // To the brand's Framer collection (00295): its item live, its images left out.
+    answer(200, {
+      deliveries: [
+        {
+          id: 'x5',
+          draftId: 'd1',
+          status: 'sent',
+          updated: true,
+          live: true,
+          changed: { images: 2 },
+        },
+      ],
+    });
+    expect(await sendPagesToCms('brand-1', [page], 'framer')).toMatchObject({
+      ok: true,
+      deliveries: [{ updated: true, live: true, changed: { images: 2 } }],
+    });
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toMatchObject({ target: 'framer' });
   });
 
   it('gives the server’s reason, and the field a 400 names', async () => {
@@ -158,6 +177,16 @@ describe('sendPagesToCms', () => {
         ok: false,
         code,
       });
+    }
+    for (const [status, code] of [
+      [503, 'framer_not_configured'],
+      [409, 'no_framer'],
+      [409, 'framer_refused'],
+      [409, 'framer_not_ready'],
+      [409, 'in_progress'],
+    ] as const) {
+      answer(status, { code });
+      expect(await sendPagesToCms('brand-1', [page], 'framer')).toMatchObject({ ok: false, code });
     }
   });
 
@@ -249,6 +278,35 @@ describe('refreshWordPressPublished', () => {
   });
 });
 
+describe('refreshFramerPublished', () => {
+  it('asks the API to read the brand’s Framer items, and gives the drafts it marked published', async () => {
+    answer(200, {
+      checked: 2,
+      published: [
+        { draftId: 'd1', url: 'https://acme.framer.website/blog/cold-brew' },
+        // A page deleted since: no draft to mark.
+        { draftId: null, url: 'https://acme.framer.website/blog/espresso' },
+      ],
+    });
+    expect(await refreshFramerPublished('brand-1')).toEqual(['d1']);
+    expect(fetchMock).toHaveBeenCalledWith('/api/aeo/api/content-drafts/framer-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
+      body: JSON.stringify({ brandId: 'brand-1' }),
+    });
+    // Read a moment ago, or not there (an API before 00295): none.
+    answer(200, { checked: 0, published: [], recent: true });
+    expect(await refreshFramerPublished('brand-1')).toEqual([]);
+    answer(404, {});
+    expect(await refreshFramerPublished('brand-1')).toEqual([]);
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    expect(await refreshFramerPublished('brand-1')).toEqual([]);
+    session = null;
+    expect(await refreshFramerPublished('brand-1')).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
 describe('readDraftCms', () => {
   it('gives the kept fields, where the page went live and its last send', async () => {
     reads = {
@@ -302,6 +360,32 @@ describe('readDraftCms', () => {
     expect((await readDraftCms('d1'))?.last).toMatchObject({
       status: 'failed',
       error: 'Not sent: interrupted',
+    });
+  });
+
+  it('says the last send went to Framer', async () => {
+    reads = {
+      content_drafts: {
+        data: { slug: null, meta_title: null, meta_description: null, published_url: null },
+        error: null,
+      },
+      content_draft_deliveries: {
+        data: {
+          status: 'sent',
+          target: 'framer',
+          created_at: '2026-10-24T10:00:00Z',
+          sent_at: '2026-10-24T10:00:02Z',
+          published_at: null,
+          error: null,
+        },
+        error: null,
+      },
+    };
+    expect((await readDraftCms('d1'))?.last).toEqual({
+      status: 'sent',
+      target: 'framer',
+      at: '2026-10-24T10:00:02Z',
+      error: null,
     });
   });
 
@@ -421,6 +505,28 @@ describe('readCmsStatuses', () => {
     const statuses = await readCmsStatuses(['d1', 'd2']);
     expect(statuses.get('d1')).toMatchObject({ status: 'sent', target: 'wordpress' });
     expect(statuses.get('d2')).toMatchObject({ target: 'webhook' });
+  });
+
+  it('says which sends went to Framer, and one removed there since as failed', async () => {
+    statusReads = [
+      {
+        data: [
+          delivery('d1', 'sent', '2026-10-24T10:00:00Z', { target: 'framer' }),
+          delivery('d2', 'failed', '2026-10-24T10:00:00Z', {
+            target: 'framer',
+            error: 'Removed in Framer',
+          }),
+        ],
+        error: null,
+      },
+    ];
+    const statuses = await readCmsStatuses(['d1', 'd2']);
+    expect(statuses.get('d1')).toMatchObject({ status: 'sent', target: 'framer' });
+    expect(statuses.get('d2')).toMatchObject({
+      status: 'failed',
+      target: 'framer',
+      error: 'Removed in Framer',
+    });
   });
 
   it('leaves a read that fails with no sends, as before its table is there', async () => {

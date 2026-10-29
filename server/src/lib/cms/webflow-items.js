@@ -4,7 +4,8 @@ import { foldLetters } from '../letters.js';
 /**
  * A page as a Webflow CMS item (Send to CMS #1331, phase 2): its rich text
  * as Webflow keeps it, a slug Webflow takes, and the item's fields by the
- * brand's field map (brand_cms_connections.field_map, 00283).
+ * brand's field map (brand_cms_connections.field_map, 00283). The steps a
+ * rich text field shares are exported for Framer's (framer-items.js).
  */
 
 /** What Webflow's rich text keeps; other elements give way to their content. */
@@ -40,17 +41,21 @@ const DROP =
 /** The meta description's fallback: the page's opening words, as long as a search result shows. */
 const OPENING_CHARS = 160;
 /** Webflow's longest name and plain text it's sent here. */
-const NAME_CHARS = 256;
+export const NAME_CHARS = 256;
 
 const escape = (value) =>
   String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const squash = (value) => String(value).replace(/\s+/g, ' ').trim();
+export const squash = (value) => String(value).replace(/\s+/g, ' ').trim();
 
-/** Attributes go but a link's address and target. */
-function bare($, el) {
+/**
+ * Attributes go but a link's address and target, and those `attrs` keeps
+ * by tag (tag → names; Framer's table cells keep their spans).
+ */
+function bare($, el, attrs = {}) {
   const tag = el.tagName?.toLowerCase();
   for (const name of Object.keys(el.attribs ?? {})) {
     if (tag === 'a' && (name === 'href' || name === 'target')) continue;
+    if (attrs[tag]?.has(name)) continue;
     $(el).removeAttr(name);
   }
 }
@@ -59,7 +64,7 @@ function bare($, el) {
  * A table cell as one line: its paragraphs, items and lines a space apart,
  * its links and emphasis kept.
  */
-function cellHtml($, cell) {
+export function cellHtml($, cell) {
   const $cell = $(cell).clone();
   $cell.find('br').replaceWith(' ');
   $cell
@@ -74,11 +79,125 @@ function cellHtml($, cell) {
 }
 
 /** A table's own rows, not those of a table inside one of its cells. */
-const ownRows = ($, table) =>
+export const ownRows = ($, table) =>
   $(table)
     .find('tr')
     .toArray()
     .filter((row) => $(row).closest('table')[0] === table);
+
+/** The images (and video, SVG) a page loses: a picture once, by its image or its own. */
+export const imagesIn = ($) =>
+  $('img, video, svg').length + $('picture').filter((_, p) => !$(p).find('img').length).length;
+
+/** Scripts, styles, forms and rules go with what they hold, and comments go. */
+export function dropUnkept($) {
+  $(DROP).remove();
+  $('*')
+    .contents()
+    .add($.root().contents())
+    .filter((_, node) => node.type === 'comment')
+    .remove();
+}
+
+/**
+ * A table as a list, a row an item ("Header: cell · …"), its header naming
+ * each cell; an empty table goes.
+ */
+export function tableAsList($, table) {
+  const rows = ownRows($, table);
+  const own = (row) =>
+    $(row)
+      .children('th, td')
+      .toArray()
+      .map((cell) => cellHtml($, cell));
+  const head =
+    rows.length && $(rows[0]).children('th').length
+      ? $(rows[0])
+          .children('th, td')
+          .toArray()
+          .map((cell) => squash($(cell).text()))
+      : null;
+  const items = (head ? rows.slice(1) : rows)
+    .map((row) =>
+      own(row)
+        .map((value, i) =>
+          value && head?.[i] ? `<strong>${escape(head[i])}</strong>: ${value}` : value,
+        )
+        .filter(Boolean)
+        .join(' · '),
+    )
+    .filter(Boolean);
+  $(table).replaceWith(
+    items.length ? `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>` : '',
+  );
+}
+
+/**
+ * A product card or grid (the editor's product-block.ts, shopping-blocks.js)
+ * as a list: a product an item, its name linked, its price after it.
+ */
+export function productsAsList($) {
+  $('.ansvisor-products').each((_, grid) => {
+    const items = $(grid)
+      .find('a.ansvisor-product')
+      .toArray()
+      .flatMap((card) => {
+        const name = squash($(card).find('strong').text());
+        if (!name) return [];
+        const price = squash($(card).find('span').text());
+        const $item = $('<li></li>').append($(card).text(name));
+        if (price) $item.append(` ${escape(price)}`);
+        return [$item];
+      });
+    $(grid).replaceWith(items.length ? $('<ul></ul>').append(items) : '');
+  });
+}
+
+/** Media goes; a figure of media with its caption, a figure of words (a table's) keeps them. */
+export function dropMedia($) {
+  $('figure').each((_, figure) => {
+    if ($(figure).find(MEDIA).length) $(figure).remove();
+  });
+  $(MEDIA).remove();
+}
+
+/**
+ * The last steps of a rich text field: elements it doesn't keep give way to
+ * their content (inside out, so an element's children are settled before
+ * it), attributes go but a link's address and target (and `attrs`, as
+ * bare() reads it), an item outside a list is a paragraph, words and inline
+ * elements at the top go in paragraphs a run at a time (`blocks`: what
+ * stands at the top on its own), and the paragraphs, items and lists a
+ * removal left empty go.
+ */
+export function settleRichText($, { keep, blocks, attrs = {} }) {
+  for (const el of $('*').toArray().reverse()) {
+    if (keep.has(el.tagName?.toLowerCase())) bare($, el, attrs);
+    else $(el).replaceWith($(el).contents());
+  }
+  $('li').each((_, el) => {
+    if (!$(el).parent().is('ul, ol')) el.tagName = 'p';
+  });
+
+  let run = [];
+  const wrap = () => {
+    if (run.some((node) => squash($(node).text()))) $(run).wrapAll('<p></p>');
+    else $(run).remove();
+    run = [];
+  };
+  for (const node of $.root().contents().toArray()) {
+    if (node.type === 'tag' && blocks.has(node.tagName.toLowerCase())) wrap();
+    else if (node.type === 'tag' || node.type === 'text') run.push(node);
+  }
+  wrap();
+
+  $('p, li, h2, h3, h4, h5, h6, blockquote').each((_, el) => {
+    if (!squash($(el).text()) && !$(el).find('br').length) $(el).remove();
+  });
+  $('ul, ol').each((_, el) => {
+    if (!$(el).children('li').length) $(el).remove();
+  });
+}
 
 /**
  * A page's publishable HTML as Webflow's rich text keeps it:
@@ -100,68 +219,13 @@ export function toWebflowRichText(html) {
   const $ = cheerio.load(String(html ?? ''), null, false);
   const changed = {
     tables: $('table').filter((_, t) => !$(t).parents('table').length).length,
-    images:
-      $('img, video, svg').length + $('picture').filter((_, p) => !$(p).find('img').length).length,
+    images: imagesIn($),
   };
-  $(DROP).remove();
-  $('*')
-    .contents()
-    .add($.root().contents())
-    .filter((_, node) => node.type === 'comment')
-    .remove();
-
+  dropUnkept($);
   // Inner tables first: a cell holding one reads it as its list.
-  for (const table of $('table').toArray().reverse()) {
-    const rows = ownRows($, table);
-    const own = (row) =>
-      $(row)
-        .children('th, td')
-        .toArray()
-        .map((cell) => cellHtml($, cell));
-    const head =
-      rows.length && $(rows[0]).children('th').length
-        ? $(rows[0])
-            .children('th, td')
-            .toArray()
-            .map((cell) => squash($(cell).text()))
-        : null;
-    const items = (head ? rows.slice(1) : rows)
-      .map((row) =>
-        own(row)
-          .map((value, i) =>
-            value && head?.[i] ? `<strong>${escape(head[i])}</strong>: ${value}` : value,
-          )
-          .filter(Boolean)
-          .join(' · '),
-      )
-      .filter(Boolean);
-    $(table).replaceWith(
-      items.length ? `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>` : '',
-    );
-  }
-
-  // A product card or grid (the editor's product-block.ts, shopping-blocks.js)
-  // as a list: a product an item, its name linked, its price after it.
-  $('.ansvisor-products').each((_, grid) => {
-    const items = $(grid)
-      .find('a.ansvisor-product')
-      .toArray()
-      .flatMap((card) => {
-        const name = squash($(card).find('strong').text());
-        if (!name) return [];
-        const price = squash($(card).find('span').text());
-        const $item = $('<li></li>').append($(card).text(name));
-        if (price) $item.append(` ${escape(price)}`);
-        return [$item];
-      });
-    $(grid).replaceWith(items.length ? $('<ul></ul>').append(items) : '');
-  });
-
-  // A figure of media goes with its caption; a figure of words (a table's) keeps them.
-  $('figure').each((_, figure) => {
-    if ($(figure).find(MEDIA).length) $(figure).remove();
-  });
-  $(MEDIA).remove();
+  for (const table of $('table').toArray().reverse()) tableAsList($, table);
+  productsAsList($);
+  dropMedia($);
   $('h1').each((_, el) => {
     el.tagName = 'h2';
   });
@@ -171,36 +235,7 @@ export function toWebflowRichText(html) {
   $('dt, dd, figcaption, caption').each((_, el) => {
     $(el).replaceWith(`<p>${$(el).html() ?? ''}</p>`);
   });
-
-  // Inside out, so an element's children are settled before it gives way.
-  for (const el of $('*').toArray().reverse()) {
-    if (KEEP.has(el.tagName?.toLowerCase())) bare($, el);
-    else $(el).replaceWith($(el).contents());
-  }
-  $('li').each((_, el) => {
-    if (!$(el).parent().is('ul, ol')) el.tagName = 'p';
-  });
-
-  // Words and inline elements at the top go in paragraphs, a run at a time.
-  let run = [];
-  const wrap = () => {
-    if (run.some((node) => squash($(node).text()))) $(run).wrapAll('<p></p>');
-    else $(run).remove();
-    run = [];
-  };
-  for (const node of $.root().contents().toArray()) {
-    if (node.type === 'tag' && BLOCKS.has(node.tagName.toLowerCase())) wrap();
-    else if (node.type === 'tag' || node.type === 'text') run.push(node);
-  }
-  wrap();
-
-  // The paragraphs, items and lists a removal left empty.
-  $('p, li, h2, h3, h4, h5, h6, blockquote').each((_, el) => {
-    if (!squash($(el).text()) && !$(el).find('br').length) $(el).remove();
-  });
-  $('ul, ol').each((_, el) => {
-    if (!$(el).children('li').length) $(el).remove();
-  });
+  settleRichText($, { keep: KEEP, blocks: BLOCKS });
   return { html: $.html().trim(), changed };
 }
 
@@ -220,7 +255,7 @@ export function webflowSlug(value) {
 }
 
 /** The page's opening words, cut at a word: its meta description when it has none. */
-function openingWords(html) {
+export function openingWords(html) {
   const text = squash(
     cheerio
       .load(String(html ?? ''), null, false)
@@ -251,12 +286,16 @@ export function fieldDataFor({ page, slug, body, jsonLd, sentAt }, fieldMap) {
   if (fieldMap.metaDescription) {
     data[fieldMap.metaDescription] = squash(page.metaDescription) || openingWords(body);
   }
-  if (fieldMap.jsonLd) {
-    // Every "<" escaped: nothing in it can end or open a tag in the embed's script.
-    data[fieldMap.jsonLd] = jsonLd?.length
-      ? JSON.stringify(jsonLd.length === 1 ? jsonLd[0] : jsonLd).replace(/</g, '\\u003c')
-      : '';
-  }
+  if (fieldMap.jsonLd) data[fieldMap.jsonLd] = jsonLd?.length ? jsonLdText(jsonLd) : '';
   if (fieldMap.date && sentAt) data[fieldMap.date] = sentAt.toISOString();
   return data;
+}
+
+/**
+ * A page's JSON-LD as one field's text: one block as itself, several as a
+ * list. Every "<" escaped: nothing in it can end or open a tag in the
+ * embed's script.
+ */
+export function jsonLdText(jsonLd) {
+  return JSON.stringify(jsonLd.length === 1 ? jsonLd[0] : jsonLd).replace(/</g, '\\u003c');
 }

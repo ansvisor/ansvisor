@@ -17,6 +17,7 @@ vi.mock('@/lib/mcp-auth', () => ({
     userId: 'user-1',
     email: null,
     organizationId: 'org-1',
+    role: 'manager',
     apiKeyId: 'key-1',
   })),
 }));
@@ -27,6 +28,7 @@ vi.mock('@/lib/mcp/task-reviews', async (importOriginal) => ({
 }));
 
 const list = await import('./route');
+const { RoleRequiredError, MANAGER_ROLES } = await import('@/lib/mcp/role-gate');
 const approve = await import('./[id]/approve/route');
 const dismiss = await import('./[id]/dismiss/route');
 
@@ -47,8 +49,9 @@ describe('GET /api/mcp/task-reviews', () => {
       list.GET(new Request('http://localhost/api/mcp/task-reviews?brand_id=brand-1'));
     reviews.listTaskReviewsFor.mockResolvedValue([{ id: 'review-1' }]);
     expect(await (await get()).json()).toEqual({ reviews: [{ id: 'review-1' }] });
-    reviews.listTaskReviewsFor.mockResolvedValue({ error: 'forbidden', message: 'No' });
+    reviews.listTaskReviewsFor.mockRejectedValue(new RoleRequiredError(MANAGER_ROLES, 'analyst'));
     expect((await get()).status).toBe(403);
+    reviews.listTaskReviewsFor.mockReset();
     reviews.listTaskReviewsFor.mockResolvedValue(null);
     expect((await get()).status).toBe(404);
   });
@@ -106,6 +109,23 @@ describe('POST /api/mcp/task-reviews/[id]/approve', () => {
       const res = await approve.POST(post('approve', {}), params);
       expect(res.status, error).toBe(status);
       expect(await res.json()).toEqual({ error, code: error });
+    }
+  });
+});
+
+describe('a key whose user may not review', () => {
+  it('answers 403 role_required on every route', async () => {
+    const refusal = new RoleRequiredError(MANAGER_ROLES, 'analyst');
+    reviews.listTaskReviewsFor.mockRejectedValue(refusal);
+    reviews.approveTaskReviewFor.mockRejectedValue(refusal);
+    reviews.dismissTaskReviewFor.mockRejectedValue(refusal);
+    for (const res of [
+      await list.GET(new Request('http://localhost/api/mcp/task-reviews?brand_id=brand-1')),
+      await approve.POST(post('approve', {}), params),
+      await dismiss.POST(post('dismiss'), params),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ error: 'forbidden', code: 'role_required' });
     }
   });
 });

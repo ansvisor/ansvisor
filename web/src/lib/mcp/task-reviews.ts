@@ -9,6 +9,7 @@ import {
   type TaskDetailsEdit,
 } from '@/lib/action-center/task-details';
 import { brandInOrg, mcpTaskDetails } from './data';
+import { requireManager } from './role-gate';
 
 /**
  * Tasks waiting for review (AC-010, 00293) for the MCP tools
@@ -16,8 +17,9 @@ import { brandInOrg, mcpTaskDetails } from './data';
  * REST mirrors: tasks an agent wrote without the exact page, the change, Done
  * when or how it is checked. An admin or a manager fills what they miss and
  * approves them onto their action's list, or dismisses them, as on the
- * Action Center's Needs review tab. The key's user must be one: everyone
- * else reads and changes none, as the table's RLS has it.
+ * Action Center's Needs review tab. The key's user must be one
+ * (requireManager): everyone else reads and changes none, as the table's RLS
+ * has it.
  *
  * TODO(demo-brand-mcp): approve_task_review and dismiss_task_review find
  * their brand through action_task_reviews → actions.brand_id. When
@@ -74,23 +76,9 @@ const MISSING: TaskReviewError = {
   message: 'Task review not found: approved or dismissed already, or not in this organization',
 };
 
-/** Whether the key's user is an admin or a manager of the key's organization. */
-async function canReview(auth: McpAuthContext): Promise<boolean> {
-  if (!auth.organizationId) return false;
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role, organization_id')
-    .eq('id', auth.userId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return (
-    data?.organization_id === auth.organizationId &&
-    (data.role === 'admin' || data.role === 'manager')
-  );
-}
-
 /** A review of the key's organization, with what is stored for it; null when there is none. */
 async function ownedReview(auth: McpAuthContext, reviewId: string) {
+  if (!auth.organizationId) return null;
   const { data, error } = await supabaseAdmin
     .from('action_task_reviews')
     .select('id, action_id, title, details, actions!inner(brands!inner(organization_id))')
@@ -107,14 +95,15 @@ const LIST_MAX = 200;
 /**
  * The brand's tasks waiting for review, the oldest first; none of an action
  * that is deleted or closed, which can't take them. Null for a brand outside
- * the key's organization.
+ * the key's organization. Throws RoleRequiredError for anyone but an admin
+ * or a manager.
  */
 export async function listTaskReviewsFor(
   auth: McpAuthContext,
   params: { brandId: string; limit?: number },
-): Promise<McpTaskReview[] | TaskReviewError | null> {
+): Promise<McpTaskReview[] | null> {
   if (!(await brandInOrg(auth, params.brandId))) return null;
-  if (!(await canReview(auth))) return FORBIDDEN;
+  requireManager(auth);
 
   const limit = Math.min(Math.max(params.limit ?? LIST_DEFAULT, 1), LIST_MAX);
   const { data, error } = await supabaseAdmin
@@ -206,14 +195,15 @@ function stillMissing(details: Record<string, unknown>): McpReviewField[] {
  * A reviewed task onto its action's list, as the Needs review tab's Approve
  * does (approve_action_task_review, 00293 and 00375): the fields given
  * replace the written ones, the rest stays, and the four it needs must be
- * filled. The trail says the key's user added it.
+ * filled. The trail says the key's user added it. Throws RoleRequiredError
+ * for anyone but an admin or a manager, before reading the review.
  */
 export async function approveTaskReviewFor(
   auth: McpAuthContext,
   reviewId: string,
   input: TaskReviewEdit,
 ): Promise<{ task_id: string; action_id: string; title: string } | TaskReviewError> {
-  if (!(await canReview(auth))) return FORBIDDEN;
+  requireManager(auth);
   const review = await ownedReview(auth, reviewId);
   if (!review) return MISSING;
 
@@ -263,12 +253,16 @@ export async function approveTaskReviewFor(
   return { task_id: data as string, action_id: review.action_id, title };
 }
 
-/** A task waiting for review dropped, as the tab's Dismiss does: it never reaches the action. */
+/**
+ * A task waiting for review dropped, as the tab's Dismiss does: it never
+ * reaches the action. Throws RoleRequiredError for anyone but an admin or a
+ * manager.
+ */
 export async function dismissTaskReviewFor(
   auth: McpAuthContext,
   reviewId: string,
 ): Promise<{ id: string; dismissed: true } | TaskReviewError> {
-  if (!(await canReview(auth))) return FORBIDDEN;
+  requireManager(auth);
   const review = await ownedReview(auth, reviewId);
   if (!review) return MISSING;
   const { data, error } = await supabaseAdmin
