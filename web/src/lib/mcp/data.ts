@@ -41,7 +41,11 @@ import {
   withTemplateDoneWhen,
 } from '@/lib/action-center/task-details';
 import { controlNetOf } from '@/lib/action-center/history';
-import { dismissReasonOf, type ActionDismissReason } from '@/lib/action-center/registry';
+import {
+  dismissReasonOf,
+  missingDismissReason,
+  type ActionDismissReason,
+} from '@/lib/action-center/registry';
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
@@ -3127,22 +3131,53 @@ export function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
   };
 }
 
+/** An action as get_action reads it; dismiss_reason is absent on a database without 00366. */
+interface ActionDetailRow {
+  id: string;
+  action_no: number;
+  brand_id: string;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  validation: unknown;
+  dismiss_reason?: string | null;
+  payload: unknown;
+  kpi_keys: string[] | null;
+  assignee_id: string | null;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  priority_score: number | null;
+  priority_level: string | null;
+  priority_reason: unknown;
+}
+
+const ACTION_DETAIL_COLUMNS =
+  'id, action_no, brand_id, category, kind, impact, status, outcome, validation, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)';
+
 export async function getActionFor(
   auth: McpAuthContext,
   actionId: string,
 ): Promise<ActionDetailForMcp | null> {
-  if (!auth.organizationId) return null;
+  const organizationId = auth.organizationId;
+  if (!organizationId) return null;
 
-  const { data: action, error } = await supabaseAdmin
-    .from('actions')
-    .select(
-      'id, action_no, brand_id, category, kind, impact, status, outcome, validation, dismiss_reason, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, completed_at, priority_score, priority_level, priority_reason, brands!inner(organization_id)',
-    )
-    .eq('id', actionId)
-    .eq('brands.organization_id', auth.organizationId)
-    .is('deleted_at', null)
-    .maybeSingle();
+  const read = (columns: string) =>
+    supabaseAdmin
+      .from('actions')
+      .select(columns)
+      .eq('id', actionId)
+      .eq('brands.organization_id', organizationId)
+      .is('deleted_at', null)
+      .maybeSingle();
+  let { data, error } = await read(`${ACTION_DETAIL_COLUMNS}, dismiss_reason`);
+  // A database without 00366 has no dismiss_reason (42703): the rest is read, no reason given.
+  if (missingDismissReason(error)) ({ data, error } = await read(ACTION_DETAIL_COLUMNS));
   if (error) throw new Error(error.message);
+  const action = data as unknown as ActionDetailRow | null;
   if (!action) return null;
 
   const [tasksRes, signalsRes, eventsRes, names, entityCounts] = await Promise.all([
@@ -3188,7 +3223,8 @@ export async function getActionFor(
     status: action.status,
     outcome: action.outcome ?? null,
     net_of_control: netOfControl(action.validation),
-    dismiss_reason: dismissReasonOf(action.dismiss_reason),
+    // Only while it is dismissed: another status leaves an earlier reason in place.
+    dismiss_reason: action.status === 'dismissed' ? dismissReasonOf(action.dismiss_reason) : null,
     payload,
     kpi_keys: action.kpi_keys ?? [],
     assignee: action.assignee_id
@@ -3396,6 +3432,24 @@ interface ValidationSnapshot {
   final?: boolean;
 }
 
+/** A closed action as list_action_history reads it; dismiss_reason is absent without 00366. */
+interface ActionHistoryDbRow {
+  id: string;
+  action_no: number;
+  category: string;
+  kind: string;
+  impact: string;
+  status: string;
+  outcome: string | null;
+  validation: unknown;
+  dismiss_reason?: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+const ACTION_HISTORY_COLUMNS =
+  'id, action_no, category, kind, impact, status, outcome, validation, created_at, completed_at';
+
 export async function listActionHistoryFor(
   auth: McpAuthContext,
   params: { brandId: string; limit?: number },
@@ -3403,19 +3457,21 @@ export async function listActionHistoryFor(
   if (!(await brandInOrg(auth, params.brandId))) return null;
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
-  const { data, error } = await supabaseAdmin
-    .from('actions')
-    .select(
-      'id, action_no, category, kind, impact, status, outcome, validation, dismiss_reason, created_at, completed_at',
-    )
-    .eq('brand_id', params.brandId)
-    .in('status', ['completed', 'dismissed'])
-    .is('deleted_at', null)
-    .order('completed_at', { ascending: false, nullsFirst: false })
-    .limit(limit);
+  const read = (columns: string) =>
+    supabaseAdmin
+      .from('actions')
+      .select(columns)
+      .eq('brand_id', params.brandId)
+      .in('status', ['completed', 'dismissed'])
+      .is('deleted_at', null)
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(limit);
+  let { data, error } = await read(`${ACTION_HISTORY_COLUMNS}, dismiss_reason`);
+  // A database without 00366 has no dismiss_reason (42703): the rest is read, no reason given.
+  if (missingDismissReason(error)) ({ data, error } = await read(ACTION_HISTORY_COLUMNS));
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((r) => {
+  return ((data ?? []) as unknown as ActionHistoryDbRow[]).map((r) => {
     const validation = r.validation as ValidationSnapshot | null;
     const metrics = validation?.metrics ?? [];
     const days = (Array.isArray(validation?.readings) ? validation.readings : [])
@@ -3448,7 +3504,8 @@ export async function listActionHistoryFor(
         (days.length === 0 && outcome != null && outcome !== 'pending_measurement'),
       reading_day: days.length ? Math.max(...days) : null,
       net_of_control: netOfControl(validation),
-      dismiss_reason: dismissReasonOf(r.dismiss_reason),
+      // Only while it is dismissed: another status leaves an earlier reason in place.
+      dismiss_reason: r.status === 'dismissed' ? dismissReasonOf(r.dismiss_reason) : null,
     };
   });
 }
