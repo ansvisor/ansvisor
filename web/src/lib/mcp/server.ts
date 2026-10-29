@@ -80,6 +80,9 @@ import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { gateWriteTools } from './subscription-gate';
 import { getAiUsageFor, getMeFor } from './account';
 import { getActionScorecardFor } from './learning';
+import { getContentPlanFor } from './content-plan';
+import { markContentDraftPublishedFor } from './content-delivery';
+import { PLAN_CARDS, PLAN_PERIODS } from '@/lib/content/plan';
 
 /**
  * Build a fresh MCP server bound to a single authenticated request.
@@ -1591,7 +1594,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'list_content_drafts',
     {
       description:
-        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path.",
+        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress or framer, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
       inputSchema: listDraftsShape,
     },
     async (args) => {
@@ -1604,7 +1607,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     'get_content_draft',
     {
       description:
-        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations).',
+        'Read one Content Editor draft: its HTML, and the page passage by passage (numbered, as suggest_content_changes refers to them). Passages marked locked are quoted by AI answers today: never suggest changing them. Also where and since when the page is live (published_url, published_at; null until then), the action it belongs to, the agent suggestions still waiting for review, and link_targets: the only URLs suggest_content_changes may link to (own_pages for internal links, sources for outbound links and inline citations). With them, `last_send` and `shopping_links` as list_content_drafts gives them, and `shopping_path`: on a page of an online shop, the category pages and catalog products it should link (with price and stock) and those left out and why, as its Brief tab shows them; null for none.',
       inputSchema: {
         draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
       },
@@ -1836,6 +1839,66 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         since: args.date_from,
       });
       return scorecard ? json(scorecard) : notFound('Brand');
+    },
+  );
+
+  // ─── The Content plan and pages ready for a CMS (B5) ───
+
+  server.registerTool(
+    'get_content_plan',
+    {
+      title: 'Content plan',
+      description:
+        "The brand's Content plan, as the Content › Plan page ranks it: what to write or fix next, by the Priority Score (0–100: severity 40, opportunity 30, page value 20, citations 10; `score_parts` says what each row's is made of). Each row: `action` (create a new page, optimize a page losing citations or with an opportunity on it, protect a top page), title, the page (null for a new one), page_type, `why` (competitors cited instead, an opportunity's prompts, a citation drop and its platforms, or a top page's citations and AI visits), opportunity_id, the draft already being written for it (with its assignee and editor path) and whether a person marked it a priority (those come first). `counts` per card and `hidden` (rows a person hid). Over `days` 7, 30 or 90 (default 30); `card` narrows to create, optimize, protect or priority. At most 50 rows.",
+      inputSchema: {
+        brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
+        days: z
+          .union([
+            z.literal(PLAN_PERIODS[0]),
+            z.literal(PLAN_PERIODS[1]),
+            z.literal(PLAN_PERIODS[2]),
+          ])
+          .optional()
+          .describe('The period the plan reads: 7, 30 (default) or 90 days.'),
+        card: z
+          .enum(PLAN_CARDS)
+          .optional()
+          .describe('Only this card: create, optimize, protect or priority.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const plan = await getContentPlanFor(auth, {
+        brandId: args.brand_id,
+        days: args.days ?? 30,
+        card: args.card,
+      });
+      return plan ? json(plan) : notFound('Brand');
+    },
+  );
+
+  server.registerTool(
+    'mark_content_draft_published',
+    {
+      title: 'Mark a draft published',
+      description:
+        "Mark a Content Editor draft Published at the address it went live at, as the editor's Mark published does: for a page you (the user's AI tool) put on their CMS with its own connector — Ansvisor never sends it. Ansvisor then measures that address (get_content_impact, the Live page tab: citations, AI visits, Google clicks) and a linked Action Center action's Publish task completes once every page it names is live. The address must be http(s), with no sign-in details; one off the brand's domains is kept but can't be measured (on_brand_domain false). Marking it again at a new address moves it. It is a write — only once the page is really live, on the user's say.",
+      inputSchema: {
+        draft_id: relaxedUuid.describe('Draft UUID, from list_content_drafts.'),
+        url: z.string().max(2048).describe('The http(s) address the page is live at.'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args) => {
+      const result = await markContentDraftPublishedFor(auth, args.draft_id, args.url);
+      return 'error' in result
+        ? { content: [{ type: 'text' as const, text: result.message }], isError: true }
+        : json(result);
     },
   );
 

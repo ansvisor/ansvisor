@@ -35,6 +35,33 @@ export const NOT_IN_WORKSPACE = "This brand isn't in your workspace";
 const notInWorkspace = () => accessError(NOT_IN_WORKSPACE, 403, 'not_in_workspace');
 
 /**
+ * The roles that may add prompts and topics, change settings and delete for
+ * good — the admin-or-manager rule the database keeps on those tables.
+ */
+export const MANAGER_ROLES = Object.freeze(['admin', 'manager']);
+
+/**
+ * Assert that the caller's role is one of `roles`. The writes here bypass Row
+ * Level Security, so a route the database keeps to some roles checks them
+ * itself; run it after the resource's own access check, so another
+ * organization's resource still reads as not found or not in the workspace.
+ * @param {string} userId
+ * @param {readonly string[]} roles
+ * @param {string} message what the caller reads when refused (403 `forbidden`)
+ * @returns {Promise<string>} the caller's role
+ */
+export async function assertRole(userId, roles, message) {
+  const { data: profile, error } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!roles.includes(profile?.role)) throw accessError(message, 403, 'forbidden');
+  return profile.role;
+}
+
+/**
  * Assert that `brandId` belongs to the caller's organization.
  * @returns {Promise<{ brand: object, orgId: string|null }>}
  */
