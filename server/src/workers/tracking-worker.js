@@ -22,6 +22,11 @@ import {
 } from '../lib/locations.js';
 import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
+import {
+  FIRST_RUN_LATE_POLL_MS,
+  isFirstRun,
+  progressiveRollups,
+} from '../lib/first-run-rollups.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -244,6 +249,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   const isFullRun = !promptId && (!promptIds || promptIds.length === 0);
   let trackingRunId = null;
   let trackingRunStartedAt = null;
+  // A brand's first full run fills the rollups as its answers land, and
+  // checks for its stamp more often (first-run-rollups.js). Read before this
+  // run's own row exists.
+  const firstRun = isFullRun && (await isFirstRun(brandId));
   if (isFullRun) {
     // A run that died mid-flight (crash, abort) leaves an uncompleted row;
     // clear those so at most one in-progress row exists per brand.
@@ -361,6 +370,16 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   let insertedCount = 0;
   let completedTasks = 0;
 
+  const firstRunRollups = progressiveRollups({
+    brandId,
+    startedAt: trackingRunStartedAt,
+    enabled: firstRun,
+  });
+  // Answers landed so far, for the refresher: those this worker stored, and
+  // in webhook mode the Cloro tasks answered (the callback stores those).
+  let scraperProcessed = 0;
+  const landedSoFar = () => insertedCount + scraperProcessed;
+
   async function insertResult(row) {
     // `created_at` comes back from the insert rather than being stamped here:
     // the citation rows copy it, and a value computed in app code would drift
@@ -375,6 +394,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       throw error;
     }
     insertedCount++;
+    firstRunRollups.note(landedSoFar());
     // Best-effort: mark target URLs cited by this answer (00032).
     await updateTargetUrlStats(row.prompt_id, row.citations, new Date().toISOString());
     // Best-effort: expand the citation array into rows (#732). The jsonb
@@ -609,6 +629,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           const pending = ourRows.length;
           pendingAtExit = pending;
           const processed = expectedSubmitted - pending;
+          scraperProcessed = processed;
+          firstRunRollups.note(landedSoFar());
           const allPendingAreOld = allTasksAreStale(ourRows, ghostTaskAgeMs);
 
           // "Delivery started" has to mean a result actually landed, not just
@@ -917,6 +939,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     logger.error({ err, brandId }, 'failed to check opportunity generation eligibility');
   }
 
+  // Everything landed so far into the rollups, and no refresh left running
+  // when the stamp's own refresh starts.
+  await firstRunRollups.finish(landedSoFar());
+
   // Stamp the ledger row — or, when Cloro is still delivering, hand back a
   // promise that stamps it once the late answers are in (lib/run-settlement).
   // `stamped` / `lateStamp` gate the Daily Pulse and signal pass (#702): a
@@ -924,12 +950,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // would recompute the previous run's window and mail numbers the recipient
   // already has.
   const settlement = trackingRunId
-    ? await settleTrackingRun({
-        brandId,
-        runId: trackingRunId,
-        startedAt: trackingRunStartedAt,
-        plannedTasks: totalTasks,
-      })
+    ? await settleTrackingRun(
+        {
+          brandId,
+          runId: trackingRunId,
+          startedAt: trackingRunStartedAt,
+          plannedTasks: totalTasks,
+        },
+        firstRun ? { pollMs: FIRST_RUN_LATE_POLL_MS } : undefined,
+      )
     : { stamped: false, lateStamp: null };
 
   return {

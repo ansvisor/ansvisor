@@ -42,7 +42,7 @@ router.post('/', async (req, res) => {
   try {
     const { job, created } = await startFirstRun(parsed.data);
     if (created) {
-      runTrackingJob(job.id, req.app.get('io'));
+      runTrackingJob(job.id, req.app.get('io'), { priority: true });
       analyzeBrandVolumes(brandId, { onlyMissing: true }).catch((err) => {
         req.log.error({ err, brandId }, 'first-run volume analysis error');
       });

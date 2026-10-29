@@ -62,7 +62,8 @@ describe('POST /api/internal/trigger-tracking', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true, jobId: 'job1', created: true });
     expect(startFirstRun).toHaveBeenCalledWith({ brandId: 'b1', since });
-    expect(runTrackingJob).toHaveBeenCalledWith('job1', io);
+    // Ahead of the queue (job-runner.js).
+    expect(runTrackingJob).toHaveBeenCalledWith('job1', io, { priority: true });
     expect(analyzeBrandVolumes).toHaveBeenCalledWith('b1', { onlyMissing: true });
   });
 
