@@ -142,7 +142,10 @@ describe('pageChange', () => {
       wordsOf(PAGE_V2),
       { lists: 'fail', 'faq-schema': 'pass' },
     );
-    expect(change).toMatchObject({ gained: ['faq-schema'], lost: ['lists'] });
+    expect(change).toMatchObject({
+      gained: [{ key: 'faq-schema', label: expect.any(String) }],
+      lost: [{ key: 'lists', label: expect.any(String) }],
+    });
     expect(change.similarity).toBeLessThan(0.9);
   });
 });
@@ -238,7 +241,9 @@ describe('recordPageChanges', () => {
             at: NOW.toISOString(),
             // The JSON-LD it now has, among what Site Audit's checks found.
             detail: expect.objectContaining({
-              gained: expect.arrayContaining(['json-ld-presence']),
+              gained: expect.arrayContaining([
+                expect.objectContaining({ key: 'json-ld-presence' }),
+              ]),
               lost: [],
             }),
           }),

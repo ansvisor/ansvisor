@@ -27,6 +27,7 @@ import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { fetchPage } from '../safe-fetch.js';
 import { logger } from '../logger.js';
 import { opportunityKey } from '../audit/opportunities.js';
+import { describeSignal } from '../audit/rubric.js';
 import { readPages } from './competitor-pages.js';
 import { FEATURE_CHECKS } from './page-features.js';
 import {
@@ -73,6 +74,9 @@ export function citedCompetitorPages(rows) {
   return [...pages.values()];
 }
 
+/** A Site Audit check as an event keeps it: its key, and its name as the rubric gives it. */
+const checkOf = (key) => ({ key, label: describeSignal(key)?.label ?? key });
+
 /**
  * Whether a re-read page changed since the read before: its words by the
  * page checks' rule, and the Site Audit checks it gained and lost. Null when
@@ -95,8 +99,8 @@ export function pageChange(before, sketch, checks) {
   const now = checks ?? {};
   return {
     similarity: Math.round(j * 100) / 100,
-    gained: FEATURE_CHECKS.filter((key) => now[key] === 'pass' && was[key] !== 'pass'),
-    lost: FEATURE_CHECKS.filter((key) => was[key] === 'pass' && now[key] !== 'pass'),
+    gained: FEATURE_CHECKS.filter((key) => now[key] === 'pass' && was[key] !== 'pass').map(checkOf),
+    lost: FEATURE_CHECKS.filter((key) => was[key] === 'pass' && now[key] !== 'pass').map(checkOf),
   };
 }
 

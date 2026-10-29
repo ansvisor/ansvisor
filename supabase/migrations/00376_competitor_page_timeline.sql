@@ -35,7 +35,7 @@ create table if not exists public.competitor_page_events (
   domain text not null,
   kind text not null check (kind in ('first_cited', 'changed')),
   at timestamptz not null,
-  -- first_cited: { answers }; changed: { similarity, gained: [check], lost: [check] }.
+  -- first_cited: { answers }; changed: { similarity, gained: [{ key, label }], lost: [{ key, label }] }.
   detail jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
