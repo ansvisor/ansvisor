@@ -12,6 +12,7 @@ import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { saveItemIssues } from './issues.js';
 import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
 import { syncCatalog } from './sync.js';
+import { syncCatalogOrders } from './orders.js';
 
 /**
  * A brand's catalog sources (#1263, 00279, 00282) synced into its catalog: a
@@ -334,6 +335,7 @@ async function syncOnce(
   let outcome;
   let credentials = null;
   let connector = null;
+  let storeRequest = null;
   try {
     let parsed;
     if (text !== undefined) {
@@ -359,13 +361,13 @@ async function syncOnce(
         credentials = await readCredentials(source.id, { db });
         // Every call the read makes stops at its deadline.
         const deadline = AbortSignal.timeout(readMs);
-        const bounded = (address, opts = {}) =>
+        storeRequest = (address, opts = {}) =>
           request(address, {
             ...opts,
             signal: opts.signal ? AbortSignal.any([opts.signal, deadline]) : deadline,
           });
         if (!credentials) outcome = NO_SIGN_IN;
-        else parsed = await connector.readCatalog(source, { request: bounded, credentials });
+        else parsed = await connector.readCatalog(source, { request: storeRequest, credentials });
       } else {
         parsed = await connector.readCatalog(source, { fetch, request });
       }
@@ -389,6 +391,40 @@ async function syncOnce(
       if (Number.isInteger(parsed.repeated)) outcome.counts.repeated = parsed.repeated;
       if (Array.isArray(parsed.issues)) {
         outcome.counts.issues = await saveItemIssues(source, parsed.issues, { db, now });
+      }
+
+      // Store connectors with order support share one idempotent persistence path.
+      // The checkpoint advances only after every page and normalized row was saved.
+      if (
+        isStore(connector) &&
+        credentials &&
+        storeRequest &&
+        typeof connector.syncOrders === 'function'
+      ) {
+        const checkpointAt = new Date().toISOString();
+        const orderResult = await connector.syncOrders(source, {
+          request: storeRequest,
+          credentials,
+          since: source.last_orders_synced_at ?? null,
+        });
+        const orderCounts = await syncCatalogOrders(
+          source.brand_id,
+          sourceKey(source.id),
+          orderResult.orders,
+          { db, now },
+        );
+        outcome.counts.orders = {
+          ...orderCounts,
+          skippedFromApi: Number.isInteger(orderResult.skipped) ? orderResult.skipped : 0,
+          truncated: !!orderResult.truncated,
+        };
+        if (!orderResult.truncated) {
+          const { error } = await db
+            .from('catalog_sources')
+            .update({ last_orders_synced_at: checkpointAt })
+            .eq('id', source.id);
+          if (error) throw new Error(`catalog_sources order cursor write: ${error.message}`);
+        }
       }
     }
   } catch (err) {
@@ -434,7 +470,7 @@ export async function sweepCatalogSources({
   const { data, error } = await db
     .from('catalog_sources')
     .select(
-      'id, brand_id, kind, format, url, account, last_synced_at, brands!inner(organizations!inner(subscription_status))',
+      'id, brand_id, kind, format, url, account, last_synced_at, last_orders_synced_at, brands!inner(organizations!inner(subscription_status))',
     )
     .neq('kind', 'upload')
     .or(`last_synced_at.is.null,last_synced_at.lt.${due}`)
