@@ -48,10 +48,16 @@ let actionRows: Record<string, unknown>[] = ACTIONS;
 let taskRows: Record<string, unknown>[] = [];
 /** What get_action's own row adds to the first action. */
 let detail: Record<string, unknown> = {};
+/** A database without 00366: reading dismiss_reason fails with 42703. */
+let without00366 = false;
 
 function builder(table: string) {
+  let columns = '';
   const chain = {
-    select: () => chain,
+    select: (cols: string) => {
+      columns = cols;
+      return chain;
+    },
     eq: () => chain,
     is: () => chain,
     in: () => chain,
@@ -60,13 +66,16 @@ function builder(table: string) {
       return chain;
     },
     limit: () => chain,
-    maybeSingle: async () => ({
-      data:
-        table === 'actions'
-          ? { ...ACTIONS[0], brand_id: 'brand-1', payload: {}, ...detail }
-          : { id: 'brand-1' },
-      error: null,
-    }),
+    maybeSingle: async () =>
+      table === 'actions' && without00366 && columns.includes('dismiss_reason')
+        ? { data: null, error: { code: '42703', message: 'column does not exist' } }
+        : {
+            data:
+              table === 'actions'
+                ? { ...ACTIONS[0], brand_id: 'brand-1', payload: {}, ...detail }
+                : { id: 'brand-1' },
+            error: null,
+          },
     then: (resolve: (v: { data: unknown; error: null }) => void) =>
       resolve({
         data: table === 'actions' ? actionRows : table === 'action_tasks' ? taskRows : [],
@@ -248,7 +257,25 @@ describe('getActionFor', () => {
         net_of_control: null,
         dismiss_reason: 'wrong_data',
       });
+      // A reason left from an earlier dismissal is not read once it moved on.
+      detail = { status: 'in_progress', validation: null, dismiss_reason: 'wrong_data' };
+      expect(await getActionFor(auth, 'a1')).toMatchObject({ dismiss_reason: null });
     } finally {
+      detail = {};
+    }
+  });
+
+  it('reads the action on a database without 00366, with no reason given', async () => {
+    without00366 = true;
+    detail = { status: 'dismissed', validation: null };
+    try {
+      expect(await getActionFor(auth, 'a1')).toMatchObject({
+        id: 'a1',
+        status: 'dismissed',
+        dismiss_reason: null,
+      });
+    } finally {
+      without00366 = false;
       detail = {};
     }
   });

@@ -328,7 +328,9 @@ async function touchAction(
 
 /**
  * Sets an action's status. A dismissal keeps why, when the person said
- * (learning A5); any other status clears it, as a dismissal it no longer is.
+ * (learning A5); a reason left from an earlier dismissal is read only while
+ * the action is dismissed. Only a dismissal writes dismiss_reason (00366), so
+ * a database without it still starts and completes actions.
  */
 export async function updateActionStatus(
   brandId: string,
@@ -340,16 +342,22 @@ export async function updateActionStatus(
   const supabase = await createClient();
   const dismissReason =
     status === 'dismissed' && reason && ACTION_DISMISS_REASONS.includes(reason) ? reason : null;
-  const { error } = await supabase
-    .from('actions')
-    .update({
-      status,
-      completed_at: status === 'completed' ? new Date().toISOString() : null,
-      dismiss_reason: dismissReason,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('brand_id', brandId)
-    .eq('id', actionId);
+  const change = {
+    status,
+    completed_at: status === 'completed' ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+  const write = (values: typeof change & { dismiss_reason?: string | null }) =>
+    supabase.from('actions').update(values).eq('brand_id', brandId).eq('id', actionId);
+  let { error } = await write(
+    status === 'dismissed' ? { ...change, dismiss_reason: dismissReason } : change,
+  );
+  // A database without 00366 has no dismiss_reason (PGRST204 from PostgREST's
+  // schema cache, 42703 from Postgres): the dismissal goes through, its
+  // reason kept in the event below only.
+  if (status === 'dismissed' && (error?.code === 'PGRST204' || error?.code === '42703')) {
+    ({ error } = await write(change));
+  }
   if (error) throw new Error(error.message);
   await logEvent(supabase, actionId, 'status_changed', {
     to: status,

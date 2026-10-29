@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 
 /**
@@ -9,18 +9,30 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  */
 
 let actionRows: Record<string, unknown>[] = [];
+/** A database without 00366: reading dismiss_reason fails with 42703. */
+let without00366 = false;
+const selected: string[] = [];
 
 function builder(table: string) {
+  let columns = '';
   const chain = {
-    select: () => chain,
+    select: (cols: string) => {
+      columns = cols;
+      if (table === 'actions') selected.push(cols);
+      return chain;
+    },
     eq: () => chain,
     is: () => chain,
     in: () => chain,
     order: () => chain,
     limit: () => chain,
     maybeSingle: async () => ({ data: { id: 'brand-1' }, error: null }),
-    then: (resolve: (v: { data: unknown; error: null }) => void) =>
-      resolve({ data: table === 'actions' ? actionRows : [], error: null }),
+    then: (resolve: (v: { data: unknown; error: unknown }) => void) =>
+      resolve(
+        table === 'actions' && without00366 && columns.includes('dismiss_reason')
+          ? { data: null, error: { code: '42703', message: 'column does not exist' } }
+          : { data: table === 'actions' ? actionRows : [], error: null },
+      ),
   };
   return chain;
 }
@@ -140,5 +152,27 @@ describe('listActionHistoryFor results', () => {
     expect(await row()).toMatchObject({ status: 'dismissed', dismiss_reason: 'already_done' });
     actionRows = [{ ...action(null, null), status: 'dismissed', dismiss_reason: 'bored' }];
     expect((await row())?.dismiss_reason).toBeNull();
+  });
+
+  it('gives no reason to one that is no longer dismissed', async () => {
+    actionRows = [{ ...action('improved', null), dismiss_reason: 'not_now' }];
+    expect((await row())?.dismiss_reason).toBeNull();
+  });
+});
+
+describe('listActionHistoryFor without 00366', () => {
+  beforeEach(() => {
+    without00366 = true;
+    selected.length = 0;
+  });
+  afterEach(() => {
+    without00366 = false;
+  });
+
+  it('reads the rest, with no reason given', async () => {
+    actionRows = [{ ...action(null, null), status: 'dismissed' }];
+    expect(await row()).toMatchObject({ id: 'a1', status: 'dismissed', dismiss_reason: null });
+    expect(selected).toHaveLength(2);
+    expect(selected[1]).not.toContain('dismiss_reason');
   });
 });
