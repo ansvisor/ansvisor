@@ -17,12 +17,19 @@
 
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
+import { actionCenter } from './action-center.js';
 import { BRAND } from './brewline.js';
+import { content } from './content.js';
 import { core } from './core.js';
+import { reports } from './reports.js';
+import { suggestions } from './suggestions.js';
 import { demoWriter } from './write.js';
 
-/** Bump to rebuild every demo brand on its next visit. */
-export const DEMO_VERSION = 1;
+/**
+ * Bump to rebuild every demo brand on its next visit.
+ * 2: Action Center, Content, suggestions and reports (demo-workflows).
+ */
+export const DEMO_VERSION = 2;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -54,10 +61,11 @@ const WAIT_POLL_MS = 1000;
  *   brand's rows of a table without a brand_id); the rows not written again
  *   are deleted once it is built (on a first build, none are). Any other
  *   module has its `tables` cleared, in reverse, just before it is built.
- * Action Center, Content, reports, Site Audit, traffic and Product
- * Visibility follow as modules of their own.
+ *   (Content after the Action Center: a draft points at the action its
+ *   opportunity was sent as.) Site Audit, traffic and Product Visibility
+ *   follow as modules of their own.
  */
-export const DEMO_MODULES = [core];
+export const DEMO_MODULES = [core, suggestions, actionCenter, content, reports];
 
 const COLUMNS = 'id, demo_version, demo_built_at, demo_hidden_at';
 

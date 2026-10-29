@@ -22,38 +22,25 @@ export const SKIPPED = {
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
     "A person's sentiment corrections on Mentions: the demo's answers carry their own.",
+  action_candidates:
+    "The nightly engine's queue of findings not yet raised as actions: no page reads it, and the engine never runs for a demo brand.",
+  action_task_runs:
+    "The audit trail of the agent's tool runs on a task: no page reads it, and no agent runs for a demo brand.",
+  signal_runs:
+    "The nightly signal pass's run log (one row per tracking run it covered): no page reads it, and the pass never runs for a demo brand.",
+  content_author_defaults:
+    "A brand's default author points at one of the organization's own content_authors: the demo adds no people to the person's organization, so its drafts name no author.",
   chat_activity_log:
     "Chat's log of the changes it made (00402): Chat's precedence refuses every change on a demo brand, so none is logged.",
   chat_access_requests:
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
 };
 
-const WORKFLOWS = 'demo-workflows (PR 2): Action Center, Content, suggestions, reports';
 const SITE = 'demo-site (PR 3): Site Audit, AI traffic, integrations, Product Visibility';
 const CHAT = 'demo Chat, once Chat ships (the demo shows Chat as Soon until then)';
 
 /** Tables a later demo PR builds; listed so the gap stays visible until then. */
 export const PENDING = {
-  actions: WORKFLOWS,
-  action_candidates: WORKFLOWS,
-  action_task_runs: WORKFLOWS,
-  signals: WORKFLOWS,
-  signal_runs: WORKFLOWS,
-  kpi_definitions: WORKFLOWS,
-  getting_started: WORKFLOWS,
-  getting_started_steps: WORKFLOWS,
-  content_opportunities: WORKFLOWS,
-  content_drafts: WORKFLOWS,
-  content_plan_marks: WORKFLOWS,
-  content_author_defaults: WORKFLOWS,
-  content_shopping_checks: WORKFLOWS,
-  prompt_suggestions: WORKFLOWS,
-  prompt_improve_suggestions: WORKFLOWS,
-  prompt_clusters: WORKFLOWS,
-  prompt_cluster_scopes: WORKFLOWS,
-  topic_suggestions: WORKFLOWS,
-  reports: WORKFLOWS,
-
   site_audits: SITE,
   site_pages: SITE,
   site_trust: SITE,
@@ -75,6 +62,8 @@ export const PENDING = {
   page_opportunities: SITE,
   brand_cms_connections: SITE,
   content_draft_deliveries: SITE,
+  // A draft's shopping path check reads the products it links to: the catalog demo-site builds.
+  content_shopping_checks: SITE,
   catalog_sources: SITE,
   catalog_products: SITE,
   catalog_variants: SITE,

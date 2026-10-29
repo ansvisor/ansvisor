@@ -55,6 +55,14 @@ describe('the demo brand covers every brand-scoped table', () => {
     }
   });
 
+  it('builds in an order its rows can point back in', () => {
+    const names = DEMO_MODULES.map((module) => module.name);
+    expect(names[0]).toBe('core');
+    // A Content draft points at the action its opportunity was sent as.
+    expect(names.indexOf('actionCenter')).toBeGreaterThan(0);
+    expect(names.indexOf('actionCenter')).toBeLessThan(names.indexOf('content'));
+  });
+
   it('keeps what costs or mails out of the demo', () => {
     for (const table of ['cloro_pending_tasks', 'jobs', 'sent_pulses', 'ai_traffic_digests']) {
       expect(SKIPPED[table], table).toBeTruthy();
