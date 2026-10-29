@@ -67,6 +67,14 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+// The Topics tab has tests of its own; here, what the page asks of it.
+const topicsTab = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
+vi.mock('./_topics-tab', () => ({
+  TopicsTab: (props: Record<string, unknown>) => {
+    topicsTab.props.push(props);
+    return <div data-testid="topics-tab" />;
+  },
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (select: (state: unknown) => unknown) =>
     select({ activeBrandId: 'b1', brands: [{ id: 'b1', slug: 'acme', name: 'Acme' }] }),
@@ -216,10 +224,9 @@ describe('Tracked Prompts on a read-only workspace', () => {
 });
 
 describe('Add Prompt on a brand without topics', () => {
-  const addTopicHref = () =>
-    [...(dialog()?.querySelectorAll('a') ?? [])]
-      .find((a) => a.textContent === 'Add a topic')
-      ?.getAttribute('href');
+  // A button, not a link: the page reads its tab from the route only when it opens.
+  const addTopic = () =>
+    [...(dialog()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Add a topic');
   const typePrompt = async (text: string) => {
     const input = dialog()!.querySelector<HTMLInputElement>('input')!;
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
@@ -234,9 +241,26 @@ describe('Add Prompt on a brand without topics', () => {
     await render(false);
     await act(async () => button('Add prompt')!.click());
     expect(dialog()?.textContent).toContain('Add a topic first');
-    expect(addTopicHref()).toBe('/dashboard/prompts/topics?new=1');
+    expect(addTopic()).toBeDefined();
     expect(button('Save & close')).toBeUndefined();
     expect(actions.importPrompts).not.toHaveBeenCalled();
+  });
+
+  it('switches to the Topics tab in place with Add Topic asked for, closing the dialog', async () => {
+    topicActions.getTopics.mockResolvedValue([]);
+    topicsTab.props = [];
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    await act(async () => addTopic()!.click());
+    await act(async () => {});
+    expect(dialog()).toBeNull();
+    expect(window.location.pathname).toBe('/dashboard/prompts/topics');
+    expect(document.querySelector('[data-testid="topics-tab"]')).not.toBeNull();
+    expect(topicsTab.props.at(-1)).toMatchObject({ openAddTopic: true });
+
+    // Once the tab has opened it, the request is handed back.
+    await act(async () => (topicsTab.props.at(-1)!.onAddTopicOpened as () => void)());
+    expect(topicsTab.props.at(-1)).toMatchObject({ openAddTopic: false });
   });
 
   it('shows the form as before when the brand has a topic', async () => {
@@ -268,7 +292,7 @@ describe('Add Prompt on a brand without topics', () => {
     await act(async () => button('Save & close')!.click());
     expect(actions.importPrompts).toHaveBeenCalled();
     expect(dialog()?.textContent).toContain('Add a topic first');
-    expect(addTopicHref()).toBe('/dashboard/prompts/topics?new=1');
+    expect(addTopic()).toBeDefined();
   });
 });
 

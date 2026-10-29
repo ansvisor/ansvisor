@@ -60,6 +60,8 @@ type QueryFanoutTabProps = {
   range: PromptRange | null;
   rangeLabel: string;
   onTracked?: () => void | Promise<void>;
+  /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
+  onAddTopic?: () => void;
 };
 
 /**
@@ -90,7 +92,13 @@ function userErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryFanoutTabProps) {
+export function QueryFanoutTab({
+  brandId,
+  range,
+  rangeLabel,
+  onTracked,
+  onAddTopic,
+}: QueryFanoutTabProps) {
   const [data, setData] = useState<QueryFanoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -105,7 +113,7 @@ export function QueryFanoutTab({ brandId, range, rangeLabel, onTracked }: QueryF
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   // A brand with no topic yet: Track asks for one first.
-  const topicFirst = useTopicFirstDialog();
+  const topicFirst = useTopicFirstDialog({ onAddTopic });
 
   // Mirror of `intents` for the async classification chain (avoids stale
   // closures), plus a run counter so a reload/brand switch/unmount cancels

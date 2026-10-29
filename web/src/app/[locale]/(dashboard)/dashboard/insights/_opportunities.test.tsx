@@ -192,19 +192,60 @@ describe('Opportunities on a read-only workspace (plan not active)', () => {
     expect(trackSuggestions).toHaveBeenCalledWith(['s1', 's2']);
     expect(openUpgrade).not.toHaveBeenCalled();
   });
-  it('asks for a topic first when the brand has none, with a way to the Topics tab', async () => {
+});
+
+/**
+ * Track on a brand without topics: prompts are grouped under topics, so it
+ * asks for one first, with a way to the Topics tab, and tracks nothing.
+ */
+describe('Opportunities on a brand without topics', () => {
+  const render = () =>
+    act(() =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <Opportunities
+            brandId="b1"
+            suggestions={[suggestion('s1', 'Espresso', 800), suggestion('s2', 'Espresso', 400)]}
+            trackedTopicIds={[]}
+            topics={null}
+            entities={null}
+            slotsLeft={null}
+            contentUsage={null}
+            onTracked={() => {}}
+          />
+        </NextIntlClientProvider>,
+      ),
+    );
+  const button = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    );
+  const addTopicLink = () =>
+    [...document.querySelectorAll('a')].find((a) => a.textContent === 'Add a topic');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => null),
+    );
     vi.mocked(trackSuggestions).mockResolvedValue({
       trackedIds: [],
       skippedIds: [],
       error: 'Add a topic first: prompts are grouped under topics.',
       code: 'no_topics',
     });
-    render(false);
-    await act(async () => button('Track 2').click());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks for a topic first, with a way to the Topics tab, and keeps the topic on the card', async () => {
+    render();
+    await act(async () => button('Track 2')!.click());
     expect(document.body.textContent).toContain('Add a topic first');
-    const link = [...document.querySelectorAll('a')].find((a) => a.textContent === 'Add a topic');
-    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
-    // Nothing was tracked: the topic stays on the card.
+    expect(addTopicLink()?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
     expect(button('Track 2')).toBeDefined();
   });
 });

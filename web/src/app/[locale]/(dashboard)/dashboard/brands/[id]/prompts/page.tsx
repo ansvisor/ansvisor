@@ -103,8 +103,10 @@ export default function PromptsPage() {
   // the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
-  // Prompts go under topics: with none, adding a prompt asks for a topic first.
-  const topicFirst = useTopicFirstDialog();
+  // Prompts go under topics: with none, adding a prompt asks for a topic first,
+  // on this brand's own Topics page (the active brand may be another).
+  const addTopicHref = `/dashboard/brands/${brandId}/topics#add-topic`;
+  const topicFirst = useTopicFirstDialog({ href: addTopicHref });
   const allowedScraperIds = useMemo(() => {
     const allowed = PLANS[planId].limits.allowedScrapers;
     const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
@@ -689,7 +691,7 @@ export default function PromptsPage() {
                     ) : (
                       <div className="space-y-2">
                         <TopicFirstNotice />
-                        <AddTopicLink />
+                        <AddTopicLink href={addTopicHref} />
                       </div>
                     )}
                   </div>
@@ -881,7 +883,7 @@ export default function PromptsPage() {
                 ) : (
                   <div className="space-y-2">
                     <TopicFirstNotice />
-                    <AddTopicLink />
+                    <AddTopicLink href={addTopicHref} />
                   </div>
                 )}
                 <Button

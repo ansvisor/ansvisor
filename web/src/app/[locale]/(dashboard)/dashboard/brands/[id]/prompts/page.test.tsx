@@ -251,9 +251,11 @@ describe('Manage prompts on a brand without topics', () => {
     expect(container.textContent).not.toContain('Add topics in brand settings');
     const links = addTopicLinks();
     expect(links).toHaveLength(2);
-    expect(links.every((a) => a.getAttribute('href') === '/dashboard/prompts/topics?new=1')).toBe(
-      true,
-    );
+    // This brand's own topics: the active brand may be another one.
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard/brands/brand-id/topics#add-topic',
+      '/dashboard/brands/brand-id/topics#add-topic',
+    ]);
   });
 
   it('asks for a topic first when Add Prompt is pressed, and adds nothing', async () => {
@@ -267,7 +269,13 @@ describe('Manage prompts on a brand without topics', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await act(async () => button('Add Prompt').click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Add a topic first');
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Add a topic first');
+    expect(
+      [...(dialog?.querySelectorAll('a') ?? [])]
+        .find((a) => a.textContent === 'Add a topic')
+        ?.getAttribute('href'),
+    ).toBe('/dashboard/brands/brand-id/topics#add-topic');
     expect(actions.addPromptToSet).not.toHaveBeenCalled();
     expect(actions.savePromptSet).not.toHaveBeenCalled();
   });

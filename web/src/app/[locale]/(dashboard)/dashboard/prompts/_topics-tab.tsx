@@ -264,6 +264,8 @@ export function TopicsTab({
   customFrom,
   customTo,
   onLoaded,
+  openAddTopic: addTopicRequested = false,
+  onAddTopicOpened,
 }: {
   /**
    * The Prompts page's place for a tab's buttons, beside the tabs: Add Topic,
@@ -278,6 +280,13 @@ export function TopicsTab({
   customTo: string;
   /** Called once the first read has finished, so the page can load the rest. */
   onLoaded?: () => void;
+  /**
+   * The page asks for Add Topic: "Add a topic" in Add prompt, Suggestions or
+   * Query Fan-out on a brand without topics switched to this tab. It opens
+   * once, and `onAddTopicOpened` hands the request back.
+   */
+  openAddTopic?: boolean;
+  onAddTopicOpened?: () => void;
 }) {
   const t = useTranslations('topics');
   const common = useTranslations('common');
@@ -375,6 +384,14 @@ export function TopicsTab({
     if (canManage) openAddTopic();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one read of the URL after mount
   }, []);
+
+  // The same asked for by the page, from one of its own tabs.
+  useEffect(() => {
+    if (!addTopicRequested) return;
+    onAddTopicOpened?.();
+    if (canManage) openAddTopic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per request
+  }, [addTopicRequested]);
 
   useEffect(() => {
     loadData();

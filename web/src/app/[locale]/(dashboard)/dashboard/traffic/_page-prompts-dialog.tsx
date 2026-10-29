@@ -81,6 +81,8 @@ export function PagePromptsDialog({
 
   useEffect(() => {
     if (!page) return;
+    // Each open asks again: a topic may have been added since a Track found none.
+    setNoTopicsPage(null);
     let cancelled = false;
     Promise.all([
       suggestPagePrompts(brandId, dateWindow, page).catch(() => ({ error: '' })),

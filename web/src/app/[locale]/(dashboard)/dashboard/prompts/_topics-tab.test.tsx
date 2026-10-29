@@ -68,7 +68,7 @@ afterEach(() => {
   slot.remove();
 });
 
-async function render() {
+async function render(addTopic: { openAddTopic?: boolean; onAddTopicOpened?: () => void } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -81,6 +81,7 @@ async function render() {
             rangePreset="7d"
             customFrom=""
             customTo=""
+            {...addTopic}
           />
         </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
@@ -169,6 +170,35 @@ describe('Add Topic opened by a link (?new=1)', () => {
     await render();
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding topics needs a plan');
     expect(dialog()).toBeNull();
+  });
+});
+
+/**
+ * The Prompts page asks for Add Topic from one of its own tabs (Add prompt,
+ * Suggestions, Query Fan-out on a brand without topics): it opens once, and
+ * the request is handed back.
+ */
+describe('Add Topic asked for by the Prompts page', () => {
+  const dialog = () => document.querySelector('[role="dialog"]');
+
+  it('opens the Add Topic form and hands the request back', async () => {
+    const onAddTopicOpened = vi.fn();
+    await render({ openAddTopic: true, onAddTopicOpened });
+    expect(dialog()?.textContent).toContain('Add Topic');
+    expect(onAddTopicOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens nothing unless asked', async () => {
+    await render({ openAddTopic: false });
+    expect(dialog()).toBeNull();
+  });
+
+  it("hands the request back without opening it for members who can't add topics", async () => {
+    canManage = false;
+    const onAddTopicOpened = vi.fn();
+    await render({ openAddTopic: true, onAddTopicOpened });
+    expect(dialog()).toBeNull();
+    expect(onAddTopicOpened).toHaveBeenCalledTimes(1);
   });
 });
 

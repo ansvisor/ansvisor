@@ -273,9 +273,40 @@ describe('refreshPromptSuggestions', () => {
     expect(await refreshPromptSuggestions('b1')).toEqual({ ok: false, failure: 'no_topics' });
   });
 
-  it('still throws any other failure, as before', async () => {
+  it('returns every other failure as a value too, never throwing', async () => {
+    // The month's AI budget: plan-guard's 429 plan_limit.
+    fetchMock.mockResolvedValueOnce(json({ error: 'plan_limit', message: 'Budget used' }, 429));
+    expect(await refreshPromptSuggestions('b1')).toEqual({
+      ok: false,
+      failure: 'limit',
+      retryable: false,
+    });
+    // The demo brand, or a read-only workspace: the upgrade dialog.
+    fetchMock.mockResolvedValueOnce(json({ error: 'plan_limit', code: 'demo_brand' }, 402));
+    expect(await refreshPromptSuggestions('b1')).toMatchObject({ failure: 'subscription' });
+    // A role refusal, and an error of the API's own.
+    fetchMock.mockResolvedValueOnce(
+      json({ error: 'Only admins and managers can generate prompt suggestions.' }, 403),
+    );
+    expect(await refreshPromptSuggestions('b1')).toMatchObject({ failure: 'failed' });
     fetchMock.mockResolvedValueOnce(json({ error: 'Failed to generate suggestions' }, 500));
-    await expect(refreshPromptSuggestions('b1')).rejects.toThrow('Failed to generate suggestions');
+    expect(await refreshPromptSuggestions('b1')).toMatchObject({
+      failure: 'failed',
+      retryable: false,
+    });
+    // The proxy while the API restarts, and no answer at all: worth trying again.
+    fetchMock.mockResolvedValueOnce(new Response('<html>Bad Gateway</html>', { status: 502 }));
+    expect(await refreshPromptSuggestions('b1')).toEqual({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+    expect(await refreshPromptSuggestions('b1')).toEqual({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
   });
 });
 

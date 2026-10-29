@@ -660,6 +660,7 @@ function AddPromptDialog({
   open,
   onClose,
   onAdded,
+  onAddTopic,
 }: {
   brandId: string;
   shoppingEnabled: boolean;
@@ -672,6 +673,8 @@ function AddPromptDialog({
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
+  /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
+  onAddTopic: () => void;
 }) {
   const limitReached =
     !!locationQuota &&
@@ -861,7 +864,7 @@ function AddPromptDialog({
               <Button type="button" variant="outline" onClick={handleClose}>
                 {tCommon('cancel')}
               </Button>
-              <AddTopicLink />
+              <AddTopicLink onAddTopic={onAddTopic} />
             </DialogFooter>
           </>
         ) : (
@@ -1314,6 +1317,8 @@ export default function PromptsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<VolumeQuota | null>(null);
   const [addPromptOpen, setAddPromptOpen] = useState(false);
+  // "Add a topic" was asked for on a tab: the Topics tab opens Add Topic once it shows.
+  const [addTopicPending, setAddTopicPending] = useState(false);
   // Where a tab's own buttons go: beside the tabs, as the Prompts tab's do.
   const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(null);
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
@@ -1495,6 +1500,19 @@ export default function PromptsPage() {
     },
     [tab, rangePreset, customFrom, customTo, regionFilter, writeUrl],
   );
+
+  /**
+   * "Add a topic" from Add prompt, Suggestions or Query Fan-out on a brand
+   * without topics: the Topics tab, with Add Topic open, in place. A link to
+   * /dashboard/prompts/topics?new=1 would change the address alone: the page
+   * reads its tab from the route only when it opens. Back on the tab, the
+   * flow reads the topics again.
+   */
+  const addTopicInPlace = useCallback(() => {
+    setAddPromptOpen(false);
+    setAddTopicPending(true);
+    showSection('topics', view);
+  }, [showSection, view]);
 
   // Deep link from the Insights Recommendations row (#459): the target card
   // only exists once the Insights tab's volume data has rendered, so a bare
@@ -2085,6 +2103,7 @@ export default function PromptsPage() {
                 <SuggestionsTab
                   brandId={activeBrandId}
                   onAccepted={reloadAfterChange}
+                  onAddTopic={addTopicInPlace}
                   planId={locationQuota?.planId}
                   limitActions={
                     locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
@@ -2181,6 +2200,8 @@ export default function PromptsPage() {
               customFrom={customFrom}
               customTo={customTo}
               onLoaded={() => setPromptDataWanted(true)}
+              openAddTopic={addTopicPending}
+              onAddTopicOpened={() => setAddTopicPending(false)}
             />
           )}
         </TabsContent>
@@ -2193,6 +2214,7 @@ export default function PromptsPage() {
               range={range}
               rangeLabel={rangeLabel}
               onTracked={reloadAfterChange}
+              onAddTopic={addTopicInPlace}
             />
           )}
         </TabsContent>
@@ -2573,6 +2595,7 @@ export default function PromptsPage() {
           open={addPromptOpen}
           onClose={() => setAddPromptOpen(false)}
           onAdded={reloadAfterChange}
+          onAddTopic={addTopicInPlace}
         />
       )}
 

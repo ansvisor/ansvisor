@@ -27,6 +27,8 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// Adding a topic is for admins and managers.
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>

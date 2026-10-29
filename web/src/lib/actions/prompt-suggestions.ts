@@ -9,7 +9,13 @@ import { API_BASE_URL } from '@/config/api';
 // live in a plain module (every runtime export here must be a server action).
 import type { PromptSuggestionSource, SuggestionSourceData } from '@/lib/prompt-suggestion-source';
 import { assertWritable } from '@/lib/subscription-guard';
-import { NO_ANSWER, responseFailure, type ReadFailure } from '@/lib/api-failure';
+import {
+  NO_ANSWER,
+  apiFailure,
+  isTransientStatus,
+  responseFailure,
+  type ReadFailure,
+} from '@/lib/api-failure';
 import { NO_TOPICS, NO_TOPICS_MESSAGE } from '@/lib/topics-required';
 
 const AEO_SERVER_URL = API_BASE_URL;
@@ -115,28 +121,46 @@ export async function getPromptSuggestions(brandId: string): Promise<PromptSugge
 
 export type RefreshPromptSuggestionsResult =
   | { ok: true; suggestions: PromptSuggestion[] }
-  | { ok: false; failure: typeof NO_TOPICS };
+  | { ok: false; failure: typeof NO_TOPICS }
+  | ReadFailure;
 
 /**
- * A fresh batch of suggestions. A brand with no topic yet gets `no_topics`
- * as a value, before anything is generated: suggestions are prompts, which
- * are grouped under topics, and production would hide a thrown message.
+ * A fresh batch of suggestions. Every failure comes back as a value, as
+ * getPromptSuggestions' do (#1777): production hides a thrown message, so a
+ * used-up AI budget, a read-only workspace or the demo brand, a role refusal
+ * or an outage read as React's #441. A brand with no topic yet gets
+ * `no_topics`, before anything is generated: suggestions are prompts, which
+ * are grouped under topics.
  */
 export async function refreshPromptSuggestions(
   brandId: string,
 ): Promise<RefreshPromptSuggestionsResult> {
-  const session = await getSession();
-  const res = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${brandId}/refresh`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    if (body.code === NO_TOPICS) return { ok: false, failure: NO_TOPICS };
-    throw new Error(body.error || `Server error: ${res.status}`);
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, failure: 'session', retryable: false };
+  try {
+    const res = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${brandId}/refresh`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) {
+      // Read once: no_topics is this route's own, the rest are the API's shared failures.
+      const body = await res.json().catch(() => ({}));
+      if (body.code === NO_TOPICS) return { ok: false, failure: NO_TOPICS };
+      return {
+        ok: false,
+        failure: apiFailure(res.status, body),
+        retryable: isTransientStatus(res.status),
+      };
+    }
+    const data = (await res.json()) as { suggestions: SuggestionRow[] };
+    return { ok: true, suggestions: data.suggestions.map(mapRow) };
+  } catch {
+    // No answer, or one cut off: a dropped connection.
+    return NO_ANSWER;
   }
-  const data = (await res.json()) as { suggestions: SuggestionRow[] };
-  return { ok: true, suggestions: data.suggestions.map(mapRow) };
 }
 
 export async function dismissSuggestion(suggestionId: string): Promise<{ success: boolean }> {
@@ -364,7 +388,8 @@ export async function trackPagePrompts(
   const { data: topicRows, error: topicsError } = await supabase
     .from('topics')
     .select('name')
-    .eq('brand_id', brandId);
+    .eq('brand_id', brandId)
+    .eq('is_active', true);
   // A failed read isn't a brand without topics: the adds below say what went wrong.
   if (!topicsError && !topicRows?.length) {
     return { promptIds: [], error: NO_TOPICS_MESSAGE, code: NO_TOPICS };

@@ -67,7 +67,8 @@ import type { SuggestionSourceStates } from '@/lib/actions/integrations';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { readWithOneRetry, type ReadFailure } from '@/lib/api-failure';
-import { isNoTopics } from '@/lib/topics-required';
+import { NO_TOPICS, isNoTopics } from '@/lib/topics-required';
+import { useFailureToast } from '@/hooks/use-failure-toast';
 import type { PromptAddFailureCode } from '@/lib/actions/prompt';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { SuggestionsLoadError } from './_suggestions-load-error';
@@ -259,6 +260,8 @@ function isMeasuredSuggestion(s: PromptSuggestion): boolean {
 interface Props {
   brandId: string;
   onAccepted?: () => void;
+  /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
+  onAddTopic?: () => void;
   /** Connected sources and whether their data has landed; null when unknown. */
   sourceStates: SuggestionSourceStates | null;
   /** The organization's plan, for the prompt limit note's wording; absent while unknown. */
@@ -314,6 +317,7 @@ function sourceNotice(
 export function SuggestionsCard({
   brandId,
   onAccepted,
+  onAddTopic,
   sourceStates,
   planId,
   limitActions,
@@ -349,7 +353,9 @@ export function SuggestionsCard({
   const [limitNote, setLimitNote] = useState<{ added: number; left: number } | null>(null);
   const [, startTransition] = useTransition();
   // A brand with no topic yet: generating or adding asks for one first.
-  const topicFirst = useTopicFirstDialog();
+  const topicFirst = useTopicFirstDialog({ onAddTopic });
+  // A failed generation in plain words, with the one thing to do (or the upgrade dialog).
+  const failureToast = useFailureToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -387,15 +393,17 @@ export function SuggestionsCard({
     try {
       const fresh = await refreshPromptSuggestions(brandId);
       if (!fresh.ok) {
-        topicFirst.show();
+        if (fresh.failure === NO_TOPICS) topicFirst.show();
+        else failureToast(fresh.failure);
         return;
       }
       setSuggestions(fresh.suggestions);
       setLoaded(true);
       setError(null);
       toast.success('Suggestions refreshed');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Refresh failed');
+    } catch {
+      // The request to Next itself failed: production hides why.
+      failureToast('failed');
     } finally {
       setRefreshing(false);
     }

@@ -26,6 +26,8 @@ vi.mock('@/lib/actions/prompt-demand-signals', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// Adding a topic is for admins and managers.
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
 
 const { DemandLevelValue, DemandSection } = await import('./demand-card');
 

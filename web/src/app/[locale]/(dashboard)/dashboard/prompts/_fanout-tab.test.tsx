@@ -24,6 +24,8 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// Track is for admins and managers.
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
 
 const { QueryFanoutTab } = await import('./_fanout-tab');
 const { toast } = await import('sonner');
@@ -60,6 +62,7 @@ const data: QueryFanoutData = {
 let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
+const onAddTopic = vi.fn();
 
 async function render(isLocked: boolean) {
   await act(async () => {
@@ -68,7 +71,12 @@ async function render(isLocked: boolean) {
         <UpgradeDialogContext.Provider
           value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
         >
-          <QueryFanoutTab brandId="b1" range={null} rangeLabel="last 7 days" />
+          <QueryFanoutTab
+            brandId="b1"
+            range={null}
+            rangeLabel="last 7 days"
+            onAddTopic={onAddTopic}
+          />
         </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
@@ -116,7 +124,7 @@ describe('Track on the Query Fan-out tab', () => {
     expect(actions.classifyFanoutIntents).toHaveBeenCalledWith(['best coffee beans']);
   });
 
-  it('asks for a topic first on a brand without one, with a way to the Topics tab', async () => {
+  it('asks for a topic first on a brand without one, and opens Add Topic in place', async () => {
     actions.trackFanoutQuery.mockResolvedValue({
       error: 'Add a topic first: prompts are grouped under topics.',
       code: 'no_topics',
@@ -124,9 +132,14 @@ describe('Track on the Query Fan-out tab', () => {
     await render(false);
     await act(async () => track().click());
     expect(document.body.textContent).toContain('Add a topic first');
-    const link = [...document.querySelectorAll('a')].find((a) => a.textContent === 'Add a topic');
-    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/topics?new=1');
     expect(toast.error).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+    // The page's Topics tab, switched to in place: a button, not a link.
+    const addTopic = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Add a topic',
+    )!;
+    await act(async () => addTopic.click());
+    expect(onAddTopic).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toContain('Add a topic first');
   });
 });

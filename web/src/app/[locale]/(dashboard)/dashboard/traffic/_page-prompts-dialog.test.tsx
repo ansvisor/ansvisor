@@ -34,6 +34,8 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 vi.mock('sonner', () => ({ toast }));
+// Adding a topic is for admins and managers.
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
 
 const { PagePromptsDialog } = await import('./_page-prompts-dialog');
 
@@ -85,7 +87,10 @@ afterEach(() => {
   container.remove();
 });
 
-async function render({ domain = 'acme-coffee.example.com' }: { domain?: string } = {}) {
+async function render({
+  domain = 'acme-coffee.example.com',
+  page = '/gifts',
+}: { domain?: string; page?: string | null } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -93,7 +98,7 @@ async function render({ domain = 'acme-coffee.example.com' }: { domain?: string 
           brandId={BRAND}
           dateWindow={WEEK}
           domain={domain}
-          page="/gifts"
+          page={page}
           onClose={onClose}
           onTracked={onTracked}
         />
@@ -211,6 +216,22 @@ describe('PagePromptsDialog', () => {
     expect(text()).toContain('Add a topic first');
     expect(toast.error).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks again on the next open: a topic may have been added since', async () => {
+    trackPagePrompts.mockResolvedValue({
+      promptIds: [],
+      error: 'Add a topic first: prompts are grouped under topics.',
+      code: 'no_topics',
+    });
+    await render();
+    await act(async () => trackButton().click());
+    expect(text()).toContain('Add a topic first');
+
+    await render({ page: null });
+    await render();
+    expect(text()).not.toContain('Add a topic first');
+    expect(trackButton().textContent).toBe('Track 2 prompts');
   });
 
   it('says when every prompt the page answers is tracked already', async () => {
