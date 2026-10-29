@@ -65,6 +65,9 @@ export function BillingSection() {
   // For a new subscription's Checkout, once the old one has ended.
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Plan changes made on this page: each has the AI usage card read again,
+  // since a trial bought starts a new period with its usage at 0.
+  const [planChanges, setPlanChanges] = useState(0);
 
   useEffect(() => {
     async function loadSubscription() {
@@ -179,7 +182,10 @@ export function BillingSection() {
       <CardContent>
         <PlanSwitcher
           subscription={subscription}
-          onUpdate={(data) => setSubscription({ ...subscription, ...data })}
+          onUpdate={(data) => {
+            setSubscription({ ...subscription, ...data });
+            setPlanChanges((n) => n + 1);
+          }}
           organizationId={organizationId}
           trialOffered={noPlanYet}
         />
@@ -234,7 +240,7 @@ export function BillingSection() {
         </CardContent>
       </Card>
 
-      <AiUsageCard />
+      <AiUsageCard key={planChanges} />
 
       {/* Plan Switcher */}
       {!ended && planCard}
