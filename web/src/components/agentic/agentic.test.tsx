@@ -39,6 +39,9 @@ function everyPiece(): ReactElement {
       {AGENT_AVATAR_STATES.map((state) => (
         <AgentAvatar key={state} state={state} />
       ))}
+      {AGENT_AVATAR_STATES.map((state) => (
+        <AgentAvatar key={`muted-${state}`} state={state} tone="muted" />
+      ))}
       {STATUS_PILL_STATES.map((state) => (
         <StatusPill key={state} state={state} />
       ))}
@@ -66,11 +69,15 @@ describe('AgentAvatar', () => {
     ['working', 'Agent · working'],
     ['waiting', 'Agent · needs you'],
     ['done', 'Agent · done'],
-  ] as const)('says %s to a screen reader', (state, label) => {
-    const el = root(<AgentAvatar state={state} />);
-    expect(el.getAttribute('role')).toBe('img');
-    expect(el.getAttribute('aria-label')).toBe(label);
-    expect(el.dataset.state).toBe(state);
+    ['failed', 'Agent · failed'],
+  ] as const)('says %s to a screen reader, in Chat and in the Agents list', (state, label) => {
+    for (const tone of ['live', 'muted'] as const) {
+      const el = root(<AgentAvatar state={state} tone={tone} />);
+      expect(el.getAttribute('role')).toBe('img');
+      expect(el.getAttribute('aria-label')).toBe(label);
+      expect(el.dataset.state).toBe(state);
+      expect(el.dataset.tone).toBe(tone);
+    }
   });
 
   it('is hidden from screen readers when the words beside it say the state', () => {
@@ -105,6 +112,37 @@ describe('AgentAvatar', () => {
     expect(classOf(done)).toContain('bg-green-100');
     expect(classOf(done)).toContain('dark:bg-green-950');
     expect(classOf(done)).not.toContain('bg-foreground');
+  });
+
+  it('turns soft red when a step failed, still blinking as the mockup does', () => {
+    const el = root(<AgentAvatar state="failed" />);
+    expect(classOf(el)).toContain('bg-red-100');
+    expect(classOf(el)).toContain('text-red-700');
+    expect(classOf(el)).toContain('dark:bg-red-950');
+    expect(classOf(el)).not.toContain('bg-foreground');
+    expect(el.querySelector('g[class*="animate-agent-blink"]')).not.toBeNull();
+    expect(el.querySelector('[class*="animate-agent-wait"]')).toBeNull();
+  });
+
+  it('sits still in the Agents list: grey when idle, a fixed amber ring when waiting', () => {
+    const idle = root(<AgentAvatar state="idle" tone="muted" />);
+    expect(classOf(idle)).toContain('bg-foreground/10');
+    expect(classOf(idle)).not.toContain('bg-foreground ');
+    const waiting = root(<AgentAvatar state="waiting" tone="muted" />);
+    expect(classOf(waiting)).toContain('ring-offset-amber-100');
+    expect(classOf(waiting)).toContain('ring-amber-200');
+    expect(classOf(waiting)).toContain('bg-foreground');
+    expect(waiting.querySelector('[class*="animate-agent-wait"]')).toBeNull();
+    for (const state of AGENT_AVATAR_STATES) {
+      const el = root(<AgentAvatar state={state} tone="muted" />);
+      expect(el.outerHTML).not.toContain('animate-');
+      // No spark: the governance mockup's robot has none.
+      expect(el.querySelector('[class*="agent-spark"]')).toBeNull();
+    }
+    // In Chat, idle stays the dark tile.
+    const chatIdle = root(<AgentAvatar state="idle" />);
+    expect(classOf(chatIdle)).toContain('bg-foreground text-background');
+    expect(chatIdle.querySelector('[class*="agent-spark"]')).not.toBeNull();
   });
 
   it.each([
@@ -286,9 +324,11 @@ describe('every piece', () => {
     for (const el of [all, ...all.querySelectorAll('*')]) {
       const cls = classOf(el).split(/\s+/);
       for (const hue of ['green', 'amber', 'red']) {
-        const light = cls.filter((c) => new RegExp(`^(bg|text|border|ring)-${hue}-`).test(c));
+        const light = cls.filter((c) =>
+          new RegExp(`^(bg|text|border|ring|ring-offset)-${hue}-`).test(c),
+        );
         for (const c of light) {
-          const kind = c.split('-')[0];
+          const kind = c.slice(0, c.indexOf(`-${hue}-`));
           expect(cls.some((d) => d.startsWith(`dark:${kind}-${hue}-`))).toBe(true);
         }
       }

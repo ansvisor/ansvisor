@@ -2988,7 +2988,8 @@
       "idle": "Agent · idle",
       "working": "Agent · working",
       "waiting": "Agent · needs you",
-      "done": "Agent · done"
+      "done": "Agent · done",
+      "failed": "Agent · failed"
     },
     "status": {
       "working": "Working",
@@ -3027,7 +3028,6 @@
       "paused": "Paused",
       "progress": "Progress",
       "legend": {
-        "open": "What the colors mean",
         "title": "What the dots mean",
         "running": "The agent is working. The thin line shows progress.",
         "needsYou": "Waiting for your OK or click. Nothing moves until you reply.",
@@ -3049,6 +3049,7 @@
       "motion": "With Reduce motion on, nothing moves.",
       "sections": {
         "avatar": "Agent avatar",
+        "avatarList": "Agent avatar in the Agents list",
         "statusPill": "Status pill",
         "approvalPill": "Approval pills",
         "steps": "Step states",
@@ -3061,8 +3062,10 @@
         "idle": "Idle",
         "working": "Working",
         "waiting": "Needs you",
-        "done": "Done"
+        "done": "Done",
+        "failed": "Failed"
       },
+      "avatarListNote": "Still, at 30 px: grey when idle, paused or stopped",
       "avatarSizes": "30, 26 and 22 px",
       "size": "{size} px",
       "progress": "Progress line",

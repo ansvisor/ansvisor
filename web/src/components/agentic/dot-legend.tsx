@@ -19,8 +19,8 @@ export function DotLegend({ className }: { className?: string }) {
     <Popover>
       <PopoverTrigger
         data-action="chatMenu.dotLegend"
-        aria-label={t('legend.open')}
-        title={t('legend.open')}
+        aria-label={t('legend.title')}
+        title={t('legend.title')}
         className={cn(
           'inline-flex size-4 shrink-0 items-center justify-center rounded-full border border-foreground/20 text-[10px] leading-none text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
           className,

@@ -41,8 +41,9 @@ describe('DotLegend', () => {
   it('is a labelled button with its CHAT-23 id', () => {
     expect(container.querySelectorAll('button')).toHaveLength(1);
     expect(trigger().dataset.action).toBe('chatMenu.dotLegend');
-    expect(trigger().getAttribute('aria-label')).toBe('What the colors mean');
-    expect(trigger().title).toBe('What the colors mean');
+    // The button says what it opens, in the popover's own words.
+    expect(trigger().getAttribute('aria-label')).toBe('What the dots mean');
+    expect(trigger().title).toBe('What the dots mean');
     expect(popup()).toBeNull();
   });
 

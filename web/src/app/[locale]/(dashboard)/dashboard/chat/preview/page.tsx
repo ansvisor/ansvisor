@@ -77,6 +77,14 @@ function ChatPiecesPreview() {
         ))}
       </Section>
 
+      <Section title={t('sections.avatarList')} note={t('avatarListNote')}>
+        {AGENT_AVATAR_STATES.map((state) => (
+          <Sample key={state} caption={t(`avatarStates.${state}`)}>
+            <AgentAvatar state={state} tone="muted" />
+          </Sample>
+        ))}
+      </Section>
+
       <Section title={t('sections.statusPill')}>
         {STATUS_PILL_STATES.map((state) => (
           <Sample key={state}>

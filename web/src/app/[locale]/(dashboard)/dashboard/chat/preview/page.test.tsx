@@ -90,11 +90,15 @@ describe('the Chat pieces preview', () => {
   it('shows every piece in every state', async () => {
     await render();
     expect(notFound).not.toHaveBeenCalled();
-    // 4 states in 3 sizes.
-    expect(slots('agent-avatar')).toHaveLength(12);
-    expect(
-      new Set([...slots('agent-avatar')].map((el) => (el as HTMLElement).dataset.state)),
-    ).toEqual(new Set(['idle', 'working', 'waiting', 'done']));
+    // 5 states in 3 sizes, and the 5 still ones of the Agents list.
+    const avatars = [...slots('agent-avatar')] as HTMLElement[];
+    const states = new Set(['idle', 'working', 'waiting', 'done', 'failed']);
+    const live = avatars.filter((el) => el.dataset.tone === 'live');
+    const muted = avatars.filter((el) => el.dataset.tone === 'muted');
+    expect(live).toHaveLength(15);
+    expect(new Set(live.map((el) => el.dataset.state))).toEqual(states);
+    expect(muted).toHaveLength(5);
+    expect(new Set(muted.map((el) => el.dataset.state))).toEqual(states);
     expect(slots('status-pill')).toHaveLength(9);
     expect(slots('approval-pill')).toHaveLength(5);
     expect(slots('step-marker')).toHaveLength(5);
