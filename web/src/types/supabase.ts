@@ -1370,6 +1370,85 @@ export type Database = {
           },
         ]
       }
+      chat_access_requests: {
+        Row: {
+          asked: string
+          asked_hash: string
+          brand_id: string | null
+          conversation_id: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          drafted_change: Json | null
+          id: string
+          organization_id: string
+          requested_on: string
+          requester_id: string
+          rule_detail: string
+          rule_kind: string
+          status: string
+          tool_key: string | null
+        }
+        Insert: {
+          asked: string
+          asked_hash: string
+          brand_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          drafted_change?: Json | null
+          id?: string
+          organization_id: string
+          requested_on?: string
+          requester_id: string
+          rule_detail?: string
+          rule_kind: string
+          status?: string
+          tool_key?: string | null
+        }
+        Update: {
+          asked?: string
+          asked_hash?: string
+          brand_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          drafted_change?: Json | null
+          id?: string
+          organization_id?: string
+          requested_on?: string
+          requester_id?: string
+          rule_detail?: string
+          rule_kind?: string
+          status?: string
+          tool_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_access_requests_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_access_requests_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_access_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_activity_log: {
         Row: {
           approval_kind: string | null
