@@ -39,6 +39,7 @@ const auth: McpAuthContext = {
   email: 'ada@acme.example',
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  role: 'admin',
 };
 
 describe('getMeFor', () => {
