@@ -1,7 +1,7 @@
 ---
 title: Write a page in the Content Editor
 route: /dashboard/content/editor
-keywords: [content editor, draft, placeholders, mark ready, mark published, history, export]
+keywords: [content editor, draft, placeholders, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
 updated: 2026-10-29
@@ -11,11 +11,13 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/content-editor.mdx]
 ---
-The Content Editor is where pages are written. It opens from the Library, from the Plan, or when you start a page in New content. **Editor** in the sidebar takes you back to the draft you last opened for this brand in this browser. The page saves as you write.
+The Content Editor is where pages are written. It opens from the Library, from the Plan, or when you start a page in New content. **Editor** in the sidebar takes you back to the draft you last opened for this brand in this browser; with none, or if that draft was deleted or archived, it opens New content. The page saves as you write.
 
 ## The header
 
-The header shows the title, the page type, a **Rules** chip with how many rules the page meets now, and whether your changes are saved. Its buttons are **History**, **Copy HTML**, **Export**, **Send to CMS** (admins and managers) and **Mark ready**, and a button to show or hide the side panel.
+The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, and a **Rules** chip with how many rules the page meets now; click it to open the rules. On a page that optimizes a live one, a chip counts the cited passages kept.
+
+On the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel.
 
 ## Write and paste
 
@@ -27,20 +29,44 @@ The page starts with its H1, which is also its title. A page has one H1: the too
 
 Words in square brackets, such as [figure, source] or [competitor], are placeholders: the Content Agent leaves one where a real name, quote or number goes. Each is tinted amber, and the toolbar counts those left to fill. Click the count, or the arrows beside it, to go to the next or previous one, already selected, so you can type over it.
 
-A placeholder in an image's alt text, the structured data or an HTML block is counted too, and **Show in HTML** selects it in the HTML view. Send to CMS waits until none is left.
+A placeholder in an image's alt text, the structured data or an HTML block is counted too, and **Show in HTML** selects it in the HTML view. **Send to CMS** waits until none is left. With Quality on, **Export** asks first: **Fill now**, or **Export without them**, which leaves out the sentences with a placeholder. One in the title or a heading has to be filled.
 
-## Brief and Sources
+## The side panel
 
-The side panel's tabs are **Instructions**, **Sources** and **Live page**. **Instructions** opens on **Rules**, with **Brief** beside it.
+The side panel's tabs are **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**.
 
-- **Brief**: the page type, target URL, goal, audience, length, outline and keywords, which **Edit brief** changes. **Rebuild brief** writes a new outline from the sources you keep, each H2 answering a search AI ran for your prompts. **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent; the page you have now stays in History.
-- **Sources**: the prompts, fan-outs, cited pages and Search Console queries the draft is built from. Uncheck one to leave it out, or **Add source**, then **Rebuild with selection**.
+While the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.
+
+Building the brief and running the Content Agent use your workspace's monthly AI usage.
+
+## The brief
+
+**Brief** shows the page type, target URL, goal, audience, length, outline and keywords; **Edit brief** changes them. With no brief yet, **Run Agent** writes the goal, audience and outline from your sources; once there is one, the button reads **Rebuild brief**. Either writes the outline from the sources you keep, each H2 answering a search AI ran for your prompts. If you edited the brief, rebuilding asks first: **Rebuild anyway** or **Keep my brief**.
+
+A draft started from an opportunity with a brief starts with that brief's outline and keywords.
+
+## What the brief reads from cited pages
+
+Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets.
+
+Once the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History.
+
+## Sources
+
+**Sources** shows what the draft is built from: **Prompts**, **Fan-outs** (the searches AI ran for your prompts), **Cited pages**, which AI quotes today, and **Search Console** queries. Each source shows where the draft uses it.
+
+Uncheck a source to leave it out, or click **Add source** to add a prompt, a page address or a Search Console query. Then click **Rebuild with selection**.
 
 ## Live page
 
-For a draft that optimizes a live page, **Live page** shows how that page does now: **Citations**, **AI visits**, **Google clicks** and **Prompts cited**, over 7 days to a year, against the period before. It is not a forecast of what the draft will get. A new page has nothing to measure yet.
+For a draft that optimizes a live page, **Live page** shows how that page does now: **Citations**, **AI visits**, **Google clicks** and **Prompts cited**, over 7 days to a year, against the period before. It is not a forecast of what the draft will get.
 
-Prompts that stopped citing the page are marked **Lost**. **Use the lost prompts in this draft** adds them to the sources and rebuilds the brief. With conversions from AI visits on, **Conversions from AI journeys** shows what the journeys through the page brought in.
+- Prompts that stopped citing the page are marked **Lost**. **Use the lost prompts in this draft** adds them to the sources and rebuilds the brief.
+- **Results from AI visits** shows the AI visits that landed on the page and, with Google Analytics connected, their key events, orders and revenue, by AI source.
+- **Your other pages for these prompts** lists your other pages cited for the same prompts.
+- With conversions from AI visits on, **Conversions from AI journeys** shows what the journeys through the page brought in.
+
+A new page has nothing to measure until it's marked published with its live address.
 
 ## Passages AI cites are locked
 
@@ -48,16 +74,26 @@ When a draft optimizes a live page brought in by its URL, the passages AI answer
 
 ## History, Copy HTML and Export
 
-- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, and the page before a restore. **Restore** makes a new version, so nothing is lost.
+- **History** keeps earlier versions for 90 days: the live page as imported, the page before agent changes, each Mark ready and publish, each Hand off, and the page before a restore. **Restore** makes a new version, so nothing is lost.
 - **Copy HTML** copies the whole page as HTML, HTML blocks and schema included, to paste into your CMS.
-- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Only the HTML file carries the schema.
+- **Export** downloads the page as **Word**, **Excel**, **CSV**, **HTML** or **Markdown**. Excel and CSV hold the page as one row, for a CMS's import. Only the HTML file carries the schema.
+
+With Quality on, **Export** opens a dialog instead: the same files, and under **Platforms** a copy of the page to paste into Webflow, WordPress, Shopify or Google Docs.
 
 ## Add products from your catalog
 
 On an online shop's draft, **Products** in the toolbar adds products from your catalog: search by name, pick one to four that are in stock, and click **Insert**. One shows as a card, more as a grid, each with its picture, name and price, linked to its page. A card keeps its price: to show today's, delete the card and add the product again.
 
-## Mark ready and Mark published
+## Mark ready
 
-**Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. Ansvisor doesn't publish the page: copy or export it to your site, or send it to your CMS.
+**Mark ready** saves the page, sets it to **Ready** and keeps a version in History. If the draft was sent to the Action Center, it also completes its task there. With Quality on, **Mark ready** opens **Before you publish** first.
 
-Once the page is live, **Mark published**, in the Library's **Status** menu or under **Next step** in the header, asks for its live address, and **Live page** measures that address from then. A page your CMS reports live gets its address on its own. Click **Ready** in the header to move the page back to **In review**.
+Ansvisor doesn't publish the page: copy or export it to your site, or send it to your CMS.
+
+Click **Ready** in the header to move the page back to **In review**. A task that Mark ready completed is open again, unless someone changed it in the Action Center since or the action is closed.
+
+## Mark published
+
+Once the page is live, tell Ansvisor where with **Mark published**, in the Library's **Status** menu or, with Quality on, under the header's **Next step** once the page is ready. It asks for the live address, starting from the page it optimizes or your site with the page's slug, and **Live page** measures that address from then. If the draft came from the Action Center, its Publish task is completed once all the action's work is live.
+
+On a published page, the header's **Published** button changes the address. A page your CMS reports live, or one published in Webflow, WordPress or Framer, gets its address on its own. An archived page is restored first.
