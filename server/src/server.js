@@ -61,6 +61,8 @@ import { sweepTaskChecks } from './lib/action-center/task-checks.js';
 import { sendHealthReport } from './lib/health/report.js';
 import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
+import { chatAgenticDeployed } from './lib/chat-flag.js';
+import { startModelPriceSync } from './lib/model-prices.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -759,6 +761,13 @@ server.listen(PORT, async () => {
       logger.error({ err }, '[insights-rollups] scheduled rebuild crashed'),
     );
   });
+
+  // Chat's model prices, from OpenRouter's public catalog, daily (CHAT-16 §A):
+  // only with the new Chat on. Off, nothing is fetched and every cost is
+  // read from improve-cost.js's own table, as before.
+  if (chatAgenticDeployed()) {
+    startModelPriceSync().catch((err) => logger.error({ err }, '[model-prices] start failed'));
+  }
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';
