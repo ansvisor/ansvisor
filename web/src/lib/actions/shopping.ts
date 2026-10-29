@@ -2,6 +2,7 @@
 
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
@@ -37,6 +38,7 @@ import {
   readForIds,
 } from '@/lib/shopping/catalog-read';
 import { productAiSays, type AiSaysAnswer, type ProductAiSays } from '@/lib/shopping/ai-says';
+import { READINESS_CHANNELS } from '@/lib/shopping/readiness';
 import { FROM_PRODUCTS_KINDS } from '@/lib/action-center/registry';
 import {
   RECHECK_DAYS,
@@ -74,7 +76,9 @@ import {
  * query joins or filters on `brand_id`, and RLS on
  * `prompt_result_shopping_cards` already restricts to the caller's
  * organization. The action just adds the matching brand filter to keep
- * results scoped to a single brand at a time.
+ * results scoped to a single brand at a time. The reads the MCP server
+ * shares (lib/mcp/product-visibility.ts) query through dbClient(), so it can
+ * run them with the service role once it has checked the brand.
  */
 
 export type ShoppingDatePreset = '7d' | '30d' | '90d' | 'all';
@@ -265,7 +269,7 @@ export async function getShoppingOverview(
 export async function getShoppingAmazonShareDropAlert(
   brandId: string,
 ): Promise<AmazonShareDropAlert | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('shopping_amazon_share_weekly', {
     p_brand_id: brandId,
   });
@@ -294,7 +298,7 @@ export async function getShoppingMerchantSplit(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingMerchantSplit> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc(
     'shopping_merchant_split',
     windowArgs(brandId, filters),
@@ -324,7 +328,7 @@ export async function getResellerPriceAlerts(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ResellerPriceAlert[]> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc(
     'shopping_own_product_offers',
     windowArgs(brandId, filters),
@@ -354,7 +358,7 @@ export async function getShoppingFilterOptions(brandId: string): Promise<{
   platforms: string[];
   regions: string[];
 }> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('shopping_filter_options', { p_brand_id: brandId });
   if (error) return { platforms: [], regions: [] };
   const row = (data as { platforms: string[] | null; regions: string[] | null }[] | null)?.[0];
@@ -1171,7 +1175,7 @@ export async function getShoppingShelf(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingShelf> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const [rows, catalog] = await Promise.all([
     fetchAllCards<
       Omit<ShelfCardRow, 'prompt_id' | 'prompt_text'> & {
@@ -1195,6 +1199,35 @@ export async function getShoppingShelf(
     stats: shelfStats(cards),
     catalogProducts: catalog.count ? catalog.count : null,
   };
+}
+
+/**
+ * The AI channels (READINESS_CHANNELS) with the brand's own products on
+ * their shelves over the filter window, whatever its platforms: what
+ * Readiness's channel cards (ECOM-015) read from the Shelf's stats, as one
+ * row a channel instead of every card. The channels are read at once.
+ */
+export async function getShoppingOwnChannels(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<string[]> {
+  if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
+  const supabase = await dbClient();
+  const own = await Promise.all(
+    READINESS_CHANNELS.map(async (platform) => {
+      const { data, error } = await cardsInWindow(
+        supabase,
+        brandId,
+        { ...filters, platforms: [platform] },
+        'id',
+      )
+        .eq('matched_brand_role', 'own')
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return (data ?? []).length > 0;
+    }),
+  );
+  return READINESS_CHANNELS.filter((_, i) => own[i]);
 }
 
 /** Orders from AI visits (CE-017): the last 30 days, the 30 before, and by AI channel. */
@@ -1308,7 +1341,7 @@ export async function getShoppingProducts(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingProducts | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { count: total, error: countErr } = await supabase
     .from('catalog_products')
     .select('id', { count: 'exact', head: true })
@@ -1726,7 +1759,8 @@ const AI_SAYS_CITED = 20;
  * that showed it, quoted where they name it, and the sources they cited
  * (lib/shopping/ai-says.ts). Read apart from the product's page, which it
  * follows: the answers' text is the heavy part. Through the member's
- * session (RLS).
+ * session (RLS) on the page; the MCP server runs it with the service role,
+ * so every read here keeps to the brand by its brand_id filter.
  */
 export async function getProductAiSays(
   brandId: string,
@@ -1736,7 +1770,7 @@ export async function getProductAiSays(
   if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(productId).success) {
     throw new Error('invalid');
   }
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const [cards, product] = await Promise.all([
     cardsInWindow(
       supabase,
