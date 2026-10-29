@@ -1459,5 +1459,12 @@ function setMg(shut,save){var b=$('#mgBox'),h=$('#mgHead'),t=$('#mgTog');if(!b)r
 document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('#mgTog'))setMg(!$('#mgBox').classList.contains('shut'),true)});
 try{if(localStorage.getItem('ansvisor.chatMenuSection')=='off')setMg(true,false)}catch(e){}
 </script>
+<script>/* Ansvisor demo: on a Mac the shortcuts say ⌘, as the keys there are. */
+(function(){if(!/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent||''))return;
+var A=['data-tip','title','aria-label'];
+function fix(root){if(!root)return;var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),n;while((n=w.nextNode())){if(n.nodeValue.indexOf('Ctrl')>-1)n.nodeValue=n.nodeValue.replace(/Ctrl/g,'\u2318')}
+ if(root.querySelectorAll)root.querySelectorAll('[data-tip],[title],[aria-label]').forEach(function(el){A.forEach(function(a){var v=el.getAttribute(a);if(v&&v.indexOf('Ctrl')>-1)el.setAttribute(a,v.replace(/Ctrl/g,'\u2318'))})})}
+fix(document.body);new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(x){if(x.nodeType==1)fix(x);else if(x.nodeType==3&&x.nodeValue.indexOf('Ctrl')>-1)x.nodeValue=x.nodeValue.replace(/Ctrl/g,'\u2318')})})}).observe(document.body,{childList:true,subtree:true})})();
+</script>
 </body>
 </html>
