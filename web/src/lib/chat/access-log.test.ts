@@ -1,12 +1,11 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const recordActivity = vi.hoisted(() => vi.fn());
-vi.mock('./activity', () => ({ recordActivity }));
+vi.mock('./activity', () => ({ recordActivity: vi.fn(async () => 'row-1') }));
 
+const { recordActivity } = await import('./activity');
 const { accessDeniedEvent, recordAccessDenied } = await import('./access-log');
 type AccessDeniedContext = import('./access-log').AccessDeniedContext;
-type ToolDenial = import('./precedence').ToolDenial;
 
 /** Every denial is an `access.denied` event (CHAT-20 §4c). */
 
@@ -45,17 +44,26 @@ describe('accessDeniedEvent', () => {
 });
 
 describe('recordAccessDenied', () => {
-  it("writes the denial's row in the Activity log", async () => {
-    recordActivity.mockResolvedValue('row-1');
-    const denial: ToolDenial = { code: 'forbidden_role', role: 'analyst', roles: ['admin'] };
-    await recordAccessDenied(ctx, denial);
-    expect(recordActivity).toHaveBeenCalledWith(accessDeniedEvent(ctx, denial));
+  it('writes the denial as its Activity log row', async () => {
+    await recordAccessDenied(ctx, { code: 'forbidden_role', role: 'analyst', roles: ['admin'] });
+    expect(recordActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'access.denied',
+        toolKey: 'saveDraft',
+        reason: 'forbidden_role',
+        detail: { role: 'analyst', roles: ['admin'] },
+      }),
+    );
   });
 
-  it('never fails the run', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    recordActivity.mockRejectedValue(new Error('log down'));
+  it('never fails the run: a failed write goes to the server log', async () => {
+    vi.mocked(recordActivity).mockRejectedValueOnce(new Error('db down'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(recordAccessDenied(ctx, { code: 'policy_never' })).resolves.toBeUndefined();
-    expect(console.error).toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      '[chat] could not record access.denied',
+      expect.stringContaining('"policy_never"'),
+      expect.any(Error),
+    );
   });
 });

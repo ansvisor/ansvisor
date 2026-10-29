@@ -1778,6 +1778,98 @@ export type Database = {
           },
         ]
       }
+      chat_run_events: {
+        Row: {
+          created_at: string
+          data: Json
+          run_id: string
+          seq: number
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          run_id: string
+          seq: number
+          type: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          run_id?: string
+          seq?: number
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_run_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_run_state: {
+        Row: {
+          heartbeat_at: string | null
+          last_seq: number
+          messages: Json
+          mode: string
+          organization_id: string
+          pending: Json | null
+          progress: Json
+          run_id: string
+          updated_at: string
+          user_id: string
+          waiting_since: string | null
+          working_ms: number
+        }
+        Insert: {
+          heartbeat_at?: string | null
+          last_seq?: number
+          messages?: Json
+          mode?: string
+          organization_id: string
+          pending?: Json | null
+          progress?: Json
+          run_id: string
+          updated_at?: string
+          user_id: string
+          waiting_since?: string | null
+          working_ms?: number
+        }
+        Update: {
+          heartbeat_at?: string | null
+          last_seq?: number
+          messages?: Json
+          mode?: string
+          organization_id?: string
+          pending?: Json | null
+          progress?: Json
+          run_id?: string
+          updated_at?: string
+          user_id?: string
+          waiting_since?: string | null
+          working_ms?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_run_state_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_run_state_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: true
+            referencedRelation: "chat_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_run_steps: {
         Row: {
           data_as_of: string | null
@@ -5623,6 +5715,14 @@ export type Database = {
       }
       brand_ai_conversions: {
         Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
+      chat_claim_run_slot: {
+        Args: { p_run_id: string; p_user_limit: number; p_workspace_limit: number }
+        Returns: boolean
+      }
+      chat_run_limits: {
+        Args: { p_organization_id: string; p_user_id: string }
         Returns: Json
       }
       chat_text_array_distinct: {

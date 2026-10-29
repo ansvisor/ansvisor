@@ -3508,6 +3508,59 @@
       "demo": "No one: the demo brand keeps its sample data."
     }
   },
+  "chatEngine": {
+    "allTime": "All time",
+    "since": "Since {date}",
+    "until": "Until {date}",
+    "range": "{from} – {to}",
+    "rows": "{count, plural, one {# row} other {# rows}}",
+    "morePlatforms": "+{count}",
+    "step": {
+      "stopped": "Stopped",
+      "expired": "No answer in 7 days",
+      "skipped": "Skipped",
+      "auto": "Done automatically",
+      "failed": "Something went wrong",
+      "readFailed": "Couldn't read this",
+      "timedOut": "Timed out",
+      "limit": "Over this run's limit",
+      "unknown": "Worked on a step"
+    },
+    "error": {
+      "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
+      "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
+      "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
+      "rateHour": "You're sending a lot. Wait a few minutes, then send again.",
+      "rateDay": "You've sent today's messages. Chat takes more tomorrow.",
+      "notWaiting": "This run isn't waiting for an answer any more.",
+      "approvalMismatch": "This changed after you approved it. Approve again?",
+      "notFound": "This chat isn't there any more."
+    }
+  },
+  "chatPage": {
+    "title": "Chat",
+    "subtitle": "A test page for Chat's engine. The full Chat replaces it.",
+    "placeholder": "Ask about your brand…",
+    "send": "Send",
+    "stop": "Stop",
+    "newChat": "New chat",
+    "you": "You",
+    "modeLabel": "Mode",
+    "modes": {
+      "ask_first": "Ask me first",
+      "auto": "Auto, ask before changes",
+      "full_auto": "Full auto"
+    },
+    "generated": "Generated {date}",
+    "dataAsOf": "Data as of {date}",
+    "deniedTitle": "I can't do this for you",
+    "queued": "Waiting for a free slot…",
+    "reconnecting": "Reconnecting…",
+    "sendFailed": "Couldn't send that. Try again.",
+    "answerFailed": "Couldn't save your answer. Try again.",
+    "stopped": "Stopped. What's done so far is kept.",
+    "pausedCap": "You've used this month's AI limit, so Chat stopped here."
+  },
   "chatAccess": {
     "roleNames": {
       "admin": "Admin",
