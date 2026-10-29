@@ -23,6 +23,7 @@
  *   size: string | null,
  *   material: string | null,
  *   productType: string | null,
+ *   productTypes?: string[],
  * }} FeedItem
  *
  * A product the feed lists but that can't be kept: its row (CSV) or item
@@ -184,6 +185,9 @@ export function toItem(attrs, row, unit = 'Row') {
   }
   const extra = attrs.additional_image_link;
   const additional = (Array.isArray(extra) ? extra : [extra ?? '']).flatMap(splitImageLinks);
+  const productTypes = [
+    ...new Set((Array.isArray(attrs.product_types) ? attrs.product_types : []).map(clean).filter(Boolean)),
+  ];
   return {
     item: {
       id: values.id,
@@ -203,7 +207,8 @@ export function toItem(attrs, row, unit = 'Row') {
       color: first('color'),
       size: first('size'),
       material: first('material'),
-      productType: first('product_type'),
+      productType: productTypes[0] ?? first('product_type'),
+      ...(productTypes.length ? { productTypes } : {}),
     },
   };
 }
