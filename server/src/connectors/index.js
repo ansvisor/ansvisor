@@ -1,5 +1,6 @@
 import feedUrl from './feed-url/index.js';
 import merchantCenter from './merchant-center/index.js';
+import wooCommerce from './woocommerce/index.js';
 
 /**
  * Catalog connectors (#1263): one folder each under `server/src/connectors/`,
@@ -54,6 +55,7 @@ import merchantCenter from './merchant-center/index.js';
 export const CONNECTORS = {
   [feedUrl.kind]: feedUrl,
   [merchantCenter.kind]: merchantCenter,
+  [wooCommerce.kind]: wooCommerce,
 };
 
 /** The connector for a source's kind, or null. */
