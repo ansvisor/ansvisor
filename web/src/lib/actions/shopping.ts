@@ -4,6 +4,8 @@ import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
 import { dbClient } from '@/lib/supabase/scoped';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
+import { pageKey } from '@/lib/content/feed-match';
+import type { ShoppingSearchAppearance } from '@/lib/shopping/readiness';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
   detectAmazonShareDrop,
@@ -354,6 +356,47 @@ export async function getResellerPriceAlerts(
  * values that actually appear in this brand's data — all of it, not the first
  * 1,000 results.
  */
+/** Days of Search Console shopping results Readiness reads, as the sync's window. */
+const SEARCH_APPEARANCE_DAYS = 28;
+
+/**
+ * The brand's pages Google showed as merchant listings or product snippets
+ * over the last 28 days, from its own Search Console property (00377), by
+ * page key; or why it can't say: no property mapped, or not read yet.
+ */
+export async function getShoppingSearchAppearance(
+  brandId: string,
+): Promise<ShoppingSearchAppearance> {
+  const supabase = await dbClient();
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .select('gsc_property, gsc_shopping_synced_at')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!brand?.gsc_property) return { state: 'not_connected', pages: [] };
+  if (!brand.gsc_shopping_synced_at) return { state: 'not_synced', pages: [] };
+  const since = new Date(Date.now() - SEARCH_APPEARANCE_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const rows = await readAllRpcRows<{ page: string }>(
+    (from, to) =>
+      supabase
+        .from('gsc_shopping_page_stats')
+        .select('page')
+        .eq('brand_id', brandId)
+        .gte('date', since)
+        .gt('impressions', 0)
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{
+        data: { page: string }[] | null;
+        error: { message: string } | null;
+      }>,
+  );
+  const pages = new Set(rows.flatMap((row) => pageKey(row.page) ?? []));
+  return { state: 'read', pages: [...pages] };
+}
+
 export async function getShoppingFilterOptions(brandId: string): Promise<{
   platforms: string[];
   regions: string[];

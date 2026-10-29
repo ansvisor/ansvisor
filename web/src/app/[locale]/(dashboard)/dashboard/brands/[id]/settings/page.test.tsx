@@ -339,8 +339,32 @@ describe('brand settings role gates', () => {
     await openTab('settings.dangerTab');
     expect(fieldset().disabled).toBe(false);
     expect(container.textContent).not.toContain('settings.adminsOnlyDelete');
+    expect(container.textContent).not.toContain('settings.demoCantDelete');
 
     await act(async () => root.unmount());
+  });
+
+  it('never deletes the demo brand: it says to hide it instead', async () => {
+    brand.isDemo = true;
+    try {
+      const { container, root, openTab, fieldset } = await render();
+      await openTab('settings.dangerTab');
+      const panel = container.querySelector('[role="tabpanel"]:not([hidden])')!;
+      expect(panel.querySelector('[data-slot="demo-cant-delete"]')?.textContent).toBe(
+        'settings.demoCantDelete',
+      );
+      expect(panel.querySelector('input')).toBeNull();
+      expect(fieldset().disabled).toBe(true);
+      const remove = [...panel.querySelectorAll('button')].find(
+        (b) => b.textContent === 'settings.deleteButton',
+      )!;
+      expect(remove.disabled).toBe(true);
+      await act(async () => remove.click());
+      expect(deleteBrand).not.toHaveBeenCalled();
+      await act(async () => root.unmount());
+    } finally {
+      brand.isDemo = undefined;
+    }
   });
 });
 

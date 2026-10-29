@@ -8,6 +8,7 @@ import { PLANS, type Plan } from '@/config/plans';
  */
 
 let brandCount = 0;
+let countFilters: unknown[][] = [];
 let inserted: unknown[] = [];
 let updates: Record<string, unknown>[] = [];
 let plan: Plan;
@@ -21,7 +22,17 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     from: (table: string) => ({
-      select: () => ({ eq: async () => ({ count: brandCount, error: null }) }),
+      select: () => {
+        const chain = {
+          eq: (...filter: unknown[]) => {
+            countFilters.push(filter);
+            return chain;
+          },
+          then: (resolve: (value: { count: number; error: null }) => void) =>
+            resolve({ count: brandCount, error: null }),
+        };
+        return chain;
+      },
       update: (payload: Record<string, unknown>) => {
         updates.push(payload);
         const row = {
@@ -62,6 +73,19 @@ const capped = (maxBrands: number): Plan => ({
 describe('createBrand plan limit', () => {
   beforeEach(() => {
     inserted = [];
+    countFilters = [];
+  });
+
+  it("counts the organization's own brands, never the demo brand (00380)", async () => {
+    brandCount = 0;
+    plan = capped(5);
+
+    await createBrand(input);
+
+    expect(countFilters).toEqual([
+      ['organization_id', 'org-1'],
+      ['is_demo', false],
+    ]);
   });
 
   it('returns a readable plan_limit result and inserts nothing at the limit', async () => {

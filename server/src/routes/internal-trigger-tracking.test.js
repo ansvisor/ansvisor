@@ -9,10 +9,16 @@ import express from 'express';
 const startFirstRun = vi.fn();
 const runTrackingJob = vi.fn();
 const analyzeBrandVolumes = vi.fn();
+const isDemoBrand = vi.fn();
 vi.mock('../lib/first-run.js', () => ({ startFirstRun: (...args) => startFirstRun(...args) }));
 vi.mock('../lib/job-runner.js', () => ({ runTrackingJob: (...args) => runTrackingJob(...args) }));
 vi.mock('../lib/volume-analysis.js', () => ({
   analyzeBrandVolumes: (...args) => analyzeBrandVolumes(...args),
+}));
+
+vi.mock('../middleware/demo-brand.js', () => ({
+  DEMO_BRAND: { code: 'demo_brand' },
+  isDemoBrand: (...args) => isDemoBrand(...args),
 }));
 
 const { default: router } = await import('./internal-trigger-tracking.js');
@@ -27,6 +33,7 @@ beforeEach(async () => {
   startFirstRun.mockReset().mockResolvedValue({ job: { id: 'job1' }, created: true });
   runTrackingJob.mockReset();
   analyzeBrandVolumes.mockReset().mockResolvedValue({});
+  isDemoBrand.mockReset().mockResolvedValue(false);
   log.error.mockReset();
   const app = express();
   app.set('io', io);
@@ -93,6 +100,17 @@ describe('POST /api/internal/trigger-tracking', () => {
 
     expect(res.status).toBe(400);
     expect(startFirstRun).not.toHaveBeenCalled();
+  });
+
+  it('refuses a demo brand with 402, starting nothing', async () => {
+    isDemoBrand.mockResolvedValue(true);
+    const res = await send({ brandId: 'demo' });
+
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ code: 'demo_brand' });
+    expect(isDemoBrand).toHaveBeenCalledWith('demo');
+    expect(startFirstRun).not.toHaveBeenCalled();
+    expect(analyzeBrandVolumes).not.toHaveBeenCalled();
   });
 
   it('refuses a caller without the secret', async () => {
