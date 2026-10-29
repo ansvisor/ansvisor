@@ -18,7 +18,7 @@ import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { PLANS, type Feature, getMinimumPlanForFeature, hasFeature, isCloud } from '@/config/plans';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
-import { WRITE_TOOL_BRANDS, assertNotDemoBrand } from '@/lib/mcp/demo-gate';
+import { DemoBrandError, assertNotDemoBrand, callOnDemoBrand } from '@/lib/mcp/demo-gate';
 import { MEMBER_ROLES, requireManager, requireRole } from '@/lib/mcp/role-gate';
 import {
   fetchPromptUsageRow,
@@ -1038,6 +1038,8 @@ export async function generateBriefFor(
   opportunityId: string,
 ): Promise<GeneratedBrief | null> {
   if (!auth.organizationId) return null;
+  // Generating costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   // Ownership check first — wrong-org or missing id returns null with no
   // outbound call, so no LLM cost or data leak for an attacker probing ids.
@@ -1049,10 +1051,14 @@ export async function generateBriefFor(
     .maybeSingle();
   if (!ownership) return null;
   // No brief (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
-  await assertNotDemoBrand(
-    auth.organizationId,
-    await WRITE_TOOL_BRANDS.generate_content_brief({ opportunity_id: opportunityId }),
-  );
+  // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
+  if (
+    await callOnDemoBrand('generate_content_brief', auth.organizationId, {
+      opportunity_id: opportunityId,
+    })
+  ) {
+    throw new DemoBrandError();
+  }
   await assertSubscriptionActive(auth.organizationId);
 
   const apiUrl = API_BASE_URL;
@@ -3563,6 +3569,8 @@ export async function createImproveActionFor(
   input: CreateImproveActionInput,
 ): Promise<CreatedImproveAction | null> {
   if (!auth.organizationId) return null;
+  // Improve costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   const { data: ownership } = await supabaseAdmin
     .from('prompts')
@@ -3572,10 +3580,14 @@ export async function createImproveActionFor(
     .maybeSingle();
   if (!ownership) return null;
   // No Improve action (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
-  await assertNotDemoBrand(
-    auth.organizationId,
-    await WRITE_TOOL_BRANDS.create_improve_action({ prompt_id: input.promptId }),
-  );
+  // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
+  if (
+    await callOnDemoBrand('create_improve_action', auth.organizationId, {
+      prompt_id: input.promptId,
+    })
+  ) {
+    throw new DemoBrandError();
+  }
   await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;

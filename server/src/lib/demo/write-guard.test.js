@@ -222,6 +222,14 @@ describe('people cannot write a demo brand’s rows', () => {
     );
     expect(bypass).toBeGreaterThan(0);
     expect(bypass).toBeLessThan(body.indexOf("raise exception 'demo_brand'"));
+    // …but not the owner of a SECURITY DEFINER function a person called
+    // straight (current_user is then its owner): the session's role decides,
+    // unless the write comes from inside another trigger (a cascade).
+    const check = body.slice(bypass, body.indexOf('\n  then\n', bypass));
+    expect(check).toMatch(/and \(\s*pg_catalog\.pg_trigger_depth\(\) > 1\s*or /);
+    expect(check).toMatch(
+      /coalesce\(pg_catalog\.current_setting\('role', true\), 'none'\)\s*not in \('authenticated', 'anon'\)/,
+    );
     expect(body).toMatch(/using errcode = '42501'/);
     // The demo generator (lib/demo) writes with the service role key.
     const client = readFileSync(new URL('../../config/supabase.js', import.meta.url), 'utf8');

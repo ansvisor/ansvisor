@@ -50,6 +50,59 @@ export function apiFailure(status: number, body: Record<string, unknown> = {}): 
 const UPGRADE_CODES = new Set(['subscription_inactive', 'demo_brand']);
 
 /**
+ * A read's failure, returned rather than thrown: Next.js hides a server
+ * action's thrown message in production, so the card showed React's
+ * "Minified React error #441" instead of what went wrong. `retryable` when
+ * trying again may help: the API didn't answer (a dropped connection, the
+ * read's timeout) or the proxy in front of it said it was down, as while it
+ * restarts on a deploy.
+ */
+export interface ReadFailure {
+  ok: false;
+  failure: ApiFailure;
+  retryable: boolean;
+}
+
+/** The proxy's answers while the API is down or restarting. */
+export function isTransientStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+/** The API didn't answer: a network error, or the read's timeout. */
+export const NO_ANSWER: ReadFailure = { ok: false, failure: 'failed', retryable: true };
+
+/** A response that isn't ok, as a ReadFailure. */
+export async function responseFailure(res: Response): Promise<ReadFailure> {
+  const body = await res.json().catch(() => ({}));
+  return {
+    ok: false,
+    failure: apiFailure(res.status, body),
+    retryable: isTransientStatus(res.status),
+  };
+}
+
+/** How long a card waits before its one automatic retry. */
+export const READ_RETRY_DELAY_MS = 1500;
+
+/**
+ * Runs `read`, and once more after `delayMs` when it failed in a way trying
+ * again may fix. A server action that throws on its way (the request to
+ * Next itself failed) is NO_ANSWER too. Called in the browser, so the wait
+ * never holds Next's serialized server-action queue.
+ */
+export async function readWithOneRetry<R extends { ok: true } | ReadFailure>(
+  read: () => Promise<R>,
+  delayMs = READ_RETRY_DELAY_MS,
+): Promise<R | ReadFailure> {
+  const attempt = () => read().catch((): ReadFailure => NO_ANSWER);
+  const first = await attempt();
+  const result: { ok: true } | ReadFailure = first;
+  if (result.ok || !result.retryable) return first;
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  return attempt();
+}
+
+/**
  * Whether a response body is the server's subscription_inactive (a read-only
  * workspace) or demo_brand (the demo brand, where nothing runs), also when
  * it comes as text: the AI SDK's chat transport throws an error whose

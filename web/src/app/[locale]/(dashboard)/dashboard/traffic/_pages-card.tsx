@@ -43,6 +43,7 @@ import { PagePromptsDialog } from './_page-prompts-dialog';
 import { getTrafficPages } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 
 /**
  * Pages: which answers send visitors (AT-006, spec §3.5, "the
@@ -206,6 +207,10 @@ export function PagesCard({
   // dialog asks the AI as it opens), open the upgrade dialog instead.
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Suggesting prompts or content for a page costs AI, and tracking adds
+  // prompts: admins and managers do both.
+  const { canManage } = useUserRole();
+  const tManagers = useTranslations('managersOnly');
   // The page whose suggested prompts are open (part B2); each opening starts
   // afresh, and tracking some reads the list again for its prompt counts.
   const [promptsFor, setPromptsFor] = useState<string | null>(null);
@@ -288,11 +293,14 @@ export function PagesCard({
     { action: tActions('suggestPrompts') },
   );
 
-  const addPromptsButton = (page: string) => (
-    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openPrompts(page)}>
-      {t('addPrompts')}
-    </Button>
-  );
+  const addPromptsButton = (page: string) =>
+    canManage ? (
+      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openPrompts(page)}>
+        {t('addPrompts')}
+      </Button>
+    ) : (
+      <span className="text-xs text-muted-foreground">{tManagers('addPrompts')}</span>
+    );
 
   /** A No AI traffic row's next step, by why AI engines skip it. */
   const reasonAction = (row: TrafficPageRow) =>
@@ -330,20 +338,22 @@ export function PagesCard({
             <Send className="h-3.5 w-3.5" />
             {t('actions.sendToActionCenter')}
           </DropdownMenuItem>
-          {addPrompts && (
+          {addPrompts && canManage && (
             <DropdownMenuItem className="gap-2" onClick={() => openPrompts(row.page)}>
               <ListPlus className="h-3.5 w-3.5" />
               {t('addPrompts')}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem
-            className="gap-2"
-            disabled={pageActions.suggesting !== null}
-            onClick={() => void pageActions.suggestContent(row.page, openPrompts)}
-          >
-            <Lightbulb className="h-3.5 w-3.5" />
-            {t('actions.suggestContent')}
-          </DropdownMenuItem>
+          {canManage && (
+            <DropdownMenuItem
+              className="gap-2"
+              disabled={pageActions.suggesting !== null}
+              onClick={() => void pageActions.suggestContent(row.page, openPrompts)}
+            >
+              <Lightbulb className="h-3.5 w-3.5" />
+              {t('actions.suggestContent')}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
