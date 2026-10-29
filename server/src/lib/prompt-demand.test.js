@@ -388,7 +388,13 @@ const volume = (promptId, googleVolumes, extra = {}) => ({
 beforeEach(() => {
   tables = {
     brands: [
-      { id: 'b1', organization_id: 'o1', gsc_property: 'sc-domain:ansvisor.com', is_active: true },
+      {
+        id: 'b1',
+        organization_id: 'o1',
+        gsc_property: 'sc-domain:ansvisor.com',
+        is_active: true,
+        is_demo: false,
+      },
     ],
     prompts: [
       prompt('p1', 'b1', 'What is the best AI search monitoring tool?'),
@@ -889,6 +895,22 @@ describe('sweepPromptDemand', () => {
   });
 });
 
+describe('sweepPromptDemand and the demo brand', () => {
+  // 00380: its prompts are sample data, and DataForSEO is paid for.
+  it("never reads, sets or pays for a demo brand's prompts", async () => {
+    vi.stubEnv('DEMAND_SIGNALS', 'true');
+    tables.brands[0].is_demo = true;
+    tables.prompt_volumes = [volume('p1', { 'ai search monitoring': 1900 })];
+
+    const outcome = await sweepPromptDemand({ now: NOW });
+
+    expect(outcome).toMatchObject({ brands: 0, written: 0, posted: 0 });
+    expect(gscReads()).toEqual([]);
+    expect(postTasks).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+  });
+});
+
 // ─── Setting the tasks: nothing paid for twice, nothing paid for lost ───────
 
 describe('setting the paid tasks', () => {
@@ -1041,6 +1063,7 @@ describe("the night's brands", () => {
       organization_id: 'o1',
       gsc_property: `sc-domain:${id}.example`,
       is_active: true,
+      is_demo: false,
     }));
     tables.prompts = [
       prompt('p1', 'b1', 'ai search monitoring tool'),

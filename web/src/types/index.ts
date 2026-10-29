@@ -34,6 +34,8 @@ export interface Brand {
   /** 'wait' keeps the snippet's visitor id only after the site's consent, 'always' at once. */
   conversionsConsent?: 'wait' | 'always';
   isActive: boolean;
+  /** The organization's demo brand (00380): sample data, never counted against the plan. */
+  isDemo?: boolean;
   domains: BrandDomain[];
   createdAt: string;
   updatedAt: string;

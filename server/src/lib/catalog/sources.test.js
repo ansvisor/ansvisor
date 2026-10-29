@@ -47,7 +47,9 @@ beforeEach(() => {
     format: 'auto',
     url: 'https://shop.example/feed.xml',
   };
-  fake.rows('catalog_sources').push({ ...source, last_synced_at: null });
+  fake
+    .rows('catalog_sources')
+    .push({ ...source, last_synced_at: null, brands: { is_demo: false } });
 });
 afterEach(() => {
   delete process.env.IS_CLOUD;
@@ -472,7 +474,7 @@ describe('sweepCatalogSources', () => {
   it("syncs the due feeds, and records that an inactive workspace's were not read", async () => {
     process.env.IS_CLOUD = 'true';
     const [first] = fake.rows('catalog_sources');
-    first.brands = { organizations: { subscription_status: 'active' } };
+    first.brands = { is_demo: false, organizations: { subscription_status: 'active' } };
     fake.rows('catalog_sources').push({
       id: '1b8d6a1e-2a3c-4d5e-8f90-123456789abc',
       brand_id: 'brand-2',
@@ -480,7 +482,7 @@ describe('sweepCatalogSources', () => {
       format: 'auto',
       url: 'https://other.example/feed.xml',
       last_synced_at: null,
-      brands: { organizations: { subscription_status: 'canceled' } },
+      brands: { is_demo: false, organizations: { subscription_status: 'canceled' } },
     });
     const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
     const result = await sweepCatalogSources({ db: fake.db, now: NOW, fetch });
@@ -510,7 +512,7 @@ describe('sweepCatalogSources', () => {
 
     process.env.IS_CLOUD = 'true';
     const [first] = fake.rows('catalog_sources');
-    first.brands = { organizations: { subscription_status: 'past_due' } };
+    first.brands = { is_demo: false, organizations: { subscription_status: 'past_due' } };
     first.last_synced_at = null;
     fake.writes.length = 0;
     const fetch = vi.fn();
@@ -531,6 +533,7 @@ describe('sweepCatalogSources', () => {
         format: 'auto',
         url: null,
         last_synced_at: null,
+        brands: { is_demo: false },
       },
       {
         id: '4b8d6a1e-2a3c-4d5e-8f90-123456789abc',
@@ -539,6 +542,7 @@ describe('sweepCatalogSources', () => {
         format: 'auto',
         url: null,
         last_synced_at: null,
+        brands: { is_demo: false },
       },
     );
     const fetch = vi.fn().mockResolvedValue({ html: fixture('google-feed.xml') });
@@ -555,6 +559,18 @@ describe('sweepCatalogSources', () => {
       ['acme_store', 'failed'],
       ['feed_url', 'ok'],
     ]);
+  });
+
+  it("never reads a demo brand's sources (00380), nor lets them hold the line", async () => {
+    fake.rows('catalog_sources')[0].brands = { is_demo: true };
+    const fetch = vi.fn();
+    expect(await sweepCatalogSources({ db: fake.db, now: NOW, fetch })).toEqual({
+      due: 0,
+      synced: 0,
+      inactive: 0,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(kept().last_synced_at).toBeNull();
   });
 });
 

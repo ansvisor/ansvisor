@@ -1168,3 +1168,26 @@ describe('validateAction', () => {
     expect(writes.updated).toHaveLength(0);
   });
 });
+
+describe('sweepActionValidation', () => {
+  it("never reads a demo brand's actions (00380): their outcomes are written with them", async () => {
+    const asked = [];
+    from.mockImplementation((table) => {
+      const builder = {
+        select: (columns) => (asked.push(['select', table, columns]), builder),
+        eq: (column, value) => (asked.push(['eq', column, value]), builder),
+        or: () => builder,
+        not: () => builder,
+        lte: () => builder,
+        order: () => builder,
+        limit: () => builder,
+        then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject),
+      };
+      return builder;
+    });
+
+    expect(await sweepActionValidation({ now: NOW })).toEqual({ measured: 0, failed: 0 });
+    expect(asked[0][2]).toContain('brands!inner(is_demo)');
+    expect(asked).toContainEqual(['eq', 'brands.is_demo', false]);
+  });
+});

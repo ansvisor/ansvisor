@@ -20,6 +20,7 @@ import catalogRoutes from './catalog.js';
 import cmsRoutes from './cms.js';
 import cmsWordPressRoutes from './cms-wordpress.js';
 import cmsFramerRoutes from './cms-framer.js';
+import demoRoutes from './demo.js';
 
 const router = Router();
 
@@ -44,6 +45,7 @@ router.use('/catalog', catalogRoutes);
 router.use('/cms', cmsRoutes);
 router.use('/cms', cmsWordPressRoutes);
 router.use('/cms', cmsFramerRoutes);
+router.use('/demo', demoRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });
