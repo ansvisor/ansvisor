@@ -1,4 +1,4 @@
-import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-core';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Database } from '@/types/supabase';
 import { planFactsFromOrgRow } from './plan-facts';

@@ -9,7 +9,7 @@ import {
   type PlanId,
   type PlanLimits,
 } from '@/config/plans';
-import { planFromOrgRow } from '@/lib/guards/plan-guard';
+import { planFromOrgRow } from '@/lib/guards/plan-core';
 import type { PlanGate } from './registry/define-tool';
 
 /**
