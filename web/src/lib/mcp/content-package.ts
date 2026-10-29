@@ -45,9 +45,11 @@ export interface McpCmsPackage {
   meta_title: string;
   meta_description: string;
   /**
-   * The page's HTML ready to paste: cleaned as the editor's Copy HTML cleans
-   * it, no placeholders left, with the brand's byline line when it puts one
-   * in the content, and without its H1, which the CMS's title field carries.
+   * The page's HTML ready to paste, as the editor's Copy HTML gives it: HTML
+   * blocks are passed as written (their scripts, iframes and links too), as
+   * Copy HTML and Send to CMS pass them; no placeholders left, with the
+   * brand's byline line when it puts one in the content, and without its H1,
+   * which the CMS's title field carries.
    */
   html: string;
   /** The JSON-LD blocks the HTML carries, parsed, for a CMS that takes them apart. */

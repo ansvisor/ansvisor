@@ -10,6 +10,7 @@ import {
   EXPECTED_HTML,
   JSON_LD_PARSED,
 } from './__fixtures__/package-draft';
+import { htmlBlockElement } from '@/lib/content/html-allowlist';
 
 /**
  * get_content_draft_package (B5) on the server, where there is no browser
@@ -87,6 +88,21 @@ describe('getContentDraftPackageFor', () => {
     expect('html' in result && result.html).not.toMatch(/onclick|steal/);
   });
 
+  it('passes an HTML block as written, as Copy HTML and Send to CMS do', async () => {
+    // A block's code is the user's own: a CMS gets it as it is, script and all.
+    const code =
+      '<script src="https://widgets.example/w.js"></script><iframe src="https://video.example/embed/1"></iframe><a href="javascript:openChat()">Chat</a>';
+    draft = {
+      ...DRAFT_ROW,
+      body_html: `<h1>Cold brew</h1><p onclick="steal()">Steep it slowly.</p>${htmlBlockElement(code)}`,
+    };
+    const result = await getContentDraftPackageFor(auth, DRAFT_ID);
+    const html = 'html' in result ? result.html : '';
+    expect(html).toContain(code);
+    // The page's own content is still cleaned.
+    expect(html).not.toMatch(/onclick|steal/);
+  });
+
   it('says why a page can’t go yet', async () => {
     draft = {
       ...DRAFT_ROW,
@@ -120,10 +136,14 @@ describe('the get_content_draft_package tool', () => {
       JSON.parse((result.content as { text: string }[])[0].text);
 
     const { tools } = await client.listTools();
-    expect(tools.find((t) => t.name === 'get_content_draft_package')).toMatchObject({
+    const tool = tools.find((t) => t.name === 'get_content_draft_package');
+    expect(tool).toMatchObject({
       title: 'Draft as a CMS-ready page',
       annotations: { readOnlyHint: true, openWorldHint: false },
     });
+    // It says HTML blocks come as written, so a client expects their code.
+    expect(tool?.description).toContain('HTML blocks are passed as written');
+    expect(tool?.description).not.toMatch(/cleaned/);
 
     const ready = await client.callTool({
       name: 'get_content_draft_package',
