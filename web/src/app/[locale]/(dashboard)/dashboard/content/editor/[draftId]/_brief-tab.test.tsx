@@ -165,6 +165,26 @@ describe('the Brief tab', () => {
     );
   });
 
+  it('says what the cited pages have, from the same read (learning C2)', async () => {
+    await render({
+      status: 'ready',
+      brief: {
+        ...brief,
+        citedLength: { characters: 4300, pages: 3 },
+        citedFeatures: {
+          pages: 3,
+          checks: [
+            { key: 'faq-schema', label: 'FAQ schema', pages: 3 },
+            { key: 'tables', label: 'Tables', pages: 2 },
+          ],
+        },
+      },
+    });
+    expect(fields()['Cited pages have']).toBe(
+      "FAQ schema (3 of 3) · Tables (2 of 3)Site Audit's checks on the same cited pages",
+    );
+  });
+
   it('offers Run Agent for a new page without a brief, or H2s added by hand', async () => {
     await render(
       { status: 'ready', brief: null },

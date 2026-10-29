@@ -62,6 +62,7 @@ const setup = vi.hoisted(() => ({
   suggestTopics: vi.fn(),
   generatePromptsFromTopics: vi.fn(),
   suggestCompetitors: vi.fn(),
+  detectSiteType: vi.fn(async () => ({ siteType: null, industry: null })),
 }));
 vi.mock('@/lib/ai-brand-setup', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai-brand-setup')>()),
