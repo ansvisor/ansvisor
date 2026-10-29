@@ -30,6 +30,8 @@ export type WixError =
   | 'session'
   | 'workspace'
   | 'busy'
+  /** A read-only workspace (plan not active): the upgrade dialog, not a message. */
+  | 'subscription'
   | 'failed';
 
 const KNOWN: readonly WixError[] = [
@@ -71,7 +73,10 @@ async function call<T>(brandId: string, init: RequestInit = {}): Promise<WixResu
       return {
         ok: false,
         code:
-          general === 'session' || general === 'workspace' || general === 'busy'
+          general === 'session' ||
+          general === 'workspace' ||
+          general === 'busy' ||
+          general === 'subscription'
             ? general
             : 'failed',
       };
