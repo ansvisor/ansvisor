@@ -107,8 +107,9 @@ create table if not exists public.chat_messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.chat_conversations(id) on delete cascade,
   role text not null check (role in ('user', 'assistant')),
-  -- The message, or the answer only: a tool's output never goes here.
-  content_md text not null default '',
+  -- The message, or the answer only: a tool's output never goes here. Up to
+  -- 200,000 characters: the server cuts or refuses a longer one first.
+  content_md text not null default '' check (char_length(content_md) <= 200000),
   -- An answer's "Generated …" (UTC), the newest data it read ("Data as of",
   -- null when it read none) and the IANA time zone both were shown in.
   generated_at timestamptz,
@@ -209,7 +210,10 @@ create table if not exists public.chat_run_steps (
   detail text check (char_length(detail) between 1 and 500),
   -- What a read covered, in names only (subject, date range, platforms,
   -- brand): never ids. The tool's own arguments are in debug_json.
-  scope_json jsonb check (scope_json is null or jsonb_typeof(scope_json) = 'object'),
+  scope_json jsonb check (
+    scope_json is null
+    or (jsonb_typeof(scope_json) = 'object' and octet_length(scope_json::text) <= 8000)
+  ),
   row_count integer check (row_count >= 0),
   -- A read's newest data (CHAT-20 §15a); the answer's "Data as of" is the newest of them.
   data_as_of timestamptz,
@@ -217,9 +221,13 @@ create table if not exists public.chat_run_steps (
   finished_at timestamptz,
   -- Server and staff only (members aren't granted them): the registry name
   -- of the tool that ran, and what the staff Debug view shows (CHAT-03 items
-  -- 25–26: input, output, model, tokens, latency).
+  -- 25–26: input, output, model, tokens, latency). Up to 1 MB as text: the
+  -- server shortens a large tool output before it keeps it here.
   tool text check (char_length(tool) between 1 and 100),
-  debug_json jsonb check (debug_json is null or jsonb_typeof(debug_json) = 'object'),
+  debug_json jsonb check (
+    debug_json is null
+    or (jsonb_typeof(debug_json) = 'object' and octet_length(debug_json::text) <= 1000000)
+  ),
   unique (run_id, position)
 );
 

@@ -210,6 +210,7 @@ import { getPromptTableViews, type PromptTableViews } from '@/lib/actions/prompt
 import {
   effectiveView,
   parseLocationColumn,
+  pendingColumn,
   visibleColumns,
   type PromptColumnId,
 } from '@/lib/prompt-table-columns';
@@ -3357,7 +3358,9 @@ function AllPromptsTab({
   if (!loading && positionsId && !openPositions) setPositionsId(null);
 
   // The panel opens on the table's window; changing it there only moves the panel.
-  // Track in more locations (PROMPT-015c): from the Locations view, or a cell's + Track.
+  // Track in more locations (PROMPT-015c), or stop tracking in some: from the
+  // Locations view, a cell, a column's menu or the bulk bar. Each opener is
+  // guarded, so a read-only workspace gets the upgrade dialog, not this one.
   const [addLocations, setAddLocations] = useState<{
     open: boolean;
     preset: AddLocationsPreset | null;
@@ -3931,6 +3934,13 @@ function AllPromptsTab({
             onSuggestContent={guard(() => void suggestFor(selectedPrompts), {
               action: tActions('suggestContent'),
             })}
+            onAddLocations={guard(() => setAddLocations({ open: true, preset: { mode: 'add' } }), {
+              action: tActions('changeLocations'),
+            })}
+            onRemoveLocations={guard(
+              () => setAddLocations({ open: true, preset: { mode: 'remove' } }),
+              { action: tActions('removeLocations') },
+            )}
             onDelete={guard(() => setConfirmDelete(selectedPrompts), {
               action: tActions('deletePrompts'),
             })}
@@ -3946,15 +3956,34 @@ function AllPromptsTab({
             onOpenCell={(promptId, region) => openPositionsPanel(promptId, 'platforms', region)}
             onTrack={
               onEditPrompt
-                ? (prompt, region) =>
-                    setAddLocations({
-                      open: true,
-                      preset: { promptId: prompt.id, locations: [region] },
-                    })
+                ? guard(
+                    (prompt: Prompt, region: string) =>
+                      setAddLocations({
+                        open: true,
+                        preset: { promptId: prompt.id, locations: [region] },
+                      }),
+                    { action: tActions('changeLocations') },
+                  )
+                : undefined
+            }
+            onStopTracking={
+              onEditPrompt
+                ? guard(
+                    (prompt: Prompt | null, region: string) =>
+                      setAddLocations({
+                        open: true,
+                        preset: { mode: 'remove', promptId: prompt?.id, locations: [region] },
+                      }),
+                    { action: tActions('removeLocations') },
+                  )
                 : undefined
             }
             onAddLocations={
-              onEditPrompt ? () => setAddLocations({ open: true, preset: null }) : undefined
+              onEditPrompt
+                ? guard(() => setAddLocations({ open: true, preset: null }), {
+                    action: tActions('changeLocations'),
+                  })
+                : undefined
             }
           />
         ) : (
@@ -4003,14 +4032,33 @@ function AllPromptsTab({
                 const vol = volumeByPromptId.get(p.id);
                 const vis = visibility[p.id];
                 const status = promptStatus(p, now);
-                // Its empty location columns wait for their first answers only
-                // while it's new, or answered elsewhere (a location just added).
+                // With no answers (in a location column, or at all), it waits for
+                // its first ones only while it's new, or answered elsewhere (a
+                // location just added); otherwise a dash.
                 const awaiting = awaitsFirstAnswers(
                   p,
                   Boolean(vis) ||
                     Object.values(locationMatrix?.[p.id] ?? {}).some((c) => c.runs > 0),
                   now,
                 );
+                // No answers in the window yet: when they come, or why not, said
+                // once in the first answer column shown, the others a dash.
+                const pendingAt = pendingColumn(p, {
+                  hasAnswers: Boolean(vis),
+                  region: regionFilter,
+                  columns,
+                });
+                const noAnswers = (id: PromptColumnId) =>
+                  pendingAt === id ? (
+                    <LocationPending
+                      prompt={p}
+                      region={regionFilter || undefined}
+                      window={positionsWindow}
+                      awaiting={awaiting}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  );
                 const cells: Record<PromptColumnId, React.ReactNode> = {
                   topic: (
                     <TableCell key="topic">
@@ -4101,26 +4149,18 @@ function AllPromptsTab({
                           </div>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        noAnswers('visibility')
                       )}
                     </TableCell>
                   ),
                   mentions: (
                     <TableCell key="mentions" className="text-right tabular-nums text-sm">
-                      {vis ? (
-                        formatNumber(vis.totalMentions)
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      {vis ? formatNumber(vis.totalMentions) : noAnswers('mentions')}
                     </TableCell>
                   ),
                   citations: (
                     <TableCell key="citations" className="text-right tabular-nums text-sm">
-                      {vis ? (
-                        formatNumber(vis.totalCitations)
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      {vis ? formatNumber(vis.totalCitations) : noAnswers('citations')}
                     </TableCell>
                   ),
                   positions: (
@@ -4128,7 +4168,11 @@ function AllPromptsTab({
                       {/* Fixed widths so the value, dots and See line up on every row. */}
                       <div className="inline-flex items-center gap-2">
                         <div className="w-[5.5rem] whitespace-nowrap">
-                          <PositionValue cell={positions[p.id]} vis={vis} />
+                          {pendingAt === 'positions' ? (
+                            noAnswers('positions')
+                          ) : (
+                            <PositionValue cell={positions[p.id]} vis={vis} />
+                          )}
                         </div>
                         <div className="w-6">
                           {/* Whenever it has answers: a prompt never named is the one to open. */}
@@ -4173,11 +4217,7 @@ function AllPromptsTab({
                   ),
                   runs: (
                     <TableCell key="runs" className="text-right tabular-nums text-sm">
-                      {vis ? (
-                        formatNumber(vis.runs)
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      {vis ? formatNumber(vis.runs) : noAnswers('runs')}
                     </TableCell>
                   ),
                   added: (
@@ -4194,7 +4234,9 @@ function AllPromptsTab({
                   ),
                   lastRun: (
                     <TableCell key="lastRun" className="text-right text-xs text-muted-foreground">
-                      {formatRelative(vis?.lastRunAt, tCommon)}
+                      {pendingAt === 'lastRun'
+                        ? noAnswers('lastRun')
+                        : formatRelative(vis?.lastRunAt, tCommon)}
                     </TableCell>
                   ),
                 };

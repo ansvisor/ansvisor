@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chatAgenticEnabled } from './chat-flag.js';
+import { chatAgenticDeployed, chatAgenticEnabled } from './chat-flag.js';
 
 /** The new Chat's switch: CHAT_AGENTIC, narrowed by CHAT_AGENTIC_ORGS. */
 
@@ -59,5 +59,20 @@ describe('chatAgenticEnabled', () => {
     expect(chatAgenticEnabled(ORG_A)).toBe(false);
     vi.stubEnv('CHAT_AGENTIC', 'true');
     expect(chatAgenticEnabled(ORG_A)).toBe(true);
+  });
+});
+
+describe('chatAgenticDeployed', () => {
+  it('is on with CHAT_AGENTIC=true whatever CHAT_AGENTIC_ORGS lists, for server-wide jobs', () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', ORG_A);
+    expect(chatAgenticDeployed()).toBe(true);
+  });
+
+  it('is off for anything but "true"', () => {
+    for (const value of [undefined, '', 'false', 'TRUE']) {
+      vi.stubEnv('CHAT_AGENTIC', value);
+      expect(chatAgenticDeployed()).toBe(false);
+    }
   });
 });

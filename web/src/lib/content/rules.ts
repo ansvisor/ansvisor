@@ -1558,3 +1558,10 @@ export function rulesMet(statuses: { rule: ActiveRule; status: RuleStatus }[]): 
   const counted = statuses.filter((s) => s.rule.on && s.status.state !== 'info');
   return { met: counted.filter((s) => s.status.state === 'ok').length, total: counted.length };
 }
+
+/** The language a draft's own Language rule names, when it is on and set. */
+export function draftLanguage(rules: unknown): string | null {
+  const language = draftRulesSchema.safeParse(rules).data?.overrides.language;
+  const value = language?.on === false ? '' : (language?.value?.trim() ?? '');
+  return value || null;
+}

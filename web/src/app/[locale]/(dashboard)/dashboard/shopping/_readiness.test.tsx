@@ -90,6 +90,7 @@ describe('ReadinessTab', () => {
     loading?: boolean;
     unread?: ('sources' | 'products')[];
     channelsRead?: 'loading' | 'failed';
+    items?: React.ComponentProps<typeof ReadinessTab>['items'];
   }) {
     act(() => {
       root.render(
@@ -124,6 +125,25 @@ describe('ReadinessTab', () => {
     expect(text).not.toContain('80 / 100');
     expect(text).toContain('Catalog connected');
     expect(renderTab({})).toContain('AI shopping readiness80 / 100');
+  });
+
+  it('counts one product in the singular', () => {
+    const text = renderTab({
+      items: [
+        { key: 'firstWords', state: 'warn', values: { count: 1 }, action: 'products' },
+        {
+          key: 'wrongPrice',
+          state: 'fail',
+          values: { count: 1, product: 'Trail Runner X', seen: 139, yours: 129, currency: 'USD' },
+          action: 'products',
+        },
+        { key: 'resellerCheaper', state: 'fail', values: { count: 1 } },
+      ],
+    });
+    expect(text).toContain('First 40 words of descriptions · 1 product');
+    expect(text).toContain('Wrong price in AI answers · 1 product');
+    expect(text).toContain('Reseller cheaper than you · 1 product');
+    expect(text).not.toContain('1 products');
   });
 
   it("doesn't call a channel without the brand's products while every channel's shelves are read, or unread", () => {

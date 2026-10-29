@@ -3,6 +3,8 @@ import { linkKey } from './content-links.js';
 import { logger } from './logger.js';
 import { MAX_CONTENT_LENGTH, extractPageContent, textLength } from './page-content.js';
 import { fetchPage } from './safe-fetch.js';
+import { FEATURE_CHECKS, pageFeatures } from './action-center/page-features.js';
+import { describeSignal } from './audit/rubric.js';
 
 /**
  * The cited pages' length (Content Editor v1.1, CE-030): the brief's Length
@@ -23,13 +25,38 @@ export const CITED_MIN_PAGES = 2;
 /** Shorter than this, what was read is a wall (a sign-in, a consent page), not the page. */
 export const CITED_MIN_CHARACTERS = 500;
 
-/** One page's main text length; it throws when the page can't be read, or `signal` ends it. */
+/**
+ * One page's main text length, and what Site Audit's checks find on it
+ * (learning C2) from the same read; it throws when the page can't be read,
+ * or `signal` ends it.
+ */
 async function readLength(url, signal) {
   const page = await fetchPage(url, { timeoutMs: READ_TIMEOUT_MS, signal });
   const content = extractPageContent(page.html, page.url);
   // Past what a page brought into the editor may be (content-pages.js): no benchmark.
   if (content.html.length > MAX_CONTENT_LENGTH) return null;
-  return textLength(content.html);
+  return {
+    length: textLength(content.html),
+    features: await pageFeatures(page.url, page.html).catch(() => null),
+  };
+}
+
+/**
+ * The checks at least half the pages read pass (learning C2), the most
+ * passed first; none from fewer than CITED_MIN_PAGES pages with features.
+ */
+export function citedFeatures(reads) {
+  const read = reads.filter((r) => r.features?.checks);
+  if (read.length < CITED_MIN_PAGES) return null;
+  const needed = Math.ceil(read.length / 2);
+  const checks = FEATURE_CHECKS.map((key) => ({
+    key,
+    label: describeSignal(key)?.label ?? key,
+    pages: read.filter((r) => r.features.checks[key] === 'pass').length,
+  }))
+    .filter((check) => check.pages >= needed)
+    .sort((a, b) => b.pages - a.pages);
+  return { pages: read.length, checks };
 }
 
 /**
@@ -76,13 +103,15 @@ function median(lengths) {
 /**
  * How long the cited pages kept are: the median of those read, rounded to a
  * hundred, and how many were read; null when fewer than two could be (no
- * number is made up). The page the draft optimizes is left out, however its address
+ * number is made up). With them, what Site Audit's checks find on the same
+ * pages (citedFeatures, learning C2), from the same reads. The page the draft optimizes is left out, however its address
  * was cited (www, tracking parameters): it is no benchmark for itself.
  *
  * @param {{ brandId: string, pages: { url: string }[], ownUrl?: string | null, signal?: AbortSignal | null }} input
  *   `signal`: the run's Stop, which settles it on null at once.
- * @param {{ read?: (url: string) => Promise<number | null> }} [deps] tests replace the read
- * @returns {Promise<{ characters: number, pages: number } | null>}
+ * @param {{ read?: (url: string) => Promise<number | { length: number, features: object | null } | null> }} [deps]
+ *   tests replace the read
+ * @returns {Promise<{ characters: number, pages: number, features?: object } | null>}
  */
 export async function citedPagesLength(
   { brandId, pages, ownUrl = null, signal = null },
@@ -99,16 +128,29 @@ export async function citedPagesLength(
 async function measure({ brandId, pages, ownUrl, signal }, read) {
   try {
     const own = ownUrl ? linkKey(ownUrl) : null;
-    const urls = [...new Set(pages.map((p) => p.url))].filter(
-      (url) => !own || linkKey(url) !== own,
-    );
+    // One page cited under two addresses (www, tracking parameters) is read
+    // once, at the first: twice, it would count as two of the cited pages.
+    const seen = new Set();
+    const urls = pages
+      .map((p) => p.url)
+      .filter((url) => {
+        const key = linkKey(url) ?? url;
+        if ((own && key === own) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     if (!urls.length) return null;
     const picked = await brandCited(brandId, urls);
-    const lengths = (
-      await Promise.all(picked.map((url) => read(url, signal).catch(() => null)))
-    ).filter((n) => Number.isFinite(n) && n >= CITED_MIN_CHARACTERS);
-    if (lengths.length < CITED_MIN_PAGES) return null;
-    return { characters: Math.round(median(lengths) / 100) * 100, pages: lengths.length };
+    const reads = (await Promise.all(picked.map((url) => read(url, signal).catch(() => null))))
+      .map((r) => (typeof r === 'number' ? { length: r } : r))
+      .filter((r) => Number.isFinite(r?.length) && r.length >= CITED_MIN_CHARACTERS);
+    if (reads.length < CITED_MIN_PAGES) return null;
+    const features = citedFeatures(reads);
+    return {
+      characters: Math.round(median(reads.map((r) => r.length)) / 100) * 100,
+      pages: reads.length,
+      ...(features ? { features } : {}),
+    };
   } catch (err) {
     // A benchmark is never worth the brief: it goes without one.
     logger.warn({ err }, 'cited pages length read failed');
