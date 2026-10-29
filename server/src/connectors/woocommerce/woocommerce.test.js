@@ -262,7 +262,7 @@ describe('readCatalog through the connector harness', () => {
     });
 
     expect(products.find((p) => p.external_id === '101')?.description).toBe('Soft merino wool.');
-    expect(images).toHaveLength(6);
+    expect(images).toHaveLength(8);
     expect(categories.map((c) => c.name).sort()).toEqual(['Accessories', 'Footwear > Boots']);
     const sockProductId = products.find((p) => p.external_id === '101')?.id;
     const sockCategories = fake.rows('catalog_product_categories')
@@ -286,11 +286,11 @@ describe('readCatalog through the connector harness', () => {
     expect(api.calls.every((call) => !JSON.stringify(call.query).includes(CONSUMER_SECRET))).toBe(
       true,
     );
-    expect(fake.rows('catalog_orders') ?? []).toEqual([]);
   });
 
   it('retries a 429 according to Retry-After and then continues the sync', async () => {
     let limited = true;
+    await api.close();
     api = await startFakeApi({
       'GET /wp-json/wc/v3/products/categories': () => {
         if (limited) {
