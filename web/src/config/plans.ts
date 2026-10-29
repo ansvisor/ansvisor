@@ -47,7 +47,7 @@ export interface PlanLimits {
    * Monthly USD budget for AI usage: Improve-tab model calls (Positions
    * panel, PROMPT-003), the Content Editor's AI and the Action Center's task
    * writing. Starter $5, Growth $25, Enterprise $50 (or more, set per
-   * customer), and $1 in the free trial (the server's rule); the billing cards
+   * customer), and $2 in the free trial (the server's rule); the billing cards
    * show them as multiples of Starter's. Enforced on the server from each
    * call's real token cost so it holds whichever model is configured.
    * -1 = unlimited (self-host).
@@ -179,7 +179,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxBriefGenerations: 10,
       // The workspace's one AI budget, in tiers the billing cards show as
       // multiples of Starter's: $5 here (1x), Growth $25 (5x), Enterprise $50
-      // or more, set per customer (2026-10-27); the server gives the free trial $1.
+      // or more, set per customer (2026-10-27); the server gives the free trial $2.
       improveMonthlyBudgetUsd: 5,
       // 0.1% of the $49 price, spent rating suggestions' relevance (VIS-011).
       relevanceMonthlyBudgetUsd: 0.049,
@@ -331,11 +331,39 @@ export const CUSTOM_PLAN_STARTING_PRICE = 499;
 export const PRICING_URL = 'https://www.ansvisor.com/pricing';
 
 /**
+ * The first-month offer with "Buy now": a Stripe promotion code taking
+ * `percentOff` off the first month of a monthly plan (no trial with it; a
+ * year up front has its own discount). One setting, so it can end without a
+ * code change: NEXT_PUBLIC_FIRST_MONTH_OFFER=off turns it off, and every
+ * plan button and line goes back to the plain price. The code itself lives
+ * in Stripe, where its coupon is ended too.
+ */
+export const FIRST_MONTH_OFFER = {
+  code: 'SAVE50',
+  percentOff: 50,
+  period: 'monthly',
+} as const;
+
+/** Whether the first-month offer is on (NEXT_PUBLIC_FIRST_MONTH_OFFER isn't `off`). */
+export function firstMonthOfferOn(): boolean {
+  return process.env.NEXT_PUBLIC_FIRST_MONTH_OFFER !== 'off';
+}
+
+/**
  * Self-hosted instances bypass all limits.
  * Cloud is determined by NEXT_PUBLIC_IS_CLOUD env var.
  */
 export function isCloud(): boolean {
   return process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
+}
+
+/**
+ * A stored plan as a known one. A new sign-up's organization holds `free`
+ * (or nothing) until it picks a plan; the dashboard opens for it once it has
+ * the demo brand, and reads limits as Starter's until then.
+ */
+export function toPlanId(value: string | null | undefined): PlanId {
+  return value && value in PLANS ? (value as PlanId) : 'starter';
 }
 
 export function getPlan(planId: string | null | undefined): Plan {

@@ -87,7 +87,7 @@ describe('settleTrackingRun', () => {
     db.results = 98;
     db.pending = 2;
     const out = await settleTrackingRun(run, fast);
-    expect(out).toEqual({ stamped: true, lateStamp: null });
+    expect(out).toEqual({ stamped: true, lateStamp: null, resultCount: 98 });
     expect(db.stamped.result_count).toBe(98);
   });
 
@@ -96,6 +96,8 @@ describe('settleTrackingRun', () => {
     db.pending = 46;
     const out = await settleTrackingRun(run, { pollMs: 5, waitMs: 1000 });
     expect(out.stamped).toBe(false);
+    // What is in so far, for the person waiting on it.
+    expect(out.resultCount).toBe(54);
     expect(db.stamped).toBeNull();
 
     db.results = 97;
@@ -137,5 +139,74 @@ describe('settleTrackingRun', () => {
     db.rowExists = false;
     db.results = 99;
     await expect(out.lateStamp).resolves.toBe(false);
+  });
+});
+
+/**
+ * A brand's first run hands over its rollup refresher (first-run-rollups.js):
+ * the stamp, which refreshes the same days, waits for it, and a run that waits
+ * for late answers keeps the rollups moving meanwhile.
+ */
+describe('settleTrackingRun with a first run refresher', () => {
+  /** A refresher whose running refresh ends only when released. */
+  function refresher() {
+    let release;
+    const busy = new Promise((resolve) => {
+      release = resolve;
+    });
+    const calls = [];
+    return {
+      calls,
+      release: () => release(),
+      note: vi.fn((landed) => calls.push(['note', landed])),
+      idle: vi.fn(async () => {
+        calls.push(['idle']);
+        await busy;
+      }),
+      flush: vi.fn(async (landed) => {
+        calls.push(['flush', landed]);
+      }),
+    };
+  }
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+  it('stamps only once the refresh still running is done', async () => {
+    db.results = 98;
+    db.pending = 2;
+    const rollups = refresher();
+
+    const settling = settleTrackingRun(run, { ...fast, rollups });
+    await tick();
+    expect(db.stamped).toBeNull();
+
+    rollups.release();
+    expect(await settling).toEqual({ stamped: true, lateStamp: null, resultCount: 98 });
+    expect(db.stamped.result_count).toBe(98);
+    // A run that stamps at once needs no refresh of its own: the stamp's covers it.
+    expect(rollups.flush).not.toHaveBeenCalled();
+  });
+
+  it('refreshes once when it has to wait, follows the late answers, and stamps once idle', async () => {
+    db.results = 54;
+    db.pending = 46;
+    const rollups = refresher();
+
+    const out = await settleTrackingRun(run, { pollMs: 5, waitMs: 1000, rollups });
+    expect(out.stamped).toBe(false);
+    await tick();
+    db.results = 70;
+    await tick();
+    db.results = 97;
+    db.pending = 3;
+    await tick();
+    // Complete now, but a refresh is still running.
+    expect(db.stamped).toBeNull();
+
+    rollups.release();
+    await expect(out.lateStamp).resolves.toBe(true);
+    expect(db.stamped.result_count).toBe(97);
+    expect(rollups.calls[0]).toEqual(['flush', 54]);
+    expect(rollups.calls).toContainEqual(['note', 70]);
+    expect(rollups.calls.at(-1)).toEqual(['idle']);
   });
 });

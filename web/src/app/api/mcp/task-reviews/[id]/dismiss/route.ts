@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 import { TASK_REVIEW_ERROR_STATUS, dismissTaskReviewFor } from '@/lib/mcp/task-reviews';
 
@@ -10,6 +11,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { id } = await params;
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('dismiss_task_review', auth.organizationId, {
+      review_id: id,
+    });
+    if (refused) return refused;
     const result = await dismissTaskReviewFor(auth, id);
     if ('error' in result) {
       return NextResponse.json(
