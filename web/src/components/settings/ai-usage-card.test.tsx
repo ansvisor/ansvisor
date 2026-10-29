@@ -11,9 +11,11 @@ import {
   percentLabel,
   type AiUsage,
 } from '@/lib/billing/ai-usage';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 import { AiUsageCard } from './ai-usage-card';
 
 vi.mock('@/lib/actions/ai-usage', () => ({ getAiUsage: vi.fn() }));
+vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }));
 
 (
   globalThis as typeof globalThis & {
@@ -39,11 +41,13 @@ const usage = (over: Partial<AiUsage> = {}): AiUsage => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function render() {
+async function render(role: TeamRole = 'admin') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <AiUsageCard />
+        <RoleProvider role={role}>
+          <AiUsageCard />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -173,13 +177,41 @@ describe('AiUsageCard', () => {
     );
   });
 
-  it('says the free trial’s is used up and starting the plan gives more, not a bigger plan', async () => {
+  it('shows the free trial’s credit with no share, and its end', async () => {
+    vi.mocked(getAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 42.5 }));
+    await render();
+    const text = container.textContent!;
+    expect(text).toContain('Trial AI credit');
+    expect(text).toContain('The trial ends on November 20, 2026');
+    expect(text).toContain('Your free trial comes with a starter AI credit.');
+    // No share: neither the whole, its bar, nor each feature's.
+    expect(text).not.toContain('%');
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+    // Nothing to start yet below 80%.
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('offers an admin to start the plan once the trial credit is almost or all used', async () => {
+    vi.mocked(getAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 85 }));
+    await render();
+    expect(container.textContent).toContain('Trial AI credit almost used');
+    expect(container.querySelector('button')!.textContent).toBe('Start my plan now');
+
     vi.mocked(getAiUsage).mockResolvedValue(usage({ trial: true, percentUsed: 100 }));
+    act(() => root.unmount());
+    root = createRoot(container);
     await render();
     expect(container.textContent).toContain(
-      "The free trial's AI usage is used up. Starting the plan below gives its full monthly allowance.",
+      'Your trial AI credit is used up. Start your plan now for its full monthly AI usage.',
     );
     expect(container.textContent).not.toContain('A bigger plan');
+    expect(container.querySelector('button')!.textContent).toBe('Start my plan now');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render('manager');
+    expect(container.textContent).toContain('To start the plan now, ask an admin of your workspace.');
+    expect(container.querySelector('button')).toBeNull();
   });
 
   it('offers no bigger plan on Enterprise', async () => {

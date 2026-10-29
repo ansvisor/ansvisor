@@ -19,24 +19,41 @@
       "ai": "AI",
       "label": "AI {percent} used this month",
       "labelWarning": "AI {percent} used this month, close to the limit",
-      "labelExhausted": "AI {percent} used this month, the limit is reached"
+      "labelExhausted": "AI {percent} used this month, the limit is reached",
+      "trial": {
+        "normal": "Trial credit",
+        "warning": "Almost used",
+        "exhausted": "Used up"
+      },
+      "trialLabel": {
+        "normal": "AI: the free trial's AI credit",
+        "warning": "AI: the free trial's AI credit is almost used",
+        "exhausted": "AI: the free trial's AI credit is used up"
+      }
     },
     "askAdmin": "To get more AI usage or use your own key, ask an admin of your workspace.",
+    "askAdminStart": "To start the plan now, ask an admin of your workspace.",
     "getMore": {
       "plan": "Get more AI usage",
-      "ownKey": "Use your own key",
-      "startPlan": "Start your plan"
+      "ownKey": "Use your own key"
     },
     "popover": {
       "title": "AI usage this month · {plan} plan",
-      "titleTrial": "AI usage this month · {plan} free trial",
+      "titleTrial": "AI usage · {plan} free trial",
+      "trialState": {
+        "normal": "Trial AI credit",
+        "warning": "Trial AI credit almost used",
+        "exhausted": "Trial AI credit used up"
+      },
+      "trialNote": "Your free trial comes with a starter AI credit. Starting your plan gives its full monthly AI usage.",
+      "trialEnds": "Shared by every seat · the trial ends {date}",
       "titleNoPlan": "AI usage this month",
       "page": "This page this month",
       "shared": "Shared by every seat · resets {date}",
       "sharedNoDate": "Shared by every seat",
       "exhausted": "Used up. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "Used up. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working.",
+      "exhaustedTrial": "Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working.",
       "none": "No AI usage yet this month.",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
@@ -48,11 +65,29 @@
     },
     "banner": {
       "warning": "You've used {percent} of this month's AI limit.",
-      "warningTrial": "You've used {percent} of the free trial's AI usage. Starting the plan gives its full monthly allowance.",
+      "warningTrial": "Your trial AI credit is almost used. Starting your plan now gives its full monthly AI usage.",
       "seeUsage": "See usage",
       "exhausted": "You've used this month's AI limit. AI features stop until {date}; Agent Chat on your own AI key keeps working.",
       "exhaustedNoDate": "You've used this month's AI limit. AI features stop until it resets; Agent Chat on your own AI key keeps working.",
-      "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage; Agent Chat on your own AI key keeps working."
+    },
+    "startNow": {
+      "button": "Start my plan now",
+      "title": "Start your {plan} plan now?",
+      "titleNoPlan": "Start your plan now?",
+      "description": "Your free trial ends now and the card you added for it pays the plan's first period. The plan's full monthly AI usage starts right away.",
+      "plan": "Plan",
+      "planValue": "{plan}, {interval, select, year {yearly} other {monthly}}",
+      "today": "Charged today",
+      "thenMonthly": "first month with the offer, then ${price} a month",
+      "trial": "Free trial",
+      "endsNow": "Ends now",
+      "notNow": "Not now",
+      "confirm": "Start my plan now",
+      "unreadable": "Couldn't read your plan. Try again, or start it from Settings › Billing.",
+      "notTrialing": "Your plan has already started.",
+      "offerGone": "The first-month offer isn't available any more. Check the full price and confirm again.",
+      "failed": "Couldn't start the plan. Try again, or start it from Settings › Billing."
     }
   },
   "chatBudget": {
@@ -10159,7 +10194,15 @@
       "resets": "Resets on {date}",
       "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
       "exhaustedNoDate": "This period's AI usage is used up. AI features resume when it resets.",
-      "exhaustedTrial": "The free trial's AI usage is used up. Starting the plan below gives its full monthly allowance.",
+      "exhaustedTrial": "Your trial AI credit is used up. Start your plan now for its full monthly AI usage.",
+      "trialState": {
+        "normal": "Trial AI credit",
+        "warning": "Trial AI credit almost used",
+        "exhausted": "Trial AI credit used up"
+      },
+      "trialNote": "Your free trial comes with a starter AI credit. Starting your plan gives its full monthly AI usage.",
+      "trialWarning": "Your trial AI credit is almost used. Starting your plan now gives its full monthly AI usage.",
+      "trialEnds": "The trial ends on {date}",
       "morePlans": "A bigger plan below comes with more.",
       "features": {
         "improve": "Improve suggestions",
