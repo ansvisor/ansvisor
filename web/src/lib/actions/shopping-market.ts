@@ -9,8 +9,9 @@ const PROMPT_MAX_ROWS = 20_000;
  * The brand's countries, for its AI shopping market (#1278): its domains'
  * `country` and every location code its prompts track (`prompts.regions`,
  * states included), deduped and sorted. Codes come back as stored;
- * `marketForCountry` normalizes them. RLS scopes both reads to the caller's
- * organization.
+ * `marketForCountry` normalizes them. On the page RLS scopes both reads to
+ * the caller's organization; the MCP server runs it with the service role,
+ * so their brand_id filters are what keep them to the brand.
  */
 export async function getBrandMarketCountries(brandId: string): Promise<string[]> {
   const supabase = await dbClient();

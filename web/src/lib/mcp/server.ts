@@ -1908,7 +1908,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Product Visibility shelf',
       description:
-        "Product Visibility's Shelf: for each shopping question the brand tracks, on each AI channel, the products the latest answer put on its \"shelf\", in order (rank, title, price, rating, reviews, merchant; `own` for the brand's own, `via` the marketplace it was linked through, `product_id` its catalog product when matched), the brand's best place on it (`own_rank`, null when it isn't on it) and its last 7 days there (`week_own_shelves` of `week_shelves`). The shelves it isn't on come first, then where it ranks lowest. A shelf it isn't on has `why_not_you`: its catalog product the question asks for most, with its readiness for AI shopping (score 0–100 and the checks it misses: gtin, image, inStock, price, description, typeFirst, category, brand); null when none fits. `stats` counts the product slots in the period's answers, those holding the brand's products, its distinct products there, and its slots by channel; `catalog_products` the live catalog (null without one). `absent_only` keeps the shelves it isn't on. Paged: `limit` (default 25, max 100) and `offset`; `total` counts the matching shelves. Needs a plan with Product Visibility.",
+        "Product Visibility's Shelf: for each shopping question the brand tracks, on each AI channel, the first 10 products the latest answer put on its \"shelf\", in order (rank, title, price, rating, reviews, merchant; `own` for the brand's own, `via` the marketplace it was linked through, `product_id` its catalog product when matched) and `products_total`, every product on it; the brand's best place on it (`own_rank`, which can be past the first 10; null when it isn't on it) and its last 7 days there (`week_own_shelves` of `week_shelves`). The shelves it isn't on come first, then where it ranks lowest. A shelf it isn't on has `why_not_you`: its catalog product the question asks for most, with its readiness for AI shopping (score 0–100 and the checks it misses: gtin, image, inStock, price, description, typeFirst, category, brand); null when none fits. `stats` counts the product slots in the period's answers, those holding the brand's products, its distinct products there, and its slots by channel; `catalog_products` the live catalog (null without one). `absent_only` keeps the shelves it isn't on. Paged: `limit` (default 10, max 50) and `offset`; `total` counts the matching shelves. Needs a plan with Product Visibility.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         period: periodInput,
@@ -1922,7 +1922,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
           .boolean()
           .optional()
           .describe("Only the shelves the brand's products aren't on."),
-        limit: z.number().int().min(1).max(100).optional().describe('Shelves a page (default 25).'),
+        limit: z.number().int().min(1).max(50).optional().describe('Shelves a page (default 10).'),
         offset: z.number().int().min(0).optional().describe('Where the page starts (default 0).'),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },

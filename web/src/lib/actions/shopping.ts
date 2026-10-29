@@ -38,6 +38,7 @@ import {
   readForIds,
 } from '@/lib/shopping/catalog-read';
 import { productAiSays, type AiSaysAnswer, type ProductAiSays } from '@/lib/shopping/ai-says';
+import { READINESS_CHANNELS } from '@/lib/shopping/readiness';
 import { FROM_PRODUCTS_KINDS } from '@/lib/action-center/registry';
 import {
   RECHECK_DAYS,
@@ -1200,6 +1201,35 @@ export async function getShoppingShelf(
   };
 }
 
+/**
+ * The AI channels (READINESS_CHANNELS) with the brand's own products on
+ * their shelves over the filter window, whatever its platforms: what
+ * Readiness's channel cards (ECOM-015) read from the Shelf's stats, as one
+ * row a channel instead of every card. The channels are read at once.
+ */
+export async function getShoppingOwnChannels(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<string[]> {
+  if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
+  const supabase = await dbClient();
+  const own = await Promise.all(
+    READINESS_CHANNELS.map(async (platform) => {
+      const { data, error } = await cardsInWindow(
+        supabase,
+        brandId,
+        { ...filters, platforms: [platform] },
+        'id',
+      )
+        .eq('matched_brand_role', 'own')
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return (data ?? []).length > 0;
+    }),
+  );
+  return READINESS_CHANNELS.filter((_, i) => own[i]);
+}
+
 /** Orders from AI visits (CE-017): the last 30 days, the 30 before, and by AI channel. */
 export interface ShoppingAiOrders {
   orders: number;
@@ -1729,7 +1759,8 @@ const AI_SAYS_CITED = 20;
  * that showed it, quoted where they name it, and the sources they cited
  * (lib/shopping/ai-says.ts). Read apart from the product's page, which it
  * follows: the answers' text is the heavy part. Through the member's
- * session (RLS).
+ * session (RLS) on the page; the MCP server runs it with the service role,
+ * so every read here keeps to the brand by its brand_id filter.
  */
 export async function getProductAiSays(
   brandId: string,

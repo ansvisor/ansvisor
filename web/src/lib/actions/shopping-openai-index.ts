@@ -11,8 +11,10 @@ import { assertWritable } from '@/lib/subscription-guard';
  * What "Catalog in OpenAI's product index" reads (#1281): the brand's word
  * that it sends a direct feed, and the cards for its own products in US
  * ChatGPT Shopping answers over the Overview's window, counted by
- * `shopping_merchant_split` (own-product cards, classified or not). RLS and
- * the RPC's membership check keep both to the caller's organization.
+ * `shopping_merchant_split` (own-product cards, classified or not). On the
+ * page, RLS and the RPC's membership check keep both to the caller's
+ * organization; the MCP server runs it with the service role, so the brand
+ * id filter and the RPC's p_brand_id are what keep it to the brand.
  */
 export async function getOpenAiIndexRead(
   brandId: string,

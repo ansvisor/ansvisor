@@ -55,6 +55,7 @@ const shopping = vi.hoisted(() => ({
   getResellerPriceAlerts: vi.fn(),
   getShoppingAmazonShareDropAlert: vi.fn(),
   getShoppingFilterOptions: vi.fn(),
+  getShoppingOwnChannels: vi.fn(),
 }));
 vi.mock('@/lib/actions/shopping', () => shopping);
 const getBrandMarketCountries = vi.hoisted(() => vi.fn());
@@ -157,11 +158,13 @@ beforeEach(() => {
   tables.catalog_products = [{ id: PRODUCT, brand_id: BRAND, title: 'Ridge Trail 2' }];
   getBrandMarketCountries.mockReset().mockResolvedValue(['US-CA', 'DE']);
   shopping.getShoppingShelf.mockReset();
-  shopping.getShoppingProducts.mockReset();
+  // No catalog, unless a test gives one.
+  shopping.getShoppingProducts.mockReset().mockResolvedValue(null);
   shopping.getProductAiSays.mockReset();
   shopping.getResellerPriceAlerts.mockReset();
   shopping.getShoppingAmazonShareDropAlert.mockReset();
   shopping.getShoppingFilterOptions.mockReset();
+  shopping.getShoppingOwnChannels.mockReset();
   getOpenAiIndexRead.mockReset();
   readCatalogSources.mockReset();
 });
@@ -187,16 +190,23 @@ describe('who may read it', () => {
     expect(await getProductAiSaysFor(auth, { brandId: BRAND, productId: PRODUCT })).toEqual(
       PLAN_LOCKED,
     );
-    // A trial that ended reads as Starter too; self-hosting has every feature.
+    // A plan with it says which: the first one, by name.
+    expect(PLAN_LOCKED.message).toContain('Growth or above');
+  });
+
+  it('reads on for a trial that ended, as the read-only page does, and on a self-hosted one', async () => {
+    shopping.getShoppingShelf.mockImplementation(loader(() => shelf([])));
     tables.organizations[0] = {
       ...tables.organizations[0],
       plan: 'growth',
       subscription_status: 'canceled',
     };
+    expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toMatchObject({ total: 0 });
+    // Its own plan, ended, without Product Visibility stays locked.
+    tables.organizations[0].plan = 'starter';
     expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toEqual(PLAN_LOCKED);
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
-    shopping.getShoppingShelf.mockImplementation(loader(() => shelf([])));
-    expect(await getShoppingShelfFor(auth, { brandId: BRAND })).not.toEqual(PLAN_LOCKED);
+    expect(await getShoppingShelfFor(auth, { brandId: BRAND })).toMatchObject({ total: 0 });
   });
 });
 
@@ -249,10 +259,50 @@ describe('get_shopping_shelf', () => {
           product_id: null,
         },
       ],
+      products_total: 1,
       why_not_you: null,
     });
-    // Every shelf has the brand: no products read for "Why not you?".
-    expect(shopping.getShoppingProducts).not.toHaveBeenCalled();
+    // The products for "Why not you?" are read beside the shelves, as the page does.
+    expect(shopping.getShoppingProducts).toHaveBeenCalledWith(BRAND, {
+      datePreset: '30d',
+      platforms: ['chatgpt-shopping'],
+      chatgptMarket: 'us',
+    });
+  });
+
+  it('reads the products beside the shelves, and waits for them only when a shelf lacks the brand', async () => {
+    let shelfDone: (value: ShoppingShelf) => void = () => {};
+    shopping.getShoppingShelf.mockReturnValue(
+      new Promise<ShoppingShelf>((resolve) => (shelfDone = resolve)),
+    );
+    shopping.getShoppingProducts.mockRejectedValue(new Error('timeout'));
+    const read = getShoppingShelfFor(auth, { brandId: BRAND });
+    await vi.waitFor(() => expect(shopping.getShoppingProducts).toHaveBeenCalled());
+    // Every shelf has the brand: a failed products read is none of its business.
+    shelfDone(shelf([row({ ownRank: 1 })]));
+    expect(await read).toMatchObject({ total: 1 });
+    // A shelf without it needs them: their read's failure is the call's.
+    shopping.getShoppingShelf.mockResolvedValue(shelf([row({})]));
+    await expect(getShoppingShelfFor(auth, { brandId: BRAND })).rejects.toThrow('timeout');
+  });
+
+  it("gives a shelf's first 10 products, and pages 10 shelves at a time, 50 at most", async () => {
+    const cards = Array.from({ length: 12 }, (_, i) => ({ ...row({}).cards[0], rank: i + 1 }));
+    shopping.getShoppingShelf.mockResolvedValue(
+      shelf(
+        Array.from({ length: 60 }, (_, i) =>
+          row({ key: `k${i}`, promptId: `q${i}`, ownRank: 1, cards }),
+        ),
+      ),
+    );
+    const page = await getShoppingShelfFor(auth, { brandId: BRAND });
+    if (!page || !('shelves' in page)) throw new Error('no shelves');
+    expect(page).toMatchObject({ total: 60, next_offset: 10 });
+    expect(page.shelves).toHaveLength(10);
+    expect(page.shelves[0].products.map((p) => p.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(page.shelves[0].products_total).toBe(12);
+    const most = await getShoppingShelfFor(auth, { brandId: BRAND, limit: 500 });
+    expect(most && 'shelves' in most && most.shelves).toHaveLength(50);
   });
 
   it('says which of its products a shelf it isn’t on asks for most', async () => {
@@ -301,8 +351,8 @@ describe('get_shopping_shelf', () => {
       platforms: undefined,
       chatgptMarket: undefined,
     });
-    // No catalog: no "Why not you?" to read for.
-    expect(shopping.getShoppingProducts).not.toHaveBeenCalled();
+    // No catalog: no "Why not you?" to give.
+    expect(first && 'shelves' in first && first.shelves[0].why_not_you).toBeNull();
     const absent = await getShoppingShelfFor(auth, { brandId: BRAND, absentOnly: true, offset: 1 });
     expect(absent).toMatchObject({ total: 2, next_offset: null });
     expect(absent && 'shelves' in absent && absent.shelves.map((s) => s.prompt_id)).toEqual(['b']);
@@ -325,7 +375,7 @@ describe('get_shopping_readiness', () => {
       platforms: ['chatgpt-shopping', 'google-aimode'],
       regions: [],
     });
-    shopping.getShoppingShelf.mockImplementation(loader(() => shelf([])));
+    shopping.getShoppingOwnChannels.mockImplementation(loader(() => ['google-aimode']));
   });
 
   it('checks the catalog as the Readiness tab does, in its words, with where each fix starts', async () => {
@@ -362,6 +412,22 @@ describe('get_shopping_readiness', () => {
       { platform: 'gemini-web', state: 'notTracked' },
       { platform: 'copilot-web', state: 'notTracked' },
     ]);
+    // The channels from one row each, not the shelves' every card.
+    expect(shopping.getShoppingOwnChannels).toHaveBeenCalledWith(BRAND, {
+      datePreset: '30d',
+      chatgptMarket: 'us',
+    });
+    expect(shopping.getShoppingShelf).not.toHaveBeenCalled();
+  });
+
+  it("says so when the channels can't be read, and keeps the checklist", async () => {
+    shopping.getShoppingOwnChannels.mockRejectedValue(new Error('timeout'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const read = await getShoppingReadinessFor(auth, { brandId: BRAND });
+    if (!read || !('checks' in read)) throw new Error('no readiness');
+    expect(read.channels).toBeNull();
+    expect(read.unread).toEqual(['channels']);
+    expect(typeof read.score).toBe('number');
   });
 
   it('writes a wrong price as a price', async () => {

@@ -1,11 +1,12 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
-import { hasFeature } from '@/config/plans';
+import { PLANS, getMinimumPlanForFeature, hasFeature } from '@/config/plans';
 import {
   getProductAiSays,
   getResellerPriceAlerts,
   getShoppingAmazonShareDropAlert,
   getShoppingFilterOptions,
+  getShoppingOwnChannels,
   getShoppingProducts,
   getShoppingShelf,
   type ShoppingDatePreset,
@@ -13,11 +14,11 @@ import {
 } from '@/lib/actions/shopping';
 import { getBrandMarketCountries } from '@/lib/actions/shopping-market';
 import { getOpenAiIndexRead } from '@/lib/actions/shopping-openai-index';
-import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { readCatalogSources } from '@/lib/shopping/catalog-read';
 import { defaultMarket, type ShoppingMarket } from '@/lib/shopping/markets';
-import type { ReadinessCheck } from '@/lib/shopping/products';
+import type { ProductRow, ReadinessCheck } from '@/lib/shopping/products';
 import {
   READINESS_CHANNELS,
   channelState,
@@ -46,10 +47,12 @@ export interface PlanLocked {
   message: string;
 }
 
+/** The first plan with Product Visibility, by its name ("Growth"). */
+const PV_PLAN = PLANS[getMinimumPlanForFeature('shopping_analytics')].name;
+
 export const PLAN_LOCKED: PlanLocked = {
   error: 'plan',
-  message:
-    "Product Visibility's Shelf, Readiness and What AI says need a plan with Product Visibility (Growth or Enterprise).",
+  message: `Product Visibility's Shelf, Readiness and What AI says need a plan with Product Visibility: ${PV_PLAN} or above.`,
 };
 
 export const isPlanLocked = (read: unknown): read is PlanLocked =>
@@ -58,14 +61,21 @@ export const isPlanLocked = (read: unknown): read is PlanLocked =>
 /** The windows a read takes, as the page's date filter. */
 export const PV_PERIODS: readonly ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
-const SHELVES_DEFAULT = 25;
-const SHELVES_MAX = 100;
+const SHELVES_DEFAULT = 10;
+const SHELVES_MAX = 50;
+/** A shelf's products given, from the top; `products_total` counts them all. */
+const SHELF_PRODUCTS = 10;
 
 /** The page's loaders, with the service role in their dbClient(). */
 const asService = <T>(read: () => Promise<T>) =>
   withDbClient(supabaseAdmin as unknown as Awaited<ReturnType<typeof dbClient>>, read);
 
-/** Null for another organization's brand, PLAN_LOCKED without Product Visibility, else nothing in the way. */
+/**
+ * Null for another organization's brand, PLAN_LOCKED without Product
+ * Visibility, else nothing in the way. The plan is the one the organization
+ * is on, as the page reads it: a trial or subscription that ended leaves the
+ * workspace read-only, its reads open.
+ */
 async function access(auth: McpAuthContext, brandId: string): Promise<null | PlanLocked | true> {
   if (!(await brandInOrg(auth, brandId))) return null;
   const { data, error } = await supabaseAdmin
@@ -74,7 +84,7 @@ async function access(auth: McpAuthContext, brandId: string): Promise<null | Pla
     .eq('id', auth.organizationId!)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return hasFeature(planFromOrgRow(data), 'shopping_analytics') ? true : PLAN_LOCKED;
+  return hasFeature(usagePlanFromOrgRow(data).plan, 'shopping_analytics') ? true : PLAN_LOCKED;
 }
 
 /**
@@ -132,7 +142,10 @@ export interface McpShelf {
   own_rank: number | null;
   week_shelves: number;
   week_own_shelves: number;
+  /** Its first SHELF_PRODUCTS products, from the top. */
   products: McpShelfProduct[];
+  /** Every product on the shelf. */
+  products_total: number;
   why_not_you: McpWhyNotYou | null;
 }
 
@@ -182,15 +195,22 @@ export async function getShoppingShelfFor(
       platforms: params.platform ? [params.platform] : undefined,
       chatgptMarket: market ?? undefined,
     };
+    // "Why not you?" picks from the products the page's Products table reads
+    // over the same window: read beside the shelves, as the page does, and
+    // waited for only when a shelf on this page lacks the brand's products.
+    const productsRead = getShoppingProducts(params.brandId, filters).then(
+      (read) => ({ rows: read?.rows ?? [] }),
+      (err: unknown) => ({ err }),
+    );
     const shelf = await getShoppingShelf(params.brandId, filters);
     const rows = params.absentOnly ? shelf.rows.filter((row) => row.ownRank === null) : shelf.rows;
     const page = rows.slice(offset, offset + limit);
-    // "Why not you?" picks from the products the page's Products table reads
-    // over the same window, only when a shelf here needs one.
-    const products =
-      shelf.catalogProducts && page.some((row) => row.ownRank === null)
-        ? ((await getShoppingProducts(params.brandId, filters))?.rows ?? [])
-        : [];
+    let products: readonly ProductRow[] = [];
+    if (shelf.catalogProducts && page.some((row) => row.ownRank === null)) {
+      const read = await productsRead;
+      if ('err' in read) throw read.err;
+      products = read.rows;
+    }
 
     return {
       period,
@@ -217,7 +237,7 @@ export async function getShoppingShelfFor(
           own_rank: row.ownRank,
           week_shelves: row.weekShelves,
           week_own_shelves: row.weekOwnShelves,
-          products: row.cards.map((card) => ({
+          products: row.cards.slice(0, SHELF_PRODUCTS).map((card) => ({
             rank: card.rank,
             title: card.title,
             price: card.price,
@@ -229,6 +249,7 @@ export async function getShoppingShelfFor(
             via: card.via,
             product_id: card.productId,
           })),
+          products_total: row.cards.length,
           why_not_you: missing && {
             product_id: missing.product.id,
             title: missing.product.title,
@@ -273,7 +294,8 @@ export interface McpReadiness {
   channels: { platform: string; state: ChannelState }[] | null;
   /**
    * The reads that failed: the catalog's sources or its products (no score:
-   * it would be another one without them), or the shelves (no channels).
+   * it would be another one without them), or which channels hold its
+   * products (no channels).
    */
   unread: ('sources' | 'products' | 'channels')[];
 }
@@ -298,7 +320,7 @@ export async function getShoppingReadinessFor(
     const own = await marketOf(brandId, params.market);
     const market = own ?? 'us';
     const filters: ShoppingFilters = { datePreset: period, chatgptMarket: own ?? undefined };
-    const [sources, products, openAi, cheaper, amazonDrop, options, shelf] = await Promise.all([
+    const [sources, products, openAi, cheaper, amazonDrop, options, ownOn] = await Promise.all([
       orNull('catalog sources', readCatalogSources(supabaseAdmin, brandId)),
       getShoppingProducts(brandId, filters).then(
         (read) => read?.rows ?? null,
@@ -312,7 +334,8 @@ export async function getShoppingReadinessFor(
       orNull('reseller prices', getResellerPriceAlerts(brandId, filters)),
       orNull('the Amazon share', getShoppingAmazonShareDropAlert(brandId)),
       getShoppingFilterOptions(brandId),
-      orNull('the shelves', getShoppingShelf(brandId, filters)),
+      // Which channels hold its products: one row a channel, not every card on the shelves.
+      orNull('the channels', getShoppingOwnChannels(brandId, filters)),
     ]);
     const { score, items } = readinessChecklist({
       market,
@@ -325,9 +348,10 @@ export async function getShoppingReadinessFor(
     const unread: McpReadiness['unread'] = [
       ...(sources === null ? (['sources'] as const) : []),
       ...(products === 'failed' ? (['products'] as const) : []),
-      ...(shelf === null ? (['channels'] as const) : []),
+      ...(ownOn === null ? (['channels'] as const) : []),
     ];
-    const ownSlots = new Map(shelf?.stats.channels.map((c) => [c.platform, c.ownSlots]) ?? []);
+    // channelState asks for the brand's slots on each channel: one at least, where it has any.
+    const ownSlots = new Map((ownOn ?? []).map((platform) => [platform, 1]));
 
     return {
       market,
@@ -346,7 +370,7 @@ export async function getShoppingReadinessFor(
           fix: item.action ?? null,
         };
       }),
-      channels: shelf
+      channels: ownOn
         ? READINESS_CHANNELS.map((platform) => ({
             platform,
             state: channelState(platform, options.platforms, ownSlots),
