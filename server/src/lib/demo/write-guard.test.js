@@ -21,6 +21,9 @@ const NOT_A_BRAND_ROW = {
   api_keys: "The organization's API keys.",
   brands:
     "The brands themselves: their policies refuse a demo brand's insert, update and delete (00380).",
+  chat_auto_choices:
+    "A person's \"Don't ask again\" ticks in Chat (00401), by tool, in their workspace: no brand's.",
+  chat_user_prefs: "A person's own Chat preferences (00400): no brand's.",
   content_authors: "The organization's authors, shared by its brands.",
   content_rule_sets: "The organization's content rules per page type, shared by its brands.",
   integration_connections: "The organization's Google connections.",
