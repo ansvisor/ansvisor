@@ -88,3 +88,26 @@ export function shouldShowDashboardNavItem(
   if (section && hiddenSections.has(section)) return false;
   return !item.requiresBrandPref || brandPrefs[item.requiresBrandPref];
 }
+
+/** Chat's menu item: its route stays /dashboard/agent. */
+export const CHAT_HREF = '/dashboard/agent';
+
+/**
+ * The badge beside a menu item. Chat has its own: while the demo brand is
+ * open, that it comes next week (`chatSoon`, the words to show); else "Set
+ * up" while the organization has no provider key for it (cloud only).
+ * Every other item keeps its own.
+ */
+export function dashboardNavBadge(
+  item: NavItem,
+  {
+    chatSoon = null,
+    agentKeyMissing = false,
+  }: { chatSoon?: string | null; agentKeyMissing?: boolean },
+): string | undefined {
+  if (item.href === CHAT_HREF) {
+    if (chatSoon) return chatSoon;
+    if (agentKeyMissing) return 'Set up';
+  }
+  return item.badge;
+}

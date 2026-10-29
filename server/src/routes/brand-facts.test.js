@@ -15,6 +15,7 @@ const assertBrandAccess = vi.fn();
 const readBrandFacts = vi.fn();
 const setFactStatus = vi.fn();
 const isOrgActive = vi.fn();
+const isDemoBrand = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -39,6 +40,9 @@ vi.mock('../lib/brand-facts.js', () => ({
 vi.mock('../lib/active-subscriptions.js', () => ({
   isOrgActive: (...args) => isOrgActive(...args),
 }));
+vi.mock('../middleware/demo-brand.js', () => ({
+  isDemoBrand: (...args) => isDemoBrand(...args),
+}));
 
 const { default: router } = await import('./brand-facts.js');
 
@@ -52,6 +56,7 @@ beforeEach(async () => {
   readBrandFacts.mockReset().mockResolvedValue({ facts: [], pages: [], paused: false });
   setFactStatus.mockReset().mockResolvedValue({ id: FACT, status: 'approved' });
   isOrgActive.mockReset().mockResolvedValue(true);
+  isDemoBrand.mockReset().mockResolvedValue(false);
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -83,6 +88,14 @@ describe('/api/brand-facts', () => {
     const res = await send(`?brandId=${BRAND}`, 'GET');
     expect(res.status).toBe(200);
     expect(isOrgActive).toHaveBeenCalledWith('o1');
+    expect(readBrandFacts).toHaveBeenCalledWith(BRAND, { orgId: 'o1', keptOnly: true });
+  });
+
+  it('reads only what is kept on a demo brand: its facts are sample data', async () => {
+    isDemoBrand.mockResolvedValue(true);
+    const res = await send(`?brandId=${BRAND}`, 'GET');
+    expect(res.status).toBe(200);
+    expect(isDemoBrand).toHaveBeenCalledWith(BRAND);
     expect(readBrandFacts).toHaveBeenCalledWith(BRAND, { orgId: 'o1', keptOnly: true });
   });
 

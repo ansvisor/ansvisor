@@ -17,17 +17,29 @@ let db;
 function table(name) {
   let op = 'select';
   let row = null;
+  const filters = {};
   const result = (single = false) => {
     if (op === 'insert') {
       db.inserts.push({ table: name, row });
-      return { data: name === 'prompt_suggestions' ? row : null, error: null };
+      if (name !== 'prompt_suggestions') return { data: null, error: null };
+      if (db.insertError) return { data: null, error: db.insertError };
+      return { data: row.map((r, i) => ({ id: `new-${i}`, ...r })), error: null };
     }
-    if (op === 'delete') return { data: null, error: null };
+    if (op === 'update') {
+      db.updates.push({ table: name, row, filters });
+      return { data: { ...row, id: filters.id }, error: null };
+    }
+    if (op === 'delete') {
+      db.deletes.push({ table: name, filters });
+      return { data: null, error: null };
+    }
+    // The undecided batch the refresh replaces.
+    if (name === 'prompt_suggestions') return { data: db.current, error: null };
     if (name === 'brands') {
       const brand = { id: 'b1', name: 'Acme', language: 'en', organization_id: 'o1' };
       return { data: brand, error: null };
     }
-    if (name === 'profiles') return { data: { organization_id: 'o1' }, error: null };
+    if (name === 'profiles') return { data: { organization_id: 'o1', role: 'admin' }, error: null };
     // The topic lookup for each suggestion finds one; the topic list is empty.
     if (name === 'topics') return { data: single ? { id: 't1' } : [], error: null };
     return { data: [], error: null };
@@ -50,6 +62,19 @@ function table(name) {
         if (prop === 'delete') {
           return () => {
             op = 'delete';
+            return chain;
+          };
+        }
+        if (prop === 'update') {
+          return (r) => {
+            op = 'update';
+            row = r;
+            return chain;
+          };
+        }
+        if (prop === 'eq' || prop === 'in') {
+          return (column, value) => {
+            filters[column] = value;
             return chain;
           };
         }
@@ -114,7 +139,7 @@ const modelEnv = process.env.PROMPT_SUGGESTION_MODEL;
 beforeEach(async () => {
   vi.clearAllMocks();
   delete process.env.PROMPT_SUGGESTION_MODEL;
-  db = { inserts: [] };
+  db = { inserts: [], updates: [], deletes: [], current: [], insertError: null };
   reserveRelevanceAllowance.mockResolvedValue({ unlimited: false, id: 'r1' });
   getCatalogSuggestionCandidates.mockResolvedValue([]);
   settleRelevanceUsage.mockResolvedValue();
@@ -124,7 +149,7 @@ beforeEach(async () => {
   app.use(express.json());
   app.use((req, _res, next) => {
     req.user = { id: 'u1' };
-    req.log = { error: vi.fn(), info: vi.fn() };
+    req.log = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
     next();
   });
   app.use('/api/prompts', router);
@@ -266,5 +291,56 @@ describe('suggestion refresh from the catalog (ECOM-003)', () => {
     const { system, prompt } = generateObject.mock.calls[0][0];
     expect(system).not.toContain('WHAT THE BRAND SELLS');
     expect(prompt).not.toContain('product catalog categories');
+  });
+});
+
+describe('suggestion refresh keeps the list', () => {
+  const old = (id, text) => ({ id, brand_id: 'b1', suggested_text: text, status: 'new' });
+  const deletedIds = () =>
+    db.deletes.filter((d) => d.table === 'prompt_suggestions').flatMap((d) => d.filters.id);
+
+  it('adds the new batch first, then removes the old one', async () => {
+    db.current = [old('o1', 'an old question'), old('o2', 'another old question')];
+
+    const res = await refresh();
+
+    expect(res.status).toBe(200);
+    const [rows] = insertsInto('prompt_suggestions');
+    expect(rows).toHaveLength(15);
+    expect(deletedIds()).toEqual(['o1', 'o2']);
+    expect(db.deletes[0].filters).toMatchObject({ status: 'new' });
+    const { suggestions } = await res.json();
+    expect(suggestions).toHaveLength(15);
+  });
+
+  it('leaves the old batch in place when the insert fails', async () => {
+    db.current = [old('o1', 'an old question')];
+    // A database without 00362 turns down source 'catalog'.
+    db.insertError = { code: '23514', message: 'violates check constraint' };
+
+    expect((await refresh()).status).toBe(500);
+    expect(db.deletes).toEqual([]);
+    expect(db.updates).toEqual([]);
+  });
+
+  it('refreshes a text it already has in its own row, not a second one', async () => {
+    const repeated = suggestion(3).text;
+    db.current = [old('o1', repeated.toUpperCase()), old('o2', 'an old question')];
+
+    const res = await refresh();
+
+    expect(res.status).toBe(200);
+    const [rows] = insertsInto('prompt_suggestions');
+    expect(rows).toHaveLength(14);
+    expect(rows.some((r) => r.suggested_text === repeated)).toBe(false);
+    expect(db.updates).toHaveLength(1);
+    expect(db.updates[0]).toMatchObject({
+      row: { suggested_text: repeated, status: 'new' },
+      filters: { id: 'o1', status: 'new' },
+    });
+    expect(deletedIds()).toEqual(['o2']);
+    const { suggestions } = await res.json();
+    expect(suggestions).toHaveLength(15);
+    expect(suggestions[3]).toMatchObject({ id: 'o1', suggested_text: repeated });
   });
 });

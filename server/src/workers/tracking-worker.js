@@ -4,7 +4,8 @@
  */
 
 import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
-import { submitScraperTask, pollScraperResult } from '../lib/cloro-scraper.js';
+import { isLegacyChatgptTask, pollScraperResult, submitPromptTask } from '../lib/cloro-scraper.js';
+import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
 import { hasFeature, getPlan, isCloud } from '../config/plans.js';
@@ -14,14 +15,14 @@ import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
-import {
-  isUnknownCity,
-  locationsForModels,
-  locationsForScraper,
-  parseLocation,
-} from '../lib/locations.js';
+import { isUnknownCity, locationsForModels, locationsForScraper } from '../lib/locations.js';
 import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
+import {
+  FIRST_RUN_LATE_POLL_MS,
+  isFirstRun,
+  progressiveRollups,
+} from '../lib/first-run-rollups.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -174,10 +175,73 @@ export function interactiveTailExhausted({ pending, expected, quietPolls, quietP
 }
 
 /**
- * Core logic: fetch prompts, run them through specified models, store results.
- * @param {{ brandId: string, promptId?: string, promptIds?: string[], source?: string, job?: { progress: function, signal?: AbortSignal } }} opts
+ * Whether a run's ChatGPT tasks may ask for their fan-out at all: only the
+ * nightly run's first attempt. A manual run, a new prompt's first run, a
+ * retry or a recovered run would ask again on a day the prompt may already
+ * have paid +2 credits for it.
  */
-export async function processTrackingJob({ brandId, promptId, promptIds, source, job }) {
+export function runAsksChatgptFanout({ source, attempt }) {
+  return source === 'cron' && attempt === 1;
+}
+
+/**
+ * A run's scraper tasks: one per prompt × engine × location that engine can
+ * run. `region` carries the full location code — it is what gets stamped on
+ * the result row, so a Google run collapsed to its country is recorded as the
+ * country it actually ran in, not the state that was asked for.
+ *
+ * `chatgptFanout` is `{ mode, date }` when the run may ask (see
+ * runAsksChatgptFanout), else null. A prompt's ChatGPT tasks then ask on its
+ * day of the week (chatgpt-fanout.js), every location's alike.
+ */
+export function scraperTasksFor(prompts, { platformsFor, locationsFor, chatgptFanout }) {
+  const tasks = [];
+  for (const prompt of prompts) {
+    for (const scraperId of platformsFor(prompt)) {
+      const legacy =
+        chatgptFanout != null &&
+        scraperId === 'chatgpt-web' &&
+        chatgptFanoutDue(prompt.id, chatgptFanout.date, chatgptFanout.mode);
+      for (const region of locationsFor(prompt, scraperId)) {
+        tasks.push({ prompt, scraperId, region, legacy });
+      }
+    }
+  }
+  return tasks;
+}
+
+/**
+ * Poll one of a run's tasks (polling mode). A legacy ChatGPT task that Cloro
+ * took and then failed goes once more without legacy and is polled in its
+ * place, so the day keeps its answer; the webhook path does the same in
+ * routes/cloro-callback.js. `legacy` is the submission's own record, as
+ * polling has no pending row.
+ */
+export async function pollTrackingTask({ taskId, scraperId, legacy, meta }) {
+  try {
+    return await pollScraperResult(taskId, scraperId);
+  } catch (err) {
+    if (!(err?.taskFailed && isLegacyChatgptTask({ scraperId, legacy }))) throw err;
+    logger.warn(
+      { err, taskId, scraperId, promptId: meta.prompt.id },
+      'chatgpt fan-out task failed at cloro; submitting it again without fan-out',
+    );
+    const again = await submitPromptTask({
+      promptText: meta.prompt.text,
+      promptId: meta.prompt.id,
+      scraperId,
+      region: meta.region,
+    });
+    return pollScraperResult(again.taskId, scraperId);
+  }
+}
+
+/**
+ * Core logic: fetch prompts, run them through specified models, store results.
+ * `attempt` is the job's attempt number (1 on its first run).
+ * @param {{ brandId: string, promptId?: string, promptIds?: string[], source?: string, attempt?: number, job?: { progress: function, signal?: AbortSignal } }} opts
+ */
+export async function processTrackingJob({ brandId, promptId, promptIds, source, attempt, job }) {
   // 1. Fetch brand info with domains
   const { data: brand, error: brandErr } = await supabaseAdmin
     .from('brands')
@@ -244,6 +308,12 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   const isFullRun = !promptId && (!promptIds || promptIds.length === 0);
   let trackingRunId = null;
   let trackingRunStartedAt = null;
+  // A brand's first full run (no run of it ever stamped) fills the rollups as
+  // its answers land, and checks for its stamp more often
+  // (first-run-rollups.js). Read before this run's own row exists. Not the
+  // job's `afterPayment`, which only orders the queue: a new brand's first
+  // run need not follow a payment.
+  const firstRun = isFullRun && (await isFirstRun(brandId));
   if (isFullRun) {
     // A run that died mid-flight (crash, abort) leaves an uncompleted row;
     // clear those so at most one in-progress row exists per brand.
@@ -336,9 +406,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     supportedLocations(locationsFor(prompt), scraperId, supportedCountries);
 
   // 4. Count total tasks: one per prompt × engine × location that engine can
-  // actually run. Google AIO / AI Mode have no sub-country mechanism, so
-  // their state locations collapse to one country-wide task — counting them
-  // per state would promise the progress bar work that is never submitted.
+  // actually run: a city only by Google's engines, a US state by every one.
   let totalTasks = 0;
   let unsupported = 0;
   for (const prompt of prompts) {
@@ -361,6 +429,16 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   let insertedCount = 0;
   let completedTasks = 0;
 
+  const firstRunRollups = progressiveRollups({
+    brandId,
+    startedAt: trackingRunStartedAt,
+    enabled: firstRun,
+  });
+  // Answers landed so far, for the refresher: those this worker stored, and
+  // in webhook mode the Cloro tasks answered (the callback stores those).
+  let scraperProcessed = 0;
+  const landedSoFar = () => insertedCount + scraperProcessed;
+
   async function insertResult(row) {
     // `created_at` comes back from the insert rather than being stamped here:
     // the citation rows copy it, and a value computed in app code would drift
@@ -375,6 +453,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       throw error;
     }
     insertedCount++;
+    firstRunRollups.note(landedSoFar());
     // Best-effort: mark target URLs cited by this answer (00032).
     await updateTargetUrlStats(row.prompt_id, row.citations, new Date().toISOString());
     // Best-effort: expand the citation array into rows (#732). The jsonb
@@ -388,26 +467,28 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     });
   }
 
-  // 6. Phase 1: Collect & run all scraper (platform) tasks first
-  const scraperTasks = [];
-  for (const prompt of prompts) {
-    const scrapersToRun = allowedPlatformsFor(prompt);
-
-    for (const scraperId of scrapersToRun) {
-      // `region` carries the full location code — it is what gets stamped on
-      // the result row, so a Google run collapsed to its country is recorded
-      // as the country it actually ran in, not the state that was asked for.
-      for (const region of scraperLocations(prompt, scraperId)) {
-        scraperTasks.push({ prompt, scraperId, region });
-      }
-    }
-  }
+  // 6. Phase 1: Collect & run all scraper (platform) tasks first. A prompt's
+  // ChatGPT answer asks for its fan-out on its day of the week
+  // (CLORO_CHATGPT_FANOUT), on the nightly run's first attempt only; the
+  // mode and the day are read once for the whole run.
+  const scraperTasks = scraperTasksFor(prompts, {
+    platformsFor: allowedPlatformsFor,
+    locationsFor: scraperLocations,
+    chatgptFanout: runAsksChatgptFanout({ source, attempt })
+      ? { mode: chatgptFanoutMode(), date: new Date() }
+      : null,
+  });
 
   const webhookUrl = process.env.CLORO_WEBHOOK_URL;
 
   if (scraperTasks.length > 0) {
     logger.info(
-      { brandId, count: scraperTasks.length, mode: webhookUrl ? 'webhook' : 'polling' },
+      {
+        brandId,
+        count: scraperTasks.length,
+        chatgptFanout: scraperTasks.filter((t) => t.legacy).length,
+        mode: webhookUrl ? 'webhook' : 'polling',
+      },
       'submitting scraper tasks to cloro',
     );
 
@@ -423,21 +504,19 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
-      scraperTasks.map((t) => {
-        // Targeting comes from the prompt's own location, not from the
-        // brand's single state column (#691): different prompts can target
-        // different places, and a brand-wide override would silently win
-        // over them.
-        const { country, state, city } = parseLocation(t.region);
-        return submitScraperTask(t.prompt.text, t.scraperId, country, {
+      scraperTasks.map((t) =>
+        submitPromptTask({
+          promptText: t.prompt.text,
+          promptId: t.prompt.id,
+          scraperId: t.scraperId,
+          region: t.region,
+          legacy: t.legacy,
           webhookUrl,
-          state,
-          location: city?.google,
         }).then((res) => ({
           ...res,
           meta: t,
-        }));
-      }),
+        })),
+      ),
     );
 
     const submitted = [];
@@ -462,12 +541,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       // Webhook mode: persist (taskId → prompt) mapping; the /cloro/callback
       // endpoint will pick up results asynchronously when Cloro pushes them.
       if (submitted.length > 0) {
-        const pendingRows = submitted.map(({ taskId, scraperId, meta }) => ({
+        // `legacy` (00378): the task went to ChatGPT's legacy interface, so
+        // the callback sends it again without it if Cloro fails it.
+        const pendingRows = submitted.map(({ taskId, scraperId, meta, legacy }) => ({
           task_id: taskId,
           prompt_id: meta.prompt.id,
           brand_id: brandId,
           scraper_id: scraperId,
           region: meta.region,
+          legacy: legacy === true,
         }));
 
         const { error: pendingErr } = await supabaseAdmin
@@ -609,6 +691,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           const pending = ourRows.length;
           pendingAtExit = pending;
           const processed = expectedSubmitted - pending;
+          scraperProcessed = processed;
+          firstRunRollups.note(landedSoFar());
           const allPendingAreOld = allTasksAreStale(ourRows, ghostTaskAgeMs);
 
           // "Delivery started" has to mean a result actually landed, not just
@@ -744,10 +828,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
 
       // Polling fallback: wait for each task inline (legacy behavior)
       await Promise.allSettled(
-        submitted.map(async ({ taskId, scraperId, meta }) => {
+        submitted.map(async ({ taskId, scraperId, meta, legacy }) => {
           try {
             logger.debug({ taskId, scraperId }, 'polling scraper task');
-            const aiResponse = await pollScraperResult(taskId, scraperId);
+            const aiResponse = await pollTrackingTask({ taskId, scraperId, legacy, meta });
             logger.debug({ taskId, scraperId }, 'scraper task completed, inserting result');
 
             const mentionCount = countBrandMentions(aiResponse.text, brandInfo);
@@ -861,6 +945,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
             competitor_mentions: metrics.competitorMentions,
             mention_position: metrics.mentionPosition,
             mentioned_entity_count: metrics.mentionedEntityCount,
+            // The searches the model ran, where its API gives them (OpenAI's web_search).
+            search_queries: Array.isArray(aiResponse.search_queries)
+              ? aiResponse.search_queries
+              : [],
           });
         } catch (err) {
           logger.error({ err, model: modelName, region }, 'ai model task failed');
@@ -924,17 +1012,26 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // would recompute the previous run's window and mail numbers the recipient
   // already has.
   const settlement = trackingRunId
-    ? await settleTrackingRun({
-        brandId,
-        runId: trackingRunId,
-        startedAt: trackingRunStartedAt,
-        plannedTasks: totalTasks,
-      })
-    : { stamped: false, lateStamp: null };
+    ? await settleTrackingRun(
+        {
+          brandId,
+          runId: trackingRunId,
+          startedAt: trackingRunStartedAt,
+          plannedTasks: totalTasks,
+        },
+        // A first run also hands over its rollup refresher: the stamp waits
+        // for it, and late answers keep the rollups moving.
+        firstRun ? { pollMs: FIRST_RUN_LATE_POLL_MS, rollups: firstRunRollups } : undefined,
+      )
+    : { stamped: false, lateStamp: null, resultCount: null };
 
   return {
-    resultCount: insertedCount,
+    // A webhook's answers are stored by /cloro/callback, never through
+    // insertResult: the settlement's count, read from the table, has them.
+    resultCount: settlement.resultCount ?? insertedCount,
     stamped: settlement.stamped,
+    // Still arriving: the run waits for its late answers before it stamps.
+    stillArriving: Boolean(settlement.lateStamp),
     lateStamp: settlement.lateStamp,
   };
 }

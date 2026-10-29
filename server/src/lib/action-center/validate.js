@@ -762,7 +762,11 @@ export async function sweepActionValidation({ now = new Date() } = {}) {
   for (;;) {
     let query = supabaseAdmin
       .from('actions')
-      .select('id, brand_id, kind, payload, kpi_keys, created_at, completed_at, validation')
+      .select(
+        'id, brand_id, kind, payload, kpi_keys, created_at, completed_at, validation, brands!inner(is_demo)',
+      )
+      // A demo brand's actions (00380) are sample data: their outcomes are written with them.
+      .eq('brands.is_demo', false)
       .eq('status', 'completed')
       // Never measured, or read but not for the last time yet (learning B1).
       // One measured once before the later readings came keeps its result.

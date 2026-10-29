@@ -2,6 +2,7 @@ import { BROWSER_API_BASE_URL } from '@/config/api';
 import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
 import type { CmsFields, CmsPage } from '@/lib/content/cms-send';
+import { lastSend } from '@/lib/content/cms-status';
 
 /**
  * Send to CMS from the browser (#1331), through the API's same-origin proxy:
@@ -11,9 +12,9 @@ import type { CmsFields, CmsPage } from '@/lib/content/cms-send';
 
 /**
  * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
- * WordPress site or its Framer collection (phase 2).
+ * WordPress site, its Framer collection or its Wix site's Blog (phase 2).
  */
-export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer';
+export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix';
 
 /** Why a send didn't go, as the server names it. */
 export type CmsSendError =
@@ -35,6 +36,10 @@ export type CmsSendError =
   | 'no_framer'
   | 'framer_refused'
   | 'framer_not_ready'
+  // Wix (00372): not on this server, not connected, or its API key refused.
+  | 'wix_not_configured'
+  | 'no_wix'
+  | 'wix_refused'
   | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
@@ -93,6 +98,9 @@ const KNOWN: readonly CmsSendError[] = [
   'no_framer',
   'framer_refused',
   'framer_not_ready',
+  'wix_not_configured',
+  'no_wix',
+  'wix_refused',
   'in_progress',
   'daily_limit',
   'forbidden',
@@ -153,7 +161,7 @@ export async function sendPagesToCms(
  */
 async function refreshPublished(
   brandId: string,
-  route: 'webflow-status' | 'wordpress-status' | 'framer-status',
+  route: 'webflow-status' | 'wordpress-status' | 'framer-status' | 'wix-status',
   label: string,
 ): Promise<string[]> {
   try {
@@ -190,6 +198,11 @@ export function refreshWordPressPublished(brandId: string): Promise<string[]> {
   return refreshPublished(brandId, 'wordpress-status', 'WordPress');
 }
 
+/** The brand's pages sent to Wix as draft posts, published there since (00372). */
+export function refreshWixPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'wix-status', 'Wix');
+}
+
 /** The brand's pages sent to Framer as draft items, published there since (00295). */
 export function refreshFramerPublished(brandId: string): Promise<string[]> {
   return refreshPublished(brandId, 'framer-status', 'Framer');
@@ -213,36 +226,6 @@ export interface CmsStatus {
 
 /** Ids a read takes: content_draft_last_deliveries (00262) reads up to 500. */
 const STATUS_IDS_PER_READ = 500;
-/**
- * A send still queued after this was left by a server that stopped mid-batch
- * (00262 closes it at the workspace's next send): it reads as interrupted,
- * so neither the Library nor the editor waits on it or says it is still
- * going. Read by the browser's clock: one 30 minutes fast would read a send
- * under way as interrupted, until its next read.
- */
-const INTERRUPTED_AFTER_MS = 30 * 60_000;
-
-/** A send as the Library and the editor read it: one left queued, as interrupted. */
-function lastSend(row: {
-  status: string;
-  created_at: string;
-  sent_at: string | null;
-  published_at: string | null;
-  error: string | null;
-  target?: string | null;
-}): { status: CmsDelivery['status']; target: CmsTarget; at: string; error: string | null } {
-  const interrupted =
-    row.status === 'queued' && Date.parse(row.created_at) < Date.now() - INTERRUPTED_AFTER_MS;
-  return {
-    status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
-    target:
-      row.target === 'webflow' || row.target === 'wordpress' || row.target === 'framer'
-        ? row.target
-        : 'webhook',
-    at: row.published_at ?? row.sent_at ?? row.created_at,
-    error: interrupted ? 'Not sent: interrupted' : row.error,
-  };
-}
 
 /**
  * Each draft's last send, for the Library's rows: one row a draft, however

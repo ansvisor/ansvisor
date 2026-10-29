@@ -18,6 +18,8 @@ const AgentChart = dynamic(
 );
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useDemoBrand } from '@/components/providers/demo-brand-provider';
+import { ChatSoonPreview } from '@/components/demo/chat-soon-preview';
 import { isSubscriptionInactive } from '@/lib/api-failure';
 import { takeBackUnansweredTurn } from '@/lib/agent/unanswered-turn';
 import { Link } from '@/i18n/navigation';
@@ -75,6 +77,13 @@ export default function AgentPage() {
   const [hydrating, setHydrating] = useState(true);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const { isDemo } = useDemoBrand();
+
+  // The demo brand: Chat comes next week, and its preview is shown as it
+  // will be (the Chat v2 mockups), with nothing sent anywhere.
+  if (isDemo) {
+    return <ChatSoonPreview />;
+  }
 
   // Plan gate — `ai_agent` is in every cloud plan post-BYOK, so this only
   // bites if the org's plan was somehow stripped of the feature. Kept as

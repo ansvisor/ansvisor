@@ -23,8 +23,8 @@
 --     to act decides it for every Admin), or the person withdraws it.
 --
 -- The server writes every row (service role), after its own checks: a person
--- has at most 10 pending requests. The person reads their own; the
--- workspace's Admins read all of its requests.
+-- has at most 10 pending requests and sends at most 20 a day. The person
+-- reads their own; the workspace's Admins read all of its requests.
 
 create table if not exists public.chat_access_requests (
   id uuid primary key default gen_random_uuid(),
@@ -38,8 +38,12 @@ create table if not exists public.chat_access_requests (
   rule_kind text not null
     check (rule_kind in ('role', 'plan', 'policy', 'workspace', 'brand', 'demo')),
   rule_detail text not null default '' check (char_length(rule_detail) <= 500),
+  -- The server takes at most 8,000 characters of JSON; this is its backstop.
   drafted_change jsonb
-    check (drafted_change is null or jsonb_typeof(drafted_change) = 'object'),
+    check (
+      drafted_change is null
+      or (jsonb_typeof(drafted_change) = 'object' and octet_length(drafted_change::text) <= 32768)
+    ),
   status text not null default 'pending'
     check (status in ('pending', 'approved', 'rejected', 'withdrawn')),
   decided_by uuid references auth.users(id) on delete set null,

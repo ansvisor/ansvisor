@@ -13,10 +13,18 @@
  * @returns {boolean}
  */
 export function chatAgenticEnabled(organizationId) {
-  if (process.env.CHAT_AGENTIC !== 'true') return false;
+  if (!chatAgenticDeployed()) return false;
   const orgs = chatAgenticOrgs();
   if (orgs.length === 0) return true;
   return !!organizationId && orgs.includes(String(organizationId).trim().toLowerCase());
+}
+
+/**
+ * Whether this deployment runs the new Chat at all, whichever workspaces it
+ * is on for: what the server's own Chat jobs (the model price sync) start on.
+ */
+export function chatAgenticDeployed() {
+  return process.env.CHAT_AGENTIC === 'true';
 }
 
 /** CHAT_AGENTIC_ORGS as a list: trimmed, lower-cased, blanks dropped. */

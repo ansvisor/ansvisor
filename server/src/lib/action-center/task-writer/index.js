@@ -24,6 +24,7 @@ import { resolveModel } from '../../ai-provider.js';
 import { withRetry } from '../../retry.js';
 import { generationCostUsd } from '../../improve-cost.js';
 import { PlanLimitError, reserveAiBudget } from '../../plan-guard.js';
+import { siteTypeOf } from '../../content-page-types.js';
 import { loadDefinitions } from '../definitions/index.js';
 import { getTask } from '../tasks/registry.js';
 import { IMPROVE_ACTION_KIND } from '../from-prompt-improve.js';
@@ -120,7 +121,7 @@ async function loadAction(actionId) {
   const [brandRes, domainsRes, signalsRes, definitions] = await Promise.all([
     supabaseAdmin
       .from('brands')
-      .select('id, name, description, organization_id')
+      .select('id, name, description, organization_id, site_type, industry, shopping_mode_enabled')
       .eq('id', action.brand_id)
       .single(),
     supabaseAdmin.from('brand_domains').select('domain').eq('brand_id', action.brand_id),
@@ -310,7 +311,17 @@ async function compose({ action, brand, domains, signals, name, trigger, userId,
     }
     const base = buildTaskWriterPrompt({
       action: { name, category: action.category },
-      brand: { name: brand.name, description: brand.description, domains },
+      brand: {
+        name: brand.name,
+        description: brand.description,
+        domains,
+        // The kind of site, chosen, detected or guessed: tasks speak its language.
+        siteType: siteTypeOf({
+          siteType: brand.site_type,
+          industry: brand.industry,
+          shoppingModeEnabled: brand.shopping_mode_enabled,
+        }),
+      },
       evidence: shown,
       history,
     });
@@ -501,15 +512,17 @@ const SWEEP_LIMIT = 20;
  */
 export async function sweepActionTasks({ brandId, now = new Date(), limit = SWEEP_LIMIT } = {}) {
   if (!isTaskWriterEnabled()) return { skipped: 'disabled' };
+  // Never a demo brand's actions (00380): they are sample data.
   let query = supabaseAdmin.from('actions');
   query = isCloud()
     ? query
         .select(
-          'id, brand_id, kind, status, brands!inner(organizations!inner(subscription_status))',
+          'id, brand_id, kind, status, brands!inner(is_demo, organizations!inner(subscription_status))',
         )
         .in('brands.organizations.subscription_status', ACTIVE_SUBSCRIPTION_STATUSES)
-    : query.select('id, brand_id, kind, status');
+    : query.select('id, brand_id, kind, status, brands!inner(is_demo)');
   query = query
+    .eq('brands.is_demo', false)
     .is('tasks_generated_at', null)
     .gte('created_at', new Date(now.getTime() - SWEEP_WINDOW_MS).toISOString())
     .not('status', 'in', '("completed","dismissed")')

@@ -355,7 +355,6 @@ export const PromptSuggestionCard = memo(function PromptSuggestionCard({
                     value={editRegions}
                     onChange={setEditRegions}
                     maxSelectable={maxLocations ?? null}
-                    platforms={editPlatforms}
                   />
                 )}
               </div>

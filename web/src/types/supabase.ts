@@ -761,15 +761,21 @@ export type Database = {
           conversions_consent: string
           conversions_enabled: boolean
           created_at: string
+          demo_built_at: string | null
+          demo_hidden_at: string | null
+          demo_version: number | null
           description: string | null
           ga_property_id: string | null
           gsc_pages_backfill_from: string | null
           gsc_pages_backfilled_property: string | null
           gsc_property: string | null
+          gsc_shopping_property: string | null
+          gsc_shopping_synced_at: string | null
           id: string
           industry: string | null
           insights_pinned_competitors: string[]
           is_active: boolean
+          is_demo: boolean
           kpi_setup_at: string | null
           language: string | null
           logo_url: string | null
@@ -779,6 +785,8 @@ export type Database = {
           region: string | null
           shopping_mode_enabled: boolean
           site_type: string | null
+          site_type_detected_at: string | null
+          site_type_source: string | null
           slug: string
           state: string | null
           tracking_code: string
@@ -790,15 +798,21 @@ export type Database = {
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string
+          demo_built_at?: string | null
+          demo_hidden_at?: string | null
+          demo_version?: number | null
           description?: string | null
           ga_property_id?: string | null
           gsc_pages_backfill_from?: string | null
           gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
+          gsc_shopping_property?: string | null
+          gsc_shopping_synced_at?: string | null
           id?: string
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          is_demo?: boolean
           kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
@@ -808,6 +822,8 @@ export type Database = {
           region?: string | null
           shopping_mode_enabled?: boolean
           site_type?: string | null
+          site_type_detected_at?: string | null
+          site_type_source?: string | null
           slug: string
           state?: string | null
           tracking_code?: string
@@ -819,15 +835,21 @@ export type Database = {
           conversions_consent?: string
           conversions_enabled?: boolean
           created_at?: string
+          demo_built_at?: string | null
+          demo_hidden_at?: string | null
+          demo_version?: number | null
           description?: string | null
           ga_property_id?: string | null
           gsc_pages_backfill_from?: string | null
           gsc_pages_backfilled_property?: string | null
           gsc_property?: string | null
+          gsc_shopping_property?: string | null
+          gsc_shopping_synced_at?: string | null
           id?: string
           industry?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
+          is_demo?: boolean
           kpi_setup_at?: string | null
           language?: string | null
           logo_url?: string | null
@@ -837,6 +859,8 @@ export type Database = {
           region?: string | null
           shopping_mode_enabled?: boolean
           site_type?: string | null
+          site_type_detected_at?: string | null
+          site_type_source?: string | null
           slug?: string
           state?: string | null
           tracking_code?: string
@@ -1443,6 +1467,139 @@ export type Database = {
           },
         ]
       }
+      chat_activity_log: {
+        Row: {
+          approval_kind: string | null
+          auto_via: string | null
+          brand_id: string | null
+          class: string
+          conversation_id: string | null
+          created_at: string
+          denial_code: string | null
+          denial_json: Json | null
+          id: string
+          kind: string
+          mode: string | null
+          organization_id: string
+          run_id: string | null
+          status: string
+          step_id: string | null
+          summary_key: string
+          summary_params: Json
+          surface: string
+          target_id: string | null
+          target_type: string | null
+          tool_key: string
+          undo_json: Json | null
+          undo_until: string | null
+          undoes_id: string | null
+          undone_at: string | null
+          undone_by: string | null
+          user_id: string | null
+        }
+        Insert: {
+          approval_kind?: string | null
+          auto_via?: string | null
+          brand_id?: string | null
+          class: string
+          conversation_id?: string | null
+          created_at?: string
+          denial_code?: string | null
+          denial_json?: Json | null
+          id?: string
+          kind?: string
+          mode?: string | null
+          organization_id: string
+          run_id?: string | null
+          status?: string
+          step_id?: string | null
+          summary_key: string
+          summary_params?: Json
+          surface: string
+          target_id?: string | null
+          target_type?: string | null
+          tool_key: string
+          undo_json?: Json | null
+          undo_until?: string | null
+          undoes_id?: string | null
+          undone_at?: string | null
+          undone_by?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          approval_kind?: string | null
+          auto_via?: string | null
+          brand_id?: string | null
+          class?: string
+          conversation_id?: string | null
+          created_at?: string
+          denial_code?: string | null
+          denial_json?: Json | null
+          id?: string
+          kind?: string
+          mode?: string | null
+          organization_id?: string
+          run_id?: string | null
+          status?: string
+          step_id?: string | null
+          summary_key?: string
+          summary_params?: Json
+          surface?: string
+          target_id?: string | null
+          target_type?: string | null
+          tool_key?: string
+          undo_json?: Json | null
+          undo_until?: string | null
+          undoes_id?: string | null
+          undone_at?: string | null
+          undone_by?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_activity_log_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_activity_log_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_activity_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_activity_log_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_activity_log_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "chat_run_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_activity_log_undoes_id_fkey"
+            columns: ["undoes_id"]
+            isOneToOne: false
+            referencedRelation: "chat_activity_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_auto_choices: {
         Row: {
           created_at: string
@@ -1525,6 +1682,54 @@ export type Database = {
           },
           {
             foreignKeyName: "chat_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_idempotency_keys: {
+        Row: {
+          activity_id: string | null
+          created_at: string
+          expires_at: string
+          key: string
+          organization_id: string
+          request_hash: string
+          result_json: Json | null
+          status: string
+        }
+        Insert: {
+          activity_id?: string | null
+          created_at?: string
+          expires_at?: string
+          key: string
+          organization_id: string
+          request_hash: string
+          result_json?: Json | null
+          status?: string
+        }
+        Update: {
+          activity_id?: string | null
+          created_at?: string
+          expires_at?: string
+          key?: string
+          organization_id?: string
+          request_hash?: string
+          result_json?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_idempotency_keys_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "chat_activity_log"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_idempotency_keys_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1811,6 +2016,7 @@ export type Database = {
       cloro_pending_tasks: {
         Row: {
           brand_id: string
+          legacy: boolean
           prompt_id: string
           region: string | null
           scraper_id: string
@@ -1819,6 +2025,7 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          legacy?: boolean
           prompt_id: string
           region?: string | null
           scraper_id: string
@@ -1827,6 +2034,7 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          legacy?: boolean
           prompt_id?: string
           region?: string | null
           scraper_id?: string
@@ -1846,6 +2054,60 @@ export type Database = {
             columns: ["prompt_id"]
             isOneToOne: false
             referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_page_events: {
+        Row: {
+          at: string
+          brand_id: string
+          competitor_id: string
+          created_at: string
+          detail: Json
+          domain: string
+          id: string
+          kind: string
+          page_key: string
+          url: string
+        }
+        Insert: {
+          at: string
+          brand_id: string
+          competitor_id: string
+          created_at?: string
+          detail?: Json
+          domain: string
+          id?: string
+          kind: string
+          page_key: string
+          url: string
+        }
+        Update: {
+          at?: string
+          brand_id?: string
+          competitor_id?: string
+          created_at?: string
+          detail?: Json
+          domain?: string
+          id?: string
+          kind?: string
+          page_key?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_page_events_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_page_events_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
             referencedColumns: ["id"]
           },
         ]
@@ -3127,6 +3389,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "gsc_page_stats_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gsc_shopping_page_stats: {
+        Row: {
+          appearance: string
+          brand_id: string
+          clicks: number
+          created_at: string
+          ctr: number
+          date: string
+          id: string
+          impressions: number
+          page: string
+          position: number
+        }
+        Insert: {
+          appearance: string
+          brand_id: string
+          clicks?: number
+          created_at?: string
+          ctr?: number
+          date: string
+          id?: string
+          impressions?: number
+          page: string
+          position?: number
+        }
+        Update: {
+          appearance?: string
+          brand_id?: string
+          clicks?: number
+          created_at?: string
+          ctr?: number
+          date?: string
+          id?: string
+          impressions?: number
+          page?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gsc_shopping_page_stats_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
@@ -5301,7 +5610,12 @@ export type Database = {
       }
       apply_prompt_locations: { Args: { p_updates: Json }; Returns: number }
       approve_action_task_review: {
-        Args: { p_details: Json; p_review_id: string; p_title: string }
+        Args: {
+          p_details: Json
+          p_review_id: string
+          p_title: string
+          p_user_id?: string
+        }
         Returns: string
       }
       brand_ai_conversions: {

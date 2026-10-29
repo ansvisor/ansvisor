@@ -18,6 +18,7 @@ const actions = vi.hoisted(() => ({
   refreshPromptSuggestions: vi.fn(),
   acceptSuggestion: vi.fn(),
   dismissSuggestion: vi.fn(),
+  dismissSuggestions: vi.fn(),
   trackSuggestions: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => actions);
@@ -27,6 +28,16 @@ vi.mock('sonner', () => ({ toast }));
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
+}));
+
+// The viewer's role: an admin unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ role: 'admin' as string }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({
+    role: viewer.role,
+    canManage: viewer.role === 'admin' || viewer.role === 'manager',
+    canAdmin: viewer.role === 'admin',
+  }),
 }));
 
 const suggestion = (n: number): PromptSuggestion => ({
@@ -57,7 +68,9 @@ const openUpgrade = vi.fn();
 
 async function render(count: number, planId: 'starter' | 'growth' = 'starter') {
   actions.getPromptSuggestions.mockResolvedValue({
+    ok: true,
     suggestions: Array.from({ length: count }, (_, i) => suggestion(i + 1)),
+    stale: false,
   });
   await act(async () => {
     root.render(
@@ -94,6 +107,7 @@ beforeEach(() => {
   root = createRoot(container);
   vi.clearAllMocks();
   isLocked = false;
+  viewer.role = 'admin';
 });
 
 afterEach(() => {
@@ -231,10 +245,94 @@ describe('SuggestionsCard — Add All', () => {
   });
 });
 
+describe('SuggestionsCard — Clear All', () => {
+  // Suggestions from Search Console and Analytics stay hidden for 30 days once dismissed.
+  const measured = (n: number, source: 'gsc' | 'ga'): PromptSuggestion => ({
+    ...suggestion(n),
+    source,
+  });
+
+  async function renderList(list: PromptSuggestion[]) {
+    actions.getPromptSuggestions.mockResolvedValue({ ok: true, suggestions: list, stale: false });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <SuggestionsCard brandId="b1" onAccepted={onAccepted} sourceStates={null} />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  const button = (label: string, root: ParentNode = container) =>
+    [...root.querySelectorAll('button')].find((b) => b.textContent === label);
+  const dialog = () => document.body.querySelector('[role="dialog"]');
+  async function click(target: HTMLButtonElement | undefined) {
+    await act(async () => {
+      target!.click();
+    });
+  }
+
+  it('asks first, with how many it dismisses and how many come from Search Console or Analytics', async () => {
+    await renderList([suggestion(1), measured(2, 'gsc'), suggestion(3), measured(4, 'ga')]);
+    await click(button('Clear All'));
+    expect(dialog()?.textContent).toContain('4 suggestions listed will be dismissed.');
+    expect(dialog()?.textContent).toContain(
+      '2 of them come from Search Console or Analytics: once dismissed, they stay hidden for 30 days.',
+    );
+    expect(actions.dismissSuggestions).not.toHaveBeenCalled();
+  });
+
+  it('changes nothing when cancelled', async () => {
+    await renderList([measured(1, 'gsc'), suggestion(2)]);
+    await click(button('Clear All'));
+    await click(button('Cancel', dialog()!));
+    expect(actions.dismissSuggestions).not.toHaveBeenCalled();
+    expect(rows()).toHaveLength(2);
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('clears a list of only Search Console and Analytics suggestions once confirmed', async () => {
+    actions.dismissSuggestions.mockResolvedValue({ ok: true, dismissed: ['s1', 's2'], failed: [] });
+    await renderList([measured(1, 'gsc'), measured(2, 'ga')]);
+    await click(button('Clear All'));
+    expect(dialog()?.textContent).toContain('2 suggestions listed will be dismissed.');
+    expect(dialog()?.textContent).toContain('2 of them come from Search Console or Analytics');
+    await click(button('Clear all', dialog()!));
+    expect(actions.dismissSuggestions).toHaveBeenCalledWith(['s1', 's2']);
+    expect(rows()).toHaveLength(0);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("says nothing of Search Console when none is listed, and brings back what couldn't be dismissed", async () => {
+    actions.dismissSuggestions.mockResolvedValue({ ok: true, dismissed: ['s1'], failed: ['s2'] });
+    await renderList([suggestion(1), suggestion(2)]);
+    await click(button('Clear All'));
+    expect(dialog()?.textContent).not.toContain('Search Console');
+    await click(button('Clear all', dialog()!));
+    expect([...rows()].map((r) => r.textContent).join()).toContain('Prompt 2');
+    expect(rows()).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith("1 suggestion couldn't be dismissed. Try again.");
+  });
+
+  it('puts every one back when the dismiss could not run', async () => {
+    actions.dismissSuggestions.mockResolvedValue({ ok: false, failure: 'failed' });
+    await renderList([suggestion(1), measured(2, 'gsc')]);
+    await click(button('Clear All'));
+    await click(button('Clear all', dialog()!));
+    expect(rows()).toHaveLength(2);
+    expect(toast.error).toHaveBeenCalledWith("Couldn't clear the suggestions. Try again.");
+  });
+});
+
 describe('SuggestionsCard — estimated volume', () => {
   it("shows an AI's guess as a grey range, never a bare number", async () => {
     actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
       suggestions: [{ ...suggestion(1), estVolume: 1200 }],
+      stale: false,
     });
     await act(async () => {
       root.render(
@@ -292,6 +390,61 @@ describe('SuggestionsCard on a read-only workspace (plan not active)', () => {
   });
 });
 
+describe('SuggestionsCard by role', () => {
+  const labels = () =>
+    [...container.querySelectorAll('button')].map(
+      (b) => b.getAttribute('aria-label') ?? b.textContent,
+    );
+
+  it('shows an analyst Dismiss and Clear All, but no way to add a prompt', async () => {
+    viewer.role = 'analyst';
+    await render(2);
+    expect(labels()).not.toContain('New');
+    expect(labels()).not.toContain('Add All');
+    expect(labels()).not.toContain('Add to tracked prompts');
+    expect(labels()).toContain('Clear All');
+    expect(labels().filter((l) => l === 'Dismiss suggestion')).toHaveLength(2);
+  });
+
+  it('leaves an agency partner the list to read, without adding or dismissing', async () => {
+    viewer.role = 'agency_partner';
+    await render(2);
+    expect(rows()).toHaveLength(2);
+    for (const label of ['Add All', 'Clear All', 'Add to tracked prompts', 'Dismiss suggestion']) {
+      expect(labels(), label).not.toContain(label);
+    }
+  });
+
+  it('tells an analyst who generates suggestions, instead of Generate Suggestions', async () => {
+    viewer.role = 'analyst';
+    await render(0);
+    expect(labels()).not.toContain('Generate Suggestions');
+    expect(container.textContent).toContain(
+      'Ask an admin or a manager to generate prompt suggestions.',
+    );
+  });
+
+  it('offers a manager Generate Suggestions on an empty list', async () => {
+    viewer.role = 'manager';
+    await render(0);
+    expect(labels()).toContain('Generate Suggestions');
+  });
+
+  it('shows a manager every action', async () => {
+    viewer.role = 'manager';
+    await render(1);
+    for (const label of [
+      'New',
+      'Add All',
+      'Clear All',
+      'Add to tracked prompts',
+      'Dismiss suggestion',
+    ]) {
+      expect(labels(), label).toContain(label);
+    }
+  });
+});
+
 describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', () => {
   const fromCatalog: PromptSuggestion = {
     ...suggestion(2),
@@ -309,7 +462,11 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
 
   async function show(search = '') {
     window.history.replaceState(null, '', `/dashboard/prompts${search}`);
-    actions.getPromptSuggestions.mockResolvedValue({ suggestions: [suggestion(1), fromCatalog] });
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
+      suggestions: [suggestion(1), fromCatalog],
+      stale: false,
+    });
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
@@ -335,5 +492,85 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
       expect.stringContaining('best hiking backpacks under $150'),
     ]);
     expect(container.textContent).toContain('Shopping');
+  });
+});
+
+describe('SuggestionsCard — a failed read', () => {
+  async function mount() {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <SuggestionsCard brandId="b1" onAccepted={onAccepted} sourceStates={null} />
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  const retryButton = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
+
+  afterEach(() => vi.useRealTimers());
+
+  it('tries once more by itself when the API did not answer, and lists what comes back', async () => {
+    vi.useFakeTimers();
+    actions.getPromptSuggestions
+      .mockResolvedValueOnce({ ok: false, failure: 'failed', retryable: true })
+      .mockResolvedValueOnce({ ok: true, suggestions: [suggestion(1)], stale: false });
+    await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(actions.getPromptSuggestions).toHaveBeenCalledTimes(2);
+    expect(rows()).toHaveLength(1);
+    expect(container.textContent).not.toContain("Couldn't load suggestions");
+  });
+
+  it("says the API is not answering in plain words, never React's hidden message, and Retry reads again", async () => {
+    vi.useFakeTimers();
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
+    await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(actions.getPromptSuggestions).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Couldn't load suggestions");
+    expect(container.textContent).toContain("Ansvisor isn't answering right now.");
+    expect(container.textContent).not.toContain('Minified React error');
+
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
+      suggestions: [suggestion(1), suggestion(2)],
+      stale: false,
+    });
+    await act(async () => {
+      retryButton()!.click();
+    });
+    expect(rows()).toHaveLength(2);
+  });
+
+  it('says why when trying again would not help, without retrying by itself', async () => {
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: false,
+      failure: 'workspace',
+      retryable: false,
+    });
+    await mount();
+    expect(actions.getPromptSuggestions).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("This brand isn't in your workspace.");
+    expect(retryButton()).toBeDefined();
+  });
+
+  it('reads a server action that threw on its way as no answer', async () => {
+    vi.useFakeTimers();
+    actions.getPromptSuggestions.mockRejectedValue(new Error('Minified React error #441'));
+    await mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(container.textContent).toContain("Ansvisor isn't answering right now.");
+    expect(container.textContent).not.toContain('Minified React error');
   });
 });

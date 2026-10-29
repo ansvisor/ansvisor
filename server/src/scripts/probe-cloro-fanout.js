@@ -11,6 +11,12 @@
  *
  * Prints a summary and writes the full response to a temp file. Never prints
  * the API key.
+ *
+ * Still to check with a real request (the maintainer's): whether a legacy
+ * ChatGPT answer's `sources` carry the `footnote` flag the way the default
+ * interface's do, so the #1119 filter (toCitations in cloro-scraper.js) keeps
+ * leaving the uncited pages out on a prompt's fan-out day. The raw response
+ * this writes holds the sources as Cloro sent them.
  */
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
@@ -40,11 +46,14 @@ if (!taskType) {
   process.exit(1);
 }
 
-// The request production sends, plus the raw stream where the engine takes
-// it (Google's endpoints don't), to look for queries outside the documented
-// fields, and the fan-out flag, which production no longer sends to ChatGPT
-// (#1119). On ChatGPT the two share one add-on's +2 credits.
-const payload = buildRequestBody(prompt, platform, country);
+// The request production sends (on ChatGPT, the legacy task a prompt sends
+// on its fan-out day, CLORO_CHATGPT_FANOUT), plus the raw stream where the
+// engine takes it (Google's endpoints don't), to look for queries outside the
+// documented fields, and the fan-out flag. On ChatGPT the two share one
+// add-on's +2 credits.
+const payload = buildRequestBody(prompt, platform, country, undefined, undefined, {
+  legacy: true,
+});
 if (!['google-aio', 'google-aimode'].includes(platform)) {
   payload.include = { ...payload.include, rawResponse: true, searchQueries: true };
 }

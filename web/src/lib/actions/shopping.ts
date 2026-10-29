@@ -2,7 +2,10 @@
 
 import { API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/server';
+import { dbClient } from '@/lib/supabase/scoped';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
+import { pageKey } from '@/lib/content/feed-match';
+import type { ShoppingSearchAppearance } from '@/lib/shopping/readiness';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import {
   detectAmazonShareDrop,
@@ -29,7 +32,15 @@ import {
   type ProductShelfLine,
 } from '@/lib/shopping/product-detail';
 import { priceText } from '@/lib/shopping/price';
+import {
+  CARD_MAX_ROWS,
+  PRODUCTS_TABLE_MAX,
+  readCatalogProducts,
+  readCatalogRows,
+  readForIds,
+} from '@/lib/shopping/catalog-read';
 import { productAiSays, type AiSaysAnswer, type ProductAiSays } from '@/lib/shopping/ai-says';
+import { READINESS_CHANNELS } from '@/lib/shopping/readiness';
 import { FROM_PRODUCTS_KINDS } from '@/lib/action-center/registry';
 import {
   RECHECK_DAYS,
@@ -67,7 +78,9 @@ import {
  * query joins or filters on `brand_id`, and RLS on
  * `prompt_result_shopping_cards` already restricts to the caller's
  * organization. The action just adds the matching brand filter to keep
- * results scoped to a single brand at a time.
+ * results scoped to a single brand at a time. The reads the MCP server
+ * shares (lib/mcp/product-visibility.ts) query through dbClient(), so it can
+ * run them with the service role once it has checked the brand.
  */
 
 export type ShoppingDatePreset = '7d' | '30d' | '90d' | 'all';
@@ -258,7 +271,7 @@ export async function getShoppingOverview(
 export async function getShoppingAmazonShareDropAlert(
   brandId: string,
 ): Promise<AmazonShareDropAlert | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('shopping_amazon_share_weekly', {
     p_brand_id: brandId,
   });
@@ -287,7 +300,7 @@ export async function getShoppingMerchantSplit(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingMerchantSplit> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc(
     'shopping_merchant_split',
     windowArgs(brandId, filters),
@@ -317,7 +330,7 @@ export async function getResellerPriceAlerts(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ResellerPriceAlert[]> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc(
     'shopping_own_product_offers',
     windowArgs(brandId, filters),
@@ -343,11 +356,52 @@ export async function getResellerPriceAlerts(
  * values that actually appear in this brand's data — all of it, not the first
  * 1,000 results.
  */
+/** Days of Search Console shopping results Readiness reads, as the sync's window. */
+const SEARCH_APPEARANCE_DAYS = 28;
+
+/**
+ * The brand's pages Google showed as merchant listings or product snippets
+ * over the last 28 days, from its own Search Console property (00377), by
+ * page key; or why it can't say: no property mapped, or not read yet.
+ */
+export async function getShoppingSearchAppearance(
+  brandId: string,
+): Promise<ShoppingSearchAppearance> {
+  const supabase = await dbClient();
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .select('gsc_property, gsc_shopping_synced_at')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!brand?.gsc_property) return { state: 'not_connected', pages: [] };
+  if (!brand.gsc_shopping_synced_at) return { state: 'not_synced', pages: [] };
+  const since = new Date(Date.now() - SEARCH_APPEARANCE_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const rows = await readAllRpcRows<{ page: string }>(
+    (from, to) =>
+      supabase
+        .from('gsc_shopping_page_stats')
+        .select('page')
+        .eq('brand_id', brandId)
+        .gte('date', since)
+        .gt('impressions', 0)
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{
+        data: { page: string }[] | null;
+        error: { message: string } | null;
+      }>,
+  );
+  const pages = new Set(rows.flatMap((row) => pageKey(row.page) ?? []));
+  return { state: 'read', pages: [...pages] };
+}
+
 export async function getShoppingFilterOptions(brandId: string): Promise<{
   platforms: string[];
   regions: string[];
 }> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { data, error } = await supabase.rpc('shopping_filter_options', { p_brand_id: brandId });
   if (error) return { platforms: [], regions: [] };
   const row = (data as { platforms: string[] | null; regions: string[] | null }[] | null)?.[0];
@@ -357,7 +411,6 @@ export async function getShoppingFilterOptions(brandId: string): Promise<{
 // ── Paged card reads ──────────────────────────────────────────────────────────
 
 const CARD_PAGE_SIZE = 1000;
-const CARD_MAX_ROWS = 50_000;
 
 /**
  * Every row a card query matches, read in `.range()` pages: an unpaged select
@@ -1165,7 +1218,7 @@ export async function getShoppingShelf(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingShelf> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const [rows, catalog] = await Promise.all([
     fetchAllCards<
       Omit<ShelfCardRow, 'prompt_id' | 'prompt_text'> & {
@@ -1189,6 +1242,35 @@ export async function getShoppingShelf(
     stats: shelfStats(cards),
     catalogProducts: catalog.count ? catalog.count : null,
   };
+}
+
+/**
+ * The AI channels (READINESS_CHANNELS) with the brand's own products on
+ * their shelves over the filter window, whatever its platforms: what
+ * Readiness's channel cards (ECOM-015) read from the Shelf's stats, as one
+ * row a channel instead of every card. The channels are read at once.
+ */
+export async function getShoppingOwnChannels(
+  brandId: string,
+  filters: ShoppingFilters,
+): Promise<string[]> {
+  if (!z.guid().safeParse(brandId).success) throw new Error('invalid');
+  const supabase = await dbClient();
+  const own = await Promise.all(
+    READINESS_CHANNELS.map(async (platform) => {
+      const { data, error } = await cardsInWindow(
+        supabase,
+        brandId,
+        { ...filters, platforms: [platform] },
+        'id',
+      )
+        .eq('matched_brand_role', 'own')
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return (data ?? []).length > 0;
+    }),
+  );
+  return READINESS_CHANNELS.filter((_, i) => own[i]);
 }
 
 /** Orders from AI visits (CE-017): the last 30 days, the 30 before, and by AI channel. */
@@ -1267,54 +1349,12 @@ export async function getShoppingAiOrders(brandId: string): Promise<ShoppingAiOr
 
 // ── Products (Product Visibility, ECOM-007) ───────────────────────────────────
 
-/** Catalog products the table reads at most. */
-const PRODUCTS_TABLE_MAX = 2000;
-const CATALOG_PAGE = 1000;
-/** Product ids one catalog read filters by: each request's address stays short. */
-const IDS_PER_READ = 100;
-/** Such reads in flight at once. */
-const ID_READS_AT_ONCE = 6;
-const IN_STOCK = new Set(['in_stock', 'instock', 'available', 'limited_availability']);
-
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface ShoppingProducts {
   rows: ProductRow[];
   /** The brand's live catalog products; more than `rows` when past PRODUCTS_TABLE_MAX. */
   total: number;
-}
-
-/** Every row of a brand's catalog table, in `.range()` pages, up to `max`. */
-async function readCatalogRows<T>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
-  build: () => any,
-  max: number,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let start = 0; start < max; start += CATALOG_PAGE) {
-    const { data, error } = await build().range(start, Math.min(start + CATALOG_PAGE, max) - 1);
-    if (error) throw new Error(error.message);
-    rows.push(...((data ?? []) as T[]));
-    if ((data ?? []).length < CATALOG_PAGE) break;
-  }
-  return rows;
-}
-
-/** A catalog table's rows for these ids: IDS_PER_READ ids a read, ID_READS_AT_ONCE reads at a time. */
-async function readForIds<T>(ids: readonly string[], read: (some: string[]) => Promise<T[]>) {
-  const slices: string[][] = [];
-  for (let i = 0; i < ids.length; i += IDS_PER_READ) slices.push(ids.slice(i, i + IDS_PER_READ));
-  const out: T[][] = [];
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(ID_READS_AT_ONCE, slices.length) }, async () => {
-      while (next < slices.length) {
-        const at = next++;
-        out[at] = await read(slices[at]);
-      }
-    }),
-  );
-  return out.flat();
 }
 
 /**
@@ -1344,7 +1384,7 @@ export async function getShoppingProducts(
   brandId: string,
   filters: ShoppingFilters,
 ): Promise<ShoppingProducts | null> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const { count: total, error: countErr } = await supabase
     .from('catalog_products')
     .select('id', { count: 'exact', head: true })
@@ -1444,137 +1484,6 @@ async function tableProductIds(
     }
   }
   return [...ids];
-}
-
-/**
- * The brand's live catalog products as Product Visibility reads them, with
- * their variants' stock, price and GTIN, first photo and category: the
- * whole catalog (up to PRODUCTS_TABLE_MAX) for `ids` null, else the products
- * `ids` names, their rows read IDS_PER_READ ids at a time.
- */
-async function readCatalogProducts(
-  supabase: ServerClient,
-  brandId: string,
-  ids: readonly string[] | null,
-): Promise<CatalogProductRow[]> {
-  // Each table read for the whole catalog, or for the ids, a slice at a time.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgREST builder generics
-  const each = <T>(column: string, build: () => any, max: number): Promise<T[]> =>
-    ids === null
-      ? readCatalogRows<T>(build, max)
-      : readForIds(ids, (some) =>
-          readCatalogRows<T>(() => build().in(column, some), CARD_MAX_ROWS),
-        );
-  const [products, variants, images, categories] = await Promise.all([
-    each<{
-      id: string;
-      title: string;
-      url: string | null;
-      product_type: string | null;
-      product_brand: string | null;
-      description: string | null;
-    }>(
-      'id',
-      () =>
-        supabase
-          .from('catalog_products')
-          .select('id, title, url, product_type, product_brand, description')
-          .eq('brand_id', brandId)
-          .is('removed_at', null)
-          .order('id'),
-      PRODUCTS_TABLE_MAX,
-    ),
-    each<{
-      product_id: string;
-      gtin: string | null;
-      price: number | null;
-      sale_price: number | null;
-      currency: string | null;
-      availability: string | null;
-    }>(
-      'product_id',
-      () =>
-        supabase
-          .from('catalog_variants')
-          .select('product_id, gtin, price, sale_price, currency, availability')
-          .eq('brand_id', brandId)
-          .is('removed_at', null)
-          .order('id'),
-      CARD_MAX_ROWS,
-    ),
-    each<{ product_id: string; url: string; position: number }>(
-      'product_id',
-      () =>
-        supabase
-          .from('catalog_images')
-          .select('product_id, url, position')
-          .eq('brand_id', brandId)
-          .order('id'),
-      CARD_MAX_ROWS,
-    ),
-    each<{ product_id: string; category: { name: string } | null }>(
-      'product_id',
-      () =>
-        supabase
-          .from('catalog_product_categories')
-          .select('product_id, category:category_id ( name )')
-          .eq('brand_id', brandId)
-          .order('product_id')
-          .order('category_id'),
-      CARD_MAX_ROWS,
-    ),
-  ]);
-
-  const variantsOf = new Map<string, typeof variants>();
-  for (const v of variants) {
-    if (!variantsOf.has(v.product_id)) variantsOf.set(v.product_id, []);
-    variantsOf.get(v.product_id)!.push(v);
-  }
-  const imageOf = new Map<string, { url: string; position: number }>();
-  for (const image of images) {
-    const kept = imageOf.get(image.product_id);
-    if (!kept || image.position < kept.position) imageOf.set(image.product_id, image);
-  }
-  const categoryOf = new Map<string, string>();
-  for (const row of categories) {
-    if (row.category?.name && !categoryOf.has(row.product_id)) {
-      categoryOf.set(row.product_id, row.category.name);
-    }
-  }
-  return products.map((p) => {
-    const own = variantsOf.get(p.id) ?? [];
-    const stocked = own.filter((v) =>
-      IN_STOCK.has(
-        String(v.availability ?? '')
-          .toLowerCase()
-          .replace(/[\s-]+/g, '_'),
-      ),
-    );
-    const priced = (stocked.length ? stocked : own)
-      .map((v) => ({ price: v.sale_price ?? v.price, currency: v.currency }))
-      .filter((v): v is { price: number; currency: string | null } => v.price !== null)
-      .sort((a, b) => a.price - b.price);
-    return {
-      id: p.id,
-      title: p.title,
-      url: p.url,
-      productType: p.product_type,
-      brand: p.product_brand,
-      description: p.description,
-      image: imageOf.get(p.id)?.url ?? null,
-      category: categoryOf.get(p.id) ?? null,
-      price: priced[0] ? Number(priced[0].price) : null,
-      currency: priced[0]?.currency ?? null,
-      // Each variant's price and sale price, in or out of stock.
-      prices: own.flatMap((v) =>
-        [v.price, v.sale_price]
-          .filter((price): price is number => price !== null)
-          .map((price) => ({ price: Number(price), currency: v.currency })),
-      ),
-      inStock: stocked.length > 0,
-      hasGtin: own.some((v) => !!v.gtin),
-    };
-  });
 }
 
 // ── Categories (Product Visibility, ECOM-008) ─────────────────────────────────
@@ -1893,7 +1802,8 @@ const AI_SAYS_CITED = 20;
  * that showed it, quoted where they name it, and the sources they cited
  * (lib/shopping/ai-says.ts). Read apart from the product's page, which it
  * follows: the answers' text is the heavy part. Through the member's
- * session (RLS).
+ * session (RLS) on the page; the MCP server runs it with the service role,
+ * so every read here keeps to the brand by its brand_id filter.
  */
 export async function getProductAiSays(
   brandId: string,
@@ -1903,7 +1813,7 @@ export async function getProductAiSays(
   if (!z.guid().safeParse(brandId).success || !z.guid().safeParse(productId).success) {
     throw new Error('invalid');
   }
-  const supabase = await createClient();
+  const supabase = await dbClient();
   const [cards, product] = await Promise.all([
     cardsInWindow(
       supabase,

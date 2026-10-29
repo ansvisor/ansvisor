@@ -111,7 +111,7 @@ async function act(decision, { brandId, runId, startedAt, plannedTasks }, result
   return false;
 }
 
-async function awaitLateResults(run, { pollMs, waitMs }) {
+async function awaitLateResults(run, { pollMs, waitMs, rollups }) {
   const deadline = Date.now() + waitMs;
   for (;;) {
     await new Promise((r) => setTimeout(r, pollMs));
@@ -131,11 +131,16 @@ async function awaitLateResults(run, { pollMs, waitMs }) {
       plannedTasks: run.plannedTasks,
       final: pastDeadline || pending === 0,
     });
-    if (decision === 'wait') continue;
+    if (decision === 'wait') {
+      // A first run's rollups follow the late answers too.
+      rollups?.note(resultCount);
+      continue;
+    }
     logger.info(
       { brandId: run.brandId, runId: run.runId, resultCount, plannedTasks: run.plannedTasks },
       'late results settled the tracking run',
     );
+    await rollups?.idle();
     return act(decision, run, resultCount);
   }
 }
@@ -143,13 +148,20 @@ async function awaitLateResults(run, { pollMs, waitMs }) {
 /**
  * Settle a full run's ledger row at the end of its drain.
  *
- * @returns {Promise<{ stamped: boolean, lateStamp: Promise<boolean> | null }>}
+ * `rollups` is a brand's first run's refresher (first-run-rollups.js): the
+ * stamp waits for a refresh it still has running, as it refreshes the same
+ * days; and a run that has to wait for late answers refreshes once now, then
+ * as they land.
+ *
+ * @returns {Promise<{ stamped: boolean, lateStamp: Promise<boolean> | null, resultCount: number | null }>}
  *   `stamped` when the row stamped now; otherwise `lateStamp` resolves true
- *   if and when it stamps later, false if it never does.
+ *   if and when it stamps later, false if it never does. `resultCount` is
+ *   the run's answers stored so far, however they came (a webhook's
+ *   included); null when they couldn't be counted.
  */
 export async function settleTrackingRun(
   { brandId, runId, startedAt, plannedTasks },
-  { pollMs = LATE_POLL_MS, waitMs = LATE_WAIT_MS } = {},
+  { pollMs = LATE_POLL_MS, waitMs = LATE_WAIT_MS, rollups = null } = {},
 ) {
   const run = { brandId, runId, startedAt, plannedTasks };
   const resultCount = await countRunResults(brandId, startedAt);
@@ -157,21 +169,26 @@ export async function settleTrackingRun(
     // Leave the row uncompleted: the dashboard keeps the previous completed
     // run and the next run clears the dangling row.
     logger.error({ brandId, runId }, 'failed to count run results');
-    return { stamped: false, lateStamp: null };
+    return { stamped: false, lateStamp: null, resultCount: null };
   }
 
   const pending = await countRunPending(brandId, startedAt);
   const decision = settleDecision({ resultCount, plannedTasks, final: pending === 0 });
-  if (decision !== 'wait')
-    return { stamped: await act(decision, run, resultCount), lateStamp: null };
+  if (decision !== 'wait') {
+    await rollups?.idle();
+    return { stamped: await act(decision, run, resultCount), lateStamp: null, resultCount };
+  }
 
   logger.info(
     { brandId, runId, resultCount, plannedTasks, pending },
     'tracking run short of complete — waiting for late results before stamping',
   );
-  const lateStamp = awaitLateResults(run, { pollMs, waitMs }).catch((err) => {
+  const lateStamp = (async () => {
+    await rollups?.flush(resultCount);
+    return awaitLateResults(run, { pollMs, waitMs, rollups });
+  })().catch((err) => {
     logger.error({ err, brandId, runId }, 'waiting for late results failed');
     return false;
   });
-  return { stamped: false, lateStamp };
+  return { stamped: false, lateStamp, resultCount };
 }

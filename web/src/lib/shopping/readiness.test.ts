@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogSource } from '@/lib/catalog';
 import { productRows, type CatalogProductRow } from './products';
-import { channelState, readinessChecklist } from './readiness';
+import { pageKey } from '@/lib/content/feed-match';
+import { channelState, readinessChecklist, type ShoppingSearchAppearance } from './readiness';
 
 /** Product Visibility's Readiness (ECOM-015). */
 
@@ -41,6 +42,9 @@ describe('readinessChecklist', () => {
     const { score, items } = readinessChecklist({
       market: 'europe',
       catalog: [source('feed_url'), source('merchant_center')],
+      merchantCenterOffered: true,
+      // Both product pages in Google's shopping results.
+      searchAppearance: { state: 'read', pages: rows.map((row) => pageKey(row.product.url)!) },
       products: rows,
       openAi: null,
       cheaperResellers: 0,
@@ -49,6 +53,7 @@ describe('readinessChecklist', () => {
     expect(items.map((item) => [item.key, item.state])).toEqual([
       ['catalog', 'pass'],
       ['merchantCenter', 'pass'],
+      ['googleShopping', 'pass'],
       ['firstWords', 'pass'],
       ['feedFields', 'pass'],
       ['feedLinks', 'pass'],
@@ -83,6 +88,8 @@ describe('readinessChecklist', () => {
     const { score, items } = readinessChecklist({
       market: 'us',
       catalog: [source('feed_url')],
+      merchantCenterOffered: true,
+      searchAppearance: null,
       products: rows,
       openAi: { directFeed: false, ownCards: 3 },
       cheaperResellers: 2,
@@ -118,6 +125,8 @@ describe('readinessChecklist', () => {
       readinessChecklist({
         market: 'us',
         catalog: [source('shopify')],
+        merchantCenterOffered: true,
+        searchAppearance: null,
         products: productRows(products, [], []),
         openAi: null,
         cheaperResellers: null,
@@ -140,6 +149,8 @@ describe('readinessChecklist', () => {
     const { items } = readinessChecklist({
       market: 'europe',
       catalog: [],
+      merchantCenterOffered: true,
+      searchAppearance: null,
       products: null,
       openAi: null,
       cheaperResellers: null,
@@ -155,6 +166,8 @@ describe('readinessChecklist', () => {
     const { items } = readinessChecklist({
       market: 'europe',
       catalog: null,
+      merchantCenterOffered: true,
+      searchAppearance: null,
       products: null,
       openAi: null,
       cheaperResellers: null,
@@ -164,6 +177,107 @@ describe('readinessChecklist', () => {
       ['catalog', 'unknown', 'settings'],
       ['merchantCenter', 'unknown', undefined],
     ]);
+  });
+
+  describe('where Merchant Center is not offered', () => {
+    const base = {
+      market: 'us' as const,
+      products: null,
+      openAi: null,
+      cheaperResellers: null,
+      amazonDrop: null,
+      merchantCenterOffered: false,
+      searchAppearance: null,
+    };
+
+    it('neither lists nor scores it, in the US and in Europe', () => {
+      for (const market of ['us', 'europe'] as const) {
+        const { score, items } = readinessChecklist({
+          ...base,
+          market,
+          catalog: [source('feed_url')],
+        });
+        expect(items.map((item) => item.key)).not.toContain('merchantCenter');
+        // The catalog connected is the one check made: 100, not pulled down.
+        expect(score).toBe(100);
+      }
+      expect(
+        readinessChecklist({ ...base, catalog: null }).items.map((item) => item.key),
+      ).not.toContain('merchantCenter');
+    });
+
+    it('still says a Merchant Center source connected before is', () => {
+      const { items } = readinessChecklist({
+        ...base,
+        catalog: [source('merchant_center')],
+      });
+      expect(items.find((item) => item.key === 'merchantCenter')).toMatchObject({
+        state: 'pass',
+        action: undefined,
+      });
+    });
+  });
+
+  describe("Google's shopping results (Search Console)", () => {
+    const rows = productRows(
+      ['a', 'b', 'c'].map((id) =>
+        product(id, { url: `https://www.shop.example/products/${id}/?utm_medium=feed` }),
+      ),
+      [],
+      [],
+    );
+    const check = (searchAppearance: ShoppingSearchAppearance | null, products = rows) =>
+      readinessChecklist({
+        market: 'us',
+        catalog: [source('feed_url')],
+        merchantCenterOffered: false,
+        searchAppearance,
+        products,
+        openAi: null,
+        cheaperResellers: null,
+        amazonDrop: null,
+      });
+    const item = (searchAppearance: ShoppingSearchAppearance | null, products = rows) =>
+      check(searchAppearance, products).items.find((i) => i.key === 'googleShopping');
+
+    it('passes from half the product pages shown, warns below, fails with none', () => {
+      expect(
+        item({ state: 'read', pages: ['shop.example/products/a', 'shop.example/products/b'] }),
+      ).toEqual({ key: 'googleShopping', state: 'pass', values: { count: 2, total: 3 } });
+      expect(
+        item({ state: 'read', pages: ['shop.example/products/c', 'shop.example/blog'] }),
+      ).toEqual({ key: 'googleShopping', state: 'warn', values: { count: 1, total: 3 } });
+      expect(item({ state: 'read', pages: [] })).toEqual({
+        key: 'googleShopping',
+        state: 'fail',
+        values: { count: 0, total: 3 },
+      });
+    });
+
+    it("doesn't know, nor scores it, without Search Console or before its first read", () => {
+      expect(item({ state: 'not_connected', pages: [] })).toEqual({
+        key: 'googleShopping',
+        state: 'unknown',
+        values: { reason: 'not_connected' },
+        action: 'settings',
+      });
+      expect(item({ state: 'not_synced', pages: [] })).toMatchObject({
+        state: 'unknown',
+        values: { reason: 'not_synced' },
+      });
+      expect(item(null)).toMatchObject({ state: 'unknown', values: { reason: 'unread' } });
+      // The catalog connected is the one scored check.
+      expect(check({ state: 'not_connected', pages: [] }).score).toBe(100);
+      const unlinked = productRows([product('a', { url: null })], [], []);
+      expect(item({ state: 'read', pages: [] }, unlinked)).toMatchObject({
+        state: 'unknown',
+        values: { reason: 'no_pages' },
+      });
+    });
+
+    it('is no check without products', () => {
+      expect(item({ state: 'read', pages: [] }, [])).toBeUndefined();
+    });
   });
 });
 

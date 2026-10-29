@@ -15,7 +15,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
-import { MAX_PENDING_REQUESTS, type AccessRequest } from '@/lib/chat/access-requests';
+import {
+  MAX_PENDING_REQUESTS,
+  MAX_REQUESTS_PER_DAY,
+  type AccessRequest,
+} from '@/lib/chat/access-requests';
 
 /**
  * Ask your Admin (CHAT-20 §4c): the person says what they need, starting
@@ -55,6 +59,8 @@ export function AskAdminButton({
         onSent?.();
       } else if (result.reason === 'too_many') {
         toast.error(t('tooMany', { count: MAX_PENDING_REQUESTS }));
+      } else if (result.reason === 'daily_limit') {
+        toast.error(t('dailyLimit', { count: MAX_REQUESTS_PER_DAY }));
       } else if (result.reason === 'already_today') {
         toast.info(t('alreadyToday'));
         setOpen(false);

@@ -90,4 +90,11 @@ describe('readability as the editor reads it', () => {
     expect(fleschBand(70.4)).toEqual({ status: 'pass', score: 1 });
     expect(fleschBand(49.6)).toEqual({ status: 'pass', score: 1 });
   });
+
+  it('reads a page of tens of thousands of paragraphs in one pass, not a minute', () => {
+    const html = '<p>One short line here.</p>'.repeat(40_000);
+    const started = Date.now();
+    expect(readingBlocks(html)).toHaveLength(40_000);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
 });

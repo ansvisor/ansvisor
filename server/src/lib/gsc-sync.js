@@ -3,8 +3,10 @@
  *
  * For every active brand mapped to a GSC property (whose org connection is
  * live), pulls the last SYNC_WINDOW_DAYS of per-query daily stats through
- * Composio and upserts them into gsc_query_stats, and the same per page into
- * gsc_page_stats (AT-008: which pages lose clicks while impressions rise). A
+ * Composio and upserts them into gsc_query_stats, the same per page into
+ * gsc_page_stats (AT-008: which pages lose clicks while impressions rise),
+ * and the pages Google showed in its shopping results into
+ * gsc_shopping_page_stats (00377: Product Visibility's Readiness). A
  * brand's page sync reads a week at a time, and reads its property's
  * PAGE_BACKFILL_DAYS once, resuming where a sync stopped, so a 90-day range
  * has a period before it (pagesSyncPlan).
@@ -125,6 +127,123 @@ async function pullWindow(brand, { dimension, table, onConflict, map }, { from, 
   return total;
 }
 
+// ─── Shopping results (00377) ────────────────────────────────────────────────
+
+/** Shopping rows are kept this long, as query rows are. */
+const SHOPPING_KEEP_DAYS = 90;
+/** Appearance types a property has, at most: there are a few dozen. */
+const APPEARANCE_ROW_LIMIT = 100;
+
+/**
+ * The shopping appearance an API type names: merchant listings (the free
+ * shopping listings) or product snippets (price, rating and stock under a
+ * result); null for any other. Matched by name, not one exact string, so
+ * the API's spelling (MERCHANT_LISTINGS, "Merchant listings") doesn't matter.
+ */
+export function shoppingAppearance(type) {
+  const name = String(type ?? '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  if (name.includes('merchantlisting')) return 'merchant_listings';
+  if (name.includes('productsnippet')) return 'product_snippets';
+  return null;
+}
+
+/** Map one appearance's GSC rows ({keys:[page,date],...}) to gsc_shopping_page_stats rows. */
+export function mapShoppingRows(brandId, appearance, rows) {
+  return mapPageRows(brandId, rows).map((row) => ({ ...row, appearance }));
+}
+
+/**
+ * The pages Google showed in its shopping results over the last
+ * SYNC_WINDOW_DAYS, read in the two steps the API needs (search appearance
+ * can't be a column beside the page): the property's appearance types, then
+ * each shopping type's pages by day, filtered to it. Both steps count
+ * impressions by page: counted by property, a result showing several of the
+ * shop's products counts once, and a shop's pages would always add up past
+ * it. A filtered read whose impressions pass its type's total by more than
+ * rounding means the filter wasn't applied: it is dropped, not kept as every
+ * page shown, and the brand is left unread rather than read as showing
+ * none. The brand's rows from another property are dropped first. Returns
+ * the rows written.
+ */
+async function syncBrandShopping(brand, now = Date.now()) {
+  const entityId = `org_${brand.organization_id}`;
+  if (brand.gsc_shopping_property && brand.gsc_shopping_property !== brand.gsc_property) {
+    const { error } = await supabaseAdmin
+      .from('gsc_shopping_page_stats')
+      .delete()
+      .eq('brand_id', brand.id);
+    if (error) throw new Error(error.message);
+  }
+  const window = {
+    site_url: brand.gsc_property,
+    start_date: utcDateString(SYNC_WINDOW_DAYS),
+    end_date: utcDateString(0),
+    search_type: 'web',
+    aggregation_type: 'auto',
+    data_state: 'final',
+  };
+  const types = await queryGscSearchAnalytics(entityId, {
+    ...window,
+    // As the page rows below are counted, so their sums compare.
+    aggregation_type: 'byPage',
+    dimensions: ['searchAppearance'],
+    row_limit: APPEARANCE_ROW_LIMIT,
+    start_row: 0,
+    dimension_filter_groups: [],
+  });
+
+  let total = 0;
+  let dropped = false;
+  for (const type of types) {
+    const name = type.keys?.[0];
+    const appearance = shoppingAppearance(name);
+    if (!appearance) continue;
+    const rows = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const batch = await queryGscSearchAnalytics(entityId, {
+        ...window,
+        dimensions: ['page', 'date'],
+        row_limit: ROW_LIMIT,
+        start_row: page * ROW_LIMIT,
+        dimension_filter_groups: [
+          {
+            groupType: 'and',
+            filters: [{ dimension: 'searchAppearance', operator: 'equals', expression: name }],
+          },
+        ],
+      });
+      rows.push(...batch);
+      if (batch.length < ROW_LIMIT) break;
+    }
+    const impressions = rows.reduce((sum, row) => sum + (row.impressions || 0), 0);
+    if (impressions > (type.impressions || 0) * 1.05 + 10) {
+      logger.error(
+        { brandId: brand.id, appearance: name, impressions, expected: type.impressions },
+        '[gsc-sync] shopping filter not applied — rows dropped',
+      );
+      dropped = true;
+      continue;
+    }
+    const mapped = mapShoppingRows(brand.id, appearance, rows);
+    for (let i = 0; i < mapped.length; i += UPSERT_CHUNK) {
+      const { error } = await supabaseAdmin
+        .from('gsc_shopping_page_stats')
+        .upsert(mapped.slice(i, i + UPSERT_CHUNK), { onConflict: 'brand_id,page,appearance,date' });
+      if (error) throw new Error(`Upsert failed: ${error.message}`);
+    }
+    total += mapped.length;
+  }
+  // A dropped read leaves the brand unread: Readiness then says it can't
+  // tell, never that Google shows none of its products.
+  await updateBrand(brand, {
+    gsc_shopping_property: brand.gsc_property,
+    gsc_shopping_synced_at: dropped ? null : new Date(now).toISOString(),
+  });
+  return total;
+}
+
 const QUERIES = {
   dimension: 'query',
   table: 'gsc_query_stats',
@@ -233,9 +352,11 @@ export async function runGscSync({ organizationId, brandId } = {}) {
   let brandQuery = supabaseAdmin
     .from('brands')
     .select(
-      'id, organization_id, gsc_property, gsc_pages_backfilled_property, gsc_pages_backfill_from',
+      'id, organization_id, gsc_property, gsc_pages_backfilled_property, gsc_pages_backfill_from, gsc_shopping_property',
     )
     .eq('is_active', true)
+    // A demo brand's figures (00380) are sample data, never synced.
+    .eq('is_demo', false)
     .not('gsc_property', 'is', null)
     .in('organization_id', connectedOrgIds);
   if (brandId) brandQuery = brandQuery.eq('id', brandId);
@@ -256,7 +377,14 @@ export async function runGscSync({ organizationId, brandId } = {}) {
       } catch (err) {
         logger.error({ err, brandId: brand.id }, '[gsc-sync] page sync failed');
       }
-      results.push({ brandId: brand.id, rows: count, pages });
+      // So are the shopping results (00377).
+      let shopping = null;
+      try {
+        shopping = await syncBrandShopping(brand);
+      } catch (err) {
+        logger.error({ err, brandId: brand.id }, '[gsc-sync] shopping sync failed');
+      }
+      results.push({ brandId: brand.id, rows: count, pages, shopping });
       synced++;
     } catch (err) {
       logger.error({ err, brandId: brand.id }, '[gsc-sync] brand sync failed');
@@ -282,6 +410,13 @@ export async function runGscSync({ organizationId, brandId } = {}) {
       .lt('date', utcDateString(PAGE_BACKFILL_DAYS));
     if (pagePruneError) {
       logger.warn({ err: pagePruneError }, '[gsc-sync] page retention prune failed');
+    }
+    const { error: shoppingPruneError } = await supabaseAdmin
+      .from('gsc_shopping_page_stats')
+      .delete()
+      .lt('date', utcDateString(SHOPPING_KEEP_DAYS));
+    if (shoppingPruneError) {
+      logger.warn({ err: shoppingPruneError }, '[gsc-sync] shopping retention prune failed');
     }
   }
 

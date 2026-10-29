@@ -11,8 +11,12 @@
  * sites and services send for it (AI-bot logs, traffic beacons, Cloro's
  * answers, workflow callbacks) is answered as usual and not stored.
  *
- * Self-hosted, everything is let through (billing doesn't apply), and
- * nothing is read.
+ * Self-hosted, every organization is let through (billing doesn't apply),
+ * and nothing is read for them.
+ *
+ * A demo brand (00380) is never let through, on the cloud or self-hosted:
+ * its data is the sample the demo generator writes (lib/demo), and nothing
+ * may track, write or spend for it. So a brand is read even self-hosted.
  */
 
 import supabaseAdmin from '../config/supabase.js';
@@ -57,27 +61,66 @@ export async function activeOrgFilter(orgIds) {
   return (orgId) => active.has(orgId);
 }
 
+/** Why no work may start for a brand: a demo brand's sample data (00380). */
+export const DEMO_BRAND_REASON = 'demo_brand';
+/** Why no work may start for a brand: its organization has no active plan. */
+export const SUBSCRIPTION_INACTIVE_REASON = 'subscription_inactive';
+
 /**
- * A test for the ids among `brandIds`: whether the brand's organization has
- * an active or trialing subscription. Throws when the brands can't be read.
+ * For the ids among `brandIds`, why no work may start for the brand, or null
+ * when it may: DEMO_BRAND_REASON for a demo brand (on the cloud or
+ * self-hosted), SUBSCRIPTION_INACTIVE_REASON for a brand whose organization
+ * has no active or trialing subscription (on the cloud), or that wasn't
+ * found. Throws when the brands can't be read.
+ *
+ * @param {string[]} brandIds
+ * @returns {Promise<(brandId: string) => string|null>}
+ */
+export async function brandStopReasons(brandIds) {
+  const ids = uniqueIds(brandIds);
+  if (ids.length === 0) return () => SUBSCRIPTION_INACTIVE_REASON;
+  const cloud = isCloud();
+  const { data, error } = await selectInChunks(ids, (chunk) =>
+    supabaseAdmin
+      .from('brands')
+      .select(cloud ? 'id, is_demo, organizations(subscription_status)' : 'id, is_demo')
+      .in('id', chunk),
+  );
+  if (error) throw new Error(`brands read: ${error.message}`);
+  const reasons = new Map(
+    (data ?? []).map((brand) => {
+      if (brand.is_demo) return [brand.id, DEMO_BRAND_REASON];
+      if (cloud && !isSubscriptionActive(brand.organizations?.subscription_status)) {
+        return [brand.id, SUBSCRIPTION_INACTIVE_REASON];
+      }
+      return [brand.id, null];
+    }),
+  );
+  return (brandId) => (reasons.has(brandId) ? reasons.get(brandId) : SUBSCRIPTION_INACTIVE_REASON);
+}
+
+/**
+ * A test for the ids among `brandIds`: whether the brand is a real one (not
+ * a demo brand) whose organization has an active or trialing subscription
+ * (any, self-hosted). Throws when the brands can't be read.
  *
  * @param {string[]} brandIds
  * @returns {Promise<(brandId: string) => boolean>}
  */
 export async function activeBrandFilter(brandIds) {
-  if (!isCloud()) return everyone;
-  const ids = uniqueIds(brandIds);
-  if (ids.length === 0) return () => false;
-  const { data, error } = await selectInChunks(ids, (chunk) =>
-    supabaseAdmin.from('brands').select('id, organizations(subscription_status)').in('id', chunk),
-  );
-  if (error) throw new Error(`brands read: ${error.message}`);
-  const active = new Set(
-    (data ?? [])
-      .filter((brand) => isSubscriptionActive(brand.organizations?.subscription_status))
-      .map((brand) => brand.id),
-  );
-  return (brandId) => active.has(brandId);
+  const reasonFor = await brandStopReasons(brandIds);
+  return (brandId) => reasonFor(brandId) === null;
+}
+
+/**
+ * Why no work may start for one brand, or null when it may (brandStopReasons):
+ * for a job that starts work for one brand, and says why it didn't.
+ *
+ * @param {string} brandId
+ * @returns {Promise<string|null>}
+ */
+export async function brandStopReason(brandId) {
+  return (await brandStopReasons([brandId]))(brandId);
 }
 
 /**
@@ -94,8 +137,8 @@ export async function isOrgActive(orgId) {
 
 /**
  * Whether one brand's organization has an active or trialing subscription
- * (always, self-hosted): for a job, a pass or a callback that starts work
- * for one brand.
+ * (always, self-hosted), and the brand isn't a demo brand: for a job, a pass
+ * or a callback that starts work for one brand.
  *
  * @param {string} brandId
  * @returns {Promise<boolean>}

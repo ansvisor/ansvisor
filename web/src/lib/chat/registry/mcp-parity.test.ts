@@ -23,12 +23,15 @@ type McpTool = Awaited<ReturnType<Client['listTools']>>['tools'][number];
 let mcpTools: Map<string, McpTool>;
 
 beforeAll(async () => {
-  const server = createMcpServer({
+  // role: the MCP context's since #1762; a const, so it compiles before it too.
+  const auth = {
     userId: 'user-1',
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
-  });
+    role: 'admin' as const,
+  };
+  const server = createMcpServer(auth);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   const client = new Client({ name: 'test', version: '1.0.0' });
