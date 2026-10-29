@@ -220,7 +220,7 @@ instead.
 
 ## Available tools
 
-The MCP server exposes **62 tools**. Descriptions below match
+The MCP server exposes **65 tools**. Descriptions below match
 [`web/src/lib/mcp/server.ts`](https://github.com/ansvisor/ansvisor/blob/main/web/src/lib/mcp/server.ts).
 Tools that change data are marked **writes** — only call them on explicit user
 intent, not during exploratory queries. A write that needs a particular role
@@ -375,9 +375,13 @@ The Shelf, Readiness and What AI says need a plan with Product Visibility (Growt
 | `list_action_history` | Closed actions with measured outcomes and before/after validation results, each with `net_of_control` (its change net of the brand's prompts it didn't touch, so a market-wide swing doesn't read as its effect) and `dismiss_reason` (`not_relevant`, `already_done`, `wrong_data` or `not_now`). | |
 | `get_action_scorecard` | What each kind of action did at the brand, as the History tab's scorecard shows it: completed and their results, `success_rate` (from three verdicts), `median_change_percent`, and dismissals by reason. Optional `date_from`. | |
 | `update_task_status` | Record progress on a task (`in_progress`, `completed`, `skipped`, `failed`); does not execute the task. | **yes** |
+| `list_task_reviews` | Tasks waiting for review, as the **Needs review** tab shows them: tasks an AI writer gave without the exact page, the change, Done when or how it is checked, each with `missing` (the fields to fill). Admins and managers only. | |
+| `approve_task_review` | Approve one onto its action's task list, as the tab's **Approve** does: the fields given (`url`, `change`, `done_when`, `check`, and optionally `title`, `where`, `why`, `how`) replace what was written, and all four must be filled. | **yes** (admin, manager) |
+| `dismiss_task_review` | Dismiss one, as the tab's **Dismiss** does: it never reaches its action. | **yes** (admin, manager) |
 | `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
 
 The scorecard is also available over REST: `GET /api/mcp/action-scorecard?brand_id=<brand_id>&date_from=2026-09-01`.
+The review queue is also available over REST: `GET /api/mcp/task-reviews?brand_id=<brand_id>`, and `POST /api/mcp/task-reviews/<id>/approve` (the fields as JSON) or `/dismiss`.
 
 #### Export an action
 
@@ -415,8 +419,8 @@ answers in plain English using the returned data.
 A key acts as the person who created it, with their role in the
 organization. `get_me` returns it. Day-to-day work is open to every role:
 reading, drafts and suggestions in the Content Editor, briefs, Site Audits,
-task progress and an opportunity's progress. Adding prompts or topics and
-dismissing are for admins and managers. Dismissing a prompt suggestion is open
+task progress and an opportunity's progress. Adding prompts or topics,
+reviewing tasks and dismissing are for admins and managers. Dismissing a prompt suggestion is open
 to analysts too. The tools marked with roles above refuse anyone else before
 they change anything. The call fails with text like this:
 
