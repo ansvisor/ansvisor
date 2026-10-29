@@ -21,11 +21,17 @@ vi.mock('@/lib/actions/content', () => ({
   generateOpportunitiesOnDemand: vi.fn(),
   getGenerationJobStatus: vi.fn(),
 }));
+// The viewer: a manager unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ canManage: viewer.canManage }),
+}));
 
 let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  viewer.canManage = true;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -75,6 +81,42 @@ describe('Opportunities — estimated volume (PROMPT-013)', () => {
     expect(ranges.every((r) => r.className.includes('text-muted-foreground'))).toBe(true);
     expect(container.textContent).toContain('2 prompts\u00a0·\u00a0600–2.4k/mo');
     expect(container.textContent).not.toContain('~');
+  });
+});
+
+describe("Opportunities' Suggest content by role", () => {
+  const render = () =>
+    act(() =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <Opportunities
+            brandId="b1"
+            suggestions={[suggestion('s3', null, 350)]}
+            trackedTopicIds={[]}
+            topics={null}
+            entities={null}
+            slotsLeft={null}
+            contentUsage={null}
+            onTracked={() => {}}
+          />
+        </NextIntlClientProvider>,
+      ),
+    );
+  const labels = () => [...container.querySelectorAll('button')].map((b) => b.textContent);
+
+  it('is offered to an admin or a manager', () => {
+    render();
+    expect(labels()).toContain('Suggest content');
+    expect(container.textContent).not.toContain('Ask an admin or a manager');
+  });
+
+  it('is left out for an analyst or an agency partner, who read who can', () => {
+    viewer.canManage = false;
+    render();
+    expect(labels()).not.toContain('Suggest content');
+    expect(container.textContent).toContain(
+      'Ask an admin or a manager to suggest content for a prompt.',
+    );
   });
 });
 

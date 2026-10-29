@@ -27,6 +27,7 @@ import type { TopicCompetitors } from '@/lib/insights-topics';
 import { guessedVolumeEstimate } from '@/lib/volume-estimate';
 import { EstimateRange } from '@/components/prompts/volume-estimate';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 
 /** Items shown, as in the mockup; "See all" opens the rest. */
 const VISIBLE_ITEMS = 4;
@@ -73,6 +74,9 @@ export function Opportunities({
   // content open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // Suggesting content costs AI: admins and managers start it.
+  const { canManage } = useUserRole();
+  const tManagers = useTranslations('managersOnly');
   const failureToast = useFailureToast();
   const format = useFormatter();
   const f = numberFormat(useLocale());
@@ -311,90 +315,103 @@ export function Opportunities({
       </CardHeader>
       <CardContent>
         {result.status === 'ready' ? (
-          <ul className="divide-y" aria-label={t('listLabel')}>
-            {result.items.slice(0, VISIBLE_ITEMS).map((item) => {
-              const isTopic = item.kind === 'topic';
-              const Icon = isTopic ? Tag : MessageCircle;
-              const count = item.suggestionIds.length;
-              const blocked = secondaryBlocked(item);
-              return (
-                <li
-                  key={item.key}
-                  className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <Icon className="h-3.5 w-3.5" aria-hidden />
-                    <span className="sr-only">{isTopic ? t('topicKind') : t('promptKind')}</span>
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium" title={item.title}>
-                      {item.title}
+          <>
+            <ul className="divide-y" aria-label={t('listLabel')}>
+              {result.items.slice(0, VISIBLE_ITEMS).map((item) => {
+                const isTopic = item.kind === 'topic';
+                const Icon = isTopic ? Tag : MessageCircle;
+                const count = item.suggestionIds.length;
+                const blocked = secondaryBlocked(item);
+                return (
+                  <li
+                    key={item.key}
+                    className="flex items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <Icon className="h-3.5 w-3.5" aria-hidden />
+                      <span className="sr-only">{isTopic ? t('topicKind') : t('promptKind')}</span>
                     </span>
-                    {/* Text truncates, the range doesn't: its focus ring and button stay whole. */}
-                    <span className="flex min-w-0 items-baseline text-xs text-muted-foreground">
-                      {meta(item).map((part, i) =>
-                        typeof part === 'string' ? (
-                          <span key={i} className="truncate">
-                            {part}
-                          </span>
-                        ) : (
-                          <span key={i} className="shrink-0">
-                            {part}
-                          </span>
-                        ),
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium" title={item.title}>
+                        {item.title}
+                      </span>
+                      {/* Text truncates, the range doesn't: its focus ring and button stay whole. */}
+                      <span className="flex min-w-0 items-baseline text-xs text-muted-foreground">
+                        {meta(item).map((part, i) =>
+                          typeof part === 'string' ? (
+                            <span key={i} className="truncate">
+                              {part}
+                            </span>
+                          ) : (
+                            <span key={i} className="shrink-0">
+                              {part}
+                            </span>
+                          ),
+                        )}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {/* The hints sit on wrappers: a disabled button shows no tooltip. */}
+                      <span
+                        title={
+                          planFull
+                            ? t('planFull')
+                            : isTopic
+                              ? t('trackCountHint', { count, topic: item.title })
+                              : t('trackHint')
+                        }
+                      >
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1.5 px-2.5 text-xs"
+                          disabled={planFull || busy !== null}
+                          onClick={guard(() => track(item), { action: tActions('trackPrompts') })}
+                        >
+                          {/* Track N adds one prompt at a time, so a big topic takes a moment. */}
+                          {busy === item.key && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                          )}
+                          {isTopic ? t('trackCount', { count }) : t('track')}
+                        </Button>
+                      </span>
+                      {(isTopic || canManage) && (
+                        <span
+                          title={
+                            blocked ??
+                            (isTopic ? t('sendActionHint', { topic: item.title }) : suggestHint)
+                          }
+                        >
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2.5 text-xs"
+                            disabled={blocked !== null || working.has(item.key)}
+                            onClick={guard(
+                              () => (isTopic ? sendAction(item) : suggestContent(item)),
+                              {
+                                action: tActions(isTopic ? 'sendAction' : 'suggestContent'),
+                              },
+                            )}
+                          >
+                            {working.has(item.key) && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            )}
+                            {isTopic ? t('sendAction') : t('suggestContent')}
+                          </Button>
+                        </span>
                       )}
                     </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    {/* The hints sit on wrappers: a disabled button shows no tooltip. */}
-                    <span
-                      title={
-                        planFull
-                          ? t('planFull')
-                          : isTopic
-                            ? t('trackCountHint', { count, topic: item.title })
-                            : t('trackHint')
-                      }
-                    >
-                      <Button
-                        size="sm"
-                        className="h-7 gap-1.5 px-2.5 text-xs"
-                        disabled={planFull || busy !== null}
-                        onClick={guard(() => track(item), { action: tActions('trackPrompts') })}
-                      >
-                        {/* Track N adds one prompt at a time, so a big topic takes a moment. */}
-                        {busy === item.key && (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                        )}
-                        {isTopic ? t('trackCount', { count }) : t('track')}
-                      </Button>
-                    </span>
-                    <span
-                      title={
-                        blocked ??
-                        (isTopic ? t('sendActionHint', { topic: item.title }) : suggestHint)
-                      }
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1.5 px-2.5 text-xs"
-                        disabled={blocked !== null || working.has(item.key)}
-                        onClick={guard(() => (isTopic ? sendAction(item) : suggestContent(item)), {
-                          action: tActions(isTopic ? 'sendAction' : 'suggestContent'),
-                        })}
-                      >
-                        {working.has(item.key) && (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                        )}
-                        {isTopic ? t('sendAction') : t('suggestContent')}
-                      </Button>
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+            {!canManage &&
+              result.items.slice(0, VISIBLE_ITEMS).some((item) => item.kind !== 'topic') && (
+                <p className="pt-2.5 text-xs text-muted-foreground">
+                  {tManagers('suggestContent')}
+                </p>
+              )}
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
             <p className="max-w-xs text-xs text-muted-foreground">
