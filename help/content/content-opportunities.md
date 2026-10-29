@@ -40,11 +40,11 @@ Opportunities are written per group of prompts: prompts of one topic that a sing
 
 - **Let Ansvisor choose** takes the highest-scoring groups that have no opportunity yet, one from each topic first.
 - **Topic** takes only that topic's groups.
-- **Prompt** takes only that prompt's group, so it always writes one opportunity, and **How many** stays at 1. If that prompt already has an open opportunity, the window says so, with **Open existing**.
+- **Prompt** takes only that prompt's group, so it always writes one opportunity, and **How many** stays at 1. If that prompt already has an open opportunity, a message says so when the run ends, with **Open existing**.
 
 ## No duplicates
 
-Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is left, the window says every matching need already has an opportunity.
+Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is left, a message says every matching need already has one.
 
 For a second take on the same need, use **Another angle** on the opportunity.
 
