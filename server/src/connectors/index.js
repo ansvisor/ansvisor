@@ -30,8 +30,10 @@ import wooCommerce from './woocommerce/index.js';
  *     ConnectError (./errors.js) with words the person can act on;
  *   - optionally `disconnect(source, ctx)`: revokes the sign-in at the
  *     platform when the person removes the store, best effort.
- *   Later, with orders and webhooks: `syncOrders(since)` and
- *   `handleWebhook(event)`.
+ *   - optionally `syncOrders(source, ctx)`: normalized orders for the shared
+ *     persistence path (lib/catalog/orders.js), which strips buyer fields;
+ *   - optionally `handleWebhook(event)`: connector-level verification and
+ *     normalization. A shared HTTP receiver/dispatch route is not wired yet.
  *
  * A platform read with the workspace's own sign-in (#1270), made in
  * Settings › Integrations and kept by Composio, has instead of `fields` and
