@@ -10,8 +10,9 @@ import { DeliveryError, sendContentPages, sendInput } from '../lib/content-deliv
 import { checkFramerPublished } from '../lib/cms/framer-status.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
+import { checkWixPublished } from '../lib/cms/wix-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
-import { cmsLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
+import { cmsStatusLimiter, shoppingPathLimiter } from '../middleware/rate-limiter.js';
 import { stopDraftRun } from '../lib/content-runs.js';
 import { startDraftWriting, writeDraftInput } from '../lib/content-writer.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -50,7 +51,7 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
  * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
  */
@@ -143,7 +144,7 @@ const webflowStatusBody = z.object({ brandId: z.guid() });
  * of the brand's workspace (the Library asks when it opens), a brand at most
  * every two minutes: { checked, published: [{ draftId, url }], recent? }.
  */
-router.post('/webflow-status', cmsLimiter, async (req, res) => {
+router.post('/webflow-status', cmsStatusLimiter, async (req, res) => {
   const parsed = webflowStatusBody.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   const { brandId } = parsed.data;
@@ -178,7 +179,7 @@ const wordpressChecked = new Map();
  * since, marked published at the post's link (cms/wordpress-status.js). As
  * /webflow-status: any member, a brand at most every two minutes.
  */
-router.post('/wordpress-status', cmsLimiter, async (req, res) => {
+router.post('/wordpress-status', cmsStatusLimiter, async (req, res) => {
   const parsed = webflowStatusBody.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   const { brandId } = parsed.data;
@@ -213,7 +214,7 @@ const framerChecked = new Map();
  * marked published at the item's page (cms/framer-status.js). As
  * /webflow-status: any member, a brand at most every two minutes.
  */
-router.post('/framer-status', cmsLimiter, async (req, res) => {
+router.post('/framer-status', cmsStatusLimiter, async (req, res) => {
   const parsed = webflowStatusBody.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   const { brandId } = parsed.data;
@@ -236,6 +237,38 @@ router.post('/framer-status', cmsLimiter, async (req, res) => {
       'content draft framer status error',
     );
     return res.status(502).json({ error: 'Framer could not be read', code: 'failed' });
+  }
+});
+
+/** A brand's Wix posts read at most this often on demand (the daily sweep reads them too). */
+const wixChecked = new Map();
+
+/**
+ * POST /api/content-drafts/wix-status
+ * Body: { brandId }. Pages the brand sent to Wix, published there since,
+ * marked published at the post's address (cms/wix-status.js). As
+ * /webflow-status: any member, a brand at most every two minutes.
+ */
+router.post('/wix-status', cmsStatusLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = wixChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    wixChecked.set(brandId, Date.now());
+    return res.json(await checkWixPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error({ err: { name: err?.name, code: err?.code } }, 'content draft wix status error');
+    return res.status(502).json({ error: 'Wix could not be read', code: 'failed' });
   }
 });
 

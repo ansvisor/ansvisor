@@ -46,7 +46,7 @@ export async function getContentSettings(): Promise<ContentSettings | null> {
  * is refused.
  */
 export async function setBrandQualityHandoff(brandId: string, on: boolean): Promise<void> {
-  await assertWritable();
+  await assertWritable({ brandId });
   if (!z.guid().safeParse(brandId).success || typeof on !== 'boolean') throw new Error('invalid');
   const supabase = await createClient();
   const { data, error } = await supabase

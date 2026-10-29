@@ -188,7 +188,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Brands',
       description:
-        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, and creation date. Always call this first to resolve a brand id before using other tools.',
+        'List the brands the authenticated user can access. Returns one row per brand with id, name, slug, industry, region, creation date and is_demo. A brand with is_demo true is the demo brand: sample data for exploring Ansvisor, read like any brand, but nothing on it can be changed, run or generated (those tools answer demo_brand); say so when you report on it. Always call this first to resolve a brand id before using other tools.',
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -678,7 +678,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Generate a content brief',
       description:
-        'Generate a fresh AI-powered content brief for a specific content opportunity. WARNING: this triggers an LLM call (cost + latency) and ALWAYS re-generates, overwriting any existing brief on the opportunity. Use only after list_content_opportunities + get_content_opportunity and only when the user has explicitly asked to generate or refresh a brief for a specific opportunity — never as part of exploratory queries. To read an existing brief without an LLM call, use get_content_opportunity instead.',
+        'Generate a fresh AI-powered content brief for a specific content opportunity. WARNING: this triggers an LLM call (cost + latency) and ALWAYS re-generates, overwriting any existing brief on the opportunity. Use only after list_content_opportunities + get_content_opportunity and only when the user has explicitly asked to generate or refresh a brief for a specific opportunity — never as part of exploratory queries. To read an existing brief without an LLM call, use get_content_opportunity instead. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         opportunity_id: relaxedUuid.describe(
           'Content opportunity UUID, from list_content_opportunities.',
@@ -1497,7 +1497,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Send Improve suggestions to Action Center',
       description:
-        'Send Improve suggestions for one prompt to Action Center as a new `prompt_improve` action, one human task per suggestion — the same as the Positions panel\'s Improve tab "Send Actions". The prompt must already have an Improve suggestion set for this exact range (generated in the dashboard); otherwise it errors with "Generate suggestions for this range first". Needs a plan that includes Improve. Reuse the same idempotency_key when retrying: a repeated call returns the action the first one created (created: false) instead of a duplicate. It is a write logged under the API key\'s user — only fire on explicit user intent, never as part of an exploratory query.',
+        'Send Improve suggestions for one prompt to Action Center as a new `prompt_improve` action, one human task per suggestion — the same as the Positions panel\'s Improve tab "Send Actions". The prompt must already have an Improve suggestion set for this exact range (generated in the dashboard); otherwise it errors with "Generate suggestions for this range first". Needs a plan that includes Improve. Reuse the same idempotency_key when retrying: a repeated call returns the action the first one created (created: false) instead of a duplicate. It is a write logged under the API key\'s user — only fire on explicit user intent, never as part of an exploratory query. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         prompt_id: relaxedUuid.describe('Prompt UUID, from list_prompts.'),
         range: z
@@ -1757,7 +1757,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Content drafts',
       description:
-        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress or framer, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
+        "List a brand's Content Editor drafts, the latest changed first (up to 100): title, status (draft, in_review, ready, published), method (create or optimize), page type, author (user or agent), the live page it optimizes, how many agent suggestions wait for review, and the editor path. Also `last_send` (its last Send to CMS: status queued, sent, failed or published, target webhook, webflow, wordpress, framer or wix, when, the webhook's HTTP status, the error, and where the CMS says it went live; null when never sent) and `shopping_links` (on a shop's page with a shopping path: whether its links still sell — state ok or attention, the category pages and products linked, and the linked products that no longer sell: sold out, refused by Merchant Center or gone; none or unchecked otherwise).",
       inputSchema: listDraftsShape,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -2243,7 +2243,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Product Visibility readiness',
       description:
-        "Product Visibility's Readiness: how ready the brand is for AI shopping, as the Readiness tab checks it, scored 0–100 over the checks that can be made (`score`; null when its catalog's sources or products couldn't be read, listed in `unread`). Each check has its `key` (catalog, merchantCenter where this server offers Google Merchant Center or the brand has it connected, openAiIndex and verifiedSeller in the US, firstWords, feedFields, feedLinks, wrongPrice, resellerCheaper, amazonShare), its `state` (pass, warn, fail, or unknown when it can't be made), its `title` and `detail` as the page writes them, and `fix`: where it starts (products = the Products tab, settings = Settings › Integrations › Catalog). `channels` says for each AI channel (chatgpt-shopping, google-aio, google-aimode, gemini-web, copilot-web) whether the brand's products are on its shelves (showing), its shelves are read without them (notShowing), or it isn't tracked (notTracked). Needs a plan with Product Visibility (Growth and above): on Starter it answers plan_limit.",
+        "Product Visibility's Readiness: how ready the brand is for AI shopping, as the Readiness tab checks it, scored 0–100 over the checks that can be made (`score`; null when its catalog's sources or products couldn't be read, listed in `unread`). Each check has its `key` (catalog, merchantCenter where this server offers Google Merchant Center or the brand has it connected, googleShopping: whether Google showed its product pages as merchant listings or product snippets in Search Console over 28 days, openAiIndex and verifiedSeller in the US, firstWords, feedFields, feedLinks, wrongPrice, resellerCheaper, amazonShare), its `state` (pass, warn, fail, or unknown when it can't be made), its `title` and `detail` as the page writes them, and `fix`: where it starts (products = the Products tab, settings = Settings › Integrations › Catalog). `channels` says for each AI channel (chatgpt-shopping, google-aio, google-aimode, gemini-web, copilot-web) whether the brand's products are on its shelves (showing), its shelves are read without them (notShowing), or it isn't tracked (notTracked). Needs a plan with Product Visibility (Growth and above): on Starter it answers plan_limit.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
         period: periodInput,

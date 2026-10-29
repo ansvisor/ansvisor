@@ -1,6 +1,7 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
+import { INTEGRATION_READ_TIMEOUT_MS } from '@/lib/integrations-client';
 import {
   CATALOG_UPLOAD_MAX_BYTES,
   type CatalogCounts,
@@ -238,6 +239,7 @@ export async function listStoreConnectors(): Promise<{
     if (!session) return null;
     const res = await fetch(`${BROWSER_API_BASE_URL}/api/catalog/connectors`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
+      signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const body = (await res.json()) as {
@@ -405,7 +407,7 @@ async function categoryCall<T>(
 export function listCategoryPages(brandId: string) {
   return categoryCall<CategoryPage[]>(
     `/categories?${new URLSearchParams({ brandId })}`,
-    {},
+    { signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS) },
     (body) => (body.categories as CategoryPage[] | undefined) ?? [],
     [],
   );

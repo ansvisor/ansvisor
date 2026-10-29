@@ -43,10 +43,13 @@ async function startApp() {
     getOrgIdForUser: vi.fn(),
   }));
   vi.doMock('../lib/access.js', () => ({
+    MANAGER_ROLES: ['admin', 'manager'],
     assertBrandAccess,
     assertOpportunitiesAccess: vi.fn(),
     assertOpportunityAccess: vi.fn(),
     assertPromptAccess,
+    // Generating is a manager's (2026-10-29): the caller is one here.
+    assertRole: vi.fn(async () => 'manager'),
   }));
   vi.doMock('../lib/job-manager.js', () => ({ createJob, getJob: vi.fn() }));
   vi.doMock('../lib/job-runner.js', () => ({ runContentJob }));

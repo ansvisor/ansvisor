@@ -46,9 +46,11 @@ export async function sweepBrandFacts({
   const nowIso = new Date(now).toISOString();
   const { data: rows, error } = await db
     .from('brand_fact_pages')
-    .select('brand_id, checked_at, brands!inner(organization_id, is_active)')
+    .select('brand_id, checked_at, brands!inner(organization_id, is_active, is_demo)')
     .lt('checked_at', new Date(now - REFRESH_DAYS * DAY_MS).toISOString())
     .eq('brands.is_active', true)
+    // A demo brand's site (00380) is a `.example` domain nobody serves.
+    .eq('brands.is_demo', false)
     .order('checked_at', { ascending: true })
     .limit(limit * 6);
   if (error) throw new Error(error.message);

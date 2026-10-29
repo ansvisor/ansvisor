@@ -41,6 +41,7 @@ import {
   getShoppingActionResults,
   getShoppingCategories,
   getShoppingProducts,
+  getShoppingSearchAppearance,
   getShoppingShelf,
   type ShoppingChartData,
   type ShoppingDatePreset,
@@ -317,6 +318,13 @@ export default function ShoppingPage() {
   );
   // Null for a brand without a catalog, and while it reads.
   const catalogTable: ShoppingProducts | null | 'failed' = productsRead ?? null;
+  // Google's shopping results from Search Console (00377), for Readiness.
+  const searchAppearance = useKeyedRead(
+    canRead && activeTab === 'readiness',
+    activeBrandId ?? '',
+    () => getShoppingSearchAppearance(activeBrandId!),
+    "Search Console's shopping results",
+  );
 
   // The Categories tab reads when it's open, once per brand and filters.
   const categoriesKey = `${activeBrandId}:${JSON.stringify(filters)}`;
@@ -643,6 +651,8 @@ export default function ShoppingPage() {
                     market: shoppingMarket.shown ?? 'us',
                     catalog: sources.catalog,
                     merchantCenterOffered: sources.merchantCenterOffered,
+                    searchAppearance:
+                      searchAppearance && searchAppearance !== 'failed' ? searchAppearance : null,
                     products: catalogTable && catalogTable !== 'failed' ? catalogTable.rows : null,
                     openAi: showOpenAiIndex ? openAiIndex.read : null,
                     cheaperResellers: destinationsLoading ? null : destinations.priceAlerts.length,

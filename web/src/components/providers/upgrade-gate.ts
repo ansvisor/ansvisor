@@ -1,15 +1,20 @@
 'use client';
 
 import { createContext, useCallback, useContext } from 'react';
-import type { ReadOnlyReason } from '@/lib/billing/subscription-access';
+import type { UpgradeReason } from '@/lib/billing/subscription-access';
 
 /** Where an admin chooses a plan: Settings › Billing, open while the workspace is read-only. */
 export const CHOOSE_PLAN_HREF = '/dashboard/settings/billing';
 
 export interface UpgradeDialogState {
-  /** The plan isn't active: an action opens the dialog instead of running. */
+  /**
+   * The plan isn't active, or the brand on screen is the demo brand: an
+   * action opens the dialog instead of running.
+   */
   isLocked: boolean;
-  reason: ReadOnlyReason;
+  /** The brand on screen is the demo brand (sample data, nothing runs); absent, it isn't. */
+  isDemo?: boolean;
+  reason: UpgradeReason;
   /** The admin a member is asked to turn to, when their name could be read. */
   adminName: string | null;
   /**

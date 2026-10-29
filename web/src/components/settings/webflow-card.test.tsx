@@ -22,6 +22,11 @@ vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: () => ({ activeBrandId: 'b1', brands: [{ id: 'b1', name: 'Acme' }] }),
 }));
+// The demo brand on screen, when a test says.
+const demo = vi.hoisted(() => ({ on: false }));
+vi.mock('@/components/providers/demo-brand-provider', () => ({
+  useDemoBrand: () => ({ isDemo: demo.on }),
+}));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 // The read-only workspace's upgrade dialog.
@@ -606,5 +611,36 @@ describe('WebflowCard', () => {
       "Webflow refused the token. Pages can't go there until an admin or manager pastes a new one.",
     );
     expect(container.textContent).not.toContain('Pages go to Blog Posts.');
+  });
+});
+
+describe('WebflowCard on the demo brand', () => {
+  beforeEach(() => {
+    demo.on = true;
+    gate.isLocked = true;
+  });
+  afterEach(() => {
+    demo.on = false;
+    gate.isLocked = false;
+  });
+
+  it('shows the site connected with sample data, and where pages go, read from nowhere', async () => {
+    await render();
+    expect(badges()).toEqual(['Connected', 'Sample data']);
+    expect(container.textContent).toContain('Acme');
+    expect(container.textContent).toContain('Blog Posts');
+    expect(client.readWebflow).not.toHaveBeenCalled();
+    expect(client.listWebflowCollections).not.toHaveBeenCalled();
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('opens the plan dialog from Replace token and Disconnect', async () => {
+    await render();
+    await click(button('Replace token'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Connecting your CMS needs a plan');
+    await click(button('Disconnect'));
+    expect(openUpgrade).toHaveBeenLastCalledWith('Disconnecting an integration needs a plan');
+    expect(client.disconnectWebflow).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

@@ -489,18 +489,28 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
 
 // ─── Tracking Progress ────────────────────────────────────────────────────────
 
-import { saveTrackingJob, loadTrackingJob, clearTrackingJob } from '@/lib/tracking-job-store';
+import {
+  saveTrackingJob,
+  loadTrackingJob,
+  clearTrackingJob,
+  doneMessage,
+} from '@/lib/tracking-job-store';
+import { etaParts, minutesLeft, withSample, type ProgressSample } from '@/lib/tracking-eta';
 import { toCsv } from '@/lib/csv';
 import { RunLine } from './_run-line';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 function TrackingProgressBanner({
   jobStatus,
+  pace,
   onStop,
 }: {
   jobStatus: TrackingJobStatus | null;
+  /** The run's progress readings while this page polls it, for the time left. */
+  pace: ProgressSample[];
   onStop: () => void;
 }) {
+  const t = useTranslations('insights.tracking');
   if (!jobStatus) return null;
 
   const isActive = jobStatus.status === 'active' || jobStatus.status === 'waiting';
@@ -508,6 +518,8 @@ function TrackingProgressBanner({
 
   const progress = jobStatus.progress;
   const pct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
+  const eta = progress ? minutesLeft(pace, progress.total) : null;
+  const left = eta === null ? null : etaParts(eta);
 
   return (
     <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
@@ -515,9 +527,7 @@ function TrackingProgressBanner({
         <div className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           <span className="text-sm font-medium">
-            {jobStatus.status === 'waiting'
-              ? 'Queued — starting automatically'
-              : 'Analyzing prompts...'}
+            {jobStatus.status === 'waiting' ? t('queued') : t('analyzing')}
           </span>
         </div>
         <Button
@@ -527,21 +537,22 @@ function TrackingProgressBanner({
           onClick={onStop}
         >
           <StopCircle className="h-3.5 w-3.5" />
-          Stop
+          {t('stop')}
         </Button>
       </div>
 
       {jobStatus.status === 'waiting' && (
-        <p className="text-xs text-muted-foreground">
-          Another analysis is running right now. Yours will begin the moment a slot opens up — no
-          need to wait here, it&apos;ll keep going in the background.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('queuedBody')}</p>
       )}
 
       {jobStatus.status === 'active' && (
         <p className="text-xs text-muted-foreground">
-          This can take anywhere from a few minutes to 1–2 hours at busy times. You can leave this
-          page — it keeps running in the background.
+          {/* The pace so far, once there is enough of it; the general range before. */}
+          {left === null
+            ? t('activeBody')
+            : 'hours' in left
+              ? t('activeBodyHours', left)
+              : t('activeBodyMinutes', left)}
         </p>
       )}
 
@@ -573,21 +584,30 @@ function TrackingProgressBanner({
 
 /**
  * Banner for runs this browser did NOT start (the daily cron, or a teammate's
- * Run All) — detected from the tracking_runs ledger, not localStorage. The
- * dashboard keeps showing the last completed run's numbers until the active
- * run finishes, then swaps in one step.
+ * Run All), or whose saved job this browser no longer restores: detected
+ * from the tracking_runs ledger, not localStorage. The dashboard keeps
+ * showing the last completed run's numbers until the active run finishes,
+ * then swaps in one step. A brand's first run has none to show, and says so.
  */
-function ServerRunBanner({ run }: { run: TrackingWindow['activeRun'] }) {
+function ServerRunBanner({
+  run,
+  firstRun,
+}: {
+  run: TrackingWindow['activeRun'];
+  /** No completed run yet: nothing older is on the page. */
+  firstRun: boolean;
+}) {
+  const t = useTranslations('insights.tracking');
   if (!run) return null;
   return (
     <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
       <div className="flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
         <span className="text-sm font-medium">
-          {run.source === 'cron' ? 'Daily tracking in progress' : 'Tracking in progress'}
+          {firstRun ? t('firstRun') : run.source === 'cron' ? t('dailyRun') : t('run')}
         </span>
         <span className="text-xs text-muted-foreground">
-          — showing the latest completed results; the numbers will refresh when this run finishes.
+          {firstRun ? t('firstRunBody') : t('runBody')}
         </span>
       </div>
     </div>
@@ -627,6 +647,11 @@ function NoCompetitorsTeaser() {
 
 export default function InsightsPage() {
   const t = useTranslations('insights');
+  // The job poll's toasts read it: the loop outlives a render.
+  const tRef = useRef(t);
+  tRef.current = t;
+  // The tracking job's pace while this page polls it ("about N min left").
+  const [pace, setPace] = useState<ProgressSample[]>([]);
   const tCommon = useTranslations('common');
   const router = useRouter();
   const { isCloud } = usePlanContext();
@@ -919,6 +944,10 @@ export default function InsightsPage() {
           const status = await getJobStatus(activeJobId);
           if (cancelled) break;
           setJobStatus(status);
+          const current = status.progress?.current;
+          if (current !== undefined) {
+            setPace((prev) => withSample(prev, { at: Date.now(), current }));
+          }
 
           // Refresh data every ~10s while active so new results appear progressively
           const now = Date.now();
@@ -932,7 +961,8 @@ export default function InsightsPage() {
             setActiveJobId(null);
             setIsRunning(false);
             setJobStatus(null);
-            toast.success(`Analysis complete — ${status.result?.resultCount ?? 0} results saved.`);
+            const done = doneMessage(status.result);
+            toast.success(tRef.current(`tracking.${done.key}`, 'count' in done ? done : undefined));
             loadData(undefined, { silent: true });
             break;
           }
@@ -943,7 +973,11 @@ export default function InsightsPage() {
             setIsRunning(false);
             setJobStatus(null);
             if (status.status === 'failed') {
-              toast.error(`Job failed: ${status.failedReason ?? 'Unknown error'}`);
+              toast.error(
+                tRef.current('tracking.failed', {
+                  reason: status.failedReason ?? tRef.current('tracking.unknownError'),
+                }),
+              );
             }
             break;
           }
@@ -1112,8 +1146,8 @@ export default function InsightsPage() {
             <p className="text-muted-foreground text-sm">{brand.name}</p>
           </div>
         </HeaderWithAiUsage>
-        <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
-        {!localJobActive && <ServerRunBanner run={cronRun} />}
+        <TrackingProgressBanner jobStatus={jobStatus} pace={pace} onStop={handleStopTracking} />
+        {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
         <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />
         {!isCloud && (
           <div className="flex justify-center">
@@ -1221,8 +1255,8 @@ export default function InsightsPage() {
       />
 
       {/* Tracking Progress */}
-      <TrackingProgressBanner jobStatus={jobStatus} onStop={handleStopTracking} />
-      {!localJobActive && <ServerRunBanner run={cronRun} />}
+      <TrackingProgressBanner jobStatus={jobStatus} pace={pace} onStop={handleStopTracking} />
+      {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
 
       {/* Refetch overlay: on a filter/date change the previous window's data
           stays mounted (no skeleton — that's first-load only), so without a

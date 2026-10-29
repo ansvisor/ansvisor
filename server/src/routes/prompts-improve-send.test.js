@@ -86,7 +86,7 @@ describe('sendImproveActionForKeyUser', () => {
     rows = {
       prompts: { id: 'p1', text: 'best crm', prompt_sets: { brand_id: 'b1' } },
       brands: { id: 'b1', organization_id: 'org-1' },
-      profiles: { organization_id: 'org-1', role: 'member' },
+      profiles: { organization_id: 'org-1', role: 'admin' },
       prompt_improve_suggestions: {
         id: 'set-1',
         range_key: '7d',
@@ -114,11 +114,20 @@ describe('sendImproveActionForKeyUser', () => {
   });
 
   it('rejects a key user from another org with 403', async () => {
-    rows.profiles = { organization_id: 'org-2', role: 'member' };
+    rows.profiles = { organization_id: 'org-2', role: 'admin' };
 
     await expect(
       sendImproveActionForKeyUser({ promptId: 'p1', userId: 'u1', body }),
     ).rejects.toMatchObject({ status: 403 });
+    expect(sendImproveToActionCenter).not.toHaveBeenCalled();
+  });
+
+  it("refuses an analyst's key before sending, as the dashboard's Send Actions (2026-10-29)", async () => {
+    rows.profiles = { organization_id: 'org-1', role: 'analyst' };
+
+    await expect(
+      sendImproveActionForKeyUser({ promptId: 'p1', userId: 'u1', body }),
+    ).rejects.toMatchObject({ status: 403, message: 'Only admins and managers can use Improve.' });
     expect(sendImproveToActionCenter).not.toHaveBeenCalled();
   });
 
