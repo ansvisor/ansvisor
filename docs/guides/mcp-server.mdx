@@ -314,7 +314,7 @@ curl "https://app.ansvisor.com/api/mcp/mentions/summary?brand_id=<brand_id>&plat
 | `list_content_opportunities` | Content gaps ranked by opportunity score — where the brand is losing visibility. | |
 | `get_content_plan` | The Content plan, as **Content → Plan** ranks it by the Priority Score: what to create, optimize or protect next, why, the score's parts, the draft already being written and the rows marked a priority. Over 7, 30 or 90 days; optional `card`. | |
 | `get_content_opportunity` | Full details for one opportunity, including metrics, intent, competitors, and any existing brief. | |
-| `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** |
+| `generate_content_brief` | Generate or overwrite an AI content brief for an opportunity (LLM cost/latency). | **yes** (admin, manager) |
 | `update_opportunity_status` | Move an opportunity through workflow states (`new`, `reviewed`, `sent`, `in_progress`, `done`, `dismissed`). Dismissing one, or moving a dismissed one back, needs an admin or a manager. | **yes** |
 
 The plan is also available over REST with the same `ans_` key: `GET /api/mcp/content-plan?brand_id=<brand_id>&days=30`, with `card` as an optional query parameter.
@@ -378,7 +378,7 @@ The Shelf, Readiness and What AI says need a plan with Product Visibility (Growt
 | `list_task_reviews` | Tasks waiting for review, as the **Needs review** tab shows them: tasks an AI writer gave without the exact page, the change, Done when or how it is checked, each with `missing` (the fields to fill). Admins and managers only. | |
 | `approve_task_review` | Approve one onto its action's task list, as the tab's **Approve** does: the fields given (`url`, `change`, `done_when`, `check`, and optionally `title`, `where`, `why`, `how`) replace what was written, and all four must be filled. | **yes** (admin, manager) |
 | `dismiss_task_review` | Dismiss one, as the tab's **Dismiss** does: it never reaches its action. | **yes** (admin, manager) |
-| `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** |
+| `create_improve_action` | Send a prompt's Improve suggestions to Action Center as a `prompt_improve` action (needs a generated suggestion set for the range and a plan with Improve; idempotent on `idempotency_key`). | **yes** (admin, manager) |
 
 The scorecard is also available over REST: `GET /api/mcp/action-scorecard?brand_id=<brand_id>&date_from=2026-09-01`.
 The review queue is also available over REST: `GET /api/mcp/task-reviews?brand_id=<brand_id>`, and `POST /api/mcp/task-reviews/<id>/approve` (the fields as JSON) or `/dismiss`.
@@ -418,10 +418,10 @@ answers in plain English using the returned data.
 
 A key acts as the person who created it, with their role in the
 organization. `get_me` returns it. Day-to-day work is open to every role:
-reading, drafts and suggestions in the Content Editor, briefs, Site Audits,
-task progress and an opportunity's progress. Adding prompts or topics,
-reviewing tasks and dismissing are for admins and managers. Dismissing a prompt suggestion is open
-to analysts too. The tools marked with roles above refuse anyone else before
+reading, drafts and suggestions in the Content Editor, Site Audits, task
+progress and an opportunity's progress. Adding prompts or topics, reviewing
+tasks, dismissing, and work that costs AI (briefs and Improve actions) are for
+admins and managers. Dismissing a prompt suggestion is open to analysts too. The tools marked with roles above refuse anyone else before
 they change anything. The call fails with text like this:
 
 ```text

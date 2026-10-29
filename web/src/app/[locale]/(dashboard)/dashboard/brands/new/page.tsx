@@ -26,7 +26,7 @@ import {
   LANGUAGE_ITEMS,
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
-import { getPlan, type PlanId } from '@/config/plans';
+import { getPlan, toPlanId, type PlanId } from '@/config/plans';
 import type { Brand } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -380,7 +380,7 @@ export default function NewBrandPage() {
             .select('plan')
             .eq('id', profile.organization_id)
             .single();
-          if (org?.plan) setCurrentPlanId(org.plan as PlanId);
+          if (org?.plan) setCurrentPlanId(toPlanId(org.plan));
         }
       } catch {
         // Non-critical

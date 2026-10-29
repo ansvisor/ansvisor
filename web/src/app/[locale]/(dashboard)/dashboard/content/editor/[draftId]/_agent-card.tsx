@@ -15,6 +15,7 @@ import { shownSteps, stepMessage, type AgentRun } from '@/lib/content/agent-runs
 import { cn } from '@/lib/utils';
 import { PageCompareDialog, pageCharacters } from './_page-rewrite';
 import { PLACEHOLDER, pagePlaceholders } from '@/lib/content/placeholders';
+import { StepSweep } from '@/components/ui/step-sweep';
 import { WorkingDots } from './_working-dots';
 
 /**
@@ -162,18 +163,8 @@ function PersonTile() {
   );
 }
 
-/**
- * A light that passes over the step under way, again and again: the agent's
- * card's sweep, faint enough for a chip. Gone with reduced motion.
- */
-export function StepSweep() {
-  return (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute inset-0 animate-agent-sweep bg-[linear-gradient(110deg,transparent_30%,color-mix(in_oklab,var(--foreground)_9%,transparent)_50%,transparent_70%)] bg-[length:250%_100%] [animation-duration:2.2s] motion-reduce:hidden"
-    />
-  );
-}
+// The step under way's sweep, shared with the demo's setup screen.
+export { StepSweep };
 
 /**
  * A run's steps as chips (CE-027/035), named by the data they use: the ones

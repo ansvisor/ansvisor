@@ -503,6 +503,10 @@ describe('MentionsListTab', () => {
     });
     const drawer = document.body.querySelector('[role="dialog"]') as HTMLElement;
     expect(drawer.textContent).not.toContain('Sentiment is wrong?');
+    // Suggesting content costs AI: an admin's or a manager's (2026-10-29).
+    const labels = [...drawer.querySelectorAll('button')].map((b) => b.textContent);
+    expect(labels).toContain('Send to Action Center');
+    expect(labels).not.toContain('Suggest content');
   });
 
   it('keeps its page when a read fails, and says so', async () => {

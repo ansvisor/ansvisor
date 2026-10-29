@@ -312,6 +312,13 @@ describe('Content Opportunities for an analyst or an agency partner', () => {
     }
   });
 
+  it('leaves New out, and says who generates opportunities', async () => {
+    viewer.canManage = false;
+    await render(false);
+    expect(labels()).not.toContain('New');
+    expect(container.textContent).toContain('Ask an admin or a manager to generate opportunities.');
+  });
+
   it("leaves Dismiss out of the row's menu", async () => {
     viewer.canManage = false;
     await render(false);

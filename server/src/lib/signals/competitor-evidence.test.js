@@ -8,16 +8,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 let rpcCalls = [];
 let tables = {};
+/** Each table's reads, as the calls made on them. */
+let reads = {};
 
 function builder(table) {
+  const calls = [];
+  (reads[table] ??= []).push(calls);
+  const call =
+    (name) =>
+    (...args) => {
+      calls.push([name, ...args]);
+      return chain;
+    };
   const chain = {
-    select: () => chain,
-    eq: () => chain,
-    neq: () => chain,
-    in: () => chain,
-    gte: () => chain,
-    order: () => chain,
-    limit: () => chain,
+    select: call('select'),
+    eq: call('eq'),
+    neq: call('neq'),
+    in: call('in'),
+    gte: call('gte'),
+    order: call('order'),
+    limit: call('limit'),
     then: (resolve) => resolve({ data: tables[table] ?? [], error: null }),
   };
   return chain;
@@ -33,7 +43,8 @@ vi.mock('../../config/supabase.js', () => ({
   },
 }));
 
-const { competitorEvidence, winningSources } = await import('./competitor-evidence.js');
+const { competitorEvidence, pageEventsOf, winningSources } =
+  await import('./competitor-evidence.js');
 const { ownDomainMatcher } = await import('../response-parser.js');
 
 const isOwn = ownDomainMatcher(['coffee.example']);
@@ -70,6 +81,7 @@ describe('winningSources', () => {
 describe('competitorEvidence', () => {
   beforeEach(() => {
     rpcCalls = [];
+    reads = {};
     tables = {
       positions: [
         {
@@ -85,6 +97,15 @@ describe('competitorEvidence', () => {
       prompts: [{ id: 'p1', text: 'Best AI rank tracker?' }],
       brand_domains: [{ domain: 'coffee.example' }],
       prompt_results: [answer({ c1: 1 }, 0, ['https://g2.example/a'])],
+      competitor_page_events: [
+        {
+          kind: 'changed',
+          at: '2026-10-12T03:00:00Z',
+          url: 'https://rival.example/pricing',
+          domain: 'rival.example',
+          detail: { similarity: 0.71, gained: [{ key: 'faq', label: 'FAQ section' }], lost: [] },
+        },
+      ],
     };
   });
 
@@ -118,11 +139,71 @@ describe('competitorEvidence', () => {
         },
       ],
       winningSources: [{ domain: 'g2.example', answers: 1, answersRead: 1 }],
+      pageEvents: [
+        {
+          kind: 'changed',
+          at: '2026-10-12T03:00:00Z',
+          url: 'https://rival.example/pricing',
+          domain: 'rival.example',
+          detail: { gained: [{ key: 'faq', label: 'FAQ section' }], lost: [] },
+        },
+      ],
+      pageEventDays: 28,
     });
+  });
+
+  it("reads each competitor's five newest page events of the last four weeks", async () => {
+    await competitorEvidence('b1', ['c1'], {
+      now: new Date('2026-10-15T12:00:00Z'),
+      windowDays: 7,
+    });
+    expect(reads.competitor_page_events).toEqual([
+      [
+        ['select', 'kind, at, url, domain, detail'],
+        ['eq', 'brand_id', 'b1'],
+        ['eq', 'competitor_id', 'c1'],
+        ['gte', 'at', '2026-09-17T12:00:00.000Z'],
+        ['order', 'at', { ascending: false }],
+        ['limit', 5],
+      ],
+    ]);
   });
 
   it('reads nothing when no competitor signal needs it', async () => {
     expect((await competitorEvidence('b1', [], { now: new Date(), windowDays: 7 })).size).toBe(0);
     expect(rpcCalls).toEqual([]);
+  });
+});
+
+describe('pageEventsOf', () => {
+  it("keeps a first citation's answers and a change's checks, nothing else", () => {
+    expect(
+      pageEventsOf([
+        {
+          kind: 'first_cited',
+          at: '2026-10-01T00:00:00Z',
+          url: 'https://rival.example/guide',
+          domain: 'rival.example',
+          detail: { answers: 3 },
+        },
+        { kind: 'changed', at: '2026-10-08T00:00:00Z', url: 'u', domain: 'd', detail: null },
+      ]),
+    ).toEqual([
+      {
+        kind: 'first_cited',
+        at: '2026-10-01T00:00:00Z',
+        url: 'https://rival.example/guide',
+        domain: 'rival.example',
+        detail: { answers: 3 },
+      },
+      {
+        kind: 'changed',
+        at: '2026-10-08T00:00:00Z',
+        url: 'u',
+        domain: 'd',
+        detail: { gained: [], lost: [] },
+      },
+    ]);
+    expect(pageEventsOf(null)).toEqual([]);
   });
 });

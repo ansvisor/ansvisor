@@ -57,6 +57,9 @@ vi.mock('@/lib/actions/content-drafts', () => ({
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
+vi.mock('@/lib/actions/chat-access-requests', () => ({
+  requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
+}));
 
 const { CHAT_TOOLS, chatTool, chatToolByKey, registryCatalog } = await import('./tools');
 const { BRAND_LOOKUP_TABLES, FIXTURE_IDS, defineTool } = await import('./define-tool');
@@ -266,6 +269,9 @@ describe('approval policies', () => {
     for (const tool of CHAT_TOOLS) {
       if (tool.class === 'read') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['on', 'on']);
+      } else if (tool.class === 'write' && tool.flags.alwaysCard) {
+        // Ask your Admin: only the person's click sends it (CHAT-20 row 80a).
+        expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask', 'ask']);
       } else if (tool.class === 'write') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'always']);
       }
@@ -279,6 +285,7 @@ describe('approval policies', () => {
       create_draft: ['admin', 'manager', 'analyst', 'agency_partner'],
       update_opportunity: ['admin', 'manager'],
       dismiss_prompt_suggestion: ['admin', 'manager', 'analyst'],
+      request_access: ['admin', 'manager', 'analyst', 'agency_partner'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -473,14 +480,16 @@ describe("the model's tool list on the registry's rows", () => {
       ...withoutShopping,
       'create_draft',
       'dismiss_prompt_suggestion',
+      'request_access',
     ]);
-    expect(list('agency_partner', growth)).toEqual([...reads, 'create_draft']);
+    expect(list('agency_partner', growth)).toEqual([...reads, 'create_draft', 'request_access']);
     expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([
       ...reads,
       'create_draft',
       'dismiss_prompt_suggestion',
+      'request_access',
     ]);
   });
 
@@ -495,6 +504,7 @@ describe("the model's tool list on the registry's rows", () => {
     expect(list('agency_partner', growth, undefined, [FIXTURE_IDS.brand])).toEqual([
       ...reads,
       'create_draft',
+      'request_access',
     ]);
   });
 });

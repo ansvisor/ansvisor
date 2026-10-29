@@ -27,7 +27,9 @@ function table(name) {
         error: null,
       };
     }
-    if (name === 'profiles') return { data: { organization_id: profileOrg }, error: null };
+    if (name === 'profiles') {
+      return { data: { organization_id: profileOrg, role: 'admin' }, error: null };
+    }
     if (name === 'prompts')
       return { data: [{ id: 'p1', text: 'Best espresso beans?' }], error: null };
     if (name === 'topics') return { data: [{ name: 'Espresso' }], error: null };

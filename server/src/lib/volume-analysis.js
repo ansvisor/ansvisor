@@ -100,7 +100,7 @@ export function medianVolume(volumes) {
  * column is unchanged from when each prompt had the response to itself. Two
  * keywords that resolve to the same returned one count once.
  */
-function summarizeVolumes(keywords, volumes) {
+export function summarizeVolumes(keywords, volumes) {
   const byKeyword = new Map();
   for (const [keyword, data] of Object.entries(volumes)) {
     byKeyword.set(keyword.trim().toLowerCase(), [keyword, data]);
@@ -340,7 +340,7 @@ export async function analyzeBrandVolumes(
 ) {
   const { data: brand, error: brandError } = await supabaseAdmin
     .from('brands')
-    .select('region, language, organization_id')
+    .select('region, language, organization_id, is_demo')
     .eq('id', brandId)
     .maybeSingle();
 
@@ -349,6 +349,11 @@ export async function analyzeBrandVolumes(
   }
   if (!brand) {
     throw new Error(`Brand ${brandId} not found`);
+  }
+  // A demo brand's volumes (00380) are sample data, written with it.
+  if (brand.is_demo) {
+    logger.info({ brandId }, 'volume analysis skipped: demo brand');
+    return [];
   }
   // Once the plan has ended (2026-10-27), no volume is looked up: every
   // prompt is a model call and a DataForSEO request. The internal trigger

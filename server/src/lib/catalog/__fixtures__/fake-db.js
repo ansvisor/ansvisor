@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
-/** A row's value at a column, or at a JSON path in it as PostgREST reads one (`shopping_path->>builtAt`). */
+/**
+ * A row's value at a column, at a JSON path in it as PostgREST reads one
+ * (`shopping_path->>builtAt`), or at an embedded table's column (`brands.is_demo`).
+ */
 function valueAt(row, column) {
   const at = column.indexOf('->>');
-  if (at < 0) return row[column];
+  if (at < 0) {
+    if (column in row || !column.includes('.')) return row[column];
+    return column.split('.').reduce((value, key) => value?.[key], row);
+  }
   const value = row[column.slice(0, at)]?.[column.slice(at + 3)];
   if (value == null) return null;
   return typeof value === 'string' ? value : JSON.stringify(value);
