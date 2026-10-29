@@ -3504,6 +3504,68 @@
         "removed": "Removed: it asks again"
       }
     },
+    "activity": {
+      "title": "Activity log",
+      "lead": "Every change Chat made, every Undo and everything it wasn't allowed to do. You see your own; Admins see the workspace's.",
+      "loadError": "Couldn't load the Activity log. Try again in a moment.",
+      "retry": "Retry",
+      "empty": "Nothing here yet: Chat's changes show up here as they happen.",
+      "emptyFiltered": "Nothing matches these filters.",
+      "loadMore": "Load more",
+      "export": "Export CSV",
+      "exported": "Exported the Activity log",
+      "exportFailed": "Couldn't export it. Try again.",
+      "clear": "Clear",
+      "autoOnly": "Auto changes only",
+      "you": "You",
+      "seeLog": "See the Activity log",
+      "filters": {
+        "person": "Person",
+        "everyone": "Everyone",
+        "area": "Area",
+        "allAreas": "All areas",
+        "kind": "Class",
+        "allKinds": "All",
+        "kinds": { "write": "WRITE", "execute": "EXECUTE", "denied": "Not allowed" }
+      },
+      "columns": {
+        "when": "When",
+        "who": "Who",
+        "event": "Event",
+        "class": "Class",
+        "approval": "Approval",
+        "undo": "Undo"
+      },
+      "surfaces": {
+        "chat": "chat",
+        "agent": "agent",
+        "mcp": "MCP",
+        "schedule": "schedule",
+        "watch_rule": "watch rule"
+      },
+      "approval": {
+        "denied": "Not allowed",
+        "card": "Approved on its card",
+        "click": "Your click",
+        "always": "Auto · policy Always",
+        "full_auto": "Auto · Full auto",
+        "dont_ask_again": "Auto · “Don't ask again”",
+        "run": "Ran"
+      },
+      "denials": {
+        "brand_scope": "Brand not shared",
+        "subscription_inactive": "Read-only workspace",
+        "demo_brand": "Demo brand",
+        "policy_never": "Turned off by an Admin",
+        "plan_locked": "Needs another plan",
+        "forbidden_role": "Role doesn't allow it",
+        "execute_off": "Off for Managers",
+        "no_access": "No access"
+      },
+      "status": { "done": "Done", "undone": "Undone", "undo_conflict": "Changed since" },
+      "undo": "Undo",
+      "openToUndo": "Open it"
+    },
     "yourAccess": {
       "title": "Your access",
       "brands": "Brands",

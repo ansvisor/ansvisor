@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Info, Lock } from 'lucide-react';
+import { ArrowUpRight, Info, Lock } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -145,6 +146,13 @@ export function ChatSettingsSection() {
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">{t('title')}</h2>
         <p className="text-sm text-muted-foreground">{t('lead')}</p>
+        <Link
+          href="/dashboard/chat/activity"
+          className="inline-flex items-center gap-0.5 text-xs font-medium underline-offset-2 hover:underline"
+        >
+          {tAccess('activity.seeLog')}
+          <ArrowUpRight className="h-3 w-3" />
+        </Link>
       </div>
 
       {!isAdmin && (

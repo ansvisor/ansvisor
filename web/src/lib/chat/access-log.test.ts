@@ -6,6 +6,7 @@ vi.mock('./activity', () => ({ recordActivity }));
 
 const { accessDeniedEvent, recordAccessDenied } = await import('./access-log');
 type AccessDeniedContext = import('./access-log').AccessDeniedContext;
+type ToolDenial = import('./precedence').ToolDenial;
 
 /** Every denial is an `access.denied` event (CHAT-20 §4c). */
 
@@ -46,7 +47,7 @@ describe('accessDeniedEvent', () => {
 describe('recordAccessDenied', () => {
   it("writes the denial's row in the Activity log", async () => {
     recordActivity.mockResolvedValue('row-1');
-    const denial = { code: 'forbidden_role', role: 'analyst', roles: ['admin'] } as const;
+    const denial: ToolDenial = { code: 'forbidden_role', role: 'analyst', roles: ['admin'] };
     await recordAccessDenied(ctx, denial);
     expect(recordActivity).toHaveBeenCalledWith(accessDeniedEvent(ctx, denial));
   });
