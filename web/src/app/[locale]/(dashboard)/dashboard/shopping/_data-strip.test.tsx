@@ -106,9 +106,7 @@ describe('ProductDataStrip', () => {
   });
 
   it('asks for the catalog when there is none, with Connect for those who may connect it', () => {
-    expect(render([])).toContain(
-      'Not connected · your products, from a feed, a file or your store',
-    );
+    expect(render([])).toContain('Not connected · your products, from a feed or a file');
     expect([...container.querySelectorAll('a')].some((a) => a.textContent === 'Connect')).toBe(
       true,
     );

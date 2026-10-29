@@ -4895,7 +4895,7 @@
       },
       "shopping": {
         "title": "Shopping path",
-        "description": "Where this page sends readers. Picked by topic and stock, and by Merchant Center status once it's connected. Prices and specs come from the catalog only.",
+        "description": "Where this page sends readers. Picked by topic and stock. Prices and specs come from the catalog only.",
         "empty": "Pick the category page and the products in stock this page links, from your catalog.",
         "build": "Pick from the catalog",
         "rebuild": "Pick again",
@@ -8191,7 +8191,7 @@
         },
         "fix": {
           "title": "Fix it, then push",
-          "body": "The agent rewrites titles, feed fields and schema. You approve, we send it to Shopify."
+          "body": "Each fix goes to the Action Center. The agent rewrites the page and its schema; you approve it and send it to your CMS. Feed fields change in your feed."
         },
         "sell": {
           "title": "See what it sells",
@@ -8532,7 +8532,7 @@
       "catalog": "Product catalog",
       "catalogLine": "{count, plural, one {# product} other {# products}} · synced {when}",
       "catalogNotSynced": "{count, plural, one {# product} other {# products}} · not synced yet",
-      "catalogNone": "Not connected · your products, from a feed, a file or your store",
+      "catalogNone": "Not connected · your products, from a feed or a file",
       "catalogFailed": "Couldn't be read right now",
       "ga": "Google Analytics",
       "gsc": "Google Search Console",
