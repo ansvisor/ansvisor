@@ -10,7 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const ORG = 'org-1';
-const AUTH = { userId: 'user-1', email: null, organizationId: ORG, apiKeyId: 'key-1' };
+const AUTH = {
+  userId: 'user-1',
+  email: null,
+  organizationId: ORG,
+  apiKeyId: 'key-1',
+  role: 'admin' as const,
+};
 
 /** The rows the fake database holds, by table and id. */
 let rows: Record<string, Record<string, Record<string, unknown>>>;
