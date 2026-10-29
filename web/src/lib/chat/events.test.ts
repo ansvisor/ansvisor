@@ -84,6 +84,8 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
       n: 4,
       action: 'Add 12 prompts to tracking',
       target: 'Pricing · Northwind CRM',
+      digest: '3f2a9c0d41b7e6a85c1d2e3f',
+      canDontAskAgain: false,
     }),
   next_moves: () =>
     chatEvent('next_moves', 8, {
@@ -98,6 +100,18 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
     }),
   'run.error': () => chatEvent('run.error', 11, { ...SUMMARY, code: 'timeout' }),
   'run.paused_cap': () => chatEvent('run.paused_cap', 12, SUMMARY),
+  'run.stopped': () => chatEvent('run.stopped', 17, { ...SUMMARY, reason: 'person' }),
+  'access.denied': () =>
+    chatEvent('access.denied', 18, {
+      asked: 'You asked: Save drafts in Content · Pricing FAQ.',
+      rule: {
+        kind: 'role',
+        detail: "Your role is Analyst, and Analysts can't do this.",
+        source: 'Settings › Team › Roles & access',
+      },
+      whoCan: 'Admins and Managers can do this.',
+      nextActions: ['ask_admin', 'see_access'],
+    }),
   'deliverable.updated': () => chatEvent('deliverable.updated', 13, { ...DELIVERABLE, version: 2 }),
   'suggestion.created': () => chatEvent('suggestion.created', 14, { count: 3 }),
   'suggestion.resolved': () => chatEvent('suggestion.resolved', 15, { count: 1 }),
@@ -239,6 +253,8 @@ describe('chat events', () => {
       n: 1,
       action: 'Archive 3 prompts',
       target: `See https://example.com/a/${UUID}?b=${UUID}`,
+      digest: '9c0d41b7e6a85c1d2e3f3f2a',
+      canDontAskAgain: false,
     }).data;
     expect(confirm.target).toBe('See https://example.com/a/…?b=…');
     expect(maskIds('no ids here')).toBe('no ids here');
