@@ -317,11 +317,36 @@ export function demoRouteFor(req) {
 
 // ─── Which brands are demo brands ───────────────────────────────────────────
 
-/** A GUID's shape: the demo's seeded ids aren't RFC 4122 versions. */
-const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * A uuid as Postgres reads one: 32 hex digits, upper or lower case, in
+ * braces or not, with or without its hyphens. The demo's seeded ids aren't
+ * RFC 4122 versions, so any digits go.
+ */
+const UUID_INPUT = /^(\{)?([0-9a-f-]+)(\})?$/i;
 
-/** Ids a request may name at once (the bulk routes): more are left to the route. */
-const MAX_IDS = 500;
+/**
+ * The id in its usual form (lowercase, 8-4-4-4-12), or null when it isn't
+ * one: a route passes the others to Postgres, which reads them as the same
+ * row, so they are checked the same.
+ */
+function guidOf(value) {
+  if (typeof value !== 'string') return null;
+  const m = UUID_INPUT.exec(value);
+  if (!m || Boolean(m[1]) !== Boolean(m[3])) return null;
+  const hex = m[2].replace(/-/g, '').toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(hex)) return null;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Ids a request may name at once (the bulk routes). A request naming more
+ * is refused with 400: each one would be read here, and the route's own
+ * read of them all at once wouldn't fit a request anyway.
+ */
+export const MAX_IDS = 500;
+
+/** A request that names more than MAX_IDS ids. */
+class TooManyIds extends Error {}
 
 /** Brands remembered at most; the oldest goes first. */
 export const MAX_CACHED_BRANDS = 10_000;
@@ -340,9 +365,15 @@ function remember(brandId, isDemo) {
   demoByBrand.set(brandId, isDemo);
 }
 
+/** The ids in `value` (one, or an array), in their usual form; others are left out. */
 function guids(value) {
-  const values = Array.isArray(value) ? value.slice(0, MAX_IDS) : [value];
-  return values.filter((id) => typeof id === 'string' && GUID.test(id));
+  return (Array.isArray(value) ? value : [value]).map(guidOf).filter(Boolean);
+}
+
+/** The ids a request names in one place: guids(), at most MAX_IDS of them. */
+function requestGuids(value) {
+  if (Array.isArray(value) && value.length > MAX_IDS) throw new TooManyIds();
+  return guids(value);
 }
 
 /**
@@ -404,7 +435,7 @@ function valueAt(req, match, { where, key }) {
 export async function brandsNamedBy(req, { entry, match }) {
   const brands = [];
   for (const source of entry.sources) {
-    const ids = guids(valueAt(req, match, source));
+    const ids = requestGuids(valueAt(req, match, source));
     if (ids.length === 0) continue;
     if (source.table) brands.push(...(await brandsOfRows(source.table, ids)));
     else brands.push(...ids);
@@ -428,6 +459,11 @@ export async function refuseDemoBrandWrites(req, res, next) {
     }
     return next();
   } catch (err) {
+    if (err instanceof TooManyIds) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'invalid', message: `At most ${MAX_IDS} ids at once` });
+    }
     (req.log ?? logger).error({ err }, 'demo brand check failed');
     return res.status(500).json({ message: 'Internal Error' });
   }
