@@ -158,10 +158,14 @@ export function mapShoppingRows(brandId, appearance, rows) {
  * The pages Google showed in its shopping results over the last
  * SYNC_WINDOW_DAYS, read in the two steps the API needs (search appearance
  * can't be a column beside the page): the property's appearance types, then
- * each shopping type's pages by day, filtered to it. A filtered read whose
- * impressions pass its type's total by more than rounding means the filter
- * wasn't applied: it is dropped, not kept as every page shown. The brand's
- * rows from another property are dropped first. Returns the rows written.
+ * each shopping type's pages by day, filtered to it. Both steps count
+ * impressions by page: counted by property, a result showing several of the
+ * shop's products counts once, and a shop's pages would always add up past
+ * it. A filtered read whose impressions pass its type's total by more than
+ * rounding means the filter wasn't applied: it is dropped, not kept as every
+ * page shown, and the brand is left unread rather than read as showing
+ * none. The brand's rows from another property are dropped first. Returns
+ * the rows written.
  */
 async function syncBrandShopping(brand, now = Date.now()) {
   const entityId = `org_${brand.organization_id}`;
@@ -182,6 +186,8 @@ async function syncBrandShopping(brand, now = Date.now()) {
   };
   const types = await queryGscSearchAnalytics(entityId, {
     ...window,
+    // As the page rows below are counted, so their sums compare.
+    aggregation_type: 'byPage',
     dimensions: ['searchAppearance'],
     row_limit: APPEARANCE_ROW_LIMIT,
     start_row: 0,
@@ -189,6 +195,7 @@ async function syncBrandShopping(brand, now = Date.now()) {
   });
 
   let total = 0;
+  let dropped = false;
   for (const type of types) {
     const name = type.keys?.[0];
     const appearance = shoppingAppearance(name);
@@ -216,6 +223,7 @@ async function syncBrandShopping(brand, now = Date.now()) {
         { brandId: brand.id, appearance: name, impressions, expected: type.impressions },
         '[gsc-sync] shopping filter not applied — rows dropped',
       );
+      dropped = true;
       continue;
     }
     const mapped = mapShoppingRows(brand.id, appearance, rows);
@@ -227,9 +235,11 @@ async function syncBrandShopping(brand, now = Date.now()) {
     }
     total += mapped.length;
   }
+  // A dropped read leaves the brand unread: Readiness then says it can't
+  // tell, never that Google shows none of its products.
   await updateBrand(brand, {
     gsc_shopping_property: brand.gsc_property,
-    gsc_shopping_synced_at: new Date(now).toISOString(),
+    gsc_shopping_synced_at: dropped ? null : new Date(now).toISOString(),
   });
   return total;
 }

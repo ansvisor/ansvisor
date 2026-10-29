@@ -138,6 +138,9 @@ describe('the shopping sync', () => {
 
     const appearances = state.calls.filter((c) => c.dimensions[0] === 'searchAppearance');
     expect(appearances).toHaveLength(1);
+    // Counted by page, as the page rows are: by property, a result showing
+    // several of the shop's products counts once.
+    expect(appearances[0].aggregation_type).toBe('byPage');
     const filtered = state.calls
       .map((c) => c.dimension_filter_groups?.[0]?.filters?.[0]?.expression)
       .filter(Boolean);
@@ -152,18 +155,25 @@ describe('the shopping sync', () => {
     });
   });
 
-  it('drops a read the filter was not applied to, and still marks the property read', async () => {
-    state.types = [{ keys: ['MERCHANT_LISTINGS'], impressions: 3 }];
+  it('drops a read the filter was not applied to, and leaves the brand unread, not showing none', async () => {
+    state.brand.gsc_shopping_synced_at = '2026-10-20T00:00:00.000Z';
+    state.types = [
+      { keys: ['MERCHANT_LISTINGS'], impressions: 3 },
+      { keys: ['PRODUCT_SNIPPETS'], impressions: 5 },
+    ];
     // Every page of the property, as an unfiltered read would give.
     state.pages = {
       MERCHANT_LISTINGS: [
         row('https://acme.com/a', '2026-10-01', 900),
         row('https://acme.com/b', '2026-10-01', 400),
       ],
+      PRODUCT_SNIPPETS: [row('https://acme.com/mug', '2026-10-02', 5)],
     };
     await runGscSync({ brandId: 'b1' });
-    expect(shoppingRows()).toEqual([]);
-    expect(state.brand.gsc_shopping_synced_at).toEqual(expect.any(String));
+    expect(shoppingRows().map((r) => [r.page, r.appearance])).toEqual([
+      ['https://acme.com/mug', 'product_snippets'],
+    ]);
+    expect(state.brand.gsc_shopping_synced_at).toBeNull();
   });
 
   it("drops another property's rows first, and marks a property with none shown as read", async () => {
