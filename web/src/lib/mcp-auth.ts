@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { subscriptionActiveFor, subscriptionInactiveResponse } from '@/lib/mcp/subscription-gate';
+import type { UserRole } from '@/types';
 
 export const API_KEY_PREFIX = 'ans_';
 export const API_KEY_DISPLAY_PREFIX_LEN = 12;
@@ -21,6 +22,8 @@ export interface McpAuthContext {
   userId: string;
   email: string | null;
   organizationId: string | null;
+  /** The user's role in the organization: the tools that need one check it (lib/mcp/role-gate.ts). */
+  role: UserRole | null;
   apiKeyId: string;
 }
 
@@ -65,7 +68,7 @@ export async function authenticateMcpRequest(
   // Resolve the owning user + their organization so handlers don't have to.
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('organization_id')
+    .select('organization_id, role')
     .eq('id', key.user_id)
     .maybeSingle();
 
@@ -93,6 +96,7 @@ export async function authenticateMcpRequest(
     userId: key.user_id,
     email: user?.email ?? null,
     organizationId,
+    role: (profile?.role as UserRole | null | undefined) ?? null,
     apiKeyId: key.id,
   };
 }

@@ -1,5 +1,5 @@
 /**
- * Client-side helpers for the three AI calls that are shared between the
+ * Client-side helpers for the AI calls that are shared between the
  * onboarding wizard and the "add a brand" page.
  *
  * Each function owns session lookup, Authorization header construction, and
@@ -15,6 +15,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { TOPIC_NAME_CHARS } from '@/lib/topic-names';
+import { isSiteType, type SiteType } from '@/lib/content/page-types';
 
 const API_BASE = BROWSER_API_BASE_URL;
 
@@ -229,4 +230,35 @@ export async function suggestCompetitors(
     domain: c.domain,
   }));
   return { competitors, isEcommerce: data.isEcommerce === true };
+}
+
+// ── Site type ─────────────────────────────────────────────────────────────────
+
+export interface DetectSiteTypeResult {
+  /** Null when the type was chosen by hand already, or couldn't be told. */
+  siteType: SiteType | null;
+  /** The industry written to the brand; null when it already had one. */
+  industry: string | null;
+}
+
+/**
+ * POST /api/brands/:id/detect-site-type
+ *
+ * The brand's kind of site, read from its home page right after it is made
+ * (action plan by business type, Step 0), and kept on the brand unless a
+ * person chose one. Throws if the request fails.
+ */
+export async function detectSiteType(brandId: string): Promise<DetectSiteTypeResult> {
+  const authorization = await getAuthHeader();
+  const res = await fetch(
+    `${API_BASE}/api/brands/${encodeURIComponent(brandId)}/detect-site-type`,
+    { method: 'POST', headers: { Authorization: authorization } },
+  );
+
+  if (!res.ok) throw await failure(res, 'Failed to detect the site type');
+  const data = await res.json();
+  return {
+    siteType: isSiteType(data.siteType) ? data.siteType : null,
+    industry: typeof data.industry === 'string' ? data.industry : null,
+  };
 }

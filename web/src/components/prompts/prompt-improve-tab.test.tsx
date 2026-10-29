@@ -23,6 +23,12 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
   useUpgradeGate: () => gate,
 }));
 
+// The viewer: a manager unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ canManage: viewer.canManage }),
+}));
+
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
@@ -80,6 +86,7 @@ const generateButton = () =>
   )!;
 
 beforeEach(() => {
+  viewer.canManage = true;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -141,6 +148,19 @@ describe('the Improve tab’s budget', () => {
     );
     expect(container.textContent).not.toContain('generations left');
     expect(container.textContent).not.toContain('used up');
+  });
+});
+
+describe('the Improve tab for an analyst or an agency partner', () => {
+  const quota = { unlimited: false, exhausted: false, generationsLeft: 3, percentLeft: 60 };
+
+  it('says who generates, instead of Generate suggestions', async () => {
+    viewer.canManage = false;
+    await render(quota, 'growth');
+    expect(container.textContent).not.toContain('Generate suggestions');
+    expect(container.textContent).toContain(
+      'Ask an admin or a manager to generate or send Improve suggestions.',
+    );
   });
 });
 
