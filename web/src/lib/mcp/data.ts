@@ -2472,7 +2472,7 @@ export const SHOPPING_NOT_IN_PLAN = {
  * has ended (read-only), the plan it was on, as the dashboard and the API's
  * readOnly reads keep it. Self-hosted has every feature.
  */
-async function planIncludes(organizationId: string, feature: Feature): Promise<boolean> {
+export async function planIncludes(organizationId: string, feature: Feature): Promise<boolean> {
   if (!isCloud()) return true;
   const { data, error } = await supabaseAdmin
     .from('organizations')

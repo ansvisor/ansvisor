@@ -79,7 +79,7 @@ describe('the MCP tools on a read-only workspace', () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const names = tools.map((tool) => tool.name);
-    expect(names.filter(isReadTool)).toHaveLength(40);
+    expect(names.filter(isReadTool)).toHaveLength(45);
     expect(names.filter((name) => !isReadTool(name)).sort()).toEqual([
       'accept_prompt_suggestion',
       'accept_topic_suggestion',
