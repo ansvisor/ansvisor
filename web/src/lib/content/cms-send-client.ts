@@ -10,10 +10,10 @@ import type { CmsFields, CmsPage } from '@/lib/content/cms-send';
  */
 
 /**
- * Where pages go: the brand's webhook (phase 1), its Webflow collection or
- * its WordPress site (phase 2).
+ * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
+ * WordPress site or its Framer collection (phase 2).
  */
-export type CmsTarget = 'webhook' | 'webflow' | 'wordpress';
+export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer';
 
 /** Why a send didn't go, as the server names it. */
 export type CmsSendError =
@@ -29,6 +29,12 @@ export type CmsSendError =
   | 'wordpress_not_configured'
   | 'no_wordpress'
   | 'wordpress_refused'
+  // Framer (00295): not on this server, not connected, its API key refused,
+  // or no collection and fields picked.
+  | 'framer_not_configured'
+  | 'no_framer'
+  | 'framer_refused'
+  | 'framer_not_ready'
   | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
@@ -53,13 +59,17 @@ export interface CmsDelivery {
   /** Why it failed, as the server wrote it ("The webhook could not be reached"). */
   error?: string | null;
   /**
-   * Webflow or WordPress, one page: its item (or draft post) updated, not
-   * made, and what of the page changed on the way: Webflow's tables and
-   * images, WordPress's JSON-LD blocks left out.
+   * Webflow, WordPress or Framer, one page: its item (or draft post)
+   * updated, not made, and what of the page changed on the way: Webflow's
+   * tables and images, WordPress's JSON-LD blocks left out, Framer's images.
    */
   updated?: boolean;
   changed?: { tables?: number; images?: number; jsonLd?: number };
-  /** WordPress: the page's post was live, so the page went as a new draft post. */
+  /**
+   * WordPress: the page's post was live, so the page went as a new draft
+   * post. Framer: the item updated isn't a draft, so the page goes live with
+   * the site's next publish.
+   */
   live?: boolean;
 }
 
@@ -79,6 +89,10 @@ const KNOWN: readonly CmsSendError[] = [
   'wordpress_not_configured',
   'no_wordpress',
   'wordpress_refused',
+  'framer_not_configured',
+  'no_framer',
+  'framer_refused',
+  'framer_not_ready',
   'in_progress',
   'daily_limit',
   'forbidden',
@@ -90,8 +104,9 @@ const KNOWN: readonly CmsSendError[] = [
 const GENERAL: readonly CmsSendError[] = ['session', 'workspace', 'busy', 'subscription'];
 
 /**
- * Sends pages of one brand to its webhook, its Webflow collection or its
- * WordPress site: one is sent before this answers, more go on.
+ * Sends pages of one brand to its webhook, its Webflow collection, its
+ * WordPress site or its Framer collection: one is sent before this answers,
+ * more go on.
  */
 export async function sendPagesToCms(
   brandId: string,
@@ -138,7 +153,7 @@ export async function sendPagesToCms(
  */
 async function refreshPublished(
   brandId: string,
-  route: 'webflow-status' | 'wordpress-status',
+  route: 'webflow-status' | 'wordpress-status' | 'framer-status',
   label: string,
 ): Promise<string[]> {
   try {
@@ -175,10 +190,18 @@ export function refreshWordPressPublished(brandId: string): Promise<string[]> {
   return refreshPublished(brandId, 'wordpress-status', 'WordPress');
 }
 
+/** The brand's pages sent to Framer as draft items, published there since (00295). */
+export function refreshFramerPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'framer-status', 'Framer');
+}
+
 /** A draft's last send, as the Library shows it beside its status. */
 export interface CmsStatus {
   status: CmsDelivery['status'];
-  /** Where it went: the webhook, Webflow (a draft item there once sent) or WordPress (a draft post). */
+  /**
+   * Where it went: the webhook, Webflow or Framer (a draft item there once
+   * sent) or WordPress (a draft post).
+   */
   target: CmsTarget;
   /** When it was published, sent or queued. */
   at: string;
@@ -212,7 +235,10 @@ function lastSend(row: {
     row.status === 'queued' && Date.parse(row.created_at) < Date.now() - INTERRUPTED_AFTER_MS;
   return {
     status: interrupted ? 'failed' : (row.status as CmsDelivery['status']),
-    target: row.target === 'webflow' || row.target === 'wordpress' ? row.target : 'webhook',
+    target:
+      row.target === 'webflow' || row.target === 'wordpress' || row.target === 'framer'
+        ? row.target
+        : 'webhook',
     at: row.published_at ?? row.sent_at ?? row.created_at,
     error: interrupted ? 'Not sent: interrupted' : row.error,
   };

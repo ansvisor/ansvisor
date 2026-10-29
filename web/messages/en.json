@@ -3438,7 +3438,7 @@
       "trackedPrompts": "Tracked prompts",
       "trackedPromptsTip": "Prompts answered in this period. The bar is your plan: {used} of {limit} prompt locations in use, shared by every brand in your workspace. A prompt counts once per location it tracks; paused prompts don't count.",
       "trackedPromptsTipUnlimited": "Prompts answered in this period. Your plan has no prompt location limit.",
-      "slotsLeft": "{count, plural, other {# prompts/locations left to add}}",
+      "slotsLeft": "{count, plural, one {# prompt/location left to add} other {# prompts/locations left to add}}",
       "limitReached": "Plan limit reached",
       "overLimit": "{count, plural, other {# over your plan limit}}",
       "unlimited": "{count, plural, one {# active location} other {# active locations}} · Unlimited",
@@ -3984,6 +3984,12 @@
           "sent": "In WordPress as a draft post since {when}",
           "failed": "The last send to WordPress failed, {when}",
           "published": "Published {when}"
+        },
+        "framer": {
+          "queued": "Sending to Framer since {when}",
+          "sent": "In Framer as a draft item since {when}",
+          "failed": "The last send to Framer failed, {when}",
+          "published": "Published {when}"
         }
       },
       "bulk": {
@@ -3997,6 +4003,7 @@
         "description": "Each page goes to the brand's webhook as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
+        "descriptionFramer": "Each page goes to {collection} in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them. A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
         "notFound": "A page was archived or deleted since you picked it. Close this, pick the pages again and send.",
@@ -4028,6 +4035,7 @@
         "skipped": "{count, plural, one {# page wasn't sent} other {# pages weren't sent}}: the workspace has sent 200 pages in the last 24 hours. Try again later.",
         "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
         "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
+        "inProgressFramer": "A page is already on its way to Framer. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
         "send": "{count, plural, one {Send # page} other {Send # pages}}",
@@ -5120,11 +5128,12 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS: Webflow, WordPress, or your workflow through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
         "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
+        "descriptionFramer": "The page goes to {collection} in Framer as a draft item, with its slug and meta. Images aren't sent yet. You publish it in Framer.",
         "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
           "label": "Send to",
@@ -5139,12 +5148,19 @@
             "hint": "A draft post on {site}",
             "notReady": "Sign-in refused: connect WordPress again in Settings › Integrations"
           },
+          "framer": {
+            "title": "Framer",
+            "hint": "A draft item in {collection}",
+            "collection": "your collection",
+            "notReady": "Not ready: connect it again or pick its collection and fields in Settings › Integrations"
+          },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
           },
           "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
           "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
+          "uncheckedFramer": "Couldn't check Framer just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
         "placeholders": "{count, plural, one {# placeholder is} other {# placeholders are}} still open. Fill {count, plural, one {it} other {them}} first: none goes to your CMS.",
@@ -5186,6 +5202,12 @@
           "failed": "The last send to WordPress failed, {when}.",
           "published": "Published {when}."
         },
+        "lastFramer": {
+          "queued": "Last sent to Framer {when}, still on its way.",
+          "sent": "In Framer as a draft item since {when}.",
+          "failed": "The last send to Framer failed, {when}.",
+          "published": "Published {when}."
+        },
         "errors": {
           "no_webhook": "This brand has no webhook yet. Set one up in Webhook Settings on Content Opportunities.",
           "webhook_not_subscribed": "The brand's webhook doesn't receive \"Content page sent\". Turn it on in Webhook Settings on Content Opportunities.",
@@ -5210,7 +5232,14 @@
           "no_wordpress": "Connect WordPress in Settings › Integrations first.",
           "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
           "in_progressWordPress": "This page is already on its way to WordPress. Wait for it, then send again.",
-          "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations."
+          "no_webhookWordPress": "This brand's WordPress refused the sign-in, and it has no webhook. Connect WordPress again in Settings › Integrations.",
+          "framerFailed": "Framer didn't take the page: {reason}",
+          "framer_not_configured": "Framer isn't set up on this server. Send to your workflow instead.",
+          "no_framer": "Connect Framer in Settings › Integrations first.",
+          "framer_refused": "Framer refused the brand's API key. Connect it again in Settings › Integrations.",
+          "framer_not_ready": "Pick the Framer collection and its fields in Settings › Integrations.",
+          "in_progressFramer": "This page is already on its way to Framer. Wait for it, then send again.",
+          "no_webhookFramer": "This brand's Framer isn't ready, and it has no webhook. Connect Framer again or pick its collection and fields in Settings › Integrations."
         },
         "cancel": "Cancel",
         "send": "Send",
@@ -5222,7 +5251,11 @@
         "sentWordPress": "Sent to WordPress as a draft post",
         "sentWordPressUpdated": "Draft post updated in WordPress",
         "wordpressLive": "Its post was already published or scheduled, so the page went as a new draft. Move the text over in WordPress; published as it is, its slug gets \"-2\".",
-        "wordpressJsonLd": "JSON-LD left out: add schema with your SEO plugin."
+        "wordpressJsonLd": "JSON-LD left out: add schema with your SEO plugin.",
+        "sentFramer": "Sent to Framer as a draft item",
+        "sentFramerUpdated": "Updated in Framer",
+        "framerImages": "{images, plural, one {# image wasn't sent: add it in Framer.} other {# images weren't sent: add them in Framer.}}",
+        "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site."
       },
       "rulesChip": "Rules {met}/{total}",
       "rulesChipReading": "Rules · reading",
@@ -7531,6 +7564,7 @@
       "noAnswers": "No answers here in this period",
       "pending": "Within 24h",
       "pendingTip": "Tracked in {location} from the next daily run: its first results come within 24 hours.",
+      "promptPendingTip": "This prompt's first results come with the next daily run, within 24 hours.",
       "paused": "Paused",
       "pausedTip": "This prompt is paused, so it isn't asked anywhere until you resume it.",
       "noEngine": "No engine here",
@@ -8240,7 +8274,7 @@
           "unknown": "Shops without it can be left out of results. How OpenAI grants it isn't public yet; a direct feed is the best bet."
         },
         "firstWords": {
-          "title": "First 40 words of descriptions{count, plural, =0 {} other { · # products}}",
+          "title": "First 40 words of descriptions{count, plural, =0 {} one { · # product} other { · # products}}",
           "pass": "Every description says what the product is in its first 40 words.",
           "warn": "ChatGPT reads about 40 words. These don't say what the product is in them.",
           "fail": "ChatGPT reads about 40 words. These don't say what the product is in them.",
@@ -8259,12 +8293,12 @@
           "fail": "Without it, ChatGPT Shopping sales can't be told apart from other AI visits. Add utm_source=chatgpt.com&utm_medium=feed to your feed's product links."
         },
         "wrongPrice": {
-          "title": "{count, plural, =0 {Prices in AI answers match yours} other {Wrong price in AI answers · # products}}",
+          "title": "{count, plural, =0 {Prices in AI answers match yours} one {Wrong price in AI answers · # product} other {Wrong price in AI answers · # products}}",
           "pass": "Every price AI showed for your products matches your catalog.",
           "fail": "AI shows {seen} for {product}, your price is {yours}."
         },
         "resellerCheaper": {
-          "title": "{count, plural, =0 {No reseller cheaper than you} other {Reseller cheaper than you · # products}}",
+          "title": "{count, plural, =0 {No reseller cheaper than you} one {Reseller cheaper than you · # product} other {Reseller cheaper than you · # products}}",
           "pass": "AI links to no reseller selling your products for less.",
           "fail": "AI links to a reseller selling your product for less. See Shelf › Where AI sends shoppers."
         },
@@ -9441,6 +9475,88 @@
         "workspace": "This brand isn't in your workspace.",
         "busy": "Too many requests. Wait a few minutes.",
         "failed": "Couldn't reach WordPress. Try again later."
+      }
+    },
+    "framer": {
+      "title": "Framer",
+      "description": "Send to CMS puts {brand}'s pages in a Framer CMS collection as draft items. You publish them in Framer.",
+      "noBrand": "Pick a brand to connect its Framer project.",
+      "unavailable": "Couldn't read the Framer connection right now.",
+      "notConfigured": "Framer isn't set up on this server yet.",
+      "connected": "Connected",
+      "setupNotFinished": "Setup not finished",
+      "refused": "Key refused",
+      "project": "Project: {project}",
+      "published": "published at {url}",
+      "account": "key acts as {account}",
+      "notConnectedMember": "Not connected. Admins and managers can connect Framer.",
+      "refusedMember": "Framer refused the API key. Pages can't go there until an admin or manager connects it again.",
+      "pagesGoTo": "Pages go to {collection} as draft items.",
+      "noCollection": "No collection picked yet. Pages can't go to Framer until an admin or manager finishes the setup.",
+      "projectLabel": "Project address",
+      "projectPlaceholder": "https://framer.com/projects/…",
+      "keyLabel": "API key",
+      "keyPlaceholder": "Paste the API key",
+      "keyHint": "Paste the project's address as your browser shows it in Framer, or its id. Make the key in the project's Site Settings › General: it works as the user who makes it, so make it as a user who can edit the CMS. It's kept encrypted by our API, never shown again.",
+      "keyShort": "That's too short for a Framer API key. Paste the whole key Framer made.",
+      "connect": "Connect",
+      "connecting": "Checking the project…",
+      "connectedToast": "Framer connected",
+      "connectedSetupToast": "Framer connected. Now pick a collection and save.",
+      "refusedNote": "Framer refused the saved API key. Make a new one in the project and connect again to send pages.",
+      "replace": "Replace key",
+      "cancel": "Cancel",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect Framer?",
+      "disconnectDescription": "Pages stop going to Framer. Items already sent stay in Framer. Framer doesn't let us revoke the API key: delete it in the project's Site Settings › General.",
+      "disconnected": "Framer disconnected",
+      "disconnectedNotRevoked": "Framer disconnected. Delete its API key in Framer too, in the project's Site Settings › General.",
+      "setupStep": "Last step: pick the collection your pages go to, check which field takes what, then Save. Pages can't be sent to Framer until then.",
+      "collectionLabel": "Collection",
+      "collectionPlaceholder": "Pick a collection",
+      "collectionBlocked": "{name} (needs fields we can't fill)",
+      "collectionIncomplete": "{name} (lacks a field pages need)",
+      "collectionGone": "The saved collection, {collection}, is no longer in the project, or a plugin manages it now. Pick another.",
+      "loadingCollections": "Reading the project's collections…",
+      "noCollections": "This project has no CMS collection pages can go to. Add one in Framer.",
+      "collectionsUnavailable": "Couldn't read the project's collections right now.",
+      "blocked": "{collection} requires {fields}, which Send to CMS can't fill. Make {count, plural, one {it} other {them}} optional in Framer, or pick another collection.",
+      "missing": {
+        "title": "{collection} has no plain text field for the page's title. Add one in Framer, or pick another collection.",
+        "body": "{collection} has no formatted text field for the page's content. Add one in Framer, or pick another collection."
+      },
+      "unmapped": "{collection} requires {fields}. Pick {count, plural, one {it} other {them}} above for the title, page content, meta title or meta description, or make {count, plural, one {it} other {them}} optional in Framer.",
+      "fieldsTitle": "Which field takes what",
+      "fieldsHint": "A page's title and content each need a field; the rest are optional.",
+      "parts": {
+        "title": "Title",
+        "body": "Page content (formatted text)",
+        "metaTitle": "Meta title",
+        "metaDescription": "Meta description",
+        "jsonLd": "JSON-LD (structured data)"
+      },
+      "notSent": "Not sent",
+      "pickField": "Pick a field",
+      "fieldRequired": "{name} (required)",
+      "jsonLdHint": "JSON-LD goes as plain JSON text. On the collection's page in Framer, put this field inside a JSON-LD script tag.",
+      "save": "Save",
+      "saved": "Saved. Pages go to {collection}.",
+      "errors": {
+        "not_configured": "Framer isn't set up on this server yet.",
+        "invalid": "Check what you picked and try again.",
+        "invalidConnect": "Check the project's address (framer.com/projects/…) or its id, and paste the whole API key made in that project.",
+        "forbidden": "Only admins and managers can change the Framer connection.",
+        "not_connected": "Connect Framer first.",
+        "auth_failed": "Framer refused this API key. Make a new one in the project's Site Settings › General and try again.",
+        "no_access": "This key's user can't edit the project's CMS. Make the key as a user who can.",
+        "not_found": "Framer couldn't find that project or collection. Check the project's address, and that the key was made in it.",
+        "invalid_map": "The fields don't fit the collection.",
+        "changed": "The connection changed meanwhile. Reload and try again.",
+        "busy": "Framer is busy, or there are too many requests. Wait a minute and try again.",
+        "unreachable": "Framer didn't answer in time. Try again.",
+        "session": "Your session expired. Sign in again.",
+        "workspace": "This brand isn't in your workspace.",
+        "failed": "Couldn't reach Framer. Try again later."
       }
     },
     "integrations_connected": "Connected",
