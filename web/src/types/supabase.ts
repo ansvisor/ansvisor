@@ -3982,6 +3982,7 @@ export type Database = {
           anthropic_api_key_set_by: string | null
           created_at: string
           id: string
+          legacy_key_grandfathered: boolean
           name: string
           plan: string
           plan_overrides: Json | null
@@ -3999,6 +4000,7 @@ export type Database = {
           anthropic_api_key_set_by?: string | null
           created_at?: string
           id?: string
+          legacy_key_grandfathered?: boolean
           name: string
           plan?: string
           plan_overrides?: Json | null
@@ -4016,6 +4018,7 @@ export type Database = {
           anthropic_api_key_set_by?: string | null
           created_at?: string
           id?: string
+          legacy_key_grandfathered?: boolean
           name?: string
           plan?: string
           plan_overrides?: Json | null

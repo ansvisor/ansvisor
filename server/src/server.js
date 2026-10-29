@@ -25,6 +25,7 @@ import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
+import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -613,6 +614,12 @@ app.get('/api/internal/integrations-config', (req, res) => {
   }
   return res.json({ success: true, config: integrationsConfig() });
 });
+
+// --- Internal Chat budget endpoints (CRON_SECRET auth, called by the web's Chat engine) ---
+// Each model step of a Chat run is held on the workspace's AI budget before it
+// starts, then charged at its real cost or let go (routes/internal-chat-budget.js).
+// With the secret, the /api limiter above doesn't count them (rate-limiter.js).
+app.use('/api/internal/chat/budget', internalChatBudgetRoutes);
 
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt

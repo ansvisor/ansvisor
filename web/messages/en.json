@@ -55,6 +55,14 @@
       "exhaustedTrial": "You've used the free trial's AI usage. Starting the plan gives its full monthly allowance; Agent Chat on your own AI key keeps working."
     }
   },
+  "chatBudget": {
+    "ai_limit": "You've used this month's AI limit, so Chat stopped here. What's done so far is kept.",
+    "ai_limit_trial": "Your trial AI limit is used up, so Chat stopped here. What's done so far is kept.",
+    "plan_limit": "This workspace's plan isn't active, so Chat can't run. Choose a plan to use it again.",
+    "not_found": "This chat's work is gone. Ask your question again.",
+    "chat_off": "Chat isn't on for this workspace.",
+    "unavailable": "Chat couldn't check your AI usage just now, so it didn't start this step. Try again in a moment."
+  },
   "readOnly": {
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
@@ -3267,6 +3275,128 @@
       "itemsNeedYou": "{count, plural, one {# item} other {# items}} · {needsYou}"
     },
     "tick": "Done",
+    "stepList": {
+      "skipped": "Skipped",
+      "waiting": "Waiting for you"
+    },
+    "runSteps": {
+      "working": "Working on it",
+      "workedFor": "Worked for {duration}",
+      "stoppedAfter": "Stopped after {duration}",
+      "failed": "Stopped: something went wrong",
+      "steps": "{count, plural, one {# step} other {# steps}}",
+      "stepsSources": "{steps, plural, one {# step} other {# steps}} · {sources, plural, one {# source} other {# sources}}",
+      "stepsClock": "{steps, plural, one {# step} other {# steps}} · {clock}",
+      "rows": "{count, plural, one {# row} other {# rows}}",
+      "seconds": "{s}s",
+      "minutes": "{m}m {s}s",
+      "now": "Step {n}: {label}"
+    },
+    "planCard": {
+      "head": "Here’s my plan",
+      "uses": "Uses",
+      "about": "About",
+      "aiUsage": "AI usage",
+      "aiUsageValue": "{value} of monthly limit",
+      "outputs": "Outputs",
+      "mode": "Mode:",
+      "modes": {
+        "ask_first": "Ask me first",
+        "auto": "Auto, ask before changes",
+        "full_auto": "Full auto"
+      },
+      "edit": "Edit plan",
+      "doneEditing": "Done editing",
+      "start": "Start",
+      "askAdmin": "Ask your Admin",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove step",
+      "notConnected": "{name} isn’t connected.",
+      "connected": "Connected",
+      "connect": "Connect {name}",
+      "startNeedsPlan": "Starting a run needs a plan",
+      "askNeedsPlan": "Sending a request needs a plan"
+    },
+    "approvalCard": {
+      "stepOf": "Step {n} of {total}",
+      "before": "Before",
+      "after": "After",
+      "approve": "Approve",
+      "skip": "Skip",
+      "edit": "Edit",
+      "cancel": "Cancel",
+      "saveAndApprove": "Save & approve",
+      "newText": "New text",
+      "dontAskAgain": "Don’t ask again for this kind of change",
+      "dontAskAgainTip": "Only for you, and only where your Admin’s tool policy allows it",
+      "approved": "Step {n} approved",
+      "skipped": "Step {n} skipped",
+      "done": "Done",
+      "working": "Working…",
+      "retry": "Retry",
+      "preview": "Preview",
+      "sources": "Sources",
+      "approveNeedsPlan": "Approving changes needs a plan",
+      "clickNeedsPlan": "Going live needs a plan"
+    },
+    "resultCard": {
+      "generated": "Generated {date} · {time}",
+      "generatedTip": "Generated {full}",
+      "dataAsOf": "Data as of {date}, {time}",
+      "dataAsOfTip": "Data as of {full}",
+      "open": "Open",
+      "files": "What I made",
+      "summary": "Result"
+    },
+    "denialCard": {
+      "asked": "You asked",
+      "why": "Why not",
+      "who": "Who can",
+      "next": "Next",
+      "requestGoes": "Your request goes to the workspace Admins, in the app",
+      "actions": {
+        "ask_admin": "Ask your Admin",
+        "see_access": "See your access ↗",
+        "upgrade": "Upgrade",
+        "choose_plan": "Choose a plan",
+        "compare_plans": "Compare plans",
+        "open_policy": "See tool policy ↗"
+      },
+      "sent": "Sent",
+      "sentToast": "Sent to your Admins",
+      "sendFailed": "Couldn’t send it. Try again.",
+      "askNeedsPlan": "Sending a request needs a plan"
+    },
+    "errorCard": {
+      "failed": "Failed",
+      "stoppedAt": "Stopped at step {n} of {total}",
+      "stopped": "Stopped: something went wrong",
+      "retry": "Retry",
+      "retryStep": "Retry step {n}",
+      "retryFrom": "Retry starts again from step {n}",
+      "retryNeedsPlan": "Retrying a run needs a plan"
+    },
+    "runsTray": {
+      "label": "Your runs",
+      "title": "Your runs",
+      "button": "{count, plural, =0 {Runs} other {# running}}",
+      "needsYouTip": "{count, plural, one {# needs you} other {# need you}}",
+      "summary": "{running} running · {needsYou, plural, one {# needs you} other {# need you}}",
+      "summaryRunning": "{running} running",
+      "empty": "No runs yet. Runs keep going when you leave a page.",
+      "failedToLoad": "Couldn’t load your runs.",
+      "newChat": "New chat",
+      "stepOf": "Step {n} of {total}",
+      "stepOfLabel": "Step {n} of {total} · {label}",
+      "needsYou": "Needs your OK · step {n} of {total}",
+      "paused": "Paused · step {n} of {total}",
+      "done": "Done {time}",
+      "failed": "Stopped · step {n} of {total}",
+      "starting": "Starting…",
+      "review": "Review",
+      "open": "Open"
+    },
     "preview": {
       "title": "Chat pieces",
       "description": "The agent's shared pieces in every state, for design sign-off. Nothing here runs.",
@@ -3297,7 +3427,52 @@
       "onIcon": "On a menu icon",
       "countNeedsYou": "Count, 1 needs you",
       "countNone": "Count, nothing needs you",
-      "tickPop": "Pops in once"
+      "tickPop": "Pops in once",
+      "cards": {
+        "title": "Run cards",
+        "description": "Plan, approval, result, out-of-permission and failed-run cards, and the runs tray, in every state. Sample data; nothing here runs.",
+        "sections": {
+          "plan": "Plan card",
+          "runSteps": "Run steps",
+          "approval": "Approval card",
+          "execute": "Click card (EXECUTE)",
+          "result": "Result card",
+          "denial": "Out-of-permission answer",
+          "failed": "Failed run",
+          "tray": "Runs tray"
+        },
+        "states": {
+          "planAuto": "Auto, ask before changes",
+          "planFullAuto": "Full auto, a tool not connected",
+          "planReadOnly": "Analyst: read-only",
+          "stepsRunning": "Running",
+          "stepsWaiting": "Waiting for you",
+          "stepsDone": "Done",
+          "stepsSingle": "Done, one step",
+          "stepsStopped": "Stopped",
+          "stepsError": "Failed",
+          "pendingDontAsk": "Waiting, Don’t ask again allowed",
+          "pendingNoDontAsk": "Waiting, Don’t ask again not allowed",
+          "saving": "Saving",
+          "error": "Failed, with Retry",
+          "approved": "Approved",
+          "skipped": "Skipped",
+          "executePending": "Waiting for the click",
+          "executeDisabled": "Before the draft is approved",
+          "executeSaving": "Publishing",
+          "executeDone": "Published",
+          "resultDone": "Done",
+          "resultNeedsClick": "Done but for a click",
+          "denialRole": "Role",
+          "denialPlan": "Plan",
+          "denialPolicy": "Policy",
+          "failedStep": "A step failed",
+          "failedRun": "The run failed",
+          "trayRuns": "With runs (click to open)",
+          "trayEmpty": "No runs",
+          "trayLive": "Live: your runs and this brand’s"
+        }
+      }
     }
   },
   "chatDenial": {
@@ -7266,6 +7441,8 @@
     "new": "New",
     "newDone": "{generated, plural, =0 {No new opportunities} one {1 opportunity created} other {# opportunities created}}{duplicates, plural, =0 {} one { · 1 duplicate skipped (not counted)} other { · # duplicates skipped (not counted)}}",
     "newNothing": "No new opportunities: every matching need already has one.",
+    "newExisting": "This prompt already has an opportunity",
+    "openExisting": "Open existing",
     "newLimitReached": "Monthly opportunity limit reached.",
     "newLimitTooltip": "Monthly limit reached. Resets on {date}.",
     "newRefunded": "Nothing was used from your monthly quota.",
@@ -7320,6 +7497,7 @@
       "fewer": "Fewer",
       "more": "More",
       "max": "max {max}",
+      "promptOne": "One per prompt. For a different take, use Another angle on its opportunity.",
       "uses": "Uses {count} of your {remaining} remaining this month → {after} left after this. Duplicates of existing opportunities are skipped and don't count.",
       "usesUnlimited": "Generates up to {count}. Duplicates of existing opportunities are skipped.",
       "noneLeft": "You've used this month's opportunities. They reset when your subscription renews.",
@@ -9923,6 +10101,7 @@
     "aiUsageMeter": {
       "title": "This period's AI usage",
       "description": "Improve suggestions, the Content Editor's AI and the Action Center's task writing share your plan's monthly AI allowance.",
+      "descriptionChat": "Chat, Improve suggestions, the Content Editor's AI and the Action Center's task writing share your plan's monthly AI allowance.",
       "used": "{percent} used",
       "resets": "Resets on {date}",
       "exhausted": "This period's AI usage is used up. AI features resume on {date}.",
@@ -9933,10 +10112,15 @@
         "improve": "Improve suggestions",
         "content": "Content Editor (briefs, Content Agent, quality checks)",
         "action_center": "Action Center task writing",
+        "chat": "Chat",
+        "agent": "Agents",
+        "schedule": "Scheduled runs",
+        "image": "Images",
         "other": "Other"
       },
       "none": "No AI usage yet this period.",
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
+      "chatMetered": "Chat uses this allowance too. Chat on your own AI key isn't counted.",
       "failed": "Couldn't read this period's AI usage. Try again later."
     },
     "cancelsOn": "Subscription ends on {date}",

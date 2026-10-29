@@ -10,7 +10,20 @@ import { USAGE_WARNING_RATIO, type UsageTone } from '@/lib/content-usage';
  * only decides how they read.
  */
 
-export const AI_USAGE_FEATURES = ['improve', 'content', 'action_center', 'other'] as const;
+/**
+ * The meter's rows, in order: Chat's (00405) only with Chat on for the
+ * workspace, its agents, scheduled runs and images as they come.
+ */
+export const AI_USAGE_FEATURES = [
+  'improve',
+  'content',
+  'action_center',
+  'chat',
+  'agent',
+  'schedule',
+  'image',
+  'other',
+] as const;
 export type AiUsageFeature = (typeof AI_USAGE_FEATURES)[number];
 
 export interface AiUsage {
@@ -30,6 +43,11 @@ export interface AiUsage {
    * percent comes as 0, read with featurePercentLabel.
    */
   features: { feature: AiUsageFeature; percent: number }[];
+  /**
+   * Chat draws on the allowance too (CHAT_AGENTIC on for the workspace;
+   * missing from an older API: off). Off, it runs on the workspace's own key.
+   */
+  chatMetered?: boolean;
 }
 
 /** A count against its plan's limit this period. */
