@@ -17,6 +17,7 @@ import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
+import { MEMBER_ROLES, requireManager, requireRole } from '@/lib/mcp/role-gate';
 import {
   fetchPromptUsageRow,
   toPromptUsageSummary,
@@ -453,13 +454,14 @@ export interface DismissedTopicSuggestion {
  * Dismiss a pending suggestion so it never reappears in future refreshes.
  * Scoped to status = 'new' so dismissing an already-decided suggestion (added
  * or already dismissed) is a no-op that returns null rather than silently
- * "succeeding" twice.
+ * "succeeding" twice. An admin's or a manager's call, as on the Topics page.
  */
 export async function dismissTopicSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<DismissedTopicSuggestion | null> {
   if (!auth.organizationId) return null;
+  requireManager(auth);
 
   const { data: ownership } = await supabaseAdmin
     .from('topic_suggestions')
@@ -493,13 +495,15 @@ export interface AcceptedTopicSuggestion {
  * createTopic action), then mark the suggestion added with a pointer to the
  * new topic. Scoped to status = 'new' up front, so accepting the same
  * suggestion twice fails the ownership lookup on the second call instead of
- * creating a second topic.
+ * creating a second topic. An admin's or a manager's call, as on the Topics
+ * page.
  */
 export async function acceptTopicSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<AcceptedTopicSuggestion | null> {
   if (!auth.organizationId) return null;
+  requireManager(auth);
 
   const { data: suggestion } = await supabaseAdmin
     .from('topic_suggestions')
@@ -588,12 +592,17 @@ export interface DismissedPromptSuggestion {
   status: 'dismissed';
 }
 
-/** Dismiss only a pending suggestion belonging to the authenticated organization. */
+/**
+ * Dismiss only a pending suggestion belonging to the authenticated
+ * organization. Any member but an agency partner may, as the table's update
+ * rule.
+ */
 export async function dismissPromptSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<DismissedPromptSuggestion | null> {
   if (!auth.organizationId) return null;
+  requireRole(auth, MEMBER_ROLES);
 
   const { data: owned, error: lookupError } = await supabaseAdmin
     .from('prompt_suggestions')
@@ -635,12 +644,14 @@ export type AcceptPromptSuggestionResult =
  * plan engine filtering, shopping-mode behavior, region choice and location
  * quota check. Every lookup is organization-scoped; duplicate acceptance
  * removes any losing concurrent insert rather than leaving duplicate prompts.
+ * Adding a prompt is an admin's or a manager's call, as on the Prompts page.
  */
 export async function acceptPromptSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<AcceptPromptSuggestionResult | null> {
   if (!auth.organizationId) return null;
+  requireManager(auth);
 
   const { data: suggestion, error: suggestionError } = await supabaseAdmin
     .from('prompt_suggestions')
@@ -1408,7 +1419,9 @@ export interface UpdatedOpportunityStatus {
  *
  * Ownership-check-first: the update only runs after we've verified the
  * opportunity's brand belongs to the caller's org. Wrong-org or missing
- * id returns null (→ 404) with no DB write.
+ * id returns null (→ 404) with no DB write. Any member may record progress;
+ * dismissing one, or bringing a dismissed one back, is an admin's or a
+ * manager's call.
  */
 export async function updateOpportunityStatusFor(
   auth: McpAuthContext,
@@ -1421,11 +1434,12 @@ export async function updateOpportunityStatusFor(
   // A wrong-org id misses here and we return null *before* any update.
   const { data: ownership } = await supabaseAdmin
     .from('content_opportunities')
-    .select('id, brands!inner(organization_id)')
+    .select('id, status, brands!inner(organization_id)')
     .eq('id', opportunityId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
+  if (status === 'dismissed' || ownership.status === 'dismissed') requireManager(auth);
 
   const updatedAt = new Date().toISOString();
 
