@@ -28,12 +28,14 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({ createContentDraft: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft } = await import('@/lib/actions/content-drafts');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
+const { requestAccess } = await import('@/lib/actions/chat-access-requests');
 const { runLoggedWrite } = await import('./write');
 const { undoChange, undoRule, UNDO_RULES } = await import('./undo');
 const { chatTool, CHAT_TOOLS } = await import('./registry/tools');
@@ -102,6 +104,7 @@ describe('every WRITE row has an Undo', () => {
     expect(UNDO_RULES.create_draft.windowMs).toBe(30 * DAY);
     expect(UNDO_RULES.update_opportunity.windowMs).toBe(7 * DAY);
     expect(UNDO_RULES.dismiss_prompt_suggestion.windowMs).toBe(7 * DAY);
+    expect(UNDO_RULES.request_access.windowMs).toBe(30 * DAY);
     for (const tool of writes) {
       expect(undoRule(tool)).not.toBeNull();
       expect(messages.chatActivity.summary).toHaveProperty(tool.labelKey);
@@ -418,5 +421,37 @@ describe('a double-clicked Undo', () => {
     expect(a).toMatchObject({ code: 'ok' });
     expect(b).toEqual(a);
     expect(db.tables.chat_activity_log.filter((r) => r.undoes_id === row.id)).toHaveLength(1);
+  });
+});
+
+describe('request_access: withdraw the request while it is pending', () => {
+  const ask = async () => {
+    db.tables.chat_access_requests = [];
+    vi.mocked(requestAccess).mockImplementation(async () => {
+      db.tables.chat_access_requests.push({ id: 'req-1', status: 'pending', decided_at: null });
+      return { ok: true, id: 'req-1' };
+    });
+    return change(PEOPLE.analyst, 'request_access', {
+      asked: 'Add competitors · Peec AI',
+      rule_kind: 'role',
+    });
+  };
+
+  it('withdraws it, and says so in the person’s words', async () => {
+    const row = await ask();
+    expect(row).toMatchObject({ target_type: 'access_request', target_id: 'req-1' });
+    const result = await undo(row.id, PEOPLE.analyst);
+    expect(result).toMatchObject({ code: 'ok' });
+    expect(db.tables.chat_access_requests[0].status).toBe('withdrawn');
+  });
+
+  it('leaves a request an Admin already decided', async () => {
+    const row = await ask();
+    db.tables.chat_access_requests[0].status = 'approved';
+    expect(await undo(row.id, PEOPLE.analyst)).toMatchObject({
+      code: 'conflict',
+      reason: 'changed',
+    });
+    expect(db.tables.chat_access_requests[0].status).toBe('approved');
   });
 });

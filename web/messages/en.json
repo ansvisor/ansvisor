@@ -3413,6 +3413,8 @@
       "opportunityStatusUndo": "Put the opportunity “{title}” back as it was",
       "dismissSuggestion": "Dismissed the prompt suggestion “{text}”",
       "dismissSuggestionUndo": "Brought back the prompt suggestion “{text}”",
+      "askAdmin": "Asked your Admins: “{asked}”",
+      "askAdminUndo": "Withdrew the request “{asked}”",
       "accessDenied": "Not allowed: {tool}"
     },
     "undo": {

@@ -43,7 +43,8 @@ const { UNDO_RULES } = await import('./undo');
 type ChatMode = import('./precedence').ChatMode;
 type ChatTool = import('./registry/define-tool').ChatTool;
 
-const WRITES = CHAT_TOOLS.filter((tool) => tool.class === 'write');
+// The writes Full auto may run without a card: an always_card one (Ask your Admin) never does.
+const WRITES = CHAT_TOOLS.filter((tool) => tool.class === 'write' && !tool.flags.alwaysCard);
 const INPUTS: Record<string, unknown> = {
   create_draft: {
     brand_id: BRAND,
