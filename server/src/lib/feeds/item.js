@@ -14,7 +14,7 @@
  *   additionalImageLinks: string[],
  *   brand: string | null,
  *   gtin: string | null,
- *   sku: string | null,
+ *   sku?: string | null,
  *   mpn: string | null,
  *   price: Money,
  *   salePrice: Money | null,
@@ -188,7 +188,9 @@ export function toItem(attrs, row, unit = 'Row') {
   const extra = attrs.additional_image_link;
   const additional = (Array.isArray(extra) ? extra : [extra ?? '']).flatMap(splitImageLinks);
   const productTypes = [
-    ...new Set((Array.isArray(attrs.product_types) ? attrs.product_types : []).map(clean).filter(Boolean)),
+    ...new Set(
+      (Array.isArray(attrs.product_types) ? attrs.product_types : []).map(clean).filter(Boolean),
+    ),
   ];
   return {
     item: {
@@ -201,7 +203,7 @@ export function toItem(attrs, row, unit = 'Row') {
       additionalImageLinks: [...new Set(additional)],
       brand: first('brand'),
       gtin: first('gtin'),
-      sku: first('sku'),
+      ...(first('sku') ? { sku: first('sku') } : {}),
       mpn: first('mpn'),
       price: values.price,
       salePrice: parseMoney(first('sale_price')),
