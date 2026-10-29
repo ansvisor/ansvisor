@@ -379,7 +379,7 @@ async function improveSpendThisPeriod(orgId) {
 /**
  * Improve-tab budget (PROMPT-003): a monthly USD budget per organization
  * (plan.limits.improveMonthlyBudgetUsd: Starter $5, Growth $25, Enterprise
- * $50 or a customer's own set by Ansvisor, the free trial $1), charged with each
+ * $50 or a customer's own set by Ansvisor, the free trial $2), charged with each
  * generation's real token cost so the budget holds for any model. Users see
  * an estimate of generations left, not dollars. -1 is unlimited. `readOnly`
  * as resolveOrgPlanByOrgId: without an active plan, a budget of 0 and

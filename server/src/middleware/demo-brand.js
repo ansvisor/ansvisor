@@ -116,13 +116,15 @@ export const DEMO_GUARDED = [
   guard('PUT /cms/brands/:brandId/webflow', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/webflow', brandIn('path')),
 
-  // WordPress and Framer (cms-wordpress.js, cms-framer.js): a connection
-  // would reach a real site.
+  // WordPress, Framer and Wix (cms-wordpress.js, cms-framer.js, cms-wix.js):
+  // a connection would reach a real site.
   guard('POST /cms/brands/:brandId/wordpress', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/wordpress', brandIn('path')),
   guard('POST /cms/brands/:brandId/framer', brandIn('path')),
   guard('PUT /cms/brands/:brandId/framer', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/framer', brandIn('path')),
+  guard('POST /cms/brands/:brandId/wix', brandIn('path')),
+  guard('DELETE /cms/brands/:brandId/wix', brandIn('path')),
 
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.
@@ -131,6 +133,7 @@ export const DEMO_GUARDED = [
   guard('POST /content-drafts/webflow-status', brandIn('body')),
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),
+  guard('POST /content-drafts/wix-status', brandIn('body')),
   guard(
     'POST /content-drafts/:draftId/brief',
     brandIn('body'),

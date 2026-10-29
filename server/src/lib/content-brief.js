@@ -33,6 +33,7 @@ import {
   todayText,
 } from './content-sources.js';
 import { reserveAiBudget } from './plan-guard.js';
+import { objectOptions } from './structured-output.js';
 
 /**
  * The Content Editor's brief (CE-007, spec §10): Rebuild outline writes a
@@ -44,7 +45,11 @@ import { reserveAiBudget } from './plan-guard.js';
  * (spec §3).
  */
 
-/** The model, as the Improve tab's. */
+/**
+ * The Improve tab's model, which the Content Editor ran on before it had
+ * its own (contentReadModelId, contentWriteModelId), and still runs on
+ * without an Anthropic key.
+ */
 export function contentBriefModelId() {
   return (
     process.env.IMPROVE_SUGGESTION_MODEL ||
@@ -52,6 +57,44 @@ export function contentBriefModelId() {
     'google/gemini-3-flash-preview'
   );
 }
+
+/** The Content Editor's models with ANTHROPIC_API_KEY set: Haiku reads, Sonnet writes. */
+export const CONTENT_READ_CLAUDE = 'anthropic/claude-haiku-5-5';
+export const CONTENT_WRITE_CLAUDE = 'anthropic/claude-sonnet-5-5';
+
+/**
+ * The model the Content Editor reads and judges with: the brief (Rebuild
+ * outline) and Quality's reads (content-source-class.js). CONTENT_READ_MODEL,
+ * else Claude Haiku with an Anthropic key, else `fallback`, the model it ran
+ * on before: a server without the key runs as it did.
+ */
+export function contentReadModelId(fallback = contentBriefModelId) {
+  return (
+    process.env.CONTENT_READ_MODEL ||
+    (process.env.ANTHROPIC_API_KEY ? CONTENT_READ_CLAUDE : fallback())
+  );
+}
+
+/**
+ * The model the Content Agent writes with: whatever goes into the page (a
+ * page written or rewritten whole, the cut pass, its suggestions).
+ * CONTENT_WRITE_MODEL, else Claude Sonnet with an Anthropic key, else the
+ * model it ran on before.
+ */
+export function contentWriteModelId() {
+  return (
+    process.env.CONTENT_WRITE_MODEL ||
+    (process.env.ANTHROPIC_API_KEY ? CONTENT_WRITE_CLAUDE : contentBriefModelId())
+  );
+}
+
+/**
+ * The most a read's and a write's answer may take, sent to Claude only
+ * (structured-output.js): its thinking counts toward it. A whole page of
+ * BRIEF_LENGTH_MAX characters is about 17k tokens as HTML in JSON.
+ */
+export const CONTENT_READ_MAX_TOKENS = 16_000;
+export const CONTENT_WRITE_MAX_TOKENS = 32_000;
 
 /** How long the model may take: the dashboard waits for it. */
 const CALL_TIMEOUT_MS = 60_000;
@@ -563,7 +606,7 @@ async function briefWithRun({
   targets,
   run,
 }) {
-  const modelId = contentBriefModelId();
+  const modelId = contentReadModelId();
   // Held on the budget before the call, so calls at once can't pass it.
   const budget = await reserveAiBudget(brand.organization_id, {
     feature: 'content',
@@ -584,7 +627,7 @@ async function briefWithRun({
     generated = await runCall(run, budget, CALL_TIMEOUT_MS, (abortSignal) =>
       generateObject({
         model: resolveModel(modelId),
-        schema: briefSchema(),
+        ...objectOptions(modelId, briefSchema(), { maxOutputTokens: CONTENT_READ_MAX_TOKENS }),
         system: briefSystemPrompt(),
         prompt: buildBriefPrompt({
           brand,

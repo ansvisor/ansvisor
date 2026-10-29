@@ -52,6 +52,7 @@ import { FramerCard } from './framer-card';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { SampleDataBadge } from './sample-data-badge';
+import { WixCard } from './wix-card';
 import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -179,6 +180,8 @@ export function IntegrationsSection() {
           <WordPressCard />
 
           <FramerCard />
+
+          <WixCard />
           {isDemo &&
             upcomingDemoIntegrations('cms').map((id) => (
               <UpcomingIntegrationCard key={id} id={id} />
