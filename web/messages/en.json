@@ -7635,6 +7635,9 @@
     "presenceRate": "Presence Rate",
     "gaps": "Content Gaps",
     "suggestions": {
+      "loadFailed": "Couldn't load suggestions",
+      "loadUnavailable": "Ansvisor isn't answering right now. Try again in a moment.",
+      "retry": "Retry",
       "measuredSuggestionsKept": "Search Console and Analytics suggestions were kept — dismiss them individually to hide them for 30 days.",
       "catalog": {
         "badge": "Your catalog",
