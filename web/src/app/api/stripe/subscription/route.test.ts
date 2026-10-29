@@ -263,9 +263,25 @@ describe('cancelling', () => {
     }
     expect(stripeApi.update).not.toHaveBeenCalled();
 
+    expect(db.update).not.toHaveBeenCalled();
+
     role = 'admin';
     const res = await DELETE();
     expect(res.status).toBe(200);
     expect(stripeApi.update).toHaveBeenCalledWith('sub_1', { cancel_at_period_end: true });
+    // Every page says when the plan ends at once, before the webhook (00386).
+    expect(db.update).toHaveBeenCalledWith({
+      cancel_at_period_end: true,
+      subscription_ends_at: '2027-01-15T08:00:00.000Z',
+    });
+  });
+
+  it('keeps the plan again, and the band goes at once', async () => {
+    stripeApi.update.mockReset().mockResolvedValue(subscription('active'));
+    const res = await patch({ reactivate: true });
+    expect(res.status).toBe(200);
+    expect(stripeApi.update).toHaveBeenCalledWith('sub1', { cancel_at_period_end: false });
+    expect(db.update).toHaveBeenCalledWith({ cancel_at_period_end: false });
+    expect(db.eq).toHaveBeenCalledWith('id', 'org1');
   });
 });

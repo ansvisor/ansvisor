@@ -4072,6 +4072,7 @@ export type Database = {
           anthropic_api_key_last4: string | null
           anthropic_api_key_set_at: string | null
           anthropic_api_key_set_by: string | null
+          cancel_at_period_end: boolean
           created_at: string
           id: string
           legacy_key_grandfathered: boolean
@@ -4090,6 +4091,7 @@ export type Database = {
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
           anthropic_api_key_set_by?: string | null
+          cancel_at_period_end?: boolean
           created_at?: string
           id?: string
           legacy_key_grandfathered?: boolean
@@ -4108,6 +4110,7 @@ export type Database = {
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
           anthropic_api_key_set_by?: string | null
+          cancel_at_period_end?: boolean
           created_at?: string
           id?: string
           legacy_key_grandfathered?: boolean

@@ -157,6 +157,12 @@ export async function PATCH(req: NextRequest) {
       const updated = (await stripe.subscriptions.update(subscriptionId, {
         cancel_at_period_end: false,
       })) as unknown as SubscriptionRaw;
+      // Mirrored at once, as the webhook does after: the app-wide "plan
+      // ends" band goes on the next page (00386).
+      await supabaseAdmin
+        .from('organizations')
+        .update({ cancel_at_period_end: false })
+        .eq('id', org.id);
       return NextResponse.json({
         status: updated.status,
         cancelAtPeriodEnd: false,
@@ -298,6 +304,16 @@ export async function DELETE() {
     const updated = (await stripe.subscriptions.update(org.stripe_subscription_id as string, {
       cancel_at_period_end: true,
     })) as unknown as SubscriptionRaw;
+    // Mirrored at once, as the webhook does after: every page shows when the
+    // plan ends (00386), with its period end.
+    const endsAt = periodEndIso(updated);
+    await supabaseAdmin
+      .from('organizations')
+      .update({
+        cancel_at_period_end: true,
+        ...(endsAt ? { subscription_ends_at: endsAt } : {}),
+      })
+      .eq('id', org.id);
 
     return NextResponse.json({
       cancelAtPeriodEnd: true,

@@ -63,6 +63,14 @@
     "chat_off": "Chat isn't on for this workspace.",
     "unavailable": "Chat couldn't check your AI usage just now, so it didn't start this step. Try again in a moment."
   },
+  "planEnds": {
+    "banner": "Your plan ends on {date}.",
+    "bannerTrial": "Your free trial ends on {date}, and your plan won't start.",
+    "keep": "Keep my plan",
+    "askAdmin": "To keep it, ask an admin of your workspace.",
+    "close": "Close",
+    "failed": "Couldn't keep the plan. Try again from Settings › Billing."
+  },
   "readOnly": {
     "banner": {
       "ended": "Your workspace is read-only. You can look around; adding, running and AI need a plan.",
