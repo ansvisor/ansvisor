@@ -157,10 +157,12 @@ describe('syncCatalog', () => {
 
     await syncCatalog(BRAND, 'multi_category', [multiCategoryItem], { db: fake.db });
 
-    expect(fake.rows('catalog_categories').map((row) => row.name).sort()).toEqual([
-      'Accessories',
-      'Footwear > Boots',
-    ]);
+    expect(
+      fake
+        .rows('catalog_categories')
+        .map((row) => row.name)
+        .sort(),
+    ).toEqual(['Accessories', 'Footwear > Boots']);
     expect(fake.rows('catalog_product_categories')).toHaveLength(2);
     expect(fake.rows('catalog_products')[0]).toMatchObject({ product_type: 'Accessories' });
     expect(fake.rows('catalog_products')[0]).not.toHaveProperty('product_types');
