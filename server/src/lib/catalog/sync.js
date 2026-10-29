@@ -89,7 +89,11 @@ export function catalogRecords(items) {
       ...new Set(
         group
           .flatMap((item) =>
-            item.productTypes?.length ? item.productTypes : item.productType ? [item.productType] : [],
+            item.productTypes?.length
+              ? item.productTypes
+              : item.productType
+                ? [item.productType]
+                : [],
           )
           .map((name) => clip(name, 750))
           .filter(Boolean),
