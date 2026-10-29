@@ -35,6 +35,7 @@ const {
   BILLING_ROUTES,
   COST_STOPPING,
   DATA_REMOVAL,
+  DEMO_ROUTES,
   MAX_ENTRIES,
   ONBOARDING_DAILY_CALLS,
   ONBOARDING_LIMIT_REACHED,
@@ -66,6 +67,7 @@ const ONBOARDING = [
   ['POST', '/topics/suggest'],
   ['POST', '/prompts/from-topics'],
   ['POST', '/competitors/suggest'],
+  ['POST', '/brands/b1/detect-site-type'],
 ];
 
 beforeEach(() => {
@@ -226,6 +228,32 @@ describe('requireActiveSubscription', () => {
     expect(DATA_REMOVAL).toHaveLength(1);
   });
 
+  it('lets an organization off a plan, or never on one, open and hide the demo brand', async () => {
+    for (const state of [ended, neverSubscribed]) {
+      org = state;
+      for (const [method, path] of [
+        ['POST', '/demo'],
+        ['POST', '/demo/'],
+        ['PATCH', '/demo'],
+      ]) {
+        const { res, next } = await run({ method, path });
+        expect(next, `${method} ${path}`).toHaveBeenCalledOnce();
+        expect(res.status).not.toHaveBeenCalled();
+      }
+    }
+    org = ended;
+    for (const [method, path] of [
+      ['DELETE', '/demo'],
+      ['POST', '/demo/rebuild'],
+      ['PUT', '/demo'],
+    ]) {
+      const { res, next } = await run({ method, path });
+      expect(next, `${method} ${path}`).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(402);
+    }
+    expect(DEMO_ROUTES).toHaveLength(2);
+  });
+
   it("opens onboarding's routes, and only them, to an organization that never subscribed", async () => {
     // Setting up, before the plan step; and back from it (onboarding marked
     // done, still no subscription): the flag is not read.
@@ -242,6 +270,8 @@ describe('requireActiveSubscription', () => {
       ['POST', '/brand-facts/fetch'],
       ['PUT', '/topics/suggest'],
       ['POST', '/topics/suggest/extra'],
+      ['POST', '/brands/b1/detect-site-type/again'],
+      ['PATCH', '/brands/b1'],
     ]) {
       const { res, next } = await run({ method, path });
       expect(next, `${method} ${path}`).not.toHaveBeenCalled();
@@ -258,7 +288,7 @@ describe('requireActiveSubscription', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-27T18:00:00Z'));
     org = neverSubscribed;
-    // The three routes share one count.
+    // The routes share one count.
     for (let i = 0; i < ONBOARDING_DAILY_CALLS; i++) {
       const [method, path] = ONBOARDING[i % ONBOARDING.length];
       expect((await run({ method, path })).next).toHaveBeenCalledOnce();
@@ -499,19 +529,28 @@ describe('when the check cannot be read', () => {
 
 /**
  * server.js can't be imported here (it listens and starts the crons), so its
- * mount is read: the API's routes are reached only through decodeToken and
- * then this middleware, and the webhooks are mounted outside /api.
+ * mount is read: the API's routes are reached only through decodeToken, the
+ * demo brand's check (demo-brand.js) and then this middleware, and the
+ * webhooks are mounted outside /api.
  */
 describe("server.js's mount", () => {
-  it('puts every API route behind the person and then the plan', async () => {
+  it('puts every API route behind the person, the demo brand and then the plan', async () => {
     const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
-    const mounts = source
+    // One call per line, however Prettier wraps it.
+    const flat = source
+      .replace(/\(\s+/g, '(')
+      .replace(/,\s+/g, ', ')
+      .replace(/,?\s+\)/g, ')');
+    const mounts = flat
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => /^app\.use\(.*\broutes\);$/.test(line));
     expect(mounts).toEqual([
-      "app.use('/api', Middleware.decodeToken.bind(Middleware), requireActiveSubscription, routes);",
+      "app.use('/api', Middleware.decodeToken.bind(Middleware), refuseDemoBrandWrites, requireActiveSubscription, routes);",
     ]);
+    expect(source).toMatch(
+      /import \{[^}]*\brefuseDemoBrandWrites\b[^}]*\} from '\.\/middleware\/demo-brand\.js';/,
+    );
     expect(source).toMatch(
       /import \{ requireActiveSubscription \} from '\.\/middleware\/subscription\.js';/,
     );

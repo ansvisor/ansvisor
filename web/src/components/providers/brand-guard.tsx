@@ -1,6 +1,5 @@
 'use client';
 
-import { useSyncExternalStore, useCallback } from 'react';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { BrandAvatar } from '@/components/brand-avatar';
 import { Button } from '@/components/ui/button';
@@ -16,25 +15,23 @@ function isExempt(pathname: string) {
   return BRAND_EXEMPT_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-const emptySubscribe = () => () => {};
-
 export function BrandGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const loaded = useBrandStore((s) => s.loaded);
   const brands = useBrandStore((s) => s.brands);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const setActiveBrand = useBrandStore((s) => s.setActiveBrand);
-  const hydrated = useSyncExternalStore(
-    emptySubscribe,
-    useCallback(() => true, []),
-    useCallback(() => false, []),
-  );
+
+  // Until the layout's brands are in the store (BrandLoader, just after the
+  // first render), an empty list isn't "no brands" and the brand on screen —
+  // the demo brand or the workspace's own — isn't known: every page waits on
+  // the skeleton instead of showing another brand's state for a moment.
+  if (!loaded) {
+    return <BrandGuardSkeleton />;
+  }
 
   if (isExempt(pathname)) {
     return <>{children}</>;
-  }
-
-  if (!hydrated) {
-    return <BrandGuardSkeleton />;
   }
 
   if (brands.length === 0) {

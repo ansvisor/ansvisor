@@ -33,6 +33,8 @@
 import supabaseAdmin from '../../../config/supabase.js';
 import { runGaReport } from '../../composio.js';
 import { resolve } from '../../../config/action-engine.js';
+import { analyzeCompetitorPages } from '../competitor-pages.js';
+import { analyzeWinningPages } from '../winning-pages.js';
 
 const DAY_MS = 86_400_000;
 
@@ -50,6 +52,37 @@ function entityIdFor(organizationId) {
 const tool = (id, spec) => Object.freeze({ id, version: 1, writesExternally: false, ...spec });
 
 export const TOOLS = Object.freeze({
+  /**
+   * What the competitor pages AI answers cite for the action's prompts have
+   * that the brand's page doesn't (learning C1): read free from the public
+   * pages its own answers cited, through Site Audit's rule checks. Reading a
+   * public page changes nothing, so no approval.
+   */
+  competitor_page_features: tool('competitor_page_features', {
+    source: 'competitors',
+    description:
+      "What the competitor pages AI answers cite for the action's prompts have that the brand's page doesn't.",
+
+    async run({ brandId, payload, now }) {
+      return analyzeCompetitorPages({ brandId, payload, now });
+    },
+  }),
+
+  /**
+   * What the brand's winning pages have that its other pages don't (learning
+   * C4): through Site Audit's rule checks, the other pages from their audits,
+   * a winning page without one read free like a cited page. Reading changes
+   * nothing, so no approval.
+   */
+  winning_page_features: tool('winning_page_features', {
+    source: 'site_audits',
+    description: "What the brand's winning pages have that its other audited pages don't.",
+
+    async run({ brandId, payload, now }) {
+      return analyzeWinningPages({ brandId, payload, now });
+    },
+  }),
+
   /**
    * The AI Visibility Score over the validation window and the one before it
    * — what `validate` asks for, read from the daily rollups rather than the

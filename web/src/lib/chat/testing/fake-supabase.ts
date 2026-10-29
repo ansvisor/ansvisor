@@ -1,0 +1,164 @@
+/**
+ * An in-memory stand-in for the service-role Supabase client, for Chat's
+ * tests: tables of plain rows, the filters and statements the activity log,
+ * Undo and the idempotency keys use, and unique keys that refuse a second
+ * row as Postgres does (23505). Each statement runs whole at once, after a
+ * turn of the event loop, so two calls started together interleave between
+ * statements as two requests would. Tests only.
+ */
+
+type Row = Record<string, unknown>;
+type Filter = (row: Row) => boolean;
+type Result = { data: unknown; error: { code?: string; message: string } | null };
+
+export interface FakeSupabase {
+  tables: Record<string, Row[]>;
+  /** Columns that are unique together, per table. */
+  unique: Record<string, string[][]>;
+  /** Defaults a new row gets, per table, computed at insert. */
+  defaults: Record<string, () => Row>;
+  /** A table whose next statements fail with this error. */
+  failures: Record<string, { code?: string; message: string }>;
+  /** Every statement, in order: [table, kind]. */
+  log: [string, string][];
+  from(table: string): Builder;
+}
+
+interface Builder extends PromiseLike<Result> {
+  select(columns?: string): Builder;
+  insert(rows: Row | Row[]): Builder;
+  update(patch: Row): Builder;
+  delete(): Builder;
+  eq(column: string, value: unknown): Builder;
+  neq(column: string, value: unknown): Builder;
+  in(column: string, values: unknown[]): Builder;
+  is(column: string, value: null): Builder;
+  lt(column: string, value: string): Builder;
+  maybeSingle(): Promise<Result>;
+  single(): Promise<Result>;
+}
+
+let counter = 0;
+/** A fresh uuid-shaped id. */
+export const fakeId = () => {
+  counter += 1;
+  return `00000000-0000-4000-8000-${String(counter).padStart(12, '0')}`;
+};
+
+const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+export function createFakeSupabase(): FakeSupabase {
+  const fake: FakeSupabase = {
+    tables: {},
+    unique: {},
+    defaults: {},
+    failures: {},
+    log: [],
+    from(table) {
+      let kind: 'select' | 'insert' | 'update' | 'delete' = 'select';
+      let payload: Row | Row[] | null = null;
+      let returning = false;
+      const filters: Filter[] = [];
+
+      const rows = () => (fake.tables[table] ??= []);
+      const clash = (row: Row, others: Row[]) =>
+        (fake.unique[table] ?? []).some((columns) =>
+          others.some((other) => other !== row && columns.every((c) => other[c] === row[c])),
+        );
+
+      const run = async (): Promise<Result> => {
+        await tick();
+        fake.log.push([table, kind]);
+        const failure = fake.failures[table];
+        if (failure) return { data: null, error: failure };
+        const matching = rows().filter((row) => filters.every((f) => f(row)));
+        if (kind === 'select') return { data: matching.map((row) => ({ ...row })), error: null };
+        if (kind === 'delete') {
+          fake.tables[table] = rows().filter((row) => !matching.includes(row));
+          return { data: returning ? matching : null, error: null };
+        }
+        if (kind === 'update') {
+          const patched = matching.map((row) => ({ ...row, ...(payload as Row) }));
+          const after = rows().map((row) => patched[matching.indexOf(row)] ?? row);
+          if (patched.some((row) => clash(row, after))) {
+            return { data: null, error: { code: '23505', message: 'duplicate key' } };
+          }
+          fake.tables[table] = after;
+          return { data: returning ? patched.map((row) => ({ ...row })) : null, error: null };
+        }
+        const added = (Array.isArray(payload) ? payload : [payload!]).map((row) => ({
+          id: fakeId(),
+          ...(fake.defaults[table]?.() ?? {}),
+          ...row,
+        }));
+        const after = [...rows(), ...added];
+        if (added.some((row) => clash(row, after))) {
+          return { data: null, error: { code: '23505', message: 'duplicate key' } };
+        }
+        fake.tables[table] = after;
+        return { data: returning ? added.map((row) => ({ ...row })) : null, error: null };
+      };
+
+      const one = async (strict: boolean): Promise<Result> => {
+        const result = await run();
+        if (result.error) return result;
+        const list = (result.data as Row[] | null) ?? [];
+        if (list.length > 1) return { data: null, error: { message: 'more than one row' } };
+        if (strict && list.length === 0) return { data: null, error: { message: 'no rows' } };
+        return { data: list[0] ?? null, error: null };
+      };
+
+      const builder: Builder = {
+        select() {
+          if (kind !== 'select') returning = true;
+          return builder;
+        },
+        insert(rowsIn) {
+          kind = 'insert';
+          payload = rowsIn;
+          return builder;
+        },
+        update(patch) {
+          kind = 'update';
+          payload = patch;
+          return builder;
+        },
+        delete() {
+          kind = 'delete';
+          return builder;
+        },
+        eq(column, value) {
+          filters.push((row) => row[column] === value);
+          return builder;
+        },
+        neq(column, value) {
+          filters.push((row) => row[column] !== value);
+          return builder;
+        },
+        in(column, values) {
+          filters.push((row) => values.includes(row[column]));
+          return builder;
+        },
+        is(column, value) {
+          filters.push((row) => (row[column] ?? null) === value);
+          return builder;
+        },
+        lt(column, value) {
+          filters.push(
+            (row) =>
+              typeof row[column] === 'string' &&
+              Date.parse(row[column] as string) < Date.parse(value),
+          );
+          return builder;
+        },
+        maybeSingle: () => one(false),
+        single: () => one(true),
+        then(resolve, reject) {
+          return run().then(resolve, reject);
+        },
+      };
+      return builder;
+    },
+  };
+  return fake;
+}

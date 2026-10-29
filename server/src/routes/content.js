@@ -20,10 +20,12 @@ import { selectInChunks } from '../lib/chunked-in.js';
 import { isRedirect, postJson } from '../lib/safe-post.js';
 import { webhookTestLimiter } from '../middleware/rate-limiter.js';
 import {
+  MANAGER_ROLES,
   assertBrandAccess,
   assertOpportunitiesAccess,
   assertOpportunityAccess,
   assertPromptAccess,
+  assertRole,
   NOT_IN_WORKSPACE,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
@@ -112,6 +114,10 @@ function mapOpportunityRow(stored, competitors = []) {
   };
 }
 
+/** Generating opportunities and briefs costs AI: admins and managers start it (2026-10-29). */
+const GENERATE_OPPORTUNITIES_REFUSAL = 'Only admins and managers can generate opportunities.';
+const GENERATE_BRIEF_REFUSAL = 'Only admins and managers can generate briefs.';
+
 /**
  * POST /api/content/generate
  * Enqueues a content opportunity generation job. Returns { jobId } immediately.
@@ -143,6 +149,7 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
     if (!profile || profile.organization_id !== brand.organization_id) {
       return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
     }
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
 
     const job = await createJob({
       type: 'content',
@@ -160,6 +167,9 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
       message: 'Content generation job enqueued',
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     req.log.error({ err: error }, 'content enqueue error');
     return res.status(500).json({ error: error.message });
   }
@@ -203,6 +213,7 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
 
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
 
     const previous = await startedJob(brandId, idempotencyKey);
     if (previous) {
@@ -278,6 +289,7 @@ router.post('/:id/alternative', requireFeature('content_optimization'), async (r
 
   try {
     const opp = await assertOpportunityAccess(req.params.id, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
     const previous = await startedJob(opp.brand_id, idempotencyKey);
     if (previous) return res.status(202).json({ jobId: previous.id });
 
@@ -386,6 +398,7 @@ router.post(
 
     try {
       const [prompt] = await assertPromptAccess(promptId, req.user.id);
+      await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
       const { brand_id: brandId, brands } = prompt.prompt_sets;
 
       const previous = await startedJob(brandId, idempotencyKey);
@@ -756,7 +769,8 @@ router.get('/brand/:brandId/topics', async (req, res) => {
 
 /**
  * POST /api/content/bulk/status
- * Update the status of multiple opportunities at once.
+ * Update the status of multiple opportunities at once: admins and managers,
+ * as the database's update rule on content_opportunities.
  */
 router.post('/bulk/status', async (req, res) => {
   try {
@@ -774,6 +788,11 @@ router.post('/bulk/status', async (req, res) => {
     }
 
     await assertOpportunitiesAccess(ids, req.user.id);
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can change opportunities in bulk.',
+    );
 
     const { data, error } = await supabaseAdmin
       .from('content_opportunities')
@@ -803,7 +822,8 @@ router.post('/bulk/status', async (req, res) => {
  * The generated brief lives on the opportunity row, so deleting takes it with
  * it. `brief_usage.opportunity_id` is ON DELETE SET NULL, so the metered usage
  * record survives and quota already spent stays spent — deleting must not hand
- * back a brief allowance.
+ * back a brief allowance. Admins and managers only, as the database's delete
+ * rule.
  */
 router.post('/bulk/delete', async (req, res) => {
   try {
@@ -814,6 +834,11 @@ router.post('/bulk/delete', async (req, res) => {
     }
 
     await assertOpportunitiesAccess(ids, req.user.id);
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can delete opportunities.',
+    );
 
     const { data, error } = await supabaseAdmin
       .from('content_opportunities')
@@ -988,7 +1013,8 @@ router.post('/bulk/send-webhook', async (req, res) => {
 
 /**
  * PATCH /api/content/:id/status
- * Update the status of an opportunity.
+ * Update the status of an opportunity. Any member records progress;
+ * dismissing one, or moving a dismissed one back, is for admins and managers.
  */
 router.patch('/:id/status', async (req, res) => {
   try {
@@ -1003,6 +1029,13 @@ router.patch('/:id/status', async (req, res) => {
     }
 
     let current = await assertOpportunityAccess(id, req.user.id);
+    if (status === 'dismissed' || current.status === 'dismissed') {
+      await assertRole(
+        req.user.id,
+        MANAGER_ROLES,
+        'Only admins and managers can dismiss an opportunity or bring one back.',
+      );
+    }
 
     // Why it was dismissed (CONTENT-006) rides in source_data, which other
     // writers touch too (an Action Center send, a duplicate merge). The row
@@ -1611,6 +1644,7 @@ router.post('/:id/brief', async (req, res) => {
     if (!brand || !userOrgId || userOrgId !== brand.organization_id) {
       return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
     }
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_BRIEF_REFUSAL);
 
     const result = await generateBriefForOpportunity(id, { model });
     const quota = await getBriefQuotaStatus(userOrgId);
@@ -1625,6 +1659,9 @@ router.post('/:id/brief', async (req, res) => {
     }
     if (error.status === 404) {
       return res.status(404).json({ error: error.message });
+    }
+    if (error.status === 403) {
+      return res.status(403).json({ error: error.message, code: error.code });
     }
     req.log.error({ err: error }, 'content brief generation error');
     return res.status(500).json({

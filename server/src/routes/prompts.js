@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
+import { MANAGER_ROLES, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
-import { classifyQueryIntents } from '../lib/intent-extraction.js';
+import { classifyQueryIntents, normalizeIntentQuery } from '../lib/intent-extraction.js';
 import { promptsFromTopicsSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
@@ -33,7 +34,9 @@ import {
   improveRangeKey,
   improveSchema,
   sanitizeSuggestions,
+  withPageChecks,
 } from '../lib/prompt-improve.js';
+import { storedFeatures } from '../lib/action-center/competitor-pages.js';
 import {
   liveImproveSends,
   loadImproveRounds,
@@ -465,12 +468,17 @@ async function findOrCreateTopic(brandId, topicName) {
   return created?.id ?? null;
 }
 
+/** Generating suggestions and Improve sets costs AI: admins and managers start it (2026-10-29). */
+const SUGGEST_PROMPTS_REFUSAL = 'Only admins and managers can generate prompt suggestions.';
+const IMPROVE_REFUSAL = 'Only admins and managers can use Improve.';
+
 router.post(
   '/suggestions/:brandId/refresh',
   requireFeature('prompt_suggestions'),
   async (req, res) => {
     try {
       const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
+      await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
       const { suggestions, gscCandidates, gaCandidates, catalogCandidates } =
         await generateSuggestions(req.params.brandId, {
           orgId: brand.organization_id,
@@ -606,6 +614,7 @@ router.post(
         return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
       }
       await assertBrandAccess(req.params.brandId, req.user.id);
+      await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
       const context = await loadSuggestionContext(req.params.brandId);
       const result = await suggestPromptsForPage(req.params.brandId, { ...parsed.data, context });
       return res.json(result);
@@ -678,6 +687,9 @@ router.get('/untracked-queries/:brandId', async (req, res) => {
   }
 });
 
+/** Who may dismiss a prompt suggestion: every role but agency partners, as the table's update rule. */
+const DISMISS_SUGGESTION_ROLES = ['admin', 'manager', 'analyst'];
+
 router.post('/suggestions/:id/dismiss', async (req, res) => {
   try {
     const { data: suggestion } = await supabaseAdmin
@@ -687,6 +699,11 @@ router.post('/suggestions/:id/dismiss', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    await assertRole(
+      req.user.id,
+      DISMISS_SUGGESTION_ROLES,
+      'Only admins, managers and analysts can dismiss prompt suggestions.',
+    );
 
     const { error } = await supabaseAdmin
       .from('prompt_suggestions')
@@ -714,6 +731,8 @@ router.post('/suggestions/:id/accept', async (req, res) => {
       .single();
     if (!suggestion) return res.status(404).json({ error: 'Not found' });
     await assertBrandAccess(suggestion.brand_id, req.user.id);
+    // The prompt itself is added by admins and managers only (the prompts table's rule).
+    await assertRole(req.user.id, MANAGER_ROLES, 'Only admins and managers can add prompts.');
 
     const { error } = await supabaseAdmin
       .from('prompt_suggestions')
@@ -806,6 +825,7 @@ router.post('/suggest', requireFeature('prompt_suggestions'), async (req, res) =
     if (!brandName) {
       return res.status(400).json({ error: 'brandName is required' });
     }
+    await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
 
     const userPrompt = `Brand context (DO NOT use the brand name "${brandName}" in any prompt):
 Industry: ${industry || 'Not specified'}
@@ -832,6 +852,9 @@ Based on this brand's industry and context, generate 10 short, generic search pr
 
     return res.json({ prompts: object.prompts });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     req.log.error({ err: error }, 'prompt suggestion error');
     return res.status(500).json({
       error: 'Failed to generate prompt suggestions',
@@ -916,10 +939,6 @@ const FANOUT_INTENT_MAX_QUERIES = 200;
 // Cache-lookup batch size — keeps each `.in('query', ...)` URL well under
 // PostgREST / proxy length limits even with long sub-queries.
 const FANOUT_INTENT_LOOKUP_CHUNK = 40;
-
-function normalizeIntentQuery(raw) {
-  return typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 512) : '';
-}
 
 router.post('/fanout-intents', async (req, res) => {
   try {
@@ -1176,6 +1195,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     const range = parseImproveRange(req.body);
     const promptId = req.params.promptId;
     const { prompt, brand, brandId } = await loadImprovePrompt(promptId, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, IMPROVE_REFUSAL);
 
     const [
       rows,
@@ -1222,7 +1242,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
       : { data: [] };
     const responseById = new Map((responses ?? []).map((r) => [r.id, r.response]));
 
-    const withEvidence = actionable.map((p) => ({
+    const collected = actionable.map((p) => ({
       ...p,
       evidence: collectEvidence(evidenceByPlatform.get(p.id) ?? [], {
         brandName: brand.name,
@@ -1230,6 +1250,23 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
         competitors: competitors ?? [],
         latestResponse: responseById.get(byPlatform.get(p.id)[0].id),
       }),
+    }));
+    // What Site Audit's checks found on the cited pages, where Analyze
+    // competitor content read them lately (learning C2). None read: as before.
+    // A read that fails goes without them, said in the log.
+    const stored = await storedFeatures(
+      brandId,
+      collected.flatMap((p) => [
+        ...p.evidence.competitorUrls.map((u) => u.url),
+        ...p.evidence.brandPages.map((u) => u.url),
+      ]),
+    ).catch((err) => {
+      req.log.warn({ err, promptId }, 'prompt improve page checks read failed');
+      return new Map();
+    });
+    const withEvidence = collected.map((p) => ({
+      ...p,
+      evidence: withPageChecks(p.evidence, stored),
     }));
 
     const modelId = improveModelId();
@@ -1394,6 +1431,8 @@ export async function sendImproveAction({ promptId, userId, body }) {
     throw err;
   }
   const { prompt, brandId } = await loadImprovePrompt(promptId, userId);
+  // The dashboard's Send Actions and an API key's create_improve_action alike.
+  await assertRole(userId, MANAGER_ROLES, IMPROVE_REFUSAL);
 
   const { data: set } = await supabaseAdmin
     .from('prompt_improve_suggestions')

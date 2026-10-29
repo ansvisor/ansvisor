@@ -26,7 +26,7 @@ import {
   LANGUAGE_ITEMS,
 } from '@/config/prompt-options';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
-import { getPlan, type PlanId } from '@/config/plans';
+import { getPlan, toPlanId, type PlanId } from '@/config/plans';
 import type { Brand } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   BRAND_SETUP_LIMITS,
+  detectSiteType,
   suggestTopics,
   generatePromptsFromTopics,
   suggestCompetitors,
@@ -379,7 +380,7 @@ export default function NewBrandPage() {
             .select('plan')
             .eq('id', profile.organization_id)
             .single();
-          if (org?.plan) setCurrentPlanId(org.plan as PlanId);
+          if (org?.plan) setCurrentPlanId(toPlanId(org.plan));
         }
       } catch {
         // Non-critical
@@ -456,6 +457,7 @@ export default function NewBrandPage() {
         setCreatedBrand(brand);
         addBrand(brand);
         setActiveBrand(brand.id);
+        void detectBrandType(brand.id);
       }
 
       setStep(3);
@@ -622,14 +624,36 @@ export default function NewBrandPage() {
     }
   };
 
+  // The brand's kind of site, from its home page (Step 0): in the
+  // background, best effort; the app goes on guessing when it can't tell.
+  const detectBrandType = async (brandId: string) => {
+    try {
+      const { siteType, industry } = await detectSiteType(brandId);
+      if (!siteType) return;
+      const updates = {
+        siteType,
+        siteTypeSource: 'auto' as const,
+        ...(industry ? { industry } : {}),
+      };
+      setCreatedBrand((b) => (b?.id === brandId ? { ...b, ...updates } : b));
+      updateBrandInStore(brandId, updates);
+    } catch (err) {
+      console.error('Site type detection error:', err);
+    }
+  };
+
   // The research found an online store: Shopping mode goes on, so Product
   // Visibility shows in the menu. Best effort: it can be turned on in the
   // brand's settings too.
   const turnOnProductVisibility = async () => {
     if (!createdBrand || createdBrand.shoppingModeEnabled) return;
     try {
-      const { industry } = await markBrandAsEcommerce(createdBrand.id);
-      const updates = { industry: industry ?? undefined, shoppingModeEnabled: true };
+      const { industry, siteType } = await markBrandAsEcommerce(createdBrand.id);
+      const updates = {
+        industry: industry ?? undefined,
+        shoppingModeEnabled: true,
+        ...(siteType ? { siteType, siteTypeSource: 'auto' as const } : {}),
+      };
       setCreatedBrand({ ...createdBrand, ...updates });
       updateBrandInStore(createdBrand.id, updates);
       setEcommerceDetected(true);

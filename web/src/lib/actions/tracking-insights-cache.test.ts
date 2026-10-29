@@ -106,7 +106,7 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 vi.mock('@/lib/prompt-locations', () => ({ getOrgLocationUsage: async () => ({ total: 2 }) }));
 vi.mock('@/lib/actions/volumes', () => ({ getPromptVolumes: async () => ({ volumes: [] }) }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
-  getPromptSuggestions: async () => ({ suggestions: [] }),
+  getPromptSuggestions: async () => ({ ok: true, suggestions: [], stale: true }),
 }));
 
 // unstable_cache as Next runs it: a result is stored once its function

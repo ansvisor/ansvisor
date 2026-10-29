@@ -16,7 +16,10 @@ import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
+import { PLANS, type Feature, getMinimumPlanForFeature, hasFeature, isCloud } from '@/config/plans';
 import { assertSubscriptionActive } from '@/lib/mcp/subscription-gate';
+import { DemoBrandError, assertNotDemoBrand, callOnDemoBrand } from '@/lib/mcp/demo-gate';
+import { MEMBER_ROLES, requireManager, requireRole } from '@/lib/mcp/role-gate';
 import {
   fetchPromptUsageRow,
   toPromptUsageSummary,
@@ -62,15 +65,23 @@ export interface BrandRow {
   industry: string | null;
   region: string | null;
   created_at: string;
+  /** The demo brand (00380): sample data, read like any brand; nothing on it is written or run. */
+  is_demo: boolean;
 }
 
+/**
+ * The organization's brands, newest first. The demo brand is one of them,
+ * marked is_demo, unless the organization hid it (once a plan was bought, or
+ * from the brand menu).
+ */
 export async function listBrandsFor(auth: McpAuthContext): Promise<BrandRow[]> {
   if (!auth.organizationId) return [];
 
   const { data, error } = await supabaseAdmin
     .from('brands')
-    .select('id, name, slug, industry, region, created_at')
+    .select('id, name, slug, industry, region, created_at, is_demo')
     .eq('organization_id', auth.organizationId)
+    .or('is_demo.eq.false,demo_hidden_at.is.null')
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -453,13 +464,14 @@ export interface DismissedTopicSuggestion {
  * Dismiss a pending suggestion so it never reappears in future refreshes.
  * Scoped to status = 'new' so dismissing an already-decided suggestion (added
  * or already dismissed) is a no-op that returns null rather than silently
- * "succeeding" twice.
+ * "succeeding" twice. An admin's or a manager's call, as on the Topics page.
  */
 export async function dismissTopicSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<DismissedTopicSuggestion | null> {
   if (!auth.organizationId) return null;
+  requireManager(auth);
 
   const { data: ownership } = await supabaseAdmin
     .from('topic_suggestions')
@@ -493,13 +505,15 @@ export interface AcceptedTopicSuggestion {
  * createTopic action), then mark the suggestion added with a pointer to the
  * new topic. Scoped to status = 'new' up front, so accepting the same
  * suggestion twice fails the ownership lookup on the second call instead of
- * creating a second topic.
+ * creating a second topic. An admin's or a manager's call, as on the Topics
+ * page.
  */
 export async function acceptTopicSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<AcceptedTopicSuggestion | null> {
   if (!auth.organizationId) return null;
+  requireManager(auth);
 
   const { data: suggestion } = await supabaseAdmin
     .from('topic_suggestions')
@@ -588,12 +602,17 @@ export interface DismissedPromptSuggestion {
   status: 'dismissed';
 }
 
-/** Dismiss only a pending suggestion belonging to the authenticated organization. */
+/**
+ * Dismiss only a pending suggestion belonging to the authenticated
+ * organization. Any member but an agency partner may, as the table's update
+ * rule.
+ */
 export async function dismissPromptSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<DismissedPromptSuggestion | null> {
   if (!auth.organizationId) return null;
+  requireRole(auth, MEMBER_ROLES);
 
   const { data: owned, error: lookupError } = await supabaseAdmin
     .from('prompt_suggestions')
@@ -635,12 +654,14 @@ export type AcceptPromptSuggestionResult =
  * plan engine filtering, shopping-mode behavior, region choice and location
  * quota check. Every lookup is organization-scoped; duplicate acceptance
  * removes any losing concurrent insert rather than leaving duplicate prompts.
+ * Adding a prompt is an admin's or a manager's call, as on the Prompts page.
  */
 export async function acceptPromptSuggestionFor(
   auth: McpAuthContext,
   suggestionId: string,
 ): Promise<AcceptPromptSuggestionResult | null> {
   if (!auth.organizationId) return null;
+  requireManager(auth);
 
   const { data: suggestion, error: suggestionError } = await supabaseAdmin
     .from('prompt_suggestions')
@@ -1017,6 +1038,8 @@ export async function generateBriefFor(
   opportunityId: string,
 ): Promise<GeneratedBrief | null> {
   if (!auth.organizationId) return null;
+  // Generating costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   // Ownership check first — wrong-org or missing id returns null with no
   // outbound call, so no LLM cost or data leak for an attacker probing ids.
@@ -1027,7 +1050,15 @@ export async function generateBriefFor(
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
-  // No brief (an LLM call) for a read-only workspace, whoever asks.
+  // No brief (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
+  // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
+  if (
+    await callOnDemoBrand('generate_content_brief', auth.organizationId, {
+      opportunity_id: opportunityId,
+    })
+  ) {
+    throw new DemoBrandError();
+  }
   await assertSubscriptionActive(auth.organizationId);
 
   const apiUrl = API_BASE_URL;
@@ -1213,7 +1244,8 @@ export async function runSiteAuditFor(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
-  // No audit (quota and crawling) for a read-only workspace, whoever asks.
+  // No audit (quota and crawling) on the demo brand, nor for a read-only workspace, whoever asks.
+  await assertNotDemoBrand(auth.organizationId, brandId);
   await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;
@@ -1408,7 +1440,9 @@ export interface UpdatedOpportunityStatus {
  *
  * Ownership-check-first: the update only runs after we've verified the
  * opportunity's brand belongs to the caller's org. Wrong-org or missing
- * id returns null (→ 404) with no DB write.
+ * id returns null (→ 404) with no DB write. Any member may record progress;
+ * dismissing one, or bringing a dismissed one back, is an admin's or a
+ * manager's call.
  */
 export async function updateOpportunityStatusFor(
   auth: McpAuthContext,
@@ -1421,11 +1455,12 @@ export async function updateOpportunityStatusFor(
   // A wrong-org id misses here and we return null *before* any update.
   const { data: ownership } = await supabaseAdmin
     .from('content_opportunities')
-    .select('id, brands!inner(organization_id)')
+    .select('id, status, brands!inner(organization_id)')
     .eq('id', opportunityId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
+  if (status === 'dismissed' || ownership.status === 'dismissed') requireManager(auth);
 
   const updatedAt = new Date().toISOString();
 
@@ -2437,6 +2472,37 @@ export async function getPromptVolumesFor(
 
 // ── Shopping Cards ────────────────────────────────────────────────────────────
 
+/** A read of a feature the organization's plan doesn't include. */
+export const NOT_IN_PLAN = 'not_in_plan';
+
+/**
+ * What a shopping read answers without the feature, as the API's
+ * requireFeature does: the tools' error text, and the REST routes' 403 body.
+ */
+export const SHOPPING_NOT_IN_PLAN = {
+  error: 'plan_limit',
+  message:
+    `Shopping analytics comes with the ${PLANS[getMinimumPlanForFeature('shopping_analytics')].name} ` +
+    "plan and above, and this workspace's plan doesn't include it. An admin can upgrade in " +
+    'Settings › Billing.',
+} as const;
+
+/**
+ * Whether the organization's plan includes `feature`, for a read: once a plan
+ * has ended (read-only), the plan it was on, as the dashboard and the API's
+ * readOnly reads keep it. Self-hosted has every feature.
+ */
+export async function planIncludes(organizationId: string, feature: Feature): Promise<boolean> {
+  if (!isCloud()) return true;
+  const { data, error } = await supabaseAdmin
+    .from('organizations')
+    .select(ORG_PLAN_COLUMNS)
+    .eq('id', organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return hasFeature(usagePlanFromOrgRow(data).plan, feature);
+}
+
 export interface ListShoppingCardsParams {
   brandId: string;
   role?: 'own' | 'competitor' | 'other';
@@ -2473,10 +2539,11 @@ export interface ListShoppingCardsOutput {
   next_cursor: string | null;
 }
 
+/** The brand's shopping cards: NOT_IN_PLAN on a plan without shopping analytics (Starter). */
 export async function listShoppingCards(
   auth: McpAuthContext,
   params: ListShoppingCardsParams,
-): Promise<ListShoppingCardsOutput | null> {
+): Promise<ListShoppingCardsOutput | typeof NOT_IN_PLAN | null> {
   if (!auth.organizationId) return null;
 
   // Brand ownership check
@@ -2487,6 +2554,7 @@ export async function listShoppingCards(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
+  if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
   const finalLimit = Math.min(Math.max(params.limit ?? 50, 1), 200);
 
@@ -2556,10 +2624,11 @@ export interface ProductVisibilityOutput {
   merchant_domains: Array<{ domain: string; count: number }>;
 }
 
+/** One product's visibility: NOT_IN_PLAN on a plan without shopping analytics (Starter). */
 export async function getProductVisibility(
   auth: McpAuthContext,
   params: { brandId: string; productTitle: string },
-): Promise<ProductVisibilityOutput | null> {
+): Promise<ProductVisibilityOutput | typeof NOT_IN_PLAN | null> {
   if (!auth.organizationId) return null;
 
   // Brand ownership check
@@ -2570,6 +2639,7 @@ export async function getProductVisibility(
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
   if (!brand) return null;
+  if (!(await planIncludes(auth.organizationId, 'shopping_analytics'))) return NOT_IN_PLAN;
 
   const { data: cards, error } = await supabaseAdmin
     .from('prompt_result_shopping_cards')
@@ -3027,7 +3097,7 @@ const templateDoneWhen = (taskKey: string) =>
   doneWhenT.has(taskKey as never) ? doneWhenT(taskKey as never) : null;
 
 /** A task's details in the snake_case the rest of the MCP output uses. */
-function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
+export function mcpTaskDetails(raw: unknown, taskKey: string | null = null) {
   const d = withTemplateCheck(
     withTemplateDoneWhen(parseTaskDetails(raw), taskKey, templateDoneWhen),
     taskKey,
@@ -3499,6 +3569,8 @@ export async function createImproveActionFor(
   input: CreateImproveActionInput,
 ): Promise<CreatedImproveAction | null> {
   if (!auth.organizationId) return null;
+  // Improve costs AI: an admin's or a manager's, as in the dashboard.
+  requireManager(auth);
 
   const { data: ownership } = await supabaseAdmin
     .from('prompts')
@@ -3507,7 +3579,15 @@ export async function createImproveActionFor(
     .eq('prompt_sets.brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (!ownership) return null;
-  // No Improve action (an LLM call) for a read-only workspace, whoever asks.
+  // No Improve action (an LLM call) on the demo brand, nor for a read-only workspace, whoever asks.
+  // Only Ansvisor Cloud has demo brands: self-hosted reads nothing for it.
+  if (
+    await callOnDemoBrand('create_improve_action', auth.organizationId, {
+      prompt_id: input.promptId,
+    })
+  ) {
+    throw new DemoBrandError();
+  }
   await assertSubscriptionActive(auth.organizationId);
 
   const cronSecret = process.env.CRON_SECRET;

@@ -41,6 +41,8 @@ import { resolve } from '../../../config/action-engine.js';
 
 const { noise } = resolve();
 
+const DAY_MS = 86_400_000;
+
 /** A task can only be carried out from the statuses that mean "not done". */
 const RUNNABLE_STATUSES = ['todo', 'in_progress', 'waiting_approval'];
 
@@ -226,6 +228,39 @@ export async function runTask(taskId, { now = new Date(), sources } = {}) {
     logger.info({ taskId, tool: tool.id }, '[task-run] completed');
     return { status: 'succeeded', output };
   } catch (err) {
+    // A tool that can't go on (learning C1) leaves the task as it was: its
+    // reads for the day spent, for the next night; or nothing found to work
+    // on, the task a person's, with why as its output, and the nightly sweep
+    // passing it over for `retryDays`.
+    if (err?.retryLater) {
+      const retryAfter =
+        err.retryDays > 0 ? new Date(now.getTime() + err.retryDays * DAY_MS).toISOString() : null;
+      await record({
+        task_id: task.id,
+        action_id: action.id,
+        brand_id: action.brand_id,
+        tool_id: tool.id,
+        tool_version: tool.version,
+        status: 'blocked',
+        input,
+        output: err.output ?? null,
+        error: err.message,
+        started_at: startedAt.toISOString(),
+        finished_at: new Date().toISOString(),
+      });
+      if (err.output || retryAfter) {
+        const { error } = await supabaseAdmin
+          .from('action_tasks')
+          .update({
+            output: { ...(err.output ?? {}), ...(retryAfter ? { retryAfter } : {}) },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', task.id);
+        if (error) logger.error({ err: error, taskId }, '[task-run] could not keep why');
+      }
+      logger.info({ taskId, tool: tool.id, reason: err.message, retryAfter }, '[task-run] later');
+      return { status: 'blocked', reason: err.message, ...(retryAfter ? { retryAfter } : {}) };
+    }
     // The action is deliberately untouched. One step failing is one step to
     // do by hand, not a recovery plan cancelled.
     await record({
@@ -272,15 +307,21 @@ export async function sweepTaskExecution({ now = new Date() } = {}) {
   // On the cloud, only for organizations still on a plan: a tool reads
   // outside services on the organization's behalf. Filtered in the query, so
   // the old tasks of an organization whose plan ended can't fill the read.
+  // Never a demo brand's (00380): its tasks are sample data.
+  // `retry_after`: a tool that found nothing to work on asked to be passed
+  // over until then (runTask).
   let query = supabaseAdmin.from('action_tasks');
   query = isCloud()
     ? query
         .select(
-          'id, task_key, action_id, actions!inner(status, brands!inner(organizations!inner(subscription_status)))',
+          'id, task_key, action_id, retry_after:output->>retryAfter, actions!inner(status, brands!inner(is_demo, organizations!inner(subscription_status)))',
         )
         .in('actions.brands.organizations.subscription_status', ACTIVE_SUBSCRIPTION_STATUSES)
-    : query.select('id, task_key, action_id, actions!inner(status)');
+    : query.select(
+        'id, task_key, action_id, retry_after:output->>retryAfter, actions!inner(status, brands!inner(is_demo))',
+      );
   const { data: rows, error } = await query
+    .eq('actions.brands.is_demo', false)
     .in('status', RUNNABLE_STATUSES)
     .not('actions.status', 'in', '("completed","dismissed")')
     .order('created_at', { ascending: true })
@@ -289,13 +330,17 @@ export async function sweepTaskExecution({ now = new Date() } = {}) {
 
   // Filter here rather than in the query: which tasks a tool implements is
   // code, not a column, and duplicating it into SQL is how the two drift.
-  const runnable = (rows ?? []).filter((row) => getTask(row.task_key)?.tool);
+  // One waiting to be tried again doesn't take a place under the ceiling.
+  const withTool = (rows ?? []).filter((row) => getTask(row.task_key)?.tool);
+  const waiting = (row) => row.retry_after && Date.parse(row.retry_after) > now.getTime();
+  const runnable = withTool.filter((row) => !waiting(row));
   const attempts = runnable.slice(0, maxTaskRunsPerNight);
 
   const summary = {
     succeeded: 0,
     failed: 0,
     blocked: 0,
+    waitingToRetry: withTool.length - runnable.length,
     skippedForCeiling: runnable.length - attempts.length,
   };
 

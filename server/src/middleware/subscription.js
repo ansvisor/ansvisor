@@ -15,6 +15,8 @@ import logger from '../lib/logger.js';
  *   - COST_STOPPING: stopping work under way, and taking back the access to
  *     an outside account (Google, a CMS, a bot log, a store) the person gave us;
  *   - DATA_REMOVAL: deleting what the person gave us (a brand and its data);
+ *   - DEMO_ROUTES: opening, hiding and showing the demo brand (00380),
+ *     whose data the server writes as a sample and which costs nothing;
  *   - ONBOARDING_ROUTES, for an organization that never had a subscription:
  *     setup suggests the brand's topics, prompts and competitors before the
  *     plan step, and again when the person comes back from it, up to
@@ -80,6 +82,19 @@ export const DATA_REMOVAL = [
 ];
 
 /**
+ * The demo brand (00380), under /api: open whatever the plan. Opening it
+ * writes the organization's sample brand (no tracking, no AI, no outside
+ * service), and the people it is for are the ones without a plan; hiding
+ * or showing it changes nothing else.
+ */
+export const DEMO_ROUTES = [
+  // Creates or rebuilds the demo brand (demo.js).
+  { method: 'POST', path: /^\/demo\/?$/ },
+  // Hides or shows it (demo.js).
+  { method: 'PATCH', path: /^\/demo\/?$/ },
+];
+
+/**
  * The writes onboarding asks of this API (web/src/lib/ai-brand-setup.ts):
  * open to an organization that never had a subscription, so setup works
  * before the plan step. The brand, topics, prompts and competitors
@@ -92,11 +107,13 @@ export const ONBOARDING_ROUTES = [
   { method: 'POST', path: /^\/prompts\/from-topics\/?$/ },
   // The brand's competitors, and whether it sells online (competitors.js).
   { method: 'POST', path: /^\/competitors\/suggest\/?$/ },
+  // The brand's kind of site, from its home page (brands.js, 00379).
+  { method: 'POST', path: /^\/brands\/[^/]+\/detect-site-type\/?$/ },
 ];
 
 /**
  * Onboarding's calls an organization that never subscribed may make a day
- * (UTC), all three routes together: a setup asks each once, so this leaves
+ * (UTC), all these routes together: a setup asks each once, so this leaves
  * room for several setups and retries, and bounds what a workspace without a
  * plan can spend on AI. Counted for the person and for their organization,
  * so neither one person nor an organization of several gets more. Counted
@@ -138,7 +155,12 @@ function matches(routes, { method, path }) {
 }
 
 function isOpen(req) {
-  return matches(BILLING_ROUTES, req) || matches(COST_STOPPING, req) || matches(DATA_REMOVAL, req);
+  return (
+    matches(BILLING_ROUTES, req) ||
+    matches(COST_STOPPING, req) ||
+    matches(DATA_REMOVAL, req) ||
+    matches(DEMO_ROUTES, req)
+  );
 }
 
 /**
