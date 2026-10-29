@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { load } from 'cheerio';
 import { toItem } from '../../lib/feeds/item.js';
 import { ConnectError } from '../errors.js';
@@ -60,7 +61,13 @@ function apiRoot(value) {
   } catch {
     throw new ConnectorHttpError('invalid_url', "WooCommerce's store address isn't valid.");
   }
-  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+  if (
+    !['https:', 'http:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
     throw new ConnectorHttpError('invalid_url', "WooCommerce's store address isn't valid.");
   }
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}${API_PATH}`;
@@ -83,12 +90,12 @@ function pageCount(headers) {
 }
 
 /** Reads a bounded WooCommerce REST collection, using WordPress's total-page header. */
-async function listPages(request, endpoint, credentials, malformedMessage) {
+async function listPages(request, endpoint, credentials, malformedMessage, query = {}) {
   const items = [];
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const { data, headers } = await request(endpoint, {
       headers: authHeaders(credentials),
-      query: { per_page: PER_PAGE, page },
+      query: { ...query, per_page: PER_PAGE, page },
     });
     if (!Array.isArray(data)) {
       throw new ConnectorHttpError('bad_response', malformedMessage);
@@ -254,9 +261,12 @@ function attributesOf(product, variant, categoriesById) {
   const selected = optionValues(variant);
   const values = optionValues(product);
   const currency = currencyCode(product, variant);
-  const regularPrice = [variant?.regular_price, product?.regular_price, variant?.price, product?.price].find(
-    (value) => value != null && String(value).trim() !== '',
-  );
+  const regularPrice = [
+    variant?.regular_price,
+    product?.regular_price,
+    variant?.price,
+    product?.price,
+  ].find((value) => value != null && String(value).trim() !== '');
   const salePrice = [variant?.sale_price, product?.sale_price].find(
     (value) => value != null && String(value).trim() !== '',
   );
@@ -282,7 +292,9 @@ function attributesOf(product, variant, categoriesById) {
     mpn: cleanText(variant?.mpn, 300) ?? cleanText(product?.mpn, 300) ?? undefined,
     price: moneyText(regularPrice, currency),
     sale_price:
-      salePrice != null && String(salePrice).trim() !== '' && String(salePrice) !== String(regularPrice)
+      salePrice != null &&
+      String(salePrice).trim() !== '' &&
+      String(salePrice) !== String(regularPrice)
         ? moneyText(salePrice, currency)
         : undefined,
     availability: availabilityOf(product, variant),
@@ -292,6 +304,96 @@ function attributesOf(product, variant, categoriesById) {
     product_type: categories[0],
     product_types: categories,
   };
+}
+
+/** WooCommerce's GMT timestamps omit the trailing Z in some API responses. */
+function dateText(value, gmt = false) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const raw = value.trim();
+  const normalized =
+    gmt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(raw) ? `${raw}Z` : raw;
+  const parsed = new Date(normalized);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+}
+
+function numericAmount(value) {
+  if (value == null || String(value).trim() === '') return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0;
+}
+
+/** The only order fields allowed past the connector boundary; never spread a raw WooCommerce order. */
+function normalizedOrder(order) {
+  const id = order?.id == null ? '' : String(order.id);
+  const placedAt = dateText(order?.date_created_gmt, true) ?? dateText(order?.date_created);
+  if (!/^\d+$/.test(id) || !placedAt) return null;
+
+  const currency = String(order.currency ?? '')
+    .trim()
+    .toUpperCase();
+  const refunds = Array.isArray(order.refunds) ? order.refunds : [];
+  const refunded =
+    order.total_refunded != null && String(order.total_refunded).trim() !== ''
+      ? Math.abs(numericAmount(order.total_refunded))
+      : refunds.reduce((total, refund) => total + Math.abs(numericAmount(refund?.total)), 0);
+
+  const items = [];
+  for (const line of Array.isArray(order.line_items) ? order.line_items : []) {
+    const lineId = line?.id == null ? '' : String(line.id);
+    const productId = line?.product_id == null ? '' : String(line.product_id);
+    const quantity = Number(line?.quantity);
+    if (
+      !/^\d+$/.test(lineId) ||
+      !/^\d+$/.test(productId) ||
+      !Number.isSafeInteger(quantity) ||
+      quantity <= 0
+    )
+      continue;
+    items.push({
+      external_line_id: lineId,
+      external_product_id: productId,
+      external_variation_id:
+        line?.variation_id && Number(line.variation_id) > 0 ? String(line.variation_id) : null,
+      quantity,
+      revenue: Math.max(0, numericAmount(line.total)),
+    });
+  }
+
+  return {
+    external_id: id,
+    placed_at: placedAt,
+    modified_at: dateText(order?.date_modified_gmt, true) ?? dateText(order?.date_modified),
+    status: cleanText(order?.status, 50) ?? '',
+    channel: cleanText(order?.created_via, 100) ?? '',
+    currency: /^[A-Z]{3}$/.test(currency) ? currency : null,
+    total: Math.max(0, numericAmount(order?.total)),
+    refunded_total: Math.max(0, refunded),
+    items,
+  };
+}
+
+/**
+ * Validates a WooCommerce webhook's base64 HMAC-SHA256 signature against the
+ * exact raw request bytes. Callers must pass the unparsed body.
+ */
+export function verifyWebhookSignature(rawBody, signature, secret) {
+  if (
+    !Buffer.isBuffer(rawBody) ||
+    typeof signature !== 'string' ||
+    !signature ||
+    typeof secret !== 'string' ||
+    !secret
+  ) {
+    return false;
+  }
+  const expected = createHmac('sha256', secret).update(rawBody).digest();
+  let actual;
+  try {
+    actual = Buffer.from(signature, 'base64');
+  } catch {
+    return false;
+  }
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 function pageLimitError(resource, count) {
@@ -375,12 +477,7 @@ export default {
     );
 
     // Read the full snapshot: the shared sync marks products missing from it as removed.
-    const productsResult = await listPages(
-      request,
-      `${base}/products`,
-      credentials,
-      PRODUCT_ERROR,
-    );
+    const productsResult = await listPages(request, `${base}/products`, credentials, PRODUCT_ERROR);
     if (productsResult.truncated) {
       errors.push(pageLimitError('products', MAX_PAGES * PER_PAGE));
     }
@@ -436,5 +533,67 @@ export default {
     }
 
     return { items, errors, format: 'woocommerce' };
+  },
+
+  /**
+   * Reads changed orders through REST API v3. The shared orders writer stores
+   * only this normalized allowlist; customer/billing/shipping fields are
+   * deliberately omitted before the connector returns.
+   */
+  async syncOrders(source, { request, credentials, since = null }) {
+    const base = apiRoot(source.url);
+    const modifiedAfter = since ? dateText(since) : null;
+    const result = await listPages(
+      request,
+      `${base}/orders`,
+      credentials,
+      "WooCommerce answered with an order list that couldn't be read.",
+      {
+        status: 'any',
+        orderby: 'modified',
+        order: 'asc',
+        ...(modifiedAfter ? { modified_after: modifiedAfter } : {}),
+      },
+    );
+    const orders = [];
+    let skipped = 0;
+    for (const order of result.items) {
+      const normalized = normalizedOrder(order);
+      if (!normalized) {
+        skipped += 1;
+        continue;
+      }
+      orders.push(normalized);
+    }
+    return { orders, skipped, truncated: result.truncated };
+  },
+
+  /**
+   * Verifies an optional WooCommerce order/product webhook and returns only
+   * routing metadata. The caller supplies raw bytes and the saved webhook
+   * secret, and must not log either.
+   */
+  handleWebhook({ rawBody, signature, secret, topic }) {
+    if (!verifyWebhookSignature(rawBody, signature, secret)) {
+      throw new ConnectError('WooCommerce rejected this webhook signature.');
+    }
+    let event;
+    try {
+      event = JSON.parse(rawBody.toString('utf8'));
+    } catch {
+      throw new ConnectError('WooCommerce sent an unreadable webhook body.');
+    }
+    const resource =
+      typeof topic === 'string' && topic.startsWith('product.')
+        ? 'product'
+        : typeof topic === 'string' && topic.startsWith('order.')
+          ? 'order'
+          : null;
+    if (!resource) throw new ConnectError('WooCommerce sent an unsupported webhook topic.');
+    const id = event?.id == null ? null : String(event.id);
+    if (!/^\d+$/.test(id ?? '')) {
+      throw new ConnectError('WooCommerce sent a webhook without a valid resource id.');
+    }
+    return { id, resource };
   },
 };
