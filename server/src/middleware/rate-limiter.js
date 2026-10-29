@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
+import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 import { verifiedBotConnection, verifiedUserId } from './verified-tokens.js';
 
 /**
@@ -40,8 +41,28 @@ export function apiLimiterKey(req) {
   return anonymousIpKey(req.ip);
 }
 
-// General API rate limit, per verified user (per IP otherwise)
+/** The web's Chat engine's budget calls (routes/internal-chat-budget.js). */
+const CHAT_BUDGET_PATH = /^\/api\/internal\/chat\/budget(\/|$)/;
+
+/**
+ * Whether a request is the web's Chat engine holding or settling a model
+ * step on the AI budget, with the internal secret (CRON_SECRET, compared in
+ * constant time). Every Chat step makes two of them, and on Vercel the web's
+ * calls come from a few shared addresses, so the API's per-IP bucket would
+ * stop Chat for every workspace at once. Only this path, and only with the
+ * secret: any other request, or this path without it, is counted as before.
+ */
+export function isInternalChatBudgetCall(req) {
+  if (!CHAT_BUDGET_PATH.test(`${req.baseUrl ?? ''}${req.path ?? ''}`)) return false;
+  const auth = req.headers?.authorization;
+  if (typeof auth !== 'string' || !auth.startsWith('Bearer ')) return false;
+  return webhookSecretsMatch(process.env.CRON_SECRET, auth.slice('Bearer '.length));
+}
+
+// General API rate limit, per verified user (per IP otherwise). The Chat
+// engine's budget calls, with the internal secret, aren't counted.
 export const apiLimiter = rateLimit({
+  skip: isInternalChatBudgetCall,
   windowMs: 15 * 60 * 1000,
   // A verified user's bucket only needs to absorb their own burst (several
   // tabs polling tracking status every 15s plus normal navigation).
