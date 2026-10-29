@@ -7,7 +7,8 @@
  * finds the run already started gets its id back with `created: false`. The
  * call that starts the run also starts the brand's volume analysis, here
  * rather than from the web app, so a caller that gives up waiting for the
- * answer still gets both.
+ * answer still gets both. Never on a demo brand (00380): 402 demo_brand,
+ * before any job is written.
  *
  * Mounted in server.js before the authenticated /api routes.
  */
@@ -17,6 +18,7 @@ import { z } from 'zod';
 import { startFirstRun } from '../lib/first-run.js';
 import { runTrackingJob } from '../lib/job-runner.js';
 import { analyzeBrandVolumes } from '../lib/volume-analysis.js';
+import { DEMO_BRAND, isDemoBrand } from '../middleware/demo-brand.js';
 
 const router = Router();
 
@@ -40,6 +42,7 @@ router.post('/', async (req, res) => {
   const { brandId } = parsed.data;
 
   try {
+    if (await isDemoBrand(brandId)) return res.status(402).json(DEMO_BRAND);
     const { job, created } = await startFirstRun(parsed.data);
     if (created) {
       runTrackingJob(job.id, req.app.get('io'), { priority: true });
