@@ -4,8 +4,12 @@
  * Opportunities are generated per prompt cluster: a group of prompts in one
  * topic that a single piece of content can answer (lib/prompt-clusters.js).
  * A cluster's figures are built from its member prompts, and the score keeps
- * its components so the detail page can say why it is what it is.
+ * its components so the detail page can say why it is what it is. Its scale
+ * and sum are the ones every screen's score shares (priority-core.js,
+ * learning D4).
  */
+
+import { INTENT_WEIGHTS, logScale, round, weightedScore } from './priority-core.js';
 
 /**
  * Opportunities one generation run may produce. A short list that gets read
@@ -26,21 +30,10 @@ export const OPPORTUNITY_WINDOW_DAYS = 30;
  */
 const DEMAND_CEILING = 1_000_000;
 
-export const INTENT_WEIGHTS = {
-  comparison: 1.0,
-  'best-top': 0.95,
-  'vs-review': 0.9,
-  recommendation: 0.85,
-  'how-to': 0.75,
-  'problem-solving': 0.7,
-  'what-is': 0.6,
-  other: 0.5,
-};
-
 /** Score weights per component, out of 100. */
 export const SCORE_WEIGHTS = { demand: 40, visibilityGap: 30, competitorGap: 20, intent: 10 };
 
-const round1 = (n) => Math.round(n * 10) / 10;
+const round1 = (n) => round(n, 1);
 
 function mostFrequent(values, limit) {
   const counts = new Map();
@@ -101,7 +94,7 @@ export function clusterMetrics(promptIds, prompts) {
 /** Each score component on a 0–100 scale. */
 export function scoreComponents({ demand, visibility, competitorGap, intent }) {
   return {
-    demand: round1(Math.min(Math.log10(1 + demand) / Math.log10(1 + DEMAND_CEILING), 1) * 100),
+    demand: round1(logScale(demand, DEMAND_CEILING) * 100),
     visibilityGap: round1(100 - visibility),
     competitorGap: round1(Math.min(Math.max(competitorGap, 0), 100)),
     intent: round1((INTENT_WEIGHTS[intent] || INTENT_WEIGHTS.other) * 100),
@@ -110,11 +103,7 @@ export function scoreComponents({ demand, visibility, competitorGap, intent }) {
 
 /** The weighted total of the components, 0–100. */
 export function opportunityScore(components) {
-  const total = Object.entries(SCORE_WEIGHTS).reduce(
-    (s, [key, weight]) => s + (components[key] * weight) / 100,
-    0,
-  );
-  return Math.round(total * 100) / 100;
+  return round(weightedScore(components, SCORE_WEIGHTS, 100).total);
 }
 
 /**

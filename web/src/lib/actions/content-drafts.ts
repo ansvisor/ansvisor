@@ -51,6 +51,7 @@ import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class
 import { draftShopping } from '@/lib/content/shopping-check';
 import {
   NO_DRAFT_RULES,
+  draftLanguage,
   draftRulesFit,
   draftRulesSchema,
   ruleSetFits,
@@ -339,13 +340,6 @@ export interface DraftPage {
   authorConfirmed: boolean;
   /** The language the draft's own Language rule names, or null: the brand's. */
   language: string | null;
-}
-
-/** The language a draft's own Language rule names, when it is on and set. */
-function draftLanguage(rules: unknown): string | null {
-  const language = draftRulesSchema.safeParse(rules).data?.overrides.language;
-  const value = language?.on === false ? '' : (language?.value?.trim() ?? '');
-  return value || null;
 }
 
 /**

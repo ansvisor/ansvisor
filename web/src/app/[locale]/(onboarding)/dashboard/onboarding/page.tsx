@@ -92,6 +92,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   BRAND_SETUP_LIMITS,
+  detectSiteType,
   suggestTopics,
   generatePromptsFromTopics,
   suggestCompetitors,
@@ -753,6 +754,7 @@ export default function OnboardingPage() {
         setCreatedBrand(brand);
         addBrand(brand);
         setActiveBrand(brand.id);
+        void detectBrandType(brand.id);
         track('onboarding_brand_created', { region: brand.region });
         track('onboarding_step_completed', {
           step: 2,
@@ -963,14 +965,37 @@ export default function OnboardingPage() {
     }
   };
 
+  // The brand's kind of site, from its home page (Step 0): in the
+  // background, best effort; the app goes on guessing when it can't tell.
+  const detectBrandType = async (brandId: string) => {
+    try {
+      const { siteType, industry } = await detectSiteType(brandId);
+      if (!siteType) return;
+      const updates = {
+        siteType,
+        siteTypeSource: 'auto' as const,
+        ...(industry ? { industry } : {}),
+      };
+      setCreatedBrand((b) => (b?.id === brandId ? { ...b, ...updates } : b));
+      updateBrandInStore(brandId, updates);
+      track('onboarding_site_type_detected', { site_type: siteType });
+    } catch (err) {
+      console.error('Site type detection error:', err);
+    }
+  };
+
   // The research found an online store: Shopping mode goes on, so Product
   // Visibility shows in the menu. Best effort: it can be turned on in the
   // brand's settings too.
   const turnOnProductVisibility = async () => {
     if (!createdBrand || createdBrand.shoppingModeEnabled) return;
     try {
-      const { industry } = await markBrandAsEcommerce(createdBrand.id);
-      const updates = { industry: industry ?? undefined, shoppingModeEnabled: true };
+      const { industry, siteType } = await markBrandAsEcommerce(createdBrand.id);
+      const updates = {
+        industry: industry ?? undefined,
+        shoppingModeEnabled: true,
+        ...(siteType ? { siteType, siteTypeSource: 'auto' as const } : {}),
+      };
       setCreatedBrand({ ...createdBrand, ...updates });
       updateBrandInStore(createdBrand.id, updates);
       setEcommerceDetected(true);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isCloud, isSubscriptionActive } from '@/config/plans';
 import { createClient } from '@/lib/supabase/server';
+import { RoleRequiredError, roleRequiredResponse } from '@/lib/mcp/role-gate';
 
 /**
  * Ansvisor Cloud's read-only mode for the web app's own writes: while a
@@ -71,12 +72,14 @@ export function subscriptionInactiveResponse(): NextResponse {
 
 /**
  * A REST route's answer to a call that threw: 402 subscription_inactive when
- * it was refused (assertWritable, assertSubscriptionActive), else 500 with
- * the error's message.
+ * it was refused (assertWritable, assertSubscriptionActive), 403 when the
+ * key's user lacks the role for it (requireManager), else 500 with the
+ * error's message.
  */
 export function failedCallResponse(err: unknown): NextResponse {
   if (err instanceof SubscriptionInactiveError) return subscriptionInactiveResponse();
   if (err instanceof DemoBrandError) return NextResponse.json(DEMO_BRAND, { status: 402 });
+  if (err instanceof RoleRequiredError) return roleRequiredResponse(err);
   const message = err instanceof Error ? err.message : 'Failed';
   return NextResponse.json({ error: message }, { status: 500 });
 }

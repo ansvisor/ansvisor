@@ -314,6 +314,10 @@ function GeneralTab({
             <p className="text-xs text-muted-foreground">
               {t('settings.siteTypeHint')}
               {siteType === null && ` ${t('settings.siteTypeGuessed')}`}
+              {siteType !== null &&
+                siteType === brand.siteType &&
+                brand.siteTypeSource === 'auto' &&
+                ` ${t('settings.siteTypeDetected')}`}
             </p>
           </div>
 
