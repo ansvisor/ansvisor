@@ -69,7 +69,15 @@ export const PENDING = {
   catalog_category_pages: SITE,
   catalog_item_issues: SITE,
 
+  cited_page_features:
+    "demo follow-up (PR 7): what the pages a demo answer cites have (learning C1, 00369); never read for a demo brand, whose tasks don't run",
+  competitor_page_events:
+    "demo follow-up (PR 7): a demo competitor's pages over time (learning C3, 00376); the nightly read never runs for a demo brand",
+  competitor_timeline_scans:
+    "demo follow-up (PR 7): when a demo competitor's pages were last read (learning C3, 00376); the nightly read never runs for a demo brand",
+
   agent_conversations: CHAT,
+  chat_conversations: CHAT,
   prompt_demand:
     "demo follow-up (PR 7): each demo prompt's demand level (PROMPT-014, 00370); the nightly read never runs for a demo brand",
 };
