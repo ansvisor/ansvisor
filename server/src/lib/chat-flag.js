@@ -1,7 +1,8 @@
 /**
  * The new Chat (the Drive Chat specs, CHAT-00…25) behind CHAT_AGENTIC.
  *
- * Read each time it is asked, so a restart picks up a change. Off unless
+ * Read from the environment each time it is asked; the process sees a change
+ * when it starts again (a restart or a new deployment). Off unless
  * "true", so a self-hosted install — or the cloud with it unset — keeps
  * today's agent and sees nothing new. With it on, CHAT_AGENTIC_ORGS
  * (organization ids, comma-separated) narrows it to those workspaces; unset
