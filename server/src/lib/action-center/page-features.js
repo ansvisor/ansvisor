@@ -42,13 +42,41 @@ export const FEATURE_CHECKS = Object.freeze([
   'readability',
 ]);
 
+/** Elements whose text isn't the page's words (audit/context.js removes them). */
+const NOT_TEXT = new Set(['script', 'style', 'noscript', 'template', 'svg']);
+
+/**
+ * The body's text without NOT_TEXT's elements, in one walk. Removing them
+ * first, as audit/context.js does, splices each out of its parent's
+ * children: tens of thousands of empty <style>s in a page AI cites would
+ * hold the server for a minute.
+ */
+export function bodyText($) {
+  const start = $('body')[0] ?? $.root()[0];
+  const out = [];
+  const stack = [start];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node.type === 'text') {
+      out.push(node.data);
+      continue;
+    }
+    if (node.type === 'cdata' && node !== start) {
+      for (const child of node.children ?? []) if (child.type === 'text') out.push(child.data);
+      continue;
+    }
+    if (node !== start && NOT_TEXT.has(node.name)) continue;
+    const children = node.children ?? [];
+    for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]);
+  }
+  return out.join('');
+}
+
 /** What Site Audit's checks read, built from a page fetched here. */
 export function pageContext(url, html, now = Date.now()) {
   const $ = cheerio.load(html);
-  // Text from a second parse, so the first keeps its JSON-LD blocks (audit/context.js).
-  const $text = cheerio.load(html);
-  $text('script, style, noscript, template, svg').remove();
-  const text = $text('body').text().replace(/\s+/g, ' ').trim();
+  // Read without changing `$`, so it keeps its JSON-LD blocks (audit/context.js).
+  const text = bodyText($).replace(/\s+/g, ' ').trim();
   const u = new URL(url);
   return {
     url,
