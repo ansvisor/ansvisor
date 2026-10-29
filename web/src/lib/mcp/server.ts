@@ -1833,7 +1833,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Catalog sources',
       description:
-        "Where the brand's product catalog is read from, as Settings › Integrations › Catalog shows it: each source's kind (a feed URL, an upload, or a connected store such as Shopify or Google Merchant Center), its address or account, and its last sync — when, its status (ok, failed, format_error, or auth_failed when the store refused the saved sign-in), the error, and what it read (items, skipped and why, products added/changed/removed, Merchant Center issues, products past the plan's cap) — and how many of its products are in the catalog now. Empty for a brand with no catalog.",
+        "Where the brand's product catalog is read from, as Settings › Integrations › Catalog shows it: each source's kind (a feed URL, an upload, or a Google Merchant Center account where the server offers it), its address or account, and its last sync — when, its status (ok, failed, format_error, or auth_failed when the store refused the saved sign-in), the error, and what it read (items, skipped and why, products added/changed/removed, Merchant Center issues, products past the plan's cap) — and how many of its products are in the catalog now. Empty for a brand with no catalog.",
       inputSchema: {
         brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
       },

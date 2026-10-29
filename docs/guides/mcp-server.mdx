@@ -333,7 +333,7 @@ Drafts are read and written as a person would in the editor. Ansvisor never publ
 | --- | --- | --- |
 | `list_shopping_cards` | Shopping cards surfaced in AI commercial contexts; filter by role, platform, and region. | |
 | `get_product_visibility` | Aggregate visibility for one product title across platforms, regions, and dates. | |
-| `get_catalog_sources` | Where the product catalog is read from (feed URLs, uploads, connected stores such as Shopify or Google Merchant Center) and how each last sync went: status, error, what it read and its products in the catalog now. | |
+| `get_catalog_sources` | Where the product catalog is read from (feed URLs, uploads, or a Google Merchant Center account where the server offers it) and how each last sync went: status, error, what it read and its products in the catalog now. | |
 | `list_catalog_products` | The live catalog products, by title, as Product Visibility reads them: price, stock, GTIN, `readiness` for AI shopping (`score` 0–100, the checks `missing`, and the `unknown` ones that can't be made), Merchant Center issues by severity (each issue once per product), and the AI visits, orders and revenue (`revenue_30d`) their pages brought over 30 days. Optional `search`; paged with `limit` (max 200) and `offset`. | |
 
 The catalog is also available over REST: `GET /api/mcp/catalog/sources?brand_id=<brand_id>` and `GET /api/mcp/catalog/products?brand_id=<brand_id>&search=<text>&limit=50&offset=0` (`search` optional).
