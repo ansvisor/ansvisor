@@ -56,6 +56,7 @@ const shopping = vi.hoisted(() => ({
   getShoppingAmazonShareDropAlert: vi.fn(),
   getShoppingFilterOptions: vi.fn(),
   getShoppingOwnChannels: vi.fn(),
+  getShoppingSearchAppearance: vi.fn(),
 }));
 vi.mock('@/lib/actions/shopping', () => shopping);
 const getBrandMarketCountries = vi.hoisted(() => vi.fn());
@@ -165,6 +166,7 @@ beforeEach(() => {
   shopping.getShoppingAmazonShareDropAlert.mockReset();
   shopping.getShoppingFilterOptions.mockReset();
   shopping.getShoppingOwnChannels.mockReset();
+  shopping.getShoppingSearchAppearance.mockReset();
   getOpenAiIndexRead.mockReset();
   readCatalogSources.mockReset();
 });
@@ -376,6 +378,7 @@ describe('get_shopping_readiness', () => {
       regions: [],
     });
     shopping.getShoppingOwnChannels.mockImplementation(loader(() => ['google-aimode']));
+    shopping.getShoppingSearchAppearance.mockResolvedValue({ state: 'not_connected', pages: [] });
     // The API offers Merchant Center (its internal config, read with the cron secret).
     vi.stubEnv('CRON_SECRET', 'cron-secret');
     vi.stubGlobal(
@@ -429,6 +432,16 @@ describe('get_shopping_readiness', () => {
       fix: null,
     });
     expect(check('merchantCenter')).toMatchObject({ state: 'warn', fix: 'settings' });
+    // Google's shopping results, from the brand's Search Console (00377).
+    expect(shopping.getShoppingSearchAppearance).toHaveBeenCalledWith(BRAND);
+    expect(check('googleShopping')).toEqual({
+      key: 'googleShopping',
+      state: 'unknown',
+      title: 'Google shows your products in shopping results (Search Console)',
+      detail:
+        'Connect Search Console to see whether Google shows your products in its shopping results.',
+      fix: 'settings',
+    });
     expect(check('openAiIndex')).toMatchObject({
       state: 'warn',
       title: "Catalog in OpenAI's product index",
