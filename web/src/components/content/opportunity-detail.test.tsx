@@ -36,7 +36,11 @@ vi.mock('@/lib/actions/content-plan', () => plan);
 vi.mock('@/hooks/use-opportunity-volume', () => ({
   useOpportunityVolume: () => ({ basket: null, basketFailed: false, volume: null }),
 }));
-vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+// An admin or a manager unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ canManage: viewer.canManage }),
+}));
 const brandState = vi.hoisted(() => ({
   activeBrandId: 'b1',
   brands: [{ id: 'b1', name: 'Acme', siteType: 'b2b' }],
@@ -119,6 +123,7 @@ const moreItem = async (item: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  viewer.canManage = true;
   newContent.open = false;
   content.getOpportunity.mockResolvedValue(OPPORTUNITY);
   content.getBriefQuota.mockResolvedValue({ limit: -1, remaining: -1 });
@@ -195,5 +200,27 @@ describe('the brief quota without an active plan', () => {
     expect(container.textContent).toContain('Monthly Brief Limit Reached');
     expect(container.textContent).not.toContain('No active plan');
     expect(buttonNamed('Generate Brief').disabled).toBe(true);
+  });
+});
+
+describe("the opportunity panel's Dismiss", () => {
+  const menuItems = async () => {
+    await act(async () =>
+      container.querySelector<HTMLElement>('[aria-label="More actions"]')!.click(),
+    );
+    return [...document.body.querySelectorAll('[role="menuitem"]')].map((el) => el.textContent);
+  };
+
+  it('is offered to an admin or a manager', async () => {
+    await render(false);
+    expect(await menuItems()).toContain('Dismiss');
+  });
+
+  it('is left out for an analyst or an agency partner, who keep Mark as reviewed', async () => {
+    viewer.canManage = false;
+    await render(false);
+    const items = await menuItems();
+    expect(items).toContain('Mark as reviewed');
+    expect(items).not.toContain('Dismiss');
   });
 });

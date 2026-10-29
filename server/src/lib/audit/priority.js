@@ -14,8 +14,13 @@
  * - Ease: how close the page is to passing. Its last score; unknown when
  *   never audited. A page whose template shares its gaps (SA-007) is easier:
  *   one fix covers every page of it.
+ *
+ * Its own composition (a product, not a weighted sum: a page worth nothing
+ * or with nothing to win isn't worth an audit, however easy); the pieces it
+ * shares with every screen's score are in priority-core.js (learning D4).
  */
 
+import { clamp, round } from '../priority-core.js';
 import { templateOf } from './templates.js';
 
 export const PRIORITY_WEIGHTS = Object.freeze({
@@ -52,9 +57,6 @@ export const PRIORITY_WEIGHTS = Object.freeze({
     templateFix: 0.1,
   }),
 });
-
-const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
  * Each page's sessions as a share of the site's pages it beats (0–1), from
@@ -129,9 +131,9 @@ export function scorePriority(row, rankSessions, sharedTemplates = new Set()) {
 
   return {
     priority: Math.round(100 * Math.cbrt(value * opportunity * ease)),
-    value: round2(value),
-    opportunity: round2(opportunity),
-    ease: round2(ease),
+    value: round(value),
+    opportunity: round(opportunity),
+    ease: round(ease),
   };
 }
 
@@ -160,9 +162,9 @@ export function scoreTemplate(row, rankSessions) {
   const ease = Math.min(1, w.ease.unaudited + w.ease.templateFix);
   return {
     priority: Math.round(100 * Math.cbrt(value * opportunity * ease)),
-    value: round2(value),
-    opportunity: round2(opportunity),
-    ease: round2(ease),
+    value: round(value),
+    opportunity: round(opportunity),
+    ease: round(ease),
   };
 }
 

@@ -22,7 +22,7 @@ vi.mock('../../config/supabase.js', () => ({
         eq: (column, value) => (op.filters.push(['eq', column, value]), chain),
         neq: () => chain,
         in: (column, value) => (op.filters.push(['in', column, value]), chain),
-        gte: () => chain,
+        gte: (column, value) => (op.filters.push(['gte', column, value]), chain),
         order: () => chain,
         limit: () => chain,
         upsert: async (row) => (writes.push(row), { error: upsertError }),
@@ -49,6 +49,7 @@ const {
   pageFeatures,
   robotsDisallow,
   scopePromptIds,
+  storedFeatures,
 } = await import('./competitor-pages.js');
 const pure = await import('./page-features.js');
 
@@ -411,5 +412,33 @@ describe('analyzeCompetitorPages', () => {
     // An action naming no prompts, for a brand tracking none.
     const noPrompts = await thrown(run({ payload: { targetEntity: 'competitors', targets: [] } }));
     expect(noPrompts).toMatchObject({ retryDays: 7, output: { reason: 'no_prompts' } });
+  });
+});
+
+/** What the checks found on pages read lately, for Improve (learning C2). */
+describe('storedFeatures', () => {
+  it('reads the pages read lately by key, leaving out one that could not be read', async () => {
+    tables.cited_page_features = [
+      { page_key: 'rival.com/kettles', own: false, features: { checks: { tables: 'pass' } } },
+      { page_key: 'blog.example/best', own: false, features: { unreadable: true } },
+    ];
+    const stored = await storedFeatures(
+      'b1',
+      ['https://www.rival.com/kettles/', 'https://blog.example/best'],
+      NOW,
+    );
+    expect([...stored.entries()]).toEqual([
+      ['rival.com/kettles', { own: false, checks: { tables: 'pass' } }],
+    ]);
+    // The brand's own reads only, from the last two freshDays (28 days).
+    const read = queries.find((q) => q.table === 'cited_page_features');
+    expect(read.filters).toContainEqual(['eq', 'brand_id', 'b1']);
+    expect(read.filters).toContainEqual([
+      'in',
+      'page_key',
+      ['rival.com/kettles', 'blog.example/best'],
+    ]);
+    expect(read.filters).toContainEqual(['gte', 'read_at', '2026-09-30T03:00:00.000Z']);
+    expect(await storedFeatures('b1', [])).toEqual(new Map());
   });
 });
