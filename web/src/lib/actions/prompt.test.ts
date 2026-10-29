@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLANS, type Plan } from '@/config/plans';
 import { getPromptVolumes, type VolumeQuota } from '@/lib/actions/volumes';
 import { getPromptVisibilitySummaries, type PromptVisibilitySummary } from '@/lib/actions/tracking';
+import { planFromOrgRow } from '@/lib/guards/plan-guard';
 
 /**
  * setPromptActive meters resuming like adding (00128): only active prompts
@@ -26,8 +27,15 @@ let positionsNull = false;
 let jsonRpcMissing = false;
 /** The position RPC calls, and whether any asked for a slice. */
 let positionCalls: { fn: string; ranged: boolean }[] = [];
+/** The brand's organization, as its row embeds it for the Positions column's plan. */
+const ORG_ROW = { plan: 'growth', subscription_status: 'active', plan_overrides: null };
+/** When set, reading the brand's row fails with it. */
+let brandReadError: string | null = null;
 /** When set, each heavy read takes a moment, counted while it runs. */
 let slowReads: { running: number; most: number } | null = null;
+/** The prompts a bulk location change reads, and what it writes back. */
+let bulkRows: { id: string; regions: string[]; is_active: boolean }[] = [];
+let appliedLocations: unknown[] = [];
 const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
   if (!slowReads) return read();
   const reads = slowReads;
@@ -43,13 +51,16 @@ vi.mock('@/lib/actions/tracking', () => ({ getPromptVisibilitySummaries: vi.fn()
 
 vi.mock('@/lib/guards/plan-guard', () => ({
   getOrgPlan: vi.fn(async () => plan),
+  // The Positions column reads the organization's plan from its brand's row.
+  ORG_PLAN_COLUMNS: 'plan, subscription_status, plan_overrides',
+  planFromOrgRow: vi.fn(() => plan),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
     // The position sums come as one jsonb value (00153), which PostgREST's
     // 1000-row cap doesn't cut; the old row-returning RPC would have been cut.
-    rpc: (fn: string, args?: { p_date_to?: string }) => {
+    rpc: (fn: string, args?: { p_date_to?: string; p_updates?: unknown[] }) => {
       const call = { fn, ranged: false };
       if (fn.startsWith('prompt_position_summaries')) positionCalls.push(call);
       const result = () => {
@@ -67,6 +78,10 @@ vi.mock('@/lib/supabase/server', () => ({
         }
         if (fn === 'prompt_position_summaries') {
           return { data: positionData.slice(0, 1000), error: null };
+        }
+        if (fn === 'apply_prompt_locations') {
+          appliedLocations.push(args?.p_updates);
+          return { data: args?.p_updates?.length ?? 0, error: null };
         }
         return usageFails
           ? { data: null, error: { message: 'rpc failed' } }
@@ -87,12 +102,22 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     from: (table: string) => ({
       select: () => ({
+        in: async () => ({
+          data: bulkRows.map((row) => ({
+            ...row,
+            prompt_sets: { brands: { organization_id: 'org-1' } },
+          })),
+          error: null,
+        }),
         eq: () => ({
           order: async () =>
             table === 'prompt_sets'
               ? { data: promptSetRows, error: null }
               : { data: null, error: { message: `unexpected ${table}` } },
-          maybeSingle: async () => ({ data: { organization_id: 'org-1' }, error: null }),
+          maybeSingle: async () =>
+            brandReadError
+              ? { data: null, error: { message: brandReadError } }
+              : { data: { organization_id: 'org-1', organizations: ORG_ROW }, error: null },
           single: async () =>
             promptRow
               ? {
@@ -119,8 +144,13 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getPromptLocationMatrix, getPromptsPageData, setPromptActive, updatePromptLocations } =
-  await import('./prompt');
+const {
+  bulkUpdatePromptLocations,
+  getPromptLocationMatrix,
+  getPromptsPageData,
+  setPromptActive,
+  updatePromptLocations,
+} = await import('./prompt');
 
 const capped = (maxPrompts: number): Plan => ({
   ...PLANS.starter,
@@ -232,10 +262,39 @@ describe('updatePromptLocations on paused prompts', () => {
   });
 });
 
+describe('bulkUpdatePromptLocations (PROMPT-015)', () => {
+  beforeEach(() => {
+    appliedLocations = [];
+    usageFails = false;
+    plan = capped(50);
+    usedLocations = 10;
+    // A city no list names any more: never run, and still on the prompts.
+    bulkRows = [
+      { id: 'p1', regions: ['US', 'TR~ATLANTIS'], is_active: true },
+      { id: 'p2', regions: ['TR~ATLANTIS'], is_active: true },
+    ];
+  });
+
+  it("stops a location no list names any more, but never a prompt's last one", async () => {
+    const result = await bulkUpdatePromptLocations(['p1', 'p2'], 'remove', ['tr~atlantis']);
+
+    expect(result).toEqual({ updated: 1, unchanged: 0, blocked: 1, delta: -1 });
+    expect(appliedLocations).toEqual([[{ id: 'p1', regions: ['US'] }]]);
+  });
+
+  it('still refuses to add one, and writes nothing', async () => {
+    const result = await bulkUpdatePromptLocations(['p1'], 'add', ['TR~ATLANTIS', 'DE']);
+
+    expect(result).toEqual({ error: 'Unknown location code: TR~ATLANTIS' });
+    expect(appliedLocations).toEqual([]);
+  });
+});
+
 describe('getPromptsPageData', () => {
   beforeEach(() => {
     plan = capped(50);
     promptRow = null;
+    brandReadError = null;
     promptSetRows = [
       {
         id: 'ps1',
@@ -290,6 +349,19 @@ describe('getPromptsPageData', () => {
 
     expect(page.positions.p1.avg).toBe(2);
     expect(page.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web']);
+    // The engines the plan includes, from the organization the brand's row embeds.
+    expect(planFromOrgRow).toHaveBeenCalledWith(ORG_ROW);
+  });
+
+  it('says when the brand’s plan could not be read, the column then reading —', async () => {
+    brandReadError = 'could not embed organizations';
+    const page = await getPromptsPageData('b1');
+
+    expect(page.positions.p1.avg).toBeNull();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('brand plan read failed'),
+      'could not embed organizations',
+    );
   });
 
   /** 1000 rows of other prompts, which come before p1's in the RPC's order. */
