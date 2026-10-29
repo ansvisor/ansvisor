@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The catalog harness imports the Supabase admin client before a test calls runSync.
@@ -5,7 +6,7 @@ vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 import { ConnectError } from '../errors.js';
 import { runSync, startFakeApi } from '../testing.js';
-import wooCommerce from './index.js';
+import wooCommerce, { verifyWebhookSignature } from './index.js';
 
 const CONSUMER_KEY = 'ck_test_woocommerce_readonly';
 const CONSUMER_SECRET = 'cs_test_woocommerce_secret';
@@ -28,7 +29,10 @@ const simple = (id, overrides = {}) => ({
     { src: `https://shop.example/wp-content/uploads/${id}.jpg` },
     { src: `https://shop.example/wp-content/uploads/${id}-back.jpg` },
   ],
-  categories: [{ id: 2, name: 'Boots' }, { id: 3, name: 'Accessories' }],
+  categories: [
+    { id: 2, name: 'Boots' },
+    { id: 3, name: 'Accessories' },
+  ],
   attributes: [{ name: 'Brand', options: ['Acme'] }],
   meta_data: [],
   ...overrides,
@@ -135,6 +139,41 @@ beforeEach(async () => {
         json: variationPages[page] ?? [],
       };
     },
+    'GET /wp-json/wc/v3/orders': (req) => {
+      if (!authorized(req)) return { status: 401, json: { message: 'Unauthorized' } };
+      const page = Number(req.query.page ?? 1);
+      return {
+        headers: { 'x-wp-totalpages': '1' },
+        json:
+          page === 1
+            ? [
+                {
+                  id: 7001,
+                  date_created_gmt: '2026-10-20T10:00:00',
+                  date_modified_gmt: '2026-10-22T09:00:00',
+                  status: 'completed',
+                  currency: 'USD',
+                  total: '250.00',
+                  created_via: 'checkout',
+                  refunds: [{ id: 801, reason: 'private refund note', total: '-25.00' }],
+                  billing: { first_name: 'PRIVATE BUYER', email: 'private@example.invalid' },
+                  shipping: { address_1: 'PRIVATE ADDRESS' },
+                  customer_id: 9876,
+                  line_items: [
+                    {
+                      id: 9101,
+                      product_id: 202,
+                      variation_id: 2011,
+                      quantity: 2,
+                      total: '225.00',
+                      name: 'Buyer-supplied product name is not stored',
+                    },
+                  ],
+                },
+              ]
+            : [],
+      };
+    },
   });
 });
 
@@ -202,8 +241,7 @@ describe('connect', () => {
           consumerSecret: 'cs_invalid_private_value',
         },
         {
-          request: (address, options) =>
-            api.request(address.replace(/^https:/, 'http:'), options),
+          request: (address, options) => api.request(address.replace(/^https:/, 'http:'), options),
         },
       ),
     ).rejects.toMatchObject({ code: 'auth', status: 401 });
@@ -265,7 +303,8 @@ describe('readCatalog through the connector harness', () => {
     expect(images).toHaveLength(8);
     expect(categories.map((c) => c.name).sort()).toEqual(['Accessories', 'Footwear > Boots']);
     const sockProductId = products.find((p) => p.external_id === '101')?.id;
-    const sockCategories = fake.rows('catalog_product_categories')
+    const sockCategories = fake
+      .rows('catalog_product_categories')
       .filter((link) => link.product_id === sockProductId)
       .map((link) => categories.find((category) => category.id === link.category_id)?.name)
       .sort();
@@ -276,16 +315,56 @@ describe('readCatalog through the connector harness', () => {
     );
     expect(productPagesRead.map((call) => call.query.page)).toEqual(['1', '2']);
     expect(
-      api.calls.filter((call) => call.path === '/wp-json/wc/v3/products/categories')
+      api.calls
+        .filter((call) => call.path === '/wp-json/wc/v3/products/categories')
         .map((call) => call.query.page),
     ).toEqual(['1', '2']);
     expect(
-      api.calls.filter((call) => call.path === '/wp-json/wc/v3/products/202/variations')
+      api.calls
+        .filter((call) => call.path === '/wp-json/wc/v3/products/202/variations')
+        .map((call) => call.query.page),
+    ).toEqual(['1']);
+    expect(
+      api.calls
+        .filter((call) => call.path === '/wp-json/wc/v3/orders')
         .map((call) => call.query.page),
     ).toEqual(['1']);
     expect(api.calls.every((call) => !JSON.stringify(call.query).includes(CONSUMER_SECRET))).toBe(
       true,
     );
+    expect(outcome.counts.orders).toMatchObject({
+      added: 1,
+      items: 1,
+      skippedFromApi: 0,
+      truncated: false,
+    });
+    const [order] = fake.rows('catalog_orders');
+    expect(order).toMatchObject({
+      external_id: '7001',
+      status: 'completed',
+      channel: 'checkout',
+      currency: 'USD',
+      total: 250,
+      refunded_total: 25,
+    });
+    expect(JSON.stringify(order)).not.toContain('PRIVATE BUYER');
+    expect(JSON.stringify(order)).not.toContain('private@example.invalid');
+    expect(JSON.stringify(order)).not.toContain('PRIVATE ADDRESS');
+    expect(JSON.stringify(order)).not.toContain('private refund note');
+    expect(order).not.toHaveProperty('billing');
+    expect(order).not.toHaveProperty('shipping');
+    expect(order).not.toHaveProperty('customer_id');
+    expect(fake.rows('catalog_order_items')).toEqual([
+      expect.objectContaining({
+        external_line_id: '9101',
+        external_product_id: '202',
+        external_variation_id: '2011',
+        quantity: 2,
+        revenue: 225,
+      }),
+    ]);
+    expect(fake.rows('catalog_order_items')[0]).not.toHaveProperty('name');
+    expect(fake.rows('catalog_sources')[0].last_orders_synced_at).toBeTruthy();
   });
 
   it('retries a 429 according to Retry-After and then continues the sync', async () => {
@@ -303,6 +382,10 @@ describe('readCatalog through the connector harness', () => {
         headers: { 'x-wp-totalpages': '1' },
         json: [],
       }),
+      'GET /wp-json/wc/v3/orders': () => ({
+        headers: { 'x-wp-totalpages': '1' },
+        json: [],
+      }),
     });
     const { outcome } = await runSync(wooCommerce, source(), {
       credentials: { consumerKey: CONSUMER_KEY, consumerSecret: CONSUMER_SECRET },
@@ -311,5 +394,59 @@ describe('readCatalog through the connector harness', () => {
     expect(outcome.status).toBe('ok');
     expect(api.waits).toHaveLength(1);
     expect(api.waits[0]).toBeGreaterThanOrEqual(2000);
+  });
+});
+
+describe('optional webhook verification', () => {
+  it('accepts a valid order or product HMAC and returns only resource routing metadata', () => {
+    const secret = 'test-webhook-secret';
+    const rawBody = Buffer.from(
+      JSON.stringify({ id: 7001, billing: { email: 'private@example.invalid' } }),
+    );
+    const signature = createHmac('sha256', secret).update(rawBody).digest('base64');
+
+    expect(verifyWebhookSignature(rawBody, signature, secret)).toBe(true);
+    expect(
+      wooCommerce.handleWebhook({ rawBody, signature, secret, topic: 'order.updated' }),
+    ).toEqual({
+      id: '7001',
+      resource: 'order',
+    });
+    expect(
+      wooCommerce.handleWebhook({ rawBody, signature, secret, topic: 'product.updated' }),
+    ).toEqual({
+      id: '7001',
+      resource: 'product',
+    });
+  });
+
+  it('rejects a bad signature, invalid body, and unsupported topic', () => {
+    const rawBody = Buffer.from('{"id":7001}');
+    expect(verifyWebhookSignature(rawBody, 'not-a-signature', 'secret')).toBe(false);
+    expect(() =>
+      wooCommerce.handleWebhook({
+        rawBody,
+        signature: 'not-a-signature',
+        secret: 'secret',
+        topic: 'order.updated',
+      }),
+    ).toThrow(ConnectError);
+    const signature = createHmac('sha256', 'secret').update(rawBody).digest('base64');
+    expect(() =>
+      wooCommerce.handleWebhook({
+        rawBody,
+        signature,
+        secret: 'secret',
+        topic: 'customer.updated',
+      }),
+    ).toThrow('unsupported webhook topic');
+    expect(() =>
+      wooCommerce.handleWebhook({
+        rawBody: Buffer.from('broken'),
+        signature: createHmac('sha256', 'secret').update('broken').digest('base64'),
+        secret: 'secret',
+        topic: 'order.updated',
+      }),
+    ).toThrow('unreadable webhook body');
   });
 });
