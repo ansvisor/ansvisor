@@ -16,7 +16,8 @@ import {
  * The catalog needs no key. A sync upserts every model it lists and removes
  * none: a failed or short read keeps the last good prices. After a sync, and
  * when the server starts, the rows are loaded into model-price-cache.js, where
- * a call's cost (improve-cost.js) and the multipliers below read them.
+ * a Chat step's cost (improve-cost.js, for chat-budget.js only) and the
+ * multipliers below read them.
  *
  * Multipliers (CHAT-16 §B): a model's blended cost is 3 × its input price +
  * its output price, at the price in effect; its multiplier is that over

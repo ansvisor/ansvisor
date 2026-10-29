@@ -353,6 +353,25 @@ describe('a Chat step on the AI budget', () => {
     expect((await guard.getAiUsage('o1')).chatMetered).toBe(false);
   });
 
+  it('prices a step from the synced catalog, but never at a $0 rate for a paid model', async () => {
+    const cache = await import('./model-price-cache.js');
+    const SONNET = 'anthropic/claude-sonnet-5.5';
+    // The synced price is used: $3 / $15 per million tokens.
+    cache.setSyncedPrices([{ model_id: SONNET, input_per_m: 3, output_per_m: 15, overrides: [] }]);
+    await budget.reserveChatStep('o1', step({ modelId: SONNET }));
+    expect(rpcCalls[0].args.p_cost).toBeCloseTo(0.021, 9);
+    // Listed at $0: the server's table prices it ($2 / $10), hold and charge alike.
+    cache.setSyncedPrices([{ model_id: SONNET, input_per_m: 0, output_per_m: 0, overrides: [] }]);
+    const id = await budget.reserveChatStep('o1', step({ modelId: SONNET }));
+    expect(rpcCalls[1].args.p_cost).toBeCloseTo(0.014, 9);
+    await budget.chargeChatStep('o1', id, {
+      modelId: SONNET,
+      usage: { inputTokens: 1000, outputTokens: 100 },
+    });
+    expect(ledger.find((r) => r.id === id).cost_usd).toBeCloseTo(0.003, 9);
+    cache.setSyncedPrices([]);
+  });
+
   it('writes each step without a hold where nothing is metered (self-hosted)', async () => {
     vi.stubEnv('IS_CLOUD', 'false');
     spent(100);
