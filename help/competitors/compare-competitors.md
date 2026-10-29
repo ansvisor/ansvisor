@@ -4,14 +4,14 @@ route: /dashboard/competitors
 keywords: [competitors, head-to-head, competitor comparison, gaps, strengths, platform breakdown]
 synonyms: [benchmark competitors, how do we compare, competitor visibility, us versus them]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
 sources: [docs/guides/competitors.mdx]
 ---
-The **Competitors** page compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand.
+The **Competitors** page, under **Analytics** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand.
 
 ## Head-to-head comparison
 

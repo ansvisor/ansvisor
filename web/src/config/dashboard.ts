@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   Sparkles,
   Target,
+  Users,
 } from 'lucide-react';
 import type { Feature } from '@/config/plans';
 
@@ -115,6 +116,14 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/insights',
         icon: BarChart3,
         requiredFeature: 'basic_insights',
+      },
+      // Head-to-head with each competitor, right under Brand Visibility,
+      // whose Leaderboard opens it too. Off the menu since #506, back on it.
+      {
+        title: 'Competitors',
+        href: '/dashboard/competitors',
+        icon: Users,
+        requiredFeature: 'competitor_tracking',
       },
       {
         title: 'Prompts',

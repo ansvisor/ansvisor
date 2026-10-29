@@ -43,6 +43,14 @@ describe('MENU_SECTIONS', () => {
     );
   });
 
+  it('lists Competitors right after Brand Visibility, so roles and people can hide it', () => {
+    expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('insights') + 1);
+    expect(cleanMenuSections(['competitors'])).toEqual(['competitors']);
+    expect(hidden({ roleHidden: ['competitors'] })).toEqual(['competitors']);
+    // No work area names it yet: picking one leaves it on the menu.
+    expect(hidden({ workAreas: ['brand'] })).not.toContain('competitors');
+  });
+
   it('knows every section a work area names', () => {
     for (const area of WORK_AREAS) {
       for (const section of area.sections) expect(MENU_SECTIONS).toContain(section);

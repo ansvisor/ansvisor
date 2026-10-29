@@ -70,6 +70,7 @@ describe('MenuAccessSection', () => {
     expect(box('Analyst sees Content')?.getAttribute('aria-checked')).toBe('false');
     expect(box('Analyst sees Audit')?.getAttribute('aria-checked')).toBe('false');
     expect(box('Analyst sees Brand Visibility')?.getAttribute('aria-checked')).toBe('true');
+    expect(box('Analyst sees Competitors')?.getAttribute('aria-checked')).toBe('true');
     expect(box('Manager sees Content')?.getAttribute('aria-checked')).toBe('true');
     expect(container.textContent).toContain('Product Visibility');
     expect(container.textContent).toContain('Execution');
@@ -134,6 +135,7 @@ describe('MenuAccessSection', () => {
     expect(actions.setRoleMenu).toHaveBeenCalledWith('manager', [
       'content',
       'audit',
+      'competitors',
       'prompts',
       'shopping',
       'traffic',
@@ -159,7 +161,15 @@ describe('MenuAccessSection', () => {
 
 describe('hiddenForSet', () => {
   it('hides what a ready-made set leaves out, never Action Center', () => {
-    expect(hiddenForSet('brand')).toEqual(['content', 'audit', 'prompts', 'shopping', 'traffic']);
+    // Competitors too: no work area's set names it yet.
+    expect(hiddenForSet('brand')).toEqual([
+      'content',
+      'audit',
+      'competitors',
+      'prompts',
+      'shopping',
+      'traffic',
+    ]);
     expect(hiddenForSet('all')).toEqual([]);
   });
 });

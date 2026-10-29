@@ -4,14 +4,14 @@ route: /dashboard/competitors
 keywords: [add competitor, track competitors, competitor name, competitor domain]
 synonyms: [new competitor, follow a rival, competitor list, which competitors to track]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
 sources: [docs/guides/competitors.mdx]
 ---
-Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add them on the **Competitors** page, and each one then appears in **Tracked Competitors** for a head-to-head comparison.
+Competitors are the brands Ansvisor compares with yours in AI answers to your tracked prompts. You add them on the **Competitors** page, under **Analytics** in the sidebar, and each one then appears in **Tracked Competitors** for a head-to-head comparison.
 
 ## Add a competitor
 
