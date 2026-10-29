@@ -318,3 +318,48 @@ describe('initialsOf', () => {
     expect(chats.initialsOf('  ')).toBeNull();
   });
 });
+
+describe('updateChat', () => {
+  it("pins, renames, shares and archives the author's chat, and undoes each", async () => {
+    db.tables.chat_conversations = [chat(1)];
+    const now = new Date('2026-10-30T12:00:00.000Z');
+    const patch = (p: Record<string, unknown>) =>
+      chats.updateChat(reader, ME, CHAT(1), chats.updateInput.parse(p), now);
+    expect(await patch({ pinned: true, title: '  Board update ' })).toMatchObject({
+      pinned: true,
+      title: 'Board update',
+    });
+    expect(await patch({ shared: true, archived: true })).toMatchObject({
+      shared: true,
+      archived: true,
+    });
+    expect(db.tables.chat_conversations[0]).toMatchObject({
+      pinned_at: now.toISOString(),
+      shared_at: now.toISOString(),
+      archived_at: now.toISOString(),
+    });
+    expect(await patch({ pinned: false, shared: false, archived: false })).toMatchObject({
+      pinned: false,
+      shared: false,
+      archived: false,
+    });
+  });
+
+  it("refuses a teammate's chat, even a shared one, and a deleted one", async () => {
+    db.tables.chat_conversations = [
+      chat(1, { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' }),
+      chat(2, { deleted_at: '2026-10-29T00:00:00.000Z' }),
+    ];
+    const pin = chats.updateInput.parse({ pinned: true });
+    expect(await chats.updateChat(reader, ME, CHAT(1), pin)).toBeNull();
+    expect(await chats.updateChat(reader, ME, CHAT(2), pin)).toBeNull();
+    expect(db.tables.chat_conversations.every((c) => c.pinned_at === null)).toBe(true);
+  });
+
+  it('refuses an empty change, an empty title and an unknown field', () => {
+    expect(chats.updateInput.safeParse({}).success).toBe(false);
+    expect(chats.updateInput.safeParse({ title: '   ' }).success).toBe(false);
+    expect(chats.updateInput.safeParse({ title: 'x'.repeat(201) }).success).toBe(false);
+    expect(chats.updateInput.safeParse({ user_id: 'x' }).success).toBe(false);
+  });
+});

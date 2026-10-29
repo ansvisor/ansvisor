@@ -16,8 +16,11 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { saveChatMenuOpen } from '@/lib/actions/chat-prefs';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { cn } from '@/lib/utils';
+import type { ChatListItem } from '@/lib/chat/conversations';
+import { ChatActionsProvider, useChatActions } from './chat-actions';
 import { useChatList } from './chat-list-provider';
 import { ChatMenu } from './chat-menu';
+import { ChatHeaderMenu, RenameField } from './chat-menus';
 import { chatShortcutOf, MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** At this width and up the chat menu is a column; below it, a drawer (CHAT-01 item 9). */
@@ -58,7 +61,28 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * leaves the saved choice alone. `Ctrl+Shift+O` starts a new chat. The app
  * sidebar beside it is untouched.
  */
-export function ChatShell({ menuOpen, children }: { menuOpen: boolean; children: ReactNode }) {
+export function ChatShell(props: { menuOpen: boolean; children: ReactNode }) {
+  return (
+    <ChatActionsProvider>
+      <ChatShellFrame {...props} />
+    </ChatActionsProvider>
+  );
+}
+
+/** The open chat's name in the header, edited there by its ⋯ menu's Rename. */
+function ChatTitle({ chat, fallback }: { chat: ChatListItem; fallback: string }) {
+  const actions = useChatActions();
+  if (actions?.renaming?.id === chat.id && actions.renaming.where === 'header') {
+    return <RenameField chat={chat} className="max-w-md text-sm font-semibold" />;
+  }
+  return (
+    <h1 className="min-w-0 truncate text-sm font-semibold" title={chat.title ?? undefined}>
+      {chat.title ?? fallback}
+    </h1>
+  );
+}
+
+function ChatShellFrame({ menuOpen, children }: { menuOpen: boolean; children: ReactNode }) {
   const t = useTranslations('chatShell.menu');
   const router = useRouter();
   const pathname = usePathname();
@@ -170,16 +194,14 @@ export function ChatShell({ menuOpen, children }: { menuOpen: boolean; children:
           )}
           {current && (
             <>
-              <h1
-                className="min-w-0 truncate text-sm font-semibold"
-                title={current.title ?? undefined}
-              >
-                {current.title ?? t('untitled')}
-              </h1>
+              <ChatTitle chat={current} fallback={t('untitled')} />
               {pill && <StatusPill state={pill} />}
             </>
           )}
-          {!strip && <div className="ml-auto flex items-center gap-1.5">{runs}</div>}
+          <div className="ml-auto flex items-center gap-1.5">
+            {!strip && runs}
+            {current && <ChatHeaderMenu chat={current} />}
+          </div>
         </header>
         <div className={cn('chat-scroll min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}>
           {children}

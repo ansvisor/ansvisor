@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, agent, new chat, open a chat, chat menu, agents at work, hide menu]
+keywords: [chat, ask chat, agent, new chat, open a chat, chat menu, agents at work, hide menu, pin chat, rename chat, share chat, archive chat, delete chat]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-10-30
@@ -24,6 +24,22 @@ The chat menu on the left of Chat lists your chats. **New chat** starts a new on
 ## Hide the chat menu
 
 Click the panel button next to **New chat**, or press Ctrl+\ (⌘\ on a Mac), to hide the menu and give the chat the whole width. A small bar at the top then keeps **New chat** and your runs at hand. Chat remembers your choice on every device. On a narrow window the menu opens over the page instead. Ctrl+Shift+O (⌘⇧O) starts a new chat from anywhere in Chat.
+
+## Manage a chat
+
+Point at a chat in the menu and click **⋯**, or click **⋯** at the top right of an open chat:
+
+- **Pin** keeps it under **Pinned** at the top of the menu; **Unpin** puts it back under its day.
+- **Rename** lets you type a new name in place. Press Enter to save or Esc to cancel. You can also double-click a chat's name in the menu.
+- **Archive** takes it off the menu. Click **Undo** in the message that appears to bring it back.
+- **Delete** asks first, then deletes the chat for everyone. Click **Undo** within a few seconds to bring it back. A chat that is still working is stopped first.
+- **Open in new window** opens it in another browser window.
+
+**Export chat** is coming soon.
+
+## Share a chat with your team
+
+A chat is yours alone until you share it. **Share with team** lets everyone in your workspace open it and read it; they can't change it. **Stop sharing** makes it private again. A shared chat shows its author's initials in teammates' menus, and an Admin can delete it.
 
 ## Old Agent links
 
