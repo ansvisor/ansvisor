@@ -42,7 +42,14 @@ const FULL_ROW: StepRow = {
   finished_at: '2026-10-29T09:13:52+00:00',
   tool: 'list_citations',
   debug_json: { input: { brand_id: UUID }, tokens: 1200, latencyMs: 840 },
+  latency_ms: 840,
+  cache_hit: true,
+  truncated: true,
+  result_tokens: 1200,
 };
+
+/** The columns only the server and staff read: the tool, its debug record and the step's measure (00410). */
+const SERVER_ONLY = ['tool', 'debug_json', 'latency_ms', 'cache_hit', 'truncated', 'result_tokens'];
 
 /** The columns 00400 grants members on chat_run_steps, read from the migrations. */
 function grantedColumns(): string[] {
@@ -61,14 +68,15 @@ function grantedColumns(): string[] {
 }
 
 describe('chat run step columns', () => {
-  it('are the ones the migrations grant members, without the tool and its debug record', () => {
+  it('are the ones the migrations grant members, without the tool, its debug record or its measure', () => {
     expect([...CHAT_RUN_STEP_MEMBER_COLUMNS].sort()).toEqual(grantedColumns().sort());
-    expect(CHAT_RUN_STEP_MEMBER_COLUMNS).not.toContain('tool');
-    expect(CHAT_RUN_STEP_MEMBER_COLUMNS).not.toContain('debug_json');
+    for (const column of SERVER_ONLY) {
+      expect(CHAT_RUN_STEP_MEMBER_COLUMNS).not.toContain(column);
+    }
   });
 
   it('cover every other column of the table', () => {
-    const others = Object.keys(FULL_ROW).filter((c) => c !== 'tool' && c !== 'debug_json');
+    const others = Object.keys(FULL_ROW).filter((c) => !SERVER_ONLY.includes(c));
     expect([...CHAT_RUN_STEP_MEMBER_COLUMNS].sort()).toEqual(others.sort());
   });
 
