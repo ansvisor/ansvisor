@@ -1,0 +1,46 @@
+---
+title: Read a site audit report
+route: /dashboard/audit
+keywords: [audit report, audit score, signals, audit categories, grade]
+synonyms: [audit results, page score, what failed, E-E-A-T score]
+plan: all
+updated: 2026-10-29
+last_checked: 2026-10-29
+owner: Cihan
+app_version: 0.3.0
+approved: false
+sources: [docs/guides/site-audit.mdx]
+---
+Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or delete it; **Delete audit** can't be undone.
+
+## Total score
+
+The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40 to 69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
+
+## Categories
+
+**Category breakdown** scores each category out of 100, with how many of its signals were evaluated:
+
+- **Structure** (25%): whether an AI engine can parse the page, such as heading hierarchy, FAQ schema, lists and tables, and alt text.
+- **Content** (25%): whether the page answers its question directly and completely.
+- **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.
+- **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.
+- **Trust** (10%): crawl-time basics such as AI bot access in robots.txt, llms.txt, HTTPS, canonical URL and meta description.
+
+## How the score is worked out
+
+A category's score is the average of its signals, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score.
+
+Most signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata.
+
+## Signals
+
+The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:
+
+- the **Finding**: what this audit saw on the page, when the check reports it;
+- what the signal measures, and **Why** it matters to AI engines;
+- the **Recommended fix** written for this page, or the general **Fix** for signals without one.
+
+## Product pages
+
+On a product page, one with Product structured data, **Product description opening** checks that the description's first 40 words, or 250 characters, name the product type and at least two key attributes, such as a measure, a material, a fit or a use. ChatGPT appears to read only about that much of a description when it matches products to a shopping question. The finding shows where the opening ends. Other pages show this signal as n/a.
