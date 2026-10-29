@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { SITE_PAGE_TYPES, SITE_TYPE_MEANINGS, SITE_TYPE_NAMES } from '../../content-page-types.js';
 import { MAX_TASKS } from './quality.js';
 
 /**
@@ -53,12 +54,23 @@ Rules:
 - Do not write analysis tasks (analyze, identify, review, validate, measure, monitor): the product already did that work and shows it to the user.
 - refs lists the evidence refs the task rests on (e.g. "page:1", "domain:2"). Use only refs that exist. The title, Where or url must name the target itself: a page by its URL or path, a domain or competitor by name, a prompt by quoting it.
 - Use only facts from the evidence. No placeholders, no generic SEO advice.
+- Name pages and content the way the brand's kind of site does (its site type and page types below): a category page or a buying guide for an online shop, a feature or comparison page for B2B software, a destination or help page for a consumer service.
 - Write in English. At most ${MAX_TASKS} tasks.`;
+
+/**
+ * The brand's kind of site and the pages it writes, for the prompt; null for
+ * a type it doesn't know (an older caller without one).
+ */
+function siteTypeLine(siteType) {
+  if (!SITE_PAGE_TYPES[siteType]) return null;
+  const pages = SITE_PAGE_TYPES[siteType].map((type) => type.replace(/_/g, ' ')).join(', ');
+  return `Site type: ${SITE_TYPE_NAMES[siteType]} (${SITE_TYPE_MEANINGS[siteType]}). Its page types: ${pages}.`;
+}
 
 /**
  * @param {{
  *   action: { name: string, category: string, title?: string },
- *   brand: { name: string, description?: string | null, domains: string[] },
+ *   brand: { name: string, description?: string | null, domains: string[], siteType?: string },
  *   evidence: object,
  *   history?: object[],
  * }} input evidence as `evidenceForPrompt` gives it; history as `loadPastRounds` does
@@ -67,6 +79,7 @@ export function buildTaskWriterPrompt({ action, brand, evidence, history = [] })
   const prompt = [
     `Brand: ${brand.name}${brand.domains.length ? ` (${brand.domains.join(', ')})` : ''}`,
     brand.description ? `About the brand: ${brand.description}` : null,
+    siteTypeLine(brand.siteType),
     `Action: ${action.name} (category: ${action.category})`,
     '',
     'Evidence (JSON):',
