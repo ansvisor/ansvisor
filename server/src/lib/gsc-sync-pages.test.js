@@ -117,8 +117,9 @@ describe('the page sync', () => {
   it('starts over when a first sync stops in the recent days', async () => {
     state.failOn = day(13, Date.now());
     await runGscSync({ brandId: 'b1' });
-    // Nothing marked: the next sync reads the property from the start.
-    expect(state.updates).toEqual([]);
+    // Nothing marked: the next sync reads the property from the start. (The
+    // shopping read is a step of its own, and marks its own fields.)
+    expect(state.updates.filter((update) => !('gsc_shopping_synced_at' in update))).toEqual([]);
     expect(state.brand.gsc_pages_backfilled_property).toBeNull();
   });
 });

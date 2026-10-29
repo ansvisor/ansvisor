@@ -1,6 +1,7 @@
 import { BROWSER_API_BASE_URL } from '@/config/api';
 import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
+import { INTEGRATION_READ_TIMEOUT_MS } from '@/lib/integrations-client';
 
 /**
  * A brand's WordPress connection for Send to CMS (#1331, phase 2; 00294),
@@ -99,7 +100,9 @@ async function call<T>(brandId: string, init: RequestInit = {}): Promise<WordPre
 
 /** The brand's connection, and whether this server can keep a WordPress sign-in. */
 export function readWordPress(brandId: string) {
-  return call<{ configured: boolean; connection: WordPressConnection | null }>(brandId);
+  return call<{ configured: boolean; connection: WordPressConnection | null }>(brandId, {
+    signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS),
+  });
 }
 
 /** Connects the brand's site, or replaces its sign-in: the API checks it with the site first. */

@@ -114,6 +114,10 @@ function mapOpportunityRow(stored, competitors = []) {
   };
 }
 
+/** Generating opportunities and briefs costs AI: admins and managers start it (2026-10-29). */
+const GENERATE_OPPORTUNITIES_REFUSAL = 'Only admins and managers can generate opportunities.';
+const GENERATE_BRIEF_REFUSAL = 'Only admins and managers can generate briefs.';
+
 /**
  * POST /api/content/generate
  * Enqueues a content opportunity generation job. Returns { jobId } immediately.
@@ -145,6 +149,7 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
     if (!profile || profile.organization_id !== brand.organization_id) {
       return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
     }
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
 
     const job = await createJob({
       type: 'content',
@@ -162,6 +167,9 @@ router.post('/generate', requireFeature('content_optimization'), async (req, res
       message: 'Content generation job enqueued',
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     req.log.error({ err: error }, 'content enqueue error');
     return res.status(500).json({ error: error.message });
   }
@@ -205,6 +213,7 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
 
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
 
     const previous = await startedJob(brandId, idempotencyKey);
     if (previous) {
@@ -280,6 +289,7 @@ router.post('/:id/alternative', requireFeature('content_optimization'), async (r
 
   try {
     const opp = await assertOpportunityAccess(req.params.id, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
     const previous = await startedJob(opp.brand_id, idempotencyKey);
     if (previous) return res.status(202).json({ jobId: previous.id });
 
@@ -388,6 +398,7 @@ router.post(
 
     try {
       const [prompt] = await assertPromptAccess(promptId, req.user.id);
+      await assertRole(req.user.id, MANAGER_ROLES, GENERATE_OPPORTUNITIES_REFUSAL);
       const { brand_id: brandId, brands } = prompt.prompt_sets;
 
       const previous = await startedJob(brandId, idempotencyKey);
@@ -1633,6 +1644,7 @@ router.post('/:id/brief', async (req, res) => {
     if (!brand || !userOrgId || userOrgId !== brand.organization_id) {
       return res.status(403).json({ error: NOT_IN_WORKSPACE, code: 'not_in_workspace' });
     }
+    await assertRole(req.user.id, MANAGER_ROLES, GENERATE_BRIEF_REFUSAL);
 
     const result = await generateBriefForOpportunity(id, { model });
     const quota = await getBriefQuotaStatus(userOrgId);
@@ -1647,6 +1659,9 @@ router.post('/:id/brief', async (req, res) => {
     }
     if (error.status === 404) {
       return res.status(404).json({ error: error.message });
+    }
+    if (error.status === 403) {
+      return res.status(403).json({ error: error.message, code: error.code });
     }
     req.log.error({ err: error }, 'content brief generation error');
     return res.status(500).json({

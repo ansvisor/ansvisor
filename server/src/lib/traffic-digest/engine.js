@@ -336,6 +336,8 @@ export async function sendTrafficDigests({ now = new Date() } = {}) {
       .from('brands')
       .select('id')
       .eq('is_active', true)
+      // A demo brand (00380) is sample data: nobody is mailed about it.
+      .eq('is_demo', false)
       .order('id', { ascending: true })
       .range(from, to),
   );

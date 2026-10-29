@@ -659,6 +659,24 @@ describe('cloro-scraper – submitPromptTask', () => {
     }
   });
 
+  it("keeps the prompt's US state or city as a Google task's location", async () => {
+    await submitPromptTask({ ...task, scraperId: 'google-aio' });
+    await submitPromptTask({ ...task, scraperId: 'google-aimode', region: 'TR~ISTANBUL' });
+    expect(sent().map(({ payload }) => payload)).toEqual([
+      expect.objectContaining({ country: 'US', location: 'California,United States' }),
+      expect.objectContaining({ country: 'TR', location: 'Istanbul,Istanbul,Turkiye' }),
+    ]);
+  });
+
+  it('sends a refused fan-out task again for the same state', async () => {
+    answers = [400];
+    await submitPromptTask({ ...task, legacy: true });
+    expect(sent().map(({ payload }) => [payload.country, payload.state, payload.legacy])).toEqual([
+      ['US', 'CA', true],
+      ['US', 'CA', undefined],
+    ]);
+  });
+
   it('never retries a task that did not ask', async () => {
     answers = [400];
     await expect(submitPromptTask({ ...task, scraperId: 'copilot-web' })).rejects.toMatchObject({

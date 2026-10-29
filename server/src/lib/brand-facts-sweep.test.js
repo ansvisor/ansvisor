@@ -92,6 +92,8 @@ describe('sweepBrandFacts', () => {
       expect.arrayContaining([
         ['lt', 'checked_at', new Date(NOW - REFRESH_DAYS * DAY).toISOString()],
         ['eq', 'brands.is_active', true],
+        // Never a demo brand (00380).
+        ['eq', 'brands.is_demo', false],
         ['limit', 12],
       ]),
     );
