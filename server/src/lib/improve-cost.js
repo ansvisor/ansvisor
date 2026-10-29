@@ -3,13 +3,16 @@
  * quota can be a dollar budget — a share of what the customer pays — and stay
  * there whichever model IMPROVE_SUGGESTION_MODEL points at.
  *
- * List prices in USD per million tokens. While CHAT_AGENTIC is on, the
- * prices synced daily from OpenRouter's catalog come first (model-prices.js,
- * CHAT-16 §A), at the price in effect; this table prices a model the sync
- * doesn't have, or every model with the flag off. Update it when a provider
+ * List prices in USD per million tokens. Chat's own steps (chat-budget.js,
+ * only for workspaces Chat is on for) read the prices synced daily from
+ * OpenRouter's catalog first (model-prices.js, CHAT-16 §A), at the price in
+ * effect; every other call, and a Chat step whose model isn't synced or is
+ * synced at $0, is priced from this table. Update it when a provider
  * changes its prices or a new model is configured; a model missing from both
  * is charged at FALLBACK_PRICE, deliberately expensive, so an unknown model
- * can only use the budget up faster, never overspend it.
+ * can only use the budget up faster, never overspend it. A model here priced
+ * higher for a long prompt has its `long` rate, for a call whose input tokens
+ * pass `over`.
  */
 
 import { syncedPriceFor } from './model-price-cache.js';
@@ -19,6 +22,13 @@ export const MODEL_PRICES = {
   'google/gemini-3-flash': { input: 0.5, output: 3 },
   'openai/gpt-5-mini': { input: 0.25, output: 2 },
   'anthropic/claude-haiku-4-5': { input: 1, output: 5 },
+  // The Content Editor's with an Anthropic key (content-brief.js): Haiku reads, Sonnet writes.
+  'anthropic/claude-haiku-5-5': {
+    input: 0.1,
+    output: 0.5,
+    long: { over: 100_000, input: 0.5, output: 2.5 },
+  },
+  'anthropic/claude-sonnet-5-5': { input: 2, output: 10 },
 };
 
 export const FALLBACK_PRICE = { input: 5, output: 25 };
@@ -31,22 +41,51 @@ export const FALLBACK_PRICE = { input: 5, output: 25 };
 const TYPICAL_TOKENS = { input: 7000, output: 2000 };
 
 /**
- * A model's price: the synced one in effect now (for a call of
- * `promptTokens`, which may cross a prompt-size price), else this table's.
- * OpenRouter ids carry the provider id after an `openrouter/` prefix
- * (`openrouter/google/gemini-3-flash-preview`); they're priced as that model.
+ * This table's price for a model: under its id, or with OpenRouter's dotted
+ * version written as ours ("anthropic/claude-haiku-5.5" is
+ * "anthropic/claude-haiku-5-5"). OpenRouter ids carry the provider id after
+ * an `openrouter/` prefix (`openrouter/google/gemini-3-flash-preview`);
+ * they're priced as that model. Null when the table hasn't the model.
  */
-export function priceFor(modelId, { promptTokens = 0 } = {}) {
-  const synced = syncedPriceFor(modelId, { promptTokens });
-  if (synced) return synced;
+function tablePriceFor(modelId) {
   const id = String(modelId ?? '').replace(/^openrouter\//, '');
-  return MODEL_PRICES[id] ?? FALLBACK_PRICE;
+  return MODEL_PRICES[id] ?? MODEL_PRICES[id.replace(/-(\d+)\.(\d+)$/, '-$1-$2')] ?? null;
 }
 
-/** USD cost of one call from the AI SDK's `usage`. */
-export function generationCostUsd(modelId, usage) {
+/**
+ * A synced price the budget may use: both rates above $0, unless the model
+ * is a `:free` one. A $0 rate for a paid model (a catalog mistake or a
+ * promotion) would let its calls cost the budget nothing, so the table (or
+ * FALLBACK_PRICE) prices it instead.
+ */
+function usableSynced(modelId, price) {
+  if (!price) return false;
+  if (String(modelId ?? '').endsWith(':free')) return true;
+  return price.input > 0 && price.output > 0;
+}
+
+/**
+ * A model's price, for a call of `promptTokens` (which may cross a
+ * prompt-size price). With `synced` (Chat's own steps only), the synced one
+ * in effect now comes first; otherwise, and when it's missing or $0, this
+ * table's, and FALLBACK_PRICE for a model the table hasn't.
+ */
+export function priceFor(modelId, { promptTokens = 0, synced = false } = {}) {
+  if (synced) {
+    const price = syncedPriceFor(modelId, { promptTokens });
+    if (usableSynced(modelId, price)) return price;
+  }
+  const price = tablePriceFor(modelId) ?? FALLBACK_PRICE;
+  return price.long && promptTokens > price.long.over ? price.long : price;
+}
+
+/**
+ * USD cost of one call from the AI SDK's `usage`. `synced`: a Chat step,
+ * priced from the synced catalog first (priceFor).
+ */
+export function generationCostUsd(modelId, usage, { synced = false } = {}) {
   const input = Number(usage?.inputTokens) || 0;
-  const price = priceFor(modelId, { promptTokens: input });
+  const price = priceFor(modelId, { promptTokens: input, synced });
   const output = Number(usage?.outputTokens) || 0;
   return (input * price.input + output * price.output) / 1_000_000;
 }

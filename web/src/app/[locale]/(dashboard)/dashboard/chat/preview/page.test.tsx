@@ -1,12 +1,12 @@
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 
 /**
- * The Chat pieces preview (Chat P0, D1): there only with the new Chat on for
- * the workspace, and every piece in every state on it.
+ * The Chat pieces preview (Chat P0, D1 and D2): there only with the new Chat
+ * on for the workspace, and every piece and run card in every state on it.
  */
 
 const session = vi.hoisted(() => ({
@@ -29,6 +29,13 @@ const notFound = vi.hoisted(() =>
   }),
 );
 vi.mock('next/navigation', () => ({ notFound }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 import ChatPiecesPreviewPage from './page';
 
@@ -47,12 +54,20 @@ beforeEach(() => {
   notFound.mockClear();
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  // The live runs tray reads its runs.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () => new Response(JSON.stringify({ ok: true, runs: [], running: 0, needsYou: 0 })),
+    ),
+  );
 });
 
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 async function render() {
@@ -66,6 +81,9 @@ async function render() {
   );
 }
 const slots = (slot: string) => container.querySelectorAll(`[data-slot="${slot}"]`);
+/** D1's pieces on their own, without the ones inside D2's run cards. */
+const pieces = (slot: string) =>
+  [...slots(slot)].filter((el) => !el.closest('[data-slot="cards-preview"]'));
 
 describe('the Chat pieces preview', () => {
   it.each([undefined, '', 'false'])('is not found with CHAT_AGENTIC=%s', async (value) => {
@@ -91,7 +109,7 @@ describe('the Chat pieces preview', () => {
     await render();
     expect(notFound).not.toHaveBeenCalled();
     // 5 states in 3 sizes, and the 5 still ones of the Agents list.
-    const avatars = [...slots('agent-avatar')] as HTMLElement[];
+    const avatars = pieces('agent-avatar') as HTMLElement[];
     const states = new Set(['idle', 'working', 'waiting', 'done', 'failed']);
     const live = avatars.filter((el) => el.dataset.tone === 'live');
     const muted = avatars.filter((el) => el.dataset.tone === 'muted');
@@ -99,20 +117,52 @@ describe('the Chat pieces preview', () => {
     expect(new Set(live.map((el) => el.dataset.state))).toEqual(states);
     expect(muted).toHaveLength(5);
     expect(new Set(muted.map((el) => el.dataset.state))).toEqual(states);
-    expect(slots('status-pill')).toHaveLength(9);
-    expect(slots('approval-pill')).toHaveLength(5);
-    expect(slots('step-marker')).toHaveLength(5);
-    expect(slots('list-dot')).toHaveLength(6);
-    expect(slots('list-progress')).toHaveLength(1);
-    expect(slots('new-pill')).toHaveLength(1);
-    expect(slots('attention-dot')).toHaveLength(1);
-    expect(slots('attention-count')).toHaveLength(2);
-    expect(slots('done-tick')).toHaveLength(3);
+    expect(pieces('status-pill')).toHaveLength(9);
+    expect(pieces('approval-pill')).toHaveLength(5);
+    expect(pieces('step-marker')).toHaveLength(5);
+    expect(pieces('list-dot')).toHaveLength(6);
+    expect(pieces('list-progress')).toHaveLength(1);
+    expect(pieces('new-pill')).toHaveLength(1);
+    expect(pieces('attention-dot')).toHaveLength(1);
+    expect(pieces('attention-count')).toHaveLength(2);
+    expect(pieces('done-tick')).toHaveLength(3);
+  });
+
+  it('shows every run card in every state, and the runs tray', async () => {
+    await render();
+    expect(slots('plan-card')).toHaveLength(3);
+    // Running, waiting, done, one step, stopped, failed; and one in the result card.
+    expect(slots('run-steps')).toHaveLength(7);
+    const approvals = ([...slots('agent-card')] as HTMLElement[]).filter((el) =>
+      el.hasAttribute('data-kind'),
+    );
+    expect(approvals.map((el) => `${el.dataset.kind}:${el.dataset.status}`)).toEqual([
+      'write:pending',
+      'write:pending',
+      'write:saving',
+      'write:error',
+      'execute:pending',
+      'execute:pending',
+      'execute:saving',
+      'execute:pending',
+    ]);
+    expect(slots('done-line')).toHaveLength(2);
+    expect(slots('approval-skipped')).toHaveLength(1);
+    expect([...slots('result-card')].map((el) => (el as HTMLElement).dataset.state)).toEqual([
+      'done',
+      'needsClick',
+    ]);
+    expect(slots('denial-card')).toHaveLength(3);
+    expect(slots('error-card')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-action="runs.toggleTray"]')).toHaveLength(3);
   });
 
   it('gives every control on it a data-action id', async () => {
     await render();
-    const controls = [...container.querySelectorAll<HTMLElement>('button, a, [role="button"]')];
-    expect(controls.map((el) => el.dataset.action)).toEqual(['chatMenu.dotLegend']);
+    const controls = [
+      ...container.querySelectorAll<HTMLElement>('button, a, input, textarea, [role="button"]'),
+    ];
+    expect(controls.length).toBeGreaterThan(40);
+    for (const el of controls) expect(el.dataset.action, el.outerHTML.slice(0, 80)).toBeTruthy();
   });
 });

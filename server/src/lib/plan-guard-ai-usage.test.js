@@ -227,6 +227,8 @@ describe('getDraftAiUsage', () => {
     expect(pageFilters).toEqual([
       ['eq', 'organization_id', 'o1'],
       ['eq', 'content_draft_id', 'd1'],
+      // Calls on the workspace's own key never count (00405).
+      ['eq', 'own_key', false],
       // The same period as the month's figure: it renews on the 20th.
       ['gte', 'used_at', '2026-10-20T09:00:00.000Z'],
     ]);
@@ -264,13 +266,13 @@ describe('getDraftAiUsage', () => {
 });
 
 describe('the free trial’s AI budget', () => {
-  it('is $1 whatever the plan while the subscription is trialing, and says it is the trial’s', async () => {
+  it('is $2 whatever the plan while the subscription is trialing, and says it is the trial’s', async () => {
     org = { ...org, plan: 'growth', subscription_status: 'trialing' };
-    spend = [{ feature: 'content', cost_usd: '0.21' }];
+    spend = [{ feature: 'content', cost_usd: '0.42' }];
     expect(await guard.getAiUsage('o1')).toMatchObject({ trial: true, percentUsed: 21 });
     // Paid: Growth's own $25.
     org = { ...org, subscription_status: 'active' };
-    expect(await guard.getAiUsage('o1')).toMatchObject({ trial: false, percentUsed: 0.8 });
+    expect(await guard.getAiUsage('o1')).toMatchObject({ trial: false, percentUsed: 1.7 });
   });
 
   it('leaves Enterprise with its own (a deal’s budget), and an unlimited one as it is', () => {
@@ -281,13 +283,13 @@ describe('the free trial’s AI budget', () => {
     expect(guard.applyTrialAiBudget(plan(-1), trialing())).toEqual(plan(-1));
   });
 
-  it('holds Starter and Growth trials to $1, and a smaller budget to its own', () => {
+  it('holds Starter and Growth trials to $2, and a smaller budget to its own', () => {
     const plan = (budget) => ({ id: 'x', limits: { improveMonthlyBudgetUsd: budget } });
     const trial = { plan: 'growth', subscription_status: 'trialing' };
     expect(guard.applyTrialAiBudget(plan(25), trial)).toEqual({
       id: 'x',
       trial: true,
-      limits: { improveMonthlyBudgetUsd: 1 },
+      limits: { improveMonthlyBudgetUsd: 2 },
     });
     expect(guard.applyTrialAiBudget(plan(0.5), trial).limits.improveMonthlyBudgetUsd).toBe(0.5);
     expect(guard.applyTrialAiBudget(plan(25), { ...trial, subscription_status: 'active' })).toEqual(

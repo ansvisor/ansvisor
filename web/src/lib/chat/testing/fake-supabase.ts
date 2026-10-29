@@ -21,7 +21,10 @@ export interface FakeSupabase {
   failures: Record<string, { code?: string; message: string }>;
   /** Every statement, in order: [table, kind]. */
   log: [string, string][];
+  /** Database functions by name, for rpc(). */
+  rpcs: Record<string, (args: Record<string, unknown>) => unknown>;
   from(table: string): Builder;
+  rpc(name: string, args?: Record<string, unknown>): Promise<Result>;
 }
 
 interface Builder extends PromiseLike<Result> {
@@ -34,6 +37,9 @@ interface Builder extends PromiseLike<Result> {
   in(column: string, values: unknown[]): Builder;
   is(column: string, value: null): Builder;
   lt(column: string, value: string): Builder;
+  gt(column: string, value: unknown): Builder;
+  order(column: string, options?: { ascending?: boolean }): Builder;
+  limit(count: number): Builder;
   maybeSingle(): Promise<Result>;
   single(): Promise<Result>;
 }
@@ -54,11 +60,21 @@ export function createFakeSupabase(): FakeSupabase {
     defaults: {},
     failures: {},
     log: [],
+    rpcs: {},
+    async rpc(name, args = {}) {
+      await tick();
+      fake.log.push([name, 'rpc']);
+      const fn = fake.rpcs[name];
+      if (!fn) return { data: null, error: { message: `No function ${name}` } };
+      return { data: await fn(args), error: null };
+    },
     from(table) {
       let kind: 'select' | 'insert' | 'update' | 'delete' = 'select';
       let payload: Row | Row[] | null = null;
       let returning = false;
       const filters: Filter[] = [];
+      let sort: { column: string; ascending: boolean } | null = null;
+      let max: number | null = null;
 
       const rows = () => (fake.tables[table] ??= []);
       const clash = (row: Row, others: Row[]) =>
@@ -72,7 +88,17 @@ export function createFakeSupabase(): FakeSupabase {
         const failure = fake.failures[table];
         if (failure) return { data: null, error: failure };
         const matching = rows().filter((row) => filters.every((f) => f(row)));
-        if (kind === 'select') return { data: matching.map((row) => ({ ...row })), error: null };
+        if (kind === 'select') {
+          const sorted = sort
+            ? [...matching].sort((a, b) => {
+                const x = a[sort!.column] as string | number;
+                const y = b[sort!.column] as string | number;
+                return (x < y ? -1 : x > y ? 1 : 0) * (sort!.ascending ? 1 : -1);
+              })
+            : matching;
+          const limited = max === null ? sorted : sorted.slice(0, max);
+          return { data: limited.map((row) => ({ ...row })), error: null };
+        }
         if (kind === 'delete') {
           fake.tables[table] = rows().filter((row) => !matching.includes(row));
           return { data: returning ? matching : null, error: null };
@@ -149,6 +175,18 @@ export function createFakeSupabase(): FakeSupabase {
               typeof row[column] === 'string' &&
               Date.parse(row[column] as string) < Date.parse(value),
           );
+          return builder;
+        },
+        gt(column, value) {
+          filters.push((row) => (row[column] as number) > (value as number));
+          return builder;
+        },
+        order(column, options) {
+          sort = { column, ascending: options?.ascending ?? true };
+          return builder;
+        },
+        limit(count) {
+          max = count;
           return builder;
         },
         maybeSingle: () => one(false),

@@ -4,7 +4,12 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { stripe, PRICE_IDS, priceIdFor } from '@/lib/stripe';
 import { TRIAL_DAYS, hasUsedTrial } from '@/lib/billing/trial';
-import { subscriptionEnded, takesPromoCode } from '@/lib/billing/plan-purchase';
+import {
+  CHECKOUT_MODES,
+  FIRST_MONTH_CODE,
+  subscriptionEnded,
+  takesPromoCode,
+} from '@/lib/billing/plan-purchase';
 import { findPromotionCode } from '@/lib/billing/promo-code';
 
 /** POST /api/stripe/checkout's body. */
@@ -16,8 +21,15 @@ const checkoutSchema = z.object({
   /** Where a canceled checkout goes back to: Billing, or onboarding's plan step. */
   returnTo: z.literal('billing').optional(),
   /**
-   * A promotion code the plan dialog checked, for a monthly plan: Checkout
-   * opens with it applied. Checked again here; the caller's word isn't taken.
+   * `buy`: the full plan from day one, no trial. `trial`: the free trial, for
+   * an organization that never had a subscription, with no promotion code.
+   * A card is taken either way.
+   */
+  mode: z.enum(CHECKOUT_MODES),
+  /**
+   * A promotion code for a monthly plan bought now (the first-month offer, or
+   * one the plan dialog checked): Checkout opens with it applied. Checked
+   * again here; the caller's word isn't taken.
    */
   promotionCode: z.string().trim().min(1).max(64).optional(),
 });
@@ -37,7 +49,14 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
-    const { planId, organizationId, interval, returnTo, promotionCode } = parsed.data;
+    const { planId, organizationId, interval, returnTo, mode, promotionCode } = parsed.data;
+    // The trial comes without an offer: its code is the price of buying now.
+    if (mode === 'trial' && promotionCode) {
+      return NextResponse.json(
+        { error: 'A free trial takes no promo code', code: 'promo_with_trial' },
+        { status: 400 },
+      );
+    }
 
     // The org id arrives in the request body, so confirm the caller is
     // actually in it. Row-level security used to be the only thing standing
@@ -94,8 +113,23 @@ export async function POST(req: NextRequest) {
 
     let customerId = org?.stripe_customer_id as string | null;
 
+    // The free trial is for an organization's first subscription only: one
+    // that had a subscription, or whose Stripe customer did (a trial taken
+    // and canceled, a lapsed plan), buys now instead.
+    if (
+      mode === 'trial' &&
+      (org?.stripe_subscription_id || (await hasUsedTrial(stripe, customerId)))
+    ) {
+      return NextResponse.json(
+        { error: 'The free trial has been used', code: 'trial_unavailable' },
+        { status: 409 },
+      );
+    }
+
     // A code goes with a monthly plan only (a year has its own discount), and
     // must be one Stripe can redeem now: looked up here, not taken on trust.
+    // The first-month offer's own code, once Stripe no longer redeems it,
+    // leaves the plan at its price, with Checkout's code box instead.
     let promotionCodeId: string | null = null;
     if (promotionCode) {
       if (!takesPromoCode(interval ?? 'month')) {
@@ -105,13 +139,16 @@ export async function POST(req: NextRequest) {
         );
       }
       const found = await findPromotionCode(stripe, promotionCode, customerId);
-      if (!found) {
+      if (found) {
+        promotionCodeId = found.id;
+      } else if (promotionCode.toUpperCase() !== FIRST_MONTH_CODE) {
         return NextResponse.json(
           { error: "That promo code isn't valid", code: 'invalid_promo_code' },
           { status: 400 },
         );
+      } else {
+        console.warn('[stripe/checkout] The first-month offer code is not redeemable now');
       }
-      promotionCodeId = found.id;
     }
 
     // Create Stripe customer if none exists
@@ -132,11 +169,7 @@ export async function POST(req: NextRequest) {
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
-    // The free trial is for the organization's first subscription only. A
-    // customer who already had one — trial taken and canceled, or a lapsed
-    // plan — subscribes without another.
-    const trial = !(await hasUsedTrial(stripe, customerId));
+    const trial = mode === 'trial';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -146,12 +179,17 @@ export async function POST(req: NextRequest) {
         ...(trial ? { trial_period_days: TRIAL_DAYS } : {}),
         metadata: { organization_id: organizationId, plan_id: planId },
       },
+      // A card either way: the trial too, so the plan starts on its own when it ends.
+      payment_method_collection: 'always',
       success_url: `${appUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}${returnTo === 'billing' ? '/dashboard/settings/billing' : '/dashboard/onboarding'}`,
-      // Stripe takes either a code applied here or its own code box, not both.
+      // Stripe takes either a code applied here or its own code box, not both;
+      // the trial takes neither.
       ...(promotionCodeId
         ? { discounts: [{ promotion_code: promotionCodeId }] }
-        : { allow_promotion_codes: true }),
+        : trial
+          ? {}
+          : { allow_promotion_codes: true }),
       // Collect billing address + VAT/tax ID up front so invoices are
       // complete; later edits happen in the Customer Portal (/api/stripe/portal).
       billing_address_collection: 'required',

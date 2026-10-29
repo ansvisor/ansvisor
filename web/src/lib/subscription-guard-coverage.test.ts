@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
@@ -22,6 +22,11 @@ import { describe, expect, it } from 'vitest';
  * setup action (assertWritable({ onboarding: true })) never runs one in its
  * file that checks without it — that check would refuse the organization
  * setup lets through.
+ *
+ * A gated action that takes a brand id hands it to its check
+ * (assertWritable({ brandId })), which refuses the demo brand (00380): a
+ * parameter named brandId, an object parameter whose type in its file has
+ * one, or a brand's own id named below.
  */
 
 const ACTIONS_DIR = join(__dirname, 'actions');
@@ -54,6 +59,19 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
   'chat-access-requests.ts:decideAccessRequest':
     "marks a request decided; it changes no one's access",
+  // Chat's settings (Admins): asAdmin() checks the plan itself (ctx.plan.writable,
+  // as assertWritable) to answer read_only as a result instead of throwing.
+  'chat-settings.ts:setToolPolicy': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:resetToolPolicies': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:setChatSwitch': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:setManagerExecute': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:removeAutoChoice':
+    "removes the person's own Don't ask again tick: takes an auto-approval back, never gives one",
+};
+
+/** Actions that take a brand's own id under another name: file:function → the parameter. */
+const BRAND_ID_PARAMS: Record<string, string> = {
+  'brand.ts:updateBrand': 'id',
 };
 
 /** Write routes that stay open while read-only: path:METHOD → why. */
@@ -75,6 +93,12 @@ const OPEN_ROUTES: Record<string, string> = {
   'stripe/subscription:DELETE': 'billing: canceling the plan',
   'stripe/webhook:POST': "Stripe's own calls",
   'traffic/read:POST': 'reads only',
+  // Chat's runs: the engine answers 402 with the server's body itself
+  // (startChatRun, prepareResume), but for a request to the Admins.
+  'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
+  'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
+  'chat/runs/[id]/skip:POST': 'saying no to a change starts no cost',
+  'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
 };
 
 /** What checks a route's plan before it writes. */
@@ -125,6 +149,10 @@ interface FunctionFacts {
   strictGate: boolean;
   /** It calls assertWritable({ onboarding: true }). */
   onboardingGate: boolean;
+  /** The brand id it takes: `brandId`, `input.brandId`… (null when it takes none). */
+  brandParam: string | null;
+  /** It hands a brand id to assertWritable ({ brandId }). */
+  brandGate: boolean;
   /** What it awaits first, outside the functions inside it: the callee's name, else the text. */
   firstAwait: string | null;
   callees: string[];
@@ -207,20 +235,64 @@ function readFunctions(
     true,
   );
   const bound = readBindings(source);
-  const bodies = new Map<string, { node: ts.Node; exported: boolean }>();
+  // The interfaces and type aliases in the file with a brandId member.
+  const hasBrandId = (members: ts.NodeArray<ts.TypeElement>) =>
+    members.some((m) => m.name?.getText(source) === 'brandId');
+  const brandTypes = new Set<string>();
+  for (const statement of source.statements) {
+    if (ts.isInterfaceDeclaration(statement) && hasBrandId(statement.members)) {
+      brandTypes.add(statement.name.text);
+    } else if (
+      ts.isTypeAliasDeclaration(statement) &&
+      ts.isTypeLiteralNode(statement.type) &&
+      hasBrandId(statement.type.members)
+    ) {
+      brandTypes.add(statement.name.text);
+    }
+  }
+  /** The brand id a function's parameters carry, as its body names it. */
+  const brandParamOf = (fn: ts.SignatureDeclaration): string | null => {
+    for (const param of fn.parameters) {
+      const { name, type } = param;
+      if (ts.isIdentifier(name) && name.text === 'brandId') return 'brandId';
+      if (
+        ts.isObjectBindingPattern(name) &&
+        name.elements.some((e) => e.name.getText(source) === 'brandId')
+      ) {
+        return 'brandId';
+      }
+      if (
+        ts.isIdentifier(name) &&
+        type &&
+        ((ts.isTypeReferenceNode(type) && brandTypes.has(type.typeName.getText(source))) ||
+          (ts.isTypeLiteralNode(type) && hasBrandId(type.members)))
+      ) {
+        return `${name.text}.brandId`;
+      }
+    }
+    return null;
+  };
+  const bodies = new Map<string, { node: ts.Node; exported: boolean; brandParam: string | null }>();
   const isExported = (node: ts.Node) =>
     ts.canHaveModifiers(node) &&
     (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
   for (const statement of source.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
-      bodies.set(statement.name.text, { node: statement.body, exported: isExported(statement) });
+      const name = statement.name.text;
+      bodies.set(name, {
+        node: statement.body,
+        exported: isExported(statement),
+        brandParam: BRAND_ID_PARAMS[`${basename(file)}:${name}`] ?? brandParamOf(statement),
+      });
     } else if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         const init = declaration.initializer;
         if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
-          bodies.set(declaration.name.getText(source), {
+          const name = declaration.name.getText(source);
+          bodies.set(name, {
             node: init,
             exported: isExported(statement),
+            brandParam: BRAND_ID_PARAMS[`${basename(file)}:${name}`] ?? brandParamOf(init),
           });
         }
       }
@@ -228,7 +300,7 @@ function readFunctions(
   }
 
   const facts = new Map<string, FunctionFacts>();
-  for (const [name, { node, exported }] of bodies) {
+  for (const [name, { node, exported, brandParam }] of bodies) {
     const fact: FunctionFacts = {
       exported,
       writes: [],
@@ -236,6 +308,8 @@ function readFunctions(
       gates: [],
       strictGate: false,
       onboardingGate: false,
+      brandParam,
+      brandGate: false,
       firstAwait: firstAwaitIn(node),
       callees: [],
     };
@@ -269,6 +343,19 @@ function readFunctions(
             const onboarding = n.arguments.some((a) => /onboarding:\s*true/.test(a.getText()));
             if (onboarding) fact.onboardingGate = true;
             else fact.strictGate = true;
+            // Its brand: `{ brandId }`, or `{ brandId: <the brand id it takes> }`.
+            const arg = n.arguments[0];
+            if (arg && ts.isObjectLiteralExpression(arg)) {
+              for (const prop of arg.properties) {
+                if (prop.name?.getText() !== 'brandId') continue;
+                const value = ts.isShorthandPropertyAssignment(prop)
+                  ? 'brandId'
+                  : ts.isPropertyAssignment(prop)
+                    ? prop.initializer.getText()
+                    : null;
+                if (value !== null && value === brandParam) fact.brandGate = true;
+              }
+            }
           }
           if (bodies.has(called)) fact.callees.push(called);
           if (
@@ -384,6 +471,29 @@ describe('read-only coverage', () => {
       }
     }
     expect(late).toEqual([]);
+  });
+
+  it('has every gated action that takes a brand id hand it to the check, which refuses the demo brand', () => {
+    const missing: string[] = [];
+    let takers = 0;
+    for (const { file, facts } of actionFiles) {
+      for (const [name, fact] of facts) {
+        const key = `${file}:${name}`;
+        if (!fact.exported || key in OPEN_ACTIONS || !reach(facts, name).writes.length) continue;
+        if (!fact.brandParam) continue;
+        takers += 1;
+        if (!fact.brandGate) missing.push(`${key} (takes ${fact.brandParam})`);
+      }
+    }
+    expect(missing).toEqual([]);
+    // The brand's own id under another name is still one it takes.
+    for (const key of Object.keys(BRAND_ID_PARAMS)) {
+      const [file, name] = key.split(':');
+      const fact = actionFiles.find((a) => a.file === file)?.facts.get(name);
+      expect(fact?.brandParam, key).toBe(BRAND_ID_PARAMS[key]);
+    }
+    // Sanity: the scan finds the actions that take a brand.
+    expect(takers).toBeGreaterThan(40);
   });
 
   it("has no setup action run a function in its file whose check refuses setup's organization", () => {

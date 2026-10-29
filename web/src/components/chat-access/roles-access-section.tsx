@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -64,10 +65,14 @@ export function RolesAccessSection({
   useEffect(() => {
     let live = true;
     Promise.all([getChatAccess(), listRoleMembers()])
-      .then(([nextAccess, nextMembers]) => {
+      .then(([accessRead, membersRead]) => {
         if (!live) return;
-        setAccess(nextAccess);
-        setMembers(nextMembers);
+        if (!accessRead.ok || !membersRead.ok) {
+          setAccess('failed');
+          return;
+        }
+        setAccess(accessRead.access);
+        setMembers(membersRead.members);
       })
       .catch(() => {
         if (live) setAccess('failed');
@@ -81,9 +86,12 @@ export function RolesAccessSection({
   if (access === undefined) return <Skeleton className="h-96 w-full" />;
   if (access === 'failed' || access === null) {
     return (
-      <p role="status" className="text-sm text-muted-foreground">
-        {t('roles.loadError')}
-      </p>
+      <div role="status" className="space-y-2 text-sm text-muted-foreground">
+        <p>{t('roles.loadError')}</p>
+        <Button size="sm" variant="outline" onClick={reload}>
+          {t('roles.retry')}
+        </Button>
+      </div>
     );
   }
 

@@ -35,23 +35,40 @@ export function RequestsSection({
 }) {
   const t = useTranslations('chatAccess.requests');
   const format = useFormatter();
-  const [data, setData] = useState<{ isAdmin: boolean; requests: AccessRequest[] } | null>(null);
+  const [data, setData] = useState<
+    { isAdmin: boolean; requests: AccessRequest[] } | 'failed' | null
+  >(null);
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
     listAccessRequests()
-      .then((next) => {
-        if (live) setData(next);
+      .then((read) => {
+        if (!live) return;
+        if (read.ok) setData({ isAdmin: read.isAdmin, requests: read.requests });
+        // Chat off: nothing to list; a failed read says so.
+        else setData(read.failure === 'failed' ? 'failed' : null);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (live) setData('failed');
+      });
     return () => {
       live = false;
     };
   }, [version, reload]);
 
   if (!data) return null;
+  if (data === 'failed') {
+    return (
+      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span>{t('loadError')}</span>
+        <Button size="sm" variant="outline" onClick={() => setReload((n) => n + 1)}>
+          {t('retry')}
+        </Button>
+      </div>
+    );
+  }
   const pending = data.requests.filter((r) => r.status === 'pending').length;
 
   async function act(id: string, run: () => Promise<boolean>, done: string) {

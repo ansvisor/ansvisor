@@ -1,4 +1,4 @@
-FROM node:20
+FROM node:24
 
 ARG VERSION=0.1.0
 LABEL org.opencontainers.image.title="Ansvisor Server"

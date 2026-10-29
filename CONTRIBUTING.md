@@ -24,6 +24,7 @@ ansvisor/
 ├── web/                 # Next.js 16 frontend (TypeScript)
 ├── server/              # Express backend (Node.js ESM)
 ├── supabase/            # Database migrations and config
+├── help/                # Product Help articles Chat answers from (help/README.md)
 ├── scripts/             # Version management tooling
 ├── docker-compose.yml   # Containerized deployment
 ├── CHANGELOG.md
@@ -164,14 +165,29 @@ We follow [GitHub Flow](https://docs.github.com/en/get-started/using-github/gith
    migration, and the other half is applying it to the hosted database. You do
    not need to do anything about the label yourself.
 
-5. Push and open a pull request against `main`.
+   If the migration adds a table with a `brand_id`, say what the
+   [demo brand](docs/guides/demo-brand.mdx) shows for it: build its rows in a
+   module under `server/src/lib/demo/`, or list it in `SKIPPED` in
+   `server/src/lib/demo/coverage.js` with the reason. `coverage.test.js` fails
+   until you do. A change to what the demo's data looks like (a module's rows,
+   or a column a page reads from them) also bumps `DEMO_VERSION` in
+   `server/src/lib/demo/index.js`, so every demo brand is rebuilt on its next
+   visit.
 
-6. In your PR description, include:
+5. If your change alters what a user sees or does, add or update its Help
+   article under `help/` in the same pull request ("Help article updated"):
+   one article per page, feature, setting and main task, in the format of
+   [help/README.md](help/README.md). `yarn test` (run from `web/`) checks
+   the format. A new article starts as `approved: false`.
+
+6. Push and open a pull request against `main`.
+
+7. In your PR description, include:
    - **What** changed and **why**
    - **How to test** the change
    - Screenshots if there are UI changes
 
-7. Wait for review, address feedback, and your PR will be merged.
+8. Wait for review, address feedback, and your PR will be merged.
 
 ### Checking for schema drift
 

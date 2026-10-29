@@ -94,8 +94,8 @@ export function YourAccessSlot({ className }: { className?: string }) {
   useEffect(() => {
     let live = true;
     getChatAccess()
-      .then((next) => {
-        if (live) setAccess(next);
+      .then((read) => {
+        if (live && read.ok) setAccess(read.access);
       })
       .catch(() => {});
     return () => {

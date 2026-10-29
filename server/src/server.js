@@ -9,15 +9,23 @@ import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
 
 import logger from './lib/logger.js';
+import { handleProcessErrors } from './lib/process-errors.js';
 import Middleware from './middleware/index.js';
 import { apiLimiter } from './middleware/rate-limiter.js';
 import requestIdMiddleware from './middleware/request-id.js';
 import { requireActiveSubscription } from './middleware/subscription.js';
+import {
+  DEMO_BRAND,
+  isDemoBrand,
+  isDemoBrandRow,
+  refuseDemoBrandWrites,
+} from './middleware/demo-brand.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
+import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -27,17 +35,20 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
+import { listDailyTrackingBrands } from './lib/tracking-brands.js';
 import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
 import { sweepActionValidation } from './lib/action-center/validate.js';
 import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
+import { sweepIdleDemoBrands } from './lib/demo/idle-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepFramerPublished } from './lib/cms/framer-status.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
+import { sweepWixPublished } from './lib/cms/wix-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -66,6 +77,9 @@ import { checkPromptUsageCounters } from './lib/prompt-usage-counters.js';
 import { refreshCloroCountries } from './lib/cloro-countries.js';
 import { chatAgenticDeployed } from './lib/chat-flag.js';
 import { startModelPriceSync } from './lib/model-prices.js';
+
+// Before anything starts: a stray rejection is logged, not a crash.
+handleProcessErrors();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -251,12 +265,8 @@ async function runDailyTracking() {
     logger.error({ err }, '[brand-facts] weekly sweep crashed');
   });
 
-  // Skip paused brands (is_active = false): the user has explicitly suspended
-  // tracking for them, so they should not spend Cloro / LLM credits daily.
-  const { data: brands, error } = await supabaseAdmin
-    .from('brands')
-    .select('id, organization_id')
-    .eq('is_active', true);
+  // Skip paused brands (the user's own stop) and demo brands (sample data).
+  const { data: brands, error } = await listDailyTrackingBrands();
 
   if (error || !brands || brands.length === 0) {
     return { triggered: 0, total: 0 };
@@ -338,6 +348,12 @@ async function runDailyTracking() {
     logger.error({ err }, '[content-history] daily prune failed');
   });
 
+  // Demo brands nobody opened for two weeks (00380): their sample rows go,
+  // the brand row stays, and the next visit builds them again.
+  sweepIdleDemoBrands().catch((err) => {
+    logger.error({ err }, '[demo] idle sweep failed');
+  });
+
   // Catalog feed URLs (#1263): read again once a day, never blocking tracking.
   // Then the products removed from their source over 90 days ago are
   // deleted: after the sweep, so it isn't deleting while a sync brings one back.
@@ -370,6 +386,10 @@ async function runDailyTracking() {
   // And to Framer (00295), once a day too.
   sweepFramerPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[framer-status] daily sweep failed');
+  });
+  // And to Wix (00372), once a day too.
+  sweepWixPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wix-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync
@@ -444,7 +464,8 @@ app.post('/api/internal/daily-tracking', async (req, res) => {
 // key belongs to the same org as the opportunity. So this endpoint just
 // trusts the secret and runs the LLM. Always passes force=true to bypass
 // the cached-brief early-return (MCP callers want a fresh brief; for
-// cached reads they should use get_content_opportunity instead).
+// cached reads they should use get_content_opportunity instead). Never on
+// a demo brand (00380): 402 demo_brand, as the API answers.
 app.post('/api/internal/content/:id/brief', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -453,6 +474,9 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
 
   try {
     const { id } = req.params;
+    if (await isDemoBrandRow('content_opportunities', id)) {
+      return res.status(402).json(DEMO_BRAND);
+    }
     const { force, model } = req.body || {};
     const result = await generateBriefForOpportunity(id, {
       force: Boolean(force),
@@ -485,7 +509,7 @@ app.post('/api/internal/content/:id/brief', async (req, res) => {
 // before reaching here, so this endpoint just trusts the secret, resolves the
 // brand's org, enforces the monthly Site Audit quota, and starts the detached
 // audit job — returning the new `running` audit (the MCP caller then polls
-// get_site_audit for the result).
+// get_site_audit for the result). Never on a demo brand (00380).
 app.post('/api/internal/site-audits', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -497,6 +521,7 @@ app.post('/api/internal/site-audits', async (req, res) => {
     if (!brandId || !url) {
       return res.status(400).json({ success: false, message: 'brandId and url are required' });
     }
+    if (await isDemoBrand(brandId)) return res.status(402).json(DEMO_BRAND);
     const audit = await startSiteAuditForBrand(brandId, url);
     return res.status(202).json({ success: true, audit });
   } catch (err) {
@@ -590,11 +615,18 @@ app.get('/api/internal/integrations-config', (req, res) => {
   return res.json({ success: true, config: integrationsConfig() });
 });
 
+// --- Internal Chat budget endpoints (CRON_SECRET auth, called by the web's Chat engine) ---
+// Each model step of a Chat run is held on the workspace's AI budget before it
+// starts, then charged at its real cost or let go (routes/internal-chat-budget.js).
+// With the secret, the /api limiter above doesn't count them (rate-limiter.js).
+app.use('/api/internal/chat/budget', internalChatBudgetRoutes);
+
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt
 // before reaching here and passes the key's user, so this endpoint trusts the
 // secret, checks the user's plan includes prompt_improve and creates the
 // Action Center action exactly as the Improve tab's "Send Actions" does.
+// Never on a demo brand's prompt (00380).
 app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
   const secret = req.headers.authorization?.replace('Bearer ', '');
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
@@ -605,6 +637,9 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
     const { userId, ...body } = req.body || {};
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+    if (await isDemoBrandRow('prompts', req.params.promptId)) {
+      return res.status(402).json(DEMO_BRAND);
     }
     const result = await sendImproveActionForKeyUser({
       promptId: req.params.promptId,
@@ -634,7 +669,8 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
 // A page marked Published at its live address for an MCP API key
 // (`mark_content_draft_published`), as the editor's Mark published does
 // (POST /api/content-drafts/:draftId/publish). The web MCP layer passes the
-// key's organization and user; the draft must be that organization's.
+// key's organization and user; the draft must be that organization's. Never
+// on a demo brand's draft (00380).
 const internalPublishBody = z.object({
   url: z.string().max(8192),
   userId: z.guid(),
@@ -661,6 +697,9 @@ app.post('/api/internal/content-drafts/:draftId/publish', async (req, res) => {
     });
   }
   try {
+    if (await isDemoBrandRow('content_drafts', draftId.data)) {
+      return res.status(402).json(DEMO_BRAND);
+    }
     const result = await publishDraftForKeyUser({
       draftId: draftId.data,
       url,
@@ -720,10 +759,18 @@ app.use('/webhooks/content', webhookContentCallbackRoutes);
 app.use('/webhooks/content-drafts', webhookContentDraftCallbackRoutes);
 
 // --- Authenticated API routes ---
-// Read-only once the plan has ended (middleware/subscription.js): checked
-// once the person is known, before any route. The webhooks, callbacks and
-// internal endpoints above never reach it.
-app.use('/api', Middleware.decodeToken.bind(Middleware), requireActiveSubscription, routes);
+// The demo brand is read-only (middleware/demo-brand.js), and so is a
+// workspace whose plan has ended (middleware/subscription.js): both checked
+// once the person is known, before any route, the demo brand first so its
+// answer is the same with a plan or without one. The webhooks, callbacks and
+// internal endpoints above never reach them.
+app.use(
+  '/api',
+  Middleware.decodeToken.bind(Middleware),
+  refuseDemoBrandWrites,
+  requireActiveSubscription,
+  routes,
+);
 
 // Health check
 app.get('/', (req, res) => {
