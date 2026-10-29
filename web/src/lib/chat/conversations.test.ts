@@ -94,6 +94,15 @@ describe('listChats', () => {
     expect(list.chats[0]).toMatchObject({ mine: false, shared: true, ownerInitials: 'SL' });
   });
 
+  it('never names an author from another workspace', async () => {
+    db.tables.profiles.push({ id: 'outsider', organization_id: OTHER_ORG, full_name: 'Zed Q' });
+    db.tables.chat_conversations = [
+      chat(1, { user_id: 'outsider', shared_at: '2026-10-12T00:00:00.000Z' }),
+    ];
+    const [row] = (await chats.listChats(reader, ME, chats.listQuery.parse({}))).chats;
+    expect(row.ownerInitials).toBeNull();
+  });
+
   it('lists only their own archived chats under Archived', async () => {
     db.tables.chat_conversations = [
       chat(1, { archived_at: '2026-10-20T00:00:00.000Z' }),
