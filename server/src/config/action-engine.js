@@ -456,6 +456,24 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     missingPages: 5,
     retryDays: 7,
   }),
+
+  /**
+   * A competitor's pages over time (learning C3). first_cited: a competitor
+   * never read is read back `backfillDays` once, the others from their last
+   * read. changed: each night, a brand's `pagesPerBrand` competitor pages its
+   * answers cited most over the last `citedDays` are read again once their
+   * last read is `rereadDays` old, within what is left of the brand's
+   * `competitorPages.perBrandPerDay` reads after the tasks' (C1, C4), and
+   * compared with that read's word sketch (task-checks' CHANGED_BELOW and
+   * MIN_CHANGED_RUNS). At most `brandsPerNight` brands a night.
+   */
+  competitorTimeline: Object.freeze({
+    backfillDays: 90,
+    citedDays: 14,
+    pagesPerBrand: 10,
+    rereadDays: 7,
+    brandsPerNight: 200,
+  }),
 });
 
 /**

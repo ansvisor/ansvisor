@@ -30,6 +30,7 @@ import { logger } from '../logger.js';
 import { topicPromptIds } from './basket-metrics.js';
 import { promptIdsOf } from './priority.js';
 import { FEATURE_CHECKS, featureGaps, pageFeatures } from './page-features.js';
+import { sketch as wordSketch, visibleText } from './task-checks.js';
 
 // The page checks live in page-features.js, which reads no database; kept
 // here for the imports that name this module.
@@ -187,21 +188,30 @@ export async function scopePromptIds(brandId, payload) {
  * Each page's features, set on it as `features` when it could be read: one
  * read (or found unreadable) within `freshDays` is reused, the rest are read
  * now, unless their site's robots.txt shuts the reader out, and kept
- * (cited_page_features) with what the checks found, never the text. All of
- * the pages are read the same night, or none: ReadLaterError when the
- * brand's reads left today (`perBrandPerDay`, shared by every task that
- * reads pages: C1's and C4's) can't cover them.
+ * (cited_page_features) with what the checks found and a sketch of its words
+ * (learning C3), never the text. A page read now gets its new sketch as
+ * `sketch`, and what the read before kept as `before` ({ features, sketch }).
+ * All of the pages are read the same night, or none: ReadLaterError when the
+ * brand's reads left today (`perBrandPerDay`, shared by every reader: C1's,
+ * C4's and C3's weekly re-read) can't cover them.
  *
  * @param {{ brandId: string,
- *   pages: Array<{ key: string, url: string, domain: string, own?: boolean, features?: object }>,
- *   now: Date, read: typeof fetchPage }} input
+ *   pages: Array<{ key: string, url: string, domain: string, own?: boolean, features?: object,
+ *     sketch?: object, before?: object }>,
+ *   now: Date, read?: typeof fetchPage, freshDays?: number }} input
  */
-export async function readPages({ brandId, pages, now, read = fetchPage }) {
+export async function readPages({
+  brandId,
+  pages,
+  now,
+  read = fetchPage,
+  freshDays = C.freshDays,
+}) {
   if (pages.length === 0) return;
   const [knownRes, todayRes] = await Promise.all([
     supabaseAdmin
       .from('cited_page_features')
-      .select('page_key, features, read_at')
+      .select('page_key, features, sketch, read_at')
       .eq('brand_id', brandId)
       .in(
         'page_key',
@@ -215,7 +225,8 @@ export async function readPages({ brandId, pages, now, read = fetchPage }) {
   ]);
   if (knownRes.error) throw new Error(knownRes.error.message);
   if (todayRes.error) throw new Error(todayRes.error.message);
-  const freshSince = now.getTime() - C.freshDays * DAY_MS;
+  const freshSince = now.getTime() - freshDays * DAY_MS;
+  const known = new Map((knownRes.data ?? []).map((row) => [row.page_key, row]));
   const fresh = new Map(
     (knownRes.data ?? [])
       .filter((row) => Date.parse(row.read_at) >= freshSince)
@@ -234,7 +245,10 @@ export async function readPages({ brandId, pages, now, read = fetchPage }) {
       if (!known.unreadable) page.features = known;
       continue;
     }
+    const before = known.get(page.key);
+    if (before) page.before = { features: before.features ?? {}, sketch: before.sketch ?? null };
     let features = null;
+    let sketched = null;
     let disallowed = false;
     try {
       const origin = new URL(page.url).origin;
@@ -243,11 +257,14 @@ export async function readPages({ brandId, pages, now, read = fetchPage }) {
       if (!disallowed) {
         const fetched = await read(page.url, { timeoutMs: READ_TIMEOUT_MS });
         features = await pageFeatures(fetched.url, fetched.html, now.getTime());
+        // Its words as the page checks measure a change: what changes by itself left out.
+        if (features) sketched = wordSketch(visibleText(fetched.html, undefined, { steady: true }));
       }
     } catch {
       // A page that blocks the reader, or isn't one: unreadable, not a failure.
     }
     if (features) page.features = features;
+    if (sketched) page.sketch = sketched;
     // An unreadable page is kept too: it counts against the day's reads and
     // isn't tried again while it would be fresh.
     const { error } = await supabaseAdmin.from('cited_page_features').upsert(
@@ -258,6 +275,8 @@ export async function readPages({ brandId, pages, now, read = fetchPage }) {
         domain: page.domain,
         own: Boolean(page.own),
         features: features ?? { unreadable: true, ...(disallowed ? { disallowed: true } : {}) },
+        // An unreadable read keeps the last sketch, to compare the next one with.
+        sketch: sketched ?? before?.sketch ?? null,
         read_at: now.toISOString(),
       },
       { onConflict: 'brand_id,page_key' },
