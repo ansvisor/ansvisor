@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
-import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { ORG_PLAN_COLUMNS, getOrgPlan, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { dbClient } from '@/lib/supabase/scoped';
 import {
   activationDelta,
   getOrgLocationUsage,
@@ -1169,14 +1170,20 @@ async function getPositionRows(
 async function includedPositionPlatforms(
   brandId: string,
 ): Promise<{ id: string; label: string }[] | null> {
-  const supabase = await createClient();
-  const { data: brand } = await supabase
+  // dbClient: the member's session, or the service role the MCP's
+  // get_prompt_locations scopes it with (withDbClient), the brand checked.
+  const supabase = await dbClient();
+  const { data: brand, error } = await supabase
     .from('brands')
-    .select('organization_id')
+    .select(`organization_id, organizations!brands_organization_id_fkey(${ORG_PLAN_COLUMNS})`)
     .eq('id', brandId)
     .maybeSingle();
+  // The column then reads —: said here, so a broken read doesn't pass for no data.
+  if (error)
+    console.error('[prompts] brand plan read failed, positions without engines:', error.message);
   if (!brand?.organization_id) return null;
-  const plan = await getOrgPlan(brand.organization_id as string);
+  const org = Array.isArray(brand.organizations) ? brand.organizations[0] : brand.organizations;
+  const plan = planFromOrgRow(org ?? null);
   return POSITION_PLATFORMS.filter((p) => platformAccess(plan, p.id).state === 'included').map(
     (p) => ({ id: p.id as string, label: p.label as string }),
   );
@@ -1254,7 +1261,7 @@ async function positionSums(
   window: { from: string; to?: string },
   region?: string,
 ): Promise<Map<string, PlatformPositionRow[]>> {
-  const supabase = await createClient();
+  const supabase = await dbClient();
   // One jsonb array (00153). A busy brand's 30 or 90 days come to thousands
   // of prompt × platform rows, past PostgREST's 1000-row cap, which dropped
   // the rest and left most prompts reading —; a single value isn't cut, so
