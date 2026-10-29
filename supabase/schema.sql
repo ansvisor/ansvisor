@@ -43901,7 +43901,13 @@ comment on function public.fanout_coverage_by_platform(timestamptz, timestamptz)
 -- refuse_demo_brand_writes() is a BEFORE INSERT/UPDATE/DELETE row trigger:
 --   * a role that bypasses RLS (the service role the server and the demo
 --     generator use, migrations, the table owner behind a cascade) passes,
---     as in the other server-column guards (00204, 00228);
+--     as in the other server-column guards (00204, 00228). Not, though, a
+--     SECURITY DEFINER function a person calls (approve_action_task_review,
+--     content_draft_restore, override_mention_sentiment, seed_kpi_presets):
+--     it runs as its owner, who bypasses RLS, but the write is the person's.
+--     So the session's own role decides (the one PostgREST sets per request:
+--     authenticated or anon is a person), unless the write comes from inside
+--     another trigger (a cascade, or a trigger of the server's);
 --   * otherwise, a row of a demo brand is refused with SQLSTATE 42501 and
 --     the message 'demo_brand' (an update is checked on its old and new row,
 --     so a row can't be moved into or out of the demo brand either).
@@ -43931,8 +43937,15 @@ declare
   v_column text;
   i integer;
 begin
-  -- A role that bypasses RLS is server-side (service role, migrations).
-  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+  -- A role that bypasses RLS is server-side (service role, migrations), unless
+  -- it is the owner of a SECURITY DEFINER function a person called directly.
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user)
+    and (
+      pg_catalog.pg_trigger_depth() > 1
+      or coalesce(pg_catalog.current_setting('role', true), 'none')
+        not in ('authenticated', 'anon')
+    )
+  then
     if tg_op = 'DELETE' then
       return old;
     end if;
@@ -43987,7 +44000,7 @@ end;
 $$;
 
 comment on function public.refuse_demo_brand_writes() is
-  'Demo brand (00381): refuses a write to a demo brand''s row (42501, ''demo_brand'') unless the role bypasses RLS (the server, which writes the demo''s sample data). No arguments: the row''s brand_id; else (column, table) pairs leading to the brand.';
+  'Demo brand (00381): refuses a write to a demo brand''s row (42501, ''demo_brand'') unless the role bypasses RLS (the server, which writes the demo''s sample data) and isn''t a person''s SECURITY DEFINER call. No arguments: the row''s brand_id; else (column, table) pairs leading to the brand.';
 
 -- ─── Tables with a brand_id ────────────────────────────────────────────────
 
