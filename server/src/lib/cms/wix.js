@@ -293,6 +293,8 @@ function draftOf(data) {
     id: typeof post.id === 'string' ? post.id : null,
     status: typeof post.status === 'string' ? post.status : null,
     url,
+    // A published post's changes not published yet (its draft version written to).
+    pending: post.hasUnpublishedChanges === true,
   };
 }
 

@@ -226,6 +226,7 @@ describe('draft posts', () => {
       id: POST,
       status: 'UNPUBLISHED',
       url: 'https://acme.example/post/x',
+      pending: false,
     });
     expect(api.calls[0].body).toEqual({ draftPost: post, publish: false, fieldsets: ['URL'] });
   });
@@ -246,6 +247,7 @@ describe('draft posts', () => {
       id: POST,
       status: 'PUBLISHED',
       url: 'https://acme.example/post/x',
+      pending: false,
     });
     expect(await readDraftPost(SITE, KEY, 'f0000000-0000-4000-8000-000000000000', opts)).toBeNull();
     expect(await readDraftPost(SITE, KEY, 'not-an-id', opts)).toBeNull();

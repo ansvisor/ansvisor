@@ -46,6 +46,7 @@ import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
 import { sweepFramerPublished } from './lib/cms/framer-status.js';
 import { sweepWebflowPublished } from './lib/cms/webflow-status.js';
 import { sweepWordPressPublished } from './lib/cms/wordpress-status.js';
+import { sweepWixPublished } from './lib/cms/wix-status.js';
 import { generateBriefForOpportunity } from './routes/content.js';
 import webhookContentCallbackRoutes from './routes/webhook-content-callback.js';
 import webhookContentDraftCallbackRoutes from './routes/webhook-content-draft-callback.js';
@@ -380,6 +381,10 @@ async function runDailyTracking() {
   // And to Framer (00295), once a day too.
   sweepFramerPublished().catch((err) => {
     logger.error({ err: { name: err?.name } }, '[framer-status] daily sweep failed');
+  });
+  // And to Wix (00372), once a day too.
+  sweepWixPublished().catch((err) => {
+    logger.error({ err: { name: err?.name } }, '[wix-status] daily sweep failed');
   });
 
   // Google Analytics sync (#704) — same contract as the Search Console sync

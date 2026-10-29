@@ -133,6 +133,7 @@ export const DEMO_GUARDED = [
   guard('POST /content-drafts/webflow-status', brandIn('body')),
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),
+  guard('POST /content-drafts/wix-status', brandIn('body')),
   guard(
     'POST /content-drafts/:draftId/brief',
     brandIn('body'),

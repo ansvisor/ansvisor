@@ -161,7 +161,7 @@ export async function sendPagesToCms(
  */
 async function refreshPublished(
   brandId: string,
-  route: 'webflow-status' | 'wordpress-status' | 'framer-status',
+  route: 'webflow-status' | 'wordpress-status' | 'framer-status' | 'wix-status',
   label: string,
 ): Promise<string[]> {
   try {
@@ -196,6 +196,11 @@ export function refreshWebflowPublished(brandId: string): Promise<string[]> {
 /** The brand's pages sent to WordPress as draft posts, published there since (00294). */
 export function refreshWordPressPublished(brandId: string): Promise<string[]> {
   return refreshPublished(brandId, 'wordpress-status', 'WordPress');
+}
+
+/** The brand's pages sent to Wix as draft posts, published there since (00372). */
+export function refreshWixPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'wix-status', 'Wix');
 }
 
 /** The brand's pages sent to Framer as draft items, published there since (00295). */
