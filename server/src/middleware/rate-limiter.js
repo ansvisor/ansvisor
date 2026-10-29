@@ -211,6 +211,22 @@ export const cmsLimiter = rateLimit({
   },
 });
 
+// The Library's checks whether pages sent to a CMS were published there:
+// four each time it opens, answered from a two-minute memory per brand. A
+// bucket of their own, so opening the Library never uses up a member's
+// cmsLimiter, and connecting a CMS stays open to them.
+export const cmsStatusLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 180,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // Test Webhook (#1568 review): each test posts to an address the caller
 // typed, so a member's are few, 10 a minute.
 export const webhookTestLimiter = rateLimit({

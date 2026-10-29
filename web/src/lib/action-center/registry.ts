@@ -182,6 +182,20 @@ export function dismissReasonOf(value: unknown): ActionDismissReason | null {
     : null;
 }
 
+/**
+ * The error a database without 00366 gives for naming dismiss_reason:
+ * PGRST204 from PostgREST's schema cache on a write, 42703 from Postgres.
+ * Only that one, so a missing column of any other name still fails.
+ */
+export function missingDismissReason(
+  error: { code?: string; message?: string } | null | undefined,
+): boolean {
+  return (
+    (error?.code === 'PGRST204' || error?.code === '42703') &&
+    (error.message ?? '').includes('dismiss_reason')
+  );
+}
+
 /** An action whose cycle is over: it is history, and its kind's slot is free. */
 export const CLOSED_ACTION_STATUSES: readonly ActionStatus[] = ['completed', 'dismissed'];
 

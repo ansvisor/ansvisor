@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import { dismissTopicSuggestionFor } from '@/lib/mcp/data';
 import { failedCallResponse } from '@/lib/mcp/subscription-gate';
 
@@ -21,6 +22,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('dismiss_topic_suggestion', auth.organizationId, {
+      suggestion_id: suggestionId,
+    });
+    if (refused) return refused;
     const result = await dismissTopicSuggestionFor(auth, suggestionId);
     if (!result) {
       return NextResponse.json(

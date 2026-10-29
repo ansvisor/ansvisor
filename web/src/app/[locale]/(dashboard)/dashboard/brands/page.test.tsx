@@ -11,7 +11,9 @@ vi.mock('@/lib/supabase/server', () => ({
     from: () => ({ select: () => ({ single: async () => ({ data: profile }) }) }),
   }),
 }));
-const brands = vi.hoisted(() => ({ list: [] as { id: string }[] }));
+const brands = vi.hoisted(() => ({
+  list: [] as { id: string; isDemo?: boolean; demoHiddenAt?: string | null }[],
+}));
 vi.mock('@/lib/actions/brand', () => ({ getBrands: async () => brands.list }));
 vi.mock('@/lib/guards/plan-guard', () => ({
   getOrgPlan: async () => ({ limits: { maxBrands: 2 } }),
@@ -29,7 +31,13 @@ vi.mock('@/i18n/navigation', () => ({
   ),
 }));
 // The list and the menu beside the button have their own tests.
-vi.mock('./_brands-client', () => ({ BrandsClient: () => null }));
+const listed = vi.hoisted(() => ({ ids: [] as string[] }));
+vi.mock('./_brands-client', () => ({
+  BrandsClient: ({ brands }: { brands: { id: string }[] }) => {
+    listed.ids = brands.map((b) => b.id);
+    return null;
+  },
+}));
 vi.mock('@/components/layout/workspace-settings-menu', () => ({
   WorkspaceSettingsMenu: () => null,
 }));
@@ -143,5 +151,24 @@ describe('the brands page', () => {
     await act(async () => add.dispatchEvent(click));
     expect(click.defaultPrevented).toBe(true);
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Adding brands needs a plan');
+  });
+});
+
+describe('the brands page and the demo brand', () => {
+  it("doesn't count the demo brand toward the plan's brands", async () => {
+    brands.list = [{ id: 'b1' }, { id: 'demo', isDemo: true, demoHiddenAt: null }];
+    cloud.on = true;
+    await render();
+    expect(links()).toEqual(['/dashboard/brands/new']);
+    expect(listed.ids).toEqual(['b1', 'demo']);
+  });
+
+  it('leaves a hidden demo brand out of the list', async () => {
+    brands.list = [
+      { id: 'b1' },
+      { id: 'demo', isDemo: true, demoHiddenAt: '2026-10-28T00:00:00Z' },
+    ];
+    await render();
+    expect(listed.ids).toEqual(['b1']);
   });
 });

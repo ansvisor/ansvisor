@@ -50,6 +50,7 @@ import {
   refreshPromptSuggestions,
   acceptSuggestion,
   dismissSuggestion,
+  dismissSuggestions,
   trackSuggestions,
   type PromptSuggestion,
 } from '@/lib/actions/prompt-suggestions';
@@ -66,6 +67,16 @@ import {
 import type { SuggestionSourceStates } from '@/lib/actions/integrations';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
+import { readWithOneRetry, type ReadFailure } from '@/lib/api-failure';
+import { SuggestionsLoadError } from './_suggestions-load-error';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 /**
  * Analytics evidence, in the customer's own numbers (#705). A blind spot is
@@ -329,7 +340,7 @@ export function SuggestionsCard({
   const [suggestions, setSuggestions] = useState<PromptSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReadFailure | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
@@ -339,6 +350,9 @@ export function SuggestionsCard({
   }, []);
   const [search, setSearch] = useState('');
   const [clearing, setClearing] = useState(false);
+  // Clear All asks first: how many it dismisses, and how many of them come
+  // from Search Console or Analytics (hidden for 30 days once dismissed).
+  const [confirmClear, setConfirmClear] = useState(false);
   const [adding, setAdding] = useState(false);
   // What Add All left behind when the plan's prompt limit stopped it.
   const [limitNote, setLimitNote] = useState<{ added: number; left: number } | null>(null);
@@ -347,17 +361,15 @@ export function SuggestionsCard({
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const { suggestions: s } = await getPromptSuggestions(brandId);
-      setSuggestions(s);
+    // Once more by itself when the API didn't answer, as while it restarts.
+    const read = await readWithOneRetry(() => getPromptSuggestions(brandId));
+    if (read.ok) {
+      setSuggestions(read.suggestions);
       setLoaded(true);
-    } catch (err) {
-      console.error('Failed to load suggestions:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load suggestions');
-      toast.error('Failed to load suggestions');
-    } finally {
-      setLoading(false);
+    } else {
+      setError(read);
     }
+    setLoading(false);
   }, [brandId]);
 
   useEffect(() => {
@@ -425,30 +437,33 @@ export function SuggestionsCard({
   );
 
   /**
-   * Dismiss only generated rows on screen. Search Console and Analytics rows
-   * carry a 30-day cooldown, so bulk clear keeps them visible unless the user
-   * explicitly dismisses each one.
+   * Dismiss every suggestion listed, after the confirmation: each one as
+   * one by one would, so Search Console and Analytics ones stay hidden for
+   * 30 days. They leave the list at once; the ones that couldn't be
+   * dismissed come back.
    */
-  const handleClearAll = () => {
-    const preserved = visible.filter(isMeasuredSuggestion);
-    const doomed = visible.filter((s) => !isMeasuredSuggestion(s));
-    if (preserved.length > 0) {
-      toast.info(t('measuredSuggestionsKept'));
-    }
+  const handleClearAll = async () => {
+    setConfirmClear(false);
+    const doomed = visible;
     if (doomed.length === 0) return;
     setClearing(true);
     const ids = new Set(doomed.map((d) => d.id));
     setSuggestions((prev) => prev.filter((x) => !ids.has(x.id)));
-    Promise.allSettled(doomed.map((d) => dismissSuggestion(d.id)))
-      .then((results) => {
-        const failed = results.filter((r) => r.status === 'rejected').length;
-        if (failed > 0) {
-          toast.error(`${failed} suggestion${failed === 1 ? '' : 's'} could not be dismissed`);
-          load();
-        }
-      })
-      .finally(() => setClearing(false));
+    try {
+      const result = await dismissSuggestions([...ids]);
+      if (!result.ok) {
+        setSuggestions((prev) => [...prev, ...doomed]);
+        toast.error(t('clearAllFailed'));
+      } else if (result.failed.length > 0) {
+        const failed = new Set(result.failed);
+        setSuggestions((prev) => [...prev, ...doomed.filter((d) => failed.has(d.id))]);
+        toast.error(t('clearAllPartial', { count: failed.size }));
+      }
+    } finally {
+      setClearing(false);
+    }
   };
+  const measuredToClear = visible.filter(isMeasuredSuggestion).length;
 
   /**
    * Track every suggestion on screen, in batches trackSuggestions takes. Each
@@ -615,7 +630,9 @@ export function SuggestionsCard({
 
               {canDismiss && (
                 <Button
-                  onClick={guard(handleClearAll, { action: tActions('dismissSuggestions') })}
+                  onClick={guard(() => setConfirmClear(true), {
+                    action: tActions('dismissSuggestions'),
+                  })}
                   disabled={clearing || adding || visible.length === 0}
                   size="sm"
                   variant="outline"
@@ -634,6 +651,27 @@ export function SuggestionsCard({
           )}
         </div>
       </CardHeader>
+      <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('clearAllConfirm.title')}</DialogTitle>
+            <DialogDescription>
+              {t('clearAllConfirm.body', { count: visible.length })}
+            </DialogDescription>
+          </DialogHeader>
+          {measuredToClear > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t('clearAllConfirm.measured', { count: measuredToClear })}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmClear(false)}>
+              {t('clearAllConfirm.cancel')}
+            </Button>
+            <Button onClick={() => void handleClearAll()}>{t('clearAllConfirm.confirm')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <CardContent>
         {limitNote && (
           <div
@@ -717,15 +755,7 @@ export function SuggestionsCard({
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <AlertTriangle className="h-8 w-8 text-destructive/60 mb-2" />
-            <p className="text-sm font-medium mb-1">Couldn&apos;t load suggestions</p>
-            <p className="text-xs text-muted-foreground mb-3 max-w-sm">{error}</p>
-            <Button onClick={load} disabled={loading} size="sm" variant="outline" className="gap-2">
-              <RefreshCw className="h-3.5 w-3.5" />
-              Retry
-            </Button>
-          </div>
+          <SuggestionsLoadError failure={error} onRetry={load} />
         ) : suggestions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <Sparkles className="h-8 w-8 text-muted-foreground/40 mb-2" />

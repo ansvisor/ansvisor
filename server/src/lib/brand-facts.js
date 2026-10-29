@@ -4,11 +4,13 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { resolveModel } from './ai-provider.js';
+import { CONTENT_READ_MAX_TOKENS } from './content-brief.js';
 import { fold } from './content-quality-claims.js';
 import { sourceClassModelId } from './content-source-class.js';
 import { logger } from './logger.js';
 import { PlanLimitError, reserveAiBudget } from './plan-guard.js';
 import { PageFetchError, fetchPage } from './safe-fetch.js';
+import { objectOptions } from './structured-output.js';
 import {
   PAGES as TRUST_PAGES,
   SEPARATOR,
@@ -659,7 +661,7 @@ async function readFactPage({ orgId, kind, domain, text, modelId }) {
   try {
     const generated = await generateObject({
       model: resolveModel(modelId),
-      schema: answerSchema,
+      ...objectOptions(modelId, answerSchema, { maxOutputTokens: CONTENT_READ_MAX_TOKENS }),
       system: SYSTEM_PROMPT,
       prompt: `Page: ${kind} page of ${domain}\n\n${text}`,
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The kind of source a site the editor's rules can't place is (Quality
@@ -70,6 +70,7 @@ const {
   linkedSites,
   readSourceClasses,
   siteOf,
+  sourceClassModelId,
 } = await import('./content-source-class.js');
 const { QUALITY_CALLS_PER_DAY } = await import('./content-quality-calls.js');
 
@@ -83,12 +84,18 @@ beforeEach(() => {
   charge.mockReset();
   release.mockReset();
   keep.mockReset();
+  // The models as a server without an Anthropic key picks them, whatever the shell has.
+  for (const name of ['ANTHROPIC_API_KEY', 'CONTENT_READ_MODEL', 'QUALITY_CHECK_MODEL']) {
+    vi.stubEnv(name, '');
+  }
   // Each site in its own call: answered by the site the prompt names.
   generateObject.mockReset().mockImplementation(async ({ prompt }) => ({
     object: { kind: KINDS[prompt.replace('Site: ', '')] ?? 'unknown' },
     usage: { inputTokens: 200, outputTokens: 3 },
   }));
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 const KINDS = { 'coffee-blog.example': 'weak', 'roaster.example': 'primary' };
 const asked = () => generateObject.mock.calls.map(([call]) => call.prompt);
@@ -137,7 +144,48 @@ describe('siteOf and linkedSites', () => {
   });
 });
 
+describe('sourceClassModelId: the model of Quality’s reads', () => {
+  it('stays on the default suggestion model without an Anthropic key (never Improve’s)', () => {
+    vi.stubEnv('DEFAULT_SUGGESTION_MODEL', '');
+    vi.stubEnv('IMPROVE_SUGGESTION_MODEL', 'openai/gpt-5-mini');
+    expect(sourceClassModelId()).toBe('google/gemini-3-flash-preview');
+    vi.stubEnv('DEFAULT_SUGGESTION_MODEL', 'google/gemini-3-flash');
+    expect(sourceClassModelId()).toBe('google/gemini-3-flash');
+  });
+
+  it('reads with Claude Haiku with an Anthropic key, or CONTENT_READ_MODEL', () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    expect(sourceClassModelId()).toBe('anthropic/claude-haiku-5-5');
+    vi.stubEnv('CONTENT_READ_MODEL', 'google/gemini-3-flash');
+    expect(sourceClassModelId()).toBe('google/gemini-3-flash');
+  });
+
+  it('keeps QUALITY_CHECK_MODEL first, when it is set', () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    vi.stubEnv('CONTENT_READ_MODEL', 'google/gemini-3-flash');
+    vi.stubEnv('QUALITY_CHECK_MODEL', 'openai/gpt-5-mini');
+    expect(sourceClassModelId()).toBe('openai/gpt-5-mini');
+  });
+});
+
 describe('readSourceClasses', () => {
+  it('reads a site with Claude Haiku with an Anthropic key: structured output, a token cap, no sampling', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    await read(['roaster.example']);
+    const [call] = generateObject.mock.calls[0];
+    expect(call.model).toEqual({ id: 'anthropic/claude-haiku-5-5' });
+    expect(reserves[0].modelId).toBe('anthropic/claude-haiku-5-5');
+    expect(call.maxOutputTokens).toBe(16_000);
+    expect(call.providerOptions).toEqual({ anthropic: { structuredOutputMode: 'outputFormat' } });
+    for (const key of ['temperature', 'topP', 'topK']) expect(call).not.toHaveProperty(key);
+    expect(call.schema.jsonSchema).toEqual({
+      type: 'object',
+      properties: { kind: { type: 'string', enum: ['primary', 'secondary', 'weak', 'unknown'] } },
+      required: ['kind'],
+      additionalProperties: false,
+    });
+  });
+
   it('reads each site not kept in its own call, keeps them, and holds the budget as quality for each', async () => {
     kept = [{ host: 'news.example', kind: 'secondary' }];
     const result = await read(['news.example', 'coffee-blog.example', 'roaster.example']);

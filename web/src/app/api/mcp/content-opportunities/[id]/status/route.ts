@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import {
   CONTENT_OPPORTUNITY_STATUSES,
   updateOpportunityStatusFor,
@@ -47,6 +48,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('update_opportunity_status', auth.organizationId, {
+      opportunity_id: opportunityId,
+    });
+    if (refused) return refused;
     const updated = await updateOpportunityStatusFor(
       auth,
       opportunityId,

@@ -323,19 +323,19 @@ describe('sweepCompetitorTimeline', () => {
         id: 'c1',
         brand_id: BRAND,
         domain: 'rival.com',
-        brands: { organization_id: 'o1', is_active: true },
+        brands: { organization_id: 'o1', is_active: true, is_demo: false },
       },
       {
         id: 'c2',
         brand_id: 'brand-2',
         domain: 'other.com',
-        brands: { organization_id: 'o2', is_active: true },
+        brands: { organization_id: 'o2', is_active: true, is_demo: false },
       },
       {
         id: 'c3',
         brand_id: 'brand-3',
         domain: '',
-        brands: { organization_id: 'o1', is_active: true },
+        brands: { organization_id: 'o1', is_active: true, is_demo: false },
       },
     ];
     tables.organizations = [
@@ -353,7 +353,7 @@ describe('sweepCompetitorTimeline', () => {
       id: `c${String(i).padStart(4, '0')}`,
       brand_id: i < 1_100 ? 'brand-busy' : BRAND,
       domain: 'rival.com',
-      brands: { organization_id: 'o1', is_active: true },
+      brands: { organization_id: 'o1', is_active: true, is_demo: false },
     }));
     // The busy brand was read last night; the other never was, so it goes first.
     tables.competitor_timeline_scans = Array.from({ length: 1_100 }, (_, i) => ({
@@ -363,5 +363,21 @@ describe('sweepCompetitorTimeline', () => {
     }));
     await sweepCompetitorTimeline({ now: NOW, read: reader({}), limit: 1 });
     expect(rpcCalls[0][1].p_brand_id).toBe(BRAND);
+  });
+
+  it("never reads a demo brand's competitor pages (00380)", async () => {
+    tables.competitors = [
+      {
+        id: 'c1',
+        brand_id: BRAND,
+        domain: 'rival.com',
+        brands: { organization_id: 'o1', is_active: true, is_demo: true },
+      },
+    ];
+    const read = reader({});
+    const outcome = await sweepCompetitorTimeline({ now: NOW, read });
+    expect(outcome).toMatchObject({ brands: 0, firstCited: 0, changed: 0 });
+    expect(rpcCalls).toEqual([]);
+    expect(read).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type Stripe from 'stripe';
-import { hasUsedTrial } from './trial';
+import { TRIAL_DAYS, hasUsedTrial, trialEndDate } from './trial';
 
 const client = (subscriptions: unknown[]) => {
   const list = vi.fn().mockResolvedValue({ data: subscriptions });
@@ -23,5 +23,14 @@ describe('hasUsedTrial', () => {
     const { client: c, list } = client([]);
     expect(await hasUsedTrial(c, null)).toBe(false);
     expect(list).not.toHaveBeenCalled();
+  });
+});
+
+describe('trialEndDate', () => {
+  it('ends a trial started now 14 days later, as Checkout counts it', () => {
+    const now = Date.parse('2026-10-28T12:00:00Z');
+    expect(TRIAL_DAYS).toBe(14);
+    expect(trialEndDate(now).toISOString()).toBe('2026-11-11T12:00:00.000Z');
+    expect(trialEndDate(now, 7).toISOString()).toBe('2026-11-04T12:00:00.000Z');
   });
 });

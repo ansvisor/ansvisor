@@ -2,6 +2,7 @@
 
 import { dbClient } from '@/lib/supabase/scoped';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { effectivePlanForBrand } from '@/lib/demo/demo-brand';
 import type { PlanId } from '@/config/plans';
 import {
   POSITION_PLATFORMS,
@@ -43,8 +44,9 @@ const SENTIMENTS: readonly string[] = ['positive', 'neutral', 'negative'];
  * location, for the Positions panel.
  *
  * Reads through the caller's RLS-scoped client, so a prompt outside the
- * caller's organisations comes back as null. Engines the org's plan doesn't
- * include are never queried: their rows carry only the upgrade state.
+ * caller's organisations comes back as null. Engines the brand's plan (the
+ * org's, Growth's on the demo brand) doesn't include are never queried:
+ * their rows carry only the upgrade state.
  * Answer text and source lists stay on the server; the panel gets the
  * folded numbers. Answers are filed under the viewer's days (`timeZone`, an
  * IANA zone from the browser; UTC when missing or unknown).
@@ -76,7 +78,7 @@ export async function getPromptPositions(
 
   const [{ data: brand }, { data: domainRows }, { data: topic }, { data: improveRows }] =
     await Promise.all([
-      supabase.from('brands').select('organization_id').eq('id', brandId).maybeSingle(),
+      supabase.from('brands').select('organization_id, is_demo').eq('id', brandId).maybeSingle(),
       supabase.from('brand_domains').select('domain').eq('brand_id', brandId),
       prompt.topic_id
         ? supabase.from('topics').select('name').eq('id', prompt.topic_id).maybeSingle()
@@ -92,7 +94,10 @@ export async function getPromptPositions(
     ]);
   if (!brand?.organization_id) return null;
 
-  const plan = await getOrgPlan(brand.organization_id as string);
+  const plan = effectivePlanForBrand(
+    await getOrgPlan(brand.organization_id as string),
+    brand.is_demo === true,
+  );
   const platforms = POSITION_PLATFORMS.map((p) => ({ ...p, access: platformAccess(plan, p.id) }));
   const includedIds = platforms.filter((p) => p.access.state === 'included').map((p) => p.id);
   const brandDomains = (domainRows ?? []).map((r) => r.domain as string);

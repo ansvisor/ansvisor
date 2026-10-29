@@ -132,3 +132,16 @@ describe('the B5 tools', () => {
     });
   });
 });
+
+describe('last_send in the drafts tools', () => {
+  it('names every CMS a page can be sent to, Wix included', async () => {
+    const server = createMcpServer(auth);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientTransport);
+    const { tools } = await client.listTools();
+    const description = tools.find((t) => t.name === 'list_content_drafts')?.description ?? '';
+    expect(description).toContain('target webhook, webflow, wordpress, framer or wix');
+  });
+});

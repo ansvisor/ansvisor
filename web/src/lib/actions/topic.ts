@@ -6,6 +6,7 @@ import { API_BASE_URL } from '@/config/api';
 import type { Topic } from '@/types';
 import { DAY_MS, topicTrendDays, type TopicsWindow } from '@/lib/topic-trend';
 import { assertWritable } from '@/lib/subscription-guard';
+import { MANAGER_ROLES } from '@/lib/mcp/role-gate';
 import { TOPIC_NAME_CHARS, topicNameFits } from '@/lib/topic-names';
 
 export type { TopicsWindow } from '@/lib/topic-trend';
@@ -28,7 +29,7 @@ function assertTopicNames(names: string[]) {
 }
 
 export async function createTopics(brandId: string, names: string[]): Promise<Topic[]> {
-  await assertWritable({ onboarding: true });
+  await assertWritable({ onboarding: true, brandId });
   assertTopicNames(names);
   const supabase = await createClient();
 
@@ -84,7 +85,7 @@ export async function getTopicById(brandId: string, topicId: string): Promise<To
 }
 
 export async function createTopic(brandId: string, name: string): Promise<Topic> {
-  await assertWritable();
+  await assertWritable({ brandId });
   assertTopicNames([name]);
   const supabase = await createClient();
 
@@ -441,9 +442,29 @@ export async function getTopicsOverview(
   return { topics: rows, unassignedPromptCount, trendDays };
 }
 
+/**
+ * Deletes a topic for an admin or a manager. Its prompts stay, with their
+ * results: prompts.topic_id is ON DELETE SET NULL, so they become prompts
+ * without a topic. The topics table's row rules let every member write, so
+ * the role is checked here.
+ */
 export async function deleteTopic(topicId: string): Promise<void> {
   await assertWritable();
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (profileErr) throw new Error(profileErr.message);
+  if (!MANAGER_ROLES.some((role) => role === profile?.role)) {
+    throw new Error('Only an admin or a manager can delete topics.');
+  }
 
   // Fetch topic to get name and brand_id
   const { data: topic, error: fetchErr } = await supabase
