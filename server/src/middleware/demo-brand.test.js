@@ -48,6 +48,7 @@ const {
   DEMO_GUARDED,
   DEMO_OPEN,
   MAX_CACHED_BRANDS,
+  MAX_IDS,
   clearDemoBrandCache,
   demoRouteFor,
   isDemoBrand,
@@ -161,6 +162,40 @@ describe('refuseDemoBrandWrites', () => {
     expectRefused(
       await run({ path: '/content/bulk/send-webhook', body: { ids: [DEMO_OPP] } }),
       'bulk send',
+    );
+  });
+
+  it('refuses a demo brand named in any form Postgres reads as its uuid', async () => {
+    const bare = DEMO.replace(/-/g, '');
+    for (const id of [
+      DEMO.toUpperCase(),
+      bare,
+      `{${DEMO}}`,
+      `{${bare.toUpperCase()}}`,
+      `${bare.slice(0, 4)}-${bare.slice(4, 8)}-${bare.slice(8)}`,
+    ]) {
+      expectRefused(await run({ path: '/tracking/check', body: { brandId: id } }), id);
+      expectRefused(await run({ path: `/prompts/suggestions/${id}/refresh` }), `path ${id}`);
+    }
+    expectRefused(
+      await run({ path: '/content/bulk/delete', body: { ids: [DEMO_OPP.replace(/-/g, '')] } }),
+      'bare row id',
+    );
+    // Not uuids, to Postgres either: left to the route.
+    for (const id of [`{${DEMO}`, `${DEMO}0`, ` ${DEMO}`]) {
+      expectPassed(await run({ path: '/tracking/check', body: { brandId: id } }), id);
+    }
+  });
+
+  it('refuses a bulk write naming more ids than it checks, wherever the demo row is', async () => {
+    const ids = [...Array.from({ length: MAX_IDS }, () => REAL_OPP), DEMO_OPP];
+    const { res, next } = await run({ path: '/content/bulk/delete', body: { ids } });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(reads).toEqual([]);
+    expectPassed(
+      await run({ path: '/content/bulk/delete', body: { ids: ids.slice(0, MAX_IDS) } }),
+      'at the cap',
     );
   });
 
@@ -298,6 +333,11 @@ describe("the MCP's internal endpoints", () => {
         "isDemoBrandRow('prompts', req.params.promptId)",
         'sendImproveActionForKeyUser(',
       ],
+      [
+        '/api/internal/content-drafts/:draftId/publish',
+        "isDemoBrandRow('content_drafts', draftId.data)",
+        'publishDraftForKeyUser(',
+      ],
     ]) {
       const body = handler(route);
       expect(body.indexOf(check), route).toBeGreaterThan(0);
@@ -385,6 +425,8 @@ describe('coverage of the write routes', () => {
     expect(outside.sort()).toEqual([
       'bot-ingest.js',
       'cloro-callback.js',
+      // The first run after a payment (CRON_SECRET): refuses a demo brand itself.
+      'internal-trigger-tracking.js',
       'traffic.js',
       'webhook-content-callback.js',
       'webhook-content-draft-callback.js',

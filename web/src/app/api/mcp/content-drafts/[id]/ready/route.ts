@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
+import { demoBrandRefusal } from '@/lib/mcp/demo-gate';
 import { setContentDraftReadyFor } from '@/lib/mcp/content';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 
@@ -12,6 +13,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'id must be a draft UUID' }, { status: 400 });
   }
   try {
+    // Nothing written on the demo brand's sample data, as the tool refuses it.
+    const refused = await demoBrandRefusal('set_content_draft_ready', auth.organizationId, {
+      draft_id: id,
+    });
+    if (refused) return refused;
     const result = await setContentDraftReadyFor(auth, id);
     if (result === 'in_review') {
       return NextResponse.json(

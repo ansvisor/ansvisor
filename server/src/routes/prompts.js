@@ -468,12 +468,17 @@ async function findOrCreateTopic(brandId, topicName) {
   return created?.id ?? null;
 }
 
+/** Generating suggestions and Improve sets costs AI: admins and managers start it (2026-10-29). */
+const SUGGEST_PROMPTS_REFUSAL = 'Only admins and managers can generate prompt suggestions.';
+const IMPROVE_REFUSAL = 'Only admins and managers can use Improve.';
+
 router.post(
   '/suggestions/:brandId/refresh',
   requireFeature('prompt_suggestions'),
   async (req, res) => {
     try {
       const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
+      await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
       const { suggestions, gscCandidates, gaCandidates, catalogCandidates } =
         await generateSuggestions(req.params.brandId, {
           orgId: brand.organization_id,
@@ -609,6 +614,7 @@ router.post(
         return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
       }
       await assertBrandAccess(req.params.brandId, req.user.id);
+      await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
       const context = await loadSuggestionContext(req.params.brandId);
       const result = await suggestPromptsForPage(req.params.brandId, { ...parsed.data, context });
       return res.json(result);
@@ -819,6 +825,7 @@ router.post('/suggest', requireFeature('prompt_suggestions'), async (req, res) =
     if (!brandName) {
       return res.status(400).json({ error: 'brandName is required' });
     }
+    await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
 
     const userPrompt = `Brand context (DO NOT use the brand name "${brandName}" in any prompt):
 Industry: ${industry || 'Not specified'}
@@ -845,6 +852,9 @@ Based on this brand's industry and context, generate 10 short, generic search pr
 
     return res.json({ prompts: object.prompts });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
     req.log.error({ err: error }, 'prompt suggestion error');
     return res.status(500).json({
       error: 'Failed to generate prompt suggestions',
@@ -1185,6 +1195,7 @@ router.post('/:promptId/improve', requireFeature('prompt_improve'), async (req, 
     const range = parseImproveRange(req.body);
     const promptId = req.params.promptId;
     const { prompt, brand, brandId } = await loadImprovePrompt(promptId, req.user.id);
+    await assertRole(req.user.id, MANAGER_ROLES, IMPROVE_REFUSAL);
 
     const [
       rows,
@@ -1420,6 +1431,8 @@ export async function sendImproveAction({ promptId, userId, body }) {
     throw err;
   }
   const { prompt, brandId } = await loadImprovePrompt(promptId, userId);
+  // The dashboard's Send Actions and an API key's create_improve_action alike.
+  await assertRole(userId, MANAGER_ROLES, IMPROVE_REFUSAL);
 
   const { data: set } = await supabaseAdmin
     .from('prompt_improve_suggestions')

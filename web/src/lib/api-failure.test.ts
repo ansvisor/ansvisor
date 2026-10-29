@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { apiFailure, isSubscriptionInactive } from './api-failure';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  NO_ANSWER,
+  apiFailure,
+  isSubscriptionInactive,
+  isTransientStatus,
+  readWithOneRetry,
+  responseFailure,
+} from './api-failure';
 
 describe('apiFailure', () => {
   it('reads a bad or expired session from 401 only', () => {
@@ -92,5 +99,58 @@ describe('isSubscriptionInactive', () => {
     expect(isSubscriptionInactive('Failed to fetch the chat response.')).toBe(false);
     expect(isSubscriptionInactive(null)).toBe(false);
     expect(isSubscriptionInactive(undefined)).toBe(false);
+  });
+});
+
+describe('a read whose failure comes back as a value', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('takes the proxy saying the API is down as transient, and nothing else', () => {
+    expect([502, 503, 504].every(isTransientStatus)).toBe(true);
+    expect([400, 401, 403, 404, 429, 500].some(isTransientStatus)).toBe(false);
+  });
+
+  it('reads a failed response, also one whose body is not JSON', async () => {
+    expect(await responseFailure(new Response('Bad Gateway', { status: 502 }))).toEqual({
+      ok: false,
+      failure: 'failed',
+      retryable: true,
+    });
+    expect(
+      await responseFailure(
+        new Response(JSON.stringify({ message: 'Unauthorized API Request' }), { status: 401 }),
+      ),
+    ).toEqual({ ok: false, failure: 'session', retryable: false });
+  });
+
+  it('tries once more after the delay when trying again may help', async () => {
+    vi.useFakeTimers();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(NO_ANSWER)
+      .mockResolvedValueOnce({ ok: true, value: 1 });
+    const result = readWithOneRetry(read, 1500);
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(read).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await result).toEqual({ ok: true, value: 1 });
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('tries only once more, and not at all when it would not help', async () => {
+    const down = vi.fn().mockResolvedValue(NO_ANSWER);
+    expect(await readWithOneRetry(down, 0)).toEqual(NO_ANSWER);
+    expect(down).toHaveBeenCalledTimes(2);
+
+    const refused = { ok: false as const, failure: 'workspace' as const, retryable: false };
+    const notMine = vi.fn().mockResolvedValue(refused);
+    expect(await readWithOneRetry(notMine, 0)).toEqual(refused);
+    expect(notMine).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads a server action that threw on its way as no answer', async () => {
+    const read = vi.fn().mockRejectedValue(new Error('Minified React error #441'));
+    expect(await readWithOneRetry(read, 0)).toEqual(NO_ANSWER);
+    expect(read).toHaveBeenCalledTimes(2);
   });
 });

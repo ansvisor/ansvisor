@@ -18,6 +18,9 @@ let prompts: { id: string; platforms: string[] }[];
 let writes: { table: string; op: string; value: unknown }[];
 // RLS lets a write through, or matches no row without an error (an analyst).
 let denied: boolean;
+// 00379 not applied yet: its columns don't exist (Postgres 42703).
+let missingColumn: boolean;
+const MISSING = { code: '42703', message: 'column brands.site_type_source does not exist' };
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/guards/plan-guard', () => ({ getOrgPlan: vi.fn() }));
@@ -27,16 +30,29 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       let op = 'select';
       let value: unknown = null;
+      let columns = '';
       const settle = async () => {
         if (op !== 'select') {
+          if (
+            op === 'update' &&
+            missingColumn &&
+            Object.hasOwn(value as object, 'site_type_detected_at')
+          ) {
+            return { data: null, error: MISSING };
+          }
           if (op === 'update' && denied) return { data: [], error: null };
           writes.push({ table, op, value });
           return { data: [{ id: 'row' }], error: null };
         }
+        if (missingColumn && columns.includes('site_type_source'))
+          return { data: null, error: MISSING };
         return { data: table === 'prompts' ? prompts : brand, error: null };
       };
       const chain: Record<string, unknown> = {
-        select: () => chain,
+        select: (cols?: string) => {
+          if (op === 'select' && cols) columns = cols;
+          return chain;
+        },
         eq: () => chain,
         single: settle,
         update: (patch: unknown) => {
@@ -72,9 +88,25 @@ beforeEach(() => {
   ];
   writes = [];
   denied = false;
+  missingColumn = false;
 });
 
 describe('markBrandAsEcommerce', () => {
+  it('still turns Shopping mode on when 00379 is not applied yet, leaving the type', async () => {
+    missingColumn = true;
+    expect(await markBrandAsEcommerce('b1')).toEqual({
+      industry: 'E-commerce & Retail',
+      promptsUpdated: 1,
+      siteType: null,
+    });
+    expect(writes.some((w) => Object.hasOwn(w.value as object, 'site_type'))).toBe(false);
+    expect(writes).toContainEqual({
+      table: 'brands',
+      op: 'update',
+      value: { shopping_mode_enabled: true },
+    });
+  });
+
   it('sets the site type and industry and turns Shopping mode on', async () => {
     expect(await markBrandAsEcommerce('b1')).toEqual({
       industry: 'E-commerce & Retail',

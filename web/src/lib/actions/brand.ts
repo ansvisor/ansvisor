@@ -361,6 +361,9 @@ async function applyShoppingMode(
   return { promptsUpdated };
 }
 
+/** Postgres' code for a column that doesn't exist (here: 00379 not applied). */
+const UNDEFINED_COLUMN = '42703';
+
 /**
  * Setup found the brand sells products online (competitor research's
  * isEcommerce): its site type becomes e-commerce, as a detection, unless a
@@ -374,26 +377,37 @@ export async function markBrandAsEcommerce(
 ): Promise<{ industry: string | null; promptsUpdated: number; siteType: SiteType | null }> {
   await assertWritable({ onboarding: true, brandId });
   const supabase = await createClient();
-  const { data: brand, error } = await supabase
+  const read = await supabase
     .from('brands')
     .select('industry, shopping_mode_enabled, site_type, site_type_source')
     .eq('id', brandId)
     .single();
+  // 00379 not applied yet (a deploy ahead of its migration): Shopping mode
+  // still goes on; the site type is left for detection once it is.
+  const typeKnown = read.error?.code !== UNDEFINED_COLUMN;
+  const { data: brand, error } = typeKnown
+    ? read
+    : await supabase
+        .from('brands')
+        .select('industry, shopping_mode_enabled, site_type')
+        .eq('id', brandId)
+        .single();
   if (error || !brand) throw new Error(error?.message ?? 'Brand not found');
 
   let siteType: SiteType | null = null;
-  if (brand.site_type_source !== 'manual' && brand.site_type !== 'ecommerce') {
+  const source = 'site_type_source' in brand ? brand.site_type_source : null;
+  if (typeKnown && source !== 'manual' && brand.site_type !== 'ecommerce') {
     // Stamped as a detection, so the trigger keeps it auto.
     const { data: typed, error: typeErr } = await supabase
       .from('brands')
       .update({ site_type: 'ecommerce', site_type_detected_at: new Date().toISOString() })
       .eq('id', brandId)
       .select('id');
-    if (typeErr) throw new Error(typeErr.message);
-    if (!typed || typed.length === 0) {
+    if (typeErr && typeErr.code !== UNDEFINED_COLUMN) throw new Error(typeErr.message);
+    if (!typeErr && (!typed || typed.length === 0)) {
       throw new Error('Brand not found or you do not have permission to update it.');
     }
-    siteType = 'ecommerce';
+    if (!typeErr) siteType = 'ecommerce';
   }
 
   if (brand.shopping_mode_enabled) {

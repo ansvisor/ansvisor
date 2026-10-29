@@ -23,6 +23,7 @@ import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
+import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import {
@@ -56,7 +57,6 @@ import { PlanLimitError, getAiUsage, getSiteAuditQuotaStatus } from './lib/plan-
 import { recountBrandCitations } from './lib/citation-recount.js';
 import supabaseAdmin from './config/supabase.js';
 import { getPlan, hasFeature, isCloud, isSubscriptionActive } from './config/plans.js';
-import { analyzeBrandVolumes } from './lib/volume-analysis.js';
 import { runGscSync } from './lib/gsc-sync.js';
 import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js';
 import { runGaSync } from './lib/ga-sync.js';
@@ -653,7 +653,8 @@ app.post('/api/internal/prompts/:promptId/improve/action', async (req, res) => {
 // A page marked Published at its live address for an MCP API key
 // (`mark_content_draft_published`), as the editor's Mark published does
 // (POST /api/content-drafts/:draftId/publish). The web MCP layer passes the
-// key's organization and user; the draft must be that organization's.
+// key's organization and user; the draft must be that organization's. Never
+// on a demo brand's draft (00380).
 const internalPublishBody = z.object({
   url: z.string().max(8192),
   userId: z.guid(),
@@ -680,6 +681,9 @@ app.post('/api/internal/content-drafts/:draftId/publish', async (req, res) => {
     });
   }
   try {
+    if (await isDemoBrandRow('content_drafts', draftId.data)) {
+      return res.status(402).json(DEMO_BRAND);
+    }
     const result = await publishDraftForKeyUser({
       draftId: draftId.data,
       url,
@@ -725,59 +729,9 @@ app.post('/api/internal/recount-citations', async (req, res) => {
   }
 });
 
-// --- Internal trigger-tracking endpoint (CRON_SECRET auth, called by Stripe success route) ---
-app.post('/api/internal/trigger-tracking', async (req, res) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  try {
-    const { brandId } = req.body;
-    if (!brandId) {
-      return res.status(400).json({ success: false, message: 'brandId is required' });
-    }
-
-    const job = await createJob({
-      type: 'tracking',
-      brandId,
-      data: { brandId, immediate: true },
-      maxAttempts: 3,
-    });
-    runTrackingJob(job.id, io);
-
-    return res.json({ success: true, jobId: job.id });
-  } catch (err) {
-    req.log.error({ err }, 'internal trigger-tracking error');
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// --- Internal analyze volumes endpoint (CRON_SECRET auth, called by Stripe success route) ---
-app.post('/api/internal/analyze-volumes', async (req, res) => {
-  const secret = req.headers.authorization?.replace('Bearer ', '');
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  try {
-    const { brandId } = req.body;
-    if (!brandId) {
-      return res.status(400).json({ success: false, message: 'brandId is required' });
-    }
-
-    analyzeBrandVolumes(brandId, {
-      onlyMissing: true,
-    }).catch((err) => {
-      req.log.error({ err, brandId }, 'internal analyze-volumes error');
-    });
-
-    return res.status(202).json({ success: true, message: 'Volume analysis started' });
-  } catch (err) {
-    req.log.error({ err }, 'internal analyze volume error');
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
+// --- Internal trigger-tracking endpoint (routes/internal-trigger-tracking.js) ---
+// The first run after a payment, and the brand's volume analysis with it.
+app.use('/api/internal/trigger-tracking', internalTriggerTrackingRoutes);
 
 // --- Cloro webhook callback (routes/cloro-callback.js) ---
 // After the raw body parser mounted for this path at the top.

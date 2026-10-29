@@ -42,6 +42,10 @@ export const SKIPPED = {
     "The nightly signal pass's run log (one row per tracking run it covered): no page reads it, and the pass never runs for a demo brand.",
   content_author_defaults:
     "A brand's default author points at one of the organization's own content_authors: the demo adds no people to the person's organization, so its drafts name no author.",
+  chat_activity_log:
+    "Chat's log of the changes it made (00402): Chat's precedence refuses every change on a demo brand, so none is logged.",
+  chat_access_requests:
+    "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
 };
 
 const FOLLOW_UP =
