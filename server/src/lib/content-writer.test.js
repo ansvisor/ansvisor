@@ -17,6 +17,22 @@ let rpcCalls;
 let reads;
 const generateObject = vi.fn();
 const reserveAiBudget = vi.fn();
+/**
+ * The facts pass (content-research.js), as a search that finds nothing:
+ * each sentence written again without what it needed.
+ */
+const notFound = async ({ prompt }) => ({
+  text: JSON.stringify({
+    facts: [...prompt.matchAll(/^(G\d+): "(.*)"$/gmu)].map(([, id, sentence]) => ({
+      id,
+      text: sentence.replace(/\s*\(?\[[^\]]+\]\)?|\s*\{\{[^}]*\}\}/gu, ''),
+      source: null,
+    })),
+  }),
+  sources: [],
+  usage: { inputTokens: 1000, outputTokens: 100 },
+});
+const generateText = vi.fn(notFound);
 
 vi.mock('../config/supabase.js', () => ({
   default: {
@@ -68,10 +84,14 @@ class NoObjectGeneratedError extends Error {
 vi.mock('ai', async (importOriginal) => ({
   ...(await importOriginal()),
   generateObject: (...args) => generateObject(...args),
+  generateText: (...args) => generateText(...args),
   NoObjectGeneratedError,
 }));
 const resolveModel = vi.hoisted(() => vi.fn((id) => `model:${id}`));
-vi.mock('./ai-provider.js', () => ({ resolveModel }));
+vi.mock('./ai-provider.js', () => ({
+  resolveModel,
+  webSearchTools: () => ({ web_search: { id: 'anthropic.web_search_20250305' } }),
+}));
 vi.mock('./plan-guard.js', async (importOriginal) => ({
   ...(await importOriginal()),
   reserveAiBudget: (...args) => reserveAiBudget(...args),
@@ -115,11 +135,8 @@ const { REWRITE_SYSTEM_PROMPT } = await import('./content-rewrite.js');
 const { NAME_PLACEHOLDER, QUOTE_PLACEHOLDER, knownPeople } = await import('./content-people.js');
 const { FEATURE_CHECKS } = await import('./action-center/page-features.js');
 const { textLength } = await import('./content-rewrite.js');
-const {
-  PLACEHOLDER_RULE,
-  SYSTEM_PROMPT: AGENT_SYSTEM_PROMPT,
-  passageKey,
-} = await import('./content-agent.js');
+const { SYSTEM_PROMPT: AGENT_SYSTEM_PROMPT, passageKey } = await import('./content-agent.js');
+const { RESEARCH_RULE } = await import('./content-research.js');
 const { PlanLimitError } = await import('./plan-guard.js');
 // The real hold: self-hosted here, so it reserves nothing and writes each charge.
 const realGuard = await vi.importActual('./plan-guard.js');
@@ -187,6 +204,7 @@ beforeEach(() => {
     usage: { inputTokens: 10, outputTokens: 20 },
   });
   reserveAiBudget.mockReset().mockImplementation(realGuard.reserveAiBudget);
+  generateText.mockReset().mockImplementation(notFound);
   hasOpenSuggestions.mockReset().mockResolvedValue(false);
   fixUnderWay.mockReset().mockResolvedValue(false);
   stopIfStopped.mockReset().mockResolvedValue(undefined);
@@ -367,7 +385,9 @@ describe('startDraftWriting', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
     await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
-    expect(resolveModel).toHaveBeenLastCalledWith(SONNET);
+    expect(resolveModel).toHaveBeenCalledWith(SONNET);
+    // The facts it needs are looked up on the read model, Claude Haiku.
+    expect(generateText.mock.calls[0][0].model).toBe('model:anthropic/claude-haiku-5-5');
     expect(reserveAiBudget).toHaveBeenCalledWith(
       'org-1',
       expect.objectContaining({ feature: 'content', modelId: SONNET }),
@@ -390,6 +410,22 @@ describe('startDraftWriting', () => {
   });
 
   it('writes the new page for review once claimed', async () => {
+    // The search finds the ratio (G1) on a page, and the time (G2) nowhere.
+    generateText.mockImplementationOnce(async (call) => ({
+      ...(await notFound(call)),
+      text: JSON.stringify({
+        facts: [
+          {
+            id: 'G1',
+            text: 'Use 15 g of coffee for 250 g of water.',
+            source: 'https://sca.example/ratio',
+            words: '15 g of coffee for 250 g of water',
+          },
+          { id: 'G2', text: '', source: null },
+        ],
+      }),
+      sources: [{ sourceType: 'url', url: 'https://sca.example/ratio', title: 'Ratio' }],
+    }));
     await startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() });
 
     await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
@@ -402,9 +438,18 @@ describe('startDraftWriting', () => {
       author: 'agent',
       agent_state: null,
     });
-    // No number without a source (CE-033): none of the data has 15 or 250.
-    expect(draftUpdates()[1].body_html).toMatch(
-      /^<h1>How to brew pour-over coffee<\/h1><p>Use \[figure, source\] g of coffee for \[figure, source\] g of water\.<\/p>/,
+    // No number without a source (CE-033): none of the data has 15 or 250, so
+    // they were looked up, and are linked to the page that has them; the time
+    // no page had went with its sentence, and its question with it. No
+    // placeholder is left.
+    const body = draftUpdates()[1].body_html;
+    expect(body).toMatch(
+      /^<h1>How to brew pour-over coffee<\/h1><p>Use <a href="https:\/\/sca\.example\/ratio">15 g of coffee for 250 g of water<\/a>\.<\/p>/,
+    );
+    expect(body).not.toContain('[');
+    expect(body).not.toContain('How long?');
+    expect(generateText.mock.calls[0][0].prompt).toContain(
+      'G1: "Use 15 g of coffee for 250 g of water."\nneeds: check: 15; check: 250',
     );
     const finish = writes.filter((w) => w.table === 'content_drafts')[1];
     expect(finish.filters).toContainEqual(['agent_state', 'writing']);
@@ -501,6 +546,8 @@ describe('startDraftWriting', () => {
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).resolves.toEqual({ started: true });
     expect(hasOpenSuggestions).not.toHaveBeenCalled();
+    // Its run finished before the next test reads the writes.
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
   });
 
   it('waits while a Fix open rules runs on the draft, before charging, for a Start or a rewrite', async () => {
@@ -527,6 +574,7 @@ describe('startDraftWriting', () => {
     await expect(
       startDraftWriting({ draftId: DRAFT, brandId: BRAND, input: input() }),
     ).resolves.toEqual({ started: true });
+    await vi.waitFor(() => expect(draftUpdates()).toHaveLength(2));
   });
 
   it('writes one of the organization’s drafts at a time', async () => {
@@ -594,6 +642,74 @@ describe('runDraftWriting on a new page', () => {
       'prompt_sets.brand_id',
       BRAND,
     ]);
+  });
+
+  it('looks up what the page needs, leaving the person only the brand’s own facts (2026-10-29)', async () => {
+    const PLANS = 'https://www.hootsuite.com/plans';
+    // The page the person got: three gaps for them to research.
+    generateObject.mockResolvedValue({
+      object: {
+        ...page,
+        intro: [
+          'AI use in social media keeps growing: {{find: share of marketers using AI for social media}}.',
+          'We help {{ask: number of customers}} teams, and {{ask: agencies served}} agencies, with {{ask: average hours saved}} hours saved.',
+          'Our churn is {{ask: churn rate}}. Pick a plan that fits.',
+        ],
+        sections: [
+          {
+            heading: '2. Hootsuite',
+            paragraphs: [
+              'Compare seats and profiles: {{find: Hootsuite Professional plan price}}.',
+              'Check client workspace limits: [plan limits].',
+            ],
+            bullets: [],
+          },
+          { heading: 'Step by step', paragraphs: ['Rinse, bloom, pour.'], bullets: [] },
+        ],
+        faq: [],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    generateText.mockImplementationOnce(async (call) => ({
+      ...(await notFound(call)),
+      text: JSON.stringify({
+        facts: [
+          // Found nowhere trustworthy: the sentence says nothing without it.
+          { id: 'G1', text: '', source: null },
+          {
+            id: 'G2',
+            text: 'Compare seats and profiles: the Professional plan costs $99 per month.',
+            source: PLANS,
+            words: '$99 per month',
+          },
+          // Not found: written without it.
+          { id: 'G3', text: 'Check each plan’s client workspace limits.', source: null },
+        ],
+      }),
+      sources: [{ sourceType: 'url', url: PLANS, title: 'Plans' }],
+    }));
+    await expect(run(draftRow())).resolves.toEqual({ written: true });
+    const written = draftUpdates().find((u) => u.body_html).body_html;
+
+    // What a page needs, looked up: found and linked, or written without.
+    expect(written).toContain(
+      `<p>Compare seats and profiles: the Professional plan costs <a href="${PLANS}">$99 per month</a>.</p>`,
+    );
+    expect(written).toContain('<p>Check each plan’s client workspace limits.</p>');
+    expect(written).not.toContain('AI use in social media');
+    // Only the brand’s own facts are left for the person, three at most:
+    // the fourth’s sentence goes.
+    expect(written).toContain(
+      '<p>We help [number of customers] teams, and [agencies served] agencies, with [average hours saved] hours saved.</p>',
+    );
+    expect(written).toContain('<p>Pick a plan that fits.</p>');
+    expect(written).not.toContain('churn');
+    expect(written).not.toMatch(
+      /\{\{|\[(?!number of customers|agencies served|average hours saved)/,
+    );
+    expect(generateText.mock.calls[0][0].prompt).toContain(
+      'needs: find: share of marketers using AI for social media',
+    );
   });
 
   it("writes from Brief › Your input in Quality's second phase, its numbers and people kept (CE-048)", async () => {
@@ -753,9 +869,12 @@ describe('runDraftWriting on a new page', () => {
     expect(written).toContain(
       'The <a href="https://shop.example/products/p1">Summit GTX Boot</a> costs $189, or 189.00 USD;',
     );
-    // A product's own number where its name is: nowhere else, nor another price.
-    expect(written).toContain('Trail 450 Boot</a> [figure, source].');
-    expect(written).toContain('At [figure, source] g it is light, and [figure, source] elsewhere.');
+    // A product's own number where its name is: nowhere else, nor another
+    // price. The gap it left is looked up, and with nothing found it goes;
+    // a sentence with figures no page has goes whole.
+    expect(written).toContain('Trail 450 Boot</a>.');
+    expect(written).not.toContain('At 450 g');
+    expect(written).not.toContain('[');
   });
 
   it('writes a draft whose shopping path is broken as one with none', async () => {
@@ -773,7 +892,9 @@ describe('runDraftWriting on a new page', () => {
       await expect(run(draftRow({ shopping_path: broken }))).resolves.toEqual({ written: true });
       expect(generateObject.mock.calls[0][0].prompt).not.toContain('The shopping path');
       const written = draftUpdates().find((u) => u.body_html)?.body_html;
-      expect(written).toContain('<p>The Summit GTX Boot costs [figure, source].</p>');
+      // Its price is no catalog's now: no page has it, so its sentence goes.
+      expect(written).not.toContain('The Summit GTX Boot costs');
+      expect(written).not.toContain('[');
     }
   });
 
@@ -1118,11 +1239,16 @@ describe('Rewrite the page to these rules', () => {
     expect(row.sources).toEqual([
       { kind: 'fanout', ref: 'pour over ratio', label: 'pour over ratio' },
     ]);
-    // 87% is in none of the data: a placeholder. A lone count stays; the
-    // kept table's 1:16 is the page's own.
-    expect(row.after_text).toContain(
-      '<p>Brew it in 4 minutes; [figure, source] of baristas agree, as "pour over ratio" asks.</p>',
+    // 87% is in none of the data: it is looked up, never with the kept
+    // lines, and with no page that has it, its sentence goes, and the
+    // paragraph it was. A lone count stays; the kept table's 1:16 is the
+    // page's own.
+    expect(generateText.mock.calls[0][0].prompt).toContain(
+      'G1: "Brew it in 4 minutes; 87% of baristas agree, as "pour over ratio" asks."\nneeds: check: 87%',
     );
+    expect(generateText.mock.calls[0][0].prompt).not.toContain('KEEP');
+    expect(row.after_text).not.toContain('baristas');
+    expect(row.after_text).not.toContain('[');
     expect(row.after_text).toContain('<td>1:16</td>');
     expect(generateObject.mock.calls[0][0].system).toContain('Put the numbers (S1, S2…)');
   });
@@ -1439,18 +1565,22 @@ describe('the brief rules (2026) in the Content Agent', () => {
     },
   };
 
-  it('keeps placeholders for facts the person must find, never a page, a document or a competitor', () => {
-    // A page waited on "[About]", "[OpenAI release notes]" and "[competitor]".
+  it('has every prompt look a fact up, never leave it in square brackets for the person', () => {
+    // A page waited on "[About]", "[OpenAI release notes]" and "[competitor]";
+    // another on "[price]" and "[plan limits]" (2026-10-29).
     for (const prompt of [
       writeSystemPrompt(),
       suggestSystemPrompt(),
       rewriteSystemPrompt(),
       AGENT_SYSTEM_PROMPT,
     ]) {
-      expect(prompt).toContain(PLACEHOLDER_RULE);
+      expect(prompt).toContain(RESEARCH_RULE);
+      expect(prompt).not.toMatch(/(?<!Never )write a placeholder in square brackets/i);
     }
-    expect(PLACEHOLDER_RULE).toContain('Never put a page, a document, a link');
-    expect(PLACEHOLDER_RULE).toContain('"OpenAI\'s release notes"');
+    expect(RESEARCH_RULE).toContain(
+      'a page, a document, a link, a product, a brand or a competitor',
+    );
+    expect(RESEARCH_RULE).toContain('"OpenAI\'s release notes"');
   });
 
   it('asks as before while they are off: the same prompts, the brief as version 1', () => {
@@ -1488,10 +1618,10 @@ describe('the brief rules (2026) in the Content Agent', () => {
     expect(brief).toContain('Goal: Sell beans');
     expect(brief).toContain("TL;DR (what the page's top must say): A 1:16 ratio suits most beans.");
     expect(brief).toContain(
-      '- Ratio — answer first: Name the ratio first.; show as a comparison, the same points for each option in turn; give a fact on: The ratio cafés use (study, a placeholder until a source is found)',
+      '- Ratio — answer first: Name the ratio first.; show as a comparison, the same points for each option in turn; give a fact on: The ratio cafés use (study, look it up with {{find: …}})',
     );
     expect(brief).toContain(
-      'Proof to gather (write it only from Your input; else a placeholder): test: Our cupping notes',
+      'Proof to gather (write it only from Your input; else {{ask: …}}): test: Our cupping notes',
     );
   });
 
@@ -1516,7 +1646,7 @@ describe('the brief rules (2026) in the Content Agent', () => {
       'give a fact on: Our grind sizes (example, from Your input "Grind chart")',
     );
     expect(brief).toContain(
-      "give a fact on: The ratio cafés use (study, a placeholder: check it against https://news.example/ratio, whose words you don't see)",
+      "give a fact on: The ratio cafés use (study, look it up with {{find: …}}: https://news.example/ratio may have it, but you don't see its words)",
     );
     expect(brief).toContain(
       'Links planned (only as the links rule allows): "our tools" → https://acme.example/top-37-tools in "Ratio"',
@@ -1587,7 +1717,10 @@ describe('the brief rules (2026) in the Content Agent', () => {
     // The rewrite is told of the links; its guards never read their addresses.
     expect(call.prompt).toContain('https://acme.example/top-37-tools');
     const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
-    expect(row.after_text).toContain('<p>Try [figure, source] tools for it.</p>');
+    // "37" is the link's, never the page's: looked up, found nowhere, its sentence goes.
+    expect(row.after_text).not.toContain('Try 37 tools');
+    expect(row.after_text).not.toContain('[figure, source]');
+    // A person it wasn't given is the person's to name: "Your input needed".
     expect(row.after_text).toContain(`<p>${NAME_PLACEHOLDER} said the bloom matters.</p>`);
   });
 });

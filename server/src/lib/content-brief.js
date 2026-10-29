@@ -386,9 +386,10 @@ const FORMAT_FOR_WRITER = {
  * A version 2 brief's plan as the Content Agent reads it (brief rules, 2026),
  * after the brief's goal, outline and keywords: the essentials at the top,
  * the angle, each section's answer, format and facts (one from Your input
- * by its name; one to check against a cited page, whose words the writer
- * doesn't see, or with none, a placeholder), the proof to gather (from Your
- * input only), the searches left to another page, freshness, the names as
+ * by its name; any other looked up, content-research.js, a cited page
+ * named when the brief has one, as the writer doesn't see its words), the
+ * proof to gather (from Your input only, else asked of the person), the
+ * searches left to another page, freshness, the names as
  * written and, unless `links` is false (a new page's writer has no links
  * rule), the links planned: never an allow list, the links rule decides.
  * '' with the brief rules off, or for an older brief.
@@ -409,8 +410,8 @@ export function briefForWriter(brief, { links: withLinks = true } = {}) {
           fact.source?.kind === 'input'
             ? `from Your input "${fact.source.label}"`
             : fact.source
-              ? `a placeholder: check it against ${fact.source.label}, whose words you don't see`
-              : 'a placeholder until a source is found';
+              ? `look it up with {{find: …}}: ${fact.source.label} may have it, but you don't see its words`
+              : 'look it up with {{find: …}}';
         parts.push(`give a fact on: ${fact.claim} (${fact.sourceType}, ${source})`);
       }
       return parts.length ? `${section.heading} — ${parts.join('; ')}` : null;
@@ -419,7 +420,7 @@ export function briefForWriter(brief, { links: withLinks = true } = {}) {
   if (plans.length) lines.push(`Section plans:\n${plans.map((plan) => `- ${plan}`).join('\n')}`);
   if (brief.proof?.length) {
     lines.push(
-      `Proof to gather (write it only from Your input; else a placeholder): ${brief.proof.map((p) => `${p.kind}: ${p.what}`).join('; ')}`,
+      `Proof to gather (write it only from Your input; else {{ask: …}}): ${brief.proof.map((p) => `${p.kind}: ${p.what}`).join('; ')}`,
     );
   }
   if (brief.leftOut?.length) {

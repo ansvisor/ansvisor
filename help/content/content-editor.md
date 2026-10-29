@@ -1,11 +1,11 @@
 ---
 title: Write a page in the Content Editor
 route: /dashboard/content/editor
-keywords: [content editor, draft, placeholders, mark ready, mark published, history, export]
+keywords: [content editor, draft, placeholders, your input needed, mark ready, mark published, history, export]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-29
+updated: 2026-10-30
+last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -23,11 +23,13 @@ The page starts with its H1, which is also its title. A page has one H1: the too
 
 **Attach a file** inserts Excel, CSV, Word, Markdown, HTML or text, up to 10 MB each; a sheet comes in as a table. **Add HTML** adds an embed, a widget or a form, kept exactly as written; Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.
 
-## Placeholders in brackets
+## Facts and your input
 
-Words in square brackets, such as [figure, source] or [competitor], are placeholders: the Content Agent leaves one where a real name, quote or number goes. Each is tinted amber, and the toolbar counts those left to fill. Click the count, or the arrows beside it, to go to the next or previous one, already selected, so you can type over it.
+The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact it can't find is left out of its sentence.
 
-A placeholder in an image's alt text, the structured data or an HTML block is counted too, and **Show in HTML** selects it in the HTML view. Send to CMS waits until none is left.
+Only a fact your brand alone has, such as your customer count, is left in square brackets for you, three at most on a page. Each is tinted amber, and **Your input needed** in the toolbar counts them. Click it, or the arrows beside it, to go to the next or previous one, already selected, so you can type over it.
+
+One in an image's alt text, the structured data or an HTML block is counted too, and **Show in HTML** selects it in the HTML view. Send to CMS waits until none is left.
 
 ## Brief and Sources
 
